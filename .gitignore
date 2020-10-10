@@ -1,0 +1,9 @@
+# IntelliJ project files
+.idea/*
+
+# visual studio code files
+.vscode
+
+# Rust
+target/*
+Cargo.lock

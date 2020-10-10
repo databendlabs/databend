@@ -1,0 +1,20 @@
+[package]
+name = "fuse-engine"
+version = "0.1.0"
+description = "A Distributed Query Engine"
+authors = ["BohuTANG <overred.shuttler@gmail.com>"]
+license = "Apache-2.0"
+include = [
+    "benches/*.rs",
+    "src/**/*.rs",
+    "Cargo.toml",
+]
+edition = "2018"
+
+[dependencies]
+num = "0.3"
+sqlparser = "0.6.1"
+arrow = "1.0.1"
+
+[dev-dependencies]
+pretty_assertions = "0.6.1"

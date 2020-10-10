@@ -1,0 +1,10 @@
+----------------------------
+Query: SELECT SUM(a) FROM t1
+
+Error:
+Unsupported : "ExpressionPlan Expression: SUM(a)"
+------------------------------
+Query: SELECT COUNT(a) FROM t1
+
+Error:
+Unsupported : "ExpressionPlan Expression: COUNT(a)"
