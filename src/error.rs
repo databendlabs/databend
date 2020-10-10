@@ -2,35 +2,24 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
-use std::fmt;
 use std::result;
+use thiserror::Error;
 
 use arrow::error::ArrowError;
 use sqlparser::parser::ParserError;
 
 pub type Result<T> = result::Result<T, Error>;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum Error {
-    SQLParse(ParserError),
+    #[error("SQLParser Error: {0}")]
+    SQLParse(#[from] ParserError),
+
+    #[error("Internal Error: {0}")]
     Internal(String),
+
+    #[error("Unsupported Error: {0}")]
     Unsupported(String),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::Internal(ref msg) => write!(f, "Internal Error: {:?}", msg),
-            Error::SQLParse(ref msg) => write!(f, "SQLParser Error: {:?}", msg),
-            Error::Unsupported(ref msg) => write!(f, "Unsupported Error: {:?}", msg),
-        }
-    }
-}
-
-impl From<ParserError> for Error {
-    fn from(e: ParserError) -> Self {
-        Error::SQLParse(e)
-    }
 }
 
 impl From<ArrowError> for Error {

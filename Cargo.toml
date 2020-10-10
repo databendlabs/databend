@@ -15,6 +15,7 @@ edition = "2018"
 num = "0.3"
 sqlparser = "0.6.1"
 arrow = "1.0.1"
+thiserror = "1.0.21"
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"
