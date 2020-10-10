@@ -10,7 +10,7 @@ macro_rules! downcast_array {
     ($ARRAY:expr, $TYPE:ident) => {
         $ARRAY.as_any().downcast_ref::<$TYPE>().expect(
             format!(
-                "Failed to downcast datatype:{:?} item to {}",
+                "Unsupported downcast datatype:{:?} item to {}",
                 ($ARRAY).data_type(),
                 stringify!($TYPE)
             )
@@ -41,7 +41,7 @@ macro_rules! compute_array {
                 )?));
             }
             _ => Err(Error::Unsupported(format!(
-                "Datatype: {:?} for Function: {} in compute_array",
+                "Unsupported Datatype: {:?} for Function: {} in compute_array",
                 ($LEFT).data_type(),
                 stringify!($FUNC),
             ))),

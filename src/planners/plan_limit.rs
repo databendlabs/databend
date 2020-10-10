@@ -18,7 +18,10 @@ impl LimitPlan {
             Some(ref expr) => {
                 let limit = match ExpressionPlan::build_plan(expr)? {
                     ExpressionPlan::Constant(DataValue::Int64(n)) => Ok(n as usize),
-                    _ => Err(Error::Unsupported(format!("LimitPlan Expr: {}", expr))),
+                    _ => Err(Error::Unsupported(format!(
+                        "Unsupported LimitPlan Expr: {}",
+                        expr
+                    ))),
                 }?;
                 Ok(PlanNode::Limit(LimitPlan { limit }))
             }

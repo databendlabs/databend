@@ -47,7 +47,7 @@ impl DataValue {
                 Ok(Arc::new(StringArray::from(vec![v.as_str()])) as DataArrayRef)
             }
             _ => Err(Error::Unsupported(format!(
-                "DataValue to_array: {:?}",
+                "Unsupported DataType {:?} in to_array",
                 self
             ))),
         }

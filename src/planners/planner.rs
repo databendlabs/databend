@@ -19,7 +19,10 @@ impl Planner {
     pub fn build(&self, statement: &ast::Statement) -> Result<PlanNode> {
         match statement {
             ast::Statement::Query(query) => SelectPlan::build_plan(query.as_ref()),
-            _ => Err(Error::Unsupported(format!("{}", statement))),
+            _ => Err(Error::Unsupported(format!(
+                "Unsupported statement: {} in planner.build()",
+                statement
+            ))),
         }
     }
 }

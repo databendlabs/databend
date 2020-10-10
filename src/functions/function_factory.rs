@@ -14,7 +14,10 @@ impl FunctionFactory {
             "*" => arithmetic::MulFunction::create(args),
             "/" => arithmetic::DivFunction::create(args),
             "COUNT" => aggregate::CountAggregateFunction::create(),
-            _ => Err(Error::Unsupported(format!("Function: {}", name))),
+            _ => Err(Error::Unsupported(format!(
+                "Unsupported Function: {}",
+                name
+            ))),
         }
     }
 }

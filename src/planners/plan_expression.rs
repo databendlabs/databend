@@ -41,7 +41,7 @@ impl ExpressionPlan {
             ast::Expr::Nested(e) => Self::build_plan(e),
 
             _ => Err(Error::Unsupported(format!(
-                "ExpressionPlan Expression: {}",
+                "Unsupported ExpressionPlan Expression: {}",
                 expr
             ))),
         }
@@ -73,7 +73,7 @@ pub fn item_to_expression_step(item: &ast::SelectItem) -> Result<ExpressionPlan>
     match item {
         ast::SelectItem::UnnamedExpr(expr) => ExpressionPlan::build_plan(expr),
         _ => Err(Error::Unsupported(format!(
-            "ExpressionStep SelectItem {}",
+            "Unsupported SelectItem {} in item_to_expression_step",
             item
         ))),
     }

@@ -23,7 +23,10 @@ impl ScanPlan {
             ast::TableFactor::Table { name, .. } => Ok(PlanNode::Scan(ScanPlan {
                 table_name: name.to_string(),
             })),
-            _ => Err(Error::Unsupported(format!("ScanPlan from: {}", relation))),
+            _ => Err(Error::Unsupported(format!(
+                "Unsupported ScanPlan from: {}",
+                relation
+            ))),
         }
     }
     pub fn describe_node(

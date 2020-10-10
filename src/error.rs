@@ -20,9 +20,9 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::Internal(ref msg) => write!(f, "Internal error: {:?}", msg),
-            Error::SQLParse(ref msg) => write!(f, "SQLParser error: {:?}", msg),
-            Error::Unsupported(ref msg) => write!(f, "Unsupported : {:?}", msg),
+            Error::Internal(ref msg) => write!(f, "Internal Error: {:?}", msg),
+            Error::SQLParse(ref msg) => write!(f, "SQLParser Error: {:?}", msg),
+            Error::Unsupported(ref msg) => write!(f, "Unsupported Error: {:?}", msg),
         }
     }
 }

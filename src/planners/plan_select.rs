@@ -24,7 +24,12 @@ impl SelectPlan {
                     .add(FilterPlan::build_plan(&sel.selection)?)
                     .add(ScanPlan::build_plan(&sel.from)?);
             }
-            _ => return Err(Error::Unsupported(format!("SelectPlan query: {}", query))),
+            _ => {
+                return Err(Error::Unsupported(format!(
+                    "Unsupported SelectPlan query: {}",
+                    query
+                )))
+            }
         };
 
         let select = SelectPlan {

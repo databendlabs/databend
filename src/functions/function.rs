@@ -62,21 +62,30 @@ impl Function {
             Function::Div(v) => v.evaluate(block),
             Function::Mul(v) => v.evaluate(block),
             Function::Sub(v) => v.evaluate(block),
-            _ => Err(Error::Unsupported(format!("{}.evaluate()", self.name()))),
+            _ => Err(Error::Unsupported(format!(
+                "Unsupported evaluate() for function {}",
+                self.name()
+            ))),
         }
     }
 
     pub fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
         match self {
             Function::Count(ref mut v) => v.accumulate(block),
-            _ => Err(Error::Unsupported(format!("{}.accumulate()", self.name()))),
+            _ => Err(Error::Unsupported(format!(
+                "Unsupported accumulate() for function {}",
+                self.name()
+            ))),
         }
     }
 
     pub fn aggregate(&self) -> Result<DataArrayRef> {
         match self {
             Function::Count(v) => v.aggregate(),
-            _ => Err(Error::Unsupported(format!("{}.aggregate()", self.name()))),
+            _ => Err(Error::Unsupported(format!(
+                "Unsupported aggregate() for function {}",
+                self.name()
+            ))),
         }
     }
 }
