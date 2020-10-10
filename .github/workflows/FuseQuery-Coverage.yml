@@ -32,5 +32,5 @@ jobs:
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
         with:
-          token: c850e690-fd44-4bc4-b3ae-04bc5a5689ce
+          token: ${{ secrets.CODECOV_TOKEN }}
           file: ${{ steps.coverage.outputs.report }}
