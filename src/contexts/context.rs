@@ -2,29 +2,21 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::*;
 
 #[derive(Clone)]
 pub struct Context {
-    providers: HashMap<String, Arc<dyn IDataSourceProvider>>,
+    provider: Arc<dyn IDataSourceProvider>,
 }
 
 impl Context {
-    pub fn create() -> Self {
-        Context {
-            providers: Default::default(),
-        }
+    pub fn create_ctx(provider: Arc<dyn IDataSourceProvider>) -> Self {
+        Context { provider }
     }
 
-    pub fn register_datasource(
-        &mut self,
-        name: &str,
-        source: Arc<dyn IDataSourceProvider>,
-    ) -> Result<()> {
-        self.providers.insert(name.to_string(), source).unwrap();
-        Ok(())
+    pub fn table(&self, db: &str, table: &str) -> Result<Arc<dyn ITable>> {
+        self.provider.get_table(db.to_string(), table.to_string())
     }
 }

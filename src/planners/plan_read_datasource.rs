@@ -8,7 +8,7 @@ use super::*;
 
 #[derive(Clone, PartialEq)]
 pub struct ReadDataSourcePlan {
-    pub table_name: String,
+    pub(crate) read_parts: usize,
 }
 
 impl ReadDataSourcePlan {
@@ -30,6 +30,6 @@ impl ReadDataSourcePlan {
                 write!(f, "{}", prefix)?;
             }
         }
-        write!(f, "{} ReadDataSource: {}", setting.prefix, self.table_name)
+        write!(f, "{} ReadDataSource: {}", setting.prefix, self.read_parts)
     }
 }

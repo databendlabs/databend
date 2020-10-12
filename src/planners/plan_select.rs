@@ -18,11 +18,17 @@ impl SelectPlan {
 
         match &query.body {
             ast::SetExpr::Select(sel) => {
-                builder
-                    .add(ProjectionPlan::build_plan(ctx.clone(), &sel.projection)?)
-                    .add(LimitPlan::build_plan(ctx.clone(), &query.limit)?)
-                    .add(FilterPlan::build_plan(ctx.clone(), &sel.selection)?)
-                    .add(ScanPlan::build_plan(ctx, &sel.from)?);
+                let project = ProjectionPlan::build_plan(ctx.clone(), &sel.projection)?;
+                builder.add(project);
+
+                let limit = LimitPlan::build_plan(ctx.clone(), &query.limit)?;
+                builder.add(limit);
+
+                let filter = FilterPlan::build_plan(ctx.clone(), &sel.selection)?;
+                builder.add(filter);
+
+                let scan = ScanPlan::build_plan(ctx, &sel.from, builder.build()?)?;
+                builder.add(scan);
             }
             _ => {
                 return Err(Error::Unsupported(format!(

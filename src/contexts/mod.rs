@@ -5,5 +5,5 @@ mod context;
 
 pub use self::context::Context;
 
-use crate::datasources::IDataSourceProvider;
+use crate::datasources::{IDataSourceProvider, ITable};
 use crate::error::Result;

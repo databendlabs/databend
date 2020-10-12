@@ -23,10 +23,13 @@ fn test_sql_to_plan() {
     use pretty_assertions::assert_eq;
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
+    use std::sync::Arc;
     use std::{env, fmt::Write};
 
     use super::planner::Planner;
     use crate::contexts::Context;
+    use crate::datasources::{MemoryProvider, MemoryTable};
+    use crate::datatypes::{DataField, DataSchema, DataType};
 
     let test_path = format!(
         "{}/src/planners/tests/",
@@ -56,7 +59,12 @@ fn test_sql_to_plan() {
             writeln!(actual, "{}", line).unwrap();
             writeln!(actual, "Query: {}\n", statement.to_string()).unwrap();
 
-            let ctx = Context::create();
+            let schema = DataSchema::new(vec![DataField::new("a", DataType::Int64, false)]);
+            let table = MemoryTable::new(Arc::new(schema));
+            let mut provider = MemoryProvider::create();
+            provider.add_table("db", "t1", Arc::new(table)).unwrap();
+
+            let ctx = Context::create_ctx(Arc::new(provider));
             let plan = Planner::new().build(ctx, &statement);
             match plan {
                 Ok(_) => {

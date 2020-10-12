@@ -5,8 +5,8 @@
 mod datasource;
 mod memory;
 
-pub use self::datasource::IDataSourceProvider;
-pub use self::memory::MemorySource;
+pub use self::datasource::{IDataSourceProvider, ITable};
+pub use self::memory::{MemoryProvider, MemoryTable};
 
 use crate::datatypes::DataSchemaRef;
 use crate::error::Result;

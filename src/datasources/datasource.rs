@@ -2,9 +2,15 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
+use std::sync::Arc;
+
 use super::*;
 
 pub trait IDataSourceProvider {
+    fn get_table(&self, db: String, table: String) -> Result<Arc<dyn ITable>>;
+}
+
+pub trait ITable {
     // Return the schema of this datasource.
     fn schema(&self) -> Result<DataSchemaRef>;
 

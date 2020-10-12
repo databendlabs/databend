@@ -2,12 +2,14 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
-mod memory_source;
+mod memory_provider;
+mod memory_table;
 
-pub use self::memory_source::MemorySource;
+pub use self::memory_provider::MemoryProvider;
+pub use self::memory_table::MemoryTable;
 
 use crate::datablocks::DataBlock;
-use crate::datasources::IDataSourceProvider;
+use crate::datasources::{IDataSourceProvider, ITable};
 use crate::datatypes::DataSchemaRef;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::planners::{PlanNode, ReadDataSourcePlan};

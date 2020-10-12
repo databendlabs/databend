@@ -4,14 +4,14 @@
 
 use super::*;
 
-pub struct MemorySource {
+pub struct MemoryTable {
     schema: DataSchemaRef,
     partitions: Vec<Vec<DataBlock>>,
 }
 
-impl MemorySource {
+impl MemoryTable {
     pub fn new(schema: DataSchemaRef) -> Self {
-        MemorySource {
+        MemoryTable {
             schema,
             partitions: vec![],
         }
@@ -23,12 +23,14 @@ impl MemorySource {
     }
 }
 
-impl IDataSourceProvider for MemorySource {
+impl ITable for MemoryTable {
     fn schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
     }
 
     fn read_plan(&self, _plans: Vec<PlanNode>) -> Result<ReadDataSourcePlan> {
-        unimplemented!()
+        Ok(ReadDataSourcePlan {
+            read_parts: self.partitions.len(),
+        })
     }
 }
