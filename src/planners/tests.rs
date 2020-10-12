@@ -26,6 +26,7 @@ fn test_sql_to_plan() {
     use std::{env, fmt::Write};
 
     use super::planner::Planner;
+    use crate::contexts::Context;
 
     let test_path = format!(
         "{}/src/planners/tests/",
@@ -55,7 +56,8 @@ fn test_sql_to_plan() {
             writeln!(actual, "{}", line).unwrap();
             writeln!(actual, "Query: {}\n", statement.to_string()).unwrap();
 
-            let plan = Planner::new().build(&statement);
+            let ctx = Context::create();
+            let plan = Planner::new().build(ctx, &statement);
             match plan {
                 Ok(_) => {
                     writeln!(actual, "AST:\n{:#?}\n", statement).unwrap();

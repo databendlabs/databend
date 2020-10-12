@@ -28,6 +28,7 @@ pub use self::planner::{FormatterSettings, PlanNode, Planner};
 /// Planners Functions.
 use self::plan_expression::item_to_expression_step;
 
+use crate::contexts::Context;
 ///
 /// Self crates.
 use crate::datatypes::DataValue;

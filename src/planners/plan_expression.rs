@@ -21,7 +21,7 @@ pub enum ExpressionPlan {
 }
 
 impl ExpressionPlan {
-    pub fn build_plan(expr: &ast::Expr) -> Result<ExpressionPlan> {
+    pub fn build_plan(ctx: Context, expr: &ast::Expr) -> Result<ExpressionPlan> {
         match expr {
             ast::Expr::Identifier(ref v) => Ok(ExpressionPlan::Field(v.clone().value)),
             ast::Expr::Value(ast::Value::Number(n)) => match n.parse::<i64>() {
@@ -34,11 +34,11 @@ impl ExpressionPlan {
                 Ok(ExpressionPlan::Constant(DataValue::String(s.clone())))
             }
             ast::Expr::BinaryOp { left, op, right } => Ok(ExpressionPlan::BinaryExpression {
-                left: Box::new(Self::build_plan(left)?),
+                left: Box::new(Self::build_plan(ctx.clone(), left)?),
                 op: format!("{}", op),
-                right: Box::new(Self::build_plan(right)?),
+                right: Box::new(Self::build_plan(ctx, right)?),
             }),
-            ast::Expr::Nested(e) => Self::build_plan(e),
+            ast::Expr::Nested(e) => Self::build_plan(ctx, e),
 
             _ => Err(Error::Unsupported(format!(
                 "Unsupported ExpressionPlan Expression: {}",
@@ -69,9 +69,9 @@ impl fmt::Display for ExpressionPlan {
 }
 
 /// SQL.SelectItem to ExpressionStep.
-pub fn item_to_expression_step(item: &ast::SelectItem) -> Result<ExpressionPlan> {
+pub fn item_to_expression_step(ctx: Context, item: &ast::SelectItem) -> Result<ExpressionPlan> {
     match item {
-        ast::SelectItem::UnnamedExpr(expr) => ExpressionPlan::build_plan(expr),
+        ast::SelectItem::UnnamedExpr(expr) => ExpressionPlan::build_plan(ctx, expr),
         _ => Err(Error::Unsupported(format!(
             "Unsupported SelectItem {} in item_to_expression_step",
             item

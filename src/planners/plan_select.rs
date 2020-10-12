@@ -13,16 +13,16 @@ pub struct SelectPlan {
 }
 
 impl SelectPlan {
-    pub fn build_plan(query: &ast::Query) -> Result<PlanNode> {
+    pub fn build_plan(ctx: Context, query: &ast::Query) -> Result<PlanNode> {
         let mut builder = PlanBuilder::default();
 
         match &query.body {
             ast::SetExpr::Select(sel) => {
                 builder
-                    .add(ProjectionPlan::build_plan(&sel.projection)?)
-                    .add(LimitPlan::build_plan(&query.limit)?)
-                    .add(FilterPlan::build_plan(&sel.selection)?)
-                    .add(ScanPlan::build_plan(&sel.from)?);
+                    .add(ProjectionPlan::build_plan(ctx.clone(), &sel.projection)?)
+                    .add(LimitPlan::build_plan(ctx.clone(), &query.limit)?)
+                    .add(FilterPlan::build_plan(ctx.clone(), &sel.selection)?)
+                    .add(ScanPlan::build_plan(ctx, &sel.from)?);
             }
             _ => {
                 return Err(Error::Unsupported(format!(

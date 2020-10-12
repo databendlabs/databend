@@ -11,5 +11,5 @@ pub trait IDataSourceProvider {
     // Return the ReadDataSourcePlan that how to read the datasource.
     // Here we can push down some plans(Filter/Limit/Project) to datasource for optimizer.
     // ReadDataSourcePlan determines the number of parallel executors(transforms) on processor pipeline.
-    fn read_plan(&self, plans: Vec<PlanNode>) -> Result<PlanNode>;
+    fn read_plan(&self, plans: Vec<PlanNode>) -> Result<ReadDataSourcePlan>;
 }

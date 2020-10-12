@@ -10,4 +10,4 @@ pub use self::memory::MemorySource;
 
 use crate::datatypes::DataSchemaRef;
 use crate::error::Result;
-use crate::planners::PlanNode;
+use crate::planners::{PlanNode, ReadDataSourcePlan};

@@ -13,10 +13,10 @@ pub struct LimitPlan {
 }
 
 impl LimitPlan {
-    pub fn build_plan(limit: &Option<ast::Expr>) -> Result<PlanNode> {
+    pub fn build_plan(ctx: Context, limit: &Option<ast::Expr>) -> Result<PlanNode> {
         match limit {
             Some(ref expr) => {
-                let limit = match ExpressionPlan::build_plan(expr)? {
+                let limit = match ExpressionPlan::build_plan(ctx, expr)? {
                     ExpressionPlan::Constant(DataValue::Int64(n)) => Ok(n as usize),
                     _ => Err(Error::Unsupported(format!(
                         "Unsupported LimitPlan Expr: {}",
@@ -28,6 +28,7 @@ impl LimitPlan {
             None => Ok(PlanNode::Empty(EmptyPlan {})),
         }
     }
+
     pub fn describe_node(
         &self,
         f: &mut fmt::Formatter,

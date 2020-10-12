@@ -13,14 +13,15 @@ pub struct FilterPlan {
 }
 
 impl FilterPlan {
-    pub fn build_plan(limit: &Option<ast::Expr>) -> Result<PlanNode> {
+    pub fn build_plan(ctx: Context, limit: &Option<ast::Expr>) -> Result<PlanNode> {
         match limit {
             Some(ref expr) => Ok(PlanNode::Filter(FilterPlan {
-                predicate: ExpressionPlan::build_plan(expr)?,
+                predicate: ExpressionPlan::build_plan(ctx, expr)?,
             })),
             None => Ok(PlanNode::Empty(EmptyPlan {})),
         }
     }
+
     pub fn describe_node(
         &self,
         f: &mut fmt::Formatter,

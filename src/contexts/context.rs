@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use super::*;
 
+#[derive(Clone)]
 pub struct Context {
     providers: HashMap<String, Arc<dyn IDataSourceProvider>>,
 }

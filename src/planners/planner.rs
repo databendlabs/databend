@@ -16,9 +16,9 @@ impl Planner {
     }
 
     /// Builds plan from AST statement.
-    pub fn build(&self, statement: &ast::Statement) -> Result<PlanNode> {
+    pub fn build(&self, ctx: Context, statement: &ast::Statement) -> Result<PlanNode> {
         match statement {
-            ast::Statement::Query(query) => SelectPlan::build_plan(query.as_ref()),
+            ast::Statement::Query(query) => SelectPlan::build_plan(ctx, query.as_ref()),
             _ => Err(Error::Unsupported(format!(
                 "Unsupported statement: {} in planner.build()",
                 statement

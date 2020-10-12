@@ -17,7 +17,7 @@ impl MemorySource {
         }
     }
 
-    pub fn add(&mut self, partition: Vec<DataBlock>) -> Result<()> {
+    pub fn add_partition(&mut self, partition: Vec<DataBlock>) -> Result<()> {
         self.partitions.push(partition);
         Ok(())
     }
@@ -28,7 +28,7 @@ impl IDataSourceProvider for MemorySource {
         Ok(self.schema.clone())
     }
 
-    fn read_plan(&self, _plans: Vec<PlanNode>) -> Result<PlanNode> {
+    fn read_plan(&self, _plans: Vec<PlanNode>) -> Result<ReadDataSourcePlan> {
         unimplemented!()
     }
 }

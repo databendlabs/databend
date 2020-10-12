@@ -13,7 +13,7 @@ pub struct ScanPlan {
 }
 
 impl ScanPlan {
-    pub fn build_plan(from: &[ast::TableWithJoins]) -> Result<PlanNode> {
+    pub fn build_plan(_ctx: Context, from: &[ast::TableWithJoins]) -> Result<PlanNode> {
         if from.is_empty() {
             return Ok(PlanNode::Empty(EmptyPlan {}));
         }
@@ -29,6 +29,7 @@ impl ScanPlan {
             ))),
         }
     }
+
     pub fn describe_node(
         &self,
         f: &mut fmt::Formatter,

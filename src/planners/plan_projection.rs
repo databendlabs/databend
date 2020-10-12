@@ -13,10 +13,10 @@ pub struct ProjectionPlan {
 }
 
 impl ProjectionPlan {
-    pub fn build_plan(items: &[ast::SelectItem]) -> Result<PlanNode> {
+    pub fn build_plan(ctx: Context, items: &[ast::SelectItem]) -> Result<PlanNode> {
         let expr = items
             .iter()
-            .map(|expr| item_to_expression_step(expr))
+            .map(|expr| item_to_expression_step(ctx.clone(), expr))
             .collect::<Result<Vec<ExpressionPlan>>>()?;
 
         Ok(PlanNode::Projection(ProjectionPlan { expr }))
