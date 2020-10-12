@@ -2,12 +2,17 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
+#[macro_use]
+mod macros;
+
 mod data_arithmetic;
 mod data_array;
 mod data_field;
 mod data_schema;
 mod data_type;
 mod data_value;
+
+mod tests;
 
 pub use self::data_arithmetic::{array_add, array_div, array_mul, array_sub};
 pub use self::data_array::{

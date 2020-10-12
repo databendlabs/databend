@@ -6,20 +6,7 @@ use std::sync::Arc;
 
 use super::*;
 
-macro_rules! downcast_array {
-    ($ARRAY:expr, $TYPE:ident) => {
-        $ARRAY.as_any().downcast_ref::<$TYPE>().expect(
-            format!(
-                "Unsupported downcast datatype:{:?} item to {}",
-                ($ARRAY).data_type(),
-                stringify!($TYPE)
-            )
-            .as_str(),
-        );
-    };
-}
-
-macro_rules! compute_array {
+macro_rules! arithmetic_compute {
     ($LEFT:expr, $RIGHT:expr, $FUNC:ident) => {
         match ($LEFT).data_type() {
             DataType::Int64 => {
@@ -50,17 +37,17 @@ macro_rules! compute_array {
 }
 
 pub fn array_add(left: DataArrayRef, right: DataArrayRef) -> Result<DataArrayRef> {
-    compute_array!(&left, &right, add)
+    arithmetic_compute!(&left, &right, add)
 }
 
 pub fn array_sub(left: DataArrayRef, right: DataArrayRef) -> Result<DataArrayRef> {
-    compute_array!(&left, &right, subtract)
+    arithmetic_compute!(&left, &right, subtract)
 }
 
 pub fn array_mul(left: DataArrayRef, right: DataArrayRef) -> Result<DataArrayRef> {
-    compute_array!(&left, &right, multiply)
+    arithmetic_compute!(&left, &right, multiply)
 }
 
 pub fn array_div(left: DataArrayRef, right: DataArrayRef) -> Result<DataArrayRef> {
-    compute_array!(&left, &right, divide)
+    arithmetic_compute!(&left, &right, divide)
 }
