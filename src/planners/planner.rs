@@ -50,6 +50,7 @@ pub enum PlanNode {
     Projection(ProjectionPlan),
     Scan(ScanPlan),
     Select(SelectPlan),
+    ReadDataSource(ReadDataSourcePlan),
 }
 
 impl PlanNode {
@@ -66,6 +67,7 @@ impl PlanNode {
             PlanNode::Scan(plan) => plan.describe_node(f, setting),
             PlanNode::Select(plan) => plan.describe_node(f, setting),
             PlanNode::Projection(plan) => plan.describe_node(f, setting),
+            PlanNode::ReadDataSource(plan) => plan.describe_node(f, setting),
         }
     }
 }

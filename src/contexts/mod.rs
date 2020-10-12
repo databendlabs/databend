@@ -1,10 +1,9 @@
 // Copyright 2020 The FuseQuery Authors.
 //
 // Code is licensed under Apache License, Version 2.0.
+mod context;
 
-pub mod data_block;
+pub use self::context::Context;
 
-pub use self::data_block::DataBlock;
-
-use crate::datatypes::{DataArrayRef, DataSchema};
+use crate::datasources::IDataSourceProvider;
 use crate::error::Result;
