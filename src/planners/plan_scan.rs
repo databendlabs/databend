@@ -4,42 +4,43 @@
 
 use sqlparser::ast;
 use std::fmt;
+use std::sync::Arc;
 
-use super::*;
+use crate::contexts::Context;
+use crate::error::{Error, Result};
 
-#[derive(Clone, PartialEq)]
+use crate::planners::{EmptyPlan, FormatterSettings, IPlanNode};
+
+#[derive(Clone)]
 pub struct ScanPlan {
     pub table_name: String,
-    pub read_from_source: ReadDataSourcePlan,
 }
 
 impl ScanPlan {
-    pub fn build_plan(
-        ctx: Context,
-        from: &[ast::TableWithJoins],
-        nodes: Vec<PlanNode>,
-    ) -> Result<PlanNode> {
+    pub fn build_plan(_ctx: Context, from: &[ast::TableWithJoins]) -> Result<Arc<dyn IPlanNode>> {
         if from.is_empty() {
-            return Ok(PlanNode::Empty(EmptyPlan {}));
+            return Ok(Arc::new(EmptyPlan {}));
         }
 
         let relation = &from[0].relation;
         match relation {
-            ast::TableFactor::Table { name, .. } => {
-                let table = ctx.table("", name.to_string().as_str())?;
-                Ok(PlanNode::Scan(ScanPlan {
-                    table_name: name.to_string(),
-                    read_from_source: table.read_plan(nodes)?,
-                }))
-            }
+            ast::TableFactor::Table { name, .. } => Ok(Arc::new(ScanPlan {
+                table_name: name.to_string(),
+            })),
             _ => Err(Error::Unsupported(format!(
                 "Unsupported ScanPlan from: {}",
                 relation
             ))),
         }
     }
+}
 
-    pub fn describe_node(
+impl IPlanNode for ScanPlan {
+    fn name(&self) -> &'static str {
+        "ScanPlan"
+    }
+
+    fn describe_node(
         &self,
         f: &mut fmt::Formatter,
         setting: &mut FormatterSettings,
@@ -54,5 +55,11 @@ impl ScanPlan {
             }
         }
         write!(f, "{} Scan: {}", setting.prefix, self.table_name)
+    }
+}
+
+impl fmt::Debug for ScanPlan {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {:?}", self.name(), self.table_name)
     }
 }

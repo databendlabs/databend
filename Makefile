@@ -9,6 +9,6 @@ lint:
 	cargo +nightly clippy -- -D warnings
 
 clean:
-	rm -rf target/
+	cargo clean
 
 .PHONY: test lint clean

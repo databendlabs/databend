@@ -4,9 +4,13 @@
 
 use std::fmt;
 
-use super::*;
+use crate::datablocks::DataBlock;
+use crate::datatypes::{DataArrayRef, DataSchema, DataType, DataValue};
+use crate::error::Result;
 
-#[derive(Clone, Debug, PartialEq)]
+use crate::functions::Function;
+
+#[derive(Clone, Debug)]
 pub struct ConstantFunction {
     value: DataValue,
 }
@@ -16,8 +20,8 @@ impl ConstantFunction {
         Ok(Function::Constant(ConstantFunction { value }))
     }
 
-    pub fn name(&self) -> String {
-        "ConstantFunction".to_string()
+    pub fn name(&self) -> &'static str {
+        "ConstantFunction"
     }
 
     pub fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {

@@ -4,10 +4,7 @@
 
 mod datasource;
 mod memory;
+mod rpc;
 
 pub use self::datasource::{IDataSourceProvider, ITable};
 pub use self::memory::{MemoryProvider, MemoryTable};
-
-use crate::datatypes::DataSchemaRef;
-use crate::error::Result;
-use crate::planners::{PlanNode, ReadDataSourcePlan};

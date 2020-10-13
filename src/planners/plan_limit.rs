@@ -4,16 +4,20 @@
 
 use sqlparser::ast;
 use std::fmt;
+use std::sync::Arc;
 
-use super::*;
+use crate::contexts::Context;
+use crate::datatypes::DataValue;
+use crate::error::{Error, Result};
 
-#[derive(Clone, PartialEq)]
+use crate::planners::{EmptyPlan, ExpressionPlan, FormatterSettings, IPlanNode};
+
 pub struct LimitPlan {
     pub limit: usize,
 }
 
 impl LimitPlan {
-    pub fn build_plan(ctx: Context, limit: &Option<ast::Expr>) -> Result<PlanNode> {
+    pub fn build_plan(ctx: Context, limit: &Option<ast::Expr>) -> Result<Arc<dyn IPlanNode>> {
         match limit {
             Some(ref expr) => {
                 let limit = match ExpressionPlan::build_plan(ctx, expr)? {
@@ -23,13 +27,19 @@ impl LimitPlan {
                         expr
                     ))),
                 }?;
-                Ok(PlanNode::Limit(LimitPlan { limit }))
+                Ok(Arc::new(LimitPlan { limit }))
             }
-            None => Ok(PlanNode::Empty(EmptyPlan {})),
+            None => Ok(Arc::new(EmptyPlan {})),
         }
     }
+}
 
-    pub fn describe_node(
+impl IPlanNode for LimitPlan {
+    fn name(&self) -> &'static str {
+        "LimitPlan"
+    }
+
+    fn describe_node(
         &self,
         f: &mut fmt::Formatter,
         setting: &mut FormatterSettings,
@@ -43,5 +53,11 @@ impl LimitPlan {
             }
         }
         write!(f, "{} Limit: {}", setting.prefix, self.limit)
+    }
+}
+
+impl fmt::Debug for LimitPlan {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {:?}", self.name(), self.limit)
     }
 }

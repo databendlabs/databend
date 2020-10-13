@@ -4,7 +4,8 @@
 
 use std::sync::Arc;
 
-use super::*;
+use crate::datasources::{IDataSourceProvider, ITable};
+use crate::error::Result;
 
 #[derive(Clone)]
 pub struct Context {

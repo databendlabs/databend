@@ -2,7 +2,9 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
-use super::*;
+use crate::datablocks::DataBlock;
+use crate::datatypes::DataArrayRef;
+use crate::functions::Function;
 
 #[allow(dead_code)]
 struct Test {
@@ -18,11 +20,11 @@ struct Test {
 
 #[test]
 fn test_cases() {
-    use super::*;
-    use crate::datatypes::{DataField, Int64Array};
-    use crate::functions::VariableFunction;
-
     use std::sync::Arc;
+
+    use crate::datatypes::{DataField, DataSchema, DataType, Int64Array};
+    use crate::functions::arithmetic::{AddFunction, DivFunction, MulFunction, SubFunction};
+    use crate::functions::VariableFunction;
 
     let schema = DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),

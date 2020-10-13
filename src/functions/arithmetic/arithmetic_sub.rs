@@ -4,9 +4,13 @@
 
 use std::fmt;
 
-use super::*;
+use crate::datablocks::DataBlock;
+use crate::datatypes::{array_sub, DataArrayRef, DataSchema, DataType};
+use crate::error::Result;
 
-#[derive(Clone, Debug, PartialEq)]
+use crate::functions::Function;
+
+#[derive(Clone, Debug)]
 pub struct SubFunction {
     left: Box<Function>,
     right: Box<Function>,
@@ -20,8 +24,8 @@ impl SubFunction {
         }))
     }
 
-    pub fn name(&self) -> String {
-        "SubFunction".to_string()
+    pub fn name(&self) -> &'static str {
+        "SubFunction"
     }
 
     pub fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {

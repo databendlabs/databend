@@ -4,25 +4,33 @@
 
 use sqlparser::ast;
 use std::fmt;
+use std::sync::Arc;
 
-use super::*;
+use crate::contexts::Context;
+use crate::error::Result;
+use crate::planners::{EmptyPlan, ExpressionPlan, FormatterSettings, IPlanNode};
 
-#[derive(Clone, PartialEq)]
 pub struct FilterPlan {
     pub predicate: ExpressionPlan,
 }
 
 impl FilterPlan {
-    pub fn build_plan(ctx: Context, limit: &Option<ast::Expr>) -> Result<PlanNode> {
+    pub fn build_plan(ctx: Context, limit: &Option<ast::Expr>) -> Result<Arc<dyn IPlanNode>> {
         match limit {
-            Some(ref expr) => Ok(PlanNode::Filter(FilterPlan {
+            Some(ref expr) => Ok(Arc::new(FilterPlan {
                 predicate: ExpressionPlan::build_plan(ctx, expr)?,
             })),
-            None => Ok(PlanNode::Empty(EmptyPlan {})),
+            None => Ok(Arc::new(EmptyPlan {})),
         }
     }
+}
 
-    pub fn describe_node(
+impl IPlanNode for FilterPlan {
+    fn name(&self) -> &'static str {
+        "FilterPlan"
+    }
+
+    fn describe_node(
         &self,
         f: &mut fmt::Formatter,
         setting: &mut FormatterSettings,
@@ -35,6 +43,12 @@ impl FilterPlan {
                 write!(f, "{}", setting.indent_char)?;
             }
         }
-        write!(f, "{} Filter: {}", setting.prefix, self.predicate)
+        write!(f, "{} Filter: {:?}", setting.prefix, self.predicate)
+    }
+}
+
+impl fmt::Debug for FilterPlan {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {:?}", self.name(), self.predicate)
     }
 }

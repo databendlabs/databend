@@ -2,7 +2,8 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
-use super::*;
+use crate::datatypes::{DataArrayRef, DataSchema};
+use crate::error::Result;
 
 #[derive(Debug, Clone)]
 pub struct DataBlock {
@@ -26,7 +27,7 @@ impl DataBlock {
         &self.schema
     }
 
-    pub fn num_rows(&self) -> u64 {
+    pub fn rows(&self) -> u64 {
         if self.columns.is_empty() {
             0
         } else {

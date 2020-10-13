@@ -13,10 +13,3 @@ pub use self::arithmetic_add::AddFunction;
 pub use self::arithmetic_div::DivFunction;
 pub use self::arithmetic_mul::MulFunction;
 pub use self::arithmetic_sub::SubFunction;
-
-use crate::datablocks::data_block::DataBlock;
-use crate::datatypes::{
-    array_add, array_div, array_mul, array_sub, DataArrayRef, DataSchema, DataType,
-};
-use crate::error::Result;
-use crate::functions::Function;

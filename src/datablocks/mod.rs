@@ -5,6 +5,3 @@
 pub mod data_block;
 
 pub use self::data_block::DataBlock;
-
-use crate::datatypes::{DataArrayRef, DataSchema};
-use crate::error::Result;

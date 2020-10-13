@@ -22,14 +22,4 @@ pub use self::plan_projection::ProjectionPlan;
 pub use self::plan_read_datasource::ReadDataSourcePlan;
 pub use self::plan_scan::ScanPlan;
 pub use self::plan_select::SelectPlan;
-pub use self::planner::{FormatterSettings, PlanNode, Planner};
-
-///
-/// Planners Functions.
-use self::plan_expression::item_to_expression_step;
-
-use crate::contexts::Context;
-///
-/// Self crates.
-use crate::datatypes::DataValue;
-use crate::error::{Error, Result};
+pub use self::planner::{FormatterSettings, IPlanNode, Planner};

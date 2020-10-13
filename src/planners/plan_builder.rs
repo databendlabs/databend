@@ -2,11 +2,14 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
-use super::*;
+use std::sync::Arc;
 
-#[derive(Clone, PartialEq)]
+use crate::error::Result;
+
+use crate::planners::{EmptyPlan, IPlanNode};
+
 pub struct PlanBuilder {
-    nodes: Vec<PlanNode>,
+    nodes: Vec<Arc<dyn IPlanNode>>,
 }
 
 impl PlanBuilder {
@@ -14,14 +17,16 @@ impl PlanBuilder {
         PlanBuilder { nodes: vec![] }
     }
 
-    pub fn add(&mut self, node: PlanNode) -> &mut PlanBuilder {
+    pub fn add(&mut self, node: Arc<dyn IPlanNode>) -> &mut PlanBuilder {
         self.nodes.push(node);
         self
     }
 
-    pub fn build(&mut self) -> Result<Vec<PlanNode>> {
+    pub fn build(&mut self) -> Result<Vec<Arc<dyn IPlanNode>>> {
         // Remove the empty plan node.
-        self.nodes.retain(|x| !matches!(x, PlanNode::Empty(_)));
+        let empty_name = EmptyPlan {}.name();
+
+        self.nodes.retain(|x| x.name() != empty_name);
         Ok(self.nodes.clone())
     }
 }

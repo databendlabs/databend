@@ -4,7 +4,11 @@
 
 use std::fmt;
 
-use super::*;
+use crate::datablocks::DataBlock;
+use crate::datatypes::{DataArrayRef, DataSchema, DataType, DataValue};
+use crate::error::Result;
+
+use crate::functions::Function;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CountAggregateFunction {
@@ -16,8 +20,8 @@ impl CountAggregateFunction {
         Ok(Function::Count(CountAggregateFunction { count: 0 }))
     }
 
-    pub fn name(&self) -> String {
-        "CountAggregateFunction".to_string()
+    pub fn name(&self) -> &'static str {
+        "CountAggregateFunction"
     }
 
     pub fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
@@ -30,7 +34,7 @@ impl CountAggregateFunction {
 
     // Accumulates a value.
     pub fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
-        self.count += block.num_rows();
+        self.count += block.rows();
         Ok(())
     }
 

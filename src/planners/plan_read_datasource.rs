@@ -3,20 +3,29 @@
 // Code is licensed under Apache License, Version 2.0.
 
 use std::fmt;
+use std::sync::Arc;
 
-use super::*;
+use crate::contexts::Context;
+use crate::error::Result;
 
-#[derive(Clone, PartialEq)]
+use crate::planners::{EmptyPlan, FormatterSettings, IPlanNode};
+
 pub struct ReadDataSourcePlan {
     pub(crate) read_parts: usize,
 }
 
 impl ReadDataSourcePlan {
-    pub fn build_plan() -> Result<PlanNode> {
-        Ok(PlanNode::Empty(EmptyPlan {}))
+    pub fn build_plan(_ctx: Context) -> Result<Arc<dyn IPlanNode>> {
+        Ok(Arc::new(EmptyPlan {}))
+    }
+}
+
+impl IPlanNode for ReadDataSourcePlan {
+    fn name(&self) -> &'static str {
+        "ReadDataSourcePlan"
     }
 
-    pub fn describe_node(
+    fn describe_node(
         &self,
         f: &mut fmt::Formatter,
         setting: &mut FormatterSettings,
@@ -31,5 +40,11 @@ impl ReadDataSourcePlan {
             }
         }
         write!(f, "{} ReadDataSource: {}", setting.prefix, self.read_parts)
+    }
+}
+
+impl fmt::Debug for ReadDataSourcePlan {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {:?}", self.name(), self.read_parts)
     }
 }

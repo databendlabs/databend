@@ -4,20 +4,14 @@
 
 mod tests;
 
-pub mod aggregate;
-pub mod arithmetic;
-pub mod function;
-pub mod function_constant;
-pub mod function_factory;
-pub mod function_variable;
+mod aggregate;
+mod arithmetic;
+mod function;
+mod function_constant;
+mod function_factory;
+mod function_variable;
 
-use self::function::Function;
-use self::function_constant::ConstantFunction;
+pub use self::function::Function;
+pub use self::function_constant::ConstantFunction;
 pub use self::function_factory::FunctionFactory;
-use self::function_variable::VariableFunction;
-
-///
-/// crates.
-use crate::datablocks::data_block::DataBlock;
-use crate::datatypes::{DataArrayRef, DataSchema, DataType, DataValue};
-use crate::error::{Error, Result};
+pub use self::function_variable::VariableFunction;

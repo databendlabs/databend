@@ -5,9 +5,13 @@
 use sqlparser::ast;
 use std::fmt;
 
-use super::*;
+use crate::contexts::Context;
+use crate::datatypes::DataValue;
+use crate::error::{Error, Result};
 
-#[derive(Clone, Debug, PartialEq)]
+use crate::planners::{FormatterSettings, IPlanNode};
+
+#[derive(Clone)]
 pub enum ExpressionPlan {
     /// Column field name in String.
     Field(String),
@@ -46,8 +50,14 @@ impl ExpressionPlan {
             ))),
         }
     }
+}
 
-    pub fn describe_node(
+impl IPlanNode for ExpressionPlan {
+    fn name(&self) -> &'static str {
+        "ExpressionPlan"
+    }
+
+    fn describe_node(
         &self,
         f: &mut fmt::Formatter,
         _setting: &mut FormatterSettings,
@@ -56,13 +66,13 @@ impl ExpressionPlan {
     }
 }
 
-impl fmt::Display for ExpressionPlan {
+impl fmt::Debug for ExpressionPlan {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ExpressionPlan::Field(ref v) => write!(f, "{}", v),
             ExpressionPlan::Constant(ref v) => write!(f, "{:?}", v),
             ExpressionPlan::BinaryExpression { left, op, right } => {
-                write!(f, "{} {} {}", left, op, right,)
+                write!(f, "{:?} {} {:?}", left, op, right,)
             }
         }
     }

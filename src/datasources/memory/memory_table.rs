@@ -2,7 +2,14 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
-use super::*;
+use std::sync::Arc;
+
+use crate::datablocks::DataBlock;
+use crate::datatypes::DataSchemaRef;
+use crate::error::Result;
+use crate::planners::{IPlanNode, ReadDataSourcePlan};
+
+use crate::datasources::ITable;
 
 pub struct MemoryTable {
     schema: DataSchemaRef,
@@ -28,7 +35,7 @@ impl ITable for MemoryTable {
         Ok(self.schema.clone())
     }
 
-    fn read_plan(&self, _plans: Vec<PlanNode>) -> Result<ReadDataSourcePlan> {
+    fn read_plan(&self, _plans: Vec<Arc<dyn IPlanNode>>) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             read_parts: self.partitions.len(),
         })

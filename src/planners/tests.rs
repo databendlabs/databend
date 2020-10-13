@@ -67,9 +67,9 @@ fn test_sql_to_plan() {
             let ctx = Context::create_ctx(Arc::new(provider));
             let plan = Planner::new().build(ctx, &statement);
             match plan {
-                Ok(_) => {
+                Ok(v) => {
                     writeln!(actual, "AST:\n{:#?}\n", statement).unwrap();
-                    write!(actual, "Plan:\n{:?}\n", plan.unwrap()).unwrap()
+                    write!(actual, "Plan:\n{:?}\n", v).unwrap()
                 }
                 Err(e) => write!(actual, "Error:\n{}\n", e.to_string()).unwrap(),
             }

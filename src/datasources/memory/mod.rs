@@ -7,9 +7,3 @@ mod memory_table;
 
 pub use self::memory_provider::MemoryProvider;
 pub use self::memory_table::MemoryTable;
-
-use crate::datablocks::DataBlock;
-use crate::datasources::{IDataSourceProvider, ITable};
-use crate::datatypes::DataSchemaRef;
-use crate::error::{Error, Result};
-use crate::planners::{PlanNode, ReadDataSourcePlan};

@@ -2,11 +2,13 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
-use arrow::array::{BooleanArray, Int64Array};
 use std::fmt;
 use std::sync::Arc;
 
-use super::*;
+use arrow::array::{BooleanArray, Float64Array, Int64Array, StringArray, UInt64Array};
+
+use crate::datatypes::{DataArrayRef, DataType};
+use crate::error::{Error, Result};
 
 /// A specific value of a data type.
 #[derive(Clone, PartialEq)]

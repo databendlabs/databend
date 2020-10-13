@@ -4,7 +4,10 @@
 
 use std::sync::Arc;
 
-use super::*;
+use arrow::array::{Float64Array, Int64Array, UInt64Array};
+
+use crate::datatypes::{DataArrayRef, DataType};
+use crate::error::{Error, Result};
 
 macro_rules! arithmetic_compute {
     ($LEFT:expr, $RIGHT:expr, $FUNC:ident) => {

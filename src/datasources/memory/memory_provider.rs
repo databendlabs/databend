@@ -5,7 +5,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::*;
+use crate::error::{Error, Result};
+
+use crate::datasources::{IDataSourceProvider, ITable};
 
 pub struct MemoryProvider {
     tables: HashMap<String, Arc<dyn ITable>>,

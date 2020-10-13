@@ -4,9 +4,13 @@
 
 use std::fmt;
 
-use super::*;
+use crate::datablocks::DataBlock;
+use crate::datatypes::{DataArrayRef, DataSchema, DataType};
+use crate::error::{Error, Result};
 
-#[derive(Clone, PartialEq)]
+use crate::functions::{aggregate, arithmetic, ConstantFunction, VariableFunction};
+
+#[derive(Clone)]
 pub enum Function {
     Constant(ConstantFunction),
     Variable(VariableFunction),
@@ -18,7 +22,7 @@ pub enum Function {
 }
 
 impl Function {
-    pub fn name(&self) -> String {
+    pub fn name(&self) -> &'static str {
         match self {
             Function::Constant(v) => v.name(),
             Function::Variable(v) => v.name(),
