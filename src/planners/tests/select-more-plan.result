@@ -93,3 +93,4 @@ Plan:
   └─ Limit: 10
     └─ Filter: a > 5
       └─ Scan: t1
+        └─ ReadDataSource: table type [InMemory], scan parts [0]

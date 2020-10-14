@@ -39,11 +39,7 @@ impl IPlanNode for LimitPlan {
         "LimitPlan"
     }
 
-    fn describe_node(
-        &self,
-        f: &mut fmt::Formatter,
-        setting: &mut FormatterSettings,
-    ) -> fmt::Result {
+    fn describe(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings) -> fmt::Result {
         let indent = setting.indent;
 
         if indent > 0 {

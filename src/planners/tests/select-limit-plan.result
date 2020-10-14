@@ -67,3 +67,4 @@ Plan:
 └─ Projection: a, bc
   └─ Limit: 10
     └─ Scan: t1
+      └─ ReadDataSource: table type [InMemory], scan parts [0]

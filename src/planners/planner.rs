@@ -46,6 +46,5 @@ pub struct FormatterSettings {
 
 pub trait IPlanNode: fmt::Debug {
     fn name(&self) -> &'static str;
-    fn describe_node(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings)
-        -> fmt::Result;
+    fn describe(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings) -> fmt::Result;
 }

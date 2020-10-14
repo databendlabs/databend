@@ -32,11 +32,7 @@ impl IPlanNode for ProjectionPlan {
         "ProjectionPlan"
     }
 
-    fn describe_node(
-        &self,
-        f: &mut fmt::Formatter,
-        setting: &mut FormatterSettings,
-    ) -> fmt::Result {
+    fn describe(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings) -> fmt::Result {
         write!(f, "{} Projection: ", setting.prefix)?;
         for i in 0..self.expr.len() {
             if i > 0 {

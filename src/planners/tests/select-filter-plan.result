@@ -76,3 +76,4 @@ Plan:
 └─ Projection: a, b
   └─ Filter: a > 3
     └─ Scan: t1
+      └─ ReadDataSource: table type [InMemory], scan parts [0]

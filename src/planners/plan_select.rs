@@ -35,9 +35,9 @@ impl SelectPlan {
                 builder.add(filter);
 
                 let scan = ScanPlan::build_plan(ctx.clone(), &sel.from)?;
-                builder.add(scan);
+                builder.add(scan.clone());
 
-                let read_from_source = ReadDataSourcePlan::build_plan(ctx)?;
+                let read_from_source = ReadDataSourcePlan::build_plan(ctx, scan, builder.build()?)?;
                 builder.add(read_from_source);
             }
             _ => {
@@ -60,13 +60,9 @@ impl IPlanNode for SelectPlan {
         "SelectPlan"
     }
 
-    fn describe_node(
-        &self,
-        f: &mut fmt::Formatter,
-        setting: &mut FormatterSettings,
-    ) -> fmt::Result {
+    fn describe(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings) -> fmt::Result {
         for node in self.nodes.iter() {
-            node.describe_node(f, setting)?;
+            node.describe(f, setting)?;
             setting.indent += 1;
         }
         write!(f, "")
@@ -80,6 +76,6 @@ impl fmt::Debug for SelectPlan {
             indent_char: "  ",
             prefix: "└─",
         };
-        self.describe_node(f, setting)
+        self.describe(f, setting)
     }
 }

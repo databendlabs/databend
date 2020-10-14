@@ -13,11 +13,7 @@ impl IPlanNode for EmptyPlan {
         "EmptyPlan"
     }
 
-    fn describe_node(
-        &self,
-        f: &mut fmt::Formatter,
-        _setting: &mut FormatterSettings,
-    ) -> fmt::Result {
+    fn describe(&self, f: &mut fmt::Formatter, _setting: &mut FormatterSettings) -> fmt::Result {
         write!(f, "")
     }
 }

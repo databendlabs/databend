@@ -37,6 +37,7 @@ impl ITable for MemoryTable {
 
     fn read_plan(&self, _plans: Vec<Arc<dyn IPlanNode>>) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
+            table_type: "InMemory",
             read_parts: self.partitions.len(),
         })
     }

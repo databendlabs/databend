@@ -5,6 +5,7 @@
 pub mod contexts;
 pub mod datablocks;
 pub mod datasources;
+pub mod datastreams;
 pub mod datatypes;
 pub mod error;
 pub mod functions;

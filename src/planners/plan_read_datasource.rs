@@ -8,15 +8,21 @@ use std::sync::Arc;
 use crate::contexts::Context;
 use crate::error::Result;
 
-use crate::planners::{EmptyPlan, FormatterSettings, IPlanNode};
+use crate::planners::{FormatterSettings, IPlanNode, ScanPlan};
 
 pub struct ReadDataSourcePlan {
+    pub(crate) table_type: &'static str,
     pub(crate) read_parts: usize,
 }
 
 impl ReadDataSourcePlan {
-    pub fn build_plan(_ctx: Context) -> Result<Arc<dyn IPlanNode>> {
-        Ok(Arc::new(EmptyPlan {}))
+    pub fn build_plan(
+        ctx: Context,
+        scan: Arc<ScanPlan>,
+        pushdowns: Vec<Arc<dyn IPlanNode>>,
+    ) -> Result<Arc<dyn IPlanNode>> {
+        let table = ctx.table("", scan.table_name.as_str())?;
+        Ok(Arc::new(table.read_plan(pushdowns)?))
     }
 }
 
@@ -25,11 +31,7 @@ impl IPlanNode for ReadDataSourcePlan {
         "ReadDataSourcePlan"
     }
 
-    fn describe_node(
-        &self,
-        f: &mut fmt::Formatter,
-        setting: &mut FormatterSettings,
-    ) -> fmt::Result {
+    fn describe(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings) -> fmt::Result {
         let indent = setting.indent;
         let prefix = setting.indent_char;
 
@@ -39,7 +41,11 @@ impl IPlanNode for ReadDataSourcePlan {
                 write!(f, "{}", prefix)?;
             }
         }
-        write!(f, "{} ReadDataSource: {}", setting.prefix, self.read_parts)
+        write!(
+            f,
+            "{} ReadDataSource: table type [{}], scan parts [{}]",
+            setting.prefix, self.table_type, self.read_parts
+        )
     }
 }
 

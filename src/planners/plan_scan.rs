@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::contexts::Context;
 use crate::error::{Error, Result};
 
-use crate::planners::{EmptyPlan, FormatterSettings, IPlanNode};
+use crate::planners::{FormatterSettings, IPlanNode};
 
 #[derive(Clone)]
 pub struct ScanPlan {
@@ -17,9 +17,11 @@ pub struct ScanPlan {
 }
 
 impl ScanPlan {
-    pub fn build_plan(_ctx: Context, from: &[ast::TableWithJoins]) -> Result<Arc<dyn IPlanNode>> {
+    pub fn build_plan(_ctx: Context, from: &[ast::TableWithJoins]) -> Result<Arc<ScanPlan>> {
         if from.is_empty() {
-            return Ok(Arc::new(EmptyPlan {}));
+            return Ok(Arc::new(ScanPlan {
+                table_name: "".to_string(),
+            }));
         }
 
         let relation = &from[0].relation;
@@ -40,11 +42,7 @@ impl IPlanNode for ScanPlan {
         "ScanPlan"
     }
 
-    fn describe_node(
-        &self,
-        f: &mut fmt::Formatter,
-        setting: &mut FormatterSettings,
-    ) -> fmt::Result {
+    fn describe(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings) -> fmt::Result {
         let indent = setting.indent;
         let prefix = setting.indent_char;
 
