@@ -4,20 +4,21 @@
 
 use sqlparser::ast;
 use std::fmt;
-use std::sync::Arc;
 
 use crate::contexts::Context;
 use crate::datatypes::DataValue;
 use crate::error::{Error, Result};
 
-use crate::planners::{EmptyPlan, ExpressionPlan, FormatterSettings, IPlanNode};
+use crate::planners::{EmptyPlan, ExpressionPlan, FormatterSettings, PlanNode};
 
+#[derive(Clone)]
 pub struct LimitPlan {
+    description: String,
     pub limit: usize,
 }
 
 impl LimitPlan {
-    pub fn build_plan(ctx: Context, limit: &Option<ast::Expr>) -> Result<Arc<dyn IPlanNode>> {
+    pub fn build_plan(ctx: Context, limit: &Option<ast::Expr>) -> Result<PlanNode> {
         match limit {
             Some(ref expr) => {
                 let limit = match ExpressionPlan::build_plan(ctx, expr)? {
@@ -27,19 +28,24 @@ impl LimitPlan {
                         expr
                     ))),
                 }?;
-                Ok(Arc::new(LimitPlan { limit }))
+                Ok(PlanNode::Limit(LimitPlan {
+                    description: "".to_string(),
+                    limit,
+                }))
             }
-            None => Ok(Arc::new(EmptyPlan {})),
+            None => Ok(PlanNode::Empty(EmptyPlan {})),
         }
     }
-}
 
-impl IPlanNode for LimitPlan {
-    fn name(&self) -> &'static str {
+    pub fn name(&self) -> &'static str {
         "LimitPlan"
     }
 
-    fn describe(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings) -> fmt::Result {
+    pub fn set_description(&mut self, description: &str) {
+        self.description = format!(" ({})", description);
+    }
+
+    pub fn format(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings) -> fmt::Result {
         let indent = setting.indent;
 
         if indent > 0 {
@@ -48,12 +54,10 @@ impl IPlanNode for LimitPlan {
                 write!(f, "{}", setting.indent_char)?;
             }
         }
-        write!(f, "{} Limit: {}", setting.prefix, self.limit)
-    }
-}
-
-impl fmt::Debug for LimitPlan {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {:?}", self.name(), self.limit)
+        write!(
+            f,
+            "{} Limit: {}{}",
+            setting.prefix, self.limit, self.description
+        )
     }
 }

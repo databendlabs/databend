@@ -9,7 +9,7 @@ use crate::contexts::Context;
 use crate::datatypes::DataValue;
 use crate::error::{Error, Result};
 
-use crate::planners::{FormatterSettings, IPlanNode};
+use crate::planners::FormatterSettings;
 
 #[derive(Clone)]
 pub enum ExpressionPlan {
@@ -50,14 +50,12 @@ impl ExpressionPlan {
             ))),
         }
     }
-}
 
-impl IPlanNode for ExpressionPlan {
-    fn name(&self) -> &'static str {
+    pub fn name(&self) -> &'static str {
         "ExpressionPlan"
     }
 
-    fn describe(&self, f: &mut fmt::Formatter, _setting: &mut FormatterSettings) -> fmt::Result {
+    pub fn format(&self, f: &mut fmt::Formatter, _setting: &mut FormatterSettings) -> fmt::Result {
         write!(f, "")
     }
 }

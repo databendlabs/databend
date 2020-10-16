@@ -74,6 +74,6 @@ Query(
 
 Plan:
 └─ Projection: a, b
-  └─ Filter: a > 3
+  └─ Filter: a > 3 (WHERE)
     └─ Scan: t1
-      └─ ReadDataSource: table type [InMemory], scan parts [0]
+      └─ ReadDataSource: scan parts [0] (Read from InMemory table)

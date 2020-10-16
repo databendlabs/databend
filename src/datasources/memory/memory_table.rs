@@ -2,12 +2,10 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use std::sync::Arc;
-
 use crate::datablocks::DataBlock;
 use crate::datatypes::DataSchemaRef;
 use crate::error::Result;
-use crate::planners::{IPlanNode, ReadDataSourcePlan};
+use crate::planners::{PlanNode, ReadDataSourcePlan};
 
 use crate::datasources::ITable;
 
@@ -35,8 +33,9 @@ impl ITable for MemoryTable {
         Ok(self.schema.clone())
     }
 
-    fn read_plan(&self, _plans: Vec<Arc<dyn IPlanNode>>) -> Result<ReadDataSourcePlan> {
+    fn read_plan(&self, _plans: Vec<PlanNode>) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
+            description: "(Read from InMemory table)".to_string(),
             table_type: "InMemory",
             read_parts: self.partitions.len(),
         })

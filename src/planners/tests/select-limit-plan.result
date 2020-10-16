@@ -65,6 +65,6 @@ Query(
 
 Plan:
 └─ Projection: a, bc
-  └─ Limit: 10
+  └─ Limit: 10 (preliminary LIMIT)
     └─ Scan: t1
-      └─ ReadDataSource: table type [InMemory], scan parts [0]
+      └─ ReadDataSource: scan parts [0] (Read from InMemory table)

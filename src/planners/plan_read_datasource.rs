@@ -3,35 +3,43 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use std::fmt;
-use std::sync::Arc;
 
 use crate::contexts::Context;
-use crate::error::Result;
+use crate::error::{Error, Result};
 
-use crate::planners::{FormatterSettings, IPlanNode, ScanPlan};
+use crate::planners::{FormatterSettings, PlanNode};
 
+#[derive(Clone)]
 pub struct ReadDataSourcePlan {
+    pub(crate) description: String,
     pub(crate) table_type: &'static str,
     pub(crate) read_parts: usize,
 }
 
 impl ReadDataSourcePlan {
-    pub fn build_plan(
-        ctx: Context,
-        scan: Arc<ScanPlan>,
-        pushdowns: Vec<Arc<dyn IPlanNode>>,
-    ) -> Result<Arc<dyn IPlanNode>> {
-        let table = ctx.table("", scan.table_name.as_str())?;
-        Ok(Arc::new(table.read_plan(pushdowns)?))
-    }
-}
+    pub fn build_plan(ctx: Context, scan: &PlanNode, pushdowns: Vec<PlanNode>) -> Result<PlanNode> {
+        match scan {
+            PlanNode::Scan(v) => {
+                let table = ctx.table("", v.table_name.as_str())?;
+                Ok(PlanNode::ReadSource(table.read_plan(pushdowns)?))
+            }
 
-impl IPlanNode for ReadDataSourcePlan {
-    fn name(&self) -> &'static str {
+            _ => Err(Error::Unsupported(format!(
+                "Expected ScanPlan, but got: {:?}",
+                scan
+            ))),
+        }
+    }
+
+    pub fn name(&self) -> &'static str {
         "ReadDataSourcePlan"
     }
 
-    fn describe(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings) -> fmt::Result {
+    pub fn set_description(&mut self, description: &str) {
+        self.description = format!("({})", description);
+    }
+
+    pub fn format(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings) -> fmt::Result {
         let indent = setting.indent;
         let prefix = setting.indent_char;
 
@@ -43,14 +51,8 @@ impl IPlanNode for ReadDataSourcePlan {
         }
         write!(
             f,
-            "{} ReadDataSource: table type [{}], scan parts [{}]",
-            setting.prefix, self.table_type, self.read_parts
+            "{} ReadDataSource: scan parts [{}] {}",
+            setting.prefix, self.read_parts, self.description
         )
-    }
-}
-
-impl fmt::Debug for ReadDataSourcePlan {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {:?}", self.name(), self.read_parts)
     }
 }

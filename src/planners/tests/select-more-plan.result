@@ -90,7 +90,7 @@ Query(
 
 Plan:
 └─ Projection: a, b + 3
-  └─ Limit: 10
-    └─ Filter: a > 5
+  └─ Limit: 10 (preliminary LIMIT)
+    └─ Filter: a > 5 (WHERE)
       └─ Scan: t1
-        └─ ReadDataSource: table type [InMemory], scan parts [0]
+        └─ ReadDataSource: scan parts [0] (Read from InMemory table)

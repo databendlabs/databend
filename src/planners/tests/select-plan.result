@@ -60,4 +60,4 @@ Query(
 Plan:
 └─ Projection: a, bc
   └─ Scan: t1
-    └─ ReadDataSource: table type [InMemory], scan parts [0]
+    └─ ReadDataSource: scan parts [0] (Read from InMemory table)

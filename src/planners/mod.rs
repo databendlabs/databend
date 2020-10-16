@@ -22,4 +22,4 @@ pub use self::plan_projection::ProjectionPlan;
 pub use self::plan_read_datasource::ReadDataSourcePlan;
 pub use self::plan_scan::ScanPlan;
 pub use self::plan_select::SelectPlan;
-pub use self::planner::{FormatterSettings, IPlanNode, Planner};
+pub use self::planner::{FormatterSettings, PlanNode, Planner};

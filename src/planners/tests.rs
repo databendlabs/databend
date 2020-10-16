@@ -78,6 +78,8 @@ fn test_sql_to_plan() {
         // Check.
         if expect != actual {
             println!("{} [fail]", test_name);
+            println!("expect:{}", expect);
+            println!("actual:{}", actual);
             assert_eq!(expect, actual);
         } else {
             println!("{} [pass]", test_name);

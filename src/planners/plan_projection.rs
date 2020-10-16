@@ -4,35 +4,37 @@
 
 use sqlparser::ast;
 use std::fmt;
-use std::sync::Arc;
 
 use crate::contexts::Context;
 use crate::error::Result;
 
 use crate::planners::plan_expression::item_to_expression_step;
-use crate::planners::{ExpressionPlan, FormatterSettings, IPlanNode};
+use crate::planners::{ExpressionPlan, FormatterSettings, PlanNode};
 
+#[derive(Clone)]
 pub struct ProjectionPlan {
+    description: String,
     pub expr: Vec<ExpressionPlan>,
 }
 
 impl ProjectionPlan {
-    pub fn build_plan(ctx: Context, items: &[ast::SelectItem]) -> Result<Arc<dyn IPlanNode>> {
+    pub fn build_plan(ctx: Context, items: &[ast::SelectItem]) -> Result<PlanNode> {
         let expr = items
             .iter()
             .map(|expr| item_to_expression_step(ctx.clone(), expr))
             .collect::<Result<Vec<ExpressionPlan>>>()?;
 
-        Ok(Arc::new(ProjectionPlan { expr }))
+        Ok(PlanNode::Projection(ProjectionPlan {
+            description: "".to_string(),
+            expr,
+        }))
     }
-}
 
-impl IPlanNode for ProjectionPlan {
-    fn name(&self) -> &'static str {
+    pub fn name(&self) -> &'static str {
         "ProjectionPlan"
     }
 
-    fn describe(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings) -> fmt::Result {
+    pub fn format(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings) -> fmt::Result {
         write!(f, "{} Projection: ", setting.prefix)?;
         for i in 0..self.expr.len() {
             if i > 0 {
@@ -41,11 +43,5 @@ impl IPlanNode for ProjectionPlan {
             write!(f, "{:?}", self.expr[i])?;
         }
         write!(f, "")
-    }
-}
-
-impl fmt::Debug for ProjectionPlan {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {:?}", self.name(), self.expr)
     }
 }
