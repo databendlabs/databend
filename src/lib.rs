@@ -7,6 +7,7 @@ pub mod datablocks;
 pub mod datasources;
 pub mod datastreams;
 pub mod datatypes;
+pub mod distributed;
 pub mod error;
 pub mod functions;
 pub mod optimizers;
