@@ -13,8 +13,8 @@ edition = "2018"
 
 [dependencies]
 num = "0.3"
-sqlparser = "0.6.1"
 arrow = "1.0.1"
+sqlparser = "0.6.1"
 thiserror = "1.0.21"
 
 [dev-dependencies]
