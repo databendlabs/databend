@@ -2,4 +2,6 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-pub struct PipelineExecutor {}
+mod pipeline_executor;
+
+pub use self::pipeline_executor::PipelineExecutor;

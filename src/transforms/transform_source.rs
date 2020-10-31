@@ -3,8 +3,11 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use std::fmt;
+use std::sync::Arc;
 
-use crate::processors::{GraphNode, IProcessor, OutputPort};
+use crate::datablocks::DataBlock;
+use crate::error::Result;
+use crate::processors::{GraphNode, IProcessor, InputPort, OutputPort, Processors};
 
 pub struct SourceTransform {
     output: OutputPort,
@@ -19,13 +22,34 @@ impl SourceTransform {
 }
 
 impl IProcessor for SourceTransform {
-    fn get_output_ports(&mut self) -> Vec<&mut OutputPort> {
-        vec![&mut self.output]
+    fn id(&self) -> u32 {
+        self.output.id()
+    }
+
+    fn input_port(&self) -> &InputPort {
+        unimplemented!()
+    }
+
+    fn output_port(&self) -> &OutputPort {
+        &self.output
+    }
+
+    fn direct_edges(&self) -> Vec<u32> {
+        self.output.edges()
+    }
+
+    fn back_edges(&self) -> Vec<u32> {
+        vec![]
+    }
+
+    fn work(&self, _processors: Arc<Processors>) -> Result<()> {
+        self.output.push(DataBlock::empty())?;
+        Ok(())
     }
 }
 
 impl fmt::Debug for SourceTransform {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.output.node)
+        writeln!(f, "SourceTransform: {:?}", self.output)
     }
 }

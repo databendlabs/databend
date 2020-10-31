@@ -4,20 +4,26 @@
 
 #[test]
 fn test_dag() {
-    use crate::processors::{connect, Graph, Processors};
+    use std::sync::Arc;
+
+    use crate::processors::{connect, Graph, PipelineExecutor, Processors};
     use crate::transforms::{SimpleTransform, SinkTransform, SourceTransform};
 
     let mut graph = Graph::default();
-    let mut source = SourceTransform::create(graph.new_node());
-    let mut simple = SimpleTransform::create(graph.new_node());
-    let mut sink = SinkTransform::create(graph.new_node());
+    let source = SourceTransform::create(graph.new_node());
+    let simple = SimpleTransform::create(graph.new_node());
+    let sink = SinkTransform::create(graph.new_node());
 
-    connect(source.get_output_ports()[0], simple.get_input_ports()[0]).unwrap();
-    connect(simple.get_output_ports()[0], sink.get_input_ports()[0]).unwrap();
+    connect(source.output_port(), simple.input_port()).unwrap();
+    connect(simple.output_port(), sink.input_port()).unwrap();
 
     let mut processors = Processors::default();
-    processors.add(source);
-    processors.add(simple);
-    processors.add(sink);
+    processors.add(source).unwrap();
+    processors.add(simple).unwrap();
+    processors.add(sink).unwrap();
     println!("{:?}", processors);
+
+    let executor = PipelineExecutor::create(Arc::new(processors));
+    executor.execute(4).unwrap();
+    println!("result: {:?}", executor.result().unwrap());
 }

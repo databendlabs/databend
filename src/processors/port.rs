@@ -2,30 +2,68 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
+use std::cell::RefCell;
+use std::fmt;
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
+
+use crate::datablocks::DataBlock;
 use crate::error::Result;
 use crate::processors::GraphNode;
 
-pub struct OutputPort {
-    pub node: GraphNode,
+pub struct Port {
+    node: RefCell<GraphNode>,
+    tx: Sender<DataBlock>,
+    rx: Receiver<DataBlock>,
 }
 
-pub struct InputPort {
-    pub node: GraphNode,
-}
+pub type OutputPort = Port;
+pub type InputPort = Port;
 
-impl OutputPort {
+impl Port {
     pub fn new(node: GraphNode) -> Self {
-        OutputPort { node }
+        let (tx, rx) = mpsc::channel();
+        Port {
+            node: RefCell::new(node),
+            tx,
+            rx,
+        }
+    }
+
+    pub fn id(&self) -> u32 {
+        self.node.borrow().id()
+    }
+
+    pub fn edges(&self) -> Vec<u32> {
+        self.node.borrow().edges()
+    }
+
+    pub fn push(&self, v: DataBlock) -> Result<()> {
+        self.tx.send(v)?;
+        Ok(())
+    }
+
+    pub fn pull(&self) -> Result<DataBlock> {
+        let v = self.rx.recv()?;
+        Ok(v)
     }
 }
 
-impl InputPort {
-    pub fn new(node: GraphNode) -> Self {
-        InputPort { node }
+impl fmt::Debug for Port {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{:?}->{:?}",
+            self.node.borrow().id(),
+            self.node.borrow().edges()
+        )
     }
 }
 
-pub fn connect(output: &mut OutputPort, input: &mut InputPort) -> Result<()> {
-    output.node.add_direct_edge(input.node.id())?;
-    input.node.add_back_edge(output.node.id())
+pub fn connect(output: &OutputPort, input: &InputPort) -> Result<()> {
+    output
+        .node
+        .borrow_mut()
+        .add_edge(input.node.borrow().id())?;
+    input.node.borrow_mut().add_edge(output.node.borrow().id())
 }

@@ -3,8 +3,10 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use std::fmt;
+use std::sync::Arc;
 
-use crate::processors::{GraphNode, IProcessor, InputPort, OutputPort};
+use crate::error::Result;
+use crate::processors::{GraphNode, IProcessor, InputPort, OutputPort, Processors};
 
 pub struct SimpleTransform {
     input: InputPort,
@@ -21,17 +23,35 @@ impl SimpleTransform {
 }
 
 impl IProcessor for SimpleTransform {
-    fn get_input_ports(&mut self) -> Vec<&mut InputPort> {
-        vec![&mut self.input]
+    fn id(&self) -> u32 {
+        self.input.id()
     }
 
-    fn get_output_ports(&mut self) -> Vec<&mut OutputPort> {
-        vec![&mut self.output]
+    fn input_port(&self) -> &InputPort {
+        &self.input
+    }
+
+    fn output_port(&self) -> &OutputPort {
+        &self.output
+    }
+
+    fn direct_edges(&self) -> Vec<u32> {
+        self.output.edges()
+    }
+
+    fn back_edges(&self) -> Vec<u32> {
+        self.input.edges()
+    }
+
+    fn work(&self, processors: Arc<Processors>) -> Result<()> {
+        let parent = processors.get_processor(self.input.edges()[0])?;
+        self.output.push(parent.output_port().pull()?)?;
+        Ok(())
     }
 }
 
 impl fmt::Debug for SimpleTransform {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.input.node)
+        writeln!(f, "SimpleTransform: {:?}", self.output)
     }
 }

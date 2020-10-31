@@ -2,51 +2,30 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use std::fmt;
-
 use crate::error::Result;
-
-#[derive(Default, Clone)]
-pub struct EdgeNode {
-    direct_edges: Vec<u32>,
-    back_edges: Vec<u32>,
-}
 
 #[derive(Default, Clone)]
 pub struct GraphNode {
     id: u32,
-    edge: EdgeNode,
+    edges: Vec<u32>,
 }
 
 impl GraphNode {
     pub fn new(id: u32) -> Self {
-        GraphNode {
-            id,
-            edge: Default::default(),
-        }
+        GraphNode { id, edges: vec![] }
     }
 
     pub fn id(&self) -> u32 {
         self.id
     }
 
-    pub fn add_direct_edge(&mut self, next: u32) -> Result<()> {
-        self.edge.direct_edges.push(next);
-        Ok(())
+    pub fn edges(&self) -> Vec<u32> {
+        self.edges.clone()
     }
 
-    pub fn add_back_edge(&mut self, back: u32) -> Result<()> {
-        self.edge.back_edges.push(back);
+    pub fn add_edge(&mut self, next: u32) -> Result<()> {
+        self.edges.push(next);
         Ok(())
-    }
-}
-
-impl fmt::Debug for GraphNode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for x in self.edge.back_edges.iter() {
-            writeln!(f, "{}->{}", x, self.id)?;
-        }
-        write!(f, "")
     }
 }
 
