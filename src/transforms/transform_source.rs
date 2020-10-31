@@ -43,7 +43,7 @@ impl IProcessor for SourceTransform {
     }
 
     fn work(&self, _processors: Arc<Processors>) -> Result<()> {
-        self.output.push(DataBlock::empty())?;
+        self.output.push(Some(DataBlock::empty()))?;
         Ok(())
     }
 }

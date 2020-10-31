@@ -13,8 +13,8 @@ use crate::processors::GraphNode;
 
 pub struct Port {
     node: RefCell<GraphNode>,
-    tx: Sender<DataBlock>,
-    rx: Receiver<DataBlock>,
+    tx: Sender<Option<DataBlock>>,
+    rx: Receiver<Option<DataBlock>>,
 }
 
 pub type OutputPort = Port;
@@ -38,12 +38,12 @@ impl Port {
         self.node.borrow().edges()
     }
 
-    pub fn push(&self, v: DataBlock) -> Result<()> {
+    pub fn push(&self, v: Option<DataBlock>) -> Result<()> {
         self.tx.send(v)?;
         Ok(())
     }
 
-    pub fn pull(&self) -> Result<DataBlock> {
+    pub fn pull(&self) -> Result<Option<DataBlock>> {
         let v = self.rx.recv()?;
         Ok(v)
     }

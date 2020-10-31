@@ -28,7 +28,7 @@ impl PipelineExecutor {
         Ok(())
     }
 
-    pub fn result(&self) -> Result<DataBlock> {
+    pub fn result(&self) -> Result<Option<DataBlock>> {
         self.processors.last_processor()?.input_port().pull()
     }
 }
