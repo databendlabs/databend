@@ -18,7 +18,7 @@ FuseQuery is a Distributed SQL Query Engine at scale.
 
 | Crate     | Description |  Status |
 |-----------|-------------|-------------|
-| processors | Query execution pipeline | WIP |
+| processors | Dataflow streaming processor | WIP |
 | transforms | Query execution transform | WIP |
 | planners | Distributed plan for queries and DML statements | WIP |
 | optimizers | Optimizer for distributed plan | TODO |
