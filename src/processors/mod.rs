@@ -15,5 +15,5 @@ pub use self::executors::PipelineExecutor;
 pub use self::graph::{Graph, GraphNode};
 pub use self::pipe::Pipe;
 pub use self::pipeline::Pipeline;
-pub use self::port::{connect, InputPort, OutputPort};
-pub use self::processor::{IProcessor, Processors};
+pub use self::port::{connect, InputPort, OutputPort, PortChannel, PortStatus};
+pub use self::processor::{IProcessor, ProcessorStatus, Processors};

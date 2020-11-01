@@ -6,7 +6,9 @@ use std::fmt;
 use std::sync::Arc;
 
 use crate::error::Result;
-use crate::processors::{GraphNode, IProcessor, InputPort, OutputPort, Processors};
+use crate::processors::{
+    GraphNode, IProcessor, InputPort, OutputPort, PortStatus, ProcessorStatus, Processors,
+};
 
 pub struct SinkTransform {
     input: InputPort,
@@ -39,6 +41,13 @@ impl IProcessor for SinkTransform {
 
     fn back_edges(&self) -> Vec<u32> {
         self.input.edges()
+    }
+
+    fn prepare(&self) -> Arc<ProcessorStatus> {
+        match self.input.state() {
+            PortStatus::None => Arc::new(ProcessorStatus::NeedData),
+            PortStatus::HasData => Arc::new(ProcessorStatus::PortFull),
+        }
     }
 
     fn work(&self, processors: Arc<Processors>) -> Result<()> {

@@ -2,15 +2,19 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
+use std::cell::RefCell;
 use std::fmt;
 use std::sync::Arc;
 
 use crate::error::Result;
-use crate::processors::{GraphNode, IProcessor, InputPort, OutputPort, Processors};
+use crate::processors::{
+    GraphNode, IProcessor, InputPort, OutputPort, ProcessorStatus, Processors,
+};
 
 pub struct SimpleTransform {
     input: InputPort,
     output: OutputPort,
+    state: Arc<RefCell<ProcessorStatus>>,
 }
 
 impl SimpleTransform {
@@ -18,6 +22,7 @@ impl SimpleTransform {
         Box::new(SimpleTransform {
             input: InputPort::new(node.clone()),
             output: OutputPort::new(node),
+            state: Arc::new(RefCell::new(ProcessorStatus::NeedData)),
         })
     }
 }
@@ -41,6 +46,10 @@ impl IProcessor for SimpleTransform {
 
     fn back_edges(&self) -> Vec<u32> {
         self.input.edges()
+    }
+
+    fn prepare(&self) -> Arc<ProcessorStatus> {
+        Arc::new(self.state.borrow().clone())
     }
 
     fn work(&self, processors: Arc<Processors>) -> Result<()> {

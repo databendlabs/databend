@@ -19,6 +19,7 @@ impl PipelineExecutor {
 
     pub fn execute(&self, _threads: u32) -> Result<()> {
         for x in self.processors.processors() {
+            x.prepare();
             x.work(self.processors.clone())?;
         }
         Ok(())

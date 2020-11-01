@@ -16,7 +16,25 @@ pub trait IProcessor: fmt::Debug {
     fn output_port(&self) -> &OutputPort;
     fn direct_edges(&self) -> Vec<u32>;
     fn back_edges(&self) -> Vec<u32>;
+    fn prepare(&self) -> Arc<ProcessorStatus>;
     fn work(&self, processors: Arc<Processors>) -> Result<()>;
+}
+
+#[derive(Clone)]
+pub enum ProcessorStatus {
+    NeedData,
+    PortFull,
+    Finished,
+    Ready,
+    Async,
+    Wait,
+    ExpandPipeline,
+}
+
+impl ProcessorStatus {
+    pub fn set(&mut self, state: ProcessorStatus) {
+        *self = state;
+    }
 }
 
 #[derive(Default)]

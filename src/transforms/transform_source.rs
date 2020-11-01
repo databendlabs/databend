@@ -7,7 +7,9 @@ use std::sync::Arc;
 
 use crate::datablocks::DataBlock;
 use crate::error::Result;
-use crate::processors::{GraphNode, IProcessor, InputPort, OutputPort, Processors};
+use crate::processors::{
+    GraphNode, IProcessor, InputPort, OutputPort, PortStatus, ProcessorStatus, Processors,
+};
 
 pub struct SourceTransform {
     output: OutputPort,
@@ -40,6 +42,13 @@ impl IProcessor for SourceTransform {
 
     fn back_edges(&self) -> Vec<u32> {
         vec![]
+    }
+
+    fn prepare(&self) -> Arc<ProcessorStatus> {
+        match self.output.state() {
+            PortStatus::None => Arc::new(ProcessorStatus::NeedData),
+            PortStatus::HasData => Arc::new(ProcessorStatus::PortFull),
+        }
     }
 
     fn work(&self, _processors: Arc<Processors>) -> Result<()> {
