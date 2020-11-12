@@ -2,63 +2,52 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use std::fmt;
-use std::sync::Arc;
+use async_std::sync::Arc;
+use async_trait::async_trait;
 
 use crate::datablocks::DataBlock;
 use crate::error::Result;
-use crate::processors::{
-    GraphNode, IProcessor, InputPort, OutputPort, PortStatus, ProcessorStatus, Processors,
-};
+use crate::processors::{FormatterSettings, IProcessor};
+use crate::streams::{ChunkStream, DataBlockStream};
 
 pub struct SourceTransform {
-    output: OutputPort,
+    data: Vec<DataBlock>,
 }
 
 impl SourceTransform {
-    pub fn create(node: GraphNode) -> Box<dyn IProcessor> {
-        Box::new(SourceTransform {
-            output: OutputPort::new(node),
-        })
+    pub fn create(data: Vec<DataBlock>) -> Self {
+        SourceTransform { data }
     }
 }
 
+#[async_trait]
 impl IProcessor for SourceTransform {
-    fn id(&self) -> u32 {
-        self.output.id()
+    fn name(&self) -> &'static str {
+        "SourceTransform"
     }
 
-    fn input_port(&self) -> &InputPort {
+    fn connect_to(&mut self, _: Arc<dyn IProcessor>) {
         unimplemented!()
     }
 
-    fn output_port(&self) -> &OutputPort {
-        &self.output
-    }
+    fn format(
+        &self,
+        f: &mut std::fmt::Formatter,
+        setting: &mut FormatterSettings,
+    ) -> std::fmt::Result {
+        let indent = setting.indent;
+        let prefix = setting.indent_char;
 
-    fn direct_edges(&self) -> Vec<u32> {
-        self.output.edges()
-    }
-
-    fn back_edges(&self) -> Vec<u32> {
-        vec![]
-    }
-
-    fn prepare(&self) -> Arc<ProcessorStatus> {
-        match self.output.state() {
-            PortStatus::None => Arc::new(ProcessorStatus::NeedData),
-            PortStatus::HasData => Arc::new(ProcessorStatus::PortFull),
+        if indent > 0 {
+            writeln!(f)?;
+            for _ in 0..indent {
+                write!(f, "{}", prefix)?;
+            }
         }
+        write!(f, "{} {} × {}", setting.prefix, self.name(), setting.ways)
     }
 
-    fn work(&self, _processors: Arc<Processors>) -> Result<()> {
-        self.output.push(Some(DataBlock::empty()))?;
-        Ok(())
-    }
-}
-
-impl fmt::Debug for SourceTransform {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "SourceTransform: {:?}", self.output)
+    async fn execute(&self) -> Result<DataBlockStream> {
+        Ok(Box::pin(ChunkStream::create(self.data.clone())))
     }
 }

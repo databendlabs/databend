@@ -2,6 +2,4 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-mod pipeline_executor;
-
-pub use self::pipeline_executor::PipelineExecutor;
+pub mod bench_pipeline_executor;
