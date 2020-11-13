@@ -17,12 +17,12 @@ async fn pipeline_count_executor() {
             columns.push(k);
         }
         let a = fuse_engine::test::generate_source(vec![columns]);
-        pipeline.add_source_processor(Arc::new(a)).unwrap();
+        pipeline.add_source(Arc::new(a)).unwrap();
     }
 
     pipeline.merge_processor().unwrap();
     pipeline
-        .add_simple_processor(|| Box::new(CountTransform::create()))
+        .add_simple_transform(|| Box::new(CountTransform::create()))
         .unwrap();
     pipeline.merge_processor().unwrap();
 

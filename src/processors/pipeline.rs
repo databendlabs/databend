@@ -36,7 +36,7 @@ impl Pipeline {
         }
     }
 
-    pub fn add_source_processor(&mut self, source: Arc<dyn IProcessor>) -> Result<()> {
+    pub fn add_source(&mut self, source: Arc<dyn IProcessor>) -> Result<()> {
         if self.processors.first().is_none() {
             let mut first = vec![];
             first.push(source);
@@ -55,7 +55,7 @@ impl Pipeline {
     ///
     /// processor3 --> processor3_1
     ///
-    pub fn add_simple_processor(&mut self, f: impl Fn() -> Box<dyn IProcessor>) -> Result<()> {
+    pub fn add_simple_transform(&mut self, f: impl Fn() -> Box<dyn IProcessor>) -> Result<()> {
         let mut items = vec![];
         let last = self.processors.last().ok_or_else(|| {
             Error::Internal("Can't add transform to an empty pipe list".to_string())

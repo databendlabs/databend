@@ -25,13 +25,13 @@ fn test_pipeline_builder() {
 
                 let a =
                     crate::test::generate_source(vec![vec![14, 13, 12, 11], vec![11, 12, 13, 14]]);
-                pipeline.add_source_processor(Arc::new(a)).unwrap();
+                pipeline.add_source(Arc::new(a)).unwrap();
                 let b =
                     crate::test::generate_source(vec![vec![24, 23, 22, 21], vec![21, 22, 23, 24]]);
-                pipeline.add_source_processor(Arc::new(b)).unwrap();
+                pipeline.add_source(Arc::new(b)).unwrap();
 
                 pipeline
-                    .add_simple_processor(|| Box::new(CountTransform::create()))
+                    .add_simple_transform(|| Box::new(CountTransform::create()))
                     .unwrap();
                 pipeline.merge_processor().unwrap();
                 pipeline
@@ -50,15 +50,15 @@ fn test_pipeline_builder() {
 
                 let a =
                     crate::test::generate_source(vec![vec![14, 13, 12, 11], vec![11, 12, 13, 14]]);
-                pipeline.add_source_processor(Arc::new(a)).unwrap();
+                pipeline.add_source(Arc::new(a)).unwrap();
                 let b =
                     crate::test::generate_source(vec![vec![24, 23, 22, 21], vec![21, 22, 23, 24]]);
-                pipeline.add_source_processor(Arc::new(b)).unwrap();
+                pipeline.add_source(Arc::new(b)).unwrap();
 
                 pipeline.merge_processor().unwrap();
                 pipeline.expand_processor(8).unwrap();
                 pipeline
-                    .add_simple_processor(|| Box::new(CountTransform::create()))
+                    .add_simple_transform(|| Box::new(CountTransform::create()))
                     .unwrap();
                 pipeline.merge_processor().unwrap();
                 pipeline
@@ -97,12 +97,12 @@ async fn test_pipeline_executor() {
             columns.push(k);
         }
         let a = crate::test::generate_source(vec![columns]);
-        pipeline.add_source_processor(Arc::new(a)).unwrap();
+        pipeline.add_source(Arc::new(a)).unwrap();
     }
 
     pipeline.merge_processor().unwrap();
     pipeline
-        .add_simple_processor(|| Box::new(CountTransform::create()))
+        .add_simple_transform(|| Box::new(CountTransform::create()))
         .unwrap();
     pipeline.merge_processor().unwrap();
 
