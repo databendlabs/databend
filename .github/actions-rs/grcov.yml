@@ -1,0 +1,3 @@
+ignore-not-existing: true
+ignore:
+  - "/*/tests.rs"
