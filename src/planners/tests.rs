@@ -2,34 +2,34 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use std::path::PathBuf;
-use std::{ffi::OsStr, fs, io};
-
-#[allow(dead_code)]
-fn list_of_testdata_paths(root: &str) -> io::Result<Vec<PathBuf>> {
-    let mut result = vec![];
-
-    for path in fs::read_dir(root)? {
-        let path = path?.path();
-        if let Some("test") = path.extension().and_then(OsStr::to_str) {
-            result.push(path);
-        }
-    }
-    Ok(result)
-}
 
 #[test]
 fn test_sql_to_plan() {
+    use std::path::PathBuf;
+    use std::{ffi::OsStr, fs, io};
+    use std::sync::Arc;
+    use std::{env, fmt::Write};
+
     use pretty_assertions::assert_eq;
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
-    use std::sync::Arc;
-    use std::{env, fmt::Write};
 
     use super::planner::Planner;
     use crate::contexts::Context;
     use crate::datasources::{MemoryProvider, MemoryTable};
     use crate::datavalues::{DataField, DataSchema, DataType};
+
+    fn list_of_testdata_paths(root: &str) -> io::Result<Vec<PathBuf>> {
+        let mut result = vec![];
+
+        for path in fs::read_dir(root)? {
+            let path = path?.path();
+            if let Some("test") = path.extension().and_then(OsStr::to_str) {
+                result.push(path);
+            }
+        }
+        Ok(result)
+    }
 
     let test_path = format!(
         "{}/src/planners/tests/",
