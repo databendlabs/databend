@@ -17,8 +17,8 @@ async fn pipeline_sum_executor(expand: bool, parts: i64) {
 
     for i in 0..parts {
         let mut columns = vec![];
-        for k in 0..2500000 {
-            columns.push(i * 2500000 + k);
+        for k in 0..250000 {
+            columns.push(i * 250000 + k);
         }
         let a = fuse_engine::test::generate_source(vec![columns]);
 

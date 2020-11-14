@@ -18,7 +18,7 @@ pub fn datavalue_max(left: DataValue, right: DataValue) -> Result<DataValue> {
         }
         _ => {
             return Err(Error::Unsupported(format!(
-                "Unsupported scalar_min() for data type: left:{:?}, right:{:?}",
+                "Unsupported datavalue_max() for data type: left:{:?}, right:{:?}",
                 left.data_type()?,
                 right.data_type()?
             )))

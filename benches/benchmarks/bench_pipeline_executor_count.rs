@@ -5,17 +5,20 @@
 use async_std::{stream::StreamExt, sync::Arc};
 use criterion::{criterion_group, criterion_main, Criterion};
 
+use fuse_engine::datavalues::DataType;
+use fuse_engine::functions::VariableFunction;
 use fuse_engine::planners::ExpressionPlan;
 use fuse_engine::processors::Pipeline;
 use fuse_engine::transforms::CountTransform;
 
 async fn pipeline_count_executor(expand: bool, parts: i64) {
+    let mut column = "a";
     let mut pipeline = Pipeline::create();
 
     for i in 0..parts {
         let mut columns = vec![];
-        for k in 0..2500000 {
-            columns.push(i * 2500000 + k);
+        for k in 0..250000 {
+            columns.push(i * 250000 + k);
         }
         let a = fuse_engine::test::generate_source(vec![columns]);
 
@@ -27,11 +30,14 @@ async fn pipeline_count_executor(expand: bool, parts: i64) {
     if expand {
         pipeline
             .add_simple_transform(|| {
-                Box::new(CountTransform::create(Arc::new(ExpressionPlan::Field(
-                    "count".to_string(),
-                ))))
+                Box::new(CountTransform::create(
+                    Arc::new(ExpressionPlan::Field("count".to_string())),
+                    Arc::new(VariableFunction::create("a").unwrap()),
+                    &DataType::UInt64,
+                ))
             })
             .unwrap();
+        column = "count";
     }
 
     // Merge the processor into one.
@@ -40,9 +46,11 @@ async fn pipeline_count_executor(expand: bool, parts: i64) {
     // Add one transform.
     pipeline
         .add_simple_transform(|| {
-            Box::new(CountTransform::create(Arc::new(ExpressionPlan::Field(
-                "count".to_string(),
-            ))))
+            Box::new(CountTransform::create(
+                Arc::new(ExpressionPlan::Field("count".to_string())),
+                Arc::new(VariableFunction::create(column).unwrap()),
+                &DataType::UInt64,
+            ))
         })
         .unwrap();
 

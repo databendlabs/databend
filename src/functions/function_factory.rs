@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::datavalues::DataType;
 use crate::error::{Error, Result};
-use crate::functions::{aggregate, arithmetic, Function};
+use crate::functions::{arithmetic, AggregatorFunction, Function};
 
 pub struct ScalarFunctionFactory;
 
@@ -29,14 +29,6 @@ pub struct AggregateFunctionFactory;
 
 impl AggregateFunctionFactory {
     pub fn get(name: &str, column: Arc<Function>, data_type: &DataType) -> Result<Function> {
-        match name.to_uppercase().as_str() {
-            "COUNT" => aggregate::CountAggregateFunction::create(),
-            "SUM" => aggregate::SumAggregateFunction::create(column, data_type),
-            "MAX" => aggregate::MaxAggregateFunction::create(column, data_type),
-            _ => Err(Error::Unsupported(format!(
-                "Unsupported Aggregate Function: {}",
-                name
-            ))),
-        }
+        AggregatorFunction::create(name, column, data_type)
     }
 }

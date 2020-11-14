@@ -2,13 +2,12 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-
 #[test]
 fn test_sql_to_plan() {
     use std::path::PathBuf;
-    use std::{ffi::OsStr, fs, io};
     use std::sync::Arc;
     use std::{env, fmt::Write};
+    use std::{ffi::OsStr, fs, io};
 
     use pretty_assertions::assert_eq;
     use sqlparser::dialect::GenericDialect;

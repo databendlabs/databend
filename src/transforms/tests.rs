@@ -15,6 +15,8 @@ struct Test {
 fn test_pipeline_builder() {
     use std::sync::Arc;
 
+    use crate::datavalues::DataType;
+    use crate::functions::VariableFunction;
     use crate::planners::ExpressionPlan;
 
     let tests = vec![
@@ -34,9 +36,11 @@ fn test_pipeline_builder() {
 
                 pipeline
                     .add_simple_transform(|| {
-                        Box::new(CountTransform::create(Arc::new(ExpressionPlan::Field(
-                            "count".to_string(),
-                        ))))
+                        Box::new(CountTransform::create(
+                            Arc::new(ExpressionPlan::Field("count".to_string())),
+                            Arc::new(VariableFunction::create("a").unwrap()),
+                            &DataType::UInt64,
+                        ))
                     })
                     .unwrap();
                 pipeline.merge_processor().unwrap();
@@ -65,9 +69,11 @@ fn test_pipeline_builder() {
                 pipeline.expand_processor(8).unwrap();
                 pipeline
                     .add_simple_transform(|| {
-                        Box::new(CountTransform::create(Arc::new(ExpressionPlan::Field(
-                            "count".to_string(),
-                        ))))
+                        Box::new(CountTransform::create(
+                            Arc::new(ExpressionPlan::Field("count".to_string())),
+                            Arc::new(VariableFunction::create("a").unwrap()),
+                            &DataType::UInt64,
+                        ))
                     })
                     .unwrap();
                 pipeline.merge_processor().unwrap();

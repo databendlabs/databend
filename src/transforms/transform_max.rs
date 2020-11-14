@@ -44,7 +44,7 @@ impl IProcessor for MaxTransform {
     }
 
     async fn execute(&self) -> Result<DataBlockStream> {
-        let mut func = AggregateFunctionFactory::get("MAX", self.column.clone(), &self.data_type)?;
+        let mut func = AggregateFunctionFactory::get("max", self.column.clone(), &self.data_type)?;
 
         let mut exec = self.input.execute().await?;
         while let Some(v) = exec.next().await {

@@ -44,7 +44,7 @@ impl IProcessor for SumTransform {
     }
 
     async fn execute(&self) -> Result<DataBlockStream> {
-        let mut func = AggregateFunctionFactory::get("SUM", self.column.clone(), &self.data_type)?;
+        let mut func = AggregateFunctionFactory::get("sum", self.column.clone(), &self.data_type)?;
 
         let mut exec = self.input.execute().await?;
         while let Some(v) = exec.next().await {

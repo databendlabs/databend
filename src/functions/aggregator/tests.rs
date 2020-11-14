@@ -23,9 +23,7 @@ fn test_cases() {
     use std::sync::Arc;
 
     use crate::datavalues::{DataField, DataSchema, DataType, Int64Array, UInt64Array};
-    use crate::functions::{
-        aggregate::CountAggregateFunction, aggregate::SumAggregateFunction, VariableFunction,
-    };
+    use crate::functions::{aggregator::AggregatorFunction, VariableFunction};
 
     let schema = DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),
@@ -39,9 +37,14 @@ fn test_cases() {
         Test {
             name: "count-passed",
             args: vec![field_a.clone(), field_b.clone()],
-            display: "CountAggregateFunction",
+            display: "CountAggregatorFunction",
             nullable: false,
-            func: CountAggregateFunction::create().unwrap(),
+            func: AggregatorFunction::create(
+                "count",
+                Arc::new(VariableFunction::create("a").unwrap()),
+                &DataType::UInt64,
+            )
+            .unwrap(),
             block: DataBlock::new(
                 schema.clone(),
                 vec![
@@ -55,9 +58,10 @@ fn test_cases() {
         Test {
             name: "sum-passed",
             args: vec![field_a.clone(), field_b.clone()],
-            display: "SumAggregateFunction",
+            display: "SumAggregatorFunction",
             nullable: false,
-            func: SumAggregateFunction::create(
+            func: AggregatorFunction::create(
+                "sum",
                 Arc::new(VariableFunction::create("a").unwrap()),
                 &DataType::Int64,
             )
@@ -70,6 +74,27 @@ fn test_cases() {
                 ],
             ),
             expect: Arc::new(Int64Array::from(vec![10])),
+            error: "",
+        },
+        Test {
+            name: "max-passed",
+            args: vec![field_a.clone(), field_b.clone()],
+            display: "MaxAggregatorFunction",
+            nullable: false,
+            func: AggregatorFunction::create(
+                "max",
+                Arc::new(VariableFunction::create("a").unwrap()),
+                &DataType::Int64,
+            )
+            .unwrap(),
+            block: DataBlock::new(
+                schema.clone(),
+                vec![
+                    Arc::new(Int64Array::from(vec![14, 3, 2, 1])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
+                ],
+            ),
+            expect: Arc::new(Int64Array::from(vec![14])),
             error: "",
         },
     ];

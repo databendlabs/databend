@@ -7,8 +7,7 @@ use std::fmt;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataArrayRef, DataSchema, DataType};
 use crate::error::{Error, Result};
-
-use crate::functions::{aggregate, arithmetic, ConstantFunction, VariableFunction};
+use crate::functions::{arithmetic, AggregatorFunction, ConstantFunction, VariableFunction};
 
 #[derive(Clone)]
 pub enum Function {
@@ -18,9 +17,7 @@ pub enum Function {
     Sub(arithmetic::SubFunction),
     Div(arithmetic::DivFunction),
     Mul(arithmetic::MulFunction),
-    Count(aggregate::CountAggregateFunction),
-    Sum(aggregate::SumAggregateFunction),
-    Max(aggregate::MaxAggregateFunction),
+    Aggregator(AggregatorFunction),
 }
 
 impl Function {
@@ -32,9 +29,7 @@ impl Function {
             Function::Div(v) => v.name(),
             Function::Mul(v) => v.name(),
             Function::Sub(v) => v.name(),
-            Function::Count(v) => v.name(),
-            Function::Sum(v) => v.name(),
-            Function::Max(v) => v.name(),
+            Function::Aggregator(v) => v.name(),
         }
     }
 
@@ -46,9 +41,7 @@ impl Function {
             Function::Div(v) => v.return_type(input_schema),
             Function::Mul(v) => v.return_type(input_schema),
             Function::Sub(v) => v.return_type(input_schema),
-            Function::Count(v) => v.return_type(),
-            Function::Sum(v) => v.return_type(),
-            Function::Max(v) => v.return_type(),
+            Function::Aggregator(v) => v.return_type(),
         }
     }
 
@@ -60,9 +53,7 @@ impl Function {
             Function::Div(v) => v.nullable(input_schema),
             Function::Mul(v) => v.nullable(input_schema),
             Function::Sub(v) => v.nullable(input_schema),
-            Function::Count(v) => v.nullable(input_schema),
-            Function::Sum(v) => v.nullable(input_schema),
-            Function::Max(v) => v.nullable(input_schema),
+            Function::Aggregator(v) => v.nullable(input_schema),
         }
     }
 
@@ -83,9 +74,7 @@ impl Function {
 
     pub fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
         match self {
-            Function::Count(ref mut v) => v.accumulate(block),
-            Function::Sum(ref mut v) => v.accumulate(block),
-            Function::Max(ref mut v) => v.accumulate(block),
+            Function::Aggregator(ref mut v) => v.accumulate(block),
             _ => Err(Error::Unsupported(format!(
                 "Unsupported accumulate() for function {}",
                 self.name()
@@ -95,11 +84,9 @@ impl Function {
 
     pub fn aggregate(&self) -> Result<DataArrayRef> {
         match self {
-            Function::Count(v) => v.aggregate(),
-            Function::Sum(v) => v.aggregate(),
-            Function::Max(v) => v.aggregate(),
+            Function::Aggregator(v) => v.aggregate(),
             _ => Err(Error::Unsupported(format!(
-                "Unsupported aggregate() for function {}",
+                "Unsupported aggregator() for function {}",
                 self.name()
             ))),
         }
@@ -115,9 +102,7 @@ impl fmt::Debug for Function {
             Function::Div(v) => write!(f, "{}", v),
             Function::Mul(v) => write!(f, "{}", v),
             Function::Sub(v) => write!(f, "{}", v),
-            Function::Count(v) => write!(f, "{}", v),
-            Function::Sum(v) => write!(f, "{}", v),
-            Function::Max(v) => write!(f, "{}", v),
+            Function::Aggregator(v) => write!(f, "{}", v),
         }
     }
 }

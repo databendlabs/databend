@@ -11,19 +11,23 @@ use crate::datablocks::DataBlock;
 use crate::datastreams::{ChunkStream, DataBlockStream};
 use crate::datavalues::{DataField, DataSchema, DataType};
 use crate::error::Result;
-use crate::functions::{AggregateFunctionFactory, VariableFunction};
+use crate::functions::{AggregateFunctionFactory, Function};
 use crate::planners::ExpressionPlan;
 use crate::processors::{EmptyProcessor, IProcessor};
 
 pub struct CountTransform {
     expr: Arc<ExpressionPlan>,
+    column: Arc<Function>,
+    data_type: DataType,
     input: Arc<dyn IProcessor>,
 }
 
 impl CountTransform {
-    pub fn create(expr: Arc<ExpressionPlan>) -> Self {
+    pub fn create(expr: Arc<ExpressionPlan>, column: Arc<Function>, data_type: &DataType) -> Self {
         CountTransform {
             expr,
+            column,
+            data_type: data_type.clone(),
             input: Arc::new(EmptyProcessor::create()),
         }
     }
@@ -40,11 +44,8 @@ impl IProcessor for CountTransform {
     }
 
     async fn execute(&self) -> Result<DataBlockStream> {
-        let mut func = AggregateFunctionFactory::get(
-            "COUNT",
-            Arc::new(VariableFunction::create("")?),
-            &DataType::UInt64,
-        )?;
+        let mut func =
+            AggregateFunctionFactory::get("count", self.column.clone(), &self.data_type)?;
 
         let mut exec = self.input.execute().await?;
         while let Some(v) = exec.next().await {

@@ -1,5 +1,5 @@
 ignore-not-existing: true
 ignore:
-  - "/lib.rs"
-  - "/error.rs"
+  - "lib.rs"
+  - "error.rs"
   - "/*/tests.rs"
