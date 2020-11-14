@@ -3,7 +3,7 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use crate::datablocks::DataBlock;
-use crate::datatypes::DataArrayRef;
+use crate::datavalues::DataArrayRef;
 use crate::functions::Function;
 
 #[allow(dead_code)]
@@ -21,11 +21,11 @@ struct Test {
 fn test_factory() {
     use std::sync::Arc;
 
-    use crate::datatypes::{
+    use crate::datavalues::{
         DataArrayRef, DataField, DataSchema, DataType, Int64Array, UInt64Array,
     };
     use crate::error::Result;
-    use crate::functions::{FunctionFactory, VariableFunction};
+    use crate::functions::{AggregateFunctionFactory, ScalarFunctionFactory, VariableFunction};
 
     let schema = DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),
@@ -113,11 +113,18 @@ fn test_factory() {
         },
     ];
     for t in tests {
-        let mut fun = FunctionFactory::get(t.fun, &*t.args).unwrap();
         let result: Result<DataArrayRef>;
+
         if !t.is_aggregate {
+            let fun = ScalarFunctionFactory::get(t.fun, &*t.args).unwrap();
             result = fun.evaluate(&t.block);
         } else {
+            let mut fun = AggregateFunctionFactory::get(
+                t.fun,
+                Arc::new(VariableFunction::create("a").unwrap()),
+                &DataType::Int64,
+            )
+            .unwrap();
             fun.accumulate(&t.block).unwrap();
             result = fun.aggregate();
         }

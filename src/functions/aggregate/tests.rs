@@ -3,7 +3,7 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use crate::datablocks::DataBlock;
-use crate::datatypes::DataArrayRef;
+use crate::datavalues::DataArrayRef;
 use crate::functions::Function;
 
 #[allow(dead_code)]
@@ -22,8 +22,10 @@ struct Test {
 fn test_cases() {
     use std::sync::Arc;
 
-    use crate::datatypes::{DataField, DataSchema, DataType, Int64Array, UInt64Array};
-    use crate::functions::{aggregate::CountAggregateFunction, VariableFunction};
+    use crate::datavalues::{DataField, DataSchema, DataType, Int64Array, UInt64Array};
+    use crate::functions::{
+        aggregate::CountAggregateFunction, aggregate::SumAggregateFunction, VariableFunction,
+    };
 
     let schema = DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),
@@ -33,22 +35,44 @@ fn test_cases() {
     let field_a = VariableFunction::create("a").unwrap();
     let field_b = VariableFunction::create("b").unwrap();
 
-    let tests = vec![Test {
-        name: "count-passed",
-        args: vec![field_a.clone(), field_b.clone()],
-        display: "CountAggregateFunction",
-        nullable: false,
-        func: CountAggregateFunction::create().unwrap(),
-        block: DataBlock::new(
-            schema.clone(),
-            vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
-            ],
-        ),
-        expect: Arc::new(UInt64Array::from(vec![4])),
-        error: "",
-    }];
+    let tests = vec![
+        Test {
+            name: "count-passed",
+            args: vec![field_a.clone(), field_b.clone()],
+            display: "CountAggregateFunction",
+            nullable: false,
+            func: CountAggregateFunction::create().unwrap(),
+            block: DataBlock::new(
+                schema.clone(),
+                vec![
+                    Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
+                ],
+            ),
+            expect: Arc::new(UInt64Array::from(vec![4])),
+            error: "",
+        },
+        Test {
+            name: "sum-passed",
+            args: vec![field_a.clone(), field_b.clone()],
+            display: "SumAggregateFunction",
+            nullable: false,
+            func: SumAggregateFunction::create(
+                Arc::new(VariableFunction::create("a").unwrap()),
+                &DataType::Int64,
+            )
+            .unwrap(),
+            block: DataBlock::new(
+                schema.clone(),
+                vec![
+                    Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
+                ],
+            ),
+            expect: Arc::new(Int64Array::from(vec![10])),
+            error: "",
+        },
+    ];
 
     for mut t in tests {
         (t.func).accumulate(&t.block).unwrap();

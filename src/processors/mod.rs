@@ -4,12 +4,12 @@
 
 mod pipeline;
 mod processor;
-mod transform_empty;
-mod transform_merge;
-mod transform_through;
+mod processor_empty;
+mod processor_merge;
+mod processor_through;
 
 pub use self::pipeline::Pipeline;
 pub use self::processor::{FormatterSettings, IProcessor};
-pub use self::transform_empty::EmptyTransform;
-pub use self::transform_merge::MergeTransform;
-pub use self::transform_through::ThroughTransform;
+pub use self::processor_empty::EmptyProcessor;
+pub use self::processor_merge::MergeProcessor;
+pub use self::processor_through::ThroughProcessor;

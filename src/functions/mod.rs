@@ -13,5 +13,5 @@ mod function_variable;
 
 pub use self::function::Function;
 pub use self::function_constant::ConstantFunction;
-pub use self::function_factory::FunctionFactory;
+pub use self::function_factory::{AggregateFunctionFactory, ScalarFunctionFactory};
 pub use self::function_variable::VariableFunction;

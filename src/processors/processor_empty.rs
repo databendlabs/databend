@@ -5,25 +5,29 @@
 use async_std::sync::Arc;
 use async_trait::async_trait;
 
+use crate::datastreams::{ChunkStream, DataBlockStream};
 use crate::error::Result;
 use crate::processors::{FormatterSettings, IProcessor};
-use crate::streams::{ChunkStream, DataBlockStream};
 
-pub struct EmptyTransform {}
+pub struct EmptyProcessor {}
 
-impl EmptyTransform {
+impl EmptyProcessor {
     pub fn create() -> Self {
-        EmptyTransform {}
+        EmptyProcessor {}
     }
 }
 
 #[async_trait]
-impl IProcessor for EmptyTransform {
+impl IProcessor for EmptyProcessor {
     fn name(&self) -> &'static str {
-        "EmptyTransform"
+        "EmptyProcessor"
     }
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) {}
+
+    async fn execute(&self) -> Result<DataBlockStream> {
+        Ok(Box::pin(ChunkStream::create(vec![])))
+    }
 
     fn format(
         &self,
@@ -31,9 +35,5 @@ impl IProcessor for EmptyTransform {
         _setting: &mut FormatterSettings,
     ) -> std::fmt::Result {
         write!(f, "")
-    }
-
-    async fn execute(&self) -> Result<DataBlockStream> {
-        Ok(Box::pin(ChunkStream::create(vec![])))
     }
 }

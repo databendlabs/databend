@@ -6,7 +6,7 @@ use sqlparser::ast;
 use std::fmt;
 
 use crate::contexts::Context;
-use crate::datatypes::DataValue;
+use crate::datavalues::DataValue;
 use crate::error::{Error, Result};
 
 use crate::planners::FormatterSettings;
@@ -29,13 +29,13 @@ impl ExpressionPlan {
         match expr {
             ast::Expr::Identifier(ref v) => Ok(ExpressionPlan::Field(v.clone().value)),
             ast::Expr::Value(ast::Value::Number(n)) => match n.parse::<i64>() {
-                Ok(n) => Ok(ExpressionPlan::Constant(DataValue::Int64(n))),
-                Err(_) => Ok(ExpressionPlan::Constant(DataValue::Float64(
+                Ok(n) => Ok(ExpressionPlan::Constant(DataValue::Int64(Some(n)))),
+                Err(_) => Ok(ExpressionPlan::Constant(DataValue::Float64(Some(
                     n.parse::<f64>()?,
-                ))),
+                )))),
             },
             ast::Expr::Value(ast::Value::SingleQuotedString(s)) => {
-                Ok(ExpressionPlan::Constant(DataValue::String(s.clone())))
+                Ok(ExpressionPlan::Constant(DataValue::String(Some(s.clone()))))
             }
             ast::Expr::BinaryOp { left, op, right } => Ok(ExpressionPlan::BinaryExpression {
                 left: Box::new(Self::build_plan(ctx.clone(), left)?),

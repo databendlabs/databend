@@ -2,7 +2,7 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use crate::datatypes::{DataArrayRef, DataSchema};
+use crate::datavalues::{DataArrayRef, DataSchema};
 use crate::error::Result;
 
 #[derive(Debug, Clone)]

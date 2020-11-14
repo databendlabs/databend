@@ -5,7 +5,7 @@
 use std::fmt;
 
 use crate::datablocks::DataBlock;
-use crate::datatypes::{array_sub, DataArrayRef, DataSchema, DataType};
+use crate::datavalues::{array_sub, DataArrayRef, DataSchema, DataType};
 use crate::error::Result;
 
 use crate::functions::Function;

@@ -5,7 +5,7 @@
 use std::fmt;
 
 use crate::datablocks::DataBlock;
-use crate::datatypes::{DataArrayRef, DataSchema, DataType, DataValue};
+use crate::datavalues::{DataArrayRef, DataSchema, DataType, DataValue};
 use crate::error::Result;
 
 use crate::functions::Function;
@@ -24,7 +24,7 @@ impl CountAggregateFunction {
         "CountAggregateFunction"
     }
 
-    pub fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
+    pub fn return_type(&self) -> Result<DataType> {
         Ok(DataType::UInt64)
     }
 
@@ -40,7 +40,7 @@ impl CountAggregateFunction {
 
     // Calculates a final aggregate.
     pub fn aggregate(&self) -> Result<DataArrayRef> {
-        DataValue::UInt64(self.count).to_array()
+        DataValue::UInt64(Some(self.count)).to_array()
     }
 }
 

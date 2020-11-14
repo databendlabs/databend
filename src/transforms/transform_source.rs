@@ -6,9 +6,9 @@ use async_std::sync::Arc;
 use async_trait::async_trait;
 
 use crate::datablocks::DataBlock;
+use crate::datastreams::{ChunkStream, DataBlockStream};
 use crate::error::Result;
-use crate::processors::{FormatterSettings, IProcessor};
-use crate::streams::{ChunkStream, DataBlockStream};
+use crate::processors::IProcessor;
 
 pub struct SourceTransform {
     data: Vec<DataBlock>,
@@ -28,23 +28,6 @@ impl IProcessor for SourceTransform {
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) {
         unimplemented!()
-    }
-
-    fn format(
-        &self,
-        f: &mut std::fmt::Formatter,
-        setting: &mut FormatterSettings,
-    ) -> std::fmt::Result {
-        let indent = setting.indent;
-        let prefix = setting.indent_char;
-
-        if indent > 0 {
-            writeln!(f)?;
-            for _ in 0..indent {
-                write!(f, "{}", prefix)?;
-            }
-        }
-        write!(f, "{} {} × {}", setting.prefix, self.name(), setting.ways)
     }
 
     async fn execute(&self) -> Result<DataBlockStream> {

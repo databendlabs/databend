@@ -6,7 +6,7 @@ use sqlparser::ast;
 use std::fmt;
 
 use crate::contexts::Context;
-use crate::datatypes::DataValue;
+use crate::datavalues::DataValue;
 use crate::error::{Error, Result};
 
 use crate::planners::{EmptyPlan, ExpressionPlan, FormatterSettings, PlanNode};
@@ -22,7 +22,7 @@ impl LimitPlan {
         match limit {
             Some(ref expr) => {
                 let limit = match ExpressionPlan::build_plan(ctx, expr)? {
-                    ExpressionPlan::Constant(DataValue::Int64(n)) => Ok(n as usize),
+                    ExpressionPlan::Constant(DataValue::Int64(Some(n))) => Ok(n as usize),
                     _ => Err(Error::Unsupported(format!(
                         "Unsupported LimitPlan Expr: {}",
                         expr

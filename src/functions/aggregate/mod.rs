@@ -5,5 +5,9 @@
 mod tests;
 
 mod aggregate_count;
+mod aggregate_max;
+mod aggregate_sum;
 
 pub use self::aggregate_count::CountAggregateFunction;
+pub use self::aggregate_max::MaxAggregateFunction;
+pub use self::aggregate_sum::SumAggregateFunction;

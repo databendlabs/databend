@@ -3,7 +3,7 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use crate::datablocks::DataBlock;
-use crate::datatypes::DataArrayRef;
+use crate::datavalues::DataArrayRef;
 use crate::functions::Function;
 
 #[allow(dead_code)]
@@ -22,7 +22,7 @@ struct Test {
 fn test_cases() {
     use std::sync::Arc;
 
-    use crate::datatypes::{DataField, DataSchema, DataType, Int64Array};
+    use crate::datavalues::{DataField, DataSchema, DataType, Int64Array};
     use crate::functions::arithmetic::{AddFunction, DivFunction, MulFunction, SubFunction};
     use crate::functions::VariableFunction;
 

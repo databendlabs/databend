@@ -29,7 +29,7 @@ fn test_sql_to_plan() {
     use super::planner::Planner;
     use crate::contexts::Context;
     use crate::datasources::{MemoryProvider, MemoryTable};
-    use crate::datatypes::{DataField, DataSchema, DataType};
+    use crate::datavalues::{DataField, DataSchema, DataType};
 
     let test_path = format!(
         "{}/src/planners/tests/",

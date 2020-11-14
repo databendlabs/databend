@@ -7,14 +7,12 @@ async fn test_chunk_stream() {
     use async_std::stream::StreamExt;
 
     use crate::datablocks::DataBlock;
-    use crate::streams::ChunkStream;
+    use crate::datastreams::ChunkStream;
 
     let mut s1 = ChunkStream::create(vec![
         DataBlock::empty(),
         DataBlock::empty(),
         DataBlock::empty(),
     ]);
-    while let Some(v) = s1.next().await {
-        println!("{:?}", v);
-    }
+    while let Some(_) = s1.next().await {}
 }

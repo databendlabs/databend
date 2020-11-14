@@ -39,15 +39,3 @@ impl From<std::num::ParseIntError> for Error {
         Error::Internal(err.to_string())
     }
 }
-
-impl<T> From<std::sync::mpsc::SendError<T>> for Error {
-    fn from(err: std::sync::mpsc::SendError<T>) -> Self {
-        Error::Internal(err.to_string())
-    }
-}
-
-impl From<std::sync::mpsc::RecvError> for Error {
-    fn from(err: std::sync::mpsc::RecvError) -> Self {
-        Error::Internal(err.to_string())
-    }
-}

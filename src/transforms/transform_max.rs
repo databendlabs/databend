@@ -11,28 +11,32 @@ use crate::datablocks::DataBlock;
 use crate::datastreams::{ChunkStream, DataBlockStream};
 use crate::datavalues::{DataField, DataSchema, DataType};
 use crate::error::Result;
-use crate::functions::{AggregateFunctionFactory, VariableFunction};
+use crate::functions::{AggregateFunctionFactory, Function};
 use crate::planners::ExpressionPlan;
 use crate::processors::{EmptyProcessor, IProcessor};
 
-pub struct CountTransform {
+pub struct MaxTransform {
     expr: Arc<ExpressionPlan>,
+    column: Arc<Function>,
+    data_type: DataType,
     input: Arc<dyn IProcessor>,
 }
 
-impl CountTransform {
-    pub fn create(expr: Arc<ExpressionPlan>) -> Self {
-        CountTransform {
+impl MaxTransform {
+    pub fn create(expr: Arc<ExpressionPlan>, column: Arc<Function>, data_type: &DataType) -> Self {
+        MaxTransform {
             expr,
+            column,
+            data_type: data_type.clone(),
             input: Arc::new(EmptyProcessor::create()),
         }
     }
 }
 
 #[async_trait]
-impl IProcessor for CountTransform {
+impl IProcessor for MaxTransform {
     fn name(&self) -> &'static str {
-        "CountTransform"
+        "MaxTransform"
     }
 
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) {
@@ -40,11 +44,7 @@ impl IProcessor for CountTransform {
     }
 
     async fn execute(&self) -> Result<DataBlockStream> {
-        let mut func = AggregateFunctionFactory::get(
-            "COUNT",
-            Arc::new(VariableFunction::create("")?),
-            &DataType::UInt64,
-        )?;
+        let mut func = AggregateFunctionFactory::get("MAX", self.column.clone(), &self.data_type)?;
 
         let mut exec = self.input.execute().await?;
         while let Some(v) = exec.next().await {
@@ -54,7 +54,7 @@ impl IProcessor for CountTransform {
         Ok(Box::pin(ChunkStream::create(vec![DataBlock::new(
             DataSchema::new(vec![DataField::new(
                 format!("{:?}", self.expr).as_str(),
-                DataType::UInt64,
+                func.return_type(&DataSchema::empty())?,
                 false,
             )]),
             vec![func.aggregate()?],

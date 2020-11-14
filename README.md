@@ -7,6 +7,8 @@
 
 FuseQuery is a Distributed SQL Query Engine at scale.
 
+Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow](https://github.com/apache/arrow).
+
 ## Features
 
 * **High Performance**
@@ -24,7 +26,7 @@ FuseQuery is a Distributed SQL Query Engine at scale.
 | optimizers | Optimizer for distributed plan | TODO |
 | functions | Scalar and Aggregation functions | WIP |
 | datablocks | Vectorized data processing unit | WIP |
-| datastreams | Streaming iterator for DataBlock | WIP |
+| datastreams | Async streaming iterators | WIP |
 | datasources | Interface to the fuse-store server | WIP | 
 | distributed | Distributed scheduler and executor for planner | TODO |
 

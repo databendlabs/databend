@@ -3,7 +3,7 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use crate::datablocks::DataBlock;
-use crate::datatypes::DataSchemaRef;
+use crate::datavalues::DataSchemaRef;
 use crate::error::Result;
 use crate::planners::{PlanNode, ReadDataSourcePlan};
 

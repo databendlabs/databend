@@ -5,9 +5,9 @@
 use num::range;
 use std::sync::Arc;
 
+use crate::datastreams::DataBlockStream;
 use crate::error::{Error, Result};
-use crate::processors::{FormatterSettings, IProcessor, MergeTransform, ThroughTransform};
-use crate::streams::DataBlockStream;
+use crate::processors::{FormatterSettings, IProcessor, MergeProcessor, ThroughProcessor};
 
 pub type Pipes = Vec<Arc<dyn IProcessor>>;
 
@@ -79,10 +79,10 @@ impl Pipeline {
     ///
     pub fn merge_processor(&mut self) -> Result<()> {
         let last = self.processors.last().ok_or_else(|| {
-            Error::Internal("Can't add transform to an empty pipe list".to_string())
+            Error::Internal("Can't merge processor when the last pipe is empty".to_string())
         })?;
 
-        let mut p = MergeTransform::create();
+        let mut p = MergeProcessor::create();
         for x in last {
             p.connect_to(x.clone());
         }
@@ -102,12 +102,12 @@ impl Pipeline {
     pub fn expand_processor(&mut self, size: u32) -> Result<()> {
         let mut items: Vec<Arc<dyn IProcessor>> = vec![];
         let last = self.processors.last().ok_or_else(|| {
-            Error::Internal("Can't add transform to an empty pipe list".to_string())
+            Error::Internal("Can't expand processor when the last pipe is empty".to_string())
         })?;
 
         for _i in 0..size {
             for x in last {
-                let mut p = ThroughTransform::create();
+                let mut p = ThroughProcessor::create();
                 p.connect_to(x.clone());
                 items.push(Arc::new(p));
             }

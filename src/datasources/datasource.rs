@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use crate::datatypes::DataSchemaRef;
+use crate::datavalues::DataSchemaRef;
 use crate::error::Result;
 use crate::planners::{PlanNode, ReadDataSourcePlan};
 

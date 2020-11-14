@@ -5,30 +5,34 @@
 use async_std::sync::Arc;
 use async_trait::async_trait;
 
+use crate::datastreams::DataBlockStream;
 use crate::error::Result;
-use crate::processors::{EmptyTransform, FormatterSettings, IProcessor};
-use crate::streams::DataBlockStream;
+use crate::processors::{EmptyProcessor, FormatterSettings, IProcessor};
 
-pub struct ThroughTransform {
+pub struct ThroughProcessor {
     input: Arc<dyn IProcessor>,
 }
 
-impl ThroughTransform {
+impl ThroughProcessor {
     pub fn create() -> Self {
-        ThroughTransform {
-            input: Arc::new(EmptyTransform::create()),
+        ThroughProcessor {
+            input: Arc::new(EmptyProcessor::create()),
         }
     }
 }
 
 #[async_trait]
-impl IProcessor for ThroughTransform {
+impl IProcessor for ThroughProcessor {
     fn name(&self) -> &'static str {
-        "ThroughTransform"
+        "ThroughProcessor"
     }
 
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) {
         self.input = input;
+    }
+
+    async fn execute(&self) -> Result<DataBlockStream> {
+        Ok(self.input.execute().await?)
     }
 
     fn format(
@@ -36,13 +40,10 @@ impl IProcessor for ThroughTransform {
         f: &mut std::fmt::Formatter,
         setting: &mut FormatterSettings,
     ) -> std::fmt::Result {
-        let indent = setting.indent;
-        let prefix = setting.indent_char;
-
-        if indent > 0 {
+        if setting.indent > 0 {
             writeln!(f)?;
-            for _ in 0..indent {
-                write!(f, "{}", prefix)?;
+            for _ in 0..setting.indent {
+                write!(f, "{}", setting.indent_char)?;
             }
         }
 
@@ -55,9 +56,5 @@ impl IProcessor for ThroughTransform {
             self.name(),
             setting.ways
         )
-    }
-
-    async fn execute(&self) -> Result<DataBlockStream> {
-        Ok(self.input.execute().await?)
     }
 }

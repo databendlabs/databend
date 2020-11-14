@@ -1,0 +1,22 @@
+on: [push, pull_request]
+name: FuseQuery Bench
+
+jobs:
+  test:
+    name: Bench Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+
+      - name: Run cargo bench
+        uses: actions-rs/cargo@v1
+        with:
+          command: bench
