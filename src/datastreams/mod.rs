@@ -4,8 +4,8 @@
 
 mod tests;
 
-mod stream_chunk;
 mod stream_datablock;
+mod stream_memory;
 
-pub use self::stream_chunk::ChunkStream;
 pub use self::stream_datablock::DataBlockStream;
+pub use self::stream_memory::MemoryStream;

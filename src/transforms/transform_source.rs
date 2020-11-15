@@ -6,7 +6,8 @@ use async_std::sync::Arc;
 use async_trait::async_trait;
 
 use crate::datablocks::DataBlock;
-use crate::datastreams::{ChunkStream, DataBlockStream};
+use crate::datastreams::{DataBlockStream, MemoryStream};
+use crate::datavalues::DataSchema;
 use crate::error::Result;
 use crate::processors::IProcessor;
 
@@ -31,6 +32,10 @@ impl IProcessor for SourceTransform {
     }
 
     async fn execute(&self) -> Result<DataBlockStream> {
-        Ok(Box::pin(ChunkStream::create(self.data.clone())))
+        Ok(Box::pin(MemoryStream::create(
+            Arc::new(DataSchema::empty()),
+            None,
+            self.data.clone(),
+        )))
     }
 }

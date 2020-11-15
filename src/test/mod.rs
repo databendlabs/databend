@@ -11,8 +11,12 @@ use crate::transforms::SourceTransform;
 pub fn generate_source(datas: Vec<Vec<i64>>) -> SourceTransform {
     let mut blocks = vec![];
     for data in datas {
-        blocks.push(DataBlock::new(
-            DataSchema::new(vec![DataField::new("a", DataType::Int64, false)]),
+        blocks.push(DataBlock::create(
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "a",
+                DataType::Int64,
+                false,
+            )])),
             vec![Arc::new(Int64Array::from(data))],
         ));
     }

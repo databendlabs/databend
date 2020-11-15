@@ -5,7 +5,8 @@
 use async_std::sync::Arc;
 use async_trait::async_trait;
 
-use crate::datastreams::{ChunkStream, DataBlockStream};
+use crate::datastreams::{DataBlockStream, MemoryStream};
+use crate::datavalues::DataSchema;
 use crate::error::Result;
 use crate::processors::{FormatterSettings, IProcessor};
 
@@ -26,7 +27,11 @@ impl IProcessor for EmptyProcessor {
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) {}
 
     async fn execute(&self) -> Result<DataBlockStream> {
-        Ok(Box::pin(ChunkStream::create(vec![])))
+        Ok(Box::pin(MemoryStream::create(
+            Arc::new(DataSchema::empty()),
+            None,
+            vec![],
+        )))
     }
 
     fn format(

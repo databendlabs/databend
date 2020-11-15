@@ -27,10 +27,10 @@ fn test_factory() {
     use crate::error::Result;
     use crate::functions::{AggregateFunctionFactory, ScalarFunctionFactory, VariableFunction};
 
-    let schema = DataSchema::new(vec![
+    let schema = Arc::new(DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Int64, false),
-    ]);
+    ]));
 
     let field_a = VariableFunction::create("a").unwrap();
     let field_b = VariableFunction::create("b").unwrap();
@@ -41,7 +41,7 @@ fn test_factory() {
             is_aggregate: false,
             fun: "+",
             args: vec![field_a.clone(), field_b.clone()],
-            block: DataBlock::new(
+            block: DataBlock::create(
                 schema.clone(),
                 vec![
                     Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
@@ -56,7 +56,7 @@ fn test_factory() {
             is_aggregate: false,
             fun: "-",
             args: vec![field_a.clone(), field_b.clone()],
-            block: DataBlock::new(
+            block: DataBlock::create(
                 schema.clone(),
                 vec![
                     Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
@@ -71,7 +71,7 @@ fn test_factory() {
             is_aggregate: false,
             fun: "*",
             args: vec![field_a.clone(), field_b.clone()],
-            block: DataBlock::new(
+            block: DataBlock::create(
                 schema.clone(),
                 vec![
                     Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
@@ -86,7 +86,7 @@ fn test_factory() {
             is_aggregate: false,
             fun: "/",
             args: vec![field_a.clone(), field_b.clone()],
-            block: DataBlock::new(
+            block: DataBlock::create(
                 schema.clone(),
                 vec![
                     Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
@@ -101,7 +101,7 @@ fn test_factory() {
             is_aggregate: true,
             fun: "count",
             args: vec![field_a.clone(), field_b.clone()],
-            block: DataBlock::new(
+            block: DataBlock::create(
                 schema.clone(),
                 vec![
                     Arc::new(Int64Array::from(vec![4, 3, 2, 1])),

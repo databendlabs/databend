@@ -25,10 +25,10 @@ fn test_cases() {
     use crate::datavalues::{DataField, DataSchema, DataType, Int64Array, UInt64Array};
     use crate::functions::{aggregators::AggregatorFunction, VariableFunction};
 
-    let schema = DataSchema::new(vec![
+    let schema = Arc::new(DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Int64, false),
-    ]);
+    ]));
 
     let field_a = VariableFunction::create("a").unwrap();
     let field_b = VariableFunction::create("b").unwrap();
@@ -45,7 +45,7 @@ fn test_cases() {
                 &DataType::UInt64,
             )
             .unwrap(),
-            block: DataBlock::new(
+            block: DataBlock::create(
                 schema.clone(),
                 vec![
                     Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
@@ -66,7 +66,7 @@ fn test_cases() {
                 &DataType::Int64,
             )
             .unwrap(),
-            block: DataBlock::new(
+            block: DataBlock::create(
                 schema.clone(),
                 vec![
                     Arc::new(Int64Array::from(vec![14, 3, 2, 1])),
@@ -87,7 +87,7 @@ fn test_cases() {
                 &DataType::Int64,
             )
             .unwrap(),
-            block: DataBlock::new(
+            block: DataBlock::create(
                 schema.clone(),
                 vec![
                     Arc::new(Int64Array::from(vec![14, 3, -2, 1])),
@@ -108,7 +108,7 @@ fn test_cases() {
                 &DataType::Int64,
             )
             .unwrap(),
-            block: DataBlock::new(
+            block: DataBlock::create(
                 schema.clone(),
                 vec![
                     Arc::new(Int64Array::from(vec![4, 3, 2, 1])),

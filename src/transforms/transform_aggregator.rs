@@ -8,7 +8,7 @@ use async_std::stream::StreamExt;
 use async_trait::async_trait;
 
 use crate::datablocks::DataBlock;
-use crate::datastreams::{ChunkStream, DataBlockStream};
+use crate::datastreams::{DataBlockStream, MemoryStream};
 use crate::datavalues::{DataField, DataSchema, DataType};
 use crate::error::{Error, Result};
 use crate::functions::{AggregateFunctionFactory, Function};
@@ -149,13 +149,17 @@ impl IProcessor for AggregatorTransform {
             func.accumulate(&v?)?;
         }
 
-        Ok(Box::pin(ChunkStream::create(vec![DataBlock::new(
-            DataSchema::new(vec![DataField::new(
-                format!("{:?}", expr).as_str(),
-                func.return_type(&DataSchema::empty())?,
-                false,
-            )]),
-            vec![func.aggregate()?],
-        )])))
+        Ok(Box::pin(MemoryStream::create(
+            Arc::new(DataSchema::empty()),
+            None,
+            vec![DataBlock::create(
+                Arc::new(DataSchema::new(vec![DataField::new(
+                    format!("{:?}", expr).as_str(),
+                    func.return_type(&DataSchema::empty())?,
+                    false,
+                )])),
+                vec![func.aggregate()?],
+            )],
+        )))
     }
 }

@@ -26,10 +26,10 @@ fn test_cases() {
     use crate::functions::arithmetics::{AddFunction, DivFunction, MulFunction, SubFunction};
     use crate::functions::VariableFunction;
 
-    let schema = DataSchema::new(vec![
+    let schema = Arc::new(DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Int64, false),
-    ]);
+    ]));
 
     let field_a = VariableFunction::create("a").unwrap();
     let field_b = VariableFunction::create("b").unwrap();
@@ -41,7 +41,7 @@ fn test_cases() {
             display: "\"a\" + \"b\"",
             nullable: false,
             func: AddFunction::create(&[field_a.clone(), field_b.clone()]).unwrap(),
-            block: DataBlock::new(
+            block: DataBlock::create(
                 schema.clone(),
                 vec![
                     Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
@@ -57,7 +57,7 @@ fn test_cases() {
             display: "\"a\" - \"b\"",
             nullable: false,
             func: SubFunction::create(&[field_a.clone(), field_b.clone()]).unwrap(),
-            block: DataBlock::new(
+            block: DataBlock::create(
                 schema.clone(),
                 vec![
                     Arc::new(Int64Array::from(vec![4, 3, 2])),
@@ -73,7 +73,7 @@ fn test_cases() {
             display: "\"a\" * \"b\"",
             nullable: false,
             func: MulFunction::create(&[field_a.clone(), field_b.clone()]).unwrap(),
-            block: DataBlock::new(
+            block: DataBlock::create(
                 schema.clone(),
                 vec![
                     Arc::new(Int64Array::from(vec![4, 3, 2])),
@@ -89,7 +89,7 @@ fn test_cases() {
             display: "\"a\" / \"b\"",
             nullable: false,
             func: DivFunction::create(&[field_a.clone(), field_b.clone()]).unwrap(),
-            block: DataBlock::new(
+            block: DataBlock::create(
                 schema.clone(),
                 vec![
                     Arc::new(Int64Array::from(vec![4, 3, 2])),

@@ -5,14 +5,16 @@
 #[async_std::test]
 async fn test_chunk_stream() {
     use async_std::stream::StreamExt;
+    use std::sync::Arc;
 
     use crate::datablocks::DataBlock;
-    use crate::datastreams::ChunkStream;
+    use crate::datastreams::MemoryStream;
+    use crate::datavalues::DataSchema;
 
-    let mut s1 = ChunkStream::create(vec![
-        DataBlock::empty(),
-        DataBlock::empty(),
-        DataBlock::empty(),
-    ]);
+    let mut s1 = MemoryStream::create(
+        Arc::new(DataSchema::empty()),
+        None,
+        vec![DataBlock::empty(), DataBlock::empty(), DataBlock::empty()],
+    );
     while let Some(_) = s1.next().await {}
 }

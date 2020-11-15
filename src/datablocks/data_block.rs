@@ -2,37 +2,35 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use crate::datavalues::{DataArrayRef, DataSchema};
+use std::sync::Arc;
+
+use crate::datavalues::{DataArrayRef, DataSchema, DataSchemaRef};
 use crate::error::Result;
 
 #[derive(Debug, Clone)]
 pub struct DataBlock {
-    schema: DataSchema,
+    schema: DataSchemaRef,
     columns: Vec<DataArrayRef>,
 }
 
 impl DataBlock {
-    pub fn new(schema: DataSchema, columns: Vec<DataArrayRef>) -> Self {
+    pub fn create(schema: DataSchemaRef, columns: Vec<DataArrayRef>) -> Self {
         DataBlock { schema, columns }
     }
 
     pub fn empty() -> Self {
         DataBlock {
-            schema: DataSchema::empty(),
+            schema: Arc::new(DataSchema::empty()),
             columns: vec![],
         }
     }
 
-    pub fn schema(&self) -> &DataSchema {
+    pub fn schema(&self) -> &DataSchemaRef {
         &self.schema
     }
 
-    pub fn rows(&self) -> u64 {
-        if self.columns.is_empty() {
-            0
-        } else {
-            self.columns[0].len() as u64
-        }
+    pub fn column(&self, index: usize) -> &DataArrayRef {
+        &self.columns[index]
     }
 
     pub fn column_by_name(&self, name: &str) -> Result<&DataArrayRef> {
