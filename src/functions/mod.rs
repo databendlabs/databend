@@ -4,14 +4,14 @@
 
 mod tests;
 
-mod aggregator;
-mod arithmetic;
+mod aggregators;
+mod arithmetics;
 mod function;
 mod function_constant;
 mod function_factory;
 mod function_variable;
 
-pub use self::aggregator::AggregatorFunction;
+pub use self::aggregators::AggregatorFunction;
 pub use self::function::Function;
 pub use self::function_constant::ConstantFunction;
 pub use self::function_factory::{AggregateFunctionFactory, ScalarFunctionFactory};

@@ -68,7 +68,7 @@ impl AggregatorFunction {
             }),
             _ => {
                 return Err(Error::Unsupported(format!(
-                    "Unsupported aggregator function: {:?}",
+                    "Unsupported aggregators function: {:?}",
                     name
                 )))
             }
@@ -114,7 +114,7 @@ impl AggregatorFunction {
         Ok(())
     }
 
-    // Calculates a final aggregator.
+    // Calculates a final aggregators.
     pub fn aggregate(&self) -> Result<DataArrayRef> {
         Ok(match self {
             AggregatorFunction::Count(v) => v.state.to_array()?,

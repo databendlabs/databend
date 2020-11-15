@@ -6,17 +6,17 @@ use std::sync::Arc;
 
 use crate::datavalues::DataType;
 use crate::error::{Error, Result};
-use crate::functions::{arithmetic, AggregatorFunction, Function};
+use crate::functions::{arithmetics, AggregatorFunction, Function};
 
 pub struct ScalarFunctionFactory;
 
 impl ScalarFunctionFactory {
     pub fn get(name: &str, args: &[Function]) -> Result<Function> {
         match name.to_uppercase().as_str() {
-            "+" => arithmetic::AddFunction::create(args),
-            "-" => arithmetic::SubFunction::create(args),
-            "*" => arithmetic::MulFunction::create(args),
-            "/" => arithmetic::DivFunction::create(args),
+            "+" => arithmetics::AddFunction::create(args),
+            "-" => arithmetics::SubFunction::create(args),
+            "*" => arithmetics::MulFunction::create(args),
+            "/" => arithmetics::DivFunction::create(args),
             _ => Err(Error::Unsupported(format!(
                 "Unsupported Scalar Function: {}",
                 name

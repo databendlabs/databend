@@ -4,6 +4,6 @@
 
 mod tests;
 
-mod function_aggregator;
+mod aggregator;
 
-pub use self::function_aggregator::AggregatorFunction;
+pub use self::aggregator::AggregatorFunction;

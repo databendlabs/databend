@@ -7,16 +7,16 @@ use std::fmt;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataArrayRef, DataSchema, DataType};
 use crate::error::{Error, Result};
-use crate::functions::{arithmetic, AggregatorFunction, ConstantFunction, VariableFunction};
+use crate::functions::{arithmetics, AggregatorFunction, ConstantFunction, VariableFunction};
 
 #[derive(Clone)]
 pub enum Function {
     Constant(ConstantFunction),
     Variable(VariableFunction),
-    Add(arithmetic::AddFunction),
-    Sub(arithmetic::SubFunction),
-    Div(arithmetic::DivFunction),
-    Mul(arithmetic::MulFunction),
+    Add(arithmetics::AddFunction),
+    Sub(arithmetics::SubFunction),
+    Div(arithmetics::DivFunction),
+    Mul(arithmetics::MulFunction),
     Aggregator(AggregatorFunction),
 }
 
@@ -86,7 +86,7 @@ impl Function {
         match self {
             Function::Aggregator(v) => v.aggregate(),
             _ => Err(Error::Unsupported(format!(
-                "Unsupported aggregator() for function {}",
+                "Unsupported aggregators() for function {}",
                 self.name()
             ))),
         }

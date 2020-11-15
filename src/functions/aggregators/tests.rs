@@ -22,9 +22,8 @@ struct Test {
 fn test_cases() {
     use std::sync::Arc;
 
-    use crate::datavalues::{DataField, DataSchema, DataType, Int64Array};
-    use crate::functions::arithmetic::{AddFunction, DivFunction, MulFunction, SubFunction};
-    use crate::functions::VariableFunction;
+    use crate::datavalues::{DataField, DataSchema, DataType, Int64Array, UInt64Array};
+    use crate::functions::{aggregators::AggregatorFunction, VariableFunction};
 
     let schema = DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),
@@ -36,11 +35,16 @@ fn test_cases() {
 
     let tests = vec![
         Test {
-            name: "add-int64-passed",
+            name: "count-passed",
             args: vec![field_a.clone(), field_b.clone()],
-            display: "\"a\" + \"b\"",
+            display: "CountAggregatorFunction",
             nullable: false,
-            func: AddFunction::create(&[field_a.clone(), field_b.clone()]).unwrap(),
+            func: AggregatorFunction::create(
+                "count",
+                Arc::new(VariableFunction::create("a").unwrap()),
+                &DataType::UInt64,
+            )
+            .unwrap(),
             block: DataBlock::new(
                 schema.clone(),
                 vec![
@@ -48,61 +52,56 @@ fn test_cases() {
                     Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
-            expect: Arc::new(Int64Array::from(vec![5, 5, 5, 5])),
+            expect: Arc::new(UInt64Array::from(vec![4])),
             error: "",
         },
         Test {
-            name: "sub-int64-passed",
+            name: "sum-passed",
             args: vec![field_a.clone(), field_b.clone()],
-            display: "\"a\" - \"b\"",
+            display: "SumAggregatorFunction",
             nullable: false,
-            func: SubFunction::create(&[field_a.clone(), field_b.clone()]).unwrap(),
+            func: AggregatorFunction::create(
+                "sum",
+                Arc::new(VariableFunction::create("a").unwrap()),
+                &DataType::Int64,
+            )
+            .unwrap(),
             block: DataBlock::new(
                 schema.clone(),
                 vec![
-                    Arc::new(Int64Array::from(vec![4, 3, 2])),
-                    Arc::new(Int64Array::from(vec![1, 2, 3])),
+                    Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
-            expect: Arc::new(Int64Array::from(vec![3, 1, -1])),
+            expect: Arc::new(Int64Array::from(vec![10])),
             error: "",
         },
         Test {
-            name: "mul-int64-passed",
+            name: "max-passed",
             args: vec![field_a.clone(), field_b.clone()],
-            display: "\"a\" * \"b\"",
+            display: "MaxAggregatorFunction",
             nullable: false,
-            func: MulFunction::create(&[field_a.clone(), field_b.clone()]).unwrap(),
+            func: AggregatorFunction::create(
+                "max",
+                Arc::new(VariableFunction::create("a").unwrap()),
+                &DataType::Int64,
+            )
+            .unwrap(),
             block: DataBlock::new(
                 schema.clone(),
                 vec![
-                    Arc::new(Int64Array::from(vec![4, 3, 2])),
-                    Arc::new(Int64Array::from(vec![1, 2, 3])),
+                    Arc::new(Int64Array::from(vec![14, 3, 2, 1])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
-            expect: Arc::new(Int64Array::from(vec![4, 6, 6])),
-            error: "",
-        },
-        Test {
-            name: "div-int64-passed",
-            args: vec![field_a.clone(), field_b.clone()],
-            display: "\"a\" / \"b\"",
-            nullable: false,
-            func: DivFunction::create(&[field_a.clone(), field_b.clone()]).unwrap(),
-            block: DataBlock::new(
-                schema.clone(),
-                vec![
-                    Arc::new(Int64Array::from(vec![4, 3, 2])),
-                    Arc::new(Int64Array::from(vec![1, 2, 3])),
-                ],
-            ),
-            expect: Arc::new(Int64Array::from(vec![4, 1, 0])),
+            expect: Arc::new(Int64Array::from(vec![14])),
             error: "",
         },
     ];
 
-    for t in tests {
-        let result = (t.func).evaluate(&t.block);
+    for mut t in tests {
+        (t.func).accumulate(&t.block).unwrap();
+        let result = (t.func).aggregate();
         match result {
             Ok(ref v) => {
                 // Display check.

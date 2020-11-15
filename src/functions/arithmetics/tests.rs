@@ -22,8 +22,9 @@ struct Test {
 fn test_cases() {
     use std::sync::Arc;
 
-    use crate::datavalues::{DataField, DataSchema, DataType, Int64Array, UInt64Array};
-    use crate::functions::{aggregator::AggregatorFunction, VariableFunction};
+    use crate::datavalues::{DataField, DataSchema, DataType, Int64Array};
+    use crate::functions::arithmetics::{AddFunction, DivFunction, MulFunction, SubFunction};
+    use crate::functions::VariableFunction;
 
     let schema = DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),
@@ -35,16 +36,11 @@ fn test_cases() {
 
     let tests = vec![
         Test {
-            name: "count-passed",
+            name: "add-int64-passed",
             args: vec![field_a.clone(), field_b.clone()],
-            display: "CountAggregatorFunction",
+            display: "\"a\" + \"b\"",
             nullable: false,
-            func: AggregatorFunction::create(
-                "count",
-                Arc::new(VariableFunction::create("a").unwrap()),
-                &DataType::UInt64,
-            )
-            .unwrap(),
+            func: AddFunction::create(&[field_a.clone(), field_b.clone()]).unwrap(),
             block: DataBlock::new(
                 schema.clone(),
                 vec![
@@ -52,56 +48,61 @@ fn test_cases() {
                     Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
-            expect: Arc::new(UInt64Array::from(vec![4])),
+            expect: Arc::new(Int64Array::from(vec![5, 5, 5, 5])),
             error: "",
         },
         Test {
-            name: "sum-passed",
+            name: "sub-int64-passed",
             args: vec![field_a.clone(), field_b.clone()],
-            display: "SumAggregatorFunction",
+            display: "\"a\" - \"b\"",
             nullable: false,
-            func: AggregatorFunction::create(
-                "sum",
-                Arc::new(VariableFunction::create("a").unwrap()),
-                &DataType::Int64,
-            )
-            .unwrap(),
+            func: SubFunction::create(&[field_a.clone(), field_b.clone()]).unwrap(),
             block: DataBlock::new(
                 schema.clone(),
                 vec![
-                    Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
-                    Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
+                    Arc::new(Int64Array::from(vec![4, 3, 2])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3])),
                 ],
             ),
-            expect: Arc::new(Int64Array::from(vec![10])),
+            expect: Arc::new(Int64Array::from(vec![3, 1, -1])),
             error: "",
         },
         Test {
-            name: "max-passed",
+            name: "mul-int64-passed",
             args: vec![field_a.clone(), field_b.clone()],
-            display: "MaxAggregatorFunction",
+            display: "\"a\" * \"b\"",
             nullable: false,
-            func: AggregatorFunction::create(
-                "max",
-                Arc::new(VariableFunction::create("a").unwrap()),
-                &DataType::Int64,
-            )
-            .unwrap(),
+            func: MulFunction::create(&[field_a.clone(), field_b.clone()]).unwrap(),
             block: DataBlock::new(
                 schema.clone(),
                 vec![
-                    Arc::new(Int64Array::from(vec![14, 3, 2, 1])),
-                    Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
+                    Arc::new(Int64Array::from(vec![4, 3, 2])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3])),
                 ],
             ),
-            expect: Arc::new(Int64Array::from(vec![14])),
+            expect: Arc::new(Int64Array::from(vec![4, 6, 6])),
+            error: "",
+        },
+        Test {
+            name: "div-int64-passed",
+            args: vec![field_a.clone(), field_b.clone()],
+            display: "\"a\" / \"b\"",
+            nullable: false,
+            func: DivFunction::create(&[field_a.clone(), field_b.clone()]).unwrap(),
+            block: DataBlock::new(
+                schema.clone(),
+                vec![
+                    Arc::new(Int64Array::from(vec![4, 3, 2])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3])),
+                ],
+            ),
+            expect: Arc::new(Int64Array::from(vec![4, 1, 0])),
             error: "",
         },
     ];
 
-    for mut t in tests {
-        (t.func).accumulate(&t.block).unwrap();
-        let result = (t.func).aggregate();
+    for t in tests {
+        let result = (t.func).evaluate(&t.block);
         match result {
             Ok(ref v) => {
                 // Display check.
