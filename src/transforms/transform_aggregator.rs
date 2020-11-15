@@ -23,7 +23,7 @@ pub struct CountTransform {
     input: Arc<dyn IProcessor>,
 }
 
-pub struct SumTransform {
+pub struct MinTransform {
     name: &'static str,
     expr: Arc<ExpressionPlan>,
     column: Arc<Function>,
@@ -39,10 +39,19 @@ pub struct MaxTransform {
     input: Arc<dyn IProcessor>,
 }
 
+pub struct SumTransform {
+    name: &'static str,
+    expr: Arc<ExpressionPlan>,
+    column: Arc<Function>,
+    data_type: DataType,
+    input: Arc<dyn IProcessor>,
+}
+
 pub enum AggregatorTransform {
     Count(CountTransform),
-    Sum(SumTransform),
+    Min(MinTransform),
     Max(MaxTransform),
+    Sum(SumTransform),
 }
 
 impl AggregatorTransform {
@@ -60,8 +69,8 @@ impl AggregatorTransform {
                 data_type: DataType::UInt64,
                 input: Arc::new(EmptyProcessor::create()),
             }),
-            "sum" => AggregatorTransform::Sum(SumTransform {
-                name: "SumTransform",
+            "min" => AggregatorTransform::Min(MinTransform {
+                name: "MinTransform",
                 expr,
                 column,
                 data_type: data_type.clone(),
@@ -74,6 +83,14 @@ impl AggregatorTransform {
                 data_type: data_type.clone(),
                 input: Arc::new(EmptyProcessor::create()),
             }),
+            "sum" => AggregatorTransform::Sum(SumTransform {
+                name: "SumTransform",
+                expr,
+                column,
+                data_type: data_type.clone(),
+                input: Arc::new(EmptyProcessor::create()),
+            }),
+
             _ => {
                 return Err(Error::Unsupported(format!(
                     "Unsupported aggregators transform: {:?}",
@@ -89,6 +106,7 @@ impl IProcessor for AggregatorTransform {
     fn name(&self) -> &'static str {
         match self {
             AggregatorTransform::Count(v) => v.name,
+            AggregatorTransform::Min(v) => v.name,
             AggregatorTransform::Max(v) => v.name,
             AggregatorTransform::Sum(v) => v.name,
         }
@@ -97,6 +115,7 @@ impl IProcessor for AggregatorTransform {
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) {
         match self {
             AggregatorTransform::Count(v) => v.input = input,
+            AggregatorTransform::Min(v) => v.input = input,
             AggregatorTransform::Max(v) => v.input = input,
             AggregatorTransform::Sum(v) => v.input = input,
         }
@@ -109,14 +128,19 @@ impl IProcessor for AggregatorTransform {
                 AggregateFunctionFactory::get("count", v.column.clone(), &v.data_type)?,
                 v.input.execute().await?,
             ),
-            AggregatorTransform::Sum(v) => (
+            AggregatorTransform::Min(v) => (
                 v.expr.clone(),
-                AggregateFunctionFactory::get("sum", v.column.clone(), &v.data_type)?,
+                AggregateFunctionFactory::get("min", v.column.clone(), &v.data_type)?,
                 v.input.execute().await?,
             ),
             AggregatorTransform::Max(v) => (
                 v.expr.clone(),
                 AggregateFunctionFactory::get("max", v.column.clone(), &v.data_type)?,
+                v.input.execute().await?,
+            ),
+            AggregatorTransform::Sum(v) => (
+                v.expr.clone(),
+                AggregateFunctionFactory::get("sum", v.column.clone(), &v.data_type)?,
                 v.input.execute().await?,
             ),
         };

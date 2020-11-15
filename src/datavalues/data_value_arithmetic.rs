@@ -5,7 +5,7 @@
 use crate::datavalues::DataValue;
 use crate::error::{Error, Result};
 
-pub fn datavalue_add(left: DataValue, right: DataValue) -> Result<DataValue> {
+pub fn data_value_add(left: DataValue, right: DataValue) -> Result<DataValue> {
     Ok(match (&left, &right) {
         (DataValue::Int64(lhs), DataValue::Int64(rhs)) => {
             typed_data_value_add!(lhs, rhs, Int64, i64)
@@ -18,7 +18,7 @@ pub fn datavalue_add(left: DataValue, right: DataValue) -> Result<DataValue> {
         }
         _ => {
             return Err(Error::Unsupported(format!(
-                "Unsupported scalar_add() for data type: left:{:?}, right:{:?}",
+                "Unsupported data_value_add() for data type: left:{:?}, right:{:?}",
                 left.data_type()?,
                 right.data_type()?
             )))

@@ -79,16 +79,16 @@ fn criterion_benchmark_count_with_expand(c: &mut Criterion) {
     );
 }
 
-fn criterion_benchmark_sum_no_expand(c: &mut Criterion) {
-    c.bench_function("pipeline sum executor bench with 1-processor", |b| {
-        b.iter(|| async_std::task::block_on(pipeline_aggregator_executor("sum", 4, false)))
+fn criterion_benchmark_min_no_expand(c: &mut Criterion) {
+    c.bench_function("pipeline min executor bench with 1-processor", |b| {
+        b.iter(|| async_std::task::block_on(pipeline_aggregator_executor("min", 4, false)))
     });
 }
 
-fn criterion_benchmark_sum_with_expand(c: &mut Criterion) {
+fn criterion_benchmark_min_with_expand(c: &mut Criterion) {
     c.bench_function(
-        "pipeline sum executor bench with 4-processors expand",
-        |b| b.iter(|| async_std::task::block_on(pipeline_aggregator_executor("sum", 4, true))),
+        "pipeline min executor bench with 4-processors expand",
+        |b| b.iter(|| async_std::task::block_on(pipeline_aggregator_executor("min", 4, true))),
     );
 }
 
@@ -105,13 +105,28 @@ fn criterion_benchmark_max_with_expand(c: &mut Criterion) {
     );
 }
 
+fn criterion_benchmark_sum_no_expand(c: &mut Criterion) {
+    c.bench_function("pipeline sum executor bench with 1-processor", |b| {
+        b.iter(|| async_std::task::block_on(pipeline_aggregator_executor("sum", 4, false)))
+    });
+}
+
+fn criterion_benchmark_sum_with_expand(c: &mut Criterion) {
+    c.bench_function(
+        "pipeline sum executor bench with 4-processors expand",
+        |b| b.iter(|| async_std::task::block_on(pipeline_aggregator_executor("sum", 4, true))),
+    );
+}
+
 criterion_group!(
     benches,
     criterion_benchmark_count_no_expand,
     criterion_benchmark_count_with_expand,
-    criterion_benchmark_sum_no_expand,
-    criterion_benchmark_sum_with_expand,
+    criterion_benchmark_min_no_expand,
+    criterion_benchmark_min_with_expand,
     criterion_benchmark_max_no_expand,
     criterion_benchmark_max_with_expand,
+    criterion_benchmark_sum_no_expand,
+    criterion_benchmark_sum_with_expand,
 );
 criterion_main!(benches);

@@ -56,27 +56,6 @@ fn test_cases() {
             error: "",
         },
         Test {
-            name: "sum-passed",
-            args: vec![field_a.clone(), field_b.clone()],
-            display: "SumAggregatorFunction",
-            nullable: false,
-            func: AggregatorFunction::create(
-                "sum",
-                Arc::new(VariableFunction::create("a").unwrap()),
-                &DataType::Int64,
-            )
-            .unwrap(),
-            block: DataBlock::new(
-                schema.clone(),
-                vec![
-                    Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
-                    Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
-                ],
-            ),
-            expect: Arc::new(Int64Array::from(vec![10])),
-            error: "",
-        },
-        Test {
             name: "max-passed",
             args: vec![field_a.clone(), field_b.clone()],
             display: "MaxAggregatorFunction",
@@ -95,6 +74,48 @@ fn test_cases() {
                 ],
             ),
             expect: Arc::new(Int64Array::from(vec![14])),
+            error: "",
+        },
+        Test {
+            name: "min-passed",
+            args: vec![field_a.clone(), field_b.clone()],
+            display: "MinAggregatorFunction",
+            nullable: false,
+            func: AggregatorFunction::create(
+                "min",
+                Arc::new(VariableFunction::create("a").unwrap()),
+                &DataType::Int64,
+            )
+            .unwrap(),
+            block: DataBlock::new(
+                schema.clone(),
+                vec![
+                    Arc::new(Int64Array::from(vec![14, 3, -2, 1])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
+                ],
+            ),
+            expect: Arc::new(Int64Array::from(vec![-2])),
+            error: "",
+        },
+        Test {
+            name: "sum-passed",
+            args: vec![field_a.clone(), field_b.clone()],
+            display: "SumAggregatorFunction",
+            nullable: false,
+            func: AggregatorFunction::create(
+                "sum",
+                Arc::new(VariableFunction::create("a").unwrap()),
+                &DataType::Int64,
+            )
+            .unwrap(),
+            block: DataBlock::new(
+                schema.clone(),
+                vec![
+                    Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
+                ],
+            ),
+            expect: Arc::new(Int64Array::from(vec![10])),
             error: "",
         },
     ];

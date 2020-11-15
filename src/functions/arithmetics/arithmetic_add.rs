@@ -5,7 +5,7 @@
 use std::fmt;
 
 use crate::datablocks::DataBlock;
-use crate::datavalues::{array_add, DataArrayRef, DataSchema, DataType};
+use crate::datavalues::{data_array_add, DataArrayRef, DataSchema, DataType};
 use crate::error::Result;
 
 use crate::functions::Function;
@@ -37,7 +37,7 @@ impl AddFunction {
     }
 
     pub fn evaluate(&self, block: &DataBlock) -> Result<DataArrayRef> {
-        array_add(self.left.evaluate(block)?, self.right.evaluate(block)?)
+        data_array_add(self.left.evaluate(block)?, self.right.evaluate(block)?)
     }
 }
 
