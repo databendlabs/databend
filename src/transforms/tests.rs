@@ -18,13 +18,12 @@ fn test_pipeline_builder() {
     use crate::datavalues::DataType;
     use crate::functions::VariableFunction;
     use crate::planners::ExpressionPlan;
+    use crate::transforms::AggregatorTransform;
 
     let tests = vec![
         Test {
             name: "test-simple-transforms-pass",
             pipeline: || {
-                use crate::transforms::CountTransform;
-
                 let mut pipeline = Pipeline::create();
 
                 let a =
@@ -36,11 +35,15 @@ fn test_pipeline_builder() {
 
                 pipeline
                     .add_simple_transform(|| {
-                        Box::new(CountTransform::create(
-                            Arc::new(ExpressionPlan::Field("count".to_string())),
-                            Arc::new(VariableFunction::create("a").unwrap()),
-                            &DataType::UInt64,
-                        ))
+                        Box::new(
+                            AggregatorTransform::create(
+                                "count",
+                                Arc::new(ExpressionPlan::Field("count".to_string())),
+                                Arc::new(VariableFunction::create("a").unwrap()),
+                                &DataType::UInt64,
+                            )
+                            .unwrap(),
+                        )
                     })
                     .unwrap();
                 pipeline.merge_processor().unwrap();
@@ -54,8 +57,6 @@ fn test_pipeline_builder() {
         Test {
             name: "test-transforms-pass",
             pipeline: || {
-                use crate::transforms::CountTransform;
-
                 let mut pipeline = Pipeline::create();
 
                 let a =
@@ -69,11 +70,15 @@ fn test_pipeline_builder() {
                 pipeline.expand_processor(8).unwrap();
                 pipeline
                     .add_simple_transform(|| {
-                        Box::new(CountTransform::create(
-                            Arc::new(ExpressionPlan::Field("count".to_string())),
-                            Arc::new(VariableFunction::create("a").unwrap()),
-                            &DataType::UInt64,
-                        ))
+                        Box::new(
+                            AggregatorTransform::create(
+                                "count",
+                                Arc::new(ExpressionPlan::Field("count".to_string())),
+                                Arc::new(VariableFunction::create("a").unwrap()),
+                                &DataType::UInt64,
+                            )
+                            .unwrap(),
+                        )
                     })
                     .unwrap();
                 pipeline.merge_processor().unwrap();
@@ -114,7 +119,7 @@ async fn test_pipeline_executor_sum() {
     use crate::datavalues::DataType;
     use crate::functions::VariableFunction;
     use crate::planners::ExpressionPlan;
-    use crate::transforms::SumTransform;
+    use crate::transforms::AggregatorTransform;
 
     let mut pipeline = Pipeline::create();
 
@@ -129,11 +134,15 @@ async fn test_pipeline_executor_sum() {
 
     pipeline
         .add_simple_transform(|| {
-            Box::new(SumTransform::create(
-                Arc::new(ExpressionPlan::Field("sum".to_string())),
-                Arc::new(VariableFunction::create("a").unwrap()),
-                &DataType::Int64,
-            ))
+            Box::new(
+                AggregatorTransform::create(
+                    "sum",
+                    Arc::new(ExpressionPlan::Field("sum".to_string())),
+                    Arc::new(VariableFunction::create("a").unwrap()),
+                    &DataType::Int64,
+                )
+                .unwrap(),
+            )
         })
         .unwrap();
 
@@ -141,11 +150,15 @@ async fn test_pipeline_executor_sum() {
 
     pipeline
         .add_simple_transform(|| {
-            Box::new(SumTransform::create(
-                Arc::new(ExpressionPlan::Field("sum".to_string())),
-                Arc::new(VariableFunction::create("sum").unwrap()),
-                &DataType::Int64,
-            ))
+            Box::new(
+                AggregatorTransform::create(
+                    "sum",
+                    Arc::new(ExpressionPlan::Field("sum".to_string())),
+                    Arc::new(VariableFunction::create("sum").unwrap()),
+                    &DataType::Int64,
+                )
+                .unwrap(),
+            )
         })
         .unwrap();
 
@@ -167,7 +180,7 @@ async fn test_pipeline_executor_max() {
     use crate::datavalues::DataType;
     use crate::functions::VariableFunction;
     use crate::planners::ExpressionPlan;
-    use crate::transforms::MaxTransform;
+    use crate::transforms::AggregatorTransform;
 
     let mut pipeline = Pipeline::create();
 
@@ -182,11 +195,15 @@ async fn test_pipeline_executor_max() {
 
     pipeline
         .add_simple_transform(|| {
-            Box::new(MaxTransform::create(
-                Arc::new(ExpressionPlan::Field("max".to_string())),
-                Arc::new(VariableFunction::create("a").unwrap()),
-                &DataType::Int64,
-            ))
+            Box::new(
+                AggregatorTransform::create(
+                    "max",
+                    Arc::new(ExpressionPlan::Field("max".to_string())),
+                    Arc::new(VariableFunction::create("a").unwrap()),
+                    &DataType::Int64,
+                )
+                .unwrap(),
+            )
         })
         .unwrap();
 
@@ -194,11 +211,15 @@ async fn test_pipeline_executor_max() {
 
     pipeline
         .add_simple_transform(|| {
-            Box::new(MaxTransform::create(
-                Arc::new(ExpressionPlan::Field("max".to_string())),
-                Arc::new(VariableFunction::create("max").unwrap()),
-                &DataType::Int64,
-            ))
+            Box::new(
+                AggregatorTransform::create(
+                    "max",
+                    Arc::new(ExpressionPlan::Field("max".to_string())),
+                    Arc::new(VariableFunction::create("max").unwrap()),
+                    &DataType::Int64,
+                )
+                .unwrap(),
+            )
         })
         .unwrap();
 
