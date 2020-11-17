@@ -5,22 +5,22 @@
 use std::fmt;
 
 use crate::contexts::Context;
+use crate::datasources::Partitions;
 use crate::error::{Error, Result};
-
 use crate::planners::{FormatterSettings, PlanNode};
 
 #[derive(Clone)]
 pub struct ReadDataSourcePlan {
     pub(crate) description: String,
     pub(crate) table_type: &'static str,
-    pub(crate) read_parts: usize,
+    pub partitions: Partitions,
 }
 
 impl ReadDataSourcePlan {
     pub fn build_plan(ctx: Context, scan: &PlanNode, pushdowns: Vec<PlanNode>) -> Result<PlanNode> {
         match scan {
             PlanNode::Scan(v) => {
-                let table = ctx.table("", v.table_name.as_str())?;
+                let table = ctx.table(ctx.default_db.as_str(), v.table_name.as_str())?;
                 Ok(PlanNode::ReadSource(table.read_plan(pushdowns)?))
             }
 
@@ -52,7 +52,9 @@ impl ReadDataSourcePlan {
         write!(
             f,
             "{} ReadDataSource: scan parts [{}] {}",
-            setting.prefix, self.read_parts, self.description
+            setting.prefix,
+            self.partitions.len(),
+            self.description
         )
     }
 }

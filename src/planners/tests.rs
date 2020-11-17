@@ -15,8 +15,8 @@ fn test_sql_to_plan() {
 
     use super::planner::Planner;
     use crate::contexts::Context;
-    use crate::datasources::{MemoryProvider, MemoryTable};
-    use crate::datavalues::{DataField, DataSchema, DataType};
+    use crate::datasources::*;
+    use crate::datavalues::*;
 
     fn list_of_testdata_paths(root: &str) -> io::Result<Vec<PathBuf>> {
         let mut result = vec![];
@@ -59,11 +59,13 @@ fn test_sql_to_plan() {
             writeln!(actual, "Query: {}\n", statement.to_string()).unwrap();
 
             let schema = DataSchema::new(vec![DataField::new("a", DataType::Int64, false)]);
-            let table = MemoryTable::new(Arc::new(schema));
-            let mut provider = MemoryProvider::create();
-            provider.add_table("db", "t1", Arc::new(table)).unwrap();
+            let table = MemoryTable::new("t1", Arc::new(schema));
+            let mut database = MemoryDatabase::create("default");
+            database.add_table(Arc::new(table)).unwrap();
+            let mut datasource = DataSource::create();
+            datasource.add_database(Arc::new(database)).unwrap();
 
-            let ctx = Context::create_ctx(Arc::new(provider));
+            let ctx = Context::create_ctx(Arc::new(datasource));
             let plan = Planner::new().build(ctx, &statement);
             match plan {
                 Ok(v) => {

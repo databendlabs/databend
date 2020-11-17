@@ -2,22 +2,33 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::datavalues::DataSchemaRef;
-use crate::error::Result;
-use crate::planners::{PlanNode, ReadDataSourcePlan};
+use crate::datasources::{IDatabase, ITable};
+use crate::error::{Error, Result};
 
-pub trait IDataSourceProvider {
-    fn get_table(&self, db: String, table: String) -> Result<Arc<dyn ITable>>;
+#[derive(Clone)]
+pub struct DataSource {
+    databases: HashMap<String, Arc<dyn IDatabase>>,
 }
 
-pub trait ITable {
-    // Return the schema of this datasource.
-    fn schema(&self) -> Result<DataSchemaRef>;
+impl DataSource {
+    pub fn create() -> DataSource {
+        DataSource {
+            databases: Default::default(),
+        }
+    }
 
-    // Return the ReadDataSourcePlan that how to read the datasource.
-    // Here we can push down some plans(Filter/Limit/Project) to datasource for optimizer.
-    // ReadDataSourcePlan determines the number of parallel executors(transforms) on processor pipeline.
-    fn read_plan(&self, plans: Vec<PlanNode>) -> Result<ReadDataSourcePlan>;
+    pub fn add_database(&mut self, db: Arc<dyn IDatabase>) -> Result<()> {
+        self.databases.insert(db.name().to_string(), db);
+        Ok(())
+    }
+
+    pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
+        self.databases
+            .get(db_name)
+            .ok_or_else(|| Error::Internal(format!("Can not find the database: {}", db_name)))?
+            .get_table(table_name)
+    }
 }

@@ -7,7 +7,6 @@ use std::fmt;
 
 use crate::contexts::Context;
 use crate::error::{Error, Result};
-
 use crate::planners::{FormatterSettings, PlanNode};
 
 #[derive(Clone)]

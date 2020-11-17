@@ -7,9 +7,9 @@ use std::fmt;
 
 use crate::contexts::Context;
 use crate::error::Result;
-
-use crate::planners::plan_expression::item_to_expression_step;
-use crate::planners::{ExpressionPlan, FormatterSettings, PlanNode};
+use crate::planners::{
+    plan_expression::item_to_expression_step, ExpressionPlan, FormatterSettings, PlanNode,
+};
 
 #[derive(Clone)]
 pub struct ProjectionPlan {

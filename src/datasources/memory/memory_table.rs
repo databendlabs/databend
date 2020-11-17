@@ -2,33 +2,44 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
+use std::collections::HashMap;
+
 use crate::datablocks::DataBlock;
+use crate::datasources::{ITable, Partition, TableType};
 use crate::datavalues::DataSchemaRef;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::planners::{PlanNode, ReadDataSourcePlan};
 
-use crate::datasources::ITable;
-
 pub struct MemoryTable {
+    name: String,
     schema: DataSchemaRef,
-    partitions: Vec<Vec<DataBlock>>,
+    partitions: HashMap<String, DataBlock>,
 }
 
 impl MemoryTable {
-    pub fn new(schema: DataSchemaRef) -> Self {
+    pub fn new(name: &str, schema: DataSchemaRef) -> Self {
         MemoryTable {
+            name: name.to_string(),
             schema,
-            partitions: vec![],
+            partitions: Default::default(),
         }
     }
 
-    pub fn add_partition(&mut self, partition: Vec<DataBlock>) -> Result<()> {
-        self.partitions.push(partition);
+    pub fn add_partition(&mut self, name: &str, partition: DataBlock) -> Result<()> {
+        self.partitions.insert(name.to_string(), partition);
         Ok(())
     }
 }
 
 impl ITable for MemoryTable {
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn table_type(&self) -> TableType {
+        TableType::Memory
+    }
+
     fn schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
     }
@@ -37,7 +48,15 @@ impl ITable for MemoryTable {
         Ok(ReadDataSourcePlan {
             description: "(Read from InMemory table)".to_string(),
             table_type: "InMemory",
-            read_parts: self.partitions.len(),
+            partitions: vec![],
         })
+    }
+
+    fn read_partition(&self, part: &Partition) -> Result<DataBlock> {
+        Ok(self
+            .partitions
+            .get(part.name.as_str())
+            .ok_or_else(|| Error::Internal(format!("Can not find the partition: {}", part.name)))?
+            .clone())
     }
 }

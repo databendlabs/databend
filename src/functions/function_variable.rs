@@ -7,7 +7,6 @@ use std::fmt;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataArrayRef, DataSchema, DataType};
 use crate::error::Result;
-
 use crate::functions::Function;
 
 #[derive(Clone, Debug)]

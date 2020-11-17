@@ -15,10 +15,10 @@ struct Test {
 fn test_pipeline_builder() {
     use std::sync::Arc;
 
-    use crate::datavalues::DataType;
-    use crate::functions::VariableFunction;
-    use crate::planners::ExpressionPlan;
-    use crate::transforms::AggregatorTransform;
+    use crate::datavalues::*;
+    use crate::functions::*;
+    use crate::planners::*;
+    use crate::transforms::*;
 
     let tests = vec![
         Test {
@@ -116,10 +116,10 @@ async fn test_pipeline_executor_sum() {
     use async_std::{stream::StreamExt, sync::Arc};
     use std::time::Instant;
 
-    use crate::datavalues::DataType;
-    use crate::functions::VariableFunction;
-    use crate::planners::ExpressionPlan;
-    use crate::transforms::AggregatorTransform;
+    use crate::datavalues::*;
+    use crate::functions::*;
+    use crate::planners::*;
+    use crate::transforms::*;
 
     let mut pipeline = Pipeline::create();
 

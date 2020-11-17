@@ -5,19 +5,27 @@
 use async_std::sync::Arc;
 use async_trait::async_trait;
 
-use crate::datablocks::DataBlock;
-use crate::datastreams::{DataBlockStream, MemoryStream};
-use crate::datavalues::DataSchema;
+use crate::contexts::Context;
+use crate::datasources::{MemoryTableStream, Partition, TableType};
+use crate::datastreams::DataBlockStream;
 use crate::error::Result;
 use crate::processors::IProcessor;
 
 pub struct SourceTransform {
-    data: Vec<DataBlock>,
+    ctx: Context,
+    db: String,
+    table: String,
+    partitions: Vec<Partition>,
 }
 
 impl SourceTransform {
-    pub fn create(data: Vec<DataBlock>) -> Self {
-        SourceTransform { data }
+    pub fn create(ctx: Context, db: &str, table: &str, partitions: Vec<Partition>) -> Self {
+        SourceTransform {
+            ctx,
+            db: db.to_string(),
+            table: table.to_string(),
+            partitions,
+        }
     }
 }
 
@@ -32,10 +40,9 @@ impl IProcessor for SourceTransform {
     }
 
     async fn execute(&self) -> Result<DataBlockStream> {
-        Ok(Box::pin(MemoryStream::create(
-            Arc::new(DataSchema::empty()),
-            None,
-            self.data.clone(),
-        )))
+        let table = self.ctx.table(self.db.as_str(), self.table.as_str())?;
+        Ok(Box::pin(match table.table_type() {
+            TableType::Memory => MemoryTableStream::new(self.partitions.clone(), table),
+        }))
     }
 }

@@ -7,9 +7,9 @@ async fn test_chunk_stream() {
     use async_std::stream::StreamExt;
     use std::sync::Arc;
 
-    use crate::datablocks::DataBlock;
-    use crate::datastreams::MemoryStream;
-    use crate::datavalues::DataSchema;
+    use crate::datablocks::*;
+    use crate::datastreams::*;
+    use crate::datavalues::*;
 
     let mut s1 = MemoryStream::create(
         Arc::new(DataSchema::empty()),

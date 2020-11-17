@@ -8,7 +8,6 @@ use std::fmt;
 use crate::contexts::Context;
 use crate::datavalues::DataValue;
 use crate::error::{Error, Result};
-
 use crate::planners::{EmptyPlan, ExpressionPlan, FormatterSettings, PlanNode};
 
 #[derive(Clone)]

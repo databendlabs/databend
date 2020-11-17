@@ -4,20 +4,24 @@
 
 use std::sync::Arc;
 
-use crate::datasources::{IDataSourceProvider, ITable};
+use crate::datasources::{DataSource, ITable};
 use crate::error::Result;
 
 #[derive(Clone)]
 pub struct Context {
-    provider: Arc<dyn IDataSourceProvider>,
+    pub default_db: String,
+    datasource: Arc<DataSource>,
 }
 
 impl Context {
-    pub fn create_ctx(provider: Arc<dyn IDataSourceProvider>) -> Self {
-        Context { provider }
+    pub fn create_ctx(datasource: Arc<DataSource>) -> Self {
+        Context {
+            default_db: "default".to_string(),
+            datasource,
+        }
     }
 
-    pub fn table(&self, db: &str, table: &str) -> Result<Arc<dyn ITable>> {
-        self.provider.get_table(db.to_string(), table.to_string())
+    pub fn table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
+        self.datasource.get_table(db_name, table_name)
     }
 }

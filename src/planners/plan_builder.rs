@@ -3,7 +3,6 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use crate::error::Result;
-
 use crate::planners::PlanNode;
 
 #[derive(Default)]

@@ -21,11 +21,9 @@ struct Test {
 fn test_factory() {
     use std::sync::Arc;
 
-    use crate::datavalues::{
-        DataArrayRef, DataField, DataSchema, DataType, Int64Array, UInt64Array,
-    };
+    use crate::datavalues::*;
     use crate::error::Result;
-    use crate::functions::{AggregateFunctionFactory, ScalarFunctionFactory, VariableFunction};
+    use crate::functions::*;
 
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),
