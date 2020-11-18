@@ -4,9 +4,11 @@
 
 use std::sync::Arc;
 
-use arrow::array::{Float64Array, Int64Array, UInt64Array};
-
 use crate::datavalues::{DataArrayRef, DataType};
+use crate::datavalues::{
+    Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, Int8Array, UInt16Array,
+    UInt32Array, UInt64Array, UInt8Array,
+};
 use crate::error::{Error, Result};
 
 pub fn data_array_add(left: DataArrayRef, right: DataArrayRef) -> Result<DataArrayRef> {

@@ -2,7 +2,7 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-pub mod test;
+pub mod testdata;
 
 pub mod contexts;
 pub mod datablocks;

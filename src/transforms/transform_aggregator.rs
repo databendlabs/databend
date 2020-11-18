@@ -8,7 +8,7 @@ use async_std::stream::StreamExt;
 use async_trait::async_trait;
 
 use crate::datablocks::DataBlock;
-use crate::datastreams::{DataBlockStream, MemoryStream};
+use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::datavalues::{DataField, DataSchema, DataType};
 use crate::error::{Error, Result};
 use crate::functions::{AggregateFunctionFactory, Function};
@@ -121,7 +121,7 @@ impl IProcessor for AggregatorTransform {
         }
     }
 
-    async fn execute(&self) -> Result<DataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let (expr, mut func, mut exec) = match self {
             AggregatorTransform::Count(v) => (
                 v.expr.clone(),
@@ -149,7 +149,7 @@ impl IProcessor for AggregatorTransform {
             func.accumulate(&v?)?;
         }
 
-        Ok(Box::pin(MemoryStream::create(
+        Ok(Box::pin(DataBlockStream::create(
             Arc::new(DataSchema::empty()),
             None,
             vec![DataBlock::create(

@@ -11,7 +11,7 @@ async fn test_chunk_stream() {
     use crate::datastreams::*;
     use crate::datavalues::*;
 
-    let mut s1 = MemoryStream::create(
+    let mut s1 = DataBlockStream::create(
         Arc::new(DataSchema::empty()),
         None,
         vec![DataBlock::empty(), DataBlock::empty(), DataBlock::empty()],

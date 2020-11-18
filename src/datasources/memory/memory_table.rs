@@ -2,12 +2,14 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
+use async_trait::async_trait;
 use std::collections::HashMap;
 
 use crate::datablocks::DataBlock;
-use crate::datasources::{ITable, Partition, TableType};
+use crate::datasources::{ITable, MemoryStream, Partition};
+use crate::datastreams::SendableDataBlockStream;
 use crate::datavalues::DataSchemaRef;
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::planners::{PlanNode, ReadDataSourcePlan};
 
 pub struct MemoryTable {
@@ -17,7 +19,7 @@ pub struct MemoryTable {
 }
 
 impl MemoryTable {
-    pub fn new(name: &str, schema: DataSchemaRef) -> Self {
+    pub fn create(name: &str, schema: DataSchemaRef) -> Self {
         MemoryTable {
             name: name.to_string(),
             schema,
@@ -31,13 +33,10 @@ impl MemoryTable {
     }
 }
 
+#[async_trait]
 impl ITable for MemoryTable {
     fn name(&self) -> &str {
         self.name.as_str()
-    }
-
-    fn table_type(&self) -> TableType {
-        TableType::Memory
     }
 
     fn schema(&self) -> Result<DataSchemaRef> {
@@ -48,15 +47,22 @@ impl ITable for MemoryTable {
         Ok(ReadDataSourcePlan {
             description: "(Read from InMemory table)".to_string(),
             table_type: "InMemory",
-            partitions: vec![],
+            partitions: self
+                .partitions
+                .keys()
+                .clone()
+                .map(|x| Partition {
+                    name: x.to_string(),
+                    version: 0,
+                })
+                .collect::<Vec<Partition>>(),
         })
     }
 
-    fn read_partition(&self, part: &Partition) -> Result<DataBlock> {
-        Ok(self
-            .partitions
-            .get(part.name.as_str())
-            .ok_or_else(|| Error::Internal(format!("Can not find the partition: {}", part.name)))?
-            .clone())
+    async fn read(&self, parts: Vec<Partition>) -> Result<SendableDataBlockStream> {
+        Ok(Box::pin(MemoryStream::create(
+            parts,
+            self.partitions.clone(),
+        )))
     }
 }

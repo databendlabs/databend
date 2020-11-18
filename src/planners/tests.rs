@@ -23,7 +23,7 @@ fn test_sql_to_plan() {
 
         for path in fs::read_dir(root)? {
             let path = path?.path();
-            if let Some("test") = path.extension().and_then(OsStr::to_str) {
+            if let Some("testdata") = path.extension().and_then(OsStr::to_str) {
                 result.push(path);
             }
         }
@@ -43,7 +43,7 @@ fn test_sql_to_plan() {
         let file_name = format!("{}/{}", file.parent().unwrap().to_str().unwrap(), test_name);
         let expect = fs::read_to_string(format!("{}.result", file_name.clone()))
             .expect(&format!("{}.result", file_name.clone()));
-        let txt = fs::read_to_string(format!("{}.test", file_name.clone())).unwrap();
+        let txt = fs::read_to_string(format!("{}.testdata", file_name.clone())).unwrap();
         let querys = txt.trim().split(";").map(str::trim);
 
         for query in querys {
@@ -59,8 +59,8 @@ fn test_sql_to_plan() {
             writeln!(actual, "Query: {}\n", statement.to_string()).unwrap();
 
             let schema = DataSchema::new(vec![DataField::new("a", DataType::Int64, false)]);
-            let table = MemoryTable::new("t1", Arc::new(schema));
-            let mut database = MemoryDatabase::create("default");
+            let table = MemoryTable::create("t1", Arc::new(schema));
+            let mut database = Database::create("default");
             database.add_table(Arc::new(table)).unwrap();
             let mut datasource = DataSource::create();
             datasource.add_database(Arc::new(database)).unwrap();

@@ -5,7 +5,7 @@
 use async_std::sync::Arc;
 use async_trait::async_trait;
 
-use crate::datastreams::DataBlockStream;
+use crate::datastreams::SendableDataBlockStream;
 use crate::error::Result;
 use crate::processors::{EmptyProcessor, FormatterSettings, IProcessor};
 
@@ -31,7 +31,7 @@ impl IProcessor for ThroughProcessor {
         self.input = input;
     }
 
-    async fn execute(&self) -> Result<DataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         Ok(self.input.execute().await?)
     }
 

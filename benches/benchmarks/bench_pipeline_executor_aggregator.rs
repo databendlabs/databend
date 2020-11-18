@@ -17,10 +17,10 @@ async fn pipeline_aggregator_executor(transform: &str, parts: i64, expand: bool)
 
     for i in 0..parts {
         let mut columns = vec![];
-        for k in 0..250000 {
-            columns.push(i * 250000 + k);
+        for k in 0..1000000 {
+            columns.push(i * 1000000 + k);
         }
-        let a = fuse_engine::test::generate_source(vec![columns]);
+        let a = fuse_engine::testdata::test_data_generate_source(vec![columns]);
 
         // Add source pipe.
         pipeline.add_source(Arc::new(a)).unwrap();

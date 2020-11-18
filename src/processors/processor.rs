@@ -5,7 +5,7 @@
 use async_std::sync::Arc;
 use async_trait::async_trait;
 
-use crate::datastreams::DataBlockStream;
+use crate::datastreams::SendableDataBlockStream;
 use crate::error::Result;
 
 /// Formatter settings for PlanStep debug.
@@ -27,7 +27,7 @@ pub trait IProcessor: Sync + Send {
     fn connect_to(&mut self, input: Arc<dyn IProcessor>);
 
     /// Execute the processor.
-    async fn execute(&self) -> Result<DataBlockStream>;
+    async fn execute(&self) -> Result<SendableDataBlockStream>;
 
     /// Format the processor.
     fn format(

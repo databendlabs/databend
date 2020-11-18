@@ -2,6 +2,7 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
+use arrow::record_batch::RecordBatch;
 use std::sync::Arc;
 
 use crate::datavalues::{DataArrayRef, DataSchema, DataSchemaRef};
@@ -18,6 +19,13 @@ impl DataBlock {
         DataBlock { schema, columns }
     }
 
+    pub fn create_from_arrow_batch(batch: &RecordBatch) -> Result<Self> {
+        Ok(DataBlock::create(
+            batch.schema(),
+            Vec::from(batch.columns()),
+        ))
+    }
+
     pub fn empty() -> Self {
         DataBlock {
             schema: Arc::new(DataSchema::empty()),
@@ -27,6 +35,14 @@ impl DataBlock {
 
     pub fn schema(&self) -> &DataSchemaRef {
         &self.schema
+    }
+
+    pub fn num_rows(&self) -> usize {
+        self.columns[0].data().len()
+    }
+
+    pub fn num_columns(&self) -> usize {
+        self.columns.len()
     }
 
     pub fn column(&self, index: usize) -> &DataArrayRef {

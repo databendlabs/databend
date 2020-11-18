@@ -6,8 +6,8 @@ use async_std::sync::Arc;
 use async_trait::async_trait;
 
 use crate::contexts::Context;
-use crate::datasources::{MemoryTableStream, Partition, TableType};
-use crate::datastreams::DataBlockStream;
+use crate::datasources::Partition;
+use crate::datastreams::SendableDataBlockStream;
 use crate::error::Result;
 use crate::processors::IProcessor;
 
@@ -39,10 +39,8 @@ impl IProcessor for SourceTransform {
         unimplemented!()
     }
 
-    async fn execute(&self) -> Result<DataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let table = self.ctx.table(self.db.as_str(), self.table.as_str())?;
-        Ok(Box::pin(match table.table_type() {
-            TableType::Memory => MemoryTableStream::new(self.partitions.clone(), table),
-        }))
+        table.read(self.partitions.clone()).await
     }
 }

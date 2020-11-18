@@ -5,7 +5,7 @@
 use num::range;
 use std::sync::Arc;
 
-use crate::datastreams::DataBlockStream;
+use crate::datastreams::SendableDataBlockStream;
 use crate::error::{Error, Result};
 use crate::processors::{FormatterSettings, IProcessor, MergeProcessor, ThroughProcessor};
 
@@ -116,7 +116,7 @@ impl Pipeline {
         Ok(())
     }
 
-    pub async fn execute(&mut self) -> Result<DataBlockStream> {
+    pub async fn execute(&mut self) -> Result<SendableDataBlockStream> {
         if self.processors.last().unwrap().len() > 1 {
             self.merge_processor()?;
         }

@@ -18,7 +18,8 @@ mod data_value_aggregate;
 mod data_value_arithmetic;
 
 pub use self::data_array::{
-    BooleanArray, DataArrayRef, Float64Array, Int64Array, NullArray, StringArray, UInt64Array,
+    BooleanArray, DataArrayRef, Float32Array, Float64Array, Int16Array, Int32Array, Int64Array,
+    Int8Array, NullArray, StringArray, UInt16Array, UInt32Array, UInt64Array, UInt8Array,
 };
 pub use self::data_array_aggregate::{data_array_max, data_array_min, data_array_sum};
 pub use self::data_array_arithmetic::{

@@ -5,7 +5,7 @@
 use async_std::{prelude::*, sync::Arc};
 use async_trait::async_trait;
 
-use crate::datastreams::DataBlockStream;
+use crate::datastreams::SendableDataBlockStream;
 use crate::error::Result;
 use crate::processors::{EmptyProcessor, FormatterSettings, IProcessor};
 
@@ -29,7 +29,7 @@ impl IProcessor for MergeProcessor {
         self.list.push(input);
     }
 
-    async fn execute(&self) -> Result<DataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let mut result = EmptyProcessor::create().execute().await?;
 
         for proc in &self.list {

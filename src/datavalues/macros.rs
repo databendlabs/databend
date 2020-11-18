@@ -18,16 +18,59 @@ macro_rules! downcast_array {
 macro_rules! arithmetic_compute {
     ($LEFT:expr, $RIGHT:expr, $FUNC:ident) => {
         match ($LEFT).data_type() {
+            DataType::Int8 => {
+                return Ok(Arc::new(arrow::compute::$FUNC(
+                    downcast_array!($LEFT, Int8Array),
+                    downcast_array!($RIGHT, Int8Array),
+                )?));
+            }
+            DataType::Int16 => {
+                return Ok(Arc::new(arrow::compute::$FUNC(
+                    downcast_array!($LEFT, Int16Array),
+                    downcast_array!($RIGHT, Int16Array),
+                )?));
+            }
+            DataType::Int32 => {
+                return Ok(Arc::new(arrow::compute::$FUNC(
+                    downcast_array!($LEFT, Int32Array),
+                    downcast_array!($RIGHT, Int32Array),
+                )?));
+            }
             DataType::Int64 => {
                 return Ok(Arc::new(arrow::compute::$FUNC(
                     downcast_array!($LEFT, Int64Array),
                     downcast_array!($RIGHT, Int64Array),
                 )?));
             }
+
+            DataType::UInt8 => {
+                return Ok(Arc::new(arrow::compute::$FUNC(
+                    downcast_array!($LEFT, UInt8Array),
+                    downcast_array!($RIGHT, UInt8Array),
+                )?));
+            }
+            DataType::UInt16 => {
+                return Ok(Arc::new(arrow::compute::$FUNC(
+                    downcast_array!($LEFT, UInt16Array),
+                    downcast_array!($RIGHT, UInt16Array),
+                )?));
+            }
+            DataType::UInt32 => {
+                return Ok(Arc::new(arrow::compute::$FUNC(
+                    downcast_array!($LEFT, UInt32Array),
+                    downcast_array!($RIGHT, UInt32Array),
+                )?));
+            }
             DataType::UInt64 => {
                 return Ok(Arc::new(arrow::compute::$FUNC(
                     downcast_array!($LEFT, UInt64Array),
                     downcast_array!($RIGHT, UInt64Array),
+                )?));
+            }
+            DataType::Float32 => {
+                return Ok(Arc::new(arrow::compute::$FUNC(
+                    downcast_array!($LEFT, Float32Array),
+                    downcast_array!($RIGHT, Float32Array),
                 )?));
             }
             DataType::Float64 => {

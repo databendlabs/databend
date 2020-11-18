@@ -39,3 +39,9 @@ impl From<std::num::ParseIntError> for Error {
         Error::Internal(err.to_string())
     }
 }
+
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Error::Internal(err.to_string())
+    }
+}

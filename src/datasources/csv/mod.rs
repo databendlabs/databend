@@ -4,9 +4,8 @@
 
 mod tests;
 
-#[macro_use]
-mod macros;
+mod csv_stream;
+mod csv_table;
 
-pub mod data_block;
-
-pub use self::data_block::DataBlock;
+pub use self::csv_stream::CsvStream;
+pub use self::csv_table::CsvTable;
