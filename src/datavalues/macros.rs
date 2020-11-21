@@ -79,7 +79,7 @@ macro_rules! arithmetic_compute {
                     downcast_array!($RIGHT, Float64Array),
                 )?));
             }
-            _ => Err(Error::Unsupported(format!(
+            _ => Err(FuseQueryError::Unsupported(format!(
                 "Unsupported arithmetic_compute::{} for data type: {:?}",
                 stringify!($FUNC),
                 ($LEFT).data_type(),

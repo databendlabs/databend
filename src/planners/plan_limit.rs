@@ -4,10 +4,11 @@
 
 use sqlparser::ast;
 use std::fmt;
+use std::sync::Arc;
 
 use crate::contexts::Context;
 use crate::datavalues::DataValue;
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{EmptyPlan, ExpressionPlan, FormatterSettings, PlanNode};
 
 #[derive(Clone)]
@@ -17,12 +18,12 @@ pub struct LimitPlan {
 }
 
 impl LimitPlan {
-    pub fn build_plan(ctx: Context, limit: &Option<ast::Expr>) -> Result<PlanNode> {
+    pub fn build_plan(ctx: Arc<Context>, limit: &Option<ast::Expr>) -> FuseQueryResult<PlanNode> {
         match limit {
             Some(ref expr) => {
                 let limit = match ExpressionPlan::build_plan(ctx, expr)? {
                     ExpressionPlan::Constant(DataValue::Int64(Some(n))) => Ok(n as usize),
-                    _ => Err(Error::Unsupported(format!(
+                    _ => Err(FuseQueryError::Unsupported(format!(
                         "Unsupported LimitPlan Expr: {}",
                         expr
                     ))),

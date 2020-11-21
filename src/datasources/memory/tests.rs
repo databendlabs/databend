@@ -2,10 +2,10 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-#[async_std::test]
-async fn test_memory_table() -> crate::error::Result<()> {
-    use async_std::stream::StreamExt;
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_memory_table() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
+    use tokio::stream::StreamExt;
 
     use crate::datablocks::*;
     use crate::datasources::*;

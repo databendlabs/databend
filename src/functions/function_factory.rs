@@ -5,19 +5,19 @@
 use std::sync::Arc;
 
 use crate::datavalues::DataType;
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::{arithmetics, AggregatorFunction, Function};
 
 pub struct ScalarFunctionFactory;
 
 impl ScalarFunctionFactory {
-    pub fn get(name: &str, args: &[Function]) -> Result<Function> {
+    pub fn get(name: &str, args: &[Function]) -> FuseQueryResult<Function> {
         match name.to_uppercase().as_str() {
             "+" => arithmetics::AddFunction::create(args),
             "-" => arithmetics::SubFunction::create(args),
             "*" => arithmetics::MulFunction::create(args),
             "/" => arithmetics::DivFunction::create(args),
-            _ => Err(Error::Unsupported(format!(
+            _ => Err(FuseQueryError::Unsupported(format!(
                 "Unsupported Scalar Function: {}",
                 name
             ))),
@@ -28,7 +28,11 @@ impl ScalarFunctionFactory {
 pub struct AggregateFunctionFactory;
 
 impl AggregateFunctionFactory {
-    pub fn get(name: &str, column: Arc<Function>, data_type: &DataType) -> Result<Function> {
+    pub fn get(
+        name: &str,
+        column: Arc<Function>,
+        data_type: &DataType,
+    ) -> FuseQueryResult<Function> {
         AggregatorFunction::create(name, column, data_type)
     }
 }

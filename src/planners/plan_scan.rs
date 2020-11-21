@@ -4,9 +4,10 @@
 
 use sqlparser::ast;
 use std::fmt;
+use std::sync::Arc;
 
 use crate::contexts::Context;
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{FormatterSettings, PlanNode};
 
 #[derive(Clone)]
@@ -16,7 +17,10 @@ pub struct ScanPlan {
 }
 
 impl ScanPlan {
-    pub fn build_plan(_ctx: Context, from: &[ast::TableWithJoins]) -> Result<PlanNode> {
+    pub fn build_plan(
+        _ctx: Arc<Context>,
+        from: &[ast::TableWithJoins],
+    ) -> FuseQueryResult<PlanNode> {
         if from.is_empty() {
             return Ok(PlanNode::Scan(ScanPlan {
                 description: "".to_string(),
@@ -30,7 +34,7 @@ impl ScanPlan {
                 description: "".to_string(),
                 table_name: name.to_string(),
             })),
-            _ => Err(Error::Unsupported(format!(
+            _ => Err(FuseQueryError::Unsupported(format!(
                 "Unsupported ScanPlan from: {}",
                 relation
             ))),

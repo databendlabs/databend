@@ -6,13 +6,13 @@ use num::range;
 use std::sync::Arc;
 
 use crate::datastreams::SendableDataBlockStream;
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::{FormatterSettings, IProcessor, MergeProcessor, ThroughProcessor};
 
-pub type Pipes = Vec<Arc<dyn IProcessor>>;
+pub type Pipe = Vec<Arc<dyn IProcessor>>;
 
 pub struct Pipeline {
-    processors: Vec<Pipes>,
+    processors: Vec<Pipe>,
 }
 
 impl Pipeline {
@@ -36,7 +36,7 @@ impl Pipeline {
         }
     }
 
-    pub fn add_source(&mut self, source: Arc<dyn IProcessor>) -> Result<()> {
+    pub fn add_source(&mut self, source: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
         if self.processors.first().is_none() {
             let mut first = vec![];
             first.push(source);
@@ -55,10 +55,13 @@ impl Pipeline {
     ///
     /// processor3 --> processor3_1
     ///
-    pub fn add_simple_transform(&mut self, f: impl Fn() -> Box<dyn IProcessor>) -> Result<()> {
+    pub fn add_simple_transform(
+        &mut self,
+        f: impl Fn() -> Box<dyn IProcessor>,
+    ) -> FuseQueryResult<()> {
         let mut items = vec![];
         let last = self.processors.last().ok_or_else(|| {
-            Error::Internal("Can't add transform to an empty pipe list".to_string())
+            FuseQueryError::Internal("Can't add transform to an empty pipe list".to_string())
         })?;
         for x in last {
             let mut p = f();
@@ -77,9 +80,11 @@ impl Pipeline {
     ///               /
     /// processor3 --
     ///
-    pub fn merge_processor(&mut self) -> Result<()> {
+    pub fn merge_processor(&mut self) -> FuseQueryResult<()> {
         let last = self.processors.last().ok_or_else(|| {
-            Error::Internal("Can't merge processor when the last pipe is empty".to_string())
+            FuseQueryError::Internal(
+                "Can't merge processor when the last pipe is empty".to_string(),
+            )
         })?;
 
         let mut p = MergeProcessor::create();
@@ -99,10 +104,12 @@ impl Pipeline {
     /// //            \
     /// //              processor3
     ///
-    pub fn expand_processor(&mut self, size: u32) -> Result<()> {
+    pub fn expand_processor(&mut self, size: u32) -> FuseQueryResult<()> {
         let mut items: Vec<Arc<dyn IProcessor>> = vec![];
         let last = self.processors.last().ok_or_else(|| {
-            Error::Internal("Can't expand processor when the last pipe is empty".to_string())
+            FuseQueryError::Internal(
+                "Can't expand processor when the last pipe is empty".to_string(),
+            )
         })?;
 
         for _i in 0..size {
@@ -116,7 +123,7 @@ impl Pipeline {
         Ok(())
     }
 
-    pub async fn execute(&mut self) -> Result<SendableDataBlockStream> {
+    pub async fn execute(&mut self) -> FuseQueryResult<SendableDataBlockStream> {
         if self.processors.last().unwrap().len() > 1 {
             self.merge_processor()?;
         }

@@ -6,7 +6,7 @@ use std::fmt;
 
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataArrayRef, DataSchema, DataType, DataValue};
-use crate::error::Result;
+use crate::error::FuseQueryResult;
 
 use crate::functions::Function;
 
@@ -16,7 +16,7 @@ pub struct ConstantFunction {
 }
 
 impl ConstantFunction {
-    pub fn create(value: DataValue) -> Result<Function> {
+    pub fn create(value: DataValue) -> FuseQueryResult<Function> {
         Ok(Function::Constant(ConstantFunction { value }))
     }
 
@@ -24,15 +24,15 @@ impl ConstantFunction {
         "ConstantFunction"
     }
 
-    pub fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
+    pub fn return_type(&self, _input_schema: &DataSchema) -> FuseQueryResult<DataType> {
         self.value.data_type()
     }
 
-    pub fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
+    pub fn nullable(&self, _input_schema: &DataSchema) -> FuseQueryResult<bool> {
         Ok(self.value.is_null())
     }
 
-    pub fn evaluate(&self, _block: &DataBlock) -> Result<DataArrayRef> {
+    pub fn evaluate(&self, _block: &DataBlock) -> FuseQueryResult<DataArrayRef> {
         self.value.to_array()
     }
 }

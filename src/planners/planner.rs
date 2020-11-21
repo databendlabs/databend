@@ -4,12 +4,13 @@
 
 use sqlparser::ast;
 use std::fmt;
+use std::sync::Arc;
 
 use crate::contexts::Context;
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
-    EmptyPlan, ExpressionPlan, FilterPlan, LimitPlan, ProjectionPlan, ReadDataSourcePlan, ScanPlan,
-    SelectPlan,
+    DFExplainPlan, DFParser, DFStatement, EmptyPlan, ExplainPlan, ExpressionPlan, FilterPlan,
+    LimitPlan, ProjectionPlan, ReadDataSourcePlan, ScanPlan, SelectPlan,
 };
 
 pub struct Planner;
@@ -20,15 +21,49 @@ impl Planner {
         Self {}
     }
 
+    pub fn build_from_sql(&self, ctx: Arc<Context>, query: &str) -> FuseQueryResult<PlanNode> {
+        let statements = DFParser::parse_sql(query)?;
+        if statements.len() != 1 {
+            return Err(FuseQueryError::Unsupported(
+                "Only support single query".to_string(),
+            ));
+        }
+        self.build(ctx, &statements[0])
+    }
+
     /// Builds plan from AST statement.
-    pub fn build(&self, ctx: Context, statement: &ast::Statement) -> Result<PlanNode> {
+    pub fn build(&self, ctx: Arc<Context>, statement: &DFStatement) -> FuseQueryResult<PlanNode> {
         match statement {
-            ast::Statement::Query(query) => SelectPlan::build_plan(ctx, query.as_ref()),
-            _ => Err(Error::Unsupported(format!(
-                "Unsupported statement: {} in planner.build()",
+            DFStatement::Statement(s) => self.sql_statement_to_plan(ctx, &s),
+            DFStatement::Explain(s) => self.explain_statement_to_plan(ctx, &s),
+            _ => Err(FuseQueryError::Unsupported(format!(
+                "Unsupported statement: {:?} in planner.build()",
                 statement
             ))),
         }
+    }
+
+    pub fn sql_statement_to_plan(
+        &self,
+        ctx: Arc<Context>,
+        sql: &ast::Statement,
+    ) -> FuseQueryResult<PlanNode> {
+        match sql {
+            ast::Statement::Query(query) => SelectPlan::build_plan(ctx, query),
+            _ => Err(FuseQueryError::Unsupported(format!(
+                "Unsupported statement {:?} for planner.statement_to_plan",
+                sql
+            ))),
+        }
+    }
+
+    pub fn explain_statement_to_plan(
+        &self,
+        ctx: Arc<Context>,
+        explain_plan: &DFExplainPlan,
+    ) -> FuseQueryResult<PlanNode> {
+        let plan = self.build(ctx.clone(), &explain_plan.statement)?;
+        ExplainPlan::build_plan(ctx, plan)
     }
 }
 
@@ -55,6 +90,7 @@ pub enum PlanNode {
     ReadSource(ReadDataSourcePlan),
     Scan(ScanPlan),
     Select(SelectPlan),
+    Explain(Box<ExplainPlan>),
 }
 
 impl PlanNode {
@@ -68,6 +104,7 @@ impl PlanNode {
             PlanNode::ReadSource(v) => v.format(f, setting),
             PlanNode::Scan(v) => v.format(f, setting),
             PlanNode::Select(v) => v.format(f, setting),
+            PlanNode::Explain(v) => v.format(f, setting),
         }
     }
 
@@ -81,6 +118,7 @@ impl PlanNode {
             PlanNode::ReadSource(v) => v.name(),
             PlanNode::Scan(v) => v.name(),
             PlanNode::Select(v) => v.name(),
+            PlanNode::Explain(v) => v.name(),
         }
     }
 

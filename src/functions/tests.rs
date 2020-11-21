@@ -22,7 +22,7 @@ fn test_factory() {
     use std::sync::Arc;
 
     use crate::datavalues::*;
-    use crate::error::Result;
+    use crate::error::FuseQueryResult;
     use crate::functions::*;
 
     let schema = Arc::new(DataSchema::new(vec![
@@ -111,7 +111,7 @@ fn test_factory() {
         },
     ];
     for t in tests {
-        let result: Result<DataArrayRef>;
+        let result: FuseQueryResult<DataArrayRef>;
 
         if !t.is_aggregate {
             let fun = ScalarFunctionFactory::get(t.fun, &*t.args).unwrap();

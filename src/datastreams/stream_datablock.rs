@@ -2,12 +2,12 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use async_std::stream::Stream;
 use std::task::{Context, Poll};
+use tokio::stream::Stream;
 
 use crate::datablocks::DataBlock;
 use crate::datavalues::DataSchemaRef;
-use crate::error::Result;
+use crate::error::FuseQueryResult;
 
 pub struct DataBlockStream {
     index: usize,
@@ -32,7 +32,7 @@ impl DataBlockStream {
 }
 
 impl Stream for DataBlockStream {
-    type Item = Result<DataBlock>;
+    type Item = FuseQueryResult<DataBlock>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,

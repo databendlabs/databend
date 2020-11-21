@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::datasources::{IDatabase, ITable};
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 
 #[derive(Clone)]
 pub struct DataSource {
@@ -20,15 +20,17 @@ impl DataSource {
         }
     }
 
-    pub fn add_database(&mut self, db: Arc<dyn IDatabase>) -> Result<()> {
+    pub fn add_database(&mut self, db: Arc<dyn IDatabase>) -> FuseQueryResult<()> {
         self.databases.insert(db.name().to_string(), db);
         Ok(())
     }
 
-    pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
+    pub fn get_table(&self, db_name: &str, table_name: &str) -> FuseQueryResult<Arc<dyn ITable>> {
         self.databases
             .get(db_name)
-            .ok_or_else(|| Error::Internal(format!("Can not find the database: {}", db_name)))?
+            .ok_or_else(|| {
+                FuseQueryError::Internal(format!("Can not find the database: {}", db_name))
+            })?
             .get_table(table_name)
     }
 }

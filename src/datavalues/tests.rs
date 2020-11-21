@@ -7,7 +7,7 @@ fn test_array_arithmetic() {
     use std::sync::Arc;
 
     use super::*;
-    use crate::error::Result;
+    use crate::error::FuseQueryResult;
 
     #[allow(dead_code)]
     struct ArrayTest {
@@ -15,7 +15,7 @@ fn test_array_arithmetic() {
         args: Vec<Vec<DataArrayRef>>,
         expect: Vec<DataArrayRef>,
         error: Vec<&'static str>,
-        func: Box<dyn Fn(DataArrayRef, DataArrayRef) -> Result<DataArrayRef>>,
+        func: Box<dyn Fn(DataArrayRef, DataArrayRef) -> FuseQueryResult<DataArrayRef>>,
     }
 
     let tests = vec![
@@ -307,7 +307,7 @@ fn test_array_aggregate() {
     use std::sync::Arc;
 
     use super::*;
-    use crate::error::Result;
+    use crate::error::FuseQueryResult;
 
     #[allow(dead_code)]
     struct ArrayTest {
@@ -315,7 +315,7 @@ fn test_array_aggregate() {
         args: Vec<DataArrayRef>,
         expect: Vec<DataValue>,
         error: Vec<&'static str>,
-        func: Box<dyn Fn(DataArrayRef) -> Result<DataValue>>,
+        func: Box<dyn Fn(DataArrayRef) -> FuseQueryResult<DataValue>>,
     }
 
     let tests = vec![
@@ -434,7 +434,7 @@ fn test_array_aggregate() {
 #[test]
 fn test_scalar_arithmetic() {
     use super::*;
-    use crate::error::Result;
+    use crate::error::FuseQueryResult;
 
     #[allow(dead_code)]
     struct ScalarTest {
@@ -442,7 +442,7 @@ fn test_scalar_arithmetic() {
         args: Vec<Vec<DataValue>>,
         expect: Vec<DataValue>,
         error: Vec<&'static str>,
-        func: Box<dyn Fn(DataValue, DataValue) -> Result<DataValue>>,
+        func: Box<dyn Fn(DataValue, DataValue) -> FuseQueryResult<DataValue>>,
     }
 
     let tests = vec![ScalarTest {

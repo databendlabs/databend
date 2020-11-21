@@ -2,12 +2,12 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use async_std::sync::Arc;
 use async_trait::async_trait;
+use std::sync::Arc;
 
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::datavalues::DataSchema;
-use crate::error::Result;
+use crate::error::FuseQueryResult;
 use crate::processors::{FormatterSettings, IProcessor};
 
 pub struct EmptyProcessor {}
@@ -26,7 +26,7 @@ impl IProcessor for EmptyProcessor {
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) {}
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
         Ok(Box::pin(DataBlockStream::create(
             Arc::new(DataSchema::empty()),
             None,

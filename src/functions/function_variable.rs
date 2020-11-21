@@ -6,7 +6,7 @@ use std::fmt;
 
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataArrayRef, DataSchema, DataType};
-use crate::error::Result;
+use crate::error::FuseQueryResult;
 use crate::functions::Function;
 
 #[derive(Clone, Debug)]
@@ -15,7 +15,7 @@ pub struct VariableFunction {
 }
 
 impl VariableFunction {
-    pub fn create(value: &str) -> Result<Function> {
+    pub fn create(value: &str) -> FuseQueryResult<Function> {
         Ok(Function::Variable(VariableFunction {
             value: value.to_string(),
         }))
@@ -25,18 +25,18 @@ impl VariableFunction {
         "VariableFunction"
     }
 
-    pub fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
+    pub fn return_type(&self, input_schema: &DataSchema) -> FuseQueryResult<DataType> {
         Ok(input_schema
             .field_with_name(&self.value)?
             .data_type()
             .clone())
     }
 
-    pub fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
+    pub fn nullable(&self, input_schema: &DataSchema) -> FuseQueryResult<bool> {
         Ok(input_schema.field_with_name(&self.value)?.is_nullable())
     }
 
-    pub fn evaluate(&self, block: &DataBlock) -> Result<DataArrayRef> {
+    pub fn evaluate(&self, block: &DataBlock) -> FuseQueryResult<DataArrayRef> {
         Ok(block.column_by_name(self.value.as_str())?.clone())
     }
 }

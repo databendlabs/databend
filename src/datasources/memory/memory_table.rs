@@ -9,7 +9,7 @@ use crate::datablocks::DataBlock;
 use crate::datasources::{ITable, MemoryStream, Partition};
 use crate::datastreams::SendableDataBlockStream;
 use crate::datavalues::DataSchemaRef;
-use crate::error::Result;
+use crate::error::FuseQueryResult;
 use crate::planners::{PlanNode, ReadDataSourcePlan};
 
 pub struct MemoryTable {
@@ -27,7 +27,7 @@ impl MemoryTable {
         }
     }
 
-    pub fn add_partition(&mut self, name: &str, partition: DataBlock) -> Result<()> {
+    pub fn add_partition(&mut self, name: &str, partition: DataBlock) -> FuseQueryResult<()> {
         self.partitions.insert(name.to_string(), partition);
         Ok(())
     }
@@ -39,11 +39,11 @@ impl ITable for MemoryTable {
         self.name.as_str()
     }
 
-    fn schema(&self) -> Result<DataSchemaRef> {
+    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
         Ok(self.schema.clone())
     }
 
-    fn read_plan(&self, _plans: Vec<PlanNode>) -> Result<ReadDataSourcePlan> {
+    fn read_plan(&self, _plans: Vec<PlanNode>) -> FuseQueryResult<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             description: "(Read from InMemory table)".to_string(),
             table_type: "InMemory",
@@ -59,7 +59,7 @@ impl ITable for MemoryTable {
         })
     }
 
-    async fn read(&self, parts: Vec<Partition>) -> Result<SendableDataBlockStream> {
+    async fn read(&self, parts: Vec<Partition>) -> FuseQueryResult<SendableDataBlockStream> {
         Ok(Box::pin(MemoryStream::create(
             parts,
             self.partitions.clone(),

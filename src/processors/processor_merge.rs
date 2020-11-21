@@ -2,11 +2,12 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use async_std::{prelude::*, sync::Arc};
 use async_trait::async_trait;
+use std::sync::Arc;
+use tokio::stream::StreamExt;
 
 use crate::datastreams::SendableDataBlockStream;
-use crate::error::Result;
+use crate::error::FuseQueryResult;
 use crate::processors::{EmptyProcessor, FormatterSettings, IProcessor};
 
 pub struct MergeProcessor {
@@ -29,12 +30,12 @@ impl IProcessor for MergeProcessor {
         self.list.push(input);
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
         let mut result = EmptyProcessor::create().execute().await?;
 
-        for proc in &self.list {
-            let proc_clone = proc.clone();
-            let next = async_std::task::spawn(async move { proc_clone.execute().await }).await?;
+        for xproc in &self.list {
+            let proc = xproc.clone();
+            let next = proc.execute().await?;
             result = Box::pin(result.merge(next));
         }
         Ok(result)

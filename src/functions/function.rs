@@ -6,7 +6,7 @@ use std::fmt;
 
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataArrayRef, DataSchema, DataType};
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::{arithmetics, AggregatorFunction, ConstantFunction, VariableFunction};
 
 #[derive(Clone)]
@@ -33,7 +33,7 @@ impl Function {
         }
     }
 
-    pub fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
+    pub fn return_type(&self, input_schema: &DataSchema) -> FuseQueryResult<DataType> {
         match self {
             Function::Constant(v) => v.return_type(input_schema),
             Function::Variable(v) => v.return_type(input_schema),
@@ -45,7 +45,7 @@ impl Function {
         }
     }
 
-    pub fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
+    pub fn nullable(&self, input_schema: &DataSchema) -> FuseQueryResult<bool> {
         match self {
             Function::Constant(v) => v.nullable(input_schema),
             Function::Variable(v) => v.nullable(input_schema),
@@ -57,7 +57,7 @@ impl Function {
         }
     }
 
-    pub fn evaluate(&self, block: &DataBlock) -> Result<DataArrayRef> {
+    pub fn evaluate(&self, block: &DataBlock) -> FuseQueryResult<DataArrayRef> {
         match self {
             Function::Constant(v) => v.evaluate(block),
             Function::Variable(v) => v.evaluate(block),
@@ -65,27 +65,27 @@ impl Function {
             Function::Div(v) => v.evaluate(block),
             Function::Mul(v) => v.evaluate(block),
             Function::Sub(v) => v.evaluate(block),
-            _ => Err(Error::Unsupported(format!(
+            _ => Err(FuseQueryError::Unsupported(format!(
                 "Unsupported evaluate() for function {}",
                 self.name()
             ))),
         }
     }
 
-    pub fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
+    pub fn accumulate(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
         match self {
             Function::Aggregator(ref mut v) => v.accumulate(block),
-            _ => Err(Error::Unsupported(format!(
+            _ => Err(FuseQueryError::Unsupported(format!(
                 "Unsupported accumulate() for function {}",
                 self.name()
             ))),
         }
     }
 
-    pub fn aggregate(&self) -> Result<DataArrayRef> {
+    pub fn aggregate(&self) -> FuseQueryResult<DataArrayRef> {
         match self {
             Function::Aggregator(v) => v.aggregate(),
-            _ => Err(Error::Unsupported(format!(
+            _ => Err(FuseQueryError::Unsupported(format!(
                 "Unsupported aggregators() for function {}",
                 self.name()
             ))),

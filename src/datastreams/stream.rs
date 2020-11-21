@@ -3,7 +3,7 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use crate::datablocks::DataBlock;
-use crate::error::Result;
+use crate::error::FuseQueryResult;
 
 pub type SendableDataBlockStream =
-    std::pin::Pin<Box<dyn async_std::stream::Stream<Item = Result<DataBlock>> + Sync + Send>>;
+    std::pin::Pin<Box<dyn tokio::stream::Stream<Item = FuseQueryResult<DataBlock>> + Sync + Send>>;

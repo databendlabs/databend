@@ -6,7 +6,7 @@ use std::fmt;
 
 use crate::datablocks::DataBlock;
 use crate::datavalues::{data_array_add, DataArrayRef, DataSchema, DataType};
-use crate::error::Result;
+use crate::error::FuseQueryResult;
 
 use crate::functions::Function;
 
@@ -17,7 +17,7 @@ pub struct AddFunction {
 }
 
 impl AddFunction {
-    pub fn create(args: &[Function]) -> Result<Function> {
+    pub fn create(args: &[Function]) -> FuseQueryResult<Function> {
         Ok(Function::Add(AddFunction {
             left: Box::from(args[0].clone()),
             right: Box::from(args[1].clone()),
@@ -28,15 +28,15 @@ impl AddFunction {
         "AddFunction"
     }
 
-    pub fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
+    pub fn return_type(&self, input_schema: &DataSchema) -> FuseQueryResult<DataType> {
         self.left.return_type(input_schema)
     }
 
-    pub fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
+    pub fn nullable(&self, _input_schema: &DataSchema) -> FuseQueryResult<bool> {
         Ok(false)
     }
 
-    pub fn evaluate(&self, block: &DataBlock) -> Result<DataArrayRef> {
+    pub fn evaluate(&self, block: &DataBlock) -> FuseQueryResult<DataArrayRef> {
         data_array_add(self.left.evaluate(block)?, self.right.evaluate(block)?)
     }
 }

@@ -7,5 +7,5 @@ use criterion::criterion_main;
 mod benchmarks;
 
 criterion_main! {
-    benchmarks::bench_pipeline_executor_aggregator::benches,
+    benchmarks::bench_pipeline_aggregator::benches,
 }

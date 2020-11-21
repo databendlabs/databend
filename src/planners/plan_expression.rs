@@ -4,10 +4,11 @@
 
 use sqlparser::ast;
 use std::fmt;
+use std::sync::Arc;
 
 use crate::contexts::Context;
 use crate::datavalues::DataValue;
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::FormatterSettings;
 
 #[derive(Clone)]
@@ -24,7 +25,7 @@ pub enum ExpressionPlan {
 }
 
 impl ExpressionPlan {
-    pub fn build_plan(ctx: Context, expr: &ast::Expr) -> Result<ExpressionPlan> {
+    pub fn build_plan(ctx: Arc<Context>, expr: &ast::Expr) -> FuseQueryResult<ExpressionPlan> {
         match expr {
             ast::Expr::Identifier(ref v) => Ok(ExpressionPlan::Field(v.clone().value)),
             ast::Expr::Value(ast::Value::Number(n)) => match n.parse::<i64>() {
@@ -43,7 +44,7 @@ impl ExpressionPlan {
             }),
             ast::Expr::Nested(e) => Self::build_plan(ctx, e),
 
-            _ => Err(Error::Unsupported(format!(
+            _ => Err(FuseQueryError::Unsupported(format!(
                 "Unsupported ExpressionPlan Expression: {}",
                 expr
             ))),
@@ -72,10 +73,13 @@ impl fmt::Debug for ExpressionPlan {
 }
 
 /// SQL.SelectItem to ExpressionStep.
-pub fn item_to_expression_step(ctx: Context, item: &ast::SelectItem) -> Result<ExpressionPlan> {
+pub fn item_to_expression_step(
+    ctx: Arc<Context>,
+    item: &ast::SelectItem,
+) -> FuseQueryResult<ExpressionPlan> {
     match item {
         ast::SelectItem::UnnamedExpr(expr) => ExpressionPlan::build_plan(ctx, expr),
-        _ => Err(Error::Unsupported(format!(
+        _ => Err(FuseQueryError::Unsupported(format!(
             "Unsupported SelectItem {} in item_to_expression_step",
             item
         ))),

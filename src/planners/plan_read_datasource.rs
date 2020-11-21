@@ -3,10 +3,11 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use std::fmt;
+use std::sync::Arc;
 
 use crate::contexts::Context;
 use crate::datasources::Partitions;
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{FormatterSettings, PlanNode};
 
 #[derive(Clone)]
@@ -17,14 +18,18 @@ pub struct ReadDataSourcePlan {
 }
 
 impl ReadDataSourcePlan {
-    pub fn build_plan(ctx: Context, scan: &PlanNode, pushdowns: Vec<PlanNode>) -> Result<PlanNode> {
+    pub fn build_plan(
+        ctx: Arc<Context>,
+        scan: &PlanNode,
+        pushdowns: Vec<PlanNode>,
+    ) -> FuseQueryResult<PlanNode> {
         match scan {
             PlanNode::Scan(v) => {
                 let table = ctx.table(ctx.default_db.as_str(), v.table_name.as_str())?;
                 Ok(PlanNode::ReadSource(table.read_plan(pushdowns)?))
             }
 
-            _ => Err(Error::Unsupported(format!(
+            _ => Err(FuseQueryError::Unsupported(format!(
                 "Expected ScanPlan, but got: {:?}",
                 scan
             ))),

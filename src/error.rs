@@ -3,15 +3,14 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use std::result;
-use thiserror::Error;
 
 use arrow::error::ArrowError;
 use sqlparser::parser::ParserError;
 
-pub type Result<T> = result::Result<T, Error>;
+pub type FuseQueryResult<T> = result::Result<T, FuseQueryError>;
 
-#[derive(Error, Debug)]
-pub enum Error {
+#[derive(thiserror::Error, Debug)]
+pub enum FuseQueryError {
     #[error("SQLParser Error: {0}")]
     SQLParse(#[from] ParserError),
 
@@ -22,26 +21,32 @@ pub enum Error {
     Unsupported(String),
 }
 
-impl From<ArrowError> for Error {
+impl From<ArrowError> for FuseQueryError {
     fn from(e: ArrowError) -> Self {
-        Error::Internal(e.to_string())
+        FuseQueryError::Internal(e.to_string())
     }
 }
 
-impl From<std::num::ParseFloatError> for Error {
+impl From<std::num::ParseFloatError> for FuseQueryError {
     fn from(err: std::num::ParseFloatError) -> Self {
-        Error::Internal(err.to_string())
+        FuseQueryError::Internal(err.to_string())
     }
 }
 
-impl From<std::num::ParseIntError> for Error {
+impl From<std::num::ParseIntError> for FuseQueryError {
     fn from(err: std::num::ParseIntError) -> Self {
-        Error::Internal(err.to_string())
+        FuseQueryError::Internal(err.to_string())
     }
 }
 
-impl From<std::io::Error> for Error {
+impl From<std::io::Error> for FuseQueryError {
     fn from(err: std::io::Error) -> Self {
-        Error::Internal(err.to_string())
+        FuseQueryError::Internal(err.to_string())
+    }
+}
+
+impl From<tokio::task::JoinError> for FuseQueryError {
+    fn from(err: tokio::task::JoinError) -> Self {
+        FuseQueryError::Internal(err.to_string())
     }
 }

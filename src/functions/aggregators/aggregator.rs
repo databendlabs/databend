@@ -11,7 +11,7 @@ use crate::datavalues::{
     data_array_max, data_array_min, data_array_sum, data_value_add, data_value_max, data_value_min,
     DataArrayRef, DataSchema, DataType, DataValue,
 };
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::Function;
 
 #[derive(Clone, Debug)]
@@ -55,7 +55,11 @@ pub enum AggregatorFunction {
 }
 
 impl AggregatorFunction {
-    pub fn create(name: &str, column: Arc<Function>, data_type: &DataType) -> Result<Function> {
+    pub fn create(
+        name: &str,
+        column: Arc<Function>,
+        data_type: &DataType,
+    ) -> FuseQueryResult<Function> {
         Ok(Function::Aggregator(match name.to_lowercase().as_str() {
             "count" => AggregatorFunction::Count(CountAggregatorFunction {
                 name: "CountAggregatorFunction",
@@ -82,7 +86,7 @@ impl AggregatorFunction {
                 data_type: data_type.clone(),
             }),
             _ => {
-                return Err(Error::Unsupported(format!(
+                return Err(FuseQueryError::Unsupported(format!(
                     "Unsupported aggregators function: {:?}",
                     name
                 )))
@@ -99,7 +103,7 @@ impl AggregatorFunction {
         }
     }
 
-    pub fn return_type(&self) -> Result<DataType> {
+    pub fn return_type(&self) -> FuseQueryResult<DataType> {
         Ok(match self {
             AggregatorFunction::Count(v) => v.data_type.clone(),
             AggregatorFunction::Min(v) => v.data_type.clone(),
@@ -108,12 +112,12 @@ impl AggregatorFunction {
         })
     }
 
-    pub fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
+    pub fn nullable(&self, _input_schema: &DataSchema) -> FuseQueryResult<bool> {
         Ok(false)
     }
 
     // Accumulates a value.
-    pub fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
+    pub fn accumulate(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
         match self {
             AggregatorFunction::Count(v) => {
                 let array = v.column.evaluate(block)?.len();
@@ -136,7 +140,7 @@ impl AggregatorFunction {
     }
 
     // Calculates a final aggregators.
-    pub fn aggregate(&self) -> Result<DataArrayRef> {
+    pub fn aggregate(&self) -> FuseQueryResult<DataArrayRef> {
         Ok(match self {
             AggregatorFunction::Count(v) => v.state.to_array()?,
             AggregatorFunction::Min(v) => v.state.to_array()?,

@@ -12,7 +12,7 @@ use crate::datavalues::{
 };
 
 use crate::datavalues::{DataArrayRef, DataType};
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 
 /// A specific value of a data type.
 #[derive(Clone, PartialEq)]
@@ -52,7 +52,7 @@ impl DataValue {
         )
     }
 
-    pub fn data_type(&self) -> Result<DataType> {
+    pub fn data_type(&self) -> FuseQueryResult<DataType> {
         match self {
             DataValue::Boolean(_) => Ok(DataType::Boolean),
             DataValue::Int8(_) => Ok(DataType::Int8),
@@ -69,7 +69,7 @@ impl DataValue {
         }
     }
 
-    pub fn to_array(&self) -> Result<DataArrayRef> {
+    pub fn to_array(&self) -> FuseQueryResult<DataArrayRef> {
         match self {
             DataValue::Boolean(v) => Ok(Arc::new(BooleanArray::from(vec![*v])) as DataArrayRef),
             DataValue::Int8(v) => Ok(Arc::new(Int8Array::from(vec![*v])) as DataArrayRef),
@@ -88,9 +88,9 @@ impl DataValue {
 }
 
 impl TryFrom<&DataType> for DataValue {
-    type Error = Error;
+    type Error = FuseQueryError;
 
-    fn try_from(data_type: &DataType) -> Result<Self> {
+    fn try_from(data_type: &DataType) -> FuseQueryResult<Self> {
         Ok(match data_type {
             DataType::Boolean => (DataValue::Boolean(None)),
             DataType::Int8 => (DataValue::Int8(None)),
@@ -104,7 +104,7 @@ impl TryFrom<&DataType> for DataValue {
             DataType::Float32 => (DataValue::Float32(None)),
             DataType::Float64 => (DataValue::Float64(None)),
             _ => {
-                return Err(Error::Unsupported(format!(
+                return Err(FuseQueryError::Unsupported(format!(
                     "Unsupported try_from() for data type: {:?}",
                     data_type
                 )))

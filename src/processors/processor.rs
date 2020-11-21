@@ -2,11 +2,11 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use async_std::sync::Arc;
 use async_trait::async_trait;
+use std::sync::Arc;
 
 use crate::datastreams::SendableDataBlockStream;
-use crate::error::Result;
+use crate::error::FuseQueryResult;
 
 /// Formatter settings for PlanStep debug.
 pub struct FormatterSettings {
@@ -27,7 +27,7 @@ pub trait IProcessor: Sync + Send {
     fn connect_to(&mut self, input: Arc<dyn IProcessor>);
 
     /// Execute the processor.
-    async fn execute(&self) -> Result<SendableDataBlockStream>;
+    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream>;
 
     /// Format the processor.
     fn format(

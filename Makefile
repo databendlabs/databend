@@ -7,6 +7,9 @@ test:
 bench:
 	cargo +nightly bench -- --nocapture
 
+run:
+	cargo +nightly run -- --nocapture
+
 lint:
 	cargo fmt
 	cargo +nightly clippy -- -D warnings

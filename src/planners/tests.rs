@@ -10,13 +10,11 @@ fn test_sql_to_plan() {
     use std::{ffi::OsStr, fs, io};
 
     use pretty_assertions::assert_eq;
-    use sqlparser::dialect::GenericDialect;
-    use sqlparser::parser::Parser;
 
-    use super::planner::Planner;
     use crate::contexts::Context;
     use crate::datasources::*;
     use crate::datavalues::*;
+    use crate::planners::*;
 
     fn list_of_testdata_paths(root: &str) -> io::Result<Vec<PathBuf>> {
         let mut result = vec![];
@@ -50,13 +48,14 @@ fn test_sql_to_plan() {
             if query.is_empty() {
                 continue;
             }
-            let dialect = GenericDialect {};
-            let mut ast = Parser::parse_sql(&dialect, &query).unwrap();
-            let statement = ast.pop().unwrap();
 
-            let line = "-".repeat(statement.to_string().len() + 7);
+            let statements = DFParser::parse_sql(query).unwrap();
+            let statement = &statements[0];
+            let statement_str = format!("{:?}", statement);
+
+            let line = "-".repeat(statement_str.len() + 7);
             writeln!(actual, "{}", line).unwrap();
-            writeln!(actual, "Query: {}\n", statement.to_string()).unwrap();
+            writeln!(actual, "Query: {:?}\n", statement).unwrap();
 
             let schema = DataSchema::new(vec![DataField::new("a", DataType::Int64, false)]);
             let table = MemoryTable::create("t1", Arc::new(schema));
@@ -66,7 +65,7 @@ fn test_sql_to_plan() {
             datasource.add_database(Arc::new(database)).unwrap();
 
             let ctx = Context::create_ctx(Arc::new(datasource));
-            let plan = Planner::new().build(ctx, &statement);
+            let plan = Planner::new().build(Arc::new(ctx), &statement);
             match plan {
                 Ok(v) => {
                     writeln!(actual, "AST:\n{:#?}\n", statement).unwrap();

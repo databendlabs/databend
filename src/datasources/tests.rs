@@ -2,14 +2,15 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-#[async_std::test]
-async fn test_datasource() -> crate::error::Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_datasource() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
     use crate::datasources::*;
     use crate::datavalues::*;
     use crate::testdata;
 
+    let csv_test_source = testdata::CsvTestData::create();
     let mut mem_database = Database::create("mem_db");
     let mem_table = MemoryTable::create(
         "mem_table",
@@ -25,8 +26,8 @@ async fn test_datasource() -> crate::error::Result<()> {
     let csv_table = CsvTable::create(
         "csv_table",
         11,
-        testdata::test_data_csv_schema(),
-        testdata::test_data_csv_partitions(),
+        csv_test_source.csv_table_schema_for_test(),
+        csv_test_source.csv_table_partitions_for_test(),
     );
     csv_database.add_table(Arc::new(csv_table))?;
 

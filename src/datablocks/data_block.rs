@@ -6,7 +6,7 @@ use arrow::record_batch::RecordBatch;
 use std::sync::Arc;
 
 use crate::datavalues::{DataArrayRef, DataSchema, DataSchemaRef};
-use crate::error::Result;
+use crate::error::FuseQueryResult;
 
 #[derive(Debug, Clone)]
 pub struct DataBlock {
@@ -19,7 +19,7 @@ impl DataBlock {
         DataBlock { schema, columns }
     }
 
-    pub fn create_from_arrow_batch(batch: &RecordBatch) -> Result<Self> {
+    pub fn create_from_arrow_batch(batch: &RecordBatch) -> FuseQueryResult<Self> {
         Ok(DataBlock::create(
             batch.schema(),
             Vec::from(batch.columns()),
@@ -49,7 +49,7 @@ impl DataBlock {
         &self.columns[index]
     }
 
-    pub fn column_by_name(&self, name: &str) -> Result<&DataArrayRef> {
+    pub fn column_by_name(&self, name: &str) -> FuseQueryResult<&DataArrayRef> {
         let idx = self.schema.index_of(name)?;
         Ok(&self.columns[idx])
     }

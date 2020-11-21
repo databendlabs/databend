@@ -3,7 +3,7 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 #[test]
-fn test_datablock() -> crate::error::Result<()> {
+fn test_datablock() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
     use crate::datablocks::*;

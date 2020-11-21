@@ -2,10 +2,10 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_chunk_stream() {
-    use async_std::stream::StreamExt;
     use std::sync::Arc;
+    use tokio::stream::StreamExt;
 
     use crate::datablocks::*;
     use crate::datastreams::*;

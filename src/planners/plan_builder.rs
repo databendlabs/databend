@@ -2,7 +2,7 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use crate::error::Result;
+use crate::error::FuseQueryResult;
 use crate::planners::PlanNode;
 
 #[derive(Default)]
@@ -21,7 +21,7 @@ impl PlanBuilder {
         }
     }
 
-    pub fn build(&mut self) -> Result<Vec<PlanNode>> {
+    pub fn build(&mut self) -> FuseQueryResult<Vec<PlanNode>> {
         Ok(self.nodes.clone())
     }
 }

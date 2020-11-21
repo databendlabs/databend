@@ -4,13 +4,13 @@
 
 use std::sync::Arc;
 
-use async_std::stream::StreamExt;
 use async_trait::async_trait;
+use tokio::stream::StreamExt;
 
 use crate::datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::datavalues::{DataField, DataSchema, DataType};
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::{AggregateFunctionFactory, Function};
 use crate::planners::ExpressionPlan;
 use crate::processors::{EmptyProcessor, IProcessor};
@@ -60,7 +60,7 @@ impl AggregatorTransform {
         expr: Arc<ExpressionPlan>,
         column: Arc<Function>,
         data_type: &DataType,
-    ) -> Result<AggregatorTransform> {
+    ) -> FuseQueryResult<AggregatorTransform> {
         Ok(match name.to_lowercase().as_str() {
             "count" => AggregatorTransform::Count(CountTransform {
                 name: "CountTransform",
@@ -92,7 +92,7 @@ impl AggregatorTransform {
             }),
 
             _ => {
-                return Err(Error::Unsupported(format!(
+                return Err(FuseQueryError::Unsupported(format!(
                     "Unsupported aggregators transform: {:?}",
                     name
                 )))
@@ -121,7 +121,7 @@ impl IProcessor for AggregatorTransform {
         }
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
         let (expr, mut func, mut exec) = match self {
             AggregatorTransform::Count(v) => (
                 v.expr.clone(),

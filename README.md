@@ -29,4 +29,31 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 | datastreams | Async streaming iterators | WIP |
 | datasources | Interface to the fuse-store server | WIP | 
 | distributed | Distributed scheduler and executor for planner | TODO |
+| servers | Server handler(MySQL/HTTP) | MySQL |
 
+## How to Run?
+
+#### Fuse-Query Cloud Compute starts
+```
+$make run
+
+12:46:15 [ INFO] Options { log_level: "debug", num_cpus: 8, mysql_handler_port: 3307 }
+12:46:15 [ INFO] Fuse-Query Cloud Compute Starts...
+12:46:15 [ INFO] Usage: mysql -h127.0.0.1 -P3307
+```
+
+#### Query with MySQL client
+```
+$mysql -h127.0.0.1 -P3307
+mysql> explain select a1 from t1 where a > 10 and b < 5 limit 10;
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| explain                                                                                                                                                                                            |
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| └─ Projection: a1
+  └─ Limit: 10 (preliminary LIMIT)
+    └─ Filter: a > 10 AND b < 5 (WHERE)
+      └─ Scan: t1
+        └─ ReadDataSource: scan parts [4] (Read from CSV table)                     |
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+1 row in set (0.00 sec)
+```

@@ -7,16 +7,16 @@ use async_trait::async_trait;
 use crate::datasources::Partition;
 use crate::datastreams::SendableDataBlockStream;
 use crate::datavalues::DataSchemaRef;
-use crate::error::Result;
+use crate::error::FuseQueryResult;
 use crate::planners::{PlanNode, ReadDataSourcePlan};
 
 #[async_trait]
 pub trait ITable: Sync + Send {
     fn name(&self) -> &str;
 
-    fn schema(&self) -> Result<DataSchemaRef>;
+    fn schema(&self) -> FuseQueryResult<DataSchemaRef>;
 
-    fn read_plan(&self, plans: Vec<PlanNode>) -> Result<ReadDataSourcePlan>;
+    fn read_plan(&self, plans: Vec<PlanNode>) -> FuseQueryResult<ReadDataSourcePlan>;
 
-    async fn read(&self, parts: Vec<Partition>) -> Result<SendableDataBlockStream>;
+    async fn read(&self, parts: Vec<Partition>) -> FuseQueryResult<SendableDataBlockStream>;
 }

@@ -4,9 +4,10 @@
 
 use sqlparser::ast;
 use std::fmt;
+use std::sync::Arc;
 
 use crate::contexts::Context;
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
     FilterPlan, FormatterSettings, LimitPlan, PlanBuilder, PlanNode, ProjectionPlan,
     ReadDataSourcePlan, ScanPlan,
@@ -18,7 +19,7 @@ pub struct SelectPlan {
 }
 
 impl SelectPlan {
-    pub fn build_plan(ctx: Context, query: &ast::Query) -> Result<PlanNode> {
+    pub fn build_plan(ctx: Arc<Context>, query: &ast::Query) -> FuseQueryResult<PlanNode> {
         let mut builder = PlanBuilder::default();
 
         match &query.body {
@@ -46,7 +47,7 @@ impl SelectPlan {
                     nodes: builder.build()?,
                 }))
             }
-            _ => Err(Error::Unsupported(format!(
+            _ => Err(FuseQueryError::Unsupported(format!(
                 "Unsupported SelectPlan query: {}",
                 query
             ))),

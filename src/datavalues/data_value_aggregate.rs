@@ -3,9 +3,9 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use crate::datavalues::DataValue;
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 
-pub fn data_value_min(left: DataValue, right: DataValue) -> Result<DataValue> {
+pub fn data_value_min(left: DataValue, right: DataValue) -> FuseQueryResult<DataValue> {
     Ok(match (&left, &right) {
         (DataValue::Int64(lhs), DataValue::Int64(rhs)) => {
             typed_data_value_min_max!(lhs, rhs, Int64, min)
@@ -17,7 +17,7 @@ pub fn data_value_min(left: DataValue, right: DataValue) -> Result<DataValue> {
             typed_data_value_min_max!(lhs, rhs, Float64, min)
         }
         _ => {
-            return Err(Error::Unsupported(format!(
+            return Err(FuseQueryError::Unsupported(format!(
                 "Unsupported data_value_min() for data type: left:{:?}, right:{:?}",
                 left.data_type()?,
                 right.data_type()?
@@ -26,7 +26,7 @@ pub fn data_value_min(left: DataValue, right: DataValue) -> Result<DataValue> {
     })
 }
 
-pub fn data_value_max(left: DataValue, right: DataValue) -> Result<DataValue> {
+pub fn data_value_max(left: DataValue, right: DataValue) -> FuseQueryResult<DataValue> {
     Ok(match (&left, &right) {
         (DataValue::Int64(lhs), DataValue::Int64(rhs)) => {
             typed_data_value_min_max!(lhs, rhs, Int64, max)
@@ -38,7 +38,7 @@ pub fn data_value_max(left: DataValue, right: DataValue) -> Result<DataValue> {
             typed_data_value_min_max!(lhs, rhs, Float64, max)
         }
         _ => {
-            return Err(Error::Unsupported(format!(
+            return Err(FuseQueryError::Unsupported(format!(
                 "Unsupported data_value_max() for data type: left:{:?}, right:{:?}",
                 left.data_type()?,
                 right.data_type()?

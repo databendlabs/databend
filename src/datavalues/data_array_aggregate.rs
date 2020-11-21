@@ -9,9 +9,9 @@ use crate::datavalues::{
     Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, Int8Array, UInt16Array,
     UInt32Array, UInt64Array, UInt8Array,
 };
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 
-pub fn data_array_min(value: DataArrayRef) -> Result<DataValue> {
+pub fn data_array_min(value: DataArrayRef) -> FuseQueryResult<DataValue> {
     Ok(match value.data_type() {
         DataType::Int8 => typed_array_min_max_to_data_value!(value, Int8Array, Int8, min),
         DataType::Int16 => typed_array_min_max_to_data_value!(value, Int16Array, Int16, min),
@@ -24,7 +24,7 @@ pub fn data_array_min(value: DataArrayRef) -> Result<DataValue> {
         DataType::Float32 => typed_array_min_max_to_data_value!(value, Float32Array, Float32, min),
         DataType::Float64 => typed_array_min_max_to_data_value!(value, Float64Array, Float64, min),
         _ => {
-            return Err(Error::Unsupported(format!(
+            return Err(FuseQueryError::Unsupported(format!(
                 "Unsupported data_array_min() for data type: {:?}",
                 value.data_type()
             )))
@@ -32,7 +32,7 @@ pub fn data_array_min(value: DataArrayRef) -> Result<DataValue> {
     })
 }
 
-pub fn data_array_max(value: DataArrayRef) -> Result<DataValue> {
+pub fn data_array_max(value: DataArrayRef) -> FuseQueryResult<DataValue> {
     Ok(match value.data_type() {
         DataType::Int8 => typed_array_min_max_to_data_value!(value, Int8Array, Int8, max),
         DataType::Int16 => typed_array_min_max_to_data_value!(value, Int16Array, Int16, max),
@@ -45,7 +45,7 @@ pub fn data_array_max(value: DataArrayRef) -> Result<DataValue> {
         DataType::Float32 => typed_array_min_max_to_data_value!(value, Float32Array, Float32, max),
         DataType::Float64 => typed_array_min_max_to_data_value!(value, Float64Array, Float64, max),
         _ => {
-            return Err(Error::Unsupported(format!(
+            return Err(FuseQueryError::Unsupported(format!(
                 "Unsupported data_array_max() for data type: {:?}",
                 value.data_type()
             )))
@@ -53,7 +53,7 @@ pub fn data_array_max(value: DataArrayRef) -> Result<DataValue> {
     })
 }
 
-pub fn data_array_sum(value: DataArrayRef) -> Result<DataValue> {
+pub fn data_array_sum(value: DataArrayRef) -> FuseQueryResult<DataValue> {
     Ok(match value.data_type() {
         DataType::Int8 => typed_array_sum_to_data_value!(value, Int8Array, Int8),
         DataType::Int16 => typed_array_sum_to_data_value!(value, Int16Array, Int16),
@@ -66,7 +66,7 @@ pub fn data_array_sum(value: DataArrayRef) -> Result<DataValue> {
         DataType::Float32 => typed_array_sum_to_data_value!(value, Float32Array, Float32),
         DataType::Float64 => typed_array_sum_to_data_value!(value, Float64Array, Float64),
         _ => {
-            return Err(Error::Unsupported(format!(
+            return Err(FuseQueryError::Unsupported(format!(
                 "Unsupported data_array_sum() for data type: {:?}",
                 value.data_type()
             )))

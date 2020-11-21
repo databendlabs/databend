@@ -2,22 +2,21 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use arrow::csv;
-use async_std::stream::Stream;
 use std::fs::File;
 use std::task::{Context, Poll};
+use tokio::stream::Stream;
 
 use crate::datablocks::DataBlock;
 use crate::datasources::Partition;
 use crate::datavalues::DataSchemaRef;
-use crate::error::Result;
+use crate::error::FuseQueryResult;
 
 pub struct CsvStream {
     index: usize,
     partitions: Vec<Partition>,
     batch_size: usize,
     schema: DataSchemaRef,
-    reader: csv::Reader<File>,
+    reader: arrow::csv::Reader<File>,
 }
 
 impl CsvStream {
@@ -25,10 +24,11 @@ impl CsvStream {
         partitions: Vec<Partition>,
         batch_size: usize,
         schema: DataSchemaRef,
-    ) -> Result<Self> {
+    ) -> FuseQueryResult<Self> {
         let filename = partitions[0].name.clone();
         let file = File::open(filename)?;
-        let reader = csv::Reader::new(file, schema.clone(), true, Some(b','), batch_size, None);
+        let reader =
+            arrow::csv::Reader::new(file, schema.clone(), true, Some(b','), batch_size, None);
 
         Ok(CsvStream {
             index: 1,
@@ -41,7 +41,7 @@ impl CsvStream {
 }
 
 impl Stream for CsvStream {
-    type Item = Result<DataBlock>;
+    type Item = FuseQueryResult<DataBlock>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
@@ -53,7 +53,7 @@ impl Stream for CsvStream {
                     if self.index < self.partitions.len() {
                         let filename = self.partitions[self.index].name.clone();
                         let file = File::open(filename.clone())?;
-                        self.reader = csv::Reader::new(
+                        self.reader = arrow::csv::Reader::new(
                             file,
                             self.schema.clone(),
                             true,

@@ -5,9 +5,8 @@
 use std::sync::Arc;
 
 use crate::datasources::{DataSource, ITable};
-use crate::error::Result;
+use crate::error::FuseQueryResult;
 
-#[derive(Clone)]
 pub struct Context {
     pub default_db: String,
     datasource: Arc<DataSource>,
@@ -21,7 +20,7 @@ impl Context {
         }
     }
 
-    pub fn table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
+    pub fn table(&self, db_name: &str, table_name: &str) -> FuseQueryResult<Arc<dyn ITable>> {
         self.datasource.get_table(db_name, table_name)
     }
 }

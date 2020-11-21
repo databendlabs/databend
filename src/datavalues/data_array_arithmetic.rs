@@ -9,20 +9,20 @@ use crate::datavalues::{
     Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, Int8Array, UInt16Array,
     UInt32Array, UInt64Array, UInt8Array,
 };
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 
-pub fn data_array_add(left: DataArrayRef, right: DataArrayRef) -> Result<DataArrayRef> {
+pub fn data_array_add(left: DataArrayRef, right: DataArrayRef) -> FuseQueryResult<DataArrayRef> {
     arithmetic_compute!(&left, &right, add)
 }
 
-pub fn data_array_sub(left: DataArrayRef, right: DataArrayRef) -> Result<DataArrayRef> {
+pub fn data_array_sub(left: DataArrayRef, right: DataArrayRef) -> FuseQueryResult<DataArrayRef> {
     arithmetic_compute!(&left, &right, subtract)
 }
 
-pub fn data_array_mul(left: DataArrayRef, right: DataArrayRef) -> Result<DataArrayRef> {
+pub fn data_array_mul(left: DataArrayRef, right: DataArrayRef) -> FuseQueryResult<DataArrayRef> {
     arithmetic_compute!(&left, &right, multiply)
 }
 
-pub fn data_array_div(left: DataArrayRef, right: DataArrayRef) -> Result<DataArrayRef> {
+pub fn data_array_div(left: DataArrayRef, right: DataArrayRef) -> FuseQueryResult<DataArrayRef> {
     arithmetic_compute!(&left, &right, divide)
 }

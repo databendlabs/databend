@@ -2,13 +2,13 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use async_std::sync::Arc;
 use async_trait::async_trait;
+use std::sync::Arc;
 
 use crate::contexts::Context;
 use crate::datasources::Partition;
 use crate::datastreams::SendableDataBlockStream;
-use crate::error::Result;
+use crate::error::FuseQueryResult;
 use crate::processors::IProcessor;
 
 pub struct SourceTransform {
@@ -39,7 +39,7 @@ impl IProcessor for SourceTransform {
         unimplemented!()
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
         let table = self.ctx.table(self.db.as_str(), self.table.as_str())?;
         table.read(self.partitions.clone()).await
     }

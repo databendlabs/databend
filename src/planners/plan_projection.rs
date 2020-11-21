@@ -4,9 +4,10 @@
 
 use sqlparser::ast;
 use std::fmt;
+use std::sync::Arc;
 
 use crate::contexts::Context;
-use crate::error::Result;
+use crate::error::FuseQueryResult;
 use crate::planners::{
     plan_expression::item_to_expression_step, ExpressionPlan, FormatterSettings, PlanNode,
 };
@@ -18,11 +19,11 @@ pub struct ProjectionPlan {
 }
 
 impl ProjectionPlan {
-    pub fn build_plan(ctx: Context, items: &[ast::SelectItem]) -> Result<PlanNode> {
+    pub fn build_plan(ctx: Arc<Context>, items: &[ast::SelectItem]) -> FuseQueryResult<PlanNode> {
         let expr = items
             .iter()
             .map(|expr| item_to_expression_step(ctx.clone(), expr))
-            .collect::<Result<Vec<ExpressionPlan>>>()?;
+            .collect::<FuseQueryResult<Vec<ExpressionPlan>>>()?;
 
         Ok(PlanNode::Projection(ProjectionPlan {
             description: "".to_string(),

@@ -6,12 +6,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::datasources::ITable;
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 
 pub trait IDatabase: Sync + Send {
     fn name(&self) -> &str;
-    fn add_table(&mut self, table: Arc<dyn ITable>) -> Result<()>;
-    fn get_table(&self, table_name: &str) -> Result<Arc<dyn ITable>>;
+    fn add_table(&mut self, table: Arc<dyn ITable>) -> FuseQueryResult<()>;
+    fn get_table(&self, table_name: &str) -> FuseQueryResult<Arc<dyn ITable>>;
 }
 
 pub struct Database {
@@ -33,16 +33,16 @@ impl IDatabase for Database {
         self.name.as_str()
     }
 
-    fn add_table(&mut self, table: Arc<dyn ITable>) -> Result<()> {
+    fn add_table(&mut self, table: Arc<dyn ITable>) -> FuseQueryResult<()> {
         self.tables.insert(table.name().to_string(), table);
         Ok(())
     }
 
-    fn get_table(&self, table: &str) -> Result<Arc<dyn ITable>> {
+    fn get_table(&self, table: &str) -> FuseQueryResult<Arc<dyn ITable>> {
         Ok(self
             .tables
             .get(table)
-            .ok_or_else(|| Error::Internal(format!("Can not find the table: {}", table)))?
+            .ok_or_else(|| FuseQueryError::Internal(format!("Can not find the table: {}", table)))?
             .clone())
     }
 }

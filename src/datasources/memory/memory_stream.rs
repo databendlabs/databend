@@ -2,13 +2,13 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use async_std::stream::Stream;
 use std::collections::HashMap;
 use std::task::{Context, Poll};
+use tokio::stream::Stream;
 
 use crate::datablocks::DataBlock;
 use crate::datasources::Partition;
-use crate::error::{Error, Result};
+use crate::error::{FuseQueryError, FuseQueryResult};
 
 pub struct MemoryStream {
     index: usize,
@@ -27,7 +27,7 @@ impl MemoryStream {
 }
 
 impl Stream for MemoryStream {
-    type Item = Result<DataBlock>;
+    type Item = FuseQueryResult<DataBlock>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
@@ -40,7 +40,7 @@ impl Stream for MemoryStream {
                 .partitions
                 .get(part.name.as_str())
                 .ok_or_else(|| {
-                    Error::Internal(format!("Can not find the partition: {}", part.name))
+                    FuseQueryError::Internal(format!("Can not find the partition: {}", part.name))
                 })?
                 .clone()))
         } else {
