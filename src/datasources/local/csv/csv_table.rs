@@ -4,12 +4,13 @@
 
 use async_trait::async_trait;
 
-use crate::datasources::csv::CsvStream;
 use crate::datasources::{ITable, Partition};
 use crate::datastreams::SendableDataBlockStream;
 use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::planners::{PlanNode, ReadDataSourcePlan};
+
+use super::CsvStream;
 
 pub struct CsvTable {
     name: String,

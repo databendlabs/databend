@@ -117,7 +117,7 @@ impl MySQLHandler {
         Ok(())
     }
 
-    pub async fn stop(&self) -> FuseQueryResult<()> {
+    pub fn stop(&self) -> FuseQueryResult<()> {
         Ok(())
     }
 }

@@ -6,11 +6,13 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 
 use crate::datablocks::DataBlock;
-use crate::datasources::{ITable, MemoryStream, Partition};
+use crate::datasources::{ITable, Partition};
 use crate::datastreams::SendableDataBlockStream;
 use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::planners::{PlanNode, ReadDataSourcePlan};
+
+use super::MemoryStream;
 
 pub struct MemoryTable {
     name: String,
