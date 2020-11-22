@@ -3,14 +3,14 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::datasources::{IDatabase, ITable};
 use crate::error::{FuseQueryError, FuseQueryResult};
 
 #[derive(Clone)]
 pub struct DataSource {
-    databases: HashMap<String, Arc<dyn IDatabase>>,
+    databases: HashMap<String, Arc<Mutex<dyn IDatabase>>>,
 }
 
 impl DataSource {
@@ -20,8 +20,9 @@ impl DataSource {
         }
     }
 
-    pub fn add_database(&mut self, db: Arc<dyn IDatabase>) -> FuseQueryResult<()> {
-        self.databases.insert(db.name().to_string(), db);
+    pub fn add_database(&mut self, db: Arc<Mutex<dyn IDatabase>>) -> FuseQueryResult<()> {
+        let name = db.lock()?.name().to_string();
+        self.databases.insert(name, db);
         Ok(())
     }
 
@@ -31,6 +32,7 @@ impl DataSource {
             .ok_or_else(|| {
                 FuseQueryError::Internal(format!("Can not find the database: {}", db_name))
             })?
+            .lock()?
             .get_table(table_name)
     }
 }

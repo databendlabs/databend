@@ -62,7 +62,9 @@ fn test_sql_to_plan() {
             let mut database = Database::create("default");
             database.add_table(Arc::new(table)).unwrap();
             let mut datasource = DataSource::create();
-            datasource.add_database(Arc::new(database)).unwrap();
+            datasource
+                .add_database(Arc::new(Mutex::new(database)))
+                .unwrap();
 
             let ctx = FuseQueryContext::create_ctx(0, Arc::new(Mutex::new(datasource)));
             let plan = Planner::new().build(Arc::new(ctx), &statement);

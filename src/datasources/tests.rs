@@ -4,7 +4,7 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_datasource() -> crate::error::FuseQueryResult<()> {
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     use crate::datasources::*;
     use crate::datavalues::*;
@@ -32,8 +32,8 @@ async fn test_datasource() -> crate::error::FuseQueryResult<()> {
     csv_database.add_table(Arc::new(csv_table))?;
 
     let mut datasource = DataSource::create();
-    datasource.add_database(Arc::new(mem_database))?;
-    datasource.add_database(Arc::new(csv_database))?;
+    datasource.add_database(Arc::new(Mutex::new(mem_database)))?;
+    datasource.add_database(Arc::new(Mutex::new(csv_database)))?;
 
     let table = datasource.get_table("mem_db", "mem_table")?;
     assert_eq!("mem_table", table.name());

@@ -64,7 +64,9 @@ impl MemoryTestData {
         let mut database = Database::create(self.db);
         database.add_table(Arc::new(table)).unwrap();
         let mut datasource = DataSource::create();
-        datasource.add_database(Arc::new(database)).unwrap();
+        datasource
+            .add_database(Arc::new(Mutex::new(database)))
+            .unwrap();
         datasource
     }
 
