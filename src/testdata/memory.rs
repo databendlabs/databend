@@ -2,7 +2,7 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::contexts::FuseQueryContext;
 use crate::datablocks::DataBlock;
@@ -71,7 +71,9 @@ impl MemoryTestData {
     pub fn memory_table_source_transform_for_test(&self, datas: Vec<Vec<i64>>) -> SourceTransform {
         let ctx = FuseQueryContext::create_ctx(
             0,
-            Arc::new(self.memory_table_datasource_for_test(datas.clone())),
+            Arc::new(Mutex::new(
+                self.memory_table_datasource_for_test(datas.clone()),
+            )),
         );
         SourceTransform::create(
             ctx,

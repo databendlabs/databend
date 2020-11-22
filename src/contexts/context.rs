@@ -2,27 +2,36 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::datasources::{DataSource, ITable};
 use crate::error::FuseQueryResult;
 
 pub struct FuseQueryContext {
     pub worker_threads: usize,
-    pub default_db: String,
-    datasource: Arc<DataSource>,
+    default_db: Mutex<String>,
+    datasource: Arc<Mutex<DataSource>>,
 }
 
 impl FuseQueryContext {
-    pub fn create_ctx(worker_threads: usize, datasource: Arc<DataSource>) -> Self {
+    pub fn create_ctx(worker_threads: usize, datasource: Arc<Mutex<DataSource>>) -> Self {
         FuseQueryContext {
             worker_threads,
-            default_db: "default".to_string(),
+            default_db: Mutex::new("default".to_string()),
             datasource,
         }
     }
 
-    pub fn table(&self, db_name: &str, table_name: &str) -> FuseQueryResult<Arc<dyn ITable>> {
-        self.datasource.get_table(db_name, table_name)
+    pub fn get_current_database(&self) -> FuseQueryResult<String> {
+        Ok(self.default_db.lock()?.clone())
+    }
+
+    pub fn set_current_database(&self, db: &str) -> FuseQueryResult<()> {
+        *self.default_db.lock()? = db.to_string();
+        Ok(())
+    }
+
+    pub fn get_table(&self, db_name: &str, table_name: &str) -> FuseQueryResult<Arc<dyn ITable>> {
+        self.datasource.lock()?.get_table(db_name, table_name)
     }
 }

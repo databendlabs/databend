@@ -45,7 +45,7 @@ impl IProcessor for SourceTransform {
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
-        let table = self.ctx.table(self.db.as_str(), self.table.as_str())?;
+        let table = self.ctx.get_table(self.db.as_str(), self.table.as_str())?;
         table.read(self.partitions.clone()).await
     }
 }

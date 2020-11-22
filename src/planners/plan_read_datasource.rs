@@ -25,7 +25,7 @@ impl ReadDataSourcePlan {
     ) -> FuseQueryResult<PlanNode> {
         match scan {
             PlanNode::Scan(v) => {
-                let table = ctx.table(ctx.default_db.as_str(), v.table_name.as_str())?;
+                let table = ctx.get_table(&ctx.get_current_database()?, v.table_name.as_str())?;
                 Ok(PlanNode::ReadSource(table.read_plan(pushdowns)?))
             }
 

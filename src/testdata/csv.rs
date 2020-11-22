@@ -3,7 +3,7 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::contexts::FuseQueryContext;
 use crate::datasources::{CsvTable, DataSource, Database, IDatabase, Partition};
@@ -92,7 +92,10 @@ impl CsvTestData {
     }
 
     pub fn csv_table_source_transform_for_test(&self) -> SourceTransform {
-        let ctx = FuseQueryContext::create_ctx(0, Arc::new(self.csv_table_datasource_for_test()));
+        let ctx = FuseQueryContext::create_ctx(
+            0,
+            Arc::new(Mutex::new(self.csv_table_datasource_for_test())),
+        );
         SourceTransform::create(
             ctx,
             self.db,

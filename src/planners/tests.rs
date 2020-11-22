@@ -5,7 +5,7 @@
 #[test]
 fn test_sql_to_plan() {
     use std::path::PathBuf;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
     use std::{env, fmt::Write};
     use std::{ffi::OsStr, fs, io};
 
@@ -64,7 +64,7 @@ fn test_sql_to_plan() {
             let mut datasource = DataSource::create();
             datasource.add_database(Arc::new(database)).unwrap();
 
-            let ctx = FuseQueryContext::create_ctx(0, Arc::new(datasource));
+            let ctx = FuseQueryContext::create_ctx(0, Arc::new(Mutex::new(datasource)));
             let plan = Planner::new().build(Arc::new(ctx), &statement);
             match plan {
                 Ok(v) => {

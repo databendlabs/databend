@@ -4,7 +4,7 @@
 
 use log::debug;
 use msql_srv::*;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::{io, net, thread};
 use tokio::stream::StreamExt;
 
@@ -86,18 +86,20 @@ impl<W: io::Write> MysqlShim<W> for Session {
         Ok(())
     }
 
-    fn on_init(&mut self, _: &str, _writer: InitWriter<W>) -> FuseQueryResult<()> {
-        unimplemented!();
+    fn on_init(&mut self, db: &str, _writer: InitWriter<W>) -> FuseQueryResult<()> {
+        debug!("MySQL use db:{}", db);
+        self.ctx.set_current_database(db)?;
+        Ok(())
     }
 }
 
 pub struct MySQLHandler {
     opts: Options,
-    datasource: Arc<DataSource>,
+    datasource: Arc<Mutex<DataSource>>,
 }
 
 impl MySQLHandler {
-    pub fn create(opts: Options, datasource: Arc<DataSource>) -> Self {
+    pub fn create(opts: Options, datasource: Arc<Mutex<DataSource>>) -> Self {
         MySQLHandler { opts, datasource }
     }
 

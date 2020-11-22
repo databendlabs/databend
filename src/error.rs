@@ -45,6 +45,12 @@ impl From<std::io::Error> for FuseQueryError {
     }
 }
 
+impl<T> From<std::sync::PoisonError<T>> for FuseQueryError {
+    fn from(err: std::sync::PoisonError<T>) -> Self {
+        FuseQueryError::Internal(err.to_string())
+    }
+}
+
 impl From<tokio::task::JoinError> for FuseQueryError {
     fn from(err: tokio::task::JoinError) -> Self {
         FuseQueryError::Internal(err.to_string())
