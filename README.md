@@ -20,16 +20,16 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 
 | Crate     | Description |  Status |
 |-----------|-------------|-------------|
-| [processors](src/processors) | Dataflow streaming processor | WIP |
-| [transforms](src/transforms) | Query execution transform | WIP |
-| [planners](src/planners) | Distributed plan for queries and DML statements | WIP |
-| [optimizers](src/optimizers) | Optimizer for distributed plan | TODO |
-| [functions](src/functions) | Scalar and Aggregation functions | WIP |
+| optimizers | Optimizer for distributed plan | TODO |
+| distributed | Distributed scheduler and executor for planner | TODO |
 | [datablocks](src/datablocks) | Vectorized data processing unit | WIP |
 | [datastreams](src/datastreams) | Async streaming iterators | WIP |
 | [datasources](src/datasources) | Interface to the fuse-store server | WIP |
-| [distributed](src/distributed) | Distributed scheduler and executor for planner | TODO |
+| [functions](src/functions) | Scalar and Aggregation functions | WIP |
+| [processors](src/processors) | Dataflow streaming processor | WIP |
+| [planners](src/planners) | Distributed plan for queries and DML statements | WIP |
 | [servers](src/servers) | Server handler(MySQL/HTTP) | MySQL |
+| [transforms](src/transforms) | Query execution transform | WIP |
 
 ## How to Run?
 
