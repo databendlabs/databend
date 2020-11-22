@@ -8,13 +8,15 @@ use crate::datasources::{DataSource, ITable};
 use crate::error::FuseQueryResult;
 
 pub struct FuseQueryContext {
+    pub worker_threads: usize,
     pub default_db: String,
     datasource: Arc<DataSource>,
 }
 
 impl FuseQueryContext {
-    pub fn create_ctx(datasource: Arc<DataSource>) -> Self {
+    pub fn create_ctx(worker_threads: usize, datasource: Arc<DataSource>) -> Self {
         FuseQueryContext {
+            worker_threads,
             default_db: "default".to_string(),
             datasource,
         }

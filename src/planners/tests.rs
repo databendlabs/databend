@@ -64,7 +64,7 @@ fn test_sql_to_plan() {
             let mut datasource = DataSource::create();
             datasource.add_database(Arc::new(database)).unwrap();
 
-            let ctx = FuseQueryContext::create_ctx(Arc::new(datasource));
+            let ctx = FuseQueryContext::create_ctx(0, Arc::new(datasource));
             let plan = Planner::new().build(Arc::new(ctx), &statement);
             match plan {
                 Ok(v) => {

@@ -92,7 +92,7 @@ impl CsvTestData {
     }
 
     pub fn csv_table_source_transform_for_test(&self) -> SourceTransform {
-        let ctx = FuseQueryContext::create_ctx(Arc::new(self.csv_table_datasource_for_test()));
+        let ctx = FuseQueryContext::create_ctx(0, Arc::new(self.csv_table_datasource_for_test()));
         SourceTransform::create(
             ctx,
             self.db,

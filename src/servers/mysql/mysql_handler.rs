@@ -53,15 +53,18 @@ impl<W: io::Write> MysqlShim<W> for Session {
         match plan {
             Ok(v) => match ExecutorFactory::get(self.ctx.clone(), v) {
                 Ok(executor) => {
-                    let result: FuseQueryResult<Vec<DataBlock>> = tokio::runtime::Runtime::new()?
-                        .block_on(async move {
-                            let mut r = vec![];
-                            let mut stream = executor.execute().await?;
-                            while let Some(block) = stream.next().await {
-                                r.push(block?);
-                            }
-                            Ok(r)
-                        });
+                    let result: FuseQueryResult<Vec<DataBlock>> =
+                        tokio::runtime::Builder::new_multi_thread()
+                            .worker_threads(self.ctx.worker_threads)
+                            .build()?
+                            .block_on(async move {
+                                let mut r = vec![];
+                                let mut stream = executor.execute().await?;
+                                while let Some(block) = stream.next().await {
+                                    r.push(block?);
+                                }
+                                Ok(r)
+                            });
 
                     match result {
                         Ok(blocks) => {
@@ -99,13 +102,14 @@ impl MySQLHandler {
     }
 
     pub fn start(&self) -> FuseQueryResult<()> {
-        let ds = self.datasource.clone();
         let listener =
             net::TcpListener::bind(format!("0.0.0.0:{}", self.opts.mysql_handler_port)).unwrap();
 
-        let ctx = Arc::new(FuseQueryContext::create_ctx(ds));
+        let worker_threads = self.opts.num_cpus;
+        let datasource = self.datasource.clone();
         let jh = thread::spawn(move || {
             if let Ok((s, _)) = listener.accept() {
+                let ctx = Arc::new(FuseQueryContext::create_ctx(worker_threads, datasource));
                 MysqlIntermediary::run_on_tcp(Session::create(ctx), s).unwrap();
             }
         });
