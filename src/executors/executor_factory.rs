@@ -5,8 +5,7 @@
 use std::sync::Arc;
 
 use crate::contexts::FuseQueryContext;
-use crate::error::FuseQueryError;
-use crate::error::FuseQueryResult;
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::executors::{ExplainExecutor, IExecutor, SelectExecutor};
 use crate::planners::PlanNode;
 
