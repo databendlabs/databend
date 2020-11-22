@@ -5,5 +5,5 @@
 mod context;
 mod options;
 
-pub use self::context::Context;
+pub use self::context::FuseQueryContext;
 pub use self::options::Options;

@@ -6,7 +6,7 @@ use sqlparser::ast;
 use std::fmt;
 use std::sync::Arc;
 
-use crate::contexts::Context;
+use crate::contexts::FuseQueryContext;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
     FilterPlan, FormatterSettings, LimitPlan, PlanBuilder, PlanNode, ProjectionPlan,
@@ -19,7 +19,7 @@ pub struct SelectPlan {
 }
 
 impl SelectPlan {
-    pub fn build_plan(ctx: Arc<Context>, query: &ast::Query) -> FuseQueryResult<PlanNode> {
+    pub fn build_plan(ctx: Arc<FuseQueryContext>, query: &ast::Query) -> FuseQueryResult<PlanNode> {
         let mut builder = PlanBuilder::default();
 
         match &query.body {

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::{io, net, thread};
 use tokio::stream::StreamExt;
 
-use crate::contexts::{Context, Options};
+use crate::contexts::{FuseQueryContext, Options};
 use crate::datablocks::DataBlock;
 use crate::datasources::DataSource;
 use crate::error::{FuseQueryError, FuseQueryResult};
@@ -17,11 +17,11 @@ use crate::planners::Planner;
 use crate::servers::mysql::MySQLStream;
 
 struct Session {
-    ctx: Arc<Context>,
+    ctx: Arc<FuseQueryContext>,
 }
 
 impl Session {
-    pub fn create(ctx: Arc<Context>) -> Self {
+    pub fn create(ctx: Arc<FuseQueryContext>) -> Self {
         Session { ctx }
     }
 }
@@ -103,7 +103,7 @@ impl MySQLHandler {
         let listener =
             net::TcpListener::bind(format!("0.0.0.0:{}", self.opts.mysql_handler_port)).unwrap();
 
-        let ctx = Arc::new(Context::create_ctx(ds));
+        let ctx = Arc::new(FuseQueryContext::create_ctx(ds));
         let jh = thread::spawn(move || {
             if let Ok((s, _)) = listener.accept() {
                 MysqlIntermediary::run_on_tcp(Session::create(ctx), s).unwrap();

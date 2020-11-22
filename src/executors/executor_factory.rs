@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use crate::contexts::Context;
+use crate::contexts::FuseQueryContext;
 use crate::error::FuseQueryError;
 use crate::error::FuseQueryResult;
 use crate::executors::{ExplainExecutor, IExecutor, SelectExecutor};
@@ -13,7 +13,7 @@ use crate::planners::PlanNode;
 pub struct ExecutorFactory;
 
 impl ExecutorFactory {
-    pub fn get(ctx: Arc<Context>, plan: PlanNode) -> FuseQueryResult<Arc<dyn IExecutor>> {
+    pub fn get(ctx: Arc<FuseQueryContext>, plan: PlanNode) -> FuseQueryResult<Arc<dyn IExecutor>> {
         match plan {
             PlanNode::Select(v) => SelectExecutor::try_create(ctx, v),
             PlanNode::Explain(v) => ExplainExecutor::try_create(ctx, v.as_ref().clone()),

@@ -6,7 +6,7 @@ use sqlparser::ast;
 use std::fmt;
 use std::sync::Arc;
 
-use crate::contexts::Context;
+use crate::contexts::FuseQueryContext;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
     DFExplainPlan, DFParser, DFStatement, EmptyPlan, ExplainPlan, ExpressionPlan, FilterPlan,
@@ -21,7 +21,11 @@ impl Planner {
         Self {}
     }
 
-    pub fn build_from_sql(&self, ctx: Arc<Context>, query: &str) -> FuseQueryResult<PlanNode> {
+    pub fn build_from_sql(
+        &self,
+        ctx: Arc<FuseQueryContext>,
+        query: &str,
+    ) -> FuseQueryResult<PlanNode> {
         let statements = DFParser::parse_sql(query)?;
         if statements.len() != 1 {
             return Err(FuseQueryError::Unsupported(
@@ -32,7 +36,11 @@ impl Planner {
     }
 
     /// Builds plan from AST statement.
-    pub fn build(&self, ctx: Arc<Context>, statement: &DFStatement) -> FuseQueryResult<PlanNode> {
+    pub fn build(
+        &self,
+        ctx: Arc<FuseQueryContext>,
+        statement: &DFStatement,
+    ) -> FuseQueryResult<PlanNode> {
         match statement {
             DFStatement::Statement(s) => self.sql_statement_to_plan(ctx, &s),
             DFStatement::Explain(s) => self.explain_statement_to_plan(ctx, &s),
@@ -45,7 +53,7 @@ impl Planner {
 
     pub fn sql_statement_to_plan(
         &self,
-        ctx: Arc<Context>,
+        ctx: Arc<FuseQueryContext>,
         sql: &ast::Statement,
     ) -> FuseQueryResult<PlanNode> {
         match sql {
@@ -59,7 +67,7 @@ impl Planner {
 
     pub fn explain_statement_to_plan(
         &self,
-        ctx: Arc<Context>,
+        ctx: Arc<FuseQueryContext>,
         explain_plan: &DFExplainPlan,
     ) -> FuseQueryResult<PlanNode> {
         let plan = self.build(ctx.clone(), &explain_plan.statement)?;

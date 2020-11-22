@@ -6,7 +6,7 @@ use sqlparser::ast;
 use std::fmt;
 use std::sync::Arc;
 
-use crate::contexts::Context;
+use crate::contexts::FuseQueryContext;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{FormatterSettings, PlanNode};
 
@@ -18,7 +18,7 @@ pub struct ScanPlan {
 
 impl ScanPlan {
     pub fn build_plan(
-        _ctx: Arc<Context>,
+        _ctx: Arc<FuseQueryContext>,
         from: &[ast::TableWithJoins],
     ) -> FuseQueryResult<PlanNode> {
         if from.is_empty() {

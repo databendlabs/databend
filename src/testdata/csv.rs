@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::contexts::Context;
+use crate::contexts::FuseQueryContext;
 use crate::datasources::{CsvTable, DataSource, Database, IDatabase, Partition};
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType};
 use crate::transforms::SourceTransform;
@@ -92,7 +92,7 @@ impl CsvTestData {
     }
 
     pub fn csv_table_source_transform_for_test(&self) -> SourceTransform {
-        let ctx = Context::create_ctx(Arc::new(self.csv_table_datasource_for_test()));
+        let ctx = FuseQueryContext::create_ctx(Arc::new(self.csv_table_datasource_for_test()));
         SourceTransform::create(
             ctx,
             self.db,

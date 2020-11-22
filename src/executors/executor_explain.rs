@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use log::debug;
 use std::sync::Arc;
 
-use crate::contexts::Context;
+use crate::contexts::FuseQueryContext;
 use crate::datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::datavalues::{DataField, DataSchema, DataType, StringArray};
@@ -20,7 +20,7 @@ pub struct ExplainExecutor {
 
 impl ExplainExecutor {
     pub fn try_create(
-        _ctx: Arc<Context>,
+        _ctx: Arc<FuseQueryContext>,
         plan: ExplainPlan,
     ) -> FuseQueryResult<Arc<dyn IExecutor>> {
         Ok(Arc::new(ExplainExecutor { plan }))

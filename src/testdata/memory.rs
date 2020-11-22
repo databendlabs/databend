@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use crate::contexts::Context;
+use crate::contexts::FuseQueryContext;
 use crate::datablocks::DataBlock;
 use crate::datasources::{DataSource, Database, IDatabase, MemoryTable, Partition};
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, Int64Array};
@@ -69,7 +69,7 @@ impl MemoryTestData {
     }
 
     pub fn memory_table_source_transform_for_test(&self, datas: Vec<Vec<i64>>) -> SourceTransform {
-        let ctx = Context::create_ctx(Arc::new(
+        let ctx = FuseQueryContext::create_ctx(Arc::new(
             self.memory_table_datasource_for_test(datas.clone()),
         ));
         SourceTransform::create(

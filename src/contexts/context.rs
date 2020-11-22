@@ -7,14 +7,14 @@ use std::sync::Arc;
 use crate::datasources::{DataSource, ITable};
 use crate::error::FuseQueryResult;
 
-pub struct Context {
+pub struct FuseQueryContext {
     pub default_db: String,
     datasource: Arc<DataSource>,
 }
 
-impl Context {
+impl FuseQueryContext {
     pub fn create_ctx(datasource: Arc<DataSource>) -> Self {
-        Context {
+        FuseQueryContext {
             default_db: "default".to_string(),
             datasource,
         }

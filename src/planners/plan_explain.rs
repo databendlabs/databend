@@ -5,7 +5,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use crate::contexts::Context;
+use crate::contexts::FuseQueryContext;
 use crate::error::FuseQueryResult;
 use crate::planners::{FormatterSettings, PlanNode};
 
@@ -15,7 +15,7 @@ pub struct ExplainPlan {
 }
 
 impl ExplainPlan {
-    pub fn build_plan(_ctx: Arc<Context>, plan: PlanNode) -> FuseQueryResult<PlanNode> {
+    pub fn build_plan(_ctx: Arc<FuseQueryContext>, plan: PlanNode) -> FuseQueryResult<PlanNode> {
         Ok(PlanNode::Explain(Box::new(ExplainPlan { plan })))
     }
 

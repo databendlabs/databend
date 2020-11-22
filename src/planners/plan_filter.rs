@@ -6,7 +6,7 @@ use sqlparser::ast;
 use std::fmt;
 use std::sync::Arc;
 
-use crate::contexts::Context;
+use crate::contexts::FuseQueryContext;
 use crate::error::FuseQueryResult;
 use crate::planners::{EmptyPlan, ExpressionPlan, FormatterSettings, PlanNode};
 
@@ -17,7 +17,10 @@ pub struct FilterPlan {
 }
 
 impl FilterPlan {
-    pub fn build_plan(ctx: Arc<Context>, limit: &Option<ast::Expr>) -> FuseQueryResult<PlanNode> {
+    pub fn build_plan(
+        ctx: Arc<FuseQueryContext>,
+        limit: &Option<ast::Expr>,
+    ) -> FuseQueryResult<PlanNode> {
         match limit {
             Some(ref expr) => Ok(PlanNode::Filter(FilterPlan {
                 description: "".to_string(),

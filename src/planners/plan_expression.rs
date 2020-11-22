@@ -6,7 +6,7 @@ use sqlparser::ast;
 use std::fmt;
 use std::sync::Arc;
 
-use crate::contexts::Context;
+use crate::contexts::FuseQueryContext;
 use crate::datavalues::DataValue;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::FormatterSettings;
@@ -25,7 +25,10 @@ pub enum ExpressionPlan {
 }
 
 impl ExpressionPlan {
-    pub fn build_plan(ctx: Arc<Context>, expr: &ast::Expr) -> FuseQueryResult<ExpressionPlan> {
+    pub fn build_plan(
+        ctx: Arc<FuseQueryContext>,
+        expr: &ast::Expr,
+    ) -> FuseQueryResult<ExpressionPlan> {
         match expr {
             ast::Expr::Identifier(ref v) => Ok(ExpressionPlan::Field(v.clone().value)),
             ast::Expr::Value(ast::Value::Number(n)) => match n.parse::<i64>() {
@@ -74,7 +77,7 @@ impl fmt::Debug for ExpressionPlan {
 
 /// SQL.SelectItem to ExpressionStep.
 pub fn item_to_expression_step(
-    ctx: Arc<Context>,
+    ctx: Arc<FuseQueryContext>,
     item: &ast::SelectItem,
 ) -> FuseQueryResult<ExpressionPlan> {
     match item {

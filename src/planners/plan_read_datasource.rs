@@ -5,7 +5,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use crate::contexts::Context;
+use crate::contexts::FuseQueryContext;
 use crate::datasources::Partitions;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{FormatterSettings, PlanNode};
@@ -19,7 +19,7 @@ pub struct ReadDataSourcePlan {
 
 impl ReadDataSourcePlan {
     pub fn build_plan(
-        ctx: Arc<Context>,
+        ctx: Arc<FuseQueryContext>,
         scan: &PlanNode,
         pushdowns: Vec<PlanNode>,
     ) -> FuseQueryResult<PlanNode> {
