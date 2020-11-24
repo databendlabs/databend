@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::contexts::FuseQueryContext;
 use crate::datablocks::DataBlock;
-use crate::datasources::{DataSource, Database, IDatabase, MemoryTable, Partition};
+use crate::datasources::{IDataSource, MemoryTable, Partition};
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, Int64Array};
 use crate::transforms::SourceTransform;
 
@@ -45,7 +45,10 @@ impl MemoryTestData {
         partitions
     }
 
-    pub fn memory_table_datasource_for_test(&self, datas: Vec<Vec<i64>>) -> DataSource {
+    pub fn memory_table_datasource_for_test(
+        &self,
+        datas: Vec<Vec<i64>>,
+    ) -> Arc<Mutex<dyn IDataSource>> {
         let mut table = MemoryTable::create(self.table, self.memory_table_schema_for_test());
 
         for (i, data) in datas.into_iter().enumerate() {
@@ -60,23 +63,19 @@ impl MemoryTestData {
             let part_name = format!("part-{}", i);
             table.add_partition(part_name.as_str(), block).unwrap();
         }
-
-        let mut database = Database::create(self.db);
-        database.add_table(Arc::new(table)).unwrap();
-        let mut datasource = DataSource::create();
+        let datasource = crate::datasources::get_datasource("memory://").unwrap();
+        datasource.lock().unwrap().add_database(self.db).unwrap();
         datasource
-            .add_database(Arc::new(Mutex::new(database)))
+            .lock()
+            .unwrap()
+            .add_table(self.db, Arc::new(table))
             .unwrap();
         datasource
     }
 
     pub fn memory_table_source_transform_for_test(&self, datas: Vec<Vec<i64>>) -> SourceTransform {
-        let ctx = FuseQueryContext::create_ctx(
-            0,
-            Arc::new(Mutex::new(
-                self.memory_table_datasource_for_test(datas.clone()),
-            )),
-        );
+        let ctx =
+            FuseQueryContext::create_ctx(0, self.memory_table_datasource_for_test(datas.clone()));
         SourceTransform::create(
             ctx,
             self.db,

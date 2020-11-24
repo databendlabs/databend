@@ -5,7 +5,7 @@
 use std::fmt;
 
 use crate::datablocks::DataBlock;
-use crate::datavalues::{DataArrayRef, DataSchema, DataType};
+use crate::datavalues::{DataColumnarValue, DataSchema, DataType};
 use crate::error::FuseQueryResult;
 use crate::functions::Function;
 
@@ -36,8 +36,10 @@ impl VariableFunction {
         Ok(input_schema.field_with_name(&self.value)?.is_nullable())
     }
 
-    pub fn evaluate(&self, block: &DataBlock) -> FuseQueryResult<DataArrayRef> {
-        Ok(block.column_by_name(self.value.as_str())?.clone())
+    pub fn evaluate(&self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
+        Ok(DataColumnarValue::Array(
+            block.column_by_name(self.value.as_str())?.clone(),
+        ))
     }
 }
 

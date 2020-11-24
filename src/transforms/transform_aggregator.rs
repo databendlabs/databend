@@ -158,7 +158,7 @@ impl IProcessor for AggregatorTransform {
                     func.return_type(&DataSchema::empty())?,
                     false,
                 )])),
-                vec![func.aggregate()?],
+                vec![func.aggregate()?.to_array(1)?],
             )],
         )))
     }

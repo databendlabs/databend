@@ -4,17 +4,17 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::datasources::{DataSource, ITable};
+use crate::datasources::{IDataSource, ITable};
 use crate::error::FuseQueryResult;
 
 pub struct FuseQueryContext {
     pub worker_threads: usize,
     default_db: Mutex<String>,
-    datasource: Arc<Mutex<DataSource>>,
+    datasource: Arc<Mutex<dyn IDataSource>>,
 }
 
 impl FuseQueryContext {
-    pub fn create_ctx(worker_threads: usize, datasource: Arc<Mutex<DataSource>>) -> Self {
+    pub fn create_ctx(worker_threads: usize, datasource: Arc<Mutex<dyn IDataSource>>) -> Self {
         FuseQueryContext {
             worker_threads,
             default_db: Mutex::new("default".to_string()),

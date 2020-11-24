@@ -6,6 +6,7 @@ mod tests;
 
 mod aggregators;
 mod arithmetics;
+mod comparisons;
 mod function;
 mod function_constant;
 mod function_factory;

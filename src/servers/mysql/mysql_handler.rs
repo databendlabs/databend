@@ -10,7 +10,7 @@ use tokio::stream::StreamExt;
 
 use crate::contexts::{FuseQueryContext, Options};
 use crate::datablocks::DataBlock;
-use crate::datasources::DataSource;
+use crate::datasources::IDataSource;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::executors::ExecutorFactory;
 use crate::planners::Planner;
@@ -95,11 +95,11 @@ impl<W: io::Write> MysqlShim<W> for Session {
 
 pub struct MySQLHandler {
     opts: Options,
-    datasource: Arc<Mutex<DataSource>>,
+    datasource: Arc<Mutex<dyn IDataSource>>,
 }
 
 impl MySQLHandler {
-    pub fn create(opts: Options, datasource: Arc<Mutex<DataSource>>) -> Self {
+    pub fn create(opts: Options, datasource: Arc<Mutex<dyn IDataSource>>) -> Self {
         MySQLHandler { opts, datasource }
     }
 

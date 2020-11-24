@@ -4,14 +4,15 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_datasource() -> crate::error::FuseQueryResult<()> {
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     use crate::datasources::*;
     use crate::datavalues::*;
     use crate::testdata;
 
-    let csv_test_source = testdata::CsvTestData::create();
-    let mut mem_database = Database::create("mem_db");
+    let csvtestdata = testdata::CsvTestData::create();
+    let datasource = csvtestdata.csv_table_datasource_for_test();
+    datasource.lock()?.add_database("mem_db")?;
     let mem_table = MemoryTable::create(
         "mem_table",
         Arc::new(DataSchema::new(vec![DataField::new(
@@ -20,28 +21,32 @@ async fn test_datasource() -> crate::error::FuseQueryResult<()> {
             false,
         )])),
     );
-    mem_database.add_table(Arc::new(mem_table))?;
+    datasource
+        .lock()
+        .unwrap()
+        .add_table("mem_db", Arc::new(mem_table))?;
 
-    let mut csv_database = Database::create("csv_db");
+    datasource.lock()?.add_database("csv_db")?;
     let csv_table = CsvTable::create(
         "csv_table",
         11,
-        csv_test_source.csv_table_schema_for_test(),
-        csv_test_source.csv_table_partitions_for_test(),
+        csvtestdata.csv_table_schema_for_test(),
+        csvtestdata.csv_table_partitions_for_test(),
     );
-    csv_database.add_table(Arc::new(csv_table))?;
+    datasource
+        .lock()
+        .unwrap()
+        .add_table("csv_db", Arc::new(csv_table))?;
 
-    let mut datasource = DataSource::create();
-    datasource.add_database(Arc::new(Mutex::new(mem_database)))?;
-    datasource.add_database(Arc::new(Mutex::new(csv_database)))?;
-
-    let table = datasource.get_table("mem_db", "mem_table")?;
+    let table = datasource.lock()?.get_table("mem_db", "mem_table")?;
     assert_eq!("mem_table", table.name());
 
-    let table = datasource.get_table("csv_db", "csv_table")?;
+    let table = datasource.lock()?.get_table("csv_db", "csv_table")?;
     assert_eq!("csv_table", table.name());
 
-    let table = datasource.get_table("not_found_db", "not_found_table");
+    let table = datasource
+        .lock()?
+        .get_table("not_found_db", "not_found_table");
     match table {
         Ok(_) => {}
         Err(e) => assert_eq!(
@@ -50,7 +55,7 @@ async fn test_datasource() -> crate::error::FuseQueryResult<()> {
         ),
     }
 
-    let table = datasource.get_table("csv_db", "not_found_table");
+    let table = datasource.lock()?.get_table("csv_db", "not_found_table");
     match table {
         Ok(_) => {}
         Err(e) => assert_eq!(

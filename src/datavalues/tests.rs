@@ -15,7 +15,7 @@ fn test_array_arithmetic() {
         args: Vec<Vec<DataArrayRef>>,
         expect: Vec<DataArrayRef>,
         error: Vec<&'static str>,
-        func: Box<dyn Fn(DataArrayRef, DataArrayRef) -> FuseQueryResult<DataArrayRef>>,
+        func: Box<dyn Fn(&DataColumnarValue, &DataColumnarValue) -> FuseQueryResult<DataArrayRef>>,
     }
 
     let tests = vec![
@@ -287,7 +287,10 @@ fn test_array_arithmetic() {
 
     for t in tests {
         for (i, args) in t.args.iter().enumerate() {
-            let result = (t.func)(args[0].clone(), args[1].clone());
+            let result = (t.func)(
+                &DataColumnarValue::Array(args[0].clone()),
+                &DataColumnarValue::Array(args[1].clone()),
+            );
             match result {
                 Ok(ref v) => {
                     // Result check.

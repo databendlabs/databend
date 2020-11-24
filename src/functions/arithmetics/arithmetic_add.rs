@@ -5,9 +5,8 @@
 use std::fmt;
 
 use crate::datablocks::DataBlock;
-use crate::datavalues::{data_array_add, DataArrayRef, DataSchema, DataType};
+use crate::datavalues::{data_array_add, DataColumnarValue, DataSchema, DataType};
 use crate::error::FuseQueryResult;
-
 use crate::functions::Function;
 
 #[derive(Clone, Debug)]
@@ -36,8 +35,11 @@ impl AddFunction {
         Ok(false)
     }
 
-    pub fn evaluate(&self, block: &DataBlock) -> FuseQueryResult<DataArrayRef> {
-        data_array_add(self.left.evaluate(block)?, self.right.evaluate(block)?)
+    pub fn evaluate(&self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
+        Ok(DataColumnarValue::Array(data_array_add(
+            &self.left.evaluate(block)?,
+            &self.right.evaluate(block)?,
+        )?))
     }
 }
 

@@ -18,11 +18,10 @@ struct Test {
 }
 
 #[test]
-fn test_factory() {
+fn test_factory() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
     use crate::datavalues::*;
-    use crate::error::FuseQueryResult;
     use crate::functions::*;
 
     let schema = Arc::new(DataSchema::new(vec![
@@ -111,30 +110,33 @@ fn test_factory() {
         },
     ];
     for t in tests {
-        let result: FuseQueryResult<DataArrayRef>;
-
         if !t.is_aggregate {
-            let fun = ScalarFunctionFactory::get(t.fun, &*t.args).unwrap();
-            result = fun.evaluate(&t.block);
+            let fun = ScalarFunctionFactory::get(t.fun, &*t.args)?;
+            let result = fun.evaluate(&t.block)?.to_array(0);
+            match result {
+                Ok(ref v) => {
+                    // Result check.
+                    if !v.equals(&*t.expect) {
+                        println!("expect:\n{:?} \nactual:\n{:?}", t.expect, v);
+                        assert!(false);
+                    }
+                }
+                Err(e) => assert_eq!(t.error, e.to_string()),
+            }
         } else {
             let mut fun = AggregateFunctionFactory::get(
                 t.fun,
-                Arc::new(VariableFunction::create("a").unwrap()),
+                Arc::new(VariableFunction::create("a")?),
                 &DataType::Int64,
             )
             .unwrap();
             fun.accumulate(&t.block).unwrap();
-            result = fun.aggregate();
-        }
-        match result {
-            Ok(ref v) => {
-                // Result check.
-                if !v.equals(&*t.expect) {
-                    println!("expect:\n{:?} \nactual:\n{:?}", t.expect, v);
-                    assert!(false);
-                }
+            let result = fun.aggregate()?;
+            if !result.to_array(1)?.equals(&*t.expect) {
+                println!("expect:\n{:?} \nactual:\n{:?}", t.expect, result);
+                assert!(false);
             }
-            Err(e) => assert_eq!(t.error, e.to_string()),
         }
     }
+    Ok(())
 }

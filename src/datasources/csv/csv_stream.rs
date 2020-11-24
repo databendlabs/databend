@@ -67,8 +67,7 @@ impl Stream for CsvStream {
                     }
                 }
                 Some(v) => {
-                    let arrow_batch: arrow::record_batch::RecordBatch = v.unwrap();
-                    return Poll::Ready(Some(DataBlock::create_from_arrow_batch(&arrow_batch)));
+                    return Poll::Ready(Some(DataBlock::try_from_arrow_batch(&(v?))));
                 }
             }
         }

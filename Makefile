@@ -1,6 +1,3 @@
-fmt:
-	cargo fmt
-
 test:
 	cargo +nightly test -- --nocapture 
 
@@ -17,4 +14,4 @@ lint:
 clean:
 	cargo clean
 
-.PHONY: test lint clean
+.PHONY: test bench run lint clean

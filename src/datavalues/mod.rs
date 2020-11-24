@@ -10,6 +10,8 @@ mod macros;
 mod data_array;
 mod data_array_aggregate;
 mod data_array_arithmetic;
+mod data_array_comparison;
+mod data_columnar_value;
 mod data_field;
 mod data_schema;
 mod data_type;
@@ -25,6 +27,8 @@ pub use self::data_array_aggregate::{data_array_max, data_array_min, data_array_
 pub use self::data_array_arithmetic::{
     data_array_add, data_array_div, data_array_mul, data_array_sub,
 };
+pub use self::data_array_comparison::data_array_eq;
+pub use self::data_columnar_value::DataColumnarValue;
 pub use self::data_field::DataField;
 pub use self::data_schema::{DataSchema, DataSchemaRef};
 pub use self::data_type::DataType;

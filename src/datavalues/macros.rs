@@ -15,7 +15,7 @@ macro_rules! downcast_array {
     };
 }
 
-macro_rules! arithmetic_compute {
+macro_rules! arrow_array_compute {
     ($LEFT:expr, $RIGHT:expr, $FUNC:ident) => {
         match ($LEFT).data_type() {
             DataType::Int8 => {
@@ -133,4 +133,23 @@ macro_rules! format_data_value_with_option {
             None => write!($F, "NULL"),
         }
     }};
+}
+
+macro_rules! impl_try_from {
+    ($SCALAR:ident, $NATIVE:ident) => {
+        impl TryFrom<DataValue> for $NATIVE {
+            type Error = FuseQueryError;
+
+            fn try_from(value: DataValue) -> FuseQueryResult<Self> {
+                match value {
+                    DataValue::$SCALAR(Some(inner_value)) => Ok(inner_value),
+                    _ => Err(FuseQueryError::Internal(format!(
+                        "Cannot convert {:?} to {}",
+                        value,
+                        std::any::type_name::<Self>()
+                    ))),
+                }
+            }
+        }
+    };
 }

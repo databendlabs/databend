@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::contexts::FuseQueryContext;
-use crate::datasources::{CsvTable, DataSource, Database, IDatabase, Partition};
+use crate::datasources::{CsvTable, IDataSource, Partition};
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType};
 use crate::transforms::SourceTransform;
 
@@ -77,27 +77,25 @@ impl CsvTestData {
         ]
     }
 
-    pub fn csv_table_datasource_for_test(&self) -> DataSource {
+    pub fn csv_table_datasource_for_test(&self) -> Arc<Mutex<dyn IDataSource>> {
         let table = CsvTable::create(
             self.table,
             self.batch_size,
             self.csv_table_schema_for_test(),
             self.csv_table_partitions_for_test(),
         );
-        let mut database = Database::create(self.db);
-        database.add_table(Arc::new(table)).unwrap();
-        let mut datasource = DataSource::create();
+        let datasource = crate::datasources::get_datasource("csv://@file(/datafuses/)").unwrap();
+        datasource.lock().unwrap().add_database(self.db).unwrap();
         datasource
-            .add_database(Arc::new(Mutex::new(database)))
+            .lock()
+            .unwrap()
+            .add_table(self.db, Arc::new(table))
             .unwrap();
         datasource
     }
 
     pub fn csv_table_source_transform_for_test(&self) -> SourceTransform {
-        let ctx = FuseQueryContext::create_ctx(
-            0,
-            Arc::new(Mutex::new(self.csv_table_datasource_for_test())),
-        );
+        let ctx = FuseQueryContext::create_ctx(0, self.csv_table_datasource_for_test());
         SourceTransform::create(
             ctx,
             self.db,

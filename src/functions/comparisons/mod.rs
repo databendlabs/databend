@@ -2,8 +2,8 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-mod csv;
-mod memory;
+mod tests;
 
-pub use self::csv::CsvTable;
-pub use self::memory::MemoryTable;
+mod comparison_equal;
+
+pub use self::comparison_equal::EqualFunction;

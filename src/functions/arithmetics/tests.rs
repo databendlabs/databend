@@ -19,12 +19,11 @@ struct Test {
 }
 
 #[test]
-fn test_cases() {
+fn test_cases() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
-    use crate::datavalues::{DataField, DataSchema, DataType, Int64Array};
-    use crate::functions::arithmetics::{AddFunction, DivFunction, MulFunction, SubFunction};
-    use crate::functions::VariableFunction;
+    use crate::datavalues::*;
+    use crate::functions::{arithmetics::*, *};
 
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),
@@ -112,16 +111,15 @@ fn test_cases() {
 
                 // Nullable check.
                 let expect_null = t.nullable;
-                let actual_null = (t.func).nullable(t.block.schema()).unwrap();
+                let actual_null = (t.func).nullable(t.block.schema())?;
                 assert_eq!(expect_null, actual_null);
 
                 // Type check.
-                let expect_type = &(t.func).return_type(t.block.schema()).unwrap();
-                let actual_type = v.data_type();
+                let expect_type = (t.func).return_type(t.block.schema())?.clone();
+                let actual_type = v.data_type().clone();
                 assert_eq!(expect_type, actual_type);
 
-                // Result check.
-                if !v.equals(&*t.expect) {
+                if !v.to_array(0)?.equals(&*t.expect) {
                     println!("expect:\n{:?} \nactual:\n{:?}", t.expect, v);
                     assert!(false);
                 }
@@ -129,4 +127,5 @@ fn test_cases() {
             Err(e) => assert_eq!(t.error, e.to_string()),
         }
     }
+    Ok(())
 }

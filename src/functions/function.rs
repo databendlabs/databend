@@ -5,9 +5,11 @@
 use std::fmt;
 
 use crate::datablocks::DataBlock;
-use crate::datavalues::{DataArrayRef, DataSchema, DataType};
+use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::functions::{arithmetics, AggregatorFunction, ConstantFunction, VariableFunction};
+use crate::functions::{
+    arithmetics, comparisons, AggregatorFunction, ConstantFunction, VariableFunction,
+};
 
 #[derive(Clone)]
 pub enum Function {
@@ -17,6 +19,7 @@ pub enum Function {
     Sub(arithmetics::SubFunction),
     Div(arithmetics::DivFunction),
     Mul(arithmetics::MulFunction),
+    Equal(comparisons::EqualFunction),
     Aggregator(AggregatorFunction),
 }
 
@@ -29,6 +32,7 @@ impl Function {
             Function::Div(v) => v.name(),
             Function::Mul(v) => v.name(),
             Function::Sub(v) => v.name(),
+            Function::Equal(v) => v.name(),
             Function::Aggregator(v) => v.name(),
         }
     }
@@ -41,6 +45,7 @@ impl Function {
             Function::Div(v) => v.return_type(input_schema),
             Function::Mul(v) => v.return_type(input_schema),
             Function::Sub(v) => v.return_type(input_schema),
+            Function::Equal(v) => v.return_type(input_schema),
             Function::Aggregator(v) => v.return_type(),
         }
     }
@@ -53,11 +58,12 @@ impl Function {
             Function::Div(v) => v.nullable(input_schema),
             Function::Mul(v) => v.nullable(input_schema),
             Function::Sub(v) => v.nullable(input_schema),
+            Function::Equal(v) => v.nullable(input_schema),
             Function::Aggregator(v) => v.nullable(input_schema),
         }
     }
 
-    pub fn evaluate(&self, block: &DataBlock) -> FuseQueryResult<DataArrayRef> {
+    pub fn evaluate(&self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
         match self {
             Function::Constant(v) => v.evaluate(block),
             Function::Variable(v) => v.evaluate(block),
@@ -65,6 +71,7 @@ impl Function {
             Function::Div(v) => v.evaluate(block),
             Function::Mul(v) => v.evaluate(block),
             Function::Sub(v) => v.evaluate(block),
+            Function::Equal(v) => v.evaluate(block),
             _ => Err(FuseQueryError::Unsupported(format!(
                 "Unsupported evaluate() for function {}",
                 self.name()
@@ -82,7 +89,7 @@ impl Function {
         }
     }
 
-    pub fn aggregate(&self) -> FuseQueryResult<DataArrayRef> {
+    pub fn aggregate(&self) -> FuseQueryResult<DataValue> {
         match self {
             Function::Aggregator(v) => v.aggregate(),
             _ => Err(FuseQueryError::Unsupported(format!(
@@ -102,6 +109,7 @@ impl fmt::Debug for Function {
             Function::Div(v) => write!(f, "{}", v),
             Function::Mul(v) => write!(f, "{}", v),
             Function::Sub(v) => write!(f, "{}", v),
+            Function::Equal(v) => write!(f, "{}", v),
             Function::Aggregator(v) => write!(f, "{}", v),
         }
     }

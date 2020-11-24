@@ -19,7 +19,7 @@ impl DataBlock {
         DataBlock { schema, columns }
     }
 
-    pub fn create_from_arrow_batch(batch: &RecordBatch) -> FuseQueryResult<Self> {
+    pub fn try_from_arrow_batch(batch: &RecordBatch) -> FuseQueryResult<Self> {
         Ok(DataBlock::create(
             batch.schema(),
             Vec::from(batch.columns()),

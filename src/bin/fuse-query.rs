@@ -4,7 +4,6 @@
 
 use log::info;
 use simplelog::{Config, LevelFilter, SimpleLogger};
-use std::sync::{Arc, Mutex};
 use tokio::signal::unix::{signal, SignalKind};
 
 use fuse_query::contexts::Options;
@@ -24,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", opts.clone());
 
     let datasource = testdata::CsvTestData::create().csv_table_datasource_for_test();
-    let mysql_handler = MySQLHandler::create(opts.clone(), Arc::new(Mutex::new(datasource)));
+    let mysql_handler = MySQLHandler::create(opts.clone(), datasource);
     tokio::spawn(async move { mysql_handler.start() });
 
     info!("Fuse-Query Cloud Compute Starts...");

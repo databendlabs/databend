@@ -38,8 +38,8 @@ pub fn data_value_add(left: DataValue, right: DataValue) -> FuseQueryResult<Data
         _ => {
             return Err(FuseQueryError::Unsupported(format!(
                 "Unsupported data_value_add() for data type: left:{:?}, right:{:?}",
-                left.data_type()?,
-                right.data_type()?
+                left.data_type(),
+                right.data_type()
             )))
         }
     })

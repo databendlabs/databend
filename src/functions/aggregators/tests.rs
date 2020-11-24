@@ -3,7 +3,7 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use crate::datablocks::DataBlock;
-use crate::datavalues::DataArrayRef;
+use crate::datavalues::DataValue;
 use crate::functions::Function;
 
 #[allow(dead_code)]
@@ -13,16 +13,16 @@ struct Test {
     display: &'static str,
     nullable: bool,
     block: DataBlock,
-    expect: DataArrayRef,
+    expect: DataValue,
     error: &'static str,
     func: Function,
 }
 
 #[test]
-fn test_cases() {
+fn test_cases() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
-    use crate::datavalues::{DataField, DataSchema, DataType, Int64Array, UInt64Array};
+    use crate::datavalues::{DataField, DataSchema, DataType, Int64Array};
     use crate::functions::{aggregators::AggregatorFunction, VariableFunction};
 
     let schema = Arc::new(DataSchema::new(vec![
@@ -52,7 +52,7 @@ fn test_cases() {
                     Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
-            expect: Arc::new(UInt64Array::from(vec![4])),
+            expect: DataValue::UInt64(Some(4)),
             error: "",
         },
         Test {
@@ -73,7 +73,7 @@ fn test_cases() {
                     Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
-            expect: Arc::new(Int64Array::from(vec![14])),
+            expect: DataValue::Int64(Some(14)),
             error: "",
         },
         Test {
@@ -94,7 +94,7 @@ fn test_cases() {
                     Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
-            expect: Arc::new(Int64Array::from(vec![-2])),
+            expect: DataValue::Int64(Some(-2)),
             error: "",
         },
         Test {
@@ -115,7 +115,7 @@ fn test_cases() {
                     Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
-            expect: Arc::new(Int64Array::from(vec![10])),
+            expect: DataValue::Int64(Some(10)),
             error: "",
         },
     ];
@@ -132,21 +132,18 @@ fn test_cases() {
 
                 // Nullable check.
                 let expect_null = t.nullable;
-                let actual_null = (t.func).nullable(t.block.schema()).unwrap();
+                let actual_null = (t.func).nullable(t.block.schema())?;
                 assert_eq!(expect_null, actual_null);
 
                 // Type check.
-                let expect_type = &(t.func).return_type(t.block.schema()).unwrap();
+                let expect_type = (t.func).return_type(t.block.schema())?;
                 let actual_type = v.data_type();
                 assert_eq!(expect_type, actual_type);
 
-                // Result check.
-                if !v.equals(&*t.expect) {
-                    println!("expect:\n{:?} \nactual:\n{:?}", t.expect, v);
-                    assert!(false);
-                }
+                assert_eq!(&t.expect, v);
             }
             Err(e) => assert_eq!(t.error, e.to_string()),
         }
     }
+    Ok(())
 }

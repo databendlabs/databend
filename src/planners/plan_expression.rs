@@ -9,6 +9,7 @@ use std::sync::Arc;
 use crate::contexts::FuseQueryContext;
 use crate::datavalues::DataValue;
 use crate::error::{FuseQueryError, FuseQueryResult};
+use crate::functions::{ConstantFunction, Function, ScalarFunctionFactory, VariableFunction};
 use crate::planners::FormatterSettings;
 
 #[derive(Clone)]
@@ -51,6 +52,18 @@ impl ExpressionPlan {
                 "Unsupported ExpressionPlan Expression: {}",
                 expr
             ))),
+        }
+    }
+
+    pub fn to_function(&self) -> FuseQueryResult<Function> {
+        match self {
+            ExpressionPlan::Field(v) => VariableFunction::create(v.as_str()),
+            ExpressionPlan::Constant(v) => ConstantFunction::create(v.clone()),
+            ExpressionPlan::BinaryExpression { left, op, right } => {
+                let l = left.to_function()?;
+                let r = right.to_function()?;
+                ScalarFunctionFactory::get(op, &vec![l, r])
+            }
         }
     }
 

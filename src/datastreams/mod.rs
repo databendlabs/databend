@@ -6,6 +6,8 @@ mod tests;
 
 mod stream;
 mod stream_datablock;
+mod stream_expression;
 
 pub use self::stream::SendableDataBlockStream;
 pub use self::stream_datablock::DataBlockStream;
+pub use self::stream_expression::ExpressionStream;

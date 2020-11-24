@@ -56,3 +56,9 @@ impl From<tokio::task::JoinError> for FuseQueryError {
         FuseQueryError::Internal(err.to_string())
     }
 }
+
+impl From<dsn::ParseError> for FuseQueryError {
+    fn from(err: dsn::ParseError) -> Self {
+        FuseQueryError::Internal(err.to_string())
+    }
+}

@@ -5,9 +5,8 @@
 use std::fmt;
 
 use crate::datablocks::DataBlock;
-use crate::datavalues::{DataArrayRef, DataSchema, DataType, DataValue};
+use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 use crate::error::FuseQueryResult;
-
 use crate::functions::Function;
 
 #[derive(Clone, Debug)]
@@ -25,15 +24,15 @@ impl ConstantFunction {
     }
 
     pub fn return_type(&self, _input_schema: &DataSchema) -> FuseQueryResult<DataType> {
-        self.value.data_type()
+        Ok(self.value.data_type())
     }
 
     pub fn nullable(&self, _input_schema: &DataSchema) -> FuseQueryResult<bool> {
         Ok(self.value.is_null())
     }
 
-    pub fn evaluate(&self, _block: &DataBlock) -> FuseQueryResult<DataArrayRef> {
-        self.value.to_array()
+    pub fn evaluate(&self, _block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
+        Ok(DataColumnarValue::Scalar(self.value.clone()))
     }
 }
 

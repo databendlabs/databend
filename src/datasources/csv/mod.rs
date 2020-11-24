@@ -4,8 +4,10 @@
 
 mod tests;
 
+mod csv_datasource;
 mod csv_stream;
 mod csv_table;
 
+pub use self::csv_datasource::CsvDataSource;
 pub use self::csv_stream::CsvStream;
 pub use self::csv_table::CsvTable;

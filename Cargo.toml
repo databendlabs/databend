@@ -12,20 +12,23 @@ include = [
 edition = "2018"
 
 [dependencies]
-arrow = "2.0.0"
-async-trait = "0.1.41"
-log = "0.4.11"
-msql-srv = "0.9.2"
+arrow = "2.0"
+async-trait = "0.1"
+dsn = "1.0"
+futures = "0.3"
+log = "0.4"
+msql-srv = "0.9"
 num = "0.3"
 num_cpus = "1.0"
-sqlparser = "0.6.1"
+paste = "^1.0"
+sqlparser = "0.6"
 simplelog = "0.7"
-thiserror = "1.0.21"
-tokio = { version = "0.3", features = ["full"] }
+thiserror = "1.0"
+tokio = { version = "0.3", features = ["macros", "rt", "rt-multi-thread", "stream", "signal"] }
 
 [dev-dependencies]
-criterion = "0.3.3"
-pretty_assertions = "0.6.1"
+criterion = "0.3"
+pretty_assertions = "0.6"
 
 [[bench]]
 name = "bench_main"

@@ -52,40 +52,58 @@ impl DataValue {
         )
     }
 
-    pub fn data_type(&self) -> FuseQueryResult<DataType> {
+    pub fn data_type(&self) -> DataType {
         match self {
-            DataValue::Boolean(_) => Ok(DataType::Boolean),
-            DataValue::Int8(_) => Ok(DataType::Int8),
-            DataValue::Int16(_) => Ok(DataType::Int16),
-            DataValue::Int32(_) => Ok(DataType::Int32),
-            DataValue::Int64(_) => Ok(DataType::Int64),
-            DataValue::UInt8(_) => Ok(DataType::UInt8),
-            DataValue::UInt16(_) => Ok(DataType::UInt16),
-            DataValue::UInt32(_) => Ok(DataType::UInt32),
-            DataValue::UInt64(_) => Ok(DataType::UInt64),
-            DataValue::Float32(_) => Ok(DataType::Float32),
-            DataValue::Float64(_) => Ok(DataType::Float64),
-            DataValue::String(_) => Ok(DataType::Utf8),
+            DataValue::Boolean(_) => (DataType::Boolean),
+            DataValue::Int8(_) => (DataType::Int8),
+            DataValue::Int16(_) => (DataType::Int16),
+            DataValue::Int32(_) => (DataType::Int32),
+            DataValue::Int64(_) => (DataType::Int64),
+            DataValue::UInt8(_) => (DataType::UInt8),
+            DataValue::UInt16(_) => (DataType::UInt16),
+            DataValue::UInt32(_) => (DataType::UInt32),
+            DataValue::UInt64(_) => (DataType::UInt64),
+            DataValue::Float32(_) => (DataType::Float32),
+            DataValue::Float64(_) => (DataType::Float64),
+            DataValue::String(_) => (DataType::Utf8),
         }
     }
 
-    pub fn to_array(&self) -> FuseQueryResult<DataArrayRef> {
+    pub fn to_array(&self, size: usize) -> FuseQueryResult<DataArrayRef> {
         match self {
-            DataValue::Boolean(v) => Ok(Arc::new(BooleanArray::from(vec![*v])) as DataArrayRef),
-            DataValue::Int8(v) => Ok(Arc::new(Int8Array::from(vec![*v])) as DataArrayRef),
-            DataValue::Int16(v) => Ok(Arc::new(Int16Array::from(vec![*v])) as DataArrayRef),
-            DataValue::Int32(v) => Ok(Arc::new(Int32Array::from(vec![*v])) as DataArrayRef),
-            DataValue::Int64(v) => Ok(Arc::new(Int64Array::from(vec![*v])) as DataArrayRef),
-            DataValue::UInt8(v) => Ok(Arc::new(UInt8Array::from(vec![*v])) as DataArrayRef),
-            DataValue::UInt16(v) => Ok(Arc::new(UInt16Array::from(vec![*v])) as DataArrayRef),
-            DataValue::UInt32(v) => Ok(Arc::new(UInt32Array::from(vec![*v])) as DataArrayRef),
-            DataValue::UInt64(v) => Ok(Arc::new(UInt64Array::from(vec![*v])) as DataArrayRef),
-            DataValue::Float32(v) => Ok(Arc::new(Float32Array::from(vec![*v])) as DataArrayRef),
-            DataValue::Float64(v) => Ok(Arc::new(Float64Array::from(vec![*v])) as DataArrayRef),
-            DataValue::String(v) => Ok(Arc::new(StringArray::from(vec![v.as_deref()]))),
+            DataValue::Boolean(v) => {
+                Ok(Arc::new(BooleanArray::from(vec![*v; size])) as DataArrayRef)
+            }
+            DataValue::Int8(v) => Ok(Arc::new(Int8Array::from(vec![*v; size])) as DataArrayRef),
+            DataValue::Int16(v) => Ok(Arc::new(Int16Array::from(vec![*v; size])) as DataArrayRef),
+            DataValue::Int32(v) => Ok(Arc::new(Int32Array::from(vec![*v; size])) as DataArrayRef),
+            DataValue::Int64(v) => Ok(Arc::new(Int64Array::from(vec![*v; size])) as DataArrayRef),
+            DataValue::UInt8(v) => Ok(Arc::new(UInt8Array::from(vec![*v; size])) as DataArrayRef),
+            DataValue::UInt16(v) => Ok(Arc::new(UInt16Array::from(vec![*v; size])) as DataArrayRef),
+            DataValue::UInt32(v) => Ok(Arc::new(UInt32Array::from(vec![*v; size])) as DataArrayRef),
+            DataValue::UInt64(v) => Ok(Arc::new(UInt64Array::from(vec![*v; size])) as DataArrayRef),
+            DataValue::Float32(v) => {
+                Ok(Arc::new(Float32Array::from(vec![*v; size])) as DataArrayRef)
+            }
+            DataValue::Float64(v) => {
+                Ok(Arc::new(Float64Array::from(vec![*v; size])) as DataArrayRef)
+            }
+            DataValue::String(v) => Ok(Arc::new(StringArray::from(vec![v.as_deref(); size]))),
         }
     }
 }
+
+impl_try_from!(Int8, i8);
+impl_try_from!(Int16, i16);
+impl_try_from!(Int32, i32);
+impl_try_from!(Int64, i64);
+impl_try_from!(UInt8, u8);
+impl_try_from!(UInt16, u16);
+impl_try_from!(UInt32, u32);
+impl_try_from!(UInt64, u64);
+impl_try_from!(Float32, f32);
+impl_try_from!(Float64, f64);
+impl_try_from!(Boolean, bool);
 
 impl TryFrom<&DataType> for DataValue {
     type Error = FuseQueryError;

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{
     data_array_max, data_array_min, data_array_sum, data_value_add, data_value_max, data_value_min,
-    DataArrayRef, DataSchema, DataType, DataValue,
+    DataSchema, DataType, DataValue,
 };
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::Function;
@@ -118,34 +118,38 @@ impl AggregatorFunction {
 
     // Accumulates a value.
     pub fn accumulate(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
+        let rows = block.num_rows();
         match self {
             AggregatorFunction::Count(v) => {
-                let array = v.column.evaluate(block)?.len();
-                v.state = data_value_add(v.state.clone(), DataValue::UInt64(Some(array as u64)))?;
+                let val = v.column.evaluate(block)?;
+                v.state = data_value_add(
+                    v.state.clone(),
+                    DataValue::UInt64(Some(val.to_array(rows)?.len() as u64)),
+                )?;
             }
             AggregatorFunction::Min(v) => {
-                let array = v.column.evaluate(block)?;
-                v.state = data_value_min(v.state.clone(), data_array_min(array)?)?;
+                let val = v.column.evaluate(block)?;
+                v.state = data_value_min(v.state.clone(), data_array_min(val.to_array(rows)?)?)?;
             }
             AggregatorFunction::Max(v) => {
-                let array = v.column.evaluate(block)?;
-                v.state = data_value_max(v.state.clone(), data_array_max(array)?)?;
+                let val = v.column.evaluate(block)?;
+                v.state = data_value_max(v.state.clone(), data_array_max(val.to_array(rows)?)?)?;
             }
             AggregatorFunction::Sum(v) => {
-                let array = v.column.evaluate(block)?;
-                v.state = data_value_add(v.state.clone(), data_array_sum(array)?)?;
+                let val = v.column.evaluate(block)?;
+                v.state = data_value_add(v.state.clone(), data_array_sum(val.to_array(rows)?)?)?;
             }
         }
         Ok(())
     }
 
     // Calculates a final aggregators.
-    pub fn aggregate(&self) -> FuseQueryResult<DataArrayRef> {
+    pub fn aggregate(&self) -> FuseQueryResult<DataValue> {
         Ok(match self {
-            AggregatorFunction::Count(v) => v.state.to_array()?,
-            AggregatorFunction::Min(v) => v.state.to_array()?,
-            AggregatorFunction::Max(v) => v.state.to_array()?,
-            AggregatorFunction::Sum(v) => v.state.to_array()?,
+            AggregatorFunction::Count(v) => v.state.clone(),
+            AggregatorFunction::Min(v) => v.state.clone(),
+            AggregatorFunction::Max(v) => v.state.clone(),
+            AggregatorFunction::Sum(v) => v.state.clone(),
         })
     }
 }
