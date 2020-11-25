@@ -39,11 +39,11 @@ async fn pipeline_aggregator_executor(
 
     match typ {
         TableType::Memory => {
-            let rows = 10000000;
+            let rows = 1000000;
             let step = rows / parts;
             let memory_source = fuse_query::testdata::MemoryTestData::create();
             for i in 0..parts {
-                let mut columns = vec![];
+                let mut columns = Vec::with_capacity(step as usize);
                 for k in 0..step {
                     columns.push(i * step + k);
                 }

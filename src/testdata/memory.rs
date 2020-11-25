@@ -34,7 +34,7 @@ impl MemoryTestData {
     }
 
     pub fn memory_table_partitions_for_test(&self, datas: Vec<Vec<i64>>) -> Vec<Partition> {
-        let mut partitions = vec![];
+        let mut partitions = Vec::with_capacity(datas.len());
         for (i, _) in datas.into_iter().enumerate() {
             let part_name = format!("part-{}", i);
             partitions.push(Partition {

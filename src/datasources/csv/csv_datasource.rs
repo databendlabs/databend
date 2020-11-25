@@ -2,31 +2,22 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use log::info;
 use std::sync::{Arc, Mutex};
 
 use crate::datasources::{DataSource, IDataSource, ITable};
 use crate::error::FuseQueryResult;
 
 pub struct CsvDataSource {
-    path: String,
     datasource: DataSource,
 }
 
 impl CsvDataSource {
-    pub fn try_create(path: String) -> FuseQueryResult<Arc<Mutex<dyn IDataSource>>> {
+    pub fn try_create(_path: String) -> FuseQueryResult<Arc<Mutex<dyn IDataSource>>> {
         let source = CsvDataSource {
-            path,
             datasource: DataSource::create(),
         };
-        source.load_databases()?;
 
         Ok(Arc::new(Mutex::new(source)))
-    }
-
-    fn load_databases(&self) -> FuseQueryResult<()> {
-        info!("Load CSV databases from path: {}", self.path);
-        Ok(())
     }
 }
 

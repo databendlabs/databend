@@ -59,10 +59,10 @@ impl Pipeline {
         &mut self,
         f: impl Fn() -> Box<dyn IProcessor>,
     ) -> FuseQueryResult<()> {
-        let mut items = vec![];
         let last = self.processors.last().ok_or_else(|| {
             FuseQueryError::Internal("Can't add transform to an empty pipe list".to_string())
         })?;
+        let mut items = Vec::with_capacity(last.len());
         for x in last {
             let mut p = f();
             p.connect_to(x.clone());
@@ -105,13 +105,13 @@ impl Pipeline {
     /// //              processor3
     ///
     pub fn expand_processor(&mut self, size: u32) -> FuseQueryResult<()> {
-        let mut items: Vec<Arc<dyn IProcessor>> = vec![];
         let last = self.processors.last().ok_or_else(|| {
             FuseQueryError::Internal(
                 "Can't expand processor when the last pipe is empty".to_string(),
             )
         })?;
 
+        let mut items: Vec<Arc<dyn IProcessor>> = Vec::with_capacity(last.len());
         for _i in 0..size {
             for x in last {
                 let mut p = ThroughProcessor::create();
