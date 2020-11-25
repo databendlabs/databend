@@ -2,28 +2,25 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use crate::datablocks::DataBlock;
-use crate::datavalues::DataArrayRef;
-use crate::functions::Function;
-
-#[allow(dead_code)]
-struct Test {
-    name: &'static str,
-    args: Vec<Function>,
-    display: &'static str,
-    nullable: bool,
-    block: DataBlock,
-    expect: DataArrayRef,
-    error: &'static str,
-    func: Function,
-}
-
 #[test]
-fn test_cases() -> crate::error::FuseQueryResult<()> {
+fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
+    use crate::datablocks::*;
     use crate::datavalues::*;
-    use crate::functions::{comparisons::*, *};
+    use crate::functions::*;
+
+    #[allow(dead_code)]
+    struct Test {
+        name: &'static str,
+        args: Vec<Function>,
+        display: &'static str,
+        nullable: bool,
+        block: DataBlock,
+        expect: DataArrayRef,
+        error: &'static str,
+        op: DataValueComparisonOperator,
+    }
 
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),
@@ -38,7 +35,7 @@ fn test_cases() -> crate::error::FuseQueryResult<()> {
         args: vec![field_a.clone(), field_b.clone()],
         display: "\"a\" = \"b\"",
         nullable: false,
-        func: EqualFunction::create(&[field_a.clone(), field_b.clone()]).unwrap(),
+        op: DataValueComparisonOperator::Eq,
         block: DataBlock::create(
             schema.clone(),
             vec![
@@ -51,27 +48,28 @@ fn test_cases() -> crate::error::FuseQueryResult<()> {
     }];
 
     for t in tests {
-        let result = (t.func).evaluate(&t.block);
+        let func = ComparisonFunction::create(t.op, &[t.args[0].clone(), t.args[1].clone()])?;
+        let result = func.evaluate(&t.block);
         match result {
             Ok(ref v) => {
                 // Display check.
                 let expect_display = t.display.to_string();
-                let actual_display = format!("{:?}", (t.func));
+                let actual_display = format!("{:?}", func);
                 assert_eq!(expect_display, actual_display);
 
                 // Nullable check.
                 let expect_null = t.nullable;
-                let actual_null = (t.func).nullable(t.block.schema())?;
+                let actual_null = func.nullable(t.block.schema())?;
                 assert_eq!(expect_null, actual_null);
 
                 // Type check.
-                let expect_type = (t.func).return_type(t.block.schema())?;
+                let expect_type = func.return_type(t.block.schema())?;
                 let actual_type = v.data_type();
                 assert_eq!(expect_type, actual_type);
 
                 // Result check.
                 if !v.to_array(t.block.num_rows())?.equals(&*t.expect) {
-                    println!("expect:\n{:?} \nactual:\n{:?}", t.expect, v);
+                    println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect, v);
                     assert!(false);
                 }
             }

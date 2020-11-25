@@ -131,6 +131,25 @@ impl TryFrom<&DataType> for DataValue {
     }
 }
 
+impl fmt::Display for DataValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DataValue::Boolean(v) => format_data_value_with_option!(f, v),
+            DataValue::Float32(v) => format_data_value_with_option!(f, v),
+            DataValue::Float64(v) => format_data_value_with_option!(f, v),
+            DataValue::Int8(v) => format_data_value_with_option!(f, v),
+            DataValue::Int16(v) => format_data_value_with_option!(f, v),
+            DataValue::Int32(v) => format_data_value_with_option!(f, v),
+            DataValue::Int64(v) => format_data_value_with_option!(f, v),
+            DataValue::UInt8(v) => format_data_value_with_option!(f, v),
+            DataValue::UInt16(v) => format_data_value_with_option!(f, v),
+            DataValue::UInt32(v) => format_data_value_with_option!(f, v),
+            DataValue::UInt64(v) => format_data_value_with_option!(f, v),
+            DataValue::String(v) => format_data_value_with_option!(f, v),
+        }
+    }
+}
+
 impl fmt::Debug for DataValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

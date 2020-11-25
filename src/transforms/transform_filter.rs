@@ -7,10 +7,12 @@ use std::sync::Arc;
 
 use crate::datablocks::DataBlock;
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
-use crate::error::FuseQueryResult;
+use crate::datavalues::BooleanArray;
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::Function;
 use crate::planners::ExpressionPlan;
 use crate::processors::{EmptyProcessor, IProcessor};
+use arrow::compute::filter_record_batch;
 
 pub struct FilterTransform {
     pub predicate: ExpressionPlan,
@@ -25,8 +27,18 @@ impl FilterTransform {
         }
     }
 
-    pub fn expression(block: DataBlock, _: Function) -> FuseQueryResult<DataBlock> {
-        Ok(block)
+    pub fn expression_executor(block: DataBlock, func: Function) -> FuseQueryResult<DataBlock> {
+        let result = func.evaluate(&block)?.to_array(block.num_rows())?;
+        let filter_array = result
+            .as_any()
+            .downcast_ref::<BooleanArray>()
+            .ok_or_else(|| {
+                FuseQueryError::Internal("cannot downcast to boolean array".to_string())
+            })?;
+        Ok(DataBlock::try_from_arrow_batch(&filter_record_batch(
+            &block.to_arrow_batch()?,
+            filter_array,
+        )?)?)
     }
 }
 
@@ -44,7 +56,7 @@ impl IProcessor for FilterTransform {
         Ok(Box::pin(ExpressionStream::try_create(
             self.input.execute().await?,
             Some(self.predicate.to_function()?),
-            FilterTransform::expression,
+            FilterTransform::expression_executor,
         )?))
     }
 }

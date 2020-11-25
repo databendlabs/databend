@@ -2,7 +2,9 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-mod tests;
+mod transform_aggregator_test;
+mod transform_filter_test;
+mod transform_source_test;
 
 mod transform_aggregator;
 mod transform_filter;

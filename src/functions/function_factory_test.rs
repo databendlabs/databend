@@ -2,27 +2,23 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use crate::datablocks::DataBlock;
-use crate::datavalues::DataArrayRef;
-use crate::functions::Function;
-
-#[allow(dead_code)]
-struct Test {
-    name: &'static str,
-    is_aggregate: bool,
-    fun: &'static str,
-    args: Vec<Function>,
-    block: DataBlock,
-    expect: DataArrayRef,
-    error: &'static str,
-}
-
 #[test]
 fn test_factory() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
+    use crate::datablocks::DataBlock;
     use crate::datavalues::*;
     use crate::functions::*;
+
+    #[allow(dead_code)]
+    struct Test {
+        name: &'static str,
+        is_aggregate: bool,
+        fun: &'static str,
+        args: Vec<Function>,
+        block: DataBlock,
+        error: &'static str,
+    }
 
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),
@@ -45,7 +41,6 @@ fn test_factory() -> crate::error::FuseQueryResult<()> {
                     Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
-            expect: Arc::new(Int64Array::from(vec![5, 5, 5, 5])),
             error: "",
         },
         Test {
@@ -60,7 +55,6 @@ fn test_factory() -> crate::error::FuseQueryResult<()> {
                     Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
-            expect: Arc::new(Int64Array::from(vec![3, 1, -1, -3])),
             error: "",
         },
         Test {
@@ -75,7 +69,6 @@ fn test_factory() -> crate::error::FuseQueryResult<()> {
                     Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
-            expect: Arc::new(Int64Array::from(vec![4, 6, 6, 4])),
             error: "",
         },
         Test {
@@ -90,7 +83,6 @@ fn test_factory() -> crate::error::FuseQueryResult<()> {
                     Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
-            expect: Arc::new(Int64Array::from(vec![4, 1, 0, 0])),
             error: "",
         },
         Test {
@@ -105,36 +97,25 @@ fn test_factory() -> crate::error::FuseQueryResult<()> {
                     Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
-            expect: Arc::new(UInt64Array::from(vec![4])),
             error: "",
         },
     ];
     for t in tests {
         if !t.is_aggregate {
-            let fun = ScalarFunctionFactory::get(t.fun, &*t.args)?;
-            let result = fun.evaluate(&t.block)?.to_array(0);
+            let result = ScalarFunctionFactory::get(t.fun, &*t.args);
             match result {
-                Ok(ref v) => {
-                    // Result check.
-                    if !v.equals(&*t.expect) {
-                        println!("expect:\n{:?} \nactual:\n{:?}", t.expect, v);
-                        assert!(false);
-                    }
-                }
+                Ok(_) => {}
                 Err(e) => assert_eq!(t.error, e.to_string()),
             }
         } else {
-            let mut fun = AggregateFunctionFactory::get(
+            let result = AggregateFunctionFactory::get(
                 t.fun,
                 Arc::new(VariableFunction::create("a")?),
                 &DataType::Int64,
-            )
-            .unwrap();
-            fun.accumulate(&t.block).unwrap();
-            let result = fun.aggregate()?;
-            if !result.to_array(1)?.equals(&*t.expect) {
-                println!("expect:\n{:?} \nactual:\n{:?}", t.expect, result);
-                assert!(false);
+            );
+            match result {
+                Ok(_) => {}
+                Err(e) => assert_eq!(t.error, e.to_string()),
             }
         }
     }

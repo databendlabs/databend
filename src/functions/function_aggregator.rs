@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use crate::datablocks::DataBlock;
 use crate::datavalues::{
-    data_array_max, data_array_min, data_array_sum, data_value_add, data_value_max, data_value_min,
-    DataSchema, DataType, DataValue,
+    data_array_aggregate_op, data_value_add, data_value_aggregate_op, DataSchema, DataType,
+    DataValue, DataValueAggregateOperator,
 };
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::Function;
@@ -129,15 +129,26 @@ impl AggregatorFunction {
             }
             AggregatorFunction::Min(v) => {
                 let val = v.column.evaluate(block)?;
-                v.state = data_value_min(v.state.clone(), data_array_min(val.to_array(rows)?)?)?;
+                v.state = data_value_aggregate_op(
+                    DataValueAggregateOperator::Min,
+                    v.state.clone(),
+                    data_array_aggregate_op(DataValueAggregateOperator::Min, val.to_array(rows)?)?,
+                )?;
             }
             AggregatorFunction::Max(v) => {
                 let val = v.column.evaluate(block)?;
-                v.state = data_value_max(v.state.clone(), data_array_max(val.to_array(rows)?)?)?;
+                v.state = data_value_aggregate_op(
+                    DataValueAggregateOperator::Max,
+                    v.state.clone(),
+                    data_array_aggregate_op(DataValueAggregateOperator::Max, val.to_array(rows)?)?,
+                )?;
             }
             AggregatorFunction::Sum(v) => {
                 let val = v.column.evaluate(block)?;
-                v.state = data_value_add(v.state.clone(), data_array_sum(val.to_array(rows)?)?)?;
+                v.state = data_value_add(
+                    v.state.clone(),
+                    data_array_aggregate_op(DataValueAggregateOperator::Sum, val.to_array(rows)?)?,
+                )?;
             }
         }
         Ok(())

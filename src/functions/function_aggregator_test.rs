@@ -2,28 +2,25 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use crate::datablocks::DataBlock;
-use crate::datavalues::DataValue;
-use crate::functions::Function;
-
-#[allow(dead_code)]
-struct Test {
-    name: &'static str,
-    args: Vec<Function>,
-    display: &'static str,
-    nullable: bool,
-    block: DataBlock,
-    expect: DataValue,
-    error: &'static str,
-    func: Function,
-}
-
 #[test]
-fn test_cases() -> crate::error::FuseQueryResult<()> {
+fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
-    use crate::datavalues::{DataField, DataSchema, DataType, Int64Array};
-    use crate::functions::{aggregators::AggregatorFunction, VariableFunction};
+    use crate::datablocks::DataBlock;
+    use crate::datavalues::*;
+    use crate::functions::*;
+
+    #[allow(dead_code)]
+    struct Test {
+        name: &'static str,
+        args: Vec<Function>,
+        display: &'static str,
+        nullable: bool,
+        block: DataBlock,
+        expect: DataValue,
+        error: &'static str,
+        func: Function,
+    }
 
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),

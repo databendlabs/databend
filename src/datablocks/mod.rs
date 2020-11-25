@@ -4,9 +4,6 @@
 
 mod tests;
 
-#[macro_use]
-mod macros;
-
 pub mod data_block;
 
 pub use self::data_block::DataBlock;

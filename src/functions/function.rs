@@ -8,18 +8,15 @@ use crate::datablocks::DataBlock;
 use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::{
-    arithmetics, comparisons, AggregatorFunction, ConstantFunction, VariableFunction,
+    AggregatorFunction, ArithmeticFunction, ComparisonFunction, ConstantFunction, VariableFunction,
 };
 
 #[derive(Clone)]
 pub enum Function {
     Constant(ConstantFunction),
     Variable(VariableFunction),
-    Add(arithmetics::AddFunction),
-    Sub(arithmetics::SubFunction),
-    Div(arithmetics::DivFunction),
-    Mul(arithmetics::MulFunction),
-    Equal(comparisons::EqualFunction),
+    Arithmetic(ArithmeticFunction),
+    Comparison(ComparisonFunction),
     Aggregator(AggregatorFunction),
 }
 
@@ -28,11 +25,8 @@ impl Function {
         match self {
             Function::Constant(v) => v.name(),
             Function::Variable(v) => v.name(),
-            Function::Add(v) => v.name(),
-            Function::Div(v) => v.name(),
-            Function::Mul(v) => v.name(),
-            Function::Sub(v) => v.name(),
-            Function::Equal(v) => v.name(),
+            Function::Arithmetic(v) => v.name(),
+            Function::Comparison(v) => v.name(),
             Function::Aggregator(v) => v.name(),
         }
     }
@@ -41,11 +35,8 @@ impl Function {
         match self {
             Function::Constant(v) => v.return_type(input_schema),
             Function::Variable(v) => v.return_type(input_schema),
-            Function::Add(v) => v.return_type(input_schema),
-            Function::Div(v) => v.return_type(input_schema),
-            Function::Mul(v) => v.return_type(input_schema),
-            Function::Sub(v) => v.return_type(input_schema),
-            Function::Equal(v) => v.return_type(input_schema),
+            Function::Arithmetic(v) => v.return_type(input_schema),
+            Function::Comparison(v) => v.return_type(input_schema),
             Function::Aggregator(v) => v.return_type(),
         }
     }
@@ -54,11 +45,8 @@ impl Function {
         match self {
             Function::Constant(v) => v.nullable(input_schema),
             Function::Variable(v) => v.nullable(input_schema),
-            Function::Add(v) => v.nullable(input_schema),
-            Function::Div(v) => v.nullable(input_schema),
-            Function::Mul(v) => v.nullable(input_schema),
-            Function::Sub(v) => v.nullable(input_schema),
-            Function::Equal(v) => v.nullable(input_schema),
+            Function::Arithmetic(v) => v.nullable(input_schema),
+            Function::Comparison(v) => v.nullable(input_schema),
             Function::Aggregator(v) => v.nullable(input_schema),
         }
     }
@@ -67,11 +55,8 @@ impl Function {
         match self {
             Function::Constant(v) => v.evaluate(block),
             Function::Variable(v) => v.evaluate(block),
-            Function::Add(v) => v.evaluate(block),
-            Function::Div(v) => v.evaluate(block),
-            Function::Mul(v) => v.evaluate(block),
-            Function::Sub(v) => v.evaluate(block),
-            Function::Equal(v) => v.evaluate(block),
+            Function::Arithmetic(v) => v.evaluate(block),
+            Function::Comparison(v) => v.evaluate(block),
             _ => Err(FuseQueryError::Unsupported(format!(
                 "Unsupported evaluate() for function {}",
                 self.name()
@@ -105,11 +90,8 @@ impl fmt::Debug for Function {
         match self {
             Function::Constant(v) => write!(f, "{}", v),
             Function::Variable(v) => write!(f, "{}", v),
-            Function::Add(v) => write!(f, "{}", v),
-            Function::Div(v) => write!(f, "{}", v),
-            Function::Mul(v) => write!(f, "{}", v),
-            Function::Sub(v) => write!(f, "{}", v),
-            Function::Equal(v) => write!(f, "{}", v),
+            Function::Arithmetic(v) => write!(f, "{}", v),
+            Function::Comparison(v) => write!(f, "{}", v),
             Function::Aggregator(v) => write!(f, "{}", v),
         }
     }

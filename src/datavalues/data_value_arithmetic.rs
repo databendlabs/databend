@@ -36,8 +36,8 @@ pub fn data_value_add(left: DataValue, right: DataValue) -> FuseQueryResult<Data
             typed_data_value_add!(lhs, rhs, Float64, f64)
         }
         _ => {
-            return Err(FuseQueryError::Unsupported(format!(
-                "Unsupported data_value_add() for data type: left:{:?}, right:{:?}",
+            return Err(FuseQueryError::Internal(format!(
+                "Unsupported data_value_add for data type: left:{:?}, right:{:?}",
                 left.data_type(),
                 right.data_type()
             )))

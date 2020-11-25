@@ -4,19 +4,24 @@
 
 use std::sync::Arc;
 
-use crate::datavalues::DataType;
+use crate::datavalues::{DataType, DataValueArithmeticOperator, DataValueComparisonOperator};
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::functions::{arithmetics, AggregatorFunction, Function};
+use crate::functions::{AggregatorFunction, ArithmeticFunction, ComparisonFunction, Function};
 
 pub struct ScalarFunctionFactory;
 
 impl ScalarFunctionFactory {
     pub fn get(name: &str, args: &[Function]) -> FuseQueryResult<Function> {
         match name.to_uppercase().as_str() {
-            "+" => arithmetics::AddFunction::create(args),
-            "-" => arithmetics::SubFunction::create(args),
-            "*" => arithmetics::MulFunction::create(args),
-            "/" => arithmetics::DivFunction::create(args),
+            "+" => ArithmeticFunction::create(DataValueArithmeticOperator::Add, args),
+            "-" => ArithmeticFunction::create(DataValueArithmeticOperator::Sub, args),
+            "*" => ArithmeticFunction::create(DataValueArithmeticOperator::Mul, args),
+            "/" => ArithmeticFunction::create(DataValueArithmeticOperator::Div, args),
+            "=" => ComparisonFunction::create(DataValueComparisonOperator::Eq, args),
+            "<" => ComparisonFunction::create(DataValueComparisonOperator::Lt, args),
+            ">" => ComparisonFunction::create(DataValueComparisonOperator::Gt, args),
+            "<=" => ComparisonFunction::create(DataValueComparisonOperator::LtEq, args),
+            ">=" => ComparisonFunction::create(DataValueComparisonOperator::GtEq, args),
             _ => Err(FuseQueryError::Unsupported(format!(
                 "Unsupported Scalar Function: {}",
                 name

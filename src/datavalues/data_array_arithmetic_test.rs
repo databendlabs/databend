@@ -7,7 +7,6 @@ fn test_array_arithmetic() {
     use std::sync::Arc;
 
     use super::*;
-    use crate::error::FuseQueryResult;
 
     #[allow(dead_code)]
     struct ArrayTest {
@@ -15,7 +14,7 @@ fn test_array_arithmetic() {
         args: Vec<Vec<DataArrayRef>>,
         expect: Vec<DataArrayRef>,
         error: Vec<&'static str>,
-        func: Box<dyn Fn(&DataColumnarValue, &DataColumnarValue) -> FuseQueryResult<DataArrayRef>>,
+        op: DataValueArithmeticOperator,
     }
 
     let tests = vec![
@@ -67,7 +66,7 @@ fn test_array_arithmetic() {
                     Arc::new(Float64Array::from(vec![1.0, 2.0, 3.0, 4.0])),
                 ],
             ],
-            func: Box::new(data_array_add),
+            op: DataValueArithmeticOperator::Add,
             expect: vec![
                 Arc::new(StringArray::from(vec![""])),
                 Arc::new(Int8Array::from(vec![5, 5, 5, 5])),
@@ -81,9 +80,7 @@ fn test_array_arithmetic() {
                 Arc::new(Float32Array::from(vec![5.0, 5.0, 5.0, 5.0])),
                 Arc::new(Float64Array::from(vec![5.0, 5.0, 5.0, 5.0])),
             ],
-            error: vec![
-                "Unsupported Error: Unsupported arithmetic_compute::add for data type: Utf8",
-            ],
+            error: vec!["Internal Error: Unsupported arithmetic_compute::add for data type: Utf8"],
         },
         ArrayTest {
             name: "sub-passed",
@@ -133,7 +130,7 @@ fn test_array_arithmetic() {
                     Arc::new(Float64Array::from(vec![1.0, 2.0, 3.0, 4.0])),
                 ],
             ],
-            func: Box::new(data_array_sub),
+            op: DataValueArithmeticOperator::Sub,
             expect: vec![
                 Arc::new(StringArray::from(vec![""])),
                 Arc::new(Int8Array::from(vec![3, 1, -1, -3])),
@@ -148,7 +145,7 @@ fn test_array_arithmetic() {
                 Arc::new(Float64Array::from(vec![3.0, 1.0, -1.0, -3.0])),
             ],
             error: vec![
-                "Unsupported Error: Unsupported arithmetic_compute::subtract for data type: Utf8",
+                "Internal Error: Unsupported arithmetic_compute::subtract for data type: Utf8",
             ],
         },
         ArrayTest {
@@ -199,7 +196,7 @@ fn test_array_arithmetic() {
                     Arc::new(Float64Array::from(vec![1.0, 2.0, 3.0, 4.0])),
                 ],
             ],
-            func: Box::new(data_array_mul),
+            op: DataValueArithmeticOperator::Mul,
             expect: vec![
                 Arc::new(StringArray::from(vec![""])),
                 Arc::new(Int8Array::from(vec![4, 6, 6, 4])),
@@ -214,7 +211,7 @@ fn test_array_arithmetic() {
                 Arc::new(Float64Array::from(vec![4.0, 6.0, 6.0, 4.0])),
             ],
             error: vec![
-                "Unsupported Error: Unsupported arithmetic_compute::multiply for data type: Utf8",
+                "Internal Error: Unsupported arithmetic_compute::multiply for data type: Utf8",
             ],
         },
         ArrayTest {
@@ -265,7 +262,7 @@ fn test_array_arithmetic() {
                     Arc::new(Float64Array::from(vec![1.0, 2.0, 3.0, 4.0])),
                 ],
             ],
-            func: Box::new(data_array_div),
+            op: DataValueArithmeticOperator::Div,
             expect: vec![
                 Arc::new(StringArray::from(vec![""])),
                 Arc::new(Int8Array::from(vec![4, 1, 0, 0])),
@@ -280,14 +277,15 @@ fn test_array_arithmetic() {
                 Arc::new(Float64Array::from(vec![4.0, 1.5, 0.6666666666666666, 0.25])),
             ],
             error: vec![
-                "Unsupported Error: Unsupported arithmetic_compute::divide for data type: Utf8",
+                "Internal Error: Unsupported arithmetic_compute::divide for data type: Utf8",
             ],
         },
     ];
 
     for t in tests {
         for (i, args) in t.args.iter().enumerate() {
-            let result = (t.func)(
+            let result = data_array_arithmetic_op(
+                t.op.clone(),
                 &DataColumnarValue::Array(args[0].clone()),
                 &DataColumnarValue::Array(args[1].clone()),
             );
@@ -295,7 +293,7 @@ fn test_array_arithmetic() {
                 Ok(ref v) => {
                     // Result check.
                     if !v.equals(&*t.expect[i]) {
-                        println!("expect:\n{:?} \nactual:\n{:?}", t.expect, v);
+                        println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect[i], v);
                         assert!(false);
                     }
                 }
@@ -306,198 +304,139 @@ fn test_array_arithmetic() {
 }
 
 #[test]
-fn test_array_aggregate() {
+fn test_array_scalar_arithmetic() {
     use std::sync::Arc;
 
     use super::*;
-    use crate::error::FuseQueryResult;
 
     #[allow(dead_code)]
     struct ArrayTest {
         name: &'static str,
-        args: Vec<DataArrayRef>,
-        expect: Vec<DataValue>,
-        error: Vec<&'static str>,
-        func: Box<dyn Fn(DataArrayRef) -> FuseQueryResult<DataValue>>,
+        array: DataArrayRef,
+        op: DataValueArithmeticOperator,
+        scalar: DataValue,
+        expect: DataArrayRef,
+        error: &'static str,
     }
 
     let tests = vec![
         ArrayTest {
-            name: "min-passed",
-            args: vec![
-                Arc::new(StringArray::from(vec!["xx"])),
-                Arc::new(Int8Array::from(vec![1, 2, 3, 4])),
-                Arc::new(Int16Array::from(vec![4, 3, 2, 1])),
-                Arc::new(Int32Array::from(vec![4, 3, 2, 1])),
-                Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
-                Arc::new(UInt8Array::from(vec![4, 3, 2, 1])),
-                Arc::new(UInt16Array::from(vec![4, 3, 2, 1])),
-                Arc::new(UInt32Array::from(vec![4, 3, 2, 1])),
-                Arc::new(UInt64Array::from(vec![4, 3, 2, 1])),
-                Arc::new(Float32Array::from(vec![4.0, 3.0, 2.0, 1.0])),
-                Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0])),
-            ],
-            func: Box::new(data_array_min),
-            expect: vec![
-                DataValue::String(Some("xx".to_string())),
-                DataValue::Int8(Some(1)),
-                DataValue::Int16(Some(1)),
-                DataValue::Int32(Some(1)),
-                DataValue::Int64(Some(1)),
-                DataValue::UInt8(Some(1)),
-                DataValue::UInt16(Some(1)),
-                DataValue::UInt32(Some(1)),
-                DataValue::UInt64(Some(1)),
-                DataValue::Float32(Some(1.0)),
-                DataValue::Float64(Some(1.0)),
-            ],
-            error: vec!["Unsupported Error: Unsupported data_array_min() for data type: Utf8"],
+            name: "add-passed",
+            array: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
+            scalar: DataValue::Int8(Some(1)),
+            op: DataValueArithmeticOperator::Add,
+            expect: Arc::new(Int8Array::from(vec![5, 5, 5, 5])),
+            error: "",
         },
         ArrayTest {
-            name: "max-passed",
-            args: vec![
-                Arc::new(StringArray::from(vec!["xx"])),
-                Arc::new(Int8Array::from(vec![1, 2, 3, 4])),
-                Arc::new(Int16Array::from(vec![4, 3, 2, 1])),
-                Arc::new(Int32Array::from(vec![4, 3, 2, 1])),
-                Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
-                Arc::new(UInt8Array::from(vec![4, 3, 2, 1])),
-                Arc::new(UInt16Array::from(vec![4, 3, 2, 1])),
-                Arc::new(UInt32Array::from(vec![4, 3, 2, 1])),
-                Arc::new(UInt64Array::from(vec![4, 3, 2, 1])),
-                Arc::new(Float32Array::from(vec![4.0, 3.0, 2.0, 1.0])),
-                Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0])),
-            ],
-            func: Box::new(data_array_max),
-            expect: vec![
-                DataValue::String(Some("xx".to_string())),
-                DataValue::Int8(Some(4)),
-                DataValue::Int16(Some(4)),
-                DataValue::Int32(Some(4)),
-                DataValue::Int64(Some(4)),
-                DataValue::UInt8(Some(4)),
-                DataValue::UInt16(Some(4)),
-                DataValue::UInt32(Some(4)),
-                DataValue::UInt64(Some(4)),
-                DataValue::Float32(Some(4.0)),
-                DataValue::Float64(Some(4.0)),
-            ],
-            error: vec!["Unsupported Error: Unsupported data_array_max() for data type: Utf8"],
+            name: "sub-passed",
+            array: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
+            scalar: DataValue::Int8(Some(1)),
+            op: DataValueArithmeticOperator::Sub,
+            expect: Arc::new(Int8Array::from(vec![3, 3, 3, 3])),
+            error: "",
         },
         ArrayTest {
-            name: "sum-passed",
-            args: vec![
-                Arc::new(StringArray::from(vec!["xx"])),
-                Arc::new(Int8Array::from(vec![1, 2, 3, 4])),
-                Arc::new(Int16Array::from(vec![4, 3, 2, 1])),
-                Arc::new(Int32Array::from(vec![4, 3, 2, 1])),
-                Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
-                Arc::new(UInt8Array::from(vec![4, 3, 2, 1])),
-                Arc::new(UInt16Array::from(vec![4, 3, 2, 1])),
-                Arc::new(UInt32Array::from(vec![4, 3, 2, 1])),
-                Arc::new(UInt64Array::from(vec![4, 3, 2, 1])),
-                Arc::new(Float32Array::from(vec![4.0, 3.0, 2.0, 1.0])),
-                Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0])),
-            ],
-            func: Box::new(data_array_sum),
-            expect: vec![
-                DataValue::String(Some("xx".to_string())),
-                DataValue::Int8(Some(10)),
-                DataValue::Int16(Some(10)),
-                DataValue::Int32(Some(10)),
-                DataValue::Int64(Some(10)),
-                DataValue::UInt8(Some(10)),
-                DataValue::UInt16(Some(10)),
-                DataValue::UInt32(Some(10)),
-                DataValue::UInt64(Some(10)),
-                DataValue::Float32(Some(10.0)),
-                DataValue::Float64(Some(10.0)),
-            ],
-            error: vec!["Unsupported Error: Unsupported data_array_sum() for data type: Utf8"],
+            name: "mul-passed",
+            array: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
+            scalar: DataValue::Int8(Some(1)),
+            op: DataValueArithmeticOperator::Mul,
+            expect: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
+            error: "",
+        },
+        ArrayTest {
+            name: "div-passed",
+            array: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
+            scalar: DataValue::Int8(Some(2)),
+            op: DataValueArithmeticOperator::Div,
+            expect: Arc::new(Int8Array::from(vec![2, 2, 2, 2])),
+            error: "",
         },
     ];
 
     for t in tests {
-        for (i, args) in t.args.iter().enumerate() {
-            let result = (t.func)(args.clone());
-            match result {
-                Ok(ref v) => {
-                    // Result check.
-                    if *v != t.expect[i] {
-                        println!("expect:\n{:?} \nactual:\n{:?}", t.expect, v);
-                        assert!(false);
-                    }
+        let result = data_array_arithmetic_op(
+            t.op.clone(),
+            &DataColumnarValue::Array(t.array),
+            &DataColumnarValue::Scalar(t.scalar),
+        );
+        match result {
+            Ok(ref v) => {
+                if !v.equals(&*t.expect) {
+                    println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect, v);
+                    assert!(false);
                 }
-                Err(e) => assert_eq!(t.error[i], e.to_string()),
             }
+            Err(e) => assert_eq!(t.error, e.to_string()),
         }
     }
 }
 
 #[test]
-fn test_scalar_arithmetic() {
+fn test_scalar_array_arithmetic() {
+    use std::sync::Arc;
+
     use super::*;
-    use crate::error::FuseQueryResult;
 
     #[allow(dead_code)]
-    struct ScalarTest {
+    struct ArrayTest {
         name: &'static str,
-        args: Vec<Vec<DataValue>>,
-        expect: Vec<DataValue>,
-        error: Vec<&'static str>,
-        func: Box<dyn Fn(DataValue, DataValue) -> FuseQueryResult<DataValue>>,
+        array: DataArrayRef,
+        op: DataValueArithmeticOperator,
+        scalar: DataValue,
+        expect: DataArrayRef,
+        error: &'static str,
     }
 
-    let tests = vec![ScalarTest {
-        name: "add-passed",
-        args: vec![
-            vec![
-                DataValue::String(Some("xx".to_string())),
-                DataValue::Int8(Some(2)),
-            ],
-            vec![DataValue::Int8(Some(1)), DataValue::Int8(Some(2))],
-            vec![DataValue::Int16(Some(1)), DataValue::Int16(Some(2))],
-            vec![DataValue::Int32(Some(1)), DataValue::Int32(Some(2))],
-            vec![DataValue::Int64(Some(1)), DataValue::Int64(Some(2))],
-            vec![DataValue::UInt8(Some(1)), DataValue::UInt8(Some(2))],
-            vec![DataValue::UInt16(Some(1)), DataValue::UInt16(Some(2))],
-            vec![DataValue::UInt32(Some(1)), DataValue::UInt32(Some(2))],
-            vec![DataValue::UInt64(Some(1)), DataValue::UInt64(Some(2))],
-            vec![DataValue::Float32(Some(1.0)), DataValue::Float32(Some(2.0))],
-            vec![DataValue::Float64(Some(1.0)), DataValue::Float64(Some(2.0))],
-        ],
-        func: Box::new(data_value_add),
-        expect: vec![
-            DataValue::String(Some("xx".to_string())),
-            DataValue::Int8(Some(3)),
-            DataValue::Int16(Some(3)),
-            DataValue::Int32(Some(3)),
-            DataValue::Int64(Some(3)),
-            DataValue::UInt8(Some(3)),
-            DataValue::UInt16(Some(3)),
-            DataValue::UInt32(Some(3)),
-            DataValue::UInt64(Some(3)),
-            DataValue::Float32(Some(3.0)),
-            DataValue::Float64(Some(3.0)),
-        ],
-        error: vec![
-            "Unsupported Error: Unsupported data_value_add() for data type: left:Utf8, right:Int8",
-        ],
-    }];
+    let tests = vec![
+        ArrayTest {
+            name: "add-passed",
+            array: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
+            scalar: DataValue::Int8(Some(1)),
+            op: DataValueArithmeticOperator::Add,
+            expect: Arc::new(Int8Array::from(vec![5, 5, 5, 5])),
+            error: "",
+        },
+        ArrayTest {
+            name: "sub-passed",
+            array: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
+            scalar: DataValue::Int8(Some(1)),
+            op: DataValueArithmeticOperator::Sub,
+            expect: Arc::new(Int8Array::from(vec![-3, -3, -3, -3])),
+            error: "",
+        },
+        ArrayTest {
+            name: "mul-passed",
+            array: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
+            scalar: DataValue::Int8(Some(1)),
+            op: DataValueArithmeticOperator::Mul,
+            expect: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
+            error: "",
+        },
+        ArrayTest {
+            name: "div-passed",
+            array: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
+            scalar: DataValue::Int8(Some(8)),
+            op: DataValueArithmeticOperator::Div,
+            expect: Arc::new(Int8Array::from(vec![2, 2, 2, 2])),
+            error: "",
+        },
+    ];
 
     for t in tests {
-        for (i, args) in t.args.iter().enumerate() {
-            let result = (t.func)(args[0].clone(), args[1].clone());
-            match result {
-                Ok(ref v) => {
-                    // Result check.
-                    if *v != t.expect[i] {
-                        println!("expect:\n{:?} \nactual:\n{:?}", t.expect, v);
-                        assert!(false);
-                    }
+        let result = data_array_arithmetic_op(
+            t.op.clone(),
+            &DataColumnarValue::Scalar(t.scalar),
+            &DataColumnarValue::Array(t.array),
+        );
+        match result {
+            Ok(ref v) => {
+                if !v.equals(&*t.expect) {
+                    println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect, v);
+                    assert!(false);
                 }
-                Err(e) => assert_eq!(t.error[i], e.to_string()),
             }
+            Err(e) => assert_eq!(t.error, e.to_string()),
         }
     }
 }
