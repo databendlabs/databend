@@ -22,7 +22,7 @@ num = "0.3"
 num_cpus = "1.0"
 paste = "^1.0"
 sqlparser = "0.6"
-simplelog = "0.7"
+simplelog = "0.8"
 thiserror = "1.0"
 tokio = { version = "0.3", features = ["macros", "rt", "rt-multi-thread", "stream", "signal"] }
 
