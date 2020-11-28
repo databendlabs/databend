@@ -24,12 +24,13 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 | distributed | Distributed scheduler and executor for planner | TODO |
 | [datablocks](src/datablocks) | Vectorized data processing unit | WIP |
 | [datastreams](src/datastreams) | Async streaming iterators | WIP |
-| [datasources](src/datasources) | Interface to the fuse-store server | WIP |
-| [functions](src/functions) | Scalar and Aggregation functions | WIP |
-| [processors](src/processors) | Dataflow streaming processor | WIP |
-| [planners](src/planners) | Distributed plan for queries and DML statements | WIP |
-| [servers](src/servers) | Server handler(MySQL/HTTP) | MySQL |
-| [transforms](src/transforms) | Query execution transform | WIP |
+| [datasources](src/datasources) | Interface to the datasource([InMemory](src/datasources/memory)/[Csv](src/datasources/csv)/Remote) | WIP |
+| [execturos](src/executors) | Executor([EXPLAIN](src/executors/executor_explain.rs)/[SELECT](src/executors/executor_select.rs)) for the Pipeline | WIP |
+| [functions](src/functions) | Scalar([Arithmetic](src/functions/function_arithmetic.rs)/[Comparison](src/functions/function_comparison.rs)) and Aggregation([Aggregator](src/functions/function_aggregator.rs)) functions | WIP |
+| [processors](src/processors) | Dataflow streaming processor([Pipeline](src/processors/pipeline.rs)) | WIP |
+| [planners](src/planners) | Distributed plan for queries and DML statements([SELECT](src/planners/plan_select.rs)/[EXPLAIN](src/planners/plan_explain.rs)) | WIP |
+| [servers](src/servers) | Server handler([MySQL](src/servers/mysql)/HTTP) | MySQL |
+| [transforms](src/transforms) | Query execution transform([Source](src/transforms/transform_source.rs)/[Filter](src/transforms/transform_filter.rs)) | WIP |
 
 ## How to Run?
 
