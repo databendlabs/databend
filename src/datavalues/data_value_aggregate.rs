@@ -12,6 +12,7 @@ pub fn data_value_aggregate_op(
 ) -> FuseQueryResult<DataValue> {
     Ok(match (&left, &right) {
         (DataValue::Null, _) => right,
+        (_, DataValue::Null) => left,
         (DataValue::Int8(lhs), DataValue::Int8(rhs)) => match op {
             DataValueAggregateOperator::Min => typed_data_value_min_max!(lhs, rhs, Int8, min),
             DataValueAggregateOperator::Max => typed_data_value_min_max!(lhs, rhs, Int8, max),
