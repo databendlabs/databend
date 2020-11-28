@@ -4,9 +4,12 @@
 
 use crate::datavalues::{
     DataValueAggregateOperator, DataValueArithmeticOperator, DataValueComparisonOperator,
+    DataValueLogicOperator,
 };
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::functions::{AggregatorFunction, ArithmeticFunction, ComparisonFunction, Function};
+use crate::functions::{
+    AggregatorFunction, ArithmeticFunction, ComparisonFunction, Function, LogicFunction,
+};
 
 pub struct ScalarFunctionFactory;
 
@@ -22,6 +25,8 @@ impl ScalarFunctionFactory {
             ">" => ComparisonFunction::try_create(DataValueComparisonOperator::Gt, args),
             "<=" => ComparisonFunction::try_create(DataValueComparisonOperator::LtEq, args),
             ">=" => ComparisonFunction::try_create(DataValueComparisonOperator::GtEq, args),
+            "and" => LogicFunction::try_create(DataValueLogicOperator::And, args),
+            "or" => LogicFunction::try_create(DataValueLogicOperator::Or, args),
             "count" => AggregatorFunction::try_create(DataValueAggregateOperator::Count, args),
             "min" => AggregatorFunction::try_create(DataValueAggregateOperator::Min, args),
             "max" => AggregatorFunction::try_create(DataValueAggregateOperator::Max, args),

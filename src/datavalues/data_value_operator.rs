@@ -73,8 +73,8 @@ pub enum DataValueLogicOperator {
 impl std::fmt::Display for DataValueLogicOperator {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let display = match &self {
-            DataValueLogicOperator::And => "And",
-            DataValueLogicOperator::Or => "Or",
+            DataValueLogicOperator::And => "and",
+            DataValueLogicOperator::Or => "or",
         };
         write!(f, "{}", display)
     }

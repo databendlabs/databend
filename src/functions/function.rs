@@ -7,6 +7,7 @@ use std::fmt;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataColumnarValue, DataSchema, DataType};
 use crate::error::FuseQueryResult;
+use crate::functions::function_logic::LogicFunction;
 use crate::functions::{
     AggregatorFunction, ArithmeticFunction, ComparisonFunction, ConstantFunction, VariableFunction,
 };
@@ -17,6 +18,7 @@ pub enum Function {
     Variable(VariableFunction),
     Arithmetic(ArithmeticFunction),
     Comparison(ComparisonFunction),
+    Logic(LogicFunction),
     Aggregator(AggregatorFunction),
 }
 
@@ -27,6 +29,7 @@ impl Function {
             Function::Variable(v) => v.return_type(input_schema),
             Function::Arithmetic(v) => v.return_type(input_schema),
             Function::Comparison(v) => v.return_type(input_schema),
+            Function::Logic(v) => v.return_type(input_schema),
             Function::Aggregator(v) => v.return_type(),
         }
     }
@@ -37,6 +40,7 @@ impl Function {
             Function::Variable(v) => v.nullable(input_schema),
             Function::Arithmetic(v) => v.nullable(input_schema),
             Function::Comparison(v) => v.nullable(input_schema),
+            Function::Logic(v) => v.nullable(input_schema),
             Function::Aggregator(v) => v.nullable(input_schema),
         }
     }
@@ -47,6 +51,7 @@ impl Function {
             Function::Variable(v) => v.eval(block),
             Function::Arithmetic(v) => v.eval(block),
             Function::Comparison(v) => v.eval(block),
+            Function::Logic(v) => v.eval(block),
             Function::Aggregator(v) => v.eval(block),
         }
     }
@@ -57,6 +62,7 @@ impl Function {
             Function::Variable(v) => v.result(),
             Function::Arithmetic(v) => v.result(),
             Function::Comparison(v) => v.result(),
+            Function::Logic(v) => v.result(),
             Function::Aggregator(v) => v.result(),
         }
     }
@@ -69,6 +75,7 @@ impl fmt::Debug for Function {
             Function::Variable(v) => write!(f, "{}", v),
             Function::Arithmetic(v) => write!(f, "{}", v),
             Function::Comparison(v) => write!(f, "{}", v),
+            Function::Logic(v) => write!(f, "{}", v),
             Function::Aggregator(v) => write!(f, "{}", v),
         }
     }

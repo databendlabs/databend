@@ -93,6 +93,32 @@ fn test_factory() -> crate::error::FuseQueryResult<()> {
             ),
             error: "",
         },
+        Test {
+            name: "and-function-passed",
+            fun: "and",
+            args: vec![field_a.clone(), field_b.clone()],
+            block: DataBlock::create(
+                schema.clone(),
+                vec![
+                    Arc::new(BooleanArray::from(vec![true])),
+                    Arc::new(BooleanArray::from(vec![true])),
+                ],
+            ),
+            error: "",
+        },
+        Test {
+            name: "or-function-passed",
+            fun: "or",
+            args: vec![field_a.clone(), field_b.clone()],
+            block: DataBlock::create(
+                schema.clone(),
+                vec![
+                    Arc::new(BooleanArray::from(vec![true])),
+                    Arc::new(BooleanArray::from(vec![true])),
+                ],
+            ),
+            error: "",
+        },
     ];
     for t in tests {
         let result = ScalarFunctionFactory::get(t.fun, &*t.args);
