@@ -1,5 +1,7 @@
 ignore-not-existing: true
 ignore:
-  - "lib.rs"
-  - "error.rs"
-  - "/bin/*"
+  - "*/lib.rs"
+  - "*/error.rs"
+  - "*/bin/*"
+  - "*/servers/*"
+  - "*/contexts/*"
