@@ -30,34 +30,26 @@ async fn test_transform_aggregate_sum() -> crate::error::FuseQueryResult<()> {
         for k in 0..2500000 {
             columns.push(i * 2500000 + k);
         }
-        let a = test_source.memory_table_source_transform_for_test(vec![columns]);
+        let a = test_source.memory_table_source_transform_for_test(vec![columns])?;
         pipeline.add_source(Arc::new(a))?;
     }
 
     pipeline.add_simple_transform(|| {
-        Box::new(
-            AggregatorTransform::create(
-                "sum",
-                Arc::new(ExpressionPlan::Field("sum".to_string())),
-                Arc::new(VariableFunction::create("c6").unwrap()),
-                &DataType::Int64,
-            )
-            .unwrap(),
-        )
+        Ok(Box::new(AggregatorTransform::try_create(
+            "sum",
+            Arc::new(ExpressionPlan::Field("sum".to_string())),
+            Box::new(VariableFunction::try_create("c6")?),
+        )?))
     })?;
 
     pipeline.merge_processor()?;
 
     pipeline.add_simple_transform(|| {
-        Box::new(
-            AggregatorTransform::create(
-                "sum",
-                Arc::new(ExpressionPlan::Field("sum".to_string())),
-                Arc::new(VariableFunction::create("sum").unwrap()),
-                &DataType::Int64,
-            )
-            .unwrap(),
-        )
+        Ok(Box::new(AggregatorTransform::try_create(
+            "sum",
+            Arc::new(ExpressionPlan::Field("sum".to_string())),
+            Box::new(VariableFunction::try_create("sum")?),
+        )?))
     })?;
 
     let mut stream = pipeline.execute().await?;
@@ -70,7 +62,7 @@ async fn test_transform_aggregate_sum() -> crate::error::FuseQueryResult<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_transform_aggregate_max() {
+async fn test_transform_aggregate_max() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
     use tokio::stream::StreamExt;
 
@@ -89,44 +81,33 @@ async fn test_transform_aggregate_max() {
         for k in 0..2500000 {
             columns.push(i * 2500000 + k);
         }
-        let a = test_source.memory_table_source_transform_for_test(vec![columns]);
-        pipeline.add_source(Arc::new(a)).unwrap();
+        let a = test_source.memory_table_source_transform_for_test(vec![columns])?;
+        pipeline.add_source(Arc::new(a))?;
     }
 
-    pipeline
-        .add_simple_transform(|| {
-            Box::new(
-                AggregatorTransform::create(
-                    "max",
-                    Arc::new(ExpressionPlan::Field("max".to_string())),
-                    Arc::new(VariableFunction::create("c6").unwrap()),
-                    &DataType::Int64,
-                )
-                .unwrap(),
-            )
-        })
-        .unwrap();
+    pipeline.add_simple_transform(|| {
+        Ok(Box::new(AggregatorTransform::try_create(
+            "max",
+            Arc::new(ExpressionPlan::Field("max".to_string())),
+            Box::new(VariableFunction::try_create("c6")?),
+        )?))
+    })?;
 
-    pipeline.merge_processor().unwrap();
+    pipeline.merge_processor()?;
 
-    pipeline
-        .add_simple_transform(|| {
-            Box::new(
-                AggregatorTransform::create(
-                    "max",
-                    Arc::new(ExpressionPlan::Field("max".to_string())),
-                    Arc::new(VariableFunction::create("max").unwrap()),
-                    &DataType::Int64,
-                )
-                .unwrap(),
-            )
-        })
-        .unwrap();
+    pipeline.add_simple_transform(|| {
+        Ok(Box::new(AggregatorTransform::try_create(
+            "max",
+            Arc::new(ExpressionPlan::Field("max".to_string())),
+            Box::new(VariableFunction::try_create("max")?),
+        )?))
+    })?;
 
     println!("{:?}", pipeline);
-    let mut stream = pipeline.execute().await.unwrap();
+    let mut stream = pipeline.execute().await?;
     let v = stream.next().await.unwrap().unwrap();
     let actual = v.column(0).as_any().downcast_ref::<Int64Array>().unwrap();
     let expect = &Int64Array::from(vec![9999999]);
     assert_eq!(expect.clone(), actual.clone());
+    Ok(())
 }

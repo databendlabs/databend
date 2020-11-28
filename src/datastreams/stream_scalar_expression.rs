@@ -10,23 +10,23 @@ use crate::datastreams::SendableDataBlockStream;
 use crate::error::FuseQueryResult;
 use crate::functions::Function;
 
-pub struct ExpressionStream {
+pub struct ScalarExpressionStream {
     input: SendableDataBlockStream,
-    expr: Option<Function>,
+    expr: Function,
     func: fn(DataBlock, Function) -> FuseQueryResult<DataBlock>,
 }
 
-impl ExpressionStream {
+impl ScalarExpressionStream {
     pub fn try_create(
         input: SendableDataBlockStream,
-        expr: Option<Function>,
+        expr: Function,
         func: fn(DataBlock, Function) -> FuseQueryResult<DataBlock>,
     ) -> FuseQueryResult<Self> {
-        Ok(ExpressionStream { input, expr, func })
+        Ok(ScalarExpressionStream { input, expr, func })
     }
 }
 
-impl Stream for ExpressionStream {
+impl Stream for ScalarExpressionStream {
     type Item = FuseQueryResult<DataBlock>;
 
     fn poll_next(
@@ -34,10 +34,7 @@ impl Stream for ExpressionStream {
         ctx: &mut Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         self.input.poll_next_unpin(ctx).map(|x| match x {
-            Some(Ok(v)) => Some(match &self.expr {
-                None => Ok(v),
-                Some(expr) => (self.func)(v, expr.clone()),
-            }),
+            Some(Ok(v)) => Some((self.func)(v, self.expr.clone())),
             other => other,
         })
     }

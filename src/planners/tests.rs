@@ -3,7 +3,7 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 #[test]
-fn test_sql_to_plan() {
+fn test_sql_to_plan() -> crate::error::FuseQueryResult<()> {
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::{env, fmt::Write};
@@ -32,7 +32,7 @@ fn test_sql_to_plan() {
         "{}/src/planners/tests/",
         env::current_dir().unwrap().display()
     );
-    let test_files = list_of_testdata_paths(test_path.as_str()).unwrap();
+    let test_files = list_of_testdata_paths(test_path.as_str())?;
 
     for file in test_files {
         let mut actual = "".to_string();
@@ -49,7 +49,7 @@ fn test_sql_to_plan() {
                 continue;
             }
 
-            let statements = DFParser::parse_sql(query).unwrap();
+            let statements = DFParser::parse_sql(query)?;
             let statement = &statements[0];
             let statement_str = format!("{:?}", statement);
 
@@ -59,13 +59,12 @@ fn test_sql_to_plan() {
 
             let schema = DataSchema::new(vec![DataField::new("a", DataType::Int64, false)]);
             let table = MemoryTable::create("t1", Arc::new(schema));
-            let datasource = get_datasource("memory://").unwrap();
-            datasource.lock().unwrap().add_database("default").unwrap();
+            let datasource = get_datasource("memory://")?;
+            datasource.lock()?.add_database("default")?;
             datasource
                 .lock()
                 .unwrap()
-                .add_table("default", Arc::new(table))
-                .unwrap();
+                .add_table("default", Arc::new(table))?;
 
             let ctx = FuseQueryContext::create_ctx(0, datasource);
             let plan = Planner::new().build(Arc::new(ctx), &statement);
@@ -88,4 +87,5 @@ fn test_sql_to_plan() {
             println!("{} [pass]", test_name);
         }
     }
+    Ok(())
 }

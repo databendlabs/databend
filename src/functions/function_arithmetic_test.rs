@@ -13,6 +13,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
+        evals: usize,
         args: Vec<Function>,
         display: &'static str,
         nullable: bool,
@@ -27,12 +28,13 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         DataField::new("b", DataType::Int64, false),
     ]));
 
-    let field_a = VariableFunction::create("a").unwrap();
-    let field_b = VariableFunction::create("b").unwrap();
+    let field_a = VariableFunction::try_create("a").unwrap();
+    let field_b = VariableFunction::try_create("b").unwrap();
 
     let tests = vec![
         Test {
             name: "add-int64-passed",
+            evals: 2,
             args: vec![field_a.clone(), field_b.clone()],
             display: "\"a\" + \"b\"",
             nullable: false,
@@ -49,6 +51,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "sub-int64-passed",
+            evals: 2,
             args: vec![field_a.clone(), field_b.clone()],
             display: "\"a\" - \"b\"",
             nullable: false,
@@ -65,6 +68,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "mul-int64-passed",
+            evals: 2,
             args: vec![field_a.clone(), field_b.clone()],
             display: "\"a\" * \"b\"",
             nullable: false,
@@ -81,6 +85,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "div-int64-passed",
+            evals: 2,
             args: vec![field_a.clone(), field_b.clone()],
             display: "\"a\" / \"b\"",
             nullable: false,
@@ -95,34 +100,61 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
             expect: Arc::new(Int64Array::from(vec![4, 1, 0])),
             error: "",
         },
+        Test {
+            name: "(sum(a)+1)-passed",
+            evals: 3,
+            args: vec![
+                ConstantFunction::try_create(DataValue::Int64(Some(1))).unwrap(),
+                AggregatorFunction::try_create(
+                    DataValueAggregateOperator::Sum,
+                    &[VariableFunction::try_create("a").unwrap()],
+                )
+                .unwrap(),
+            ],
+            display: "1 + Sum(\"a\")",
+            nullable: false,
+            op: DataValueArithmeticOperator::Add,
+            block: DataBlock::create(
+                schema.clone(),
+                vec![
+                    Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
+                ],
+            ),
+            expect: Arc::new(Int64Array::from(vec![31])),
+            error: "",
+        },
     ];
 
     for t in tests {
-        let func = ArithmeticFunction::create(t.op, &[t.args[0].clone(), t.args[1].clone()])?;
-        let result = func.evaluate(&t.block);
-        match result {
-            Ok(ref v) => {
-                // Display check.
-                let expect_display = t.display.to_string();
-                let actual_display = format!("{:?}", func);
-                assert_eq!(expect_display, actual_display);
+        let mut func =
+            ArithmeticFunction::try_create(t.op, &[t.args[0].clone(), t.args[1].clone()])?;
+        if let Err(e) = func.eval(&t.block) {
+            assert_eq!(t.error, e.to_string());
+        }
+        for _ in 1..t.evals {
+            func.eval(&t.block)?;
+        }
 
-                // Nullable check.
-                let expect_null = t.nullable;
-                let actual_null = func.nullable(t.block.schema())?;
-                assert_eq!(expect_null, actual_null);
+        // Display check.
+        let expect_display = t.display.to_string();
+        let actual_display = format!("{:?}", func);
+        assert_eq!(expect_display, actual_display);
 
-                // Type check.
-                let expect_type = func.return_type(t.block.schema())?.clone();
-                let actual_type = v.data_type().clone();
-                assert_eq!(expect_type, actual_type);
+        // Nullable check.
+        let expect_null = t.nullable;
+        let actual_null = func.nullable(t.block.schema())?;
+        assert_eq!(expect_null, actual_null);
 
-                if !v.to_array(0)?.equals(&*t.expect) {
-                    println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect, v);
-                    assert!(false);
-                }
-            }
-            Err(e) => assert_eq!(t.error, e.to_string()),
+        let ref v = func.result()?;
+        // Type check.
+        let expect_type = func.return_type(t.block.schema())?.clone();
+        let actual_type = v.data_type().clone();
+        assert_eq!(expect_type, actual_type);
+
+        if !v.to_array(0)?.equals(&*t.expect) {
+            println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect, v);
+            assert!(false);
         }
     }
     Ok(())

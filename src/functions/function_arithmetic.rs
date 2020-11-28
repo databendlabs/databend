@@ -8,7 +8,7 @@ use crate::datablocks::DataBlock;
 use crate::datavalues::{
     data_array_arithmetic_op, DataColumnarValue, DataSchema, DataType, DataValueArithmeticOperator,
 };
-use crate::error::FuseQueryResult;
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::Function;
 
 #[derive(Clone)]
@@ -16,14 +16,19 @@ pub struct ArithmeticFunction {
     op: DataValueArithmeticOperator,
     left: Box<Function>,
     right: Box<Function>,
+    saved: Option<DataColumnarValue>,
 }
 
 impl ArithmeticFunction {
-    pub fn create(op: DataValueArithmeticOperator, args: &[Function]) -> FuseQueryResult<Function> {
+    pub fn try_create(
+        op: DataValueArithmeticOperator,
+        args: &[Function],
+    ) -> FuseQueryResult<Function> {
         Ok(Function::Arithmetic(ArithmeticFunction {
             op,
             left: Box::from(args[0].clone()),
             right: Box::from(args[1].clone()),
+            saved: None,
         }))
     }
 
@@ -44,12 +49,21 @@ impl ArithmeticFunction {
         Ok(false)
     }
 
-    pub fn evaluate(&self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
-        Ok(DataColumnarValue::Array(data_array_arithmetic_op(
+    pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
+        self.left.eval(block)?;
+        self.right.eval(block)?;
+        self.saved = Some(DataColumnarValue::Array(data_array_arithmetic_op(
             self.op.clone(),
-            &self.left.evaluate(block)?,
-            &self.right.evaluate(block)?,
-        )?))
+            &self.left.result()?,
+            &self.right.result()?,
+        )?));
+        Ok(())
+    }
+
+    pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
+        self.saved
+            .clone()
+            .ok_or_else(|| FuseQueryError::Internal("Saved cannot none".to_string()))
     }
 }
 

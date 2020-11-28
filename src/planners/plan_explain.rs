@@ -11,11 +11,11 @@ use crate::planners::{FormatterSettings, PlanNode};
 
 #[derive(Clone)]
 pub struct ExplainPlan {
-    plan: PlanNode,
+    pub plan: PlanNode,
 }
 
 impl ExplainPlan {
-    pub fn build_plan(_ctx: Arc<FuseQueryContext>, plan: PlanNode) -> FuseQueryResult<PlanNode> {
+    pub fn try_create(_ctx: Arc<FuseQueryContext>, plan: PlanNode) -> FuseQueryResult<PlanNode> {
         Ok(PlanNode::Explain(Box::new(ExplainPlan { plan })))
     }
 

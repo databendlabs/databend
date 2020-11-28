@@ -13,6 +13,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
+        evals: usize,
         args: Vec<Function>,
         display: &'static str,
         nullable: bool,
@@ -27,19 +28,19 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
         DataField::new("b", DataType::Int64, false),
     ]));
 
-    let field_a = VariableFunction::create("a").unwrap();
-    let field_b = VariableFunction::create("b").unwrap();
+    let field_a = VariableFunction::try_create("a").unwrap();
+    let field_b = VariableFunction::try_create("b").unwrap();
 
     let tests = vec![
         Test {
             name: "count-passed",
+            evals: 2,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "CountAggregatorFunction",
+            display: "Count(\"a\")",
             nullable: false,
-            func: AggregatorFunction::create(
-                "count",
-                Arc::new(VariableFunction::create("a").unwrap()),
-                &DataType::UInt64,
+            func: AggregatorFunction::try_create(
+                DataValueAggregateOperator::Count,
+                &[VariableFunction::try_create("a").unwrap()],
             )
             .unwrap(),
             block: DataBlock::create(
@@ -49,18 +50,18 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
                     Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
-            expect: DataValue::UInt64(Some(4)),
+            expect: DataValue::UInt64(Some(8)),
             error: "",
         },
         Test {
             name: "max-passed",
+            evals: 2,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "MaxAggregatorFunction",
+            display: "Max(\"a\")",
             nullable: false,
-            func: AggregatorFunction::create(
-                "max",
-                Arc::new(VariableFunction::create("a").unwrap()),
-                &DataType::Int64,
+            func: AggregatorFunction::try_create(
+                DataValueAggregateOperator::Max,
+                &[VariableFunction::try_create("a").unwrap()],
             )
             .unwrap(),
             block: DataBlock::create(
@@ -75,13 +76,13 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "min-passed",
+            evals: 2,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "MinAggregatorFunction",
+            display: "Min(\"a\")",
             nullable: false,
-            func: AggregatorFunction::create(
-                "min",
-                Arc::new(VariableFunction::create("a").unwrap()),
-                &DataType::Int64,
+            func: AggregatorFunction::try_create(
+                DataValueAggregateOperator::Min,
+                &[VariableFunction::try_create("a").unwrap()],
             )
             .unwrap(),
             block: DataBlock::create(
@@ -96,13 +97,13 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "sum-passed",
+            evals: 2,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "SumAggregatorFunction",
+            display: "Sum(\"a\")",
             nullable: false,
-            func: AggregatorFunction::create(
-                "sum",
-                Arc::new(VariableFunction::create("a").unwrap()),
-                &DataType::Int64,
+            func: AggregatorFunction::try_create(
+                DataValueAggregateOperator::Sum,
+                &[VariableFunction::try_create("a").unwrap()],
             )
             .unwrap(),
             block: DataBlock::create(
@@ -112,34 +113,64 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
                     Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
-            expect: DataValue::Int64(Some(10)),
+            expect: DataValue::Int64(Some(20)),
+            error: "",
+        },
+        Test {
+            name: "sum(b+1)-passed",
+            evals: 1,
+            args: vec![field_a.clone(), field_b.clone()],
+            display: "Sum(\"b\" + 1)",
+            nullable: false,
+            func: AggregatorFunction::try_create(
+                DataValueAggregateOperator::Sum,
+                &[ArithmeticFunction::try_create(
+                    DataValueArithmeticOperator::Add,
+                    &[
+                        VariableFunction::try_create("b").unwrap(),
+                        ConstantFunction::try_create(DataValue::Int64(Some(1))).unwrap(),
+                    ],
+                )
+                .unwrap()],
+            )
+            .unwrap(),
+            block: DataBlock::create(
+                schema.clone(),
+                vec![
+                    Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
+                ],
+            ),
+            expect: DataValue::Int64(Some(14)),
             error: "",
         },
     ];
 
     for mut t in tests {
-        (t.func).accumulate(&t.block).unwrap();
-        let result = (t.func).aggregate();
-        match result {
-            Ok(ref v) => {
-                // Display check.
-                let expect_display = t.display.to_string();
-                let actual_display = format!("{:?}", (t.func));
-                assert_eq!(expect_display, actual_display);
+        if let Err(e) = (t.func).eval(&t.block) {
+            assert_eq!(t.error, e.to_string());
+        }
+        for _ in 1..t.evals {
+            (t.func).eval(&t.block)?;
+        }
 
-                // Nullable check.
-                let expect_null = t.nullable;
-                let actual_null = (t.func).nullable(t.block.schema())?;
-                assert_eq!(expect_null, actual_null);
+        // Display check.
+        let expect_display = t.display.to_string();
+        let actual_display = format!("{:?}", (t.func));
+        assert_eq!(expect_display, actual_display);
 
-                // Type check.
-                let expect_type = (t.func).return_type(t.block.schema())?;
-                let actual_type = v.data_type();
-                assert_eq!(expect_type, actual_type);
+        // Nullable check.
+        let expect_null = t.nullable;
+        let actual_null = (t.func).nullable(t.block.schema())?;
+        assert_eq!(expect_null, actual_null);
 
-                assert_eq!(&t.expect, v);
-            }
-            Err(e) => assert_eq!(t.error, e.to_string()),
+        if let DataColumnarValue::Scalar(ref v) = (t.func).result()? {
+            // Type check.
+            let expect_type = (t.func).return_type(t.block.schema())?;
+            let actual_type = v.data_type();
+            assert_eq!(expect_type, actual_type);
+
+            assert_eq!(&t.expect, v);
         }
     }
     Ok(())

@@ -18,15 +18,15 @@ pub struct LimitPlan {
 }
 
 impl LimitPlan {
-    pub fn build_plan(
+    pub fn try_create(
         ctx: Arc<FuseQueryContext>,
         limit: &Option<ast::Expr>,
     ) -> FuseQueryResult<PlanNode> {
         match limit {
             Some(ref expr) => {
-                let limit = match ExpressionPlan::build_plan(ctx, expr)? {
+                let limit = match ExpressionPlan::try_create(ctx, expr)? {
                     ExpressionPlan::Constant(DataValue::Int64(Some(n))) => Ok(n as usize),
-                    _ => Err(FuseQueryError::Unsupported(format!(
+                    _ => Err(FuseQueryError::Internal(format!(
                         "Unsupported LimitPlan Expr: {}",
                         expr
                     ))),

@@ -2,9 +2,9 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use std::sync::Arc;
-
-use crate::datavalues::{DataType, DataValueArithmeticOperator, DataValueComparisonOperator};
+use crate::datavalues::{
+    DataValueAggregateOperator, DataValueArithmeticOperator, DataValueComparisonOperator,
+};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::{AggregatorFunction, ArithmeticFunction, ComparisonFunction, Function};
 
@@ -12,32 +12,24 @@ pub struct ScalarFunctionFactory;
 
 impl ScalarFunctionFactory {
     pub fn get(name: &str, args: &[Function]) -> FuseQueryResult<Function> {
-        match name.to_uppercase().as_str() {
-            "+" => ArithmeticFunction::create(DataValueArithmeticOperator::Add, args),
-            "-" => ArithmeticFunction::create(DataValueArithmeticOperator::Sub, args),
-            "*" => ArithmeticFunction::create(DataValueArithmeticOperator::Mul, args),
-            "/" => ArithmeticFunction::create(DataValueArithmeticOperator::Div, args),
-            "=" => ComparisonFunction::create(DataValueComparisonOperator::Eq, args),
-            "<" => ComparisonFunction::create(DataValueComparisonOperator::Lt, args),
-            ">" => ComparisonFunction::create(DataValueComparisonOperator::Gt, args),
-            "<=" => ComparisonFunction::create(DataValueComparisonOperator::LtEq, args),
-            ">=" => ComparisonFunction::create(DataValueComparisonOperator::GtEq, args),
-            _ => Err(FuseQueryError::Unsupported(format!(
-                "Unsupported Scalar Function: {}",
+        match name.to_lowercase().as_str() {
+            "+" => ArithmeticFunction::try_create(DataValueArithmeticOperator::Add, args),
+            "-" => ArithmeticFunction::try_create(DataValueArithmeticOperator::Sub, args),
+            "*" => ArithmeticFunction::try_create(DataValueArithmeticOperator::Mul, args),
+            "/" => ArithmeticFunction::try_create(DataValueArithmeticOperator::Div, args),
+            "=" => ComparisonFunction::try_create(DataValueComparisonOperator::Eq, args),
+            "<" => ComparisonFunction::try_create(DataValueComparisonOperator::Lt, args),
+            ">" => ComparisonFunction::try_create(DataValueComparisonOperator::Gt, args),
+            "<=" => ComparisonFunction::try_create(DataValueComparisonOperator::LtEq, args),
+            ">=" => ComparisonFunction::try_create(DataValueComparisonOperator::GtEq, args),
+            "count" => AggregatorFunction::try_create(DataValueAggregateOperator::Count, args),
+            "min" => AggregatorFunction::try_create(DataValueAggregateOperator::Min, args),
+            "max" => AggregatorFunction::try_create(DataValueAggregateOperator::Max, args),
+            "sum" => AggregatorFunction::try_create(DataValueAggregateOperator::Sum, args),
+            _ => Err(FuseQueryError::Internal(format!(
+                "Unsupported Function: {}",
                 name
             ))),
         }
-    }
-}
-
-pub struct AggregateFunctionFactory;
-
-impl AggregateFunctionFactory {
-    pub fn get(
-        name: &str,
-        column: Arc<Function>,
-        data_type: &DataType,
-    ) -> FuseQueryResult<Function> {
-        AggregatorFunction::create(name, column, data_type)
     }
 }

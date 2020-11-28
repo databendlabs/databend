@@ -28,12 +28,12 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
         DataField::new("b", DataType::Int64, false),
     ]));
 
-    let field_a = VariableFunction::create("a").unwrap();
-    let field_b = VariableFunction::create("b").unwrap();
+    let field_a = VariableFunction::try_create("a").unwrap();
+    let field_b = VariableFunction::try_create("b").unwrap();
 
     let tests = vec![Test {
         name: "equal-passed",
-        func_name:"EqualFunction",
+        func_name: "EqualFunction",
         args: vec![field_a.clone(), field_b.clone()],
         display: "\"a\" = \"b\"",
         nullable: false,
@@ -50,35 +50,36 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
     }];
 
     for t in tests {
-        let func = ComparisonFunction::create(t.op, &[t.args[0].clone(), t.args[1].clone()])?;
-        let result = func.evaluate(&t.block);
-        match result {
-            Ok(ref v) => {
-                // Display check.
-                let expect_display = t.display.to_string();
-                let actual_display = format!("{:?}", func);
-                assert_eq!(expect_display, actual_display);
+        let mut func =
+            ComparisonFunction::try_create(t.op, &[t.args[0].clone(), t.args[1].clone()])?;
+        if let Err(e) = func.eval(&t.block) {
+            assert_eq!(t.error, e.to_string());
+        }
+        func.eval(&t.block)?;
 
-                // Nullable check.
-                let expect_null = t.nullable;
-                let actual_null = func.nullable(t.block.schema())?;
-                assert_eq!(expect_null, actual_null);
+        // Display check.
+        let expect_display = t.display.to_string();
+        let actual_display = format!("{:?}", func);
+        assert_eq!(expect_display, actual_display);
 
-                // Func name.
-                assert_eq!(func.name(), t.func_name);
+        // Nullable check.
+        let expect_null = t.nullable;
+        let actual_null = func.nullable(t.block.schema())?;
+        assert_eq!(expect_null, actual_null);
 
-                // Type check.
-                let expect_type = func.return_type(t.block.schema())?;
-                let actual_type = v.data_type();
-                assert_eq!(expect_type, actual_type);
+        // Func name.
+        assert_eq!(func.name(), t.func_name);
 
-                // Result check.
-                if !v.to_array(t.block.num_rows())?.equals(&*t.expect) {
-                    println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect, v);
-                    assert!(false);
-                }
-            }
-            Err(e) => assert_eq!(t.error, e.to_string()),
+        let ref v = func.result()?;
+        // Type check.
+        let expect_type = func.return_type(t.block.schema())?;
+        let actual_type = v.data_type();
+        assert_eq!(expect_type, actual_type);
+
+        // Result check.
+        if !v.to_array(t.block.num_rows())?.equals(&*t.expect) {
+            println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect, v);
+            assert!(false);
         }
     }
     Ok(())

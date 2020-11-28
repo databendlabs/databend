@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 
 use crate::datablocks::DataBlock;
-use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
+use crate::datastreams::{ScalarExpressionStream, SendableDataBlockStream};
 use crate::datavalues::BooleanArray;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::Function;
@@ -20,15 +20,16 @@ pub struct FilterTransform {
 }
 
 impl FilterTransform {
-    pub fn create(predicate: ExpressionPlan) -> Self {
-        FilterTransform {
+    pub fn try_create(predicate: ExpressionPlan) -> FuseQueryResult<Self> {
+        Ok(FilterTransform {
             predicate,
             input: Arc::new(EmptyProcessor::create()),
-        }
+        })
     }
 
-    pub fn expression_executor(block: DataBlock, func: Function) -> FuseQueryResult<DataBlock> {
-        let result = func.evaluate(&block)?.to_array(block.num_rows())?;
+    pub fn expression_executor(block: DataBlock, mut func: Function) -> FuseQueryResult<DataBlock> {
+        func.eval(&block)?;
+        let result = func.result()?.to_array(block.num_rows())?;
         let filter_array = result
             .as_any()
             .downcast_ref::<BooleanArray>()
@@ -53,9 +54,9 @@ impl IProcessor for FilterTransform {
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
-        Ok(Box::pin(ExpressionStream::try_create(
+        Ok(Box::pin(ScalarExpressionStream::try_create(
             self.input.execute().await?,
-            Some(self.predicate.to_function()?),
+            self.predicate.to_function()?,
             FilterTransform::expression_executor,
         )?))
     }

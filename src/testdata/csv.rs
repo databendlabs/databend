@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use crate::contexts::FuseQueryContext;
 use crate::datasources::{CsvTable, IDataSource, Partition};
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType};
+use crate::error::FuseQueryResult;
 use crate::transforms::SourceTransform;
 
 pub struct CsvTestData {
@@ -94,10 +95,10 @@ impl CsvTestData {
         datasource
     }
 
-    pub fn csv_table_source_transform_for_test(&self) -> SourceTransform {
+    pub fn csv_table_source_transform_for_test(&self) -> FuseQueryResult<SourceTransform> {
         let ctx = FuseQueryContext::create_ctx(0, self.csv_table_datasource_for_test());
-        SourceTransform::create(
-            ctx,
+        SourceTransform::try_create(
+            Arc::new(ctx),
             self.db,
             self.table,
             self.csv_table_partitions_for_test(),

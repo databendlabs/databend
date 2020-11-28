@@ -9,41 +9,37 @@ use tokio::stream::StreamExt;
 
 use crate::datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::datavalues::{DataField, DataSchema, DataType};
+use crate::datavalues::{DataField, DataSchema};
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::functions::{AggregateFunctionFactory, Function};
+use crate::functions::{Function, ScalarFunctionFactory};
 use crate::planners::ExpressionPlan;
 use crate::processors::{EmptyProcessor, IProcessor};
 
 pub struct CountTransform {
     name: &'static str,
     expr: Arc<ExpressionPlan>,
-    column: Arc<Function>,
-    data_type: DataType,
+    column: Box<Function>,
     input: Arc<dyn IProcessor>,
 }
 
 pub struct MinTransform {
     name: &'static str,
     expr: Arc<ExpressionPlan>,
-    column: Arc<Function>,
-    data_type: DataType,
+    column: Box<Function>,
     input: Arc<dyn IProcessor>,
 }
 
 pub struct MaxTransform {
     name: &'static str,
     expr: Arc<ExpressionPlan>,
-    column: Arc<Function>,
-    data_type: DataType,
+    column: Box<Function>,
     input: Arc<dyn IProcessor>,
 }
 
 pub struct SumTransform {
     name: &'static str,
     expr: Arc<ExpressionPlan>,
-    column: Arc<Function>,
-    data_type: DataType,
+    column: Box<Function>,
     input: Arc<dyn IProcessor>,
 }
 
@@ -55,44 +51,39 @@ pub enum AggregatorTransform {
 }
 
 impl AggregatorTransform {
-    pub fn create(
+    pub fn try_create(
         name: &str,
         expr: Arc<ExpressionPlan>,
-        column: Arc<Function>,
-        data_type: &DataType,
+        column: Box<Function>,
     ) -> FuseQueryResult<AggregatorTransform> {
         Ok(match name.to_lowercase().as_str() {
             "count" => AggregatorTransform::Count(CountTransform {
                 name: "CountTransform",
                 expr,
                 column,
-                data_type: DataType::UInt64,
                 input: Arc::new(EmptyProcessor::create()),
             }),
             "min" => AggregatorTransform::Min(MinTransform {
                 name: "MinTransform",
                 expr,
                 column,
-                data_type: data_type.clone(),
                 input: Arc::new(EmptyProcessor::create()),
             }),
             "max" => AggregatorTransform::Max(MaxTransform {
                 name: "MaxTransform",
                 expr,
                 column,
-                data_type: data_type.clone(),
                 input: Arc::new(EmptyProcessor::create()),
             }),
             "sum" => AggregatorTransform::Sum(SumTransform {
                 name: "SumTransform",
                 expr,
                 column,
-                data_type: data_type.clone(),
                 input: Arc::new(EmptyProcessor::create()),
             }),
 
             _ => {
-                return Err(FuseQueryError::Unsupported(format!(
+                return Err(FuseQueryError::Internal(format!(
                     "Unsupported aggregators transform: {:?}",
                     name
                 )))
@@ -125,28 +116,28 @@ impl IProcessor for AggregatorTransform {
         let (expr, mut func, mut exec) = match self {
             AggregatorTransform::Count(v) => (
                 v.expr.clone(),
-                AggregateFunctionFactory::get("count", v.column.clone(), &v.data_type)?,
+                ScalarFunctionFactory::get("count", &[v.column.as_ref().clone()])?,
                 v.input.execute().await?,
             ),
             AggregatorTransform::Min(v) => (
                 v.expr.clone(),
-                AggregateFunctionFactory::get("min", v.column.clone(), &v.data_type)?,
+                ScalarFunctionFactory::get("min", &[v.column.as_ref().clone()])?,
                 v.input.execute().await?,
             ),
             AggregatorTransform::Max(v) => (
                 v.expr.clone(),
-                AggregateFunctionFactory::get("max", v.column.clone(), &v.data_type)?,
+                ScalarFunctionFactory::get("max", &[v.column.as_ref().clone()])?,
                 v.input.execute().await?,
             ),
             AggregatorTransform::Sum(v) => (
                 v.expr.clone(),
-                AggregateFunctionFactory::get("sum", v.column.clone(), &v.data_type)?,
+                ScalarFunctionFactory::get("sum", &[v.column.as_ref().clone()])?,
                 v.input.execute().await?,
             ),
         };
 
         while let Some(v) = exec.next().await {
-            func.accumulate(&v?)?;
+            func.eval(&v?)?;
         }
 
         Ok(Box::pin(DataBlockStream::create(
@@ -158,7 +149,7 @@ impl IProcessor for AggregatorTransform {
                     func.return_type(&DataSchema::empty())?,
                     false,
                 )])),
-                vec![func.aggregate()?.to_array(1)?],
+                vec![func.result()?.to_array(1)?],
             )],
         )))
     }

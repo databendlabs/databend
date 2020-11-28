@@ -6,18 +6,20 @@ use std::fmt;
 
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataColumnarValue, DataSchema, DataType};
-use crate::error::FuseQueryResult;
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::Function;
 
 #[derive(Clone, Debug)]
 pub struct VariableFunction {
     value: String,
+    saved: Option<DataColumnarValue>,
 }
 
 impl VariableFunction {
-    pub fn create(value: &str) -> FuseQueryResult<Function> {
+    pub fn try_create(value: &str) -> FuseQueryResult<Function> {
         Ok(Function::Variable(VariableFunction {
             value: value.to_string(),
+            saved: None,
         }))
     }
 
@@ -36,10 +38,17 @@ impl VariableFunction {
         Ok(input_schema.field_with_name(&self.value)?.is_nullable())
     }
 
-    pub fn evaluate(&self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
-        Ok(DataColumnarValue::Array(
+    pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
+        self.saved = Some(DataColumnarValue::Array(
             block.column_by_name(self.value.as_str())?.clone(),
-        ))
+        ));
+        Ok(())
+    }
+
+    pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
+        self.saved
+            .clone()
+            .ok_or_else(|| FuseQueryError::Internal("Saved cannot none".to_string()))
     }
 }
 

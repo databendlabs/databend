@@ -8,7 +8,7 @@ use crate::datablocks::DataBlock;
 use crate::datavalues::{
     data_array_comparison_op, DataColumnarValue, DataSchema, DataType, DataValueComparisonOperator,
 };
-use crate::error::FuseQueryResult;
+use crate::error::{FuseQueryError, FuseQueryResult};
 
 use crate::functions::Function;
 
@@ -17,14 +17,19 @@ pub struct ComparisonFunction {
     op: DataValueComparisonOperator,
     left: Box<Function>,
     right: Box<Function>,
+    saved: Option<DataColumnarValue>,
 }
 
 impl ComparisonFunction {
-    pub fn create(op: DataValueComparisonOperator, args: &[Function]) -> FuseQueryResult<Function> {
+    pub fn try_create(
+        op: DataValueComparisonOperator,
+        args: &[Function],
+    ) -> FuseQueryResult<Function> {
         Ok(Function::Comparison(ComparisonFunction {
             op,
             left: Box::from(args[0].clone()),
             right: Box::from(args[1].clone()),
+            saved: None,
         }))
     }
 
@@ -46,12 +51,21 @@ impl ComparisonFunction {
         Ok(false)
     }
 
-    pub fn evaluate(&self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
-        Ok(DataColumnarValue::Array(data_array_comparison_op(
+    pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
+        self.left.eval(block)?;
+        self.right.eval(block)?;
+        self.saved = Some(DataColumnarValue::Array(data_array_comparison_op(
             self.op.clone(),
-            &self.left.evaluate(block)?,
-            &self.right.evaluate(block)?,
-        )?))
+            &self.left.result()?,
+            &self.right.result()?,
+        )?));
+        Ok(())
+    }
+
+    pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
+        self.saved
+            .clone()
+            .ok_or_else(|| FuseQueryError::Internal("Saved cannot none".to_string()))
     }
 }
 

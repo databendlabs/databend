@@ -17,7 +17,7 @@ pub struct ScanPlan {
 }
 
 impl ScanPlan {
-    pub fn build_plan(
+    pub fn try_create(
         _ctx: Arc<FuseQueryContext>,
         from: &[ast::TableWithJoins],
     ) -> FuseQueryResult<PlanNode> {
@@ -34,7 +34,7 @@ impl ScanPlan {
                 description: "".to_string(),
                 table_name: name.to_string(),
             })),
-            _ => Err(FuseQueryError::Unsupported(format!(
+            _ => Err(FuseQueryError::Internal(format!(
                 "Unsupported ScanPlan from: {}",
                 relation
             ))),

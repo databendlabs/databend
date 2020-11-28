@@ -13,7 +13,6 @@ fn test_factory() -> crate::error::FuseQueryResult<()> {
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
-        is_aggregate: bool,
         fun: &'static str,
         args: Vec<Function>,
         block: DataBlock,
@@ -25,13 +24,12 @@ fn test_factory() -> crate::error::FuseQueryResult<()> {
         DataField::new("b", DataType::Int64, false),
     ]));
 
-    let field_a = VariableFunction::create("a").unwrap();
-    let field_b = VariableFunction::create("b").unwrap();
+    let field_a = VariableFunction::try_create("a").unwrap();
+    let field_b = VariableFunction::try_create("b").unwrap();
 
     let tests = vec![
         Test {
             name: "add-function-passed",
-            is_aggregate: false,
             fun: "+",
             args: vec![field_a.clone(), field_b.clone()],
             block: DataBlock::create(
@@ -45,7 +43,6 @@ fn test_factory() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "sub-function-passed",
-            is_aggregate: false,
             fun: "-",
             args: vec![field_a.clone(), field_b.clone()],
             block: DataBlock::create(
@@ -59,7 +56,6 @@ fn test_factory() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "mul-function-passed",
-            is_aggregate: false,
             fun: "*",
             args: vec![field_a.clone(), field_b.clone()],
             block: DataBlock::create(
@@ -73,7 +69,6 @@ fn test_factory() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "div-function-passed",
-            is_aggregate: false,
             fun: "/",
             args: vec![field_a.clone(), field_b.clone()],
             block: DataBlock::create(
@@ -87,7 +82,6 @@ fn test_factory() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "count-function-passed",
-            is_aggregate: true,
             fun: "count",
             args: vec![field_a.clone(), field_b.clone()],
             block: DataBlock::create(
@@ -101,22 +95,10 @@ fn test_factory() -> crate::error::FuseQueryResult<()> {
         },
     ];
     for t in tests {
-        if !t.is_aggregate {
-            let result = ScalarFunctionFactory::get(t.fun, &*t.args);
-            match result {
-                Ok(_) => {}
-                Err(e) => assert_eq!(t.error, e.to_string()),
-            }
-        } else {
-            let result = AggregateFunctionFactory::get(
-                t.fun,
-                Arc::new(VariableFunction::create("a")?),
-                &DataType::Int64,
-            );
-            match result {
-                Ok(_) => {}
-                Err(e) => assert_eq!(t.error, e.to_string()),
-            }
+        let result = ScalarFunctionFactory::get(t.fun, &*t.args);
+        match result {
+            Ok(_) => {}
+            Err(e) => assert_eq!(t.error, e.to_string()),
         }
     }
     Ok(())

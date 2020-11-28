@@ -7,18 +7,22 @@ use std::sync::Arc;
 
 use crate::contexts::FuseQueryContext;
 use crate::datastreams::SendableDataBlockStream;
-use crate::error::{FuseQueryError, FuseQueryResult};
+use crate::error::FuseQueryResult;
 use crate::executors::IExecutor;
-use crate::planners::SelectPlan;
+use crate::planners::{PlanNode, SelectPlan};
+use crate::processors::PipelineBuilder;
 
-pub struct SelectExecutor {}
+pub struct SelectExecutor {
+    ctx: Arc<FuseQueryContext>,
+    plan: SelectPlan,
+}
 
 impl SelectExecutor {
     pub fn try_create(
-        _ctx: Arc<FuseQueryContext>,
-        _plan: SelectPlan,
+        ctx: Arc<FuseQueryContext>,
+        plan: SelectPlan,
     ) -> FuseQueryResult<Arc<dyn IExecutor>> {
-        Ok(Arc::new(SelectExecutor {}))
+        Ok(Arc::new(SelectExecutor { ctx, plan }))
     }
 }
 
@@ -29,8 +33,9 @@ impl IExecutor for SelectExecutor {
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
-        Err(FuseQueryError::Unsupported(
-            "Unsupported select executor".to_string(),
-        ))
+        PipelineBuilder::create(self.ctx.clone(), PlanNode::Select(self.plan.clone()))
+            .build()?
+            .execute()
+            .await
     }
 }

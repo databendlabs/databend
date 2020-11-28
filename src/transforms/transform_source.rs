@@ -12,25 +12,25 @@ use crate::error::FuseQueryResult;
 use crate::processors::IProcessor;
 
 pub struct SourceTransform {
-    ctx: FuseQueryContext,
+    ctx: Arc<FuseQueryContext>,
     db: String,
     table: String,
     partitions: Vec<Partition>,
 }
 
 impl SourceTransform {
-    pub fn create(
-        ctx: FuseQueryContext,
+    pub fn try_create(
+        ctx: Arc<FuseQueryContext>,
         db: &str,
         table: &str,
         partitions: Vec<Partition>,
-    ) -> Self {
-        SourceTransform {
+    ) -> FuseQueryResult<Self> {
+        Ok(SourceTransform {
             ctx,
             db: db.to_string(),
             table: table.to_string(),
             partitions,
-        }
+        })
     }
 }
 

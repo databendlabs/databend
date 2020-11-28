@@ -40,24 +40,26 @@ async fn pipeline_filter_executor(typ: TableType, parts: i64) -> FuseQueryResult
                 for k in 0..step {
                     columns.push(i * step + k);
                 }
-                let source = memory_source.memory_table_source_transform_for_test(vec![columns]);
+                let source = memory_source.memory_table_source_transform_for_test(vec![columns])?;
                 pipeline.add_source(Arc::new(source))?;
             }
         }
         TableType::Csv => {
             let csv_source = fuse_query::testdata::CsvTestData::create();
-            let source = csv_source.csv_table_source_transform_for_test();
+            let source = csv_source.csv_table_source_transform_for_test()?;
             pipeline.add_source(Arc::new(source))?;
         }
     }
 
     // Add one transform.
     pipeline.add_simple_transform(|| {
-        Box::new(FilterTransform::create(ExpressionPlan::BinaryExpression {
-            left: Box::from(ExpressionPlan::Field("c6".to_string())),
-            op: "=".to_string(),
-            right: Box::from(ExpressionPlan::Constant(DataValue::Int64(Some(10000i64)))),
-        }))
+        Ok(Box::new(FilterTransform::try_create(
+            ExpressionPlan::BinaryExpression {
+                left: Box::from(ExpressionPlan::Field("c6".to_string())),
+                op: "=".to_string(),
+                right: Box::from(ExpressionPlan::Constant(DataValue::Int64(Some(10000i64)))),
+            },
+        )?))
     })?;
 
     pipeline.merge_processor()?;

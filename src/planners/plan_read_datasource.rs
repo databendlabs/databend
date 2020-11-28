@@ -7,18 +7,21 @@ use std::sync::Arc;
 
 use crate::contexts::FuseQueryContext;
 use crate::datasources::Partitions;
+use crate::datavalues::DataSchemaRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{FormatterSettings, PlanNode};
 
 #[derive(Clone)]
 pub struct ReadDataSourcePlan {
-    pub(crate) description: String,
-    pub(crate) table_type: &'static str,
+    pub table: String,
+    pub table_type: &'static str,
+    pub schema: DataSchemaRef,
     pub partitions: Partitions,
+    pub description: String,
 }
 
 impl ReadDataSourcePlan {
-    pub fn build_plan(
+    pub fn try_create(
         ctx: Arc<FuseQueryContext>,
         scan: &PlanNode,
         pushdowns: Vec<PlanNode>,
@@ -29,7 +32,7 @@ impl ReadDataSourcePlan {
                 Ok(PlanNode::ReadSource(table.read_plan(pushdowns)?))
             }
 
-            _ => Err(FuseQueryError::Unsupported(format!(
+            _ => Err(FuseQueryError::Internal(format!(
                 "Expected ScanPlan, but got: {:?}",
                 scan
             ))),

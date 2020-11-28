@@ -15,7 +15,7 @@ pub struct ConstantFunction {
 }
 
 impl ConstantFunction {
-    pub fn create(value: DataValue) -> FuseQueryResult<Function> {
+    pub fn try_create(value: DataValue) -> FuseQueryResult<Function> {
         Ok(Function::Constant(ConstantFunction { value }))
     }
 
@@ -31,7 +31,11 @@ impl ConstantFunction {
         Ok(self.value.is_null())
     }
 
-    pub fn evaluate(&self, _block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
+    pub fn eval(&self, _block: &DataBlock) -> FuseQueryResult<()> {
+        Ok(())
+    }
+
+    pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
         Ok(DataColumnarValue::Scalar(self.value.clone()))
     }
 }

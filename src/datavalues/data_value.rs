@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::datavalues::{
     BooleanArray, Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, Int8Array,
-    StringArray, UInt16Array, UInt32Array, UInt64Array, UInt8Array,
+    NullArray, StringArray, UInt16Array, UInt32Array, UInt64Array, UInt8Array,
 };
 
 use crate::datavalues::{DataArrayRef, DataType};
@@ -17,6 +17,7 @@ use crate::error::{FuseQueryError, FuseQueryResult};
 /// A specific value of a data type.
 #[derive(Clone, PartialEq)]
 pub enum DataValue {
+    Null,
     Boolean(Option<bool>),
     Int8(Option<i8>),
     Int16(Option<i16>),
@@ -54,6 +55,7 @@ impl DataValue {
 
     pub fn data_type(&self) -> DataType {
         match self {
+            DataValue::Null => (DataType::Null),
             DataValue::Boolean(_) => (DataType::Boolean),
             DataValue::Int8(_) => (DataType::Int8),
             DataValue::Int16(_) => (DataType::Int16),
@@ -71,6 +73,7 @@ impl DataValue {
 
     pub fn to_array(&self, size: usize) -> FuseQueryResult<DataArrayRef> {
         match self {
+            DataValue::Null => Ok(Arc::new(NullArray::new(size))),
             DataValue::Boolean(v) => {
                 Ok(Arc::new(BooleanArray::from(vec![*v; size])) as DataArrayRef)
             }
@@ -110,6 +113,7 @@ impl TryFrom<&DataType> for DataValue {
 
     fn try_from(data_type: &DataType) -> FuseQueryResult<Self> {
         Ok(match data_type {
+            DataType::Null => (DataValue::Null),
             DataType::Boolean => (DataValue::Boolean(None)),
             DataType::Int8 => (DataValue::Int8(None)),
             DataType::Int16 => (DataValue::Int16(None)),
@@ -122,7 +126,7 @@ impl TryFrom<&DataType> for DataValue {
             DataType::Float32 => (DataValue::Float32(None)),
             DataType::Float64 => (DataValue::Float64(None)),
             _ => {
-                return Err(FuseQueryError::Unsupported(format!(
+                return Err(FuseQueryError::Internal(format!(
                     "Unsupported try_from() for data type: {:?}",
                     data_type
                 )))
@@ -134,6 +138,7 @@ impl TryFrom<&DataType> for DataValue {
 impl fmt::Display for DataValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            DataValue::Null => write!(f, "Null"),
             DataValue::Boolean(v) => format_data_value_with_option!(f, v),
             DataValue::Float32(v) => format_data_value_with_option!(f, v),
             DataValue::Float64(v) => format_data_value_with_option!(f, v),
@@ -153,6 +158,7 @@ impl fmt::Display for DataValue {
 impl fmt::Debug for DataValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            DataValue::Null => write!(f, "Null"),
             DataValue::Boolean(v) => format_data_value_with_option!(f, v),
             DataValue::Int8(v) => format_data_value_with_option!(f, v),
             DataValue::Int16(v) => format_data_value_with_option!(f, v),

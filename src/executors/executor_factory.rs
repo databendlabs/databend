@@ -16,7 +16,7 @@ impl ExecutorFactory {
         match plan {
             PlanNode::Select(v) => SelectExecutor::try_create(ctx, v),
             PlanNode::Explain(v) => ExplainExecutor::try_create(ctx, v.as_ref().clone()),
-            _ => Err(FuseQueryError::Unsupported(format!(
+            _ => Err(FuseQueryError::Internal(format!(
                 "Can't get the executor by plan:{}",
                 plan.name()
             ))),

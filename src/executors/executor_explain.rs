@@ -13,17 +13,19 @@ use crate::datavalues::{DataField, DataSchema, DataType, StringArray};
 use crate::error::FuseQueryResult;
 use crate::executors::IExecutor;
 use crate::planners::ExplainPlan;
+use crate::processors::PipelineBuilder;
 
 pub struct ExplainExecutor {
-    plan: ExplainPlan,
+    ctx: Arc<FuseQueryContext>,
+    explain: ExplainPlan,
 }
 
 impl ExplainExecutor {
     pub fn try_create(
-        _ctx: Arc<FuseQueryContext>,
-        plan: ExplainPlan,
+        ctx: Arc<FuseQueryContext>,
+        explain: ExplainPlan,
     ) -> FuseQueryResult<Arc<dyn IExecutor>> {
-        Ok(Arc::new(ExplainExecutor { plan }))
+        Ok(Arc::new(ExplainExecutor { ctx, explain }))
     }
 }
 
@@ -40,13 +42,15 @@ impl IExecutor for ExplainExecutor {
             false,
         )]));
 
+        let pipeline =
+            PipelineBuilder::create(self.ctx.clone(), self.explain.plan.clone()).build()?;
+
         let block = DataBlock::create(
             schema.clone(),
-            vec![Arc::new(StringArray::from(vec![format!(
-                "{:?}",
-                self.plan
-            )
-            .as_str()]))],
+            vec![Arc::new(StringArray::from(vec![
+                format!("{:?}", self.explain).as_str(),
+                format!("{:?}", pipeline).as_str(),
+            ]))],
         );
         debug!("Explain executor result: {:?}", block);
 

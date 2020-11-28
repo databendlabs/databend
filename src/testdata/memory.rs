@@ -8,6 +8,7 @@ use crate::contexts::FuseQueryContext;
 use crate::datablocks::DataBlock;
 use crate::datasources::{IDataSource, MemoryTable, Partition};
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, Int64Array};
+use crate::error::FuseQueryResult;
 use crate::transforms::SourceTransform;
 
 pub struct MemoryTestData {
@@ -73,11 +74,14 @@ impl MemoryTestData {
         datasource
     }
 
-    pub fn memory_table_source_transform_for_test(&self, datas: Vec<Vec<i64>>) -> SourceTransform {
+    pub fn memory_table_source_transform_for_test(
+        &self,
+        datas: Vec<Vec<i64>>,
+    ) -> FuseQueryResult<SourceTransform> {
         let ctx =
             FuseQueryContext::create_ctx(0, self.memory_table_datasource_for_test(datas.clone()));
-        SourceTransform::create(
-            ctx,
+        SourceTransform::try_create(
+            Arc::new(ctx),
             self.db,
             self.table,
             self.memory_table_partitions_for_test(datas),

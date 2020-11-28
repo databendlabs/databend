@@ -46,16 +46,21 @@ $make run
 ```
 $mysql -h127.0.0.1 -P3307
 mysql> explain select a1 from t1 where a > 10 and b < 5 limit 10;
+
 +----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | explain                                                                                                                                                                                            |
 +----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| └─ Projection: a1
+ └─ Projection: a1
   └─ Limit: 10 (preliminary LIMIT)
     └─ Filter: a > 10 AND b < 5 (WHERE)
       └─ Scan: t1
-        └─ ReadDataSource: scan parts [4] (Read from CSV table)                     |
+        └─ ReadDataSource: scan parts [4] (Read from CSV table)                     
+ 
+  └─ Merge (FilterTransform × 4 processors) to (MergeProcessor × 1)
+    └─ FilterTransform × 4 processors
+      └─ SourceTransform × 4 processors                                                 
 +----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-1 row in set (0.00 sec)
+2 rows in set (0.01 sec)
 ```
 
 ## How to Test?

@@ -5,8 +5,8 @@
 use std::fmt;
 
 use crate::datablocks::DataBlock;
-use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
-use crate::error::{FuseQueryError, FuseQueryResult};
+use crate::datavalues::{DataColumnarValue, DataSchema, DataType};
+use crate::error::FuseQueryResult;
 use crate::functions::{
     AggregatorFunction, ArithmeticFunction, ComparisonFunction, ConstantFunction, VariableFunction,
 };
@@ -51,36 +51,23 @@ impl Function {
         }
     }
 
-    pub fn evaluate(&self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
+    pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
         match self {
-            Function::Constant(v) => v.evaluate(block),
-            Function::Variable(v) => v.evaluate(block),
-            Function::Arithmetic(v) => v.evaluate(block),
-            Function::Comparison(v) => v.evaluate(block),
-            _ => Err(FuseQueryError::Unsupported(format!(
-                "Unsupported evaluate() for function {}",
-                self.name()
-            ))),
+            Function::Constant(v) => v.eval(block),
+            Function::Variable(v) => v.eval(block),
+            Function::Arithmetic(v) => v.eval(block),
+            Function::Comparison(v) => v.eval(block),
+            Function::Aggregator(v) => v.eval(block),
         }
     }
 
-    pub fn accumulate(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
+    pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
         match self {
-            Function::Aggregator(ref mut v) => v.accumulate(block),
-            _ => Err(FuseQueryError::Unsupported(format!(
-                "Unsupported accumulate() for function {}",
-                self.name()
-            ))),
-        }
-    }
-
-    pub fn aggregate(&self) -> FuseQueryResult<DataValue> {
-        match self {
-            Function::Aggregator(v) => v.aggregate(),
-            _ => Err(FuseQueryError::Unsupported(format!(
-                "Unsupported aggregators() for function {}",
-                self.name()
-            ))),
+            Function::Constant(v) => v.result(),
+            Function::Variable(v) => v.result(),
+            Function::Arithmetic(v) => v.result(),
+            Function::Comparison(v) => v.result(),
+            Function::Aggregator(v) => v.result(),
         }
     }
 }

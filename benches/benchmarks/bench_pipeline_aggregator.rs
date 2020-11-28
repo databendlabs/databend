@@ -6,7 +6,6 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use std::sync::Arc;
 use tokio::stream::StreamExt;
 
-use fuse_query::datavalues::DataType;
 use fuse_query::error::FuseQueryResult;
 use fuse_query::functions::VariableFunction;
 use fuse_query::planners::ExpressionPlan;
@@ -47,32 +46,26 @@ async fn pipeline_aggregator_executor(
                 for k in 0..step {
                     columns.push(i * step + k);
                 }
-                let source = memory_source.memory_table_source_transform_for_test(vec![columns]);
+                let source = memory_source.memory_table_source_transform_for_test(vec![columns])?;
                 pipeline.add_source(Arc::new(source))?;
             }
         }
         TableType::Csv => {
             let csv_source = fuse_query::testdata::CsvTestData::create();
-            let source = csv_source.csv_table_source_transform_for_test();
+            let source = csv_source.csv_table_source_transform_for_test()?;
             pipeline.add_source(Arc::new(source))?;
         }
     }
 
     // Expand processor.
     if expand {
-        pipeline
-            .add_simple_transform(|| {
-                Box::new(
-                    AggregatorTransform::create(
-                        transform,
-                        Arc::new(ExpressionPlan::Field(transform.to_string())),
-                        Arc::new(VariableFunction::create(column).unwrap()),
-                        &DataType::Int64,
-                    )
-                    .unwrap(),
-                )
-            })
-            .unwrap();
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(AggregatorTransform::try_create(
+                transform,
+                Arc::new(ExpressionPlan::Field(transform.to_string())),
+                Box::new(VariableFunction::try_create(column)?),
+            )?))
+        })?;
         column = transform;
     }
 
@@ -81,15 +74,11 @@ async fn pipeline_aggregator_executor(
 
     // Add one transform.
     pipeline.add_simple_transform(|| {
-        Box::new(
-            AggregatorTransform::create(
-                transform,
-                Arc::new(ExpressionPlan::Field(transform.to_string())),
-                Arc::new(VariableFunction::create(column).unwrap()),
-                &DataType::Int64,
-            )
-            .unwrap(),
-        )
+        Ok(Box::new(AggregatorTransform::try_create(
+            transform,
+            Arc::new(ExpressionPlan::Field(transform.to_string())),
+            Box::new(VariableFunction::try_create(column)?),
+        )?))
     })?;
 
     let mut stream = pipeline.execute().await?;

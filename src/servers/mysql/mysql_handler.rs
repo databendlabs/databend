@@ -2,7 +2,8 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use log::debug;
+use log::{debug, error};
+
 use msql_srv::*;
 use std::sync::{Arc, Mutex};
 use std::{io, net, thread};
@@ -71,15 +72,20 @@ impl<W: io::Write> MysqlShim<W> for Session {
                             let stream = MySQLStream::create(blocks);
                             stream.execute(writer)?;
                         }
-                        Err(e) => writer
-                            .error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?,
+                        Err(e) => {
+                            error!("{}", e);
+                            writer
+                                .error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?
+                        }
                     }
                 }
                 Err(e) => {
+                    error!("{}", e);
                     writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?
                 }
             },
             Err(e) => {
+                error!("{}", e);
                 writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?;
             }
         }

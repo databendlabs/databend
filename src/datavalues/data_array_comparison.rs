@@ -49,8 +49,8 @@ pub fn data_array_comparison_op(
             }
         },
 
-        _ => Err(FuseQueryError::Unsupported(format!(
-            "cannot do data_array {}, left:{:?}, right:{:?}",
+        _ => Err(FuseQueryError::Internal(format!(
+            "Cannot do data_array {}, left:{:?}, right:{:?}",
             op,
             left.data_type(),
             right.data_type()

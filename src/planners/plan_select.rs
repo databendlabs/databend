@@ -19,35 +19,34 @@ pub struct SelectPlan {
 }
 
 impl SelectPlan {
-    pub fn build_plan(ctx: Arc<FuseQueryContext>, query: &ast::Query) -> FuseQueryResult<PlanNode> {
+    pub fn try_create(ctx: Arc<FuseQueryContext>, query: &ast::Query) -> FuseQueryResult<PlanNode> {
         let mut builder = PlanBuilder::default();
 
         match &query.body {
             ast::SetExpr::Select(sel) => {
-                let project = ProjectionPlan::build_plan(ctx.clone(), &sel.projection)?;
+                let project = ProjectionPlan::try_create(ctx.clone(), &sel.projection)?;
                 builder.add(project);
 
-                let mut limit = LimitPlan::build_plan(ctx.clone(), &query.limit)?;
+                let mut limit = LimitPlan::try_create(ctx.clone(), &query.limit)?;
                 limit.set_description("preliminary LIMIT");
                 builder.add(limit);
 
-                let mut filter = FilterPlan::build_plan(ctx.clone(), &sel.selection)?;
+                let mut filter = FilterPlan::try_create(ctx.clone(), &sel.selection)?;
                 filter.set_description("WHERE");
                 builder.add(filter);
 
-                let scan = ScanPlan::build_plan(ctx.clone(), &sel.from)?;
-                let scan_ref = &scan;
+                let scan = ScanPlan::try_create(ctx.clone(), &sel.from)?;
                 builder.add(scan.clone());
 
                 let read_from_source =
-                    ReadDataSourcePlan::build_plan(ctx, scan_ref, builder.build()?)?;
+                    ReadDataSourcePlan::try_create(ctx, &scan, builder.build()?)?;
                 builder.add(read_from_source);
 
                 Ok(PlanNode::Select(SelectPlan {
                     nodes: builder.build()?,
                 }))
             }
-            _ => Err(FuseQueryError::Unsupported(format!(
+            _ => Err(FuseQueryError::Internal(format!(
                 "Unsupported SelectPlan query: {}",
                 query
             ))),

@@ -57,14 +57,14 @@ impl Pipeline {
     ///
     pub fn add_simple_transform(
         &mut self,
-        f: impl Fn() -> Box<dyn IProcessor>,
+        f: impl Fn() -> FuseQueryResult<Box<dyn IProcessor>>,
     ) -> FuseQueryResult<()> {
         let last = self.processors.last().ok_or_else(|| {
             FuseQueryError::Internal("Can't add transform to an empty pipe list".to_string())
         })?;
         let mut items = Vec::with_capacity(last.len());
         for x in last {
-            let mut p = f();
+            let mut p = f()?;
             p.connect_to(x.clone());
             items.push(Arc::from(p));
         }
@@ -87,11 +87,13 @@ impl Pipeline {
             )
         })?;
 
-        let mut p = MergeProcessor::create();
-        for x in last {
-            p.connect_to(x.clone());
+        if last.len() > 1 {
+            let mut p = MergeProcessor::create();
+            for x in last {
+                p.connect_to(x.clone());
+            }
+            self.processors.push(vec![Arc::from(p)]);
         }
-        self.processors.push(vec![Arc::from(p)]);
         Ok(())
     }
 

@@ -26,12 +26,8 @@ pub fn data_array_arithmetic_op(
         (DataColumnarValue::Scalar(scalar), DataColumnarValue::Array(array)) => {
             (scalar.to_array(array.len())?, array.clone())
         }
-        _ => {
-            return Err(FuseQueryError::Unsupported(format!(
-                "cannot do data_array_add, left:{:?}, right:{:?}",
-                left.data_type(),
-                right.data_type()
-            )))
+        (DataColumnarValue::Scalar(lscalar), DataColumnarValue::Scalar(rscalar)) => {
+            (lscalar.to_array(1)?, rscalar.to_array(1)?)
         }
     };
     match op {

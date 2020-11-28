@@ -16,9 +16,6 @@ pub enum FuseQueryError {
 
     #[error("Internal Error: {0}")]
     Internal(String),
-
-    #[error("Unsupported Error: {0}")]
-    Unsupported(String),
 }
 
 impl From<ArrowError> for FuseQueryError {

@@ -47,9 +47,11 @@ impl ITable for CsvTable {
 
     fn read_plan(&self, _plans: Vec<PlanNode>) -> FuseQueryResult<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
-            description: "(Read from CSV table)".to_string(),
+            table: self.name.clone(),
             table_type: "CsvTable",
+            schema: self.schema.clone(),
             partitions: self.partitions.clone(),
+            description: "(Read from CSV table)".to_string(),
         })
     }
 

@@ -2,11 +2,12 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum DataValueAggregateOperator {
     Min,
     Max,
     Sum,
+    Count,
 }
 
 impl std::fmt::Display for DataValueAggregateOperator {
@@ -15,6 +16,7 @@ impl std::fmt::Display for DataValueAggregateOperator {
             DataValueAggregateOperator::Min => "min",
             DataValueAggregateOperator::Max => "max",
             DataValueAggregateOperator::Sum => "sum",
+            DataValueAggregateOperator::Count => "count",
         };
         write!(f, "{}", display)
     }

@@ -17,14 +17,14 @@ pub struct FilterPlan {
 }
 
 impl FilterPlan {
-    pub fn build_plan(
+    pub fn try_create(
         ctx: Arc<FuseQueryContext>,
         limit: &Option<ast::Expr>,
     ) -> FuseQueryResult<PlanNode> {
         match limit {
             Some(ref expr) => Ok(PlanNode::Filter(FilterPlan {
                 description: "".to_string(),
-                predicate: ExpressionPlan::build_plan(ctx, expr)?,
+                predicate: ExpressionPlan::try_create(ctx, expr)?,
             })),
             None => Ok(PlanNode::Empty(EmptyPlan {})),
         }

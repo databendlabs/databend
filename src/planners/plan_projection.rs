@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::contexts::FuseQueryContext;
 use crate::error::FuseQueryResult;
 use crate::planners::{
-    plan_expression::item_to_expression_step, ExpressionPlan, FormatterSettings, PlanNode,
+    plan_expression::item_to_expression_plan, ExpressionPlan, FormatterSettings, PlanNode,
 };
 
 #[derive(Clone)]
@@ -19,13 +19,13 @@ pub struct ProjectionPlan {
 }
 
 impl ProjectionPlan {
-    pub fn build_plan(
+    pub fn try_create(
         ctx: Arc<FuseQueryContext>,
         items: &[ast::SelectItem],
     ) -> FuseQueryResult<PlanNode> {
         let expr = items
             .iter()
-            .map(|expr| item_to_expression_step(ctx.clone(), expr))
+            .map(|expr| item_to_expression_plan(ctx.clone(), expr))
             .collect::<FuseQueryResult<Vec<ExpressionPlan>>>()?;
 
         Ok(PlanNode::Projection(ProjectionPlan {

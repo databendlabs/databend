@@ -47,8 +47,9 @@ impl ITable for MemoryTable {
 
     fn read_plan(&self, _plans: Vec<PlanNode>) -> FuseQueryResult<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
-            description: "(Read from InMemory table)".to_string(),
+            table: self.name.clone(),
             table_type: "InMemory",
+            schema: self.schema.clone(),
             partitions: self
                 .partitions
                 .keys()
@@ -58,6 +59,7 @@ impl ITable for MemoryTable {
                     version: 0,
                 })
                 .collect::<Vec<Partition>>(),
+            description: "(Read from InMemory table)".to_string(),
         })
     }
 

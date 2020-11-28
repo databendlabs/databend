@@ -28,7 +28,7 @@ impl Planner {
     ) -> FuseQueryResult<PlanNode> {
         let statements = DFParser::parse_sql(query)?;
         if statements.len() != 1 {
-            return Err(FuseQueryError::Unsupported(
+            return Err(FuseQueryError::Internal(
                 "Only support single query".to_string(),
             ));
         }
@@ -44,7 +44,7 @@ impl Planner {
         match statement {
             DFStatement::Statement(s) => self.sql_statement_to_plan(ctx, &s),
             DFStatement::Explain(s) => self.explain_statement_to_plan(ctx, &s),
-            _ => Err(FuseQueryError::Unsupported(format!(
+            _ => Err(FuseQueryError::Internal(format!(
                 "Unsupported statement: {:?} in planner.build()",
                 statement
             ))),
@@ -57,8 +57,8 @@ impl Planner {
         sql: &ast::Statement,
     ) -> FuseQueryResult<PlanNode> {
         match sql {
-            ast::Statement::Query(query) => SelectPlan::build_plan(ctx, query),
-            _ => Err(FuseQueryError::Unsupported(format!(
+            ast::Statement::Query(query) => SelectPlan::try_create(ctx, query),
+            _ => Err(FuseQueryError::Internal(format!(
                 "Unsupported statement {:?} for planner.statement_to_plan",
                 sql
             ))),
@@ -71,7 +71,7 @@ impl Planner {
         explain_plan: &DFExplainPlan,
     ) -> FuseQueryResult<PlanNode> {
         let plan = self.build(ctx.clone(), &explain_plan.statement)?;
-        ExplainPlan::build_plan(ctx, plan)
+        ExplainPlan::try_create(ctx, plan)
     }
 }
 

@@ -7,6 +7,7 @@ use crate::error::{FuseQueryError, FuseQueryResult};
 
 pub fn data_value_add(left: DataValue, right: DataValue) -> FuseQueryResult<DataValue> {
     Ok(match (&left, &right) {
+        (DataValue::Null, _) => right,
         (DataValue::Int8(lhs), DataValue::Int8(rhs)) => typed_data_value_add!(lhs, rhs, Int8, i8),
         (DataValue::Int16(lhs), DataValue::Int16(rhs)) => {
             typed_data_value_add!(lhs, rhs, Int16, i16)
