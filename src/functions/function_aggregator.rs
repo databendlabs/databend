@@ -6,9 +6,9 @@ use std::convert::TryFrom;
 use std::fmt;
 
 use crate::datablocks::DataBlock;
+use crate::datavalues;
 use crate::datavalues::{
-    data_array_aggregate_op, data_value_add, data_value_aggregate_op, DataColumnarValue,
-    DataSchema, DataType, DataValue, DataValueAggregateOperator,
+    DataColumnarValue, DataSchema, DataType, DataValue, DataValueAggregateOperator,
 };
 use crate::error::FuseQueryResult;
 use crate::functions::Function;
@@ -52,29 +52,38 @@ impl AggregatorFunction {
         let val = self.arg.result()?;
         match &self.op {
             DataValueAggregateOperator::Count => {
-                self.state = data_value_add(
+                self.state = datavalues::data_value_add(
                     self.state.clone(),
                     DataValue::UInt64(Some(val.to_array(rows)?.len() as u64)),
                 )?;
             }
             DataValueAggregateOperator::Min => {
-                self.state = data_value_aggregate_op(
+                self.state = datavalues::data_value_aggregate_op(
                     DataValueAggregateOperator::Min,
                     self.state.clone(),
-                    data_array_aggregate_op(DataValueAggregateOperator::Min, val.to_array(rows)?)?,
+                    datavalues::data_array_aggregate_op(
+                        DataValueAggregateOperator::Min,
+                        val.to_array(rows)?,
+                    )?,
                 )?;
             }
             DataValueAggregateOperator::Max => {
-                self.state = data_value_aggregate_op(
+                self.state = datavalues::data_value_aggregate_op(
                     DataValueAggregateOperator::Max,
                     self.state.clone(),
-                    data_array_aggregate_op(DataValueAggregateOperator::Max, val.to_array(rows)?)?,
+                    datavalues::data_array_aggregate_op(
+                        DataValueAggregateOperator::Max,
+                        val.to_array(rows)?,
+                    )?,
                 )?;
             }
             DataValueAggregateOperator::Sum => {
-                self.state = data_value_add(
+                self.state = datavalues::data_value_add(
                     self.state.clone(),
-                    data_array_aggregate_op(DataValueAggregateOperator::Sum, val.to_array(rows)?)?,
+                    datavalues::data_array_aggregate_op(
+                        DataValueAggregateOperator::Sum,
+                        val.to_array(rows)?,
+                    )?,
                 )?;
             }
         }

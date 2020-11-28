@@ -5,9 +5,8 @@
 use std::fmt;
 
 use crate::datablocks::DataBlock;
-use crate::datavalues::{
-    data_array_arithmetic_op, DataColumnarValue, DataSchema, DataType, DataValueArithmeticOperator,
-};
+use crate::datavalues;
+use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValueArithmeticOperator};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::Function;
 
@@ -43,11 +42,13 @@ impl ArithmeticFunction {
     pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
         self.left.eval(block)?;
         self.right.eval(block)?;
-        self.saved = Some(DataColumnarValue::Array(data_array_arithmetic_op(
-            self.op.clone(),
-            &self.left.result()?,
-            &self.right.result()?,
-        )?));
+        self.saved = Some(DataColumnarValue::Array(
+            datavalues::data_array_arithmetic_op(
+                self.op.clone(),
+                &self.left.result()?,
+                &self.right.result()?,
+            )?,
+        ));
         Ok(())
     }
 
