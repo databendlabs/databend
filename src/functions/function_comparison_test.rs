@@ -67,9 +67,6 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
         let actual_null = func.nullable(t.block.schema())?;
         assert_eq!(expect_null, actual_null);
 
-        // Func name.
-        assert_eq!(func.name(), t.func_name);
-
         let ref v = func.result()?;
         // Type check.
         let expect_type = func.return_type(t.block.schema())?;

@@ -21,16 +21,6 @@ pub enum Function {
 }
 
 impl Function {
-    pub fn name(&self) -> &'static str {
-        match self {
-            Function::Constant(v) => v.name(),
-            Function::Variable(v) => v.name(),
-            Function::Arithmetic(v) => v.name(),
-            Function::Comparison(v) => v.name(),
-            Function::Aggregator(v) => v.name(),
-        }
-    }
-
     pub fn return_type(&self, input_schema: &DataSchema) -> FuseQueryResult<DataType> {
         match self {
             Function::Constant(v) => v.return_type(input_schema),

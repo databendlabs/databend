@@ -32,15 +32,6 @@ impl ArithmeticFunction {
         }))
     }
 
-    pub fn name(&self) -> &'static str {
-        match self.op {
-            DataValueArithmeticOperator::Add => "AddFunction",
-            DataValueArithmeticOperator::Sub => "SubFunction",
-            DataValueArithmeticOperator::Mul => "MulFunction",
-            DataValueArithmeticOperator::Div => "DivFunction",
-        }
-    }
-
     pub fn return_type(&self, input_schema: &DataSchema) -> FuseQueryResult<DataType> {
         self.left.return_type(input_schema)
     }

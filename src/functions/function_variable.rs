@@ -23,10 +23,6 @@ impl VariableFunction {
         }))
     }
 
-    pub fn name(&self) -> &'static str {
-        "VariableFunction"
-    }
-
     pub fn return_type(&self, input_schema: &DataSchema) -> FuseQueryResult<DataType> {
         Ok(input_schema
             .field_with_name(&self.value)?

@@ -37,15 +37,6 @@ impl AggregatorFunction {
         }))
     }
 
-    pub fn name(&self) -> &'static str {
-        match self.op {
-            DataValueAggregateOperator::Min => "MinAggregatorFunction",
-            DataValueAggregateOperator::Max => "MaxAggregatorFunction",
-            DataValueAggregateOperator::Sum => "SumAggregatorFunction",
-            DataValueAggregateOperator::Count => "CountAggregatorFunction",
-        }
-    }
-
     pub fn return_type(&self) -> FuseQueryResult<DataType> {
         Ok(self.state.data_type())
     }

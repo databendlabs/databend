@@ -33,16 +33,6 @@ impl ComparisonFunction {
         }))
     }
 
-    pub fn name(&self) -> &'static str {
-        match self.op {
-            DataValueComparisonOperator::Eq => "EqualFunction",
-            DataValueComparisonOperator::Lt => "LessThanFunction",
-            DataValueComparisonOperator::LtEq => "LessOrEqualFunction",
-            DataValueComparisonOperator::Gt => "GreaterThanFunction",
-            DataValueComparisonOperator::GtEq => "GreaterOrEqualFunction",
-        }
-    }
-
     pub fn return_type(&self, _input_schema: &DataSchema) -> FuseQueryResult<DataType> {
         Ok(DataType::Boolean)
     }

@@ -19,10 +19,6 @@ impl ConstantFunction {
         Ok(Function::Constant(ConstantFunction { value }))
     }
 
-    pub fn name(&self) -> &'static str {
-        "ConstantFunction"
-    }
-
     pub fn return_type(&self, _input_schema: &DataSchema) -> FuseQueryResult<DataType> {
         Ok(self.value.data_type())
     }
