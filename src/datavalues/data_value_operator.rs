@@ -63,3 +63,19 @@ impl std::fmt::Display for DataValueArithmeticOperator {
         write!(f, "{}", display)
     }
 }
+
+#[derive(Clone)]
+pub enum DataValueLogicOperator {
+    And,
+    Or,
+}
+
+impl std::fmt::Display for DataValueLogicOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let display = match &self {
+            DataValueLogicOperator::And => "And",
+            DataValueLogicOperator::Or => "Or",
+        };
+        write!(f, "{}", display)
+    }
+}

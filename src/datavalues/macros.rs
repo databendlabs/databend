@@ -210,6 +210,15 @@ macro_rules! format_data_value_with_option {
     }};
 }
 
+/// Invoke a boolean kernel on a pair of arrays
+macro_rules! array_boolean_op {
+    ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
+        let ll = downcast_array!($LEFT, $DT);
+        let rr = downcast_array!($RIGHT, $DT);
+        Ok(Arc::new(arrow::compute::$OP(&ll, &rr)?))
+    }};
+}
+
 macro_rules! impl_try_from {
     ($SCALAR:ident, $NATIVE:ident) => {
         impl TryFrom<DataValue> for $NATIVE {
