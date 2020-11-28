@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tokio::stream::StreamExt;
 
 use crate::datastreams::SendableDataBlockStream;
+use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::processors::{EmptyProcessor, FormatterSettings, IProcessor};
 
@@ -26,8 +27,13 @@ impl IProcessor for MergeProcessor {
         "MergeProcessor"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) {
+    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
+        self.list[0].schema()
+    }
+
+    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
         self.list.push(input);
+        Ok(())
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {

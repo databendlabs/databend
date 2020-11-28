@@ -15,7 +15,7 @@ use crate::planners::{
 #[derive(Clone)]
 pub struct ProjectionPlan {
     description: String,
-    pub expr: Vec<ExpressionPlan>,
+    pub exprs: Vec<ExpressionPlan>,
 }
 
 impl ProjectionPlan {
@@ -23,14 +23,14 @@ impl ProjectionPlan {
         ctx: Arc<FuseQueryContext>,
         items: &[ast::SelectItem],
     ) -> FuseQueryResult<PlanNode> {
-        let expr = items
+        let exprs = items
             .iter()
             .map(|expr| item_to_expression_plan(ctx.clone(), expr))
             .collect::<FuseQueryResult<Vec<ExpressionPlan>>>()?;
 
         Ok(PlanNode::Projection(ProjectionPlan {
             description: "".to_string(),
-            expr,
+            exprs,
         }))
     }
 
@@ -40,11 +40,11 @@ impl ProjectionPlan {
 
     pub fn format(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings) -> fmt::Result {
         write!(f, "{} Projection: ", setting.prefix)?;
-        for i in 0..self.expr.len() {
+        for i in 0..self.exprs.len() {
             if i > 0 {
                 write!(f, ", ")?;
             }
-            write!(f, "{:?}", self.expr[i])?;
+            write!(f, "{:?}", self.exprs[i])?;
         }
         write!(f, "")
     }

@@ -8,7 +8,7 @@ use crate::contexts::FuseQueryContext;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::PlanNode;
 use crate::processors::Pipeline;
-use crate::transforms::{FilterTransform, SourceTransform};
+use crate::transforms::{FilterTransform, ProjectionTransform, SourceTransform};
 
 pub struct PipelineBuilder {
     ctx: Arc<FuseQueryContext>,
@@ -32,6 +32,13 @@ impl PipelineBuilder {
                             pipeline.add_simple_transform(|| {
                                 Ok(Box::new(FilterTransform::try_create(
                                     plan.predicate.clone(),
+                                )?))
+                            })?;
+                        }
+                        PlanNode::Projection(plan) => {
+                            pipeline.add_simple_transform(|| {
+                                Ok(Box::new(ProjectionTransform::try_create(
+                                    plan.exprs.clone(),
                                 )?))
                             })?;
                         }

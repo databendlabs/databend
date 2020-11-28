@@ -65,7 +65,7 @@ impl Pipeline {
         let mut items = Vec::with_capacity(last.len());
         for x in last {
             let mut p = f()?;
-            p.connect_to(x.clone());
+            p.connect_to(x.clone())?;
             items.push(Arc::from(p));
         }
         self.processors.push(items);
@@ -90,7 +90,7 @@ impl Pipeline {
         if last.len() > 1 {
             let mut p = MergeProcessor::create();
             for x in last {
-                p.connect_to(x.clone());
+                p.connect_to(x.clone())?;
             }
             self.processors.push(vec![Arc::from(p)]);
         }
@@ -117,7 +117,7 @@ impl Pipeline {
         for _i in 0..size {
             for x in last {
                 let mut p = ThroughProcessor::create();
-                p.connect_to(x.clone());
+                p.connect_to(x.clone())?;
                 items.push(Arc::new(p));
             }
         }

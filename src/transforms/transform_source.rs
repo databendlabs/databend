@@ -8,7 +8,8 @@ use std::sync::Arc;
 use crate::contexts::FuseQueryContext;
 use crate::datasources::Partition;
 use crate::datastreams::SendableDataBlockStream;
-use crate::error::FuseQueryResult;
+use crate::datavalues::DataSchemaRef;
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::IProcessor;
 
 pub struct SourceTransform {
@@ -40,8 +41,16 @@ impl IProcessor for SourceTransform {
         "SourceTransform"
     }
 
-    fn connect_to(&mut self, _: Arc<dyn IProcessor>) {
-        unimplemented!()
+    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
+        self.ctx
+            .get_table(self.db.as_str(), self.table.as_str())?
+            .schema()
+    }
+
+    fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
+        Err(FuseQueryError::Internal(
+            "Cannot call SourceTransform connect_to".to_string(),
+        ))
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {

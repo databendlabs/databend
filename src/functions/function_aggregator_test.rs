@@ -36,7 +36,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             name: "count-passed",
             evals: 2,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "Count(\"a\")",
+            display: "Count(a)",
             nullable: false,
             func: AggregatorFunction::try_create(
                 DataValueAggregateOperator::Count,
@@ -57,7 +57,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             name: "max-passed",
             evals: 2,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "Max(\"a\")",
+            display: "Max(a)",
             nullable: false,
             func: AggregatorFunction::try_create(
                 DataValueAggregateOperator::Max,
@@ -78,7 +78,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             name: "min-passed",
             evals: 2,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "Min(\"a\")",
+            display: "Min(a)",
             nullable: false,
             func: AggregatorFunction::try_create(
                 DataValueAggregateOperator::Min,
@@ -99,7 +99,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             name: "sum-passed",
             evals: 2,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "Sum(\"a\")",
+            display: "Sum(a)",
             nullable: false,
             func: AggregatorFunction::try_create(
                 DataValueAggregateOperator::Sum,
@@ -120,7 +120,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             name: "sum(b+1)-passed",
             evals: 1,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "Sum(\"b\" + 1)",
+            display: "Sum(b + 1)",
             nullable: false,
             func: AggregatorFunction::try_create(
                 DataValueAggregateOperator::Sum,

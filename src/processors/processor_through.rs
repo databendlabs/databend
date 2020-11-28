@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 
 use crate::datastreams::SendableDataBlockStream;
+use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::processors::{EmptyProcessor, FormatterSettings, IProcessor};
 
@@ -27,8 +28,13 @@ impl IProcessor for ThroughProcessor {
         "ThroughProcessor"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) {
+    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
+        self.input.schema()
+    }
+
+    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
         self.input = input;
+        Ok(())
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {

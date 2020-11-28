@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::datablocks::DataBlock;
 use crate::datastreams::{ScalarExpressionStream, SendableDataBlockStream};
-use crate::datavalues::BooleanArray;
+use crate::datavalues::{BooleanArray, DataSchemaRef};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::Function;
 use crate::planners::ExpressionPlan;
@@ -15,19 +15,32 @@ use crate::processors::{EmptyProcessor, IProcessor};
 use arrow::compute::filter_record_batch;
 
 pub struct FilterTransform {
-    pub predicate: ExpressionPlan,
+    func: Function,
     input: Arc<dyn IProcessor>,
 }
 
 impl FilterTransform {
     pub fn try_create(predicate: ExpressionPlan) -> FuseQueryResult<Self> {
+        if predicate.has_aggregator() {
+            return Err(FuseQueryError::Internal(format!(
+                "Aggregate function {:?} is found in WHERE in query",
+                predicate
+            )));
+        }
+
+        let func = predicate.to_function()?;
         Ok(FilterTransform {
-            predicate,
+            func,
             input: Arc::new(EmptyProcessor::create()),
         })
     }
 
-    pub fn expression_executor(block: DataBlock, mut func: Function) -> FuseQueryResult<DataBlock> {
+    pub fn expression_executor(
+        _schema: &DataSchemaRef,
+        block: DataBlock,
+        funcs: Vec<Function>,
+    ) -> FuseQueryResult<DataBlock> {
+        let mut func = funcs[0].clone();
         func.eval(&block)?;
         let result = func.result()?.to_array(block.num_rows())?;
         let filter_array = result
@@ -49,14 +62,20 @@ impl IProcessor for FilterTransform {
         "FilterTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) {
+    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
+        self.input.schema()
+    }
+
+    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
         self.input = input;
+        Ok(())
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
         Ok(Box::pin(ScalarExpressionStream::try_create(
             self.input.execute().await?,
-            self.predicate.to_function()?,
+            self.schema()?,
+            vec![self.func.clone()],
             FilterTransform::expression_executor,
         )?))
     }

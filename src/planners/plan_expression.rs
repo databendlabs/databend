@@ -76,6 +76,14 @@ impl ExpressionPlan {
         }
     }
 
+    pub fn name(&self) -> &'static str {
+        "ExpressionPlan"
+    }
+
+    pub fn format(&self, f: &mut fmt::Formatter, _setting: &mut FormatterSettings) -> fmt::Result {
+        write!(f, "")
+    }
+
     pub fn to_function(&self) -> FuseQueryResult<Function> {
         match self {
             ExpressionPlan::Field(ref v) => VariableFunction::try_create(v.as_str()),
@@ -95,24 +103,30 @@ impl ExpressionPlan {
         }
     }
 
-    pub fn name(&self) -> &'static str {
-        "ExpressionPlan"
-    }
-
-    pub fn format(&self, f: &mut fmt::Formatter, _setting: &mut FormatterSettings) -> fmt::Result {
-        write!(f, "")
+    pub fn has_aggregator(&self) -> bool {
+        match self {
+            ExpressionPlan::Field(_) => false,
+            ExpressionPlan::Constant(_) => false,
+            ExpressionPlan::BinaryExpression { op: _, left, right } => {
+                left.has_aggregator() || right.has_aggregator()
+            }
+            ExpressionPlan::Function { op, .. } => matches!(
+                op.to_lowercase().as_str(),
+                "max" | "min" | "avg" | "count" | "sum"
+            ),
+        }
     }
 }
 
 impl fmt::Debug for ExpressionPlan {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ExpressionPlan::Field(ref v) => write!(f, "{}", v),
-            ExpressionPlan::Constant(ref v) => write!(f, "{:?}", v),
+            ExpressionPlan::Field(ref v) => write!(f, "{:#}", v),
+            ExpressionPlan::Constant(ref v) => write!(f, "{:#}", v),
             ExpressionPlan::BinaryExpression { op, left, right } => {
                 write!(f, "{:?} {} {:?}", left, op, right,)
             }
-            ExpressionPlan::Function { op, args } => write!(f, "{} {:?}", op, args),
+            ExpressionPlan::Function { op, args } => write!(f, "{}({:?})", op, args),
         }
     }
 }

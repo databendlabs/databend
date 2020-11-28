@@ -44,12 +44,12 @@ impl VariableFunction {
     pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
         self.saved
             .clone()
-            .ok_or_else(|| FuseQueryError::Internal("Saved cannot none".to_string()))
+            .ok_or_else(|| FuseQueryError::Internal("Saved cannot be none".to_string()))
     }
 }
 
 impl fmt::Display for VariableFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.value)
+        write!(f, "{:#}", self.value)
     }
 }

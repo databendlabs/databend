@@ -7,22 +7,30 @@ use std::task::{Context, Poll};
 
 use crate::datablocks::DataBlock;
 use crate::datastreams::SendableDataBlockStream;
+use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::functions::Function;
 
 pub struct ScalarExpressionStream {
     input: SendableDataBlockStream,
-    expr: Function,
-    func: fn(DataBlock, Function) -> FuseQueryResult<DataBlock>,
+    schema: DataSchemaRef,
+    exprs: Vec<Function>,
+    func: fn(&DataSchemaRef, DataBlock, Vec<Function>) -> FuseQueryResult<DataBlock>,
 }
 
 impl ScalarExpressionStream {
     pub fn try_create(
         input: SendableDataBlockStream,
-        expr: Function,
-        func: fn(DataBlock, Function) -> FuseQueryResult<DataBlock>,
+        schema: DataSchemaRef,
+        exprs: Vec<Function>,
+        func: fn(&DataSchemaRef, DataBlock, Vec<Function>) -> FuseQueryResult<DataBlock>,
     ) -> FuseQueryResult<Self> {
-        Ok(ScalarExpressionStream { input, expr, func })
+        Ok(ScalarExpressionStream {
+            input,
+            schema,
+            exprs,
+            func,
+        })
     }
 }
 
@@ -34,7 +42,7 @@ impl Stream for ScalarExpressionStream {
         ctx: &mut Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         self.input.poll_next_unpin(ctx).map(|x| match x {
-            Some(Ok(v)) => Some((self.func)(v, self.expr.clone())),
+            Some(Ok(v)) => Some((self.func)(&self.schema, v, self.exprs.clone())),
             other => other,
         })
     }

@@ -36,7 +36,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
             name: "add-int64-passed",
             evals: 2,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "\"a\" + \"b\"",
+            display: "a + b",
             nullable: false,
             op: DataValueArithmeticOperator::Add,
             block: DataBlock::create(
@@ -53,7 +53,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
             name: "sub-int64-passed",
             evals: 2,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "\"a\" - \"b\"",
+            display: "a - b",
             nullable: false,
             op: DataValueArithmeticOperator::Sub,
             block: DataBlock::create(
@@ -70,7 +70,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
             name: "mul-int64-passed",
             evals: 2,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "\"a\" * \"b\"",
+            display: "a * b",
             nullable: false,
             op: DataValueArithmeticOperator::Mul,
             block: DataBlock::create(
@@ -87,7 +87,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
             name: "div-int64-passed",
             evals: 2,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "\"a\" / \"b\"",
+            display: "a / b",
             nullable: false,
             op: DataValueArithmeticOperator::Div,
             block: DataBlock::create(
@@ -111,7 +111,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
                 )
                 .unwrap(),
             ],
-            display: "1 + Sum(\"a\")",
+            display: "1 + Sum(a)",
             nullable: false,
             op: DataValueArithmeticOperator::Add,
             block: DataBlock::create(

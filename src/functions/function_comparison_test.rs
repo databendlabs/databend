@@ -35,7 +35,7 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
         name: "equal-passed",
         func_name: "EqualFunction",
         args: vec![field_a.clone(), field_b.clone()],
-        display: "\"a\" = \"b\"",
+        display: "a = b",
         nullable: false,
         op: DataValueComparisonOperator::Eq,
         block: DataBlock::create(
