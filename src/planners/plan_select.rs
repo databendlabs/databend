@@ -24,9 +24,6 @@ impl SelectPlan {
 
         match &query.body {
             ast::SetExpr::Select(sel) => {
-                let project = ProjectionPlan::try_create(ctx.clone(), &sel.projection)?;
-                builder.add(project);
-
                 let mut limit = LimitPlan::try_create(ctx.clone(), &query.limit)?;
                 limit.set_description("preliminary LIMIT");
                 builder.add(limit);
@@ -34,6 +31,9 @@ impl SelectPlan {
                 let mut filter = FilterPlan::try_create(ctx.clone(), &sel.selection)?;
                 filter.set_description("WHERE");
                 builder.add(filter);
+
+                let project = ProjectionPlan::try_create(ctx.clone(), &sel.projection)?;
+                builder.add(project);
 
                 let scan = ScanPlan::try_create(ctx.clone(), &sel.from)?;
                 builder.add(scan.clone());

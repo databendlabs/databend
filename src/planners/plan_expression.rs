@@ -11,11 +11,15 @@ use std::sync::Arc;
 use crate::contexts::FuseQueryContext;
 use crate::datavalues::DataValue;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::functions::{ConstantFunction, Function, ScalarFunctionFactory, VariableFunction};
+use crate::functions::{
+    AliasFunction, ConstantFunction, Function, ScalarFunctionFactory, VariableFunction,
+};
 use crate::planners::FormatterSettings;
 
 #[derive(Clone)]
 pub enum ExpressionPlan {
+    Alias(String, Box<ExpressionPlan>),
+
     /// Column field name in String.
     Field(String),
 
@@ -100,11 +104,15 @@ impl ExpressionPlan {
                 }
                 ScalarFunctionFactory::get(op, &funcs)
             }
+            ExpressionPlan::Alias(alias, expr) => {
+                AliasFunction::try_create(alias.clone(), expr.to_function()?)
+            }
         }
     }
 
     pub fn has_aggregator(&self) -> bool {
         match self {
+            ExpressionPlan::Alias(_, expr) => expr.has_aggregator(),
             ExpressionPlan::Field(_) => false,
             ExpressionPlan::Constant(_) => false,
             ExpressionPlan::BinaryExpression { op: _, left, right } => {
@@ -121,6 +129,7 @@ impl ExpressionPlan {
 impl fmt::Debug for ExpressionPlan {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            ExpressionPlan::Alias(alias, v) => write!(f, "{:?} as {:#}", v, alias),
             ExpressionPlan::Field(ref v) => write!(f, "{:#}", v),
             ExpressionPlan::Constant(ref v) => write!(f, "{:#}", v),
             ExpressionPlan::BinaryExpression { op, left, right } => {
@@ -137,6 +146,10 @@ pub fn item_to_expression_plan(
     item: &ast::SelectItem,
 ) -> FuseQueryResult<ExpressionPlan> {
     match item {
+        ast::SelectItem::ExprWithAlias { expr, alias } => Ok(ExpressionPlan::Alias(
+            alias.value.clone(),
+            Box::from(ExpressionPlan::try_create(ctx, expr)?),
+        )),
         ast::SelectItem::UnnamedExpr(expr) => ExpressionPlan::try_create(ctx, expr),
         _ => Err(FuseQueryError::Internal(format!(
             "Unsupported SelectItem {} in item_to_expression_step",

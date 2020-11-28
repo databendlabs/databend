@@ -9,11 +9,13 @@ use crate::datavalues::{DataColumnarValue, DataSchema, DataType};
 use crate::error::FuseQueryResult;
 use crate::functions::function_logic::LogicFunction;
 use crate::functions::{
-    AggregatorFunction, ArithmeticFunction, ComparisonFunction, ConstantFunction, VariableFunction,
+    AggregatorFunction, AliasFunction, ArithmeticFunction, ComparisonFunction, ConstantFunction,
+    VariableFunction,
 };
 
 #[derive(Clone)]
 pub enum Function {
+    Alias(AliasFunction),
     Constant(ConstantFunction),
     Variable(VariableFunction),
     Arithmetic(ArithmeticFunction),
@@ -25,6 +27,7 @@ pub enum Function {
 impl Function {
     pub fn return_type(&self, input_schema: &DataSchema) -> FuseQueryResult<DataType> {
         match self {
+            Function::Alias(v) => v.return_type(input_schema),
             Function::Constant(v) => v.return_type(input_schema),
             Function::Variable(v) => v.return_type(input_schema),
             Function::Arithmetic(v) => v.return_type(input_schema),
@@ -36,6 +39,7 @@ impl Function {
 
     pub fn nullable(&self, input_schema: &DataSchema) -> FuseQueryResult<bool> {
         match self {
+            Function::Alias(v) => v.nullable(input_schema),
             Function::Constant(v) => v.nullable(input_schema),
             Function::Variable(v) => v.nullable(input_schema),
             Function::Arithmetic(v) => v.nullable(input_schema),
@@ -47,6 +51,7 @@ impl Function {
 
     pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
         match self {
+            Function::Alias(v) => v.eval(block),
             Function::Constant(v) => v.eval(block),
             Function::Variable(v) => v.eval(block),
             Function::Arithmetic(v) => v.eval(block),
@@ -58,6 +63,7 @@ impl Function {
 
     pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
         match self {
+            Function::Alias(v) => v.result(),
             Function::Constant(v) => v.result(),
             Function::Variable(v) => v.result(),
             Function::Arithmetic(v) => v.result(),
@@ -71,6 +77,7 @@ impl Function {
 impl fmt::Debug for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Function::Alias(v) => write!(f, "{}", v),
             Function::Constant(v) => write!(f, "{}", v),
             Function::Variable(v) => write!(f, "{}", v),
             Function::Arithmetic(v) => write!(f, "{}", v),

@@ -10,6 +10,7 @@ mod function_logic_test;
 
 mod function;
 mod function_aggregator;
+mod function_alias;
 mod function_arithmetic;
 mod function_comparison;
 mod function_constant;
@@ -19,6 +20,7 @@ mod function_variable;
 
 pub use self::function::Function;
 pub use self::function_aggregator::AggregatorFunction;
+pub use self::function_alias::AliasFunction;
 pub use self::function_arithmetic::ArithmeticFunction;
 pub use self::function_comparison::ComparisonFunction;
 pub use self::function_constant::ConstantFunction;
