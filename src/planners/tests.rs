@@ -61,10 +61,7 @@ fn test_sql_to_plan() -> crate::error::FuseQueryResult<()> {
             let table = MemoryTable::create("t1", Arc::new(schema));
             let datasource = get_datasource("memory://")?;
             datasource.lock()?.add_database("default")?;
-            datasource
-                .lock()
-                .unwrap()
-                .add_table("default", Arc::new(table))?;
+            datasource.lock()?.add_table("default", Arc::new(table))?;
 
             let ctx = FuseQueryContext::create_ctx(0, datasource);
             let plan = Planner::new().build(Arc::new(ctx), &statement);
