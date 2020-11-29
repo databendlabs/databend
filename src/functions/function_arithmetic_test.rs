@@ -26,10 +26,12 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Int64, false),
+        DataField::new("c", DataType::Int16, false),
     ]));
 
-    let field_a = VariableFunction::try_create("a").unwrap();
-    let field_b = VariableFunction::try_create("b").unwrap();
+    let field_a = VariableFunction::try_create("a")?;
+    let field_b = VariableFunction::try_create("b")?;
+    let field_c = VariableFunction::try_create("c")?;
 
     let tests = vec![
         Test {
@@ -44,6 +46,25 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
                 vec![
                     Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
                     Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
+                    Arc::new(Int16Array::from(vec![1, 2, 3, 4])),
+                ],
+            ),
+            expect: Arc::new(Int64Array::from(vec![5, 5, 5, 5])),
+            error: "",
+        },
+        Test {
+            name: "add-diff-passed",
+            evals: 2,
+            args: vec![field_c.clone(), field_a.clone()],
+            display: "c + a",
+            nullable: false,
+            op: DataValueArithmeticOperator::Add,
+            block: DataBlock::create(
+                schema.clone(),
+                vec![
+                    Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
+                    Arc::new(Int16Array::from(vec![1, 2, 3, 4])),
+                    Arc::new(Int16Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
             expect: Arc::new(Int64Array::from(vec![5, 5, 5, 5])),
@@ -61,6 +82,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
                 vec![
                     Arc::new(Int64Array::from(vec![4, 3, 2])),
                     Arc::new(Int64Array::from(vec![1, 2, 3])),
+                    Arc::new(Int16Array::from(vec![1, 2, 3])),
                 ],
             ),
             expect: Arc::new(Int64Array::from(vec![3, 1, -1])),
@@ -78,6 +100,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
                 vec![
                     Arc::new(Int64Array::from(vec![4, 3, 2])),
                     Arc::new(Int64Array::from(vec![1, 2, 3])),
+                    Arc::new(Int16Array::from(vec![1, 2, 3])),
                 ],
             ),
             expect: Arc::new(Int64Array::from(vec![4, 6, 6])),
@@ -95,6 +118,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
                 vec![
                     Arc::new(Int64Array::from(vec![4, 3, 2])),
                     Arc::new(Int64Array::from(vec![1, 2, 3])),
+                    Arc::new(Int16Array::from(vec![1, 2, 3])),
                 ],
             ),
             expect: Arc::new(Int64Array::from(vec![4, 1, 0])),
@@ -119,6 +143,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
                 vec![
                     Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
                     Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
+                    Arc::new(Int16Array::from(vec![1, 2, 3, 4])),
                 ],
             ),
             expect: Arc::new(Int64Array::from(vec![31])),

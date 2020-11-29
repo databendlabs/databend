@@ -32,7 +32,11 @@ impl ArithmeticFunction {
     }
 
     pub fn return_type(&self, input_schema: &DataSchema) -> FuseQueryResult<DataType> {
-        self.left.return_type(input_schema)
+        datavalues::numerical_coercion(
+            format!("{}", self.op).as_str(),
+            &self.left.return_type(input_schema)?,
+            &self.right.return_type(input_schema)?,
+        )
     }
 
     pub fn nullable(&self, _input_schema: &DataSchema) -> FuseQueryResult<bool> {
