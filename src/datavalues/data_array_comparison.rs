@@ -17,12 +17,12 @@ pub fn data_array_comparison_op(
     right: &DataColumnarValue,
 ) -> FuseQueryResult<DataArrayRef> {
     match (left, right) {
-        (DataColumnarValue::Array(larray), DataColumnarValue::Array(rarray)) => match op {
-            DataValueComparisonOperator::Eq => arrow_array_op!(&larray, &rarray, eq),
-            DataValueComparisonOperator::Lt => arrow_array_op!(&larray, &rarray, lt),
-            DataValueComparisonOperator::LtEq => arrow_array_op!(&larray, &rarray, lt_eq),
-            DataValueComparisonOperator::Gt => arrow_array_op!(&larray, &rarray, gt),
-            DataValueComparisonOperator::GtEq => arrow_array_op!(&larray, &rarray, gt_eq),
+        (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => match op {
+            DataValueComparisonOperator::Eq => arrow_array_op!(&left_array, &right_array, eq),
+            DataValueComparisonOperator::Lt => arrow_array_op!(&left_array, &right_array, lt),
+            DataValueComparisonOperator::LtEq => arrow_array_op!(&left_array, &right_array, lt_eq),
+            DataValueComparisonOperator::Gt => arrow_array_op!(&left_array, &right_array, gt),
+            DataValueComparisonOperator::GtEq => arrow_array_op!(&left_array, &right_array, gt_eq),
         },
 
         (DataColumnarValue::Array(array), DataColumnarValue::Scalar(scalar)) => match op {

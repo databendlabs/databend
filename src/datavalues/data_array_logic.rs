@@ -13,9 +13,13 @@ pub fn data_array_logic_op(
     right: &DataColumnarValue,
 ) -> FuseQueryResult<DataArrayRef> {
     match (left, right) {
-        (DataColumnarValue::Array(larray), DataColumnarValue::Array(rarray)) => match op {
-            DataValueLogicOperator::And => array_boolean_op!(larray, rarray, and, BooleanArray),
-            DataValueLogicOperator::Or => array_boolean_op!(larray, rarray, or, BooleanArray),
+        (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => match op {
+            DataValueLogicOperator::And => {
+                array_boolean_op!(left_array, right_array, and, BooleanArray)
+            }
+            DataValueLogicOperator::Or => {
+                array_boolean_op!(left_array, right_array, or, BooleanArray)
+            }
         },
         _ => Err(FuseQueryError::Internal(format!(
             "Cannot do data_array {}, left:{:?}, right:{:?}",

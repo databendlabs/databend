@@ -16,9 +16,9 @@ pub fn data_array_arithmetic_op(
     left: &DataColumnarValue,
     right: &DataColumnarValue,
 ) -> FuseQueryResult<DataArrayRef> {
-    let (larray, rarray) = match (left, right) {
-        (DataColumnarValue::Array(larray), DataColumnarValue::Array(rarray)) => {
-            (larray.clone(), rarray.clone())
+    let (left_array, right_array) = match (left, right) {
+        (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
+            (left_array.clone(), right_array.clone())
         }
         (DataColumnarValue::Array(array), DataColumnarValue::Scalar(scalar)) => {
             (array.clone(), scalar.to_array(array.len())?)
@@ -26,14 +26,22 @@ pub fn data_array_arithmetic_op(
         (DataColumnarValue::Scalar(scalar), DataColumnarValue::Array(array)) => {
             (scalar.to_array(array.len())?, array.clone())
         }
-        (DataColumnarValue::Scalar(lscalar), DataColumnarValue::Scalar(rscalar)) => {
-            (lscalar.to_array(1)?, rscalar.to_array(1)?)
+        (DataColumnarValue::Scalar(left_scalar), DataColumnarValue::Scalar(right_scalar)) => {
+            (left_scalar.to_array(1)?, right_scalar.to_array(1)?)
         }
     };
     match op {
-        DataValueArithmeticOperator::Add => arrow_primitive_array_op!(&larray, &rarray, add),
-        DataValueArithmeticOperator::Sub => arrow_primitive_array_op!(&larray, &rarray, subtract),
-        DataValueArithmeticOperator::Mul => arrow_primitive_array_op!(&larray, &rarray, multiply),
-        DataValueArithmeticOperator::Div => arrow_primitive_array_op!(&larray, &rarray, divide),
+        DataValueArithmeticOperator::Add => {
+            arrow_primitive_array_op!(&left_array, &right_array, add)
+        }
+        DataValueArithmeticOperator::Sub => {
+            arrow_primitive_array_op!(&left_array, &right_array, subtract)
+        }
+        DataValueArithmeticOperator::Mul => {
+            arrow_primitive_array_op!(&left_array, &right_array, multiply)
+        }
+        DataValueArithmeticOperator::Div => {
+            arrow_primitive_array_op!(&left_array, &right_array, divide)
+        }
     }
 }
