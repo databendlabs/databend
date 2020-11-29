@@ -26,6 +26,10 @@ fn test_array_arithmetic() {
                     Arc::new(StringArray::from(vec!["yy"])),
                 ],
                 vec![
+                    Arc::new(Int16Array::from(vec![4, 3, 2, 1])),
+                    Arc::new(Int8Array::from(vec![1, 2, 3, 4])),
+                ],
+                vec![
                     Arc::new(Int8Array::from(vec![4, 3, 2, 1])),
                     Arc::new(Int8Array::from(vec![1, 2, 3, 4])),
                 ],
@@ -69,6 +73,7 @@ fn test_array_arithmetic() {
             op: DataValueArithmeticOperator::Add,
             expect: vec![
                 Arc::new(StringArray::from(vec![""])),
+                Arc::new(Int16Array::from(vec![5, 5, 5, 5])),
                 Arc::new(Int8Array::from(vec![5, 5, 5, 5])),
                 Arc::new(Int16Array::from(vec![5, 5, 5, 5])),
                 Arc::new(Int32Array::from(vec![5, 5, 5, 5])),
@@ -80,7 +85,7 @@ fn test_array_arithmetic() {
                 Arc::new(Float32Array::from(vec![5.0, 5.0, 5.0, 5.0])),
                 Arc::new(Float64Array::from(vec![5.0, 5.0, 5.0, 5.0])),
             ],
-            error: vec!["Internal Error: Unsupported arithmetic_compute::add for data type: Utf8"],
+            error: vec!["Internal Error: Unsupported (Utf8) + (Utf8)"],
         },
         ArrayTest {
             name: "sub-passed",
@@ -88,6 +93,10 @@ fn test_array_arithmetic() {
                 vec![
                     Arc::new(StringArray::from(vec!["xx"])),
                     Arc::new(StringArray::from(vec!["yy"])),
+                ],
+                vec![
+                    Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
+                    Arc::new(Int8Array::from(vec![1, 2, 3, 4])),
                 ],
                 vec![
                     Arc::new(Int8Array::from(vec![4, 3, 2, 1])),
@@ -133,6 +142,7 @@ fn test_array_arithmetic() {
             op: DataValueArithmeticOperator::Sub,
             expect: vec![
                 Arc::new(StringArray::from(vec![""])),
+                Arc::new(Int64Array::from(vec![3, 1, -1, -3])),
                 Arc::new(Int8Array::from(vec![3, 1, -1, -3])),
                 Arc::new(Int16Array::from(vec![3, 1, -1, -3])),
                 Arc::new(Int32Array::from(vec![3, 1, -1, -3])),
@@ -144,9 +154,7 @@ fn test_array_arithmetic() {
                 Arc::new(Float32Array::from(vec![3.0, 1.0, -1.0, -3.0])),
                 Arc::new(Float64Array::from(vec![3.0, 1.0, -1.0, -3.0])),
             ],
-            error: vec![
-                "Internal Error: Unsupported arithmetic_compute::subtract for data type: Utf8",
-            ],
+            error: vec!["Internal Error: Unsupported (Utf8) - (Utf8)"],
         },
         ArrayTest {
             name: "mul-passed",
@@ -210,9 +218,7 @@ fn test_array_arithmetic() {
                 Arc::new(Float32Array::from(vec![4.0, 6.0, 6.0, 4.0])),
                 Arc::new(Float64Array::from(vec![4.0, 6.0, 6.0, 4.0])),
             ],
-            error: vec![
-                "Internal Error: Unsupported arithmetic_compute::multiply for data type: Utf8",
-            ],
+            error: vec!["Internal Error: Unsupported (Utf8) * (Utf8)"],
         },
         ArrayTest {
             name: "div-passed",
@@ -276,9 +282,7 @@ fn test_array_arithmetic() {
                 Arc::new(Float32Array::from(vec![4.0, 1.5, 0.6666666666666666, 0.25])),
                 Arc::new(Float64Array::from(vec![4.0, 1.5, 0.6666666666666666, 0.25])),
             ],
-            error: vec![
-                "Internal Error: Unsupported arithmetic_compute::divide for data type: Utf8",
-            ],
+            error: vec!["Internal Error: Unsupported (Utf8) / (Utf8)"],
         },
     ];
 

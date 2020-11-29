@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use crate::datavalues;
 use crate::datavalues::{DataArrayRef, DataColumnarValue, DataType, DataValueArithmeticOperator};
 use crate::datavalues::{
     Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, Int8Array, UInt16Array,
@@ -30,6 +31,22 @@ pub fn data_array_arithmetic_op(
             (left_scalar.to_array(1)?, right_scalar.to_array(1)?)
         }
     };
+
+    let coercion_type =
+        match datavalues::numerical_coercion(&left_array.data_type(), &right_array.data_type()) {
+            None => {
+                return Err(FuseQueryError::Internal(format!(
+                    "Unsupported ({:?}) {} ({:?})",
+                    left_array.data_type(),
+                    op,
+                    right_array.data_type(),
+                )))
+            }
+            Some(v) => v,
+        };
+
+    let left_array = arrow::compute::cast(&left_array, &coercion_type)?;
+    let right_array = arrow::compute::cast(&right_array, &coercion_type)?;
     match op {
         DataValueArithmeticOperator::Add => {
             arrow_primitive_array_op!(&left_array, &right_array, add)
