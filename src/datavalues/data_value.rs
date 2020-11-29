@@ -98,18 +98,40 @@ impl DataValue {
     /// Converts a value in `array` at `index` into a ScalarValue
     pub fn try_from_array(array: &DataArrayRef, index: usize) -> FuseQueryResult<Self> {
         Ok(match array.data_type() {
-            DataType::Boolean => typed_cast!(array, index, BooleanArray, Boolean),
-            DataType::Float64 => typed_cast!(array, index, Float64Array, Float64),
-            DataType::Float32 => typed_cast!(array, index, Float32Array, Float32),
-            DataType::UInt64 => typed_cast!(array, index, UInt64Array, UInt64),
-            DataType::UInt32 => typed_cast!(array, index, UInt32Array, UInt32),
-            DataType::UInt16 => typed_cast!(array, index, UInt16Array, UInt16),
-            DataType::UInt8 => typed_cast!(array, index, UInt8Array, UInt8),
-            DataType::Int64 => typed_cast!(array, index, Int64Array, Int64),
-            DataType::Int32 => typed_cast!(array, index, Int32Array, Int32),
-            DataType::Int16 => typed_cast!(array, index, Int16Array, Int16),
-            DataType::Int8 => typed_cast!(array, index, Int8Array, Int8),
-            DataType::Utf8 => typed_cast!(array, index, StringArray, String),
+            DataType::Boolean => {
+                typed_cast_from_array_to_data_value!(array, index, BooleanArray, Boolean)
+            }
+            DataType::Float64 => {
+                typed_cast_from_array_to_data_value!(array, index, Float64Array, Float64)
+            }
+            DataType::Float32 => {
+                typed_cast_from_array_to_data_value!(array, index, Float32Array, Float32)
+            }
+            DataType::UInt64 => {
+                typed_cast_from_array_to_data_value!(array, index, UInt64Array, UInt64)
+            }
+            DataType::UInt32 => {
+                typed_cast_from_array_to_data_value!(array, index, UInt32Array, UInt32)
+            }
+            DataType::UInt16 => {
+                typed_cast_from_array_to_data_value!(array, index, UInt16Array, UInt16)
+            }
+            DataType::UInt8 => {
+                typed_cast_from_array_to_data_value!(array, index, UInt8Array, UInt8)
+            }
+            DataType::Int64 => {
+                typed_cast_from_array_to_data_value!(array, index, Int64Array, Int64)
+            }
+            DataType::Int32 => {
+                typed_cast_from_array_to_data_value!(array, index, Int32Array, Int32)
+            }
+            DataType::Int16 => {
+                typed_cast_from_array_to_data_value!(array, index, Int16Array, Int16)
+            }
+            DataType::Int8 => typed_cast_from_array_to_data_value!(array, index, Int8Array, Int8),
+            DataType::Utf8 => {
+                typed_cast_from_array_to_data_value!(array, index, StringArray, String)
+            }
             other => {
                 return Err(FuseQueryError::Internal(format!(
                     "Can't create a scalar of array of type \"{:?}\"",
@@ -120,17 +142,17 @@ impl DataValue {
     }
 }
 
-impl_try_from!(Int8, i8);
-impl_try_from!(Int16, i16);
-impl_try_from!(Int32, i32);
-impl_try_from!(Int64, i64);
-impl_try_from!(UInt8, u8);
-impl_try_from!(UInt16, u16);
-impl_try_from!(UInt32, u32);
-impl_try_from!(UInt64, u64);
-impl_try_from!(Float32, f32);
-impl_try_from!(Float64, f64);
-impl_try_from!(Boolean, bool);
+typed_cast_from_data_value_to_std!(Int8, i8);
+typed_cast_from_data_value_to_std!(Int16, i16);
+typed_cast_from_data_value_to_std!(Int32, i32);
+typed_cast_from_data_value_to_std!(Int64, i64);
+typed_cast_from_data_value_to_std!(UInt8, u8);
+typed_cast_from_data_value_to_std!(UInt16, u16);
+typed_cast_from_data_value_to_std!(UInt32, u32);
+typed_cast_from_data_value_to_std!(UInt64, u64);
+typed_cast_from_data_value_to_std!(Float32, f32);
+typed_cast_from_data_value_to_std!(Float64, f64);
+typed_cast_from_data_value_to_std!(Boolean, bool);
 
 impl TryFrom<&DataType> for DataValue {
     type Error = FuseQueryError;
