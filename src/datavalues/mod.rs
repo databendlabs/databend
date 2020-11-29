@@ -30,7 +30,6 @@ pub use self::data_array_aggregate::data_array_aggregate_op;
 pub use self::data_array_arithmetic::data_array_arithmetic_op;
 pub use self::data_array_comparison::data_array_comparison_op;
 pub use self::data_array_logic::data_array_logic_op;
-pub use self::data_type::numerical_coercion;
 pub use self::data_value_aggregate::data_value_aggregate_op;
 pub use self::data_value_arithmetic::data_value_add;
 

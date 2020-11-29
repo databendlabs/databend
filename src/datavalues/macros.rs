@@ -237,3 +237,14 @@ macro_rules! impl_try_from {
         }
     };
 }
+
+macro_rules! typed_cast {
+    ($array:expr, $index:expr, $ARRAYTYPE:ident, $SCALAR:ident) => {{
+        use arrow::array::*;
+        let array = downcast_array!($array, $ARRAYTYPE);
+        DataValue::$SCALAR(match array.is_null($index) {
+            true => None,
+            false => Some(array.value($index).into()),
+        })
+    }};
+}

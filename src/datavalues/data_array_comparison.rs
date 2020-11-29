@@ -17,38 +17,73 @@ pub fn data_array_comparison_op(
     right: &DataColumnarValue,
 ) -> FuseQueryResult<DataArrayRef> {
     match (left, right) {
-        (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => match op {
-            DataValueComparisonOperator::Eq => arrow_array_op!(&left_array, &right_array, eq),
-            DataValueComparisonOperator::Lt => arrow_array_op!(&left_array, &right_array, lt),
-            DataValueComparisonOperator::LtEq => arrow_array_op!(&left_array, &right_array, lt_eq),
-            DataValueComparisonOperator::Gt => arrow_array_op!(&left_array, &right_array, gt),
-            DataValueComparisonOperator::GtEq => arrow_array_op!(&left_array, &right_array, gt_eq),
-        },
+        (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
+            let coercion_type = super::data_type::equal_coercion(
+                format!("{}", op).as_str(),
+                &left_array.data_type(),
+                &right_array.data_type(),
+            )?;
+            let left_array = arrow::compute::cast(&left_array, &coercion_type)?;
+            let right_array = arrow::compute::cast(&right_array, &coercion_type)?;
 
-        (DataColumnarValue::Array(array), DataColumnarValue::Scalar(scalar)) => match op {
-            DataValueComparisonOperator::Eq => arrow_array_op_scalar!(array, scalar.clone(), eq),
-            DataValueComparisonOperator::Lt => arrow_array_op_scalar!(array, scalar.clone(), lt),
-            DataValueComparisonOperator::LtEq => {
-                arrow_array_op_scalar!(array, scalar.clone(), lt_eq)
+            match op {
+                DataValueComparisonOperator::Eq => arrow_array_op!(&left_array, &right_array, eq),
+                DataValueComparisonOperator::Lt => arrow_array_op!(&left_array, &right_array, lt),
+                DataValueComparisonOperator::LtEq => {
+                    arrow_array_op!(&left_array, &right_array, lt_eq)
+                }
+                DataValueComparisonOperator::Gt => arrow_array_op!(&left_array, &right_array, gt),
+                DataValueComparisonOperator::GtEq => {
+                    arrow_array_op!(&left_array, &right_array, gt_eq)
+                }
             }
-            DataValueComparisonOperator::Gt => arrow_array_op_scalar!(array, scalar.clone(), gt),
-            DataValueComparisonOperator::GtEq => {
-                arrow_array_op_scalar!(array, scalar.clone(), gt_eq)
-            }
-        },
+        }
 
-        (DataColumnarValue::Scalar(scalar), DataColumnarValue::Array(array)) => match op {
-            DataValueComparisonOperator::Eq => arrow_array_op_scalar!(array, scalar.clone(), eq),
-            DataValueComparisonOperator::Lt => arrow_array_op_scalar!(array, scalar.clone(), gt),
-            DataValueComparisonOperator::LtEq => {
-                arrow_array_op_scalar!(array, scalar.clone(), gt_eq)
-            }
-            DataValueComparisonOperator::Gt => arrow_array_op_scalar!(array, scalar.clone(), lt),
-            DataValueComparisonOperator::GtEq => {
-                arrow_array_op_scalar!(array, scalar.clone(), lt_eq)
-            }
-        },
+        (DataColumnarValue::Array(array), DataColumnarValue::Scalar(scalar)) => {
+            let coercion_type = super::data_type::equal_coercion(
+                format!("{}", op).as_str(),
+                &array.data_type(),
+                &scalar.data_type(),
+            )?;
+            let left_array = arrow::compute::cast(&array, &coercion_type)?;
+            let right_array = arrow::compute::cast(&scalar.to_array(1)?, &coercion_type)?;
+            let scalar = super::DataValue::try_from_array(&right_array, 0)?;
 
+            match op {
+                DataValueComparisonOperator::Eq => arrow_array_op_scalar!(left_array, scalar, eq),
+                DataValueComparisonOperator::Lt => arrow_array_op_scalar!(left_array, scalar, lt),
+                DataValueComparisonOperator::LtEq => {
+                    arrow_array_op_scalar!(left_array, scalar, lt_eq)
+                }
+                DataValueComparisonOperator::Gt => arrow_array_op_scalar!(left_array, scalar, gt),
+                DataValueComparisonOperator::GtEq => {
+                    arrow_array_op_scalar!(left_array, scalar, gt_eq)
+                }
+            }
+        }
+
+        (DataColumnarValue::Scalar(scalar), DataColumnarValue::Array(array)) => {
+            let coercion_type = super::data_type::equal_coercion(
+                format!("{}", op).as_str(),
+                &array.data_type(),
+                &scalar.data_type(),
+            )?;
+            let left_array = arrow::compute::cast(&scalar.to_array(1)?, &coercion_type)?;
+            let right_array = arrow::compute::cast(&array, &coercion_type)?;
+            let scalar = super::DataValue::try_from_array(&left_array, 0)?;
+
+            match op {
+                DataValueComparisonOperator::Eq => arrow_array_op_scalar!(right_array, scalar, eq),
+                DataValueComparisonOperator::Lt => arrow_array_op_scalar!(right_array, scalar, gt),
+                DataValueComparisonOperator::LtEq => {
+                    arrow_array_op_scalar!(right_array, scalar, gt_eq)
+                }
+                DataValueComparisonOperator::Gt => arrow_array_op_scalar!(right_array, scalar, lt),
+                DataValueComparisonOperator::GtEq => {
+                    arrow_array_op_scalar!(right_array, scalar, lt_eq)
+                }
+            }
+        }
         _ => Err(FuseQueryError::Internal(format!(
             "Cannot do data_array {}, left:{:?}, right:{:?}",
             op,

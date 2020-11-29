@@ -94,6 +94,30 @@ impl DataValue {
             DataValue::String(v) => Ok(Arc::new(StringArray::from(vec![v.as_deref(); size]))),
         }
     }
+
+    /// Converts a value in `array` at `index` into a ScalarValue
+    pub fn try_from_array(array: &DataArrayRef, index: usize) -> FuseQueryResult<Self> {
+        Ok(match array.data_type() {
+            DataType::Boolean => typed_cast!(array, index, BooleanArray, Boolean),
+            DataType::Float64 => typed_cast!(array, index, Float64Array, Float64),
+            DataType::Float32 => typed_cast!(array, index, Float32Array, Float32),
+            DataType::UInt64 => typed_cast!(array, index, UInt64Array, UInt64),
+            DataType::UInt32 => typed_cast!(array, index, UInt32Array, UInt32),
+            DataType::UInt16 => typed_cast!(array, index, UInt16Array, UInt16),
+            DataType::UInt8 => typed_cast!(array, index, UInt8Array, UInt8),
+            DataType::Int64 => typed_cast!(array, index, Int64Array, Int64),
+            DataType::Int32 => typed_cast!(array, index, Int32Array, Int32),
+            DataType::Int16 => typed_cast!(array, index, Int16Array, Int16),
+            DataType::Int8 => typed_cast!(array, index, Int8Array, Int8),
+            DataType::Utf8 => typed_cast!(array, index, StringArray, String),
+            other => {
+                return Err(FuseQueryError::Internal(format!(
+                    "Can't create a scalar of array of type \"{:?}\"",
+                    other
+                )))
+            }
+        })
+    }
 }
 
 impl_try_from!(Int8, i8);
