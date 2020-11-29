@@ -2,6 +2,9 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
+mod executor_explain_test;
+mod executor_select_test;
+
 mod executor;
 mod executor_explain;
 mod executor_factory;
