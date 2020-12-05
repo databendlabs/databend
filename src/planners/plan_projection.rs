@@ -2,50 +2,25 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use sqlparser::ast;
-use std::fmt;
 use std::sync::Arc;
 
-use crate::contexts::FuseQueryContext;
-use crate::error::FuseQueryResult;
-use crate::planners::{
-    plan_expression::item_to_expression_plan, ExpressionPlan, FormatterSettings, PlanNode,
-};
+use crate::datavalues::DataSchemaRef;
+use crate::planners::{ExpressionPlan, PlanNode};
 
+/// Evaluates an arbitrary list of expressions (essentially a
+/// SELECT with an expression list) on its input.
 #[derive(Clone)]
 pub struct ProjectionPlan {
-    description: String,
-    pub exprs: Vec<ExpressionPlan>,
+    /// The list of expressions
+    pub expr: Vec<ExpressionPlan>,
+    /// The schema description of the output
+    pub schema: DataSchemaRef,
+    /// The incoming logical plan
+    pub input: Arc<PlanNode>,
 }
 
 impl ProjectionPlan {
-    pub fn try_create(
-        ctx: Arc<FuseQueryContext>,
-        items: &[ast::SelectItem],
-    ) -> FuseQueryResult<PlanNode> {
-        let exprs = items
-            .iter()
-            .map(|expr| item_to_expression_plan(ctx.clone(), expr))
-            .collect::<FuseQueryResult<Vec<ExpressionPlan>>>()?;
-
-        Ok(PlanNode::Projection(ProjectionPlan {
-            description: "".to_string(),
-            exprs,
-        }))
-    }
-
-    pub fn name(&self) -> &'static str {
-        "ProjectionPlan"
-    }
-
-    pub fn format(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings) -> fmt::Result {
-        write!(f, "{} Projection: ", setting.prefix)?;
-        for i in 0..self.exprs.len() {
-            if i > 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{:?}", self.exprs[i])?;
-        }
-        write!(f, "")
+    pub fn schema(&self) -> DataSchemaRef {
+        self.schema.clone()
     }
 }

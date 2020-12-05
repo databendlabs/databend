@@ -19,6 +19,11 @@ impl MySQLStream {
     }
 
     pub fn execute<W: std::io::Write>(&self, writer: QueryResultWriter<W>) -> FuseQueryResult<()> {
+        if self.blocks.is_empty() {
+            writer.completed(0, 0)?;
+            return Ok(());
+        }
+
         let block = self.blocks[0].clone();
         let fields = block.schema().fields();
         let mut cols = Vec::with_capacity(fields.len());
@@ -61,14 +66,17 @@ impl MySQLStream {
         let cols_num = block.num_columns();
         if cols_num > 0 {
             let mut row_writer = writer.start(&cols).unwrap();
-            let rows_num = block.column(0).len();
-            for r in 0..rows_num {
-                let mut row = Vec::with_capacity(cols_num);
-                for c in 0..cols_num {
-                    let column = block.column(c);
-                    row.push(array_value_to_string(column, r)?);
+
+            for block in &self.blocks {
+                let rows_num = block.column(0).len();
+                for r in 0..rows_num {
+                    let mut row = Vec::with_capacity(cols_num);
+                    for c in 0..cols_num {
+                        let column = block.column(c);
+                        row.push(array_value_to_string(column, r)?);
+                    }
+                    row_writer.write_row(row)?;
                 }
-                row_writer.write_row(row)?;
             }
             row_writer.finish()?;
         }

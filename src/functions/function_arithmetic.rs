@@ -6,8 +6,10 @@ use std::fmt;
 
 use crate::datablocks::DataBlock;
 use crate::datavalues;
-use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValueArithmeticOperator};
-use crate::error::{FuseQueryError, FuseQueryResult};
+use crate::datavalues::{
+    DataColumnarValue, DataSchema, DataType, DataValue, DataValueArithmeticOperator,
+};
+use crate::error::FuseQueryResult;
 use crate::functions::Function;
 
 #[derive(Clone)]
@@ -15,7 +17,6 @@ pub struct ArithmeticFunction {
     op: DataValueArithmeticOperator,
     left: Box<Function>,
     right: Box<Function>,
-    saved: Option<DataColumnarValue>,
 }
 
 impl ArithmeticFunction {
@@ -27,7 +28,6 @@ impl ArithmeticFunction {
             op,
             left: Box::from(args[0].clone()),
             right: Box::from(args[1].clone()),
-            saved: None,
         }))
     }
 
@@ -46,20 +46,29 @@ impl ArithmeticFunction {
     pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
         self.left.eval(block)?;
         self.right.eval(block)?;
-        self.saved = Some(DataColumnarValue::Array(
+
+        Ok(())
+    }
+
+    pub fn merge(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
+        self.left.merge(states)?;
+        self.right.merge(states)?;
+
+        Ok(())
+    }
+
+    pub fn state(&self) -> FuseQueryResult<Vec<DataValue>> {
+        Ok(vec![])
+    }
+
+    pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
+        Ok(DataColumnarValue::Array(
             datavalues::data_array_arithmetic_op(
                 self.op.clone(),
                 &self.left.result()?,
                 &self.right.result()?,
             )?,
-        ));
-        Ok(())
-    }
-
-    pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
-        self.saved
-            .clone()
-            .ok_or_else(|| FuseQueryError::Internal("Saved cannot none".to_string()))
+        ))
     }
 }
 

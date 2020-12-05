@@ -1,1 +1,0 @@
-From https://github.com/apache/arrow-testing/tree/master/data/csv

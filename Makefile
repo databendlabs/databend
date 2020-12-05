@@ -7,6 +7,9 @@ bench:
 run:
 	cargo +nightly run -- --nocapture
 
+build:
+	cargo build --release 
+
 lint:
 	cargo fmt
 	cargo +nightly clippy -- -D warnings
@@ -14,4 +17,4 @@ lint:
 clean:
 	cargo clean
 
-.PHONY: test bench run lint clean
+.PHONY: test bench run build lint clean

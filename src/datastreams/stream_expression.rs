@@ -2,8 +2,9 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use futures::stream::{Stream, StreamExt};
 use std::task::{Context, Poll};
+
+use futures::stream::{Stream, StreamExt};
 
 use crate::datablocks::DataBlock;
 use crate::datastreams::SendableDataBlockStream;
@@ -11,21 +12,21 @@ use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::functions::Function;
 
-pub struct ScalarExpressionStream {
+pub struct ExpressionStream {
     input: SendableDataBlockStream,
     schema: DataSchemaRef,
     exprs: Vec<Function>,
     func: fn(&DataSchemaRef, DataBlock, Vec<Function>) -> FuseQueryResult<DataBlock>,
 }
 
-impl ScalarExpressionStream {
+impl ExpressionStream {
     pub fn try_create(
         input: SendableDataBlockStream,
         schema: DataSchemaRef,
         exprs: Vec<Function>,
         func: fn(&DataSchemaRef, DataBlock, Vec<Function>) -> FuseQueryResult<DataBlock>,
     ) -> FuseQueryResult<Self> {
-        Ok(ScalarExpressionStream {
+        Ok(ExpressionStream {
             input,
             schema,
             exprs,
@@ -34,7 +35,7 @@ impl ScalarExpressionStream {
     }
 }
 
-impl Stream for ScalarExpressionStream {
+impl Stream for ExpressionStream {
     type Item = FuseQueryResult<DataBlock>;
 
     fn poll_next(

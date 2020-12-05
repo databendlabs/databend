@@ -5,26 +5,28 @@
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_pipeline_builder() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
-    use tokio::stream::StreamExt;
 
     use crate::contexts::*;
     use crate::planners::*;
     use crate::processors::*;
-    use crate::testdata::*;
+    use crate::testdata;
 
-    let testdata = CsvTestData::create();
+    let test_source = testdata::NumberTestData::create();
     let ctx = Arc::new(FuseQueryContext::create_ctx(
         0,
-        testdata.csv_table_datasource_for_test(),
+        test_source.number_source_for_test()?,
     ));
     let plan = Planner::new().build_from_sql(
         ctx.clone(),
-        "select c2+1 as c21, c3 from t1 where (c21+2)<2",
+        "select number as c1,(number+1) from system.numbers where (number+1)=4",
     )?;
-    let mut stream = PipelineBuilder::create(ctx, plan)
-        .build()?
-        .execute()
-        .await?;
-    while let Some(_block) = stream.next().await {}
+    let pipeline = PipelineBuilder::create(ctx, plan).build()?;
+    let expect = "\
+    \n  └─ Merge (ProjectionTransform × 4 processors) to (MergeProcessor × 1)\
+    \n    └─ ProjectionTransform × 4 processors\
+    \n      └─ FilterTransform × 4 processors\
+    \n        └─ SourceTransform × 4 processors";
+    let actual = format!("{:?}", pipeline);
+    assert_eq!(expect, actual);
     Ok(())
 }

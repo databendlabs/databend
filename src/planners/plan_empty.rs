@@ -2,26 +2,15 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use std::fmt;
-
 use crate::datavalues::DataSchemaRef;
-use crate::planners::FormatterSettings;
 
 #[derive(Clone)]
-pub struct EmptyPlan {}
+pub struct EmptyPlan {
+    pub(crate) schema: DataSchemaRef,
+}
 
 impl EmptyPlan {
-    pub fn name(&self) -> &'static str {
-        "EmptyPlan"
-    }
-
     pub fn schema(&self) -> DataSchemaRef {
-        unimplemented!()
-    }
-
-    pub fn set_description(&mut self, _description: &str) {}
-
-    pub fn format(&self, f: &mut fmt::Formatter, _setting: &mut FormatterSettings) -> fmt::Result {
-        write!(f, "")
+        self.schema.clone()
     }
 }

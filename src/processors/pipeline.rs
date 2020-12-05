@@ -2,8 +2,9 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use num::range;
 use std::sync::Arc;
+
+use num::range;
 
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::{FuseQueryError, FuseQueryResult};

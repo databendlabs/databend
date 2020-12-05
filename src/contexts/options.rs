@@ -7,7 +7,6 @@ pub struct Options {
     pub log_level: &'static str,
     pub num_cpus: usize,
     pub mysql_handler_port: usize,
-    pub dsn: &'static str,
 }
 
 impl Options {
@@ -16,7 +15,6 @@ impl Options {
             log_level: "debug",
             num_cpus: num_cpus::get(),
             mysql_handler_port: 3307,
-            dsn: "csv://fusedatas",
         }
     }
 }

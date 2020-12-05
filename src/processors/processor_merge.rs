@@ -2,14 +2,16 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use async_trait::async_trait;
 use std::sync::Arc;
-use tokio::stream::StreamExt;
 
-use crate::datastreams::SendableDataBlockStream;
-use crate::datavalues::DataSchemaRef;
-use crate::error::FuseQueryResult;
-use crate::processors::{EmptyProcessor, FormatterSettings, IProcessor};
+use async_trait::async_trait;
+use tokio::stream::StreamExt;
+use tokio::sync::mpsc;
+
+use crate::datablocks::DataBlock;
+use crate::datastreams::{ChannelStream, SendableDataBlockStream};
+use crate::error::{FuseQueryError, FuseQueryResult};
+use crate::processors::{FormatterSettings, IProcessor};
 
 pub struct MergeProcessor {
     list: Vec<Arc<dyn IProcessor>>,
@@ -23,12 +25,8 @@ impl MergeProcessor {
 
 #[async_trait]
 impl IProcessor for MergeProcessor {
-    fn name(&self) -> &'static str {
-        "MergeProcessor"
-    }
-
-    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
-        self.list[0].schema()
+    fn name(&self) -> String {
+        "MergeProcessor".to_owned()
     }
 
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
@@ -37,14 +35,34 @@ impl IProcessor for MergeProcessor {
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
-        let mut result = EmptyProcessor::create().execute().await?;
+        let partitions = self.list.len();
+        match partitions {
+            0 => Err(FuseQueryError::Internal(
+                "Merge processor cannot be zero".to_string(),
+            )),
+            1 => self.list[0].execute().await,
+            _ => {
+                let (sender, receiver) = mpsc::channel::<FuseQueryResult<DataBlock>>(partitions);
+                for i in 0..partitions {
+                    let input = self.list[i].clone();
+                    let sender = sender.clone();
+                    tokio::spawn(async move {
+                        let mut stream = match input.execute().await {
+                            Err(e) => {
+                                sender.send(Err(e)).await.ok();
+                                return;
+                            }
+                            Ok(stream) => stream,
+                        };
 
-        for xproc in &self.list {
-            let proc = xproc.clone();
-            let next = proc.execute().await?;
-            result = Box::pin(result.merge(next));
+                        while let Some(item) = stream.next().await {
+                            sender.send(item).await.ok();
+                        }
+                    });
+                }
+                Ok(Box::pin(ChannelStream { input: receiver }))
+            }
         }
-        Ok(result)
     }
 
     fn format(

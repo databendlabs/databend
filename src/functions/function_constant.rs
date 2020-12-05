@@ -31,6 +31,14 @@ impl ConstantFunction {
         Ok(())
     }
 
+    pub fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
+        Ok(())
+    }
+
+    pub fn state(&self) -> FuseQueryResult<Vec<DataValue>> {
+        Ok(vec![])
+    }
+
     pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
         Ok(DataColumnarValue::Scalar(self.value.clone()))
     }

@@ -2,62 +2,28 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use sqlparser::ast;
-use std::fmt;
-use std::sync::Arc;
-
-use crate::contexts::FuseQueryContext;
-use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::planners::{FormatterSettings, PlanNode};
+use crate::datavalues::DataSchemaRef;
+use crate::planners::ExpressionPlan;
 
 #[derive(Clone)]
 pub struct ScanPlan {
-    description: String,
-    pub table_name: String,
+    /// The name of the schema
+    pub schema_name: String,
+
+    /// The schema of the source data
+    pub table_schema: DataSchemaRef,
+
+    pub table_args: Option<ExpressionPlan>,
+
+    /// Optional column indices to use as a projection
+    pub projection: Option<Vec<usize>>,
+
+    /// The schema description of the output
+    pub projected_schema: DataSchemaRef,
 }
 
 impl ScanPlan {
-    pub fn try_create(
-        _ctx: Arc<FuseQueryContext>,
-        from: &[ast::TableWithJoins],
-    ) -> FuseQueryResult<PlanNode> {
-        if from.is_empty() {
-            return Ok(PlanNode::Scan(ScanPlan {
-                description: "".to_string(),
-                table_name: "".to_string(),
-            }));
-        }
-
-        let relation = &from[0].relation;
-        match relation {
-            ast::TableFactor::Table { name, .. } => Ok(PlanNode::Scan(ScanPlan {
-                description: "".to_string(),
-                table_name: name.to_string(),
-            })),
-            _ => Err(FuseQueryError::Internal(format!(
-                "Unsupported ScanPlan from: {}",
-                relation
-            ))),
-        }
-    }
-    pub fn name(&self) -> &'static str {
-        "ScanPlan"
-    }
-
-    pub fn set_description(&mut self, description: &str) {
-        self.description = format!(" ({})", description);
-    }
-
-    pub fn format(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings) -> fmt::Result {
-        let indent = setting.indent;
-        let prefix = setting.indent_char;
-
-        if indent > 0 {
-            writeln!(f)?;
-            for _ in 0..indent {
-                write!(f, "{}", prefix)?;
-            }
-        }
-        write!(f, "{} Scan: {}", setting.prefix, self.table_name)
+    pub fn schema(&self) -> DataSchemaRef {
+        self.projected_schema.clone()
     }
 }

@@ -12,7 +12,7 @@ use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::datavalues::{DataField, DataSchema, DataType, StringArray};
 use crate::error::FuseQueryResult;
 use crate::executors::IExecutor;
-use crate::planners::ExplainPlan;
+use crate::planners::{ExplainPlan, PlanNode};
 use crate::processors::PipelineBuilder;
 
 pub struct ExplainExecutor {
@@ -43,12 +43,13 @@ impl IExecutor for ExplainExecutor {
         )]));
 
         let pipeline =
-            PipelineBuilder::create(self.ctx.clone(), self.explain.plan.clone()).build()?;
+            PipelineBuilder::create(self.ctx.clone(), self.explain.plan.as_ref().clone())
+                .build()?;
 
         let block = DataBlock::create(
             schema.clone(),
             vec![Arc::new(StringArray::from(vec![
-                format!("{:?}", self.explain).as_str(),
+                format!("{:?}", PlanNode::Explain(self.explain.clone())).as_str(),
                 format!("{:?}", pipeline).as_str(),
             ]))],
         );

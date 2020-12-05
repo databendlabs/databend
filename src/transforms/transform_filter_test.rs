@@ -13,27 +13,24 @@ async fn test_transform_filter() -> crate::error::FuseQueryResult<()> {
     use crate::testdata;
     use crate::transforms::*;
 
-    let test_source = testdata::MemoryTestData::create();
+    let test_source = testdata::NumberTestData::create();
     let mut pipeline = Pipeline::create();
 
-    let mut columns = vec![];
-    for k in 0..2 {
-        columns.push(k);
-    }
-    let a = test_source.memory_table_source_transform_for_test(vec![columns])?;
+    let a = test_source.number_source_transform_for_test(8)?;
     pipeline.add_source(Arc::new(a))?;
 
-    pipeline.add_simple_transform(|| {
-        Ok(Box::new(FilterTransform::try_create(
-            ExpressionPlan::BinaryExpression {
-                left: Box::from(ExpressionPlan::Field("c6".to_string())),
-                op: "=".to_string(),
-                right: Box::from(ExpressionPlan::Constant(DataValue::Int64(Some(1i64)))),
-            },
-        )?))
-    })?;
+    if let PlanNode::Filter(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
+        .filter(field("number").eq(constant(1)))?
+        .build()?
+    {
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(FilterTransform::try_create(
+                plan.predicate.clone(),
+            )?))
+        })?;
+    }
+    pipeline.merge_processor()?;
 
-    println!("{:?}", pipeline);
     let mut stream = pipeline.execute().await?;
     let v = stream.next().await.unwrap().unwrap();
     let actual = v.column(0).as_any().downcast_ref::<Int64Array>().unwrap();

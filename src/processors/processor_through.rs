@@ -2,11 +2,11 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use async_trait::async_trait;
 use std::sync::Arc;
 
+use async_trait::async_trait;
+
 use crate::datastreams::SendableDataBlockStream;
-use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::processors::{EmptyProcessor, FormatterSettings, IProcessor};
 
@@ -24,12 +24,8 @@ impl ThroughProcessor {
 
 #[async_trait]
 impl IProcessor for ThroughProcessor {
-    fn name(&self) -> &'static str {
-        "ThroughProcessor"
-    }
-
-    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
-        self.input.schema()
+    fn name(&self) -> String {
+        "ThroughProcessor".to_owned()
     }
 
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {

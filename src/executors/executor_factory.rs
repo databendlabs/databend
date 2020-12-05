@@ -15,7 +15,7 @@ impl ExecutorFactory {
     pub fn get(ctx: Arc<FuseQueryContext>, plan: PlanNode) -> FuseQueryResult<Arc<dyn IExecutor>> {
         match plan {
             PlanNode::Select(v) => SelectExecutor::try_create(ctx, v),
-            PlanNode::Explain(v) => ExplainExecutor::try_create(ctx, v.as_ref().clone()),
+            PlanNode::Explain(v) => ExplainExecutor::try_create(ctx, v),
             _ => Err(FuseQueryError::Internal(format!(
                 "Can't get the executor by plan:{}",
                 plan.name()

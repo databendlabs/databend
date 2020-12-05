@@ -48,9 +48,7 @@ fn test_data_value_arithmetic() {
             DataValue::Float32(Some(3.0)),
             DataValue::Float64(Some(3.0)),
         ],
-        error: vec![
-            "Internal Error: Unsupported data_value_add for data type: left:Utf8, right:Int8",
-        ],
+        error: vec!["Internal Error: Unsupported (Utf8) + (Int8)"],
     }];
 
     for t in tests {

@@ -16,7 +16,7 @@ pub trait ITable: Sync + Send {
 
     fn schema(&self) -> FuseQueryResult<DataSchemaRef>;
 
-    fn read_plan(&self, plans: Vec<PlanNode>) -> FuseQueryResult<ReadDataSourcePlan>;
+    fn read_plan(&self, push_down_plan: PlanNode) -> FuseQueryResult<ReadDataSourcePlan>;
 
     async fn read(&self, parts: Vec<Partition>) -> FuseQueryResult<SendableDataBlockStream>;
 }

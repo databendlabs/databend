@@ -5,19 +5,19 @@
 use std::fmt;
 
 use crate::datablocks::DataBlock;
-use crate::datavalues::{DataColumnarValue, DataSchema, DataType};
+use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 use crate::error::FuseQueryResult;
 use crate::functions::function_logic::LogicFunction;
 use crate::functions::{
     AggregatorFunction, AliasFunction, ArithmeticFunction, ComparisonFunction, ConstantFunction,
-    VariableFunction,
+    FieldFunction,
 };
 
 #[derive(Clone)]
 pub enum Function {
     Alias(AliasFunction),
     Constant(ConstantFunction),
-    Variable(VariableFunction),
+    Variable(FieldFunction),
     Arithmetic(ArithmeticFunction),
     Comparison(ComparisonFunction),
     Logic(LogicFunction),
@@ -33,7 +33,7 @@ impl Function {
             Function::Arithmetic(v) => v.return_type(input_schema),
             Function::Comparison(v) => v.return_type(input_schema),
             Function::Logic(v) => v.return_type(input_schema),
-            Function::Aggregator(v) => v.return_type(),
+            Function::Aggregator(v) => v.return_type(input_schema),
         }
     }
 
@@ -58,6 +58,30 @@ impl Function {
             Function::Comparison(v) => v.eval(block),
             Function::Logic(v) => v.eval(block),
             Function::Aggregator(v) => v.eval(block),
+        }
+    }
+
+    pub fn merge(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
+        match self {
+            Function::Alias(v) => v.merge(states),
+            Function::Constant(v) => v.merge(states),
+            Function::Variable(v) => v.merge(states),
+            Function::Arithmetic(v) => v.merge(states),
+            Function::Comparison(v) => v.merge(states),
+            Function::Logic(v) => v.merge(states),
+            Function::Aggregator(v) => v.merge(states),
+        }
+    }
+
+    pub fn state(&self) -> FuseQueryResult<Vec<DataValue>> {
+        match self {
+            Function::Alias(v) => v.state(),
+            Function::Constant(v) => v.state(),
+            Function::Variable(v) => v.state(),
+            Function::Arithmetic(v) => v.state(),
+            Function::Comparison(v) => v.state(),
+            Function::Logic(v) => v.state(),
+            Function::Aggregator(v) => v.state(),
         }
     }
 

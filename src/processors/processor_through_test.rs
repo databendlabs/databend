@@ -11,14 +11,10 @@ async fn test_processor_through() -> crate::error::FuseQueryResult<()> {
     use crate::processors::*;
     use crate::testdata;
 
-    let test_source = testdata::MemoryTestData::create();
+    let test_source = testdata::NumberTestData::create();
     let mut pipeline = Pipeline::create();
 
-    let mut columns = vec![];
-    for k in 0..2 {
-        columns.push(k);
-    }
-    let a = test_source.memory_table_source_transform_for_test(vec![columns])?;
+    let a = test_source.number_source_transform_for_test(8)?;
     pipeline.add_source(Arc::new(a))?;
 
     pipeline.expand_processor(4)?;

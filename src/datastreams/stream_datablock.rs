@@ -3,6 +3,7 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use std::task::{Context, Poll};
+
 use tokio::stream::Stream;
 
 use crate::datablocks::DataBlock;
@@ -10,7 +11,7 @@ use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 
 pub struct DataBlockStream {
-    index: usize,
+    current: usize,
     schema: DataSchemaRef,
     data: Vec<DataBlock>,
     projects: Option<Vec<usize>>,
@@ -23,7 +24,7 @@ impl DataBlockStream {
         data: Vec<DataBlock>,
     ) -> Self {
         DataBlockStream {
-            index: 0,
+            current: 0,
             schema,
             data,
             projects,
@@ -38,9 +39,9 @@ impl Stream for DataBlockStream {
         mut self: std::pin::Pin<&mut Self>,
         _: &mut Context<'_>,
     ) -> Poll<Option<Self::Item>> {
-        Poll::Ready(if self.index < self.data.len() {
-            self.index += 1;
-            let block = &self.data[self.index - 1];
+        Poll::Ready(if self.current < self.data.len() {
+            self.current += 1;
+            let block = &self.data[self.current - 1];
             Some(Ok(match &self.projects {
                 Some(v) => DataBlock::create(
                     self.schema.clone(),

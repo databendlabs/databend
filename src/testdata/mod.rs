@@ -2,8 +2,6 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-mod csv;
-mod memory;
+mod number;
 
-pub use self::csv::CsvTestData;
-pub use self::memory::MemoryTestData;
+pub use self::number::NumberTestData;

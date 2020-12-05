@@ -5,7 +5,7 @@
 use std::fmt;
 
 use crate::datablocks::DataBlock;
-use crate::datavalues::{DataColumnarValue, DataSchema, DataType};
+use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 use crate::error::FuseQueryResult;
 use crate::functions::Function;
 
@@ -33,6 +33,14 @@ impl AliasFunction {
 
     pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
         self.func.eval(block)
+    }
+
+    pub fn merge(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
+        self.func.merge(states)
+    }
+
+    pub fn state(&self) -> FuseQueryResult<Vec<DataValue>> {
+        self.func.state()
     }
 
     pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {

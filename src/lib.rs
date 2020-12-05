@@ -1,5 +1,3 @@
-#![feature(try_trait)]
-#![feature(entry_insert)]
 // Copyright 2020 The VectorQuery Authors.
 //
 // Code is licensed under AGPL License, Version 3.0.

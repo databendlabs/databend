@@ -4,7 +4,7 @@
 
 pub type Partitions = Vec<Partition>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Partition {
     pub name: String,
     pub version: u64,

@@ -2,11 +2,11 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use async_trait::async_trait;
 use std::sync::Arc;
 
+use async_trait::async_trait;
+
 use crate::datastreams::SendableDataBlockStream;
-use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 
 /// Formatter settings for PlanStep debug.
@@ -22,10 +22,7 @@ pub struct FormatterSettings {
 #[async_trait]
 pub trait IProcessor: Sync + Send {
     /// Processor name.
-    fn name(&self) -> &'static str;
-
-    /// Processor schema.
-    fn schema(&self) -> FuseQueryResult<DataSchemaRef>;
+    fn name(&self) -> String;
 
     /// Connect to the input processor, add an edge on the DAG.
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()>;

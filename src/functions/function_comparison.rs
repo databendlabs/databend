@@ -6,7 +6,9 @@ use std::fmt;
 
 use crate::datablocks::DataBlock;
 use crate::datavalues;
-use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValueComparisonOperator};
+use crate::datavalues::{
+    DataColumnarValue, DataSchema, DataType, DataValue, DataValueComparisonOperator,
+};
 use crate::error::{FuseQueryError, FuseQueryResult};
 
 use crate::functions::Function;
@@ -53,10 +55,18 @@ impl ComparisonFunction {
         Ok(())
     }
 
+    pub fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
+        Ok(())
+    }
+
+    pub fn state(&self) -> FuseQueryResult<Vec<DataValue>> {
+        Ok(vec![])
+    }
+
     pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
         self.saved
             .clone()
-            .ok_or_else(|| FuseQueryError::Internal("Saved cannot none".to_string()))
+            .ok_or_else(|| FuseQueryError::Internal("Result cannot be none".to_string()))
     }
 }
 

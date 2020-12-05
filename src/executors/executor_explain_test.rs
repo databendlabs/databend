@@ -10,18 +10,19 @@ async fn test_explain_executor() -> crate::error::FuseQueryResult<()> {
     use crate::contexts::*;
     use crate::executors::*;
     use crate::planners::*;
-    use crate::testdata::*;
+    use crate::testdata;
 
-    let testdata = CsvTestData::create();
+    let test_source = testdata::NumberTestData::create();
     let ctx = Arc::new(FuseQueryContext::create_ctx(
         0,
-        testdata.csv_table_datasource_for_test(),
+        test_source.number_source_for_test()?,
     ));
+
     if let PlanNode::Explain(plan) = Planner::new().build_from_sql(
         ctx.clone(),
-        "explain select c2+1 as c21, c3 from t1 where (c21+2)<2",
+        "explain select number from system.numbers(10) where (number+1)=4",
     )? {
-        let executor = ExplainExecutor::try_create(ctx, plan.as_ref().clone())?;
+        let executor = ExplainExecutor::try_create(ctx, plan)?;
         assert_eq!(executor.name(), "ExplainExecutor");
 
         let mut stream = executor.execute().await?;

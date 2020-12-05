@@ -2,11 +2,12 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use async_trait::async_trait;
 use std::sync::Arc;
 
+use async_trait::async_trait;
+
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::datavalues::{DataSchema, DataSchemaRef};
+use crate::datavalues::DataSchema;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::{FormatterSettings, IProcessor};
 
@@ -20,14 +21,8 @@ impl EmptyProcessor {
 
 #[async_trait]
 impl IProcessor for EmptyProcessor {
-    fn name(&self) -> &'static str {
-        "EmptyProcessor"
-    }
-
-    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
-        Err(FuseQueryError::Internal(
-            "Cannot get EmptyProcessor schema".to_string(),
-        ))
+    fn name(&self) -> String {
+        "EmptyProcessor".to_owned()
     }
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> FuseQueryResult<()> {

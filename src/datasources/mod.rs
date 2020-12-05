@@ -4,14 +4,11 @@
 
 mod tests;
 
-mod csv;
 mod datasource;
-mod memory;
 mod partition;
+mod system;
 mod table;
 
-pub use self::csv::{CsvDataSource, CsvTable};
-pub use self::datasource::{get_datasource, DataSource, IDataSource};
-pub use self::memory::{MemoryDataSource, MemoryTable};
+pub use self::datasource::{DataSource, IDataSource};
 pub use self::partition::{Partition, Partitions};
 pub use self::table::ITable;

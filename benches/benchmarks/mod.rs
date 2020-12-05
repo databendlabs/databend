@@ -2,4 +2,4 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-pub mod bench_pipeline_filter;
+pub mod bench_pipeline;

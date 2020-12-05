@@ -29,9 +29,9 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         DataField::new("c", DataType::Int16, false),
     ]));
 
-    let field_a = VariableFunction::try_create("a")?;
-    let field_b = VariableFunction::try_create("b")?;
-    let field_c = VariableFunction::try_create("c")?;
+    let field_a = FieldFunction::try_create("a")?;
+    let field_b = FieldFunction::try_create("b")?;
+    let field_c = FieldFunction::try_create("c")?;
 
     let tests = vec![
         Test {
@@ -131,7 +131,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
                 ConstantFunction::try_create(DataValue::Int64(Some(1))).unwrap(),
                 AggregatorFunction::try_create(
                     DataValueAggregateOperator::Sum,
-                    &[VariableFunction::try_create("a").unwrap()],
+                    &[FieldFunction::try_create("a").unwrap()],
                 )
                 .unwrap(),
             ],

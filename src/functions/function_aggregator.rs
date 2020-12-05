@@ -2,7 +2,6 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use std::convert::TryFrom;
 use std::fmt;
 
 use crate::datablocks::DataBlock;
@@ -25,11 +24,7 @@ impl AggregatorFunction {
         op: DataValueAggregateOperator,
         args: &[Function],
     ) -> FuseQueryResult<Function> {
-        let mut state = DataValue::Null;
-        if op == DataValueAggregateOperator::Count {
-            state = DataValue::try_from(&DataType::UInt64)?;
-        }
-
+        let state = DataValue::Null;
         Ok(Function::Aggregator(AggregatorFunction {
             op,
             arg: Box::new(args[0].clone()),
@@ -37,8 +32,11 @@ impl AggregatorFunction {
         }))
     }
 
-    pub fn return_type(&self) -> FuseQueryResult<DataType> {
-        Ok(self.state.data_type())
+    pub fn return_type(&self, input_schema: &DataSchema) -> FuseQueryResult<DataType> {
+        match self.op {
+            DataValueAggregateOperator::Count => Ok(DataType::UInt64),
+            _ => self.arg.return_type(input_schema),
+        }
     }
 
     pub fn nullable(&self, _input_schema: &DataSchema) -> FuseQueryResult<bool> {
@@ -54,7 +52,7 @@ impl AggregatorFunction {
             DataValueAggregateOperator::Count => {
                 self.state = datavalues::data_value_add(
                     self.state.clone(),
-                    DataValue::UInt64(Some(val.to_array(rows)?.len() as u64)),
+                    DataValue::UInt64(Some(rows as u64)),
                 )?;
             }
             DataValueAggregateOperator::Min => {
@@ -88,6 +86,37 @@ impl AggregatorFunction {
             }
         }
         Ok(())
+    }
+
+    pub fn merge(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
+        let val = states[0].clone();
+        match &self.op {
+            DataValueAggregateOperator::Count => {
+                self.state = datavalues::data_value_add(self.state.clone(), val)?;
+            }
+            DataValueAggregateOperator::Min => {
+                self.state = datavalues::data_value_aggregate_op(
+                    DataValueAggregateOperator::Min,
+                    self.state.clone(),
+                    val,
+                )?;
+            }
+            DataValueAggregateOperator::Max => {
+                self.state = datavalues::data_value_aggregate_op(
+                    DataValueAggregateOperator::Max,
+                    self.state.clone(),
+                    val,
+                )?;
+            }
+            DataValueAggregateOperator::Sum => {
+                self.state = datavalues::data_value_add(self.state.clone(), val)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn state(&self) -> FuseQueryResult<Vec<DataValue>> {
+        Ok(vec![])
     }
 
     // Calculates a final aggregators.

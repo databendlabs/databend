@@ -12,23 +12,28 @@ async fn test_transform_projection() -> crate::error::FuseQueryResult<()> {
     use crate::testdata;
     use crate::transforms::*;
 
-    let test_source = testdata::CsvTestData::create();
+    let test_source = testdata::NumberTestData::create();
     let mut pipeline = Pipeline::create();
 
-    let a = test_source.csv_table_source_transform_for_test()?;
+    let a = test_source.number_source_transform_for_test(8)?;
     pipeline.add_source(Arc::new(a))?;
 
-    pipeline.add_simple_transform(|| {
-        Ok(Box::new(ProjectionTransform::try_create(vec![
-            ExpressionPlan::Field("c6".to_string()),
-        ])?))
-    })?;
+    if let PlanNode::Projection(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
+        .project(vec![field("number"), field("number")])?
+        .build()?
+    {
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(ProjectionTransform::try_create(
+                plan.schema.clone(),
+                plan.expr.clone(),
+            )?))
+        })?;
+    }
 
-    println!("{:?}", pipeline);
     let mut stream = pipeline.execute().await?;
     let v = stream.next().await.unwrap().unwrap();
     let actual = v.num_columns();
-    let expect = 1;
+    let expect = 2;
     assert_eq!(expect, actual);
     Ok(())
 }

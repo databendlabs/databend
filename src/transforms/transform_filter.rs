@@ -6,8 +6,8 @@ use async_trait::async_trait;
 use std::sync::Arc;
 
 use crate::datablocks::DataBlock;
-use crate::datastreams::{ScalarExpressionStream, SendableDataBlockStream};
-use crate::datavalues::{BooleanArray, DataSchemaRef};
+use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
+use crate::datavalues::{BooleanArray, DataSchema, DataSchemaRef};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::Function;
 use crate::planners::ExpressionPlan;
@@ -21,7 +21,7 @@ pub struct FilterTransform {
 
 impl FilterTransform {
     pub fn try_create(predicate: ExpressionPlan) -> FuseQueryResult<Self> {
-        if predicate.has_aggregator() {
+        if predicate.is_aggregate() {
             return Err(FuseQueryError::Internal(format!(
                 "Aggregate function {:?} is found in WHERE in query",
                 predicate
@@ -58,12 +58,8 @@ impl FilterTransform {
 
 #[async_trait]
 impl IProcessor for FilterTransform {
-    fn name(&self) -> &'static str {
-        "FilterTransform"
-    }
-
-    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
-        self.input.schema()
+    fn name(&self) -> String {
+        "FilterTransform".to_owned()
     }
 
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
@@ -72,9 +68,9 @@ impl IProcessor for FilterTransform {
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
-        Ok(Box::pin(ScalarExpressionStream::try_create(
+        Ok(Box::pin(ExpressionStream::try_create(
             self.input.execute().await?,
-            self.schema()?,
+            Arc::new(DataSchema::empty()),
             vec![self.func.clone()],
             FilterTransform::expression_executor,
         )?))

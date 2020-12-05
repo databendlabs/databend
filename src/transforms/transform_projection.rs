@@ -2,12 +2,15 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
+use log::debug;
+use std::time::Instant;
+
 use async_trait::async_trait;
 use std::sync::Arc;
 
 use crate::datablocks::DataBlock;
-use crate::datastreams::{ScalarExpressionStream, SendableDataBlockStream};
-use crate::datavalues::{DataField, DataSchema, DataSchemaRef};
+use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
+use crate::datavalues::DataSchemaRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::Function;
 use crate::planners::ExpressionPlan;
@@ -20,9 +23,9 @@ pub struct ProjectionTransform {
 }
 
 impl ProjectionTransform {
-    pub fn try_create(exprs: Vec<ExpressionPlan>) -> FuseQueryResult<Self> {
+    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> FuseQueryResult<Self> {
         for expr in &exprs {
-            if expr.has_aggregator() {
+            if expr.is_aggregate() {
                 return Err(FuseQueryError::Internal(format!(
                     "Unsupported aggregator function: {:?}",
                     expr
@@ -37,58 +40,45 @@ impl ProjectionTransform {
 
         Ok(ProjectionTransform {
             funcs,
-            schema: Arc::new(DataSchema::empty()),
+            schema,
             input: Arc::new(EmptyProcessor::create()),
         })
     }
 
     pub fn expression_executor(
-        schema: &DataSchemaRef,
+        projected_schema: &DataSchemaRef,
         block: DataBlock,
         funcs: Vec<Function>,
     ) -> FuseQueryResult<DataBlock> {
         let mut arrays = Vec::with_capacity(funcs.len());
-        for mut func in funcs.clone() {
+
+        let start = Instant::now();
+        for mut func in funcs {
             func.eval(&block)?;
             arrays.push(func.result()?.to_array(block.num_rows())?);
         }
-        Ok(DataBlock::create(schema.clone(), arrays))
+        let duration = start.elapsed();
+        debug!("transform projection cost:{:?}", duration);
+
+        Ok(DataBlock::create(projected_schema.clone(), arrays))
     }
 }
 
 #[async_trait]
 impl IProcessor for ProjectionTransform {
-    fn name(&self) -> &'static str {
-        "ProjectionTransform"
-    }
-
-    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
-        Ok(self.schema.clone())
+    fn name(&self) -> String {
+        "ProjectionTransform".to_owned()
     }
 
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
         self.input = input;
-        let input_schema = self.input.schema()?;
-
-        let fields: FuseQueryResult<Vec<_>> = self
-            .funcs
-            .iter()
-            .map(|func| {
-                Ok(DataField::new(
-                    format!("{:?}", func).as_str(),
-                    func.return_type(&input_schema)?,
-                    func.nullable(&input_schema)?,
-                ))
-            })
-            .collect();
-        self.schema = Arc::new(DataSchema::new(fields?));
         Ok(())
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
-        Ok(Box::pin(ScalarExpressionStream::try_create(
+        Ok(Box::pin(ExpressionStream::try_create(
             self.input.execute().await?,
-            self.schema()?,
+            self.schema.clone(),
             self.funcs.clone(),
             ProjectionTransform::expression_executor,
         )?))

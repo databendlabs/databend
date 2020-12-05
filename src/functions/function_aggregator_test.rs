@@ -28,8 +28,8 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
         DataField::new("b", DataType::Int64, false),
     ]));
 
-    let field_a = VariableFunction::try_create("a").unwrap();
-    let field_b = VariableFunction::try_create("b").unwrap();
+    let field_a = FieldFunction::try_create("a").unwrap();
+    let field_b = FieldFunction::try_create("b").unwrap();
 
     let tests = vec![
         Test {
@@ -40,7 +40,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             nullable: false,
             func: AggregatorFunction::try_create(
                 DataValueAggregateOperator::Count,
-                &[VariableFunction::try_create("a").unwrap()],
+                &[FieldFunction::try_create("a").unwrap()],
             )
             .unwrap(),
             block: DataBlock::create(
@@ -61,7 +61,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             nullable: false,
             func: AggregatorFunction::try_create(
                 DataValueAggregateOperator::Max,
-                &[VariableFunction::try_create("a").unwrap()],
+                &[FieldFunction::try_create("a").unwrap()],
             )
             .unwrap(),
             block: DataBlock::create(
@@ -82,7 +82,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             nullable: false,
             func: AggregatorFunction::try_create(
                 DataValueAggregateOperator::Min,
-                &[VariableFunction::try_create("a").unwrap()],
+                &[FieldFunction::try_create("a").unwrap()],
             )
             .unwrap(),
             block: DataBlock::create(
@@ -103,7 +103,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             nullable: false,
             func: AggregatorFunction::try_create(
                 DataValueAggregateOperator::Sum,
-                &[VariableFunction::try_create("a").unwrap()],
+                &[FieldFunction::try_create("a").unwrap()],
             )
             .unwrap(),
             block: DataBlock::create(
@@ -127,7 +127,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
                 &[ArithmeticFunction::try_create(
                     DataValueArithmeticOperator::Add,
                     &[
-                        VariableFunction::try_create("b").unwrap(),
+                        FieldFunction::try_create("b").unwrap(),
                         ConstantFunction::try_create(DataValue::Int64(Some(1))).unwrap(),
                     ],
                 )
@@ -153,6 +153,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
         for _ in 1..t.evals {
             (t.func).eval(&t.block)?;
         }
+
 
         // Display check.
         let expect_display = t.display.to_string();

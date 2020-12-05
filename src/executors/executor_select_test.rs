@@ -10,16 +10,17 @@ async fn test_select_executor() -> crate::error::FuseQueryResult<()> {
     use crate::contexts::*;
     use crate::executors::*;
     use crate::planners::*;
-    use crate::testdata::*;
+    use crate::testdata;
 
-    let testdata = CsvTestData::create();
+    let test_source = testdata::NumberTestData::create();
     let ctx = Arc::new(FuseQueryContext::create_ctx(
         0,
-        testdata.csv_table_datasource_for_test(),
+        test_source.number_source_for_test()?,
     ));
+
     if let PlanNode::Select(plan) = Planner::new().build_from_sql(
         ctx.clone(),
-        "select c2+1 as c21, c3 from t1 where (c21+2)<2",
+        "select number from system.numbers(10) where (number+2)<2",
     )? {
         let executor = SelectExecutor::try_create(ctx, plan)?;
         assert_eq!(executor.name(), "SelectExecutor");

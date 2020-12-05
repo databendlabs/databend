@@ -6,7 +6,9 @@ use std::fmt;
 
 use crate::datablocks::DataBlock;
 use crate::datavalues;
-use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValueLogicOperator};
+use crate::datavalues::{
+    DataColumnarValue, DataSchema, DataType, DataValue, DataValueLogicOperator,
+};
 use crate::error::{FuseQueryError, FuseQueryResult};
 
 use crate::functions::Function;
@@ -48,10 +50,18 @@ impl LogicFunction {
         Ok(())
     }
 
+    pub fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
+        Ok(())
+    }
+
+    pub fn state(&self) -> FuseQueryResult<Vec<DataValue>> {
+        Ok(vec![])
+    }
+
     pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
         self.saved
             .clone()
-            .ok_or_else(|| FuseQueryError::Internal("Saved cannot none".to_string()))
+            .ok_or_else(|| FuseQueryError::Internal("Result cannot be none".to_string()))
     }
 }
 

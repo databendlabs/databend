@@ -6,6 +6,7 @@ use log::{debug, error};
 
 use msql_srv::*;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use std::{io, net, thread};
 use tokio::stream::StreamExt;
 
@@ -59,18 +60,24 @@ impl<W: io::Write> MysqlShim<W> for Session {
                             .worker_threads(self.ctx.worker_threads)
                             .build()?
                             .block_on(async move {
+                                let start = Instant::now();
                                 let mut r = vec![];
                                 let mut stream = executor.execute().await?;
                                 while let Some(block) = stream.next().await {
                                     r.push(block?);
                                 }
+                                let duration = start.elapsed();
+                                debug!("MySQLHandler executor cost:{:?}", duration);
                                 Ok(r)
                             });
 
                     match result {
                         Ok(blocks) => {
+                            let start = Instant::now();
                             let stream = MySQLStream::create(blocks);
                             stream.execute(writer)?;
+                            let duration = start.elapsed();
+                            debug!("MySQLHandler send to client cost:{:?}", duration);
                         }
                         Err(e) => {
                             error!("{}", e);
@@ -116,8 +123,14 @@ impl MySQLHandler {
         let worker_threads = self.opts.num_cpus;
         let datasource = self.datasource.clone();
         let jh = thread::spawn(move || {
-            if let Ok((s, _)) = listener.accept() {
+            if let Ok((s, client)) = listener.accept() {
                 let ctx = Arc::new(FuseQueryContext::create_ctx(worker_threads, datasource));
+                debug!(
+                    "New client from {:?}:{} with {} worker threads",
+                    client.ip(),
+                    client.port(),
+                    ctx.worker_threads
+                );
                 MysqlIntermediary::run_on_tcp(Session::create(ctx), s).unwrap();
             }
         });

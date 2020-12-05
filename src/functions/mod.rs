@@ -15,8 +15,8 @@ mod function_arithmetic;
 mod function_comparison;
 mod function_constant;
 mod function_factory;
+mod function_field;
 mod function_logic;
-mod function_variable;
 
 pub use self::function::Function;
 pub use self::function_aggregator::AggregatorFunction;
@@ -25,5 +25,5 @@ pub use self::function_arithmetic::ArithmeticFunction;
 pub use self::function_comparison::ComparisonFunction;
 pub use self::function_constant::ConstantFunction;
 pub use self::function_factory::ScalarFunctionFactory;
+pub use self::function_field::FieldFunction;
 pub use self::function_logic::LogicFunction;
-pub use self::function_variable::VariableFunction;

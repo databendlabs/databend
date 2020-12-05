@@ -14,6 +14,9 @@ pub enum FuseQueryError {
     #[error("SQLParser Error: {0}")]
     SQLParse(#[from] ParserError),
 
+    #[error("Error during plan: {0}")]
+    Plan(String),
+
     #[error("Internal Error: {0}")]
     Internal(String),
 }
@@ -38,6 +41,12 @@ impl From<std::num::ParseIntError> for FuseQueryError {
 
 impl From<std::io::Error> for FuseQueryError {
     fn from(err: std::io::Error) -> Self {
+        FuseQueryError::Internal(err.to_string())
+    }
+}
+
+impl From<std::fmt::Error> for FuseQueryError {
+    fn from(err: std::fmt::Error) -> Self {
         FuseQueryError::Internal(err.to_string())
     }
 }
