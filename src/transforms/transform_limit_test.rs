@@ -4,8 +4,8 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_limit() -> crate::error::FuseQueryResult<()> {
+    use futures::TryStreamExt;
     use std::sync::Arc;
-    use tokio::stream::StreamExt;
 
     use crate::planners::*;
     use crate::processors::*;
@@ -27,12 +27,9 @@ async fn test_transform_limit() -> crate::error::FuseQueryResult<()> {
         pipeline.add_simple_transform(|| Ok(Box::new(LimitTransform::try_create(plan.n)?)))?;
     }
 
-    let mut stream = pipeline.execute().await?;
-    let mut rows = 0;
-    while let Some(v) = stream.next().await {
-        let row = v?.num_rows();
-        rows += row;
-    }
+    let stream = pipeline.execute().await?;
+    let blocks = stream.try_collect::<Vec<_>>().await?;
+    let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
     assert_eq!(2, rows);
     Ok(())
 }

@@ -32,9 +32,13 @@ async fn test_transform_filter() -> crate::error::FuseQueryResult<()> {
     pipeline.merge_processor()?;
 
     let mut stream = pipeline.execute().await?;
-    let v = stream.next().await.unwrap().unwrap();
-    let actual = v.column(0).as_any().downcast_ref::<Int64Array>().unwrap();
-    let expect = &Int64Array::from(vec![1]);
-    assert_eq!(expect.clone(), actual.clone());
+    while let Some(v) = stream.next().await {
+        let v = v?;
+        if v.num_rows() > 0 {
+            let actual = v.column(0).as_any().downcast_ref::<Int64Array>().unwrap();
+            let expect = &Int64Array::from(vec![1]);
+            assert_eq!(expect.clone(), actual.clone());
+        }
+    }
     Ok(())
 }

@@ -27,7 +27,7 @@ impl NumbersTable {
     }
 
     pub fn generate_parts(&self, total: i64) -> Partitions {
-        let workers = 4i64;
+        let workers = 8i64;
         let chunk_size = total / workers;
         let mut partitions = Vec::with_capacity(workers as usize);
 

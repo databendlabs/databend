@@ -22,10 +22,10 @@ async fn test_pipeline_builder() -> crate::error::FuseQueryResult<()> {
     )?;
     let pipeline = PipelineBuilder::create(ctx, plan).build()?;
     let expect = "\
-    \n  └─ Merge (ProjectionTransform × 4 processors) to (MergeProcessor × 1)\
-    \n    └─ ProjectionTransform × 4 processors\
-    \n      └─ FilterTransform × 4 processors\
-    \n        └─ SourceTransform × 4 processors";
+    \n  └─ Merge (ProjectionTransform × 8 processors) to (MergeProcessor × 1)\
+    \n    └─ ProjectionTransform × 8 processors\
+    \n      └─ FilterTransform × 8 processors\
+    \n        └─ SourceTransform × 8 processors";
     let actual = format!("{:?}", pipeline);
     assert_eq!(expect, actual);
     Ok(())

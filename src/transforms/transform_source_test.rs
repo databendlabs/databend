@@ -4,8 +4,8 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn transform_source_test() -> crate::error::FuseQueryResult<()> {
+    use futures::TryStreamExt;
     use std::sync::Arc;
-    use tokio::stream::StreamExt;
 
     use crate::processors::*;
     use crate::testdata;
@@ -20,13 +20,9 @@ async fn transform_source_test() -> crate::error::FuseQueryResult<()> {
     pipeline.add_source(Arc::new(b))?;
     pipeline.merge_processor()?;
 
-    let mut stream = pipeline.execute().await?;
-
-    let mut rows = 0;
-    while let Some(v) = stream.next().await {
-        let row = v?.num_rows();
-        rows += row;
-    }
+    let stream = pipeline.execute().await?;
+    let blocks = stream.try_collect::<Vec<_>>().await?;
+    let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
     assert_eq!(16, rows);
     Ok(())
 }

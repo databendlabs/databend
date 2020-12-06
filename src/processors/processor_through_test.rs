@@ -14,10 +14,10 @@ async fn test_processor_through() -> crate::error::FuseQueryResult<()> {
     let test_source = testdata::NumberTestData::create();
     let mut pipeline = Pipeline::create();
 
-    let a = test_source.number_source_transform_for_test(8)?;
+    let a = test_source.number_source_transform_for_test(16)?;
     pipeline.add_source(Arc::new(a))?;
 
-    pipeline.expand_processor(4)?;
+    pipeline.expand_processor(8)?;
 
     let mut stream = pipeline.execute().await?;
     let v = stream.next().await.unwrap().unwrap();
