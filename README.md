@@ -67,7 +67,7 @@ mysql> explain select number as a, number/2 as b, number+1 as c  from system.num
           └─ FilterTransform × 4 processors
             └─ SourceTransform × 4 processors                                |
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-2 rows in set (0.41 sec)
+2 rows in set (0.01 sec)
 
 ```
 
@@ -82,7 +82,7 @@ mysql> select number as a, number/2 as b, number+1 as c  from system.numbers(100
 |    2 |    1 |    3 |
 |    3 |    1 |    4 |
 +------+------+------+
-4 rows in set (0.81 sec)
+4 rows in set (0.10 sec)
 ```
 
 ###### Server log in 4-parallels

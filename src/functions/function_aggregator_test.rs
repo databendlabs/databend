@@ -154,7 +154,6 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             (t.func).eval(&t.block)?;
         }
 
-
         // Display check.
         let expect_display = t.display.to_string();
         let actual_display = format!("{:?}", (t.func));

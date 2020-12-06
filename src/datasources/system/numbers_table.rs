@@ -37,11 +37,16 @@ impl NumbersTable {
                 version: 0,
             })
         } else {
-            let data: Vec<i64> = (0..total).collect();
-            let chunks: Vec<&[i64]> = data.chunks(chunk_size as usize).collect();
-            for chunk in chunks.iter() {
+            let parts = workers;
+            let remain = total % workers;
+            for part in 0..parts {
+                let start = part * chunk_size;
+                let mut end = (part + 1) * chunk_size - 1;
+                if part == (parts - 1) && remain > 0 {
+                    end += remain;
+                }
                 partitions.push(Partition {
-                    name: format!("{}-{}-{}", total, chunk[0], chunk[chunk.len() - 1],),
+                    name: format!("{}-{}-{}", total, start, end,),
                     version: 0,
                 })
             }
