@@ -66,7 +66,7 @@ impl ITable for NumbersTable {
     }
 
     fn read_plan(&self, push_down_plan: PlanNode) -> FuseQueryResult<ReadDataSourcePlan> {
-        let mut total = 10000 as i64;
+        let mut total = 10000_i64;
 
         if let PlanNode::Scan(plan) = push_down_plan {
             let ScanPlan { table_args, .. } = plan;
