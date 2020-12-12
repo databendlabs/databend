@@ -134,8 +134,34 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
                     )?,
                 ],
             )?,
-            block,
+            block: block.clone(),
             expect: DataValue::Int64(Some(2)),
+            error: "",
+        },
+        Test {
+            name: "(sum(a+1)+2)-merge-passed",
+            evals: 4,
+            args: vec![field_a.clone(), field_b.clone()],
+            display: "Sum(a+1)+2",
+            nullable: false,
+            func: ArithmeticFunction::try_create(
+                DataValueArithmeticOperator::Add,
+                &[
+                    AggregatorFunction::try_create(
+                        DataValueAggregateOperator::Sum,
+                        &[ArithmeticFunction::try_create(
+                            DataValueArithmeticOperator::Add,
+                            &[
+                                FieldFunction::try_create("a")?,
+                                ConstantFunction::try_create(DataValue::Int8(Some(1)))?,
+                            ],
+                        )?],
+                    )?,
+                    ConstantFunction::try_create(DataValue::Int8(Some(2)))?,
+                ],
+            )?,
+            block,
+            expect: DataValue::Int64(Some(100)),
             error: "",
         },
     ];
