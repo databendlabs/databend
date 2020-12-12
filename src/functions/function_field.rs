@@ -11,6 +11,7 @@ use crate::functions::Function;
 
 #[derive(Clone, Debug)]
 pub struct FieldFunction {
+    depth: usize,
     value: String,
     saved: Option<DataColumnarValue>,
 }
@@ -18,6 +19,7 @@ pub struct FieldFunction {
 impl FieldFunction {
     pub fn try_create(value: &str) -> FuseQueryResult<Function> {
         Ok(Function::Variable(FieldFunction {
+            depth: 0,
             value: value.to_string(),
             saved: None,
         }))
@@ -32,6 +34,10 @@ impl FieldFunction {
 
     pub fn nullable(&self, input_schema: &DataSchema) -> FuseQueryResult<bool> {
         Ok(input_schema.field_with_name(&self.value)?.is_nullable())
+    }
+
+    pub fn set_depth(&mut self, depth: usize) {
+        self.depth = depth;
     }
 
     pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {

@@ -31,6 +31,8 @@ impl ConstantFunction {
         Ok(DataColumnarValue::Scalar(self.value.clone()))
     }
 
+    pub fn set_depth(&mut self, _depth: usize) {}
+
     pub fn accumulate(&mut self, _block: &DataBlock) -> FuseQueryResult<()> {
         Ok(())
     }

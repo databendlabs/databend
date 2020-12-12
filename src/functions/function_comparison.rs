@@ -15,6 +15,7 @@ use crate::functions::Function;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
+    depth: usize,
     op: DataValueComparisonOperator,
     left: Box<Function>,
     right: Box<Function>,
@@ -27,6 +28,7 @@ impl ComparisonFunction {
         args: &[Function],
     ) -> FuseQueryResult<Function> {
         Ok(Function::Comparison(ComparisonFunction {
+            depth: 0,
             op,
             left: Box::from(args[0].clone()),
             right: Box::from(args[1].clone()),
@@ -40,6 +42,10 @@ impl ComparisonFunction {
 
     pub fn nullable(&self, _input_schema: &DataSchema) -> FuseQueryResult<bool> {
         Ok(false)
+    }
+
+    pub fn set_depth(&mut self, depth: usize) {
+        self.depth = depth;
     }
 
     pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {

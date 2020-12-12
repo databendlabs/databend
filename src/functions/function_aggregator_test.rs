@@ -154,6 +154,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
         let state2 = func2.accumulate_result()?;
 
         let mut final_func = t.func.clone();
+        final_func.set_depth(0);
         final_func.merge_state(&*state1)?;
         final_func.merge_state(&*state2)?;
 

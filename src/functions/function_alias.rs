@@ -11,6 +11,7 @@ use crate::functions::Function;
 
 #[derive(Clone, Debug)]
 pub struct AliasFunction {
+    depth: usize,
     alias: String,
     func: Box<Function>,
 }
@@ -18,6 +19,7 @@ pub struct AliasFunction {
 impl AliasFunction {
     pub fn try_create(alias: String, func: Function) -> FuseQueryResult<Function> {
         Ok(Function::Alias(AliasFunction {
+            depth: 0,
             alias,
             func: Box::new(func),
         }))
@@ -29,6 +31,10 @@ impl AliasFunction {
 
     pub fn nullable(&self, input_schema: &DataSchema) -> FuseQueryResult<bool> {
         self.func.nullable(input_schema)
+    }
+
+    pub fn set_depth(&mut self, depth: usize) {
+        self.depth = depth;
     }
 
     pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {

@@ -15,6 +15,7 @@ use crate::functions::Function;
 
 #[derive(Clone, Debug)]
 pub struct AggregatorFunction {
+    depth: usize,
     op: DataValueAggregateOperator,
     arg: Box<Function>,
     state: DataValue,
@@ -27,6 +28,7 @@ impl AggregatorFunction {
     ) -> FuseQueryResult<Function> {
         let state = DataValue::Null;
         Ok(Function::Aggregator(AggregatorFunction {
+            depth: 0,
             op,
             arg: Box::new(args[0].clone()),
             state,
@@ -42,6 +44,10 @@ impl AggregatorFunction {
 
     pub fn nullable(&self, _input_schema: &DataSchema) -> FuseQueryResult<bool> {
         Ok(false)
+    }
+
+    pub fn set_depth(&mut self, depth: usize) {
+        self.depth = depth;
     }
 
     pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
@@ -98,7 +104,7 @@ impl AggregatorFunction {
     }
 
     pub fn merge_state(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
-        let val = states[0].clone();
+        let val = states[self.depth].clone();
         match &self.op {
             DataValueAggregateOperator::Count => {
                 self.state = datavalues::data_value_arithmetic_op(

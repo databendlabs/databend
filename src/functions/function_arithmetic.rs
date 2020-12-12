@@ -14,6 +14,7 @@ use crate::functions::Function;
 
 #[derive(Clone)]
 pub struct ArithmeticFunction {
+    depth: usize,
     op: DataValueArithmeticOperator,
     left: Box<Function>,
     right: Box<Function>,
@@ -25,6 +26,7 @@ impl ArithmeticFunction {
         args: &[Function],
     ) -> FuseQueryResult<Function> {
         Ok(Function::Arithmetic(ArithmeticFunction {
+            depth: 0,
             op,
             left: Box::from(args[0].clone()),
             right: Box::from(args[1].clone()),
@@ -41,6 +43,12 @@ impl ArithmeticFunction {
 
     pub fn nullable(&self, _input_schema: &DataSchema) -> FuseQueryResult<bool> {
         Ok(false)
+    }
+
+    pub fn set_depth(&mut self, depth: usize) {
+        self.left.set_depth(depth);
+        self.right.set_depth(depth + 1);
+        self.depth = depth;
     }
 
     pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
@@ -67,13 +75,8 @@ impl ArithmeticFunction {
     }
 
     pub fn merge_state(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
-        if states.len() > 1 {
-            self.left.merge_state(&*vec![states[0].clone()])?;
-            self.right.merge_state(&*vec![states[1].clone()])
-        } else {
-            self.left.merge_state(states)?;
-            self.right.merge_state(states)
-        }
+        self.left.merge_state(states)?;
+        self.right.merge_state(states)
     }
 
     pub fn merge_result(&self) -> FuseQueryResult<DataValue> {

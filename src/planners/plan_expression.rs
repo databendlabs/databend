@@ -28,7 +28,7 @@ pub enum ExpressionPlan {
 
 impl ExpressionPlan {
     pub fn to_field(&self, input_schema: &DataSchemaRef) -> FuseQueryResult<DataField> {
-        let func = self.to_function()?;
+        let func = self.to_function(0)?;
         Ok(DataField::new(
             format!("{:?}", func).as_str(),
             func.return_type(&input_schema)?,
@@ -36,24 +36,32 @@ impl ExpressionPlan {
         ))
     }
 
-    pub fn to_function(&self) -> FuseQueryResult<Function> {
+    pub fn to_function(&self, depth: usize) -> FuseQueryResult<Function> {
         match self {
             ExpressionPlan::Field(ref v) => FieldFunction::try_create(v.as_str()),
             ExpressionPlan::Constant(ref v) => ConstantFunction::try_create(v.clone()),
             ExpressionPlan::BinaryExpression { left, op, right } => {
-                let l = left.to_function()?;
-                let r = right.to_function()?;
-                ScalarFunctionFactory::get(op, &[l, r])
+                let l = left.to_function(depth)?;
+                let r = right.to_function(depth + 1)?;
+                let mut func = ScalarFunctionFactory::get(op, &[l, r])?;
+                func.set_depth(depth);
+                Ok(func)
             }
             ExpressionPlan::Function { op, args } => {
                 let mut funcs = Vec::with_capacity(args.len());
                 for arg in args {
-                    funcs.push(arg.to_function()?);
+                    let mut func = arg.to_function(depth + 1)?;
+                    func.set_depth(depth);
+                    funcs.push(func);
                 }
-                ScalarFunctionFactory::get(op, &funcs)
+                let mut func = ScalarFunctionFactory::get(op, &funcs)?;
+                func.set_depth(depth);
+                Ok(func)
             }
             ExpressionPlan::Alias(alias, expr) => {
-                AliasFunction::try_create(alias.clone(), expr.to_function()?)
+                let mut func = expr.to_function(depth)?;
+                func.set_depth(depth);
+                AliasFunction::try_create(alias.clone(), func)
             }
         }
     }

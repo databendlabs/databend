@@ -61,6 +61,18 @@ impl Function {
         }
     }
 
+    pub fn set_depth(&mut self, depth: usize) {
+        match self {
+            Function::Alias(v) => v.set_depth(depth),
+            Function::Constant(v) => v.set_depth(depth),
+            Function::Variable(v) => v.set_depth(depth),
+            Function::Arithmetic(v) => v.set_depth(depth),
+            Function::Comparison(v) => v.set_depth(depth),
+            Function::Logic(v) => v.set_depth(depth),
+            Function::Aggregator(v) => v.set_depth(depth),
+        }
+    }
+
     // Accumulator all the block to one state.
     // This is used in aggregation.
     // sum(state) = sum(block1) + sum(block2) ...

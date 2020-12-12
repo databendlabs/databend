@@ -15,6 +15,7 @@ use crate::functions::Function;
 
 #[derive(Clone)]
 pub struct LogicFunction {
+    depth: usize,
     op: DataValueLogicOperator,
     left: Box<Function>,
     right: Box<Function>,
@@ -24,6 +25,7 @@ pub struct LogicFunction {
 impl LogicFunction {
     pub fn try_create(op: DataValueLogicOperator, args: &[Function]) -> FuseQueryResult<Function> {
         Ok(Function::Logic(LogicFunction {
+            depth: 0,
             op,
             left: Box::from(args[0].clone()),
             right: Box::from(args[1].clone()),
@@ -37,6 +39,10 @@ impl LogicFunction {
 
     pub fn nullable(&self, _input_schema: &DataSchema) -> FuseQueryResult<bool> {
         Ok(false)
+    }
+
+    pub fn set_depth(&mut self, depth: usize) {
+        self.depth = depth;
     }
 
     pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {

@@ -35,7 +35,7 @@ impl ProjectionTransform {
 
         let mut funcs = Vec::with_capacity(exprs.len());
         for expr in &exprs {
-            funcs.push(expr.to_function()?);
+            funcs.push(expr.to_function(0)?);
         }
 
         Ok(ProjectionTransform {
