@@ -13,6 +13,10 @@ fn binary_expr(l: ExpressionPlan, op: &str, r: ExpressionPlan) -> ExpressionPlan
     }
 }
 
+pub fn add(left: ExpressionPlan, right: ExpressionPlan) -> ExpressionPlan {
+    binary_expr(left, "+", right)
+}
+
 impl ExpressionPlan {
     /// Equal
     pub fn eq(&self, other: ExpressionPlan) -> ExpressionPlan {
