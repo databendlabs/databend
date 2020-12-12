@@ -1,1 +1,0 @@
-SELECT a, bc FROM t1 LIMIT 10
