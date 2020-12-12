@@ -3,6 +3,7 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 mod pipeline_builder_test;
+mod processor_empty_test;
 mod processor_merge_test;
 mod processor_through_test;
 
