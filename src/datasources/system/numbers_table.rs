@@ -33,7 +33,7 @@ impl NumbersTable {
 
         if chunk_size == 0 {
             partitions.push(Partition {
-                name: format!("{}-{}-{}", total, 0, total),
+                name: format!("{}-{}-{}", total, 0, total - 1),
                 version: 0,
             })
         } else {

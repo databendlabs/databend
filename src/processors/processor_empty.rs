@@ -6,8 +6,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::datastreams::SendableDataBlockStream;
-use crate::error::FuseQueryResult;
+use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
+use crate::datavalues::DataSchema;
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::{FormatterSettings, IProcessor};
 
 pub struct EmptyProcessor {}
@@ -25,11 +26,17 @@ impl IProcessor for EmptyProcessor {
     }
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
-        unimplemented!()
+        Err(FuseQueryError::Internal(
+            "Cannot call EmptyProcessor connect_to".to_owned(),
+        ))
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
-        unimplemented!()
+        Ok(Box::pin(DataBlockStream::create(
+            Arc::new(DataSchema::empty()),
+            None,
+            vec![],
+        )))
     }
 
     fn format(

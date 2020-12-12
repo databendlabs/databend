@@ -12,14 +12,10 @@ async fn test_processor_through() -> crate::error::FuseQueryResult<()> {
     use crate::testdata;
 
     let test_source = testdata::NumberTestData::create();
-    let mut pipeline = Pipeline::create();
+    let mut through = ThroughProcessor::create();
+    through.connect_to(Arc::new(test_source.number_source_transform_for_test(2)?))?;
 
-    let a = test_source.number_source_transform_for_test(16)?;
-    pipeline.add_source(Arc::new(a))?;
-
-    pipeline.expand_processor(8)?;
-
-    let mut stream = pipeline.execute().await?;
+    let mut stream = through.execute().await?;
     let v = stream.next().await.unwrap().unwrap();
     let actual = v.column(0).as_any().downcast_ref::<UInt64Array>().unwrap();
     let expect = &UInt64Array::from(vec![0, 1]);
