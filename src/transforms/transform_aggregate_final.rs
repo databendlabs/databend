@@ -25,7 +25,7 @@ impl AggregateFinalTransform {
     pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> FuseQueryResult<Self> {
         let mut funcs = Vec::with_capacity(exprs.len());
         for expr in &exprs {
-            funcs.push(expr.to_function(0)?);
+            funcs.push(expr.to_function()?);
         }
 
         Ok(AggregateFinalTransform {

@@ -28,7 +28,7 @@ impl FilterTransform {
             )));
         }
 
-        let func = predicate.to_function(0)?;
+        let func = predicate.to_function()?;
         Ok(FilterTransform {
             func,
             input: Arc::new(EmptyProcessor::create()),
