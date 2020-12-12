@@ -46,6 +46,11 @@ fn criterion_benchmark_memory_table_processor(c: &mut Criterion) {
         "select number from system.numbers(1000000) where number < 4 limit 10",
     );
     criterion_benchmark_suite(c, "select number as a, number/2 as b, number+1 as c from system.numbers(1000000) where number < 4 limit 10");
+    criterion_benchmark_suite(
+        c,
+        "select sum(number), max(number) from system.numbers(1000000)",
+    );
+    criterion_benchmark_suite(c, "select sum(number+1) from system.numbers(10000000)");
 }
 
 criterion_group!(benches, criterion_benchmark_memory_table_processor,);

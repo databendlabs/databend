@@ -41,8 +41,7 @@ impl FilterTransform {
         funcs: Vec<Function>,
     ) -> FuseQueryResult<DataBlock> {
         let mut func = funcs[0].clone();
-        func.eval(&block)?;
-        let result = func.result()?.to_array(block.num_rows())?;
+        let result = func.eval(&block)?.to_array(block.num_rows())?;
         let filter_array = result
             .as_any()
             .downcast_ref::<BooleanArray>()

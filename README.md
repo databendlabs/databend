@@ -7,6 +7,8 @@
 
 FuseQuery is a Distributed SQL Query Engine at scale.
 
+New implementation of ClickHouse from scratch in Rust, WIP.
+
 Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow](https://github.com/apache/arrow).
 
 ## Features
@@ -30,13 +32,54 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 | [processors](src/processors) | Dataflow streaming processor([Pipeline](src/processors/pipeline.rs)) | WIP |
 | [planners](src/planners) | Distributed plan for queries and DML statements([SELECT](src/planners/plan_select.rs)/[EXPLAIN](src/planners/plan_explain.rs)) | WIP |
 | [servers](src/servers) | Server handler([MySQL](src/servers/mysql)/HTTP) | MySQL |
-| [transforms](src/transforms) | Query execution transform([Source](src/transforms/transform_source.rs)/[Filter](src/transforms/transform_filter.rs)/[Projection](src/transforms/transform_projection.rs)/[Aggregator](src/transforms/transform_aggregate.rs)/[Limit](src/transforms/transform_limit.rs)) | WIP |
+| [transforms](src/transforms) | Query execution transform([Source](src/transforms/transform_source.rs)/[Filter](src/transforms/transform_filter.rs)/[Projection](src/transforms/transform_projection.rs)/[AggregatorPartial](src/transforms/transform_aggregate_partial.rs)/[AggregatorFinal](src/transforms/transform_aggregate_final.rs)/[Limit](src/transforms/transform_limit.rs)) | WIP |
+
+## Performance
+
+* Dataset: 10,000,000,000 (10 Billion) 
+* Hardware: 8vCPUx16G KVM Cloud Instance
+
+
+|Query |FuseQuery Cost| ClickHouse Cost|
+|-------------------------------|---------------| ----|
+|SELECT sum(number) FROM system.numbers(10000000000) | [1.82s] | [6.66s], 1.50 billion rows/s., 12.01 GB/s |
+|SELECT sum(number - 1) FROM system.numbers(10000000000)| [21.80s] | [10.62s], 941.32 million rows/s., 7.53 GB/s |
+|SELECT max(number) FROM system.numbers(10000000000) | [3.66s] | [8.79s], 1.14 billion rows/s., 9.11 GB/s |
+|SELECT count(number) FROM system.numbers(10000000000) | [1.63s] | [2.33s], 4.29 billion rows/s., 34.29 GB/s |
+|SELECT sum(number) / count(number) FROM system.numbers(10000000000) | [2.04s] | [5.25s], 4.29 billion rows/s., 34.29 GB/s |
+|SELECT sum(number) / count(number), max(number), min(number) FROM system.numbers(10000000000) | [7.97s] | [16.73s], 597.85 million rows/s., 4.78 GB/s |
+
+Note:
+* ClickHouse system.numbers is <b>1-way</b> parallelism processing
+* FuseQuery system.numbers is <b>8-way</b> parallelism processing
+```
+explain select count(number) from system.numbers(10000000000);
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| explain                                                                                                                                                                                                                                      |
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| └─ Aggregate: count([number])
+  └─ ReadDataSource: scan parts [8](Read from system.numbers table)                                                                                                                                            |
+| 
+  └─ AggregateFinalTransform × 1 processor
+    └─ Merge (AggregatePartialTransform × 8 processors) to (MergeProcessor × 1)
+      └─ AggregatePartialTransform × 8 processors
+        └─ SourceTransform × 8 processors                      |
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+2 rows in set (0.00 sec)
+```
+
+## How to install Rust(nightly)?
+```
+$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+$ rustup toolchain install nightly
+```
+
 
 ## How to Run?
 
-#### Fuse-Query Cloud Compute starts
+#### Fuse-Query Server
 ```
-$make run
+$ make run
 
 12:46:15 [ INFO] Options { log_level: "debug", num_cpus: 8, mysql_handler_port: 3307 }
 12:46:15 [ INFO] Fuse-Query Cloud Compute Starts...
@@ -46,7 +89,7 @@ $make run
 #### Query with MySQL client
 ###### Connect
 ```
-$mysql -h127.0.0.1 -P3307
+$ mysql -h127.0.0.1 -P3307
 ```
 
 ###### Explain
@@ -58,14 +101,14 @@ mysql> explain select number as a, number/2 as b, number+1 as c  from system.num
 | └─ Limit: 10
   └─ Projection: number as a, number / 2 as b, number + 1 as c
     └─ Filter: number < 4
-      └─ ReadDataSource: scan parts [4](Read from system.numbers table)                                                                                                                                         |
+      └─ ReadDataSource: scan parts [8](Read from system.numbers table)                                                                                                                                         |
 | 
   └─ LimitTransform × 1 processor
-    └─ Merge (LimitTransform × 4 processors) to (MergeProcessor × 1)
-      └─ LimitTransform × 4 processors
-        └─ ProjectionTransform × 4 processors
-          └─ FilterTransform × 4 processors
-            └─ SourceTransform × 4 processors                                |
+    └─ Merge (LimitTransform × 8 processors) to (MergeProcessor × 1)
+      └─ LimitTransform × 8 processors
+        └─ ProjectionTransform × 8 processors
+          └─ FilterTransform × 8 processors
+            └─ SourceTransform × 8 processors                                |
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 2 rows in set (0.01 sec)
 
@@ -85,41 +128,8 @@ mysql> select number as a, number/2 as b, number+1 as c  from system.numbers(100
 4 rows in set (0.10 sec)
 ```
 
-###### Server log in 4-parallels
-```
-12:28:09 [DEBUG] (33) fuse_query::datasources::system::numbers_stream: number stream part:10000000-2500000-4999999, cost:129.60938ms
-12:28:09 [DEBUG] (34) fuse_query::datasources::system::numbers_stream: number stream part:10000000-0-2499999, cost:130.609545ms
-12:28:09 [DEBUG] (30) fuse_query::datasources::system::numbers_stream: number stream part:10000000-7500000-9999999, cost:154.209505ms
-12:28:09 [DEBUG] (28) fuse_query::datasources::system::numbers_stream: number stream part:10000000-5000000-7499999, cost:155.297662ms
-12:28:09 [DEBUG] (34) fuse_query::transforms::transform_projection: transform projection cost:177.497µs
-12:28:09 [DEBUG] (33) fuse_query::transforms::transform_projection: transform projection cost:58.612µs
-12:28:09 [DEBUG] (28) fuse_query::transforms::transform_projection: transform projection cost:72.562µs
-12:28:09 [DEBUG] (30) fuse_query::transforms::transform_projection: transform projection cost:72.598µs
-12:28:09 [DEBUG] (10) fuse_query::servers::mysql::mysql_handler: MySQLHandler executor cost:408.81587ms
-12:28:09 [DEBUG] (10) fuse_query::servers::mysql::mysql_handler: MySQLHandler send to client cost:211.087µs
-```
-
 ## How to Test?
 
 ```
-$make test
+$ make test
 ```
-
-## How to Bench?
-
-```
-$make bench
-
-select number from system.numbers(1000000) where number < 4 limit 10                                                                             
-                        time:   [4.5042 ms 4.5400 ms 4.5764 ms]
-                        change: [-0.8063% +0.0880% +1.2691%] (p = 0.87 > 0.05)
-                        No change in performance detected.
-Found 2 outliers among 100 measurements (2.00%)
-  2 (2.00%) high mild
-
-select number as a, number/2 as b, number+1 as c from system.numbers(1000000) where number < 4 limit...                                                                             
-                        time:   [4.5120 ms 4.5444 ms 4.5760 ms]
-                        change: [-4.1011% -3.0361% -2.0114%] (p = 0.00 < 0.05)
-                        Performance has improved.
-```
-

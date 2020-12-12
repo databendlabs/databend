@@ -73,7 +73,6 @@ fn test_logic_function() -> crate::error::FuseQueryResult<()> {
         if let Err(e) = func.eval(&t.block) {
             assert_eq!(t.error, e.to_string());
         }
-        func.eval(&t.block)?;
 
         // Display check.
         let expect_display = t.display.to_string();
@@ -85,7 +84,7 @@ fn test_logic_function() -> crate::error::FuseQueryResult<()> {
         let actual_null = func.nullable(t.block.schema())?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.result()?;
+        let ref v = func.eval(&t.block)?;
         // Type check.
         let expect_type = func.return_type(t.block.schema())?;
         let actual_type = v.data_type();

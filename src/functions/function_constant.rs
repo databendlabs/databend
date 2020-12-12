@@ -27,20 +27,24 @@ impl ConstantFunction {
         Ok(self.value.is_null())
     }
 
-    pub fn eval(&self, _block: &DataBlock) -> FuseQueryResult<()> {
-        Ok(())
-    }
-
-    pub fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
-        Ok(())
-    }
-
-    pub fn state(&self) -> FuseQueryResult<Vec<DataValue>> {
-        Ok(vec![])
-    }
-
-    pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
+    pub fn eval(&self, _block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
         Ok(DataColumnarValue::Scalar(self.value.clone()))
+    }
+
+    pub fn accumulate(&mut self, _block: &DataBlock) -> FuseQueryResult<()> {
+        Ok(())
+    }
+
+    pub fn accumulate_result(&self) -> FuseQueryResult<Vec<DataValue>> {
+        Ok(vec![self.value.clone()])
+    }
+
+    pub fn merge_state(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
+        Ok(())
+    }
+
+    pub fn merge_result(&self) -> FuseQueryResult<DataValue> {
+        Ok(self.value.clone())
     }
 }
 

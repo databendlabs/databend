@@ -35,8 +35,8 @@ async fn test_transform_filter() -> crate::error::FuseQueryResult<()> {
     while let Some(v) = stream.next().await {
         let v = v?;
         if v.num_rows() > 0 {
-            let actual = v.column(0).as_any().downcast_ref::<Int64Array>().unwrap();
-            let expect = &Int64Array::from(vec![1]);
+            let actual = v.column(0).as_any().downcast_ref::<UInt64Array>().unwrap();
+            let expect = &UInt64Array::from(vec![1]);
             assert_eq!(expect.clone(), actual.clone());
         }
     }

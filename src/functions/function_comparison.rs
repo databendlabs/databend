@@ -42,31 +42,40 @@ impl ComparisonFunction {
         Ok(false)
     }
 
-    pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
-        self.left.eval(block)?;
-        self.right.eval(block)?;
-        self.saved = Some(DataColumnarValue::Array(
+    pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
+        Ok(DataColumnarValue::Array(
             datavalues::data_array_comparison_op(
                 self.op.clone(),
-                &self.left.result()?,
-                &self.right.result()?,
+                &self.left.eval(block)?,
+                &self.right.eval(block)?,
             )?,
-        ));
-        Ok(())
+        ))
     }
 
-    pub fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
-        Ok(())
+    pub fn accumulate(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
+        self.left.accumulate(block)?;
+        self.right.accumulate(block)
     }
 
-    pub fn state(&self) -> FuseQueryResult<Vec<DataValue>> {
-        Ok(vec![])
+    pub fn accumulate_result(&self) -> FuseQueryResult<Vec<DataValue>> {
+        Err(FuseQueryError::Internal(format!(
+            "Unsupported aggregate operation for function {}",
+            self.op
+        )))
     }
 
-    pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
-        self.saved
-            .clone()
-            .ok_or_else(|| FuseQueryError::Internal("Result cannot be none".to_string()))
+    pub fn merge_state(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
+        Err(FuseQueryError::Internal(format!(
+            "Unsupported aggregate operation for function {}",
+            self.op
+        )))
+    }
+
+    pub fn merge_result(&self) -> FuseQueryResult<DataValue> {
+        Err(FuseQueryError::Internal(format!(
+            "Unsupported aggregate operation for function {}",
+            self.op
+        )))
     }
 }
 

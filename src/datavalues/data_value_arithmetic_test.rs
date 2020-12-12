@@ -5,7 +5,6 @@
 #[test]
 fn test_data_value_arithmetic() {
     use super::*;
-    use crate::error::FuseQueryResult;
 
     #[allow(dead_code)]
     struct ScalarTest {
@@ -13,7 +12,7 @@ fn test_data_value_arithmetic() {
         args: Vec<Vec<DataValue>>,
         expect: Vec<DataValue>,
         error: Vec<&'static str>,
-        func: fn(DataValue, DataValue) -> FuseQueryResult<DataValue>,
+        op: DataValueArithmeticOperator,
     }
 
     let tests = vec![ScalarTest {
@@ -34,7 +33,7 @@ fn test_data_value_arithmetic() {
             vec![DataValue::Float32(Some(1.0)), DataValue::Float32(Some(2.0))],
             vec![DataValue::Float64(Some(1.0)), DataValue::Float64(Some(2.0))],
         ],
-        func: data_value_add,
+        op: DataValueArithmeticOperator::Add,
         expect: vec![
             DataValue::String(Some("xx".to_string())),
             DataValue::Int8(Some(3)),
@@ -53,7 +52,7 @@ fn test_data_value_arithmetic() {
 
     for t in tests {
         for (i, args) in t.args.iter().enumerate() {
-            let result = (t.func)(args[0].clone(), args[1].clone());
+            let result = data_value_arithmetic_op(t.op.clone(), args[0].clone(), args[1].clone());
             match result {
                 Ok(ref v) => {
                     // Result check.

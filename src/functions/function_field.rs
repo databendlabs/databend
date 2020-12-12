@@ -34,25 +34,35 @@ impl FieldFunction {
         Ok(input_schema.field_with_name(&self.value)?.is_nullable())
     }
 
-    pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
+    pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
+        Ok(DataColumnarValue::Array(
+            block.column_by_name(self.value.as_str())?.clone(),
+        ))
+    }
+
+    pub fn accumulate(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
         self.saved = Some(DataColumnarValue::Array(
             block.column_by_name(self.value.as_str())?.clone(),
         ));
         Ok(())
     }
 
-    pub fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
-        Ok(())
+    pub fn accumulate_result(&self) -> FuseQueryResult<Vec<DataValue>> {
+        Err(FuseQueryError::Internal(
+            "Unsupported aggregate operation for function field".to_string(),
+        ))
     }
 
-    pub fn state(&self) -> FuseQueryResult<Vec<DataValue>> {
-        Ok(vec![])
+    pub fn merge_state(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
+        Err(FuseQueryError::Internal(
+            "Unsupported aggregate operation for function field".to_string(),
+        ))
     }
 
-    pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
-        self.saved
-            .clone()
-            .ok_or_else(|| FuseQueryError::Internal("Result cannot be none".to_string()))
+    pub fn merge_result(&self) -> FuseQueryResult<DataValue> {
+        Err(FuseQueryError::Internal(
+            "Unsupported aggregate operation for function field".to_string(),
+        ))
     }
 }
 

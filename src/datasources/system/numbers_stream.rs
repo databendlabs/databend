@@ -2,29 +2,62 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use log::debug;
-use std::time::Instant;
-
 use std::task::{Context, Poll};
 use tokio::stream::Stream;
 
 use crate::datablocks::DataBlock;
 use crate::datasources::Partitions;
-use crate::datavalues::Int64Array;
-use crate::datavalues::{DataField, DataSchema, DataType};
+use crate::datavalues::{DataSchemaRef, UInt64Array};
 use crate::error::FuseQueryResult;
 use std::sync::Arc;
 
+#[derive(Debug, Clone)]
+struct BlockRange {
+    begin: u64,
+    end: u64,
+}
+
 pub struct NumbersStream {
-    index: usize,
-    partitions: Partitions,
+    block_index: usize,
+    schema: DataSchemaRef,
+    blocks: Vec<BlockRange>,
 }
 
 impl NumbersStream {
-    pub fn create(partitions: Partitions) -> Self {
+    pub fn create(schema: DataSchemaRef, partitions: Partitions) -> Self {
+        let mut blocks = vec![];
+        let block_size = 10000;
+
+        for part in partitions {
+            let names: Vec<_> = part.name.split('-').collect();
+            let begin: u64 = names[1].parse().unwrap();
+            let end: u64 = names[2].parse().unwrap();
+            let count = end - begin + 1;
+
+            let block_nums = count / block_size;
+            let remain = count % block_size;
+
+            if block_nums > 0 {
+                for i in 0..block_nums {
+                    let block_begin = begin + block_size * i;
+                    let mut block_end = begin + block_size * (i + 1) - 1;
+                    if (i == block_nums - 1) && remain > 0 {
+                        block_end = block_begin + remain;
+                    }
+                    blocks.push(BlockRange {
+                        begin: block_begin,
+                        end: block_end,
+                    });
+                }
+            } else {
+                blocks.push(BlockRange { begin, end });
+            }
+        }
+
         NumbersStream {
-            index: 0,
-            partitions,
+            block_index: 0,
+            schema,
+            blocks,
         }
     }
 }
@@ -36,26 +69,13 @@ impl Stream for NumbersStream {
         mut self: std::pin::Pin<&mut Self>,
         _: &mut Context<'_>,
     ) -> Poll<Option<Self::Item>> {
-        Poll::Ready(if self.index < self.partitions.len() {
-            let start = Instant::now();
+        Poll::Ready(if (self.block_index as usize) < self.blocks.len() {
+            let current = self.blocks[self.block_index].clone();
+            self.block_index += 1;
 
-            let part = self.partitions[self.index].clone();
-            let names: Vec<_> = part.name.split('-').collect();
-            let begin: i64 = names[1].parse()?;
-            let end: i64 = names[2].parse()?;
-
-            self.index += 1;
-            let data: Vec<i64> = (begin..=end).collect();
-            let block = DataBlock::create(
-                Arc::new(DataSchema::new(vec![DataField::new(
-                    "number",
-                    DataType::Int64,
-                    false,
-                )])),
-                vec![Arc::new(Int64Array::from(data))],
-            );
-            let duration = start.elapsed();
-            debug!("number stream part:{}, cost:{:?}", part.name, duration);
+            let data: Vec<u64> = (current.begin..=current.end).collect();
+            let block =
+                DataBlock::create(self.schema.clone(), vec![Arc::new(UInt64Array::from(data))]);
             Some(Ok(block))
         } else {
             None

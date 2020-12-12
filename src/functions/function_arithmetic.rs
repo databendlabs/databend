@@ -43,32 +43,45 @@ impl ArithmeticFunction {
         Ok(false)
     }
 
-    pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
-        self.left.eval(block)?;
-        self.right.eval(block)?;
-
-        Ok(())
-    }
-
-    pub fn merge(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
-        self.left.merge(states)?;
-        self.right.merge(states)?;
-
-        Ok(())
-    }
-
-    pub fn state(&self) -> FuseQueryResult<Vec<DataValue>> {
-        Ok(vec![])
-    }
-
-    pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
+    pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
         Ok(DataColumnarValue::Array(
             datavalues::data_array_arithmetic_op(
                 self.op.clone(),
-                &self.left.result()?,
-                &self.right.result()?,
+                &self.left.eval(block)?,
+                &self.right.eval(block)?,
             )?,
         ))
+    }
+
+    pub fn accumulate(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
+        self.left.accumulate(&block)?;
+        self.right.accumulate(&block)
+    }
+
+    pub fn accumulate_result(&self) -> FuseQueryResult<Vec<DataValue>> {
+        Ok([
+            &self.left.accumulate_result()?[..],
+            &self.right.accumulate_result()?[..],
+        ]
+        .concat())
+    }
+
+    pub fn merge_state(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
+        if states.len() > 1 {
+            self.left.merge_state(&*vec![states[0].clone()])?;
+            self.right.merge_state(&*vec![states[1].clone()])
+        } else {
+            self.left.merge_state(states)?;
+            self.right.merge_state(states)
+        }
+    }
+
+    pub fn merge_result(&self) -> FuseQueryResult<DataValue> {
+        datavalues::data_value_arithmetic_op(
+            self.op.clone(),
+            self.left.merge_result()?,
+            self.right.merge_result()?,
+        )
     }
 }
 

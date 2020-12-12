@@ -21,8 +21,8 @@ async fn test_processor_through() -> crate::error::FuseQueryResult<()> {
 
     let mut stream = pipeline.execute().await?;
     let v = stream.next().await.unwrap().unwrap();
-    let actual = v.column(0).as_any().downcast_ref::<Int64Array>().unwrap();
-    let expect = &Int64Array::from(vec![0, 1]);
+    let actual = v.column(0).as_any().downcast_ref::<UInt64Array>().unwrap();
+    let expect = &UInt64Array::from(vec![0, 1]);
     assert_eq!(expect.clone(), actual.clone());
     Ok(())
 }

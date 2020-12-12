@@ -20,14 +20,14 @@ impl NumbersTable {
         NumbersTable {
             schema: Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                DataType::Int64,
+                DataType::UInt64,
                 false,
             )])),
         }
     }
 
-    pub fn generate_parts(&self, total: i64) -> Partitions {
-        let workers = 8i64;
+    pub fn generate_parts(&self, total: u64) -> Partitions {
+        let workers = 8u64;
         let chunk_size = total / workers;
         let mut partitions = Vec::with_capacity(workers as usize);
 
@@ -66,13 +66,17 @@ impl ITable for NumbersTable {
     }
 
     fn read_plan(&self, push_down_plan: PlanNode) -> FuseQueryResult<ReadDataSourcePlan> {
-        let mut total = 10000_i64;
+        let mut total = 10000_u64;
 
         if let PlanNode::Scan(plan) = push_down_plan {
             let ScanPlan { table_args, .. } = plan;
             if let Some(args) = table_args {
-                if let ExpressionPlan::Constant(DataValue::Int64(Some(v))) = args {
+                if let ExpressionPlan::Constant(DataValue::UInt64(Some(v))) = args {
                     total = v;
+                }
+
+                if let ExpressionPlan::Constant(DataValue::Int64(Some(v))) = args {
+                    total = v as u64;
                 }
             }
         }
@@ -88,6 +92,6 @@ impl ITable for NumbersTable {
     }
 
     async fn read(&self, parts: Vec<Partition>) -> FuseQueryResult<SendableDataBlockStream> {
-        Ok(Box::pin(NumbersStream::create(parts)))
+        Ok(Box::pin(NumbersStream::create(self.schema.clone(), parts)))
     }
 }

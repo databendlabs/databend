@@ -49,7 +49,7 @@ impl Function {
         }
     }
 
-    pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
+    pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
         match self {
             Function::Alias(v) => v.eval(block),
             Function::Constant(v) => v.eval(block),
@@ -61,39 +61,60 @@ impl Function {
         }
     }
 
-    pub fn merge(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
+    // Accumulator all the block to one state.
+    // This is used in aggregation.
+    // sum(state) = sum(block1) + sum(block2) ...
+    pub fn accumulate(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
         match self {
-            Function::Alias(v) => v.merge(states),
-            Function::Constant(v) => v.merge(states),
-            Function::Variable(v) => v.merge(states),
-            Function::Arithmetic(v) => v.merge(states),
-            Function::Comparison(v) => v.merge(states),
-            Function::Logic(v) => v.merge(states),
-            Function::Aggregator(v) => v.merge(states),
+            Function::Alias(v) => v.accumulate(block),
+            Function::Constant(v) => v.accumulate(block),
+            Function::Variable(v) => v.accumulate(block),
+            Function::Arithmetic(v) => v.accumulate(block),
+            Function::Comparison(v) => v.accumulate(block),
+            Function::Logic(v) => v.accumulate(block),
+            Function::Aggregator(v) => v.accumulate(block),
         }
     }
 
-    pub fn state(&self) -> FuseQueryResult<Vec<DataValue>> {
+    // Get the final state for all the accumulator.
+    pub fn accumulate_result(&self) -> FuseQueryResult<Vec<DataValue>> {
         match self {
-            Function::Alias(v) => v.state(),
-            Function::Constant(v) => v.state(),
-            Function::Variable(v) => v.state(),
-            Function::Arithmetic(v) => v.state(),
-            Function::Comparison(v) => v.state(),
-            Function::Logic(v) => v.state(),
-            Function::Aggregator(v) => v.state(),
+            Function::Alias(v) => v.accumulate_result(),
+            Function::Constant(v) => v.accumulate_result(),
+            Function::Variable(v) => v.accumulate_result(),
+            Function::Arithmetic(v) => v.accumulate_result(),
+            Function::Comparison(v) => v.accumulate_result(),
+            Function::Logic(v) => v.accumulate_result(),
+            Function::Aggregator(v) => v.accumulate_result(),
         }
     }
 
-    pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
+    // Merge partial accumulator results(state) to one.
+    // merge(state) = sum(state1) + sum(state2)
+    // This is used in aggregation.
+    pub fn merge_state(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
         match self {
-            Function::Alias(v) => v.result(),
-            Function::Constant(v) => v.result(),
-            Function::Variable(v) => v.result(),
-            Function::Arithmetic(v) => v.result(),
-            Function::Comparison(v) => v.result(),
-            Function::Logic(v) => v.result(),
-            Function::Aggregator(v) => v.result(),
+            Function::Alias(v) => v.merge_state(states),
+            Function::Constant(v) => v.merge_state(states),
+            Function::Variable(v) => v.merge_state(states),
+            Function::Arithmetic(v) => v.merge_state(states),
+            Function::Comparison(v) => v.merge_state(states),
+            Function::Logic(v) => v.merge_state(states),
+            Function::Aggregator(v) => v.merge_state(states),
+        }
+    }
+
+    // Return the final result merge(state)
+    // This is used in aggregation.
+    pub fn merge_result(&self) -> FuseQueryResult<DataValue> {
+        match self {
+            Function::Alias(v) => v.merge_result(),
+            Function::Constant(v) => v.merge_result(),
+            Function::Variable(v) => v.merge_result(),
+            Function::Arithmetic(v) => v.merge_result(),
+            Function::Comparison(v) => v.merge_result(),
+            Function::Logic(v) => v.merge_result(),
+            Function::Aggregator(v) => v.merge_result(),
         }
     }
 }

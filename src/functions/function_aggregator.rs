@@ -8,6 +8,7 @@ use crate::datablocks::DataBlock;
 use crate::datavalues;
 use crate::datavalues::{
     DataColumnarValue, DataSchema, DataType, DataValue, DataValueAggregateOperator,
+    DataValueArithmeticOperator,
 };
 use crate::error::FuseQueryResult;
 use crate::functions::Function;
@@ -43,14 +44,17 @@ impl AggregatorFunction {
         Ok(false)
     }
 
-    // Accumulates a value.
-    pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
+    pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
+        self.arg.eval(block)
+    }
+
+    pub fn accumulate(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
         let rows = block.num_rows();
-        self.arg.eval(block)?;
-        let val = self.arg.result()?;
+        let val = self.arg.eval(&block)?;
         match &self.op {
             DataValueAggregateOperator::Count => {
-                self.state = datavalues::data_value_add(
+                self.state = datavalues::data_value_arithmetic_op(
+                    DataValueArithmeticOperator::Add,
                     self.state.clone(),
                     DataValue::UInt64(Some(rows as u64)),
                 )?;
@@ -76,7 +80,8 @@ impl AggregatorFunction {
                 )?;
             }
             DataValueAggregateOperator::Sum => {
-                self.state = datavalues::data_value_add(
+                self.state = datavalues::data_value_arithmetic_op(
+                    DataValueArithmeticOperator::Add,
                     self.state.clone(),
                     datavalues::data_array_aggregate_op(
                         DataValueAggregateOperator::Sum,
@@ -88,11 +93,19 @@ impl AggregatorFunction {
         Ok(())
     }
 
-    pub fn merge(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
+    pub fn accumulate_result(&self) -> FuseQueryResult<Vec<DataValue>> {
+        Ok(vec![self.state.clone()])
+    }
+
+    pub fn merge_state(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
         let val = states[0].clone();
         match &self.op {
             DataValueAggregateOperator::Count => {
-                self.state = datavalues::data_value_add(self.state.clone(), val)?;
+                self.state = datavalues::data_value_arithmetic_op(
+                    DataValueArithmeticOperator::Add,
+                    self.state.clone(),
+                    val,
+                )?;
             }
             DataValueAggregateOperator::Min => {
                 self.state = datavalues::data_value_aggregate_op(
@@ -109,19 +122,18 @@ impl AggregatorFunction {
                 )?;
             }
             DataValueAggregateOperator::Sum => {
-                self.state = datavalues::data_value_add(self.state.clone(), val)?;
+                self.state = datavalues::data_value_arithmetic_op(
+                    DataValueArithmeticOperator::Add,
+                    self.state.clone(),
+                    val,
+                )?;
             }
         }
         Ok(())
     }
 
-    pub fn state(&self) -> FuseQueryResult<Vec<DataValue>> {
-        Ok(vec![])
-    }
-
-    // Calculates a final aggregators.
-    pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
-        Ok(DataColumnarValue::Scalar(self.state.clone()))
+    pub fn merge_result(&self) -> FuseQueryResult<DataValue> {
+        Ok(self.state.clone())
     }
 }
 

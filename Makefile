@@ -5,10 +5,10 @@ bench:
 	cargo +nightly bench -- --nocapture
 
 run:
-	cargo +nightly run -- --nocapture
+	cargo +nightly run --release -- --nocapture
 
 build:
-	cargo build --release 
+	cargo +nightly build --release
 
 lint:
 	cargo fmt

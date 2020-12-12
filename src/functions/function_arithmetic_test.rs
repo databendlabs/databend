@@ -124,31 +124,6 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
             expect: Arc::new(Int64Array::from(vec![4, 1, 0])),
             error: "",
         },
-        Test {
-            name: "(sum(a)+1)-passed",
-            evals: 3,
-            args: vec![
-                ConstantFunction::try_create(DataValue::Int64(Some(1))).unwrap(),
-                AggregatorFunction::try_create(
-                    DataValueAggregateOperator::Sum,
-                    &[FieldFunction::try_create("a").unwrap()],
-                )
-                .unwrap(),
-            ],
-            display: "1 + Sum(a)",
-            nullable: false,
-            op: DataValueArithmeticOperator::Add,
-            block: DataBlock::create(
-                schema.clone(),
-                vec![
-                    Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
-                    Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
-                    Arc::new(Int16Array::from(vec![1, 2, 3, 4])),
-                ],
-            ),
-            expect: Arc::new(Int64Array::from(vec![31])),
-            error: "",
-        },
     ];
 
     for t in tests {
@@ -156,9 +131,6 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
             ArithmeticFunction::try_create(t.op, &[t.args[0].clone(), t.args[1].clone()])?;
         if let Err(e) = func.eval(&t.block) {
             assert_eq!(t.error, e.to_string());
-        }
-        for _ in 1..t.evals {
-            func.eval(&t.block)?;
         }
 
         // Display check.
@@ -171,7 +143,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         let actual_null = func.nullable(t.block.schema())?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.result()?;
+        let ref v = func.eval(&t.block)?;
         // Type check.
         let expect_type = func.return_type(t.block.schema())?.clone();
         let actual_type = v.data_type().clone();

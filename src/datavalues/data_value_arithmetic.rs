@@ -7,13 +7,17 @@ use crate::datavalues::{
 };
 use crate::error::FuseQueryResult;
 
-pub fn data_value_add(left: DataValue, right: DataValue) -> FuseQueryResult<DataValue> {
+pub fn data_value_arithmetic_op(
+    op: DataValueArithmeticOperator,
+    left: DataValue,
+    right: DataValue,
+) -> FuseQueryResult<DataValue> {
     match (&left, &right) {
         (DataValue::Null, _) => Ok(right),
         (_, DataValue::Null) => Ok(left),
         _ => {
             let result = data_array_arithmetic_op(
-                DataValueArithmeticOperator::Add,
+                op,
                 &DataColumnarValue::Scalar(left),
                 &DataColumnarValue::Scalar(right),
             )?;

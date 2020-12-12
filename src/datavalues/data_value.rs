@@ -6,16 +6,17 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::sync::Arc;
 
-use crate::datavalues::{
-    BooleanArray, Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, Int8Array,
-    NullArray, StringArray, UInt16Array, UInt32Array, UInt64Array, UInt8Array,
-};
+use serde::{Deserialize, Serialize};
 
-use crate::datavalues::{DataArrayRef, DataType};
+use crate::datavalues::{
+    BooleanArray, DataArrayRef, DataType, Float32Array, Float64Array, Int16Array, Int32Array,
+    Int64Array, Int8Array, NullArray, StringArray, UInt16Array, UInt32Array, UInt64Array,
+    UInt8Array,
+};
 use crate::error::{FuseQueryError, FuseQueryResult};
 
 /// A specific value of a data type.
-#[derive(Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub enum DataValue {
     Null,
     Boolean(Option<bool>),
@@ -30,6 +31,7 @@ pub enum DataValue {
     Float32(Option<f32>),
     Float64(Option<f64>),
     String(Option<String>),
+    Struct(Vec<DataValue>),
 }
 
 pub type DataValueRef = Box<DataValue>;
@@ -68,6 +70,7 @@ impl DataValue {
             DataValue::Float32(_) => (DataType::Float32),
             DataValue::Float64(_) => (DataType::Float64),
             DataValue::String(_) => (DataType::Utf8),
+            DataValue::Struct(_) => unimplemented!(),
         }
     }
 
@@ -92,6 +95,7 @@ impl DataValue {
                 Ok(Arc::new(Float64Array::from(vec![*v; size])) as DataArrayRef)
             }
             DataValue::String(v) => Ok(Arc::new(StringArray::from(vec![v.as_deref(); size]))),
+            DataValue::Struct(_) => unimplemented!(),
         }
     }
 
@@ -197,6 +201,7 @@ impl fmt::Display for DataValue {
             DataValue::UInt32(v) => format_data_value_with_option!(f, v),
             DataValue::UInt64(v) => format_data_value_with_option!(f, v),
             DataValue::String(v) => format_data_value_with_option!(f, v),
+            DataValue::Struct(v) => write!(f, "{:?}", v),
         }
     }
 }
@@ -217,6 +222,7 @@ impl fmt::Debug for DataValue {
             DataValue::Float32(v) => format_data_value_with_option!(f, v),
             DataValue::Float64(v) => format_data_value_with_option!(f, v),
             DataValue::String(v) => format_data_value_with_option!(f, v),
+            DataValue::Struct(v) => write!(f, "{:?}", v),
         }
     }
 }

@@ -220,7 +220,13 @@ impl Planner {
             sqlparser::ast::Expr::Identifier(ref v) => Ok(ExpressionPlan::Field(v.clone().value)),
             sqlparser::ast::Expr::Value(sqlparser::ast::Value::Number(n)) => match n.parse::<i64>()
             {
-                Ok(n) => Ok(ExpressionPlan::Constant(DataValue::Int64(Some(n)))),
+                Ok(n) => {
+                    if n >= 0 {
+                        Ok(ExpressionPlan::Constant(DataValue::UInt64(Some(n as u64))))
+                    } else {
+                        Ok(ExpressionPlan::Constant(DataValue::Int64(Some(n))))
+                    }
+                }
                 Err(_) => Ok(ExpressionPlan::Constant(DataValue::Float64(Some(
                     n.parse::<f64>()?,
                 )))),

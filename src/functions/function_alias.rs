@@ -31,20 +31,24 @@ impl AliasFunction {
         self.func.nullable(input_schema)
     }
 
-    pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
+    pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
         self.func.eval(block)
     }
 
-    pub fn merge(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
-        self.func.merge(states)
+    pub fn accumulate(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
+        self.func.accumulate(block)
     }
 
-    pub fn state(&self) -> FuseQueryResult<Vec<DataValue>> {
-        self.func.state()
+    pub fn accumulate_result(&self) -> FuseQueryResult<Vec<DataValue>> {
+        self.func.accumulate_result()
     }
 
-    pub fn result(&self) -> FuseQueryResult<DataColumnarValue> {
-        self.func.result()
+    pub fn merge_state(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
+        self.func.merge_state(states)
+    }
+
+    pub fn merge_result(&self) -> FuseQueryResult<DataValue> {
+        self.func.merge_result()
     }
 }
 

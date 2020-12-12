@@ -54,8 +54,7 @@ impl ProjectionTransform {
 
         let start = Instant::now();
         for mut func in funcs {
-            func.eval(&block)?;
-            arrays.push(func.result()?.to_array(block.num_rows())?);
+            arrays.push(func.eval(&block)?.to_array(block.num_rows())?);
         }
         let duration = start.elapsed();
         debug!("transform projection cost:{:?}", duration);

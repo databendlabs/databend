@@ -32,7 +32,7 @@ pub use self::data_array_comparison::data_array_comparison_op;
 pub use self::data_array_logic::data_array_logic_op;
 pub use self::data_type::numerical_coercion;
 pub use self::data_value_aggregate::data_value_aggregate_op;
-pub use self::data_value_arithmetic::data_value_add;
+pub use self::data_value_arithmetic::data_value_arithmetic_op;
 
 pub use self::data_array::{
     BooleanArray, DataArrayRef, Float32Array, Float64Array, Int16Array, Int32Array, Int64Array,
