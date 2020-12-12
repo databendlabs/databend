@@ -4,6 +4,7 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_pipeline_builder() -> crate::error::FuseQueryResult<()> {
+    use pretty_assertions::assert_eq;
     use std::sync::Arc;
 
     use crate::contexts::*;
@@ -18,14 +19,15 @@ async fn test_pipeline_builder() -> crate::error::FuseQueryResult<()> {
     ));
     let plan = Planner::new().build_from_sql(
         ctx.clone(),
-        "select number as c1,(number+1) from system.numbers_mt where (number+1)=4",
+        "select sum(number+1)+2 as sumx from system.numbers_mt where (number+1)=4",
     )?;
     let pipeline = PipelineBuilder::create(ctx, plan).build()?;
     let expect = "\
-    \n  └─ Merge (ProjectionTransform × 8 processors) to (MergeProcessor × 1)\
-    \n    └─ ProjectionTransform × 8 processors\
-    \n      └─ FilterTransform × 8 processors\
-    \n        └─ SourceTransform × 8 processors";
+    \n  └─ AggregateFinalTransform × 1 processor\
+    \n    └─ Merge (AggregatePartialTransform × 8 processors) to (MergeProcessor × 1)\
+    \n      └─ AggregatePartialTransform × 8 processors\
+    \n        └─ FilterTransform × 8 processors\
+    \n          └─ SourceTransform × 8 processors";
     let actual = format!("{:?}", pipeline);
     assert_eq!(expect, actual);
     Ok(())
