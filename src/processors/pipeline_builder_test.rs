@@ -18,7 +18,7 @@ async fn test_pipeline_builder() -> crate::error::FuseQueryResult<()> {
     ));
     let plan = Planner::new().build_from_sql(
         ctx.clone(),
-        "select number as c1,(number+1) from system.numbers where (number+1)=4",
+        "select number as c1,(number+1) from system.numbers_mt where (number+1)=4",
     )?;
     let pipeline = PipelineBuilder::create(ctx, plan).build()?;
     let expect = "\

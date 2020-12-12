@@ -20,7 +20,7 @@ async fn test_select_executor() -> crate::error::FuseQueryResult<()> {
 
     if let PlanNode::Select(plan) = Planner::new().build_from_sql(
         ctx.clone(),
-        "select number from system.numbers(10) where (number+2)<2",
+        "select number from system.numbers_mt(10) where (number+2)<2",
     )? {
         let executor = SelectExecutor::try_create(ctx, plan)?;
         assert_eq!(executor.name(), "SelectExecutor");

@@ -18,7 +18,7 @@ fn test_filter_plan() -> crate::error::FuseQueryResult<()> {
     let expect = "\
     └─ Projection: number\
     \n  └─ Filter: number = 1\
-    \n    └─ ReadDataSource: scan parts [8](Read from system.numbers table)";
+    \n    └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table)";
     let actual = format!("{:?}", plan);
 
     assert_eq!(expect, actual);

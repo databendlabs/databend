@@ -18,11 +18,11 @@ fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
     ));
     let plan = Planner::new().build_from_sql(
         ctx.clone(),
-        "explain select number as c1, number as c2, number as c3,(number+1) from system.numbers where (number+1)=4",
+        "explain select number as c1, number as c2, number as c3,(number+1) from system.numbers_mt where (number+1)=4",
     )?;
     let expect = "└─ Projection: number as c1, number as c2, number as c3, number + 1\
     \n  └─ Filter: number + 1 = 4\
-    \n    └─ ReadDataSource: scan parts [8](Read from system.numbers table)";
+    \n    └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table)";
     let actual = format!("{:?}", plan);
     assert_eq!(expect, actual);
     Ok(())

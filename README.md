@@ -36,36 +36,51 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 
 ## Performance
 
-* Dataset: 10,000,000,000 (10 Billion) 
+* Dataset: 10,000,000,000 (10 Billion), system.numbers_mt 
 * Hardware: 8vCPUx16G KVM Cloud Instance
 
 
 |Query |FuseQuery Cost| ClickHouse Cost|
 |-------------------------------|---------------| ----|
-|SELECT sum(number) FROM system.numbers(10000000000) | [1.82s] | [6.66s], 1.50 billion rows/s., 12.01 GB/s |
-|SELECT sum(number - 1) FROM system.numbers(10000000000)| [21.80s] | [10.62s], 941.32 million rows/s., 7.53 GB/s |
-|SELECT max(number) FROM system.numbers(10000000000) | [3.66s] | [8.79s], 1.14 billion rows/s., 9.11 GB/s |
-|SELECT count(number) FROM system.numbers(10000000000) | [1.63s] | [2.33s], 4.29 billion rows/s., 34.29 GB/s |
-|SELECT sum(number) / count(number) FROM system.numbers(10000000000) | [2.04s] | [5.25s], 4.29 billion rows/s., 34.29 GB/s |
-|SELECT sum(number) / count(number), max(number), min(number) FROM system.numbers(10000000000) | [7.97s] | [16.73s], 597.85 million rows/s., 4.78 GB/s |
+|SELECT sum(number) FROM system.numbers_mt(10000000000) | [2.04s] | [1.34s], 7.48 billion rows/s., 59.80 GB/s|
+|SELECT max(number) FROM system.numbers_mt(10000000000) | [3.66s] | [2.33s], 4.34 billion rows/s., 34.74 GB/s|
+|SELECT count(number) FROM system.numbers_mt(10000000000) | [1.63s] | [0.67s], 15.00 billion rows/s., 119.99 GB/s|
+|SELECT sum(number) / count(number) FROM system.numbers_mt(10000000000) | [2.04s] | [1.28s], 7.84 billion rows/s., 62.73 GB/s|
+|SELECT sum(number) / count(number), max(number), min(number) FROM system.numbers_mt(10000000000) | [7.97s] | [4.30s], 2.33 billion rows/s., 18.61 GB/s|
 
 Note:
-* ClickHouse system.numbers is <b>1-way</b> parallelism processing
-* FuseQuery system.numbers is <b>8-way</b> parallelism processing
+* ClickHouse system.numbers_mt is <b>8-way</b> parallelism processing
+* FuseQuery system.numbers_mt is <b>8-way</b> parallelism processing
+
 ```
-explain select count(number) from system.numbers(10000000000);
+fuse-query> explain select count(number) from system.numbers_mt(10000000000);
 +----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | explain                                                                                                                                                                                                                                      |
 +----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | └─ Aggregate: count([number])
-  └─ ReadDataSource: scan parts [8](Read from system.numbers table)                                                                                                                                            |
+  └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table)                                                                                                                                            |
 | 
   └─ AggregateFinalTransform × 1 processor
     └─ Merge (AggregatePartialTransform × 8 processors) to (MergeProcessor × 1)
       └─ AggregatePartialTransform × 8 processors
         └─ SourceTransform × 8 processors                      |
 +----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-2 rows in set (0.00 sec)
+
+clickhouse> explain pipeline select count(number) from system.numbers_mt(10000000000);
+┌─explain───────────────────────────┐
+│ (Expression)                      │
+│ ExpressionTransform               │
+│   (Expression)                    │
+│   ExpressionTransform             │
+│     (Aggregating)                 │
+│     Resize 8 → 1                  │
+│       AggregatingTransform × 8    │
+│         (Expression)              │
+│         ExpressionTransform × 8   │
+│           (SettingQuotaAndLimits) │
+│             (ReadFromStorage)     │
+│             NumbersMt × 8 0 → 1   │
+└───────────────────────────────────┘
 ```
 
 ## How to install Rust(nightly)?

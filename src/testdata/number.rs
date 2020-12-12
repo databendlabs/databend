@@ -20,7 +20,7 @@ impl NumberTestData {
     pub fn create() -> Self {
         NumberTestData {
             db: "system",
-            table: "numbers",
+            table: "numbers_mt",
         }
     }
 

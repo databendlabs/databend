@@ -58,7 +58,7 @@ impl NumbersTable {
 #[async_trait]
 impl ITable for NumbersTable {
     fn name(&self) -> &str {
-        "numbers"
+        "numbers_mt"
     }
 
     fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
@@ -87,7 +87,7 @@ impl ITable for NumbersTable {
             table_type: "System",
             schema: self.schema.clone(),
             partitions: self.generate_parts(total),
-            description: "(Read from system.numbers table)".to_string(),
+            description: "(Read from system.numbers_mt table)".to_string(),
         })
     }
 
