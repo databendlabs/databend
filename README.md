@@ -52,38 +52,8 @@ Note:
 * ClickHouse system.numbers_mt is <b>8-way</b> parallelism processing
 * FuseQuery system.numbers_mt is <b>8-way</b> parallelism processing
 
-```
-fuse-query> explain select count(number) from system.numbers_mt(10000000000);
-+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| explain                                                                                                                                                                                                                                      |
-+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| └─ Aggregate: count([number])
-  └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table)                                                                                                                                            |
-| 
-  └─ AggregateFinalTransform × 1 processor
-    └─ Merge (AggregatePartialTransform × 8 processors) to (MergeProcessor × 1)
-      └─ AggregatePartialTransform × 8 processors
-        └─ SourceTransform × 8 processors                      |
-+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-
-clickhouse> explain pipeline select count(number) from system.numbers_mt(10000000000);
-┌─explain───────────────────────────┐
-│ (Expression)                      │
-│ ExpressionTransform               │
-│   (Expression)                    │
-│   ExpressionTransform             │
-│     (Aggregating)                 │
-│     Resize 8 → 1                  │
-│       AggregatingTransform × 8    │
-│         (Expression)              │
-│         ExpressionTransform × 8   │
-│           (SettingQuotaAndLimits) │
-│             (ReadFromStorage)     │
-│             NumbersMt × 8 0 → 1   │
-└───────────────────────────────────┘
-```
-
 ## How to install Rust(nightly)?
+
 ```
 $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 $ rustup toolchain install nightly
@@ -93,6 +63,7 @@ $ rustup toolchain install nightly
 ## How to Run?
 
 #### Fuse-Query Server
+
 ```
 $ make run
 
@@ -103,20 +74,22 @@ $ make run
 
 #### Query with MySQL client
 ###### Connect
+
 ```
 $ mysql -h127.0.0.1 -P3307
 ```
 
 ###### Explain
+
 ```
-mysql> explain select number as a, number/2 as b, number+1 as c  from system.numbers(10000000) where number < 4 limit 10;
+mysql> explain select number as a, number/2 as b, number+1 as c  from system.numbers_mt(10000000) where number < 4 limit 10;
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | explain                                                                                                                                                                                                                                                                                                               |
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | └─ Limit: 10
   └─ Projection: number as a, number / 2 as b, number + 1 as c
     └─ Filter: number < 4
-      └─ ReadDataSource: scan parts [8](Read from system.numbers table)                                                                                                                                         |
+      └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table)                                                                                                                                         |
 | 
   └─ LimitTransform × 1 processor
     └─ Merge (LimitTransform × 8 processors) to (MergeProcessor × 1)
@@ -130,8 +103,9 @@ mysql> explain select number as a, number/2 as b, number+1 as c  from system.num
 ```
 
 ###### Select
+
 ```
-mysql> select number as a, number/2 as b, number+1 as c  from system.numbers(10000000) where number < 4 limit 10;
+mysql> select number as a, number/2 as b, number+1 as c  from system.numbers_mt(10000000) where number < 4 limit 10;
 +------+------+------+
 | a    | b    | c    |
 +------+------+------+
