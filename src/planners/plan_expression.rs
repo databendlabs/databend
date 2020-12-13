@@ -73,8 +73,6 @@ impl ExpressionPlan {
     pub fn is_aggregate(&self) -> bool {
         match self {
             ExpressionPlan::Alias(_, expr) => expr.is_aggregate(),
-            ExpressionPlan::Field(_) => false,
-            ExpressionPlan::Constant(_) => false,
             ExpressionPlan::BinaryExpression { left, right, .. } => {
                 left.is_aggregate() || right.is_aggregate()
             }
@@ -82,6 +80,7 @@ impl ExpressionPlan {
                 op.to_lowercase().as_str(),
                 "max" | "min" | "avg" | "count" | "sum"
             ),
+            _ => false,
         }
     }
 }
