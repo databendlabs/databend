@@ -2,9 +2,6 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use log::debug;
-use std::time::Instant;
-
 use async_trait::async_trait;
 use std::sync::Arc;
 
@@ -52,13 +49,9 @@ impl ProjectionTransform {
     ) -> FuseQueryResult<DataBlock> {
         let mut arrays = Vec::with_capacity(funcs.len());
 
-        let start = Instant::now();
         for mut func in funcs {
             arrays.push(func.eval(&block)?.to_array(block.num_rows())?);
         }
-        let duration = start.elapsed();
-        debug!("transform projection cost:{:?}", duration);
-
         Ok(DataBlock::create(projected_schema.clone(), arrays))
     }
 }

@@ -19,15 +19,16 @@ async fn test_pipeline_builder() -> crate::error::FuseQueryResult<()> {
     ));
     let plan = Planner::new().build_from_sql(
         ctx.clone(),
-        "select sum(number+1)+2 as sumx from system.numbers_mt where (number+1)=4",
+        "select sum(number+1)+2 as sumx from system.numbers_mt where (number+1)=4 limit 1",
     )?;
     let pipeline = PipelineBuilder::create(ctx, plan).build()?;
     let expect = "\
-    \n  └─ AggregateFinalTransform × 1 processor\
-    \n    └─ Merge (AggregatePartialTransform × 8 processors) to (MergeProcessor × 1)\
-    \n      └─ AggregatePartialTransform × 8 processors\
-    \n        └─ FilterTransform × 8 processors\
-    \n          └─ SourceTransform × 8 processors";
+    \n  └─ LimitTransform × 1 processor\
+    \n    └─ AggregateFinalTransform × 1 processor\
+    \n      └─ Merge (AggregatePartialTransform × 8 processors) to (MergeProcessor × 1)\
+    \n        └─ AggregatePartialTransform × 8 processors\
+    \n          └─ FilterTransform × 8 processors\
+    \n            └─ SourceTransform × 8 processors";
     let actual = format!("{:?}", pipeline);
     assert_eq!(expect, actual);
     Ok(())

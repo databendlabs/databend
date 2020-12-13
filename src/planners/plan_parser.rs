@@ -314,7 +314,7 @@ impl Planner {
         match *limit {
             Some(ref limit_expr) => {
                 let n = match self.sql_to_rex(&limit_expr, &input.schema())? {
-                    ExpressionPlan::Constant(DataValue::Int64(Some(n))) => Ok(n as usize),
+                    ExpressionPlan::Constant(DataValue::UInt64(Some(n))) => Ok(n as usize),
                     _ => Err(FuseQueryError::Plan(
                         "Unexpected expression for LIMIT clause".to_string(),
                     )),
