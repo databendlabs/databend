@@ -38,8 +38,8 @@ impl AggregateFinalTransform {
 
 #[async_trait]
 impl IProcessor for AggregateFinalTransform {
-    fn name(&self) -> String {
-        "AggregateFinalTransform".to_string()
+    fn name(&self) -> &str {
+        "AggregateFinalTransform"
     }
 
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {

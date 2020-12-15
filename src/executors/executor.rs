@@ -9,6 +9,6 @@ use crate::error::FuseQueryResult;
 
 #[async_trait]
 pub trait IExecutor: Sync + Send {
-    fn name(&self) -> &'static str;
+    fn name(&self) -> &str;
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream>;
 }

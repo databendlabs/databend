@@ -77,19 +77,36 @@ impl DataValue {
     pub fn to_array(&self, size: usize) -> FuseQueryResult<DataArrayRef> {
         Ok(match self {
             DataValue::Null => Arc::new(NullArray::new(size)),
-            DataValue::Boolean(v) => Arc::new(BooleanArray::from(vec![*v; size])) as DataArrayRef,
-            DataValue::Int8(v) => Arc::new(Int8Array::from(vec![*v; size])) as DataArrayRef,
-            DataValue::Int16(v) => Arc::new(Int16Array::from(vec![*v; size])) as DataArrayRef,
-            DataValue::Int32(v) => Arc::new(Int32Array::from(vec![*v; size])) as DataArrayRef,
-            DataValue::Int64(v) => Arc::new(Int64Array::from(vec![*v; size])) as DataArrayRef,
-            DataValue::UInt8(v) => Arc::new(UInt8Array::from(vec![*v; size])) as DataArrayRef,
-            DataValue::UInt16(v) => Arc::new(UInt16Array::from(vec![*v; size])) as DataArrayRef,
-            DataValue::UInt32(v) => Arc::new(UInt32Array::from(vec![*v; size])) as DataArrayRef,
-            DataValue::UInt64(v) => Arc::new(UInt64Array::from(vec![*v; size])) as DataArrayRef,
-            DataValue::Float32(v) => Arc::new(Float32Array::from(vec![*v; size])) as DataArrayRef,
-            DataValue::Float64(v) => Arc::new(Float64Array::from(vec![*v; size])) as DataArrayRef,
+            DataValue::Boolean(Some(v)) => {
+                Arc::new(BooleanArray::from(vec![*v; size])) as DataArrayRef
+            }
+            DataValue::Int8(Some(v)) => Arc::new(Int8Array::from(vec![*v; size])) as DataArrayRef,
+            DataValue::Int16(Some(v)) => Arc::new(Int16Array::from(vec![*v; size])) as DataArrayRef,
+            DataValue::Int32(Some(v)) => Arc::new(Int32Array::from(vec![*v; size])) as DataArrayRef,
+            DataValue::Int64(Some(v)) => Arc::new(Int64Array::from(vec![*v; size])) as DataArrayRef,
+            DataValue::UInt8(Some(v)) => Arc::new(UInt8Array::from(vec![*v; size])) as DataArrayRef,
+            DataValue::UInt16(Some(v)) => {
+                Arc::new(UInt16Array::from(vec![*v; size])) as DataArrayRef
+            }
+            DataValue::UInt32(Some(v)) => {
+                Arc::new(UInt32Array::from(vec![*v; size])) as DataArrayRef
+            }
+            DataValue::UInt64(Some(v)) => {
+                Arc::new(UInt64Array::from(vec![*v; size])) as DataArrayRef
+            }
+            DataValue::Float32(Some(v)) => {
+                Arc::new(Float32Array::from(vec![*v; size])) as DataArrayRef
+            }
+            DataValue::Float64(Some(v)) => {
+                Arc::new(Float64Array::from(vec![*v; size])) as DataArrayRef
+            }
             DataValue::String(v) => Arc::new(StringArray::from(vec![v.as_deref(); size])),
-            DataValue::Struct(_) => unimplemented!(),
+            other => {
+                return Err(FuseQueryError::Internal(format!(
+                    "DataValue to array cannot be NONE {:?}",
+                    other
+                )))
+            }
         })
     }
 

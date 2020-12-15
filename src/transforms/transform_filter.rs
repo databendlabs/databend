@@ -57,8 +57,8 @@ impl FilterTransform {
 
 #[async_trait]
 impl IProcessor for FilterTransform {
-    fn name(&self) -> String {
-        "FilterTransform".to_owned()
+    fn name(&self) -> &str {
+        "FilterTransform"
     }
 
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {

@@ -31,7 +31,7 @@ impl ExplainExecutor {
 
 #[async_trait]
 impl IExecutor for ExplainExecutor {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         "ExplainExecutor"
     }
 

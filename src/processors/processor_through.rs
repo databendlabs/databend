@@ -24,8 +24,8 @@ impl ThroughProcessor {
 
 #[async_trait]
 impl IProcessor for ThroughProcessor {
-    fn name(&self) -> String {
-        "ThroughProcessor".to_owned()
+    fn name(&self) -> &str {
+        "ThroughProcessor"
     }
 
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {

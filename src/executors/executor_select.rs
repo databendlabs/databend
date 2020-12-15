@@ -28,7 +28,7 @@ impl SelectExecutor {
 
 #[async_trait]
 impl IExecutor for SelectExecutor {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         "SelectExecutor"
     }
 

@@ -25,8 +25,8 @@ impl MergeProcessor {
 
 #[async_trait]
 impl IProcessor for MergeProcessor {
-    fn name(&self) -> String {
-        "MergeProcessor".to_owned()
+    fn name(&self) -> &str {
+        "MergeProcessor"
     }
 
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {

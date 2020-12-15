@@ -5,7 +5,7 @@
 use crate::datavalues::DataSchemaRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
-    AggregatePlan, EmptyPlan, ExplainPlan, FilterPlan, LimitPlan, ProjectionPlan,
+    AggregatePlan, EmptyPlan, ExplainPlan, FilterPlan, LimitPlan, PlanBuilder, ProjectionPlan,
     ReadDataSourcePlan, ScanPlan, SelectPlan,
 };
 
@@ -112,5 +112,41 @@ impl PlanNode {
         }
         result.reverse();
         Ok(result)
+    }
+
+    pub fn plans_to_node(array: &[PlanNode]) -> FuseQueryResult<PlanNode> {
+        let mut builder = PlanBuilder::empty(false);
+        for plan in array {
+            match plan {
+                PlanNode::Projection(v) => {
+                    builder = builder.project(v.expr.clone())?;
+                }
+                PlanNode::Aggregate(v) => {
+                    builder = builder.aggregate(v.group_expr.clone(), v.aggr_expr.clone())?;
+                }
+                PlanNode::Filter(v) => {
+                    builder = builder.filter(v.predicate.clone())?;
+                }
+                PlanNode::Limit(v) => {
+                    builder = builder.limit(v.n)?;
+                }
+                PlanNode::ReadSource(v) => {
+                    builder = PlanBuilder::from(&PlanNode::ReadSource(v.clone()))
+                }
+                PlanNode::Explain(_v) => {
+                    return Ok(PlanNode::Explain(ExplainPlan {
+                        plan: Box::new(builder.build()?),
+                    }))
+                }
+                PlanNode::Select(_v) => {
+                    return Ok(PlanNode::Select(SelectPlan {
+                        plan: Box::new(builder.build()?),
+                    }))
+                }
+                PlanNode::Empty(_) => {}
+                PlanNode::Scan(_) => {}
+            }
+        }
+        builder.build()
     }
 }

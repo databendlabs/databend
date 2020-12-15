@@ -36,8 +36,8 @@ impl SourceTransform {
 
 #[async_trait]
 impl IProcessor for SourceTransform {
-    fn name(&self) -> String {
-        "SourceTransform".to_owned()
+    fn name(&self) -> &str {
+        "SourceTransform"
     }
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> FuseQueryResult<()> {

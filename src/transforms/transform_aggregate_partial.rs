@@ -38,8 +38,8 @@ impl AggregatePartialTransform {
 
 #[async_trait]
 impl IProcessor for AggregatePartialTransform {
-    fn name(&self) -> String {
-        "AggregatePartialTransform".to_string()
+    fn name(&self) -> &str {
+        "AggregatePartialTransform"
     }
 
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {

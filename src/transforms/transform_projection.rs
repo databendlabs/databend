@@ -58,8 +58,8 @@ impl ProjectionTransform {
 
 #[async_trait]
 impl IProcessor for ProjectionTransform {
-    fn name(&self) -> String {
-        "ProjectionTransform".to_owned()
+    fn name(&self) -> &str {
+        "ProjectionTransform"
     }
 
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {

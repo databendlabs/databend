@@ -21,8 +21,8 @@ impl EmptyProcessor {
 
 #[async_trait]
 impl IProcessor for EmptyProcessor {
-    fn name(&self) -> String {
-        "EmptyProcessor".to_owned()
+    fn name(&self) -> &str {
+        "EmptyProcessor"
     }
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> FuseQueryResult<()> {

@@ -25,8 +25,8 @@ impl LimitTransform {
 
 #[async_trait]
 impl IProcessor for LimitTransform {
-    fn name(&self) -> String {
-        "LimitTransform".to_owned()
+    fn name(&self) -> &str {
+        "LimitTransform"
     }
 
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {

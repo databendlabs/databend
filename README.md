@@ -22,7 +22,7 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 
 | Crate     | Description |  Status |
 |-----------|-------------|-------------|
-| optimizers | Optimizer for distributed plan | TODO |
+| optimizers | Optimizer for distributed plan | WIP |
 | distributed | Distributed scheduler and executor for planner | TODO |
 | [datablocks](src/datablocks) | Vectorized data processing unit | WIP |
 | [datastreams](src/datastreams) | Async streaming iterators | WIP |
@@ -42,11 +42,12 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 
 |Query |FuseQuery Cost| ClickHouse Cost|
 |-------------------------------|---------------| ----|
-|SELECT sum(number) FROM system.numbers_mt(10000000000) | [1.77s] | [1.34s], 7.48 billion rows/s., 59.80 GB/s|
-|SELECT max(number) FROM system.numbers_mt(10000000000) | [2.83s] | [2.33s], 4.34 billion rows/s., 34.74 GB/s|
-|SELECT count(number) FROM system.numbers_mt(10000000000) | [1.55s] | [0.67s], 15.00 billion rows/s., 119.99 GB/s|
-|SELECT sum(number) / count(number) FROM system.numbers_mt(10000000000) | [2.04s] | [1.28s], 7.84 billion rows/s., 62.73 GB/s|
-|SELECT sum(number) / count(number), max(number), min(number) FROM system.numbers_mt(10000000000) | [6.40s] | [4.30s], 2.33 billion rows/s., 18.61 GB/s|
+|SELECT sum(number)  | [1.77s] | [1.34s], 7.48 billion rows/s., 59.80 GB/s|
+|SELECT max(number)| [2.83s] | [2.33s], 4.34 billion rows/s., 34.74 GB/s|
+|SELECT max(number+1)| [6.13s] | [3.29s], 3.04 billion rows/s., 24.31 GB/s|
+|SELECT count(number) | [1.55s] | [0.67s], 15.00 billion rows/s., 119.99 GB/s|
+|SELECT sum(number) / count(number) | [2.04s] | [1.28s], 7.84 billion rows/s., 62.73 GB/s|
+|SELECT sum(number) / count(number), max(number), min(number)| [6.40s] | [4.30s], 2.33 billion rows/s., 18.61 GB/s|
 
 Note:
 * ClickHouse system.numbers_mt is <b>8-way</b> parallelism processing

@@ -22,7 +22,7 @@ pub struct FormatterSettings {
 #[async_trait]
 pub trait IProcessor: Sync + Send {
     /// Processor name.
-    fn name(&self) -> String;
+    fn name(&self) -> &str;
 
     /// Connect to the input processor, add an edge on the DAG.
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()>;
