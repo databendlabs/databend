@@ -14,7 +14,10 @@ lint:
 	cargo fmt
 	cargo +nightly clippy -- -D warnings
 
+docker:
+	docker build -f docker/Dockerfile .
+
 clean:
 	cargo clean
 
-.PHONY: test bench run build lint clean
+.PHONY: test bench run build lint docker clean

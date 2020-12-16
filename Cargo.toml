@@ -11,6 +11,10 @@ include = [
 ]
 edition = "2018"
 
+[[bin]]
+name = "fuse-query"
+path = "src/bin/fuse-query.rs"
+
 [dependencies]
 arrow = {version = "2.0", features = ["simd"]}
 async-trait = "0.1"
