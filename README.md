@@ -17,13 +17,25 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 * **High Scalability**
 * **High Reliability**
 
+## Status
+#### SQL Support
+
+- [x] Projection
+- [x] Filter (WHERE)
+- [x] Limit
+- [x] Aggregate
+- [x] Common math functions
+- [ ] Sorting
+- [ ] Subqueries
+- [ ] Joins
+
 
 ## Architecture
 
 | Crate     | Description |  Status |
 |-----------|-------------|-------------|
-| optimizers | Optimizer for distributed plan | WIP |
 | distributed | Distributed scheduler and executor for planner | TODO |
+| [optimizers](src/optimizers) | Optimizer for distributed plan | WIP |
 | [datablocks](src/datablocks) | Vectorized data processing unit | WIP |
 | [datastreams](src/datastreams) | Async streaming iterators | WIP |
 | [datasources](src/datasources) | Interface to the datasource([system.numbers for performance](src/datasources/system)/Remote(S3 or other table storage engine)) | WIP |
@@ -38,7 +50,7 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 
 * Dataset: 10,000,000,000 (10 Billion), system.numbers_mt 
 * Hardware: 8vCPUx16G KVM Cloud Instance
-
+* Rust: rustc 1.50.0-nightly (f76ecd066 2020-12-15)
 
 |Query |FuseQuery Cost| ClickHouse Cost|
 |-------------------------------|---------------| ----|
@@ -83,14 +95,14 @@ $ mysql -h127.0.0.1 -P3307
 ###### Explain
 
 ```
-mysql> explain select number as a, number/2 as b, number+1 as c  from system.numbers_mt(10000000) where number < 4 limit 10;
+mysql> explain select (number+1) as c1, number/2 as c2 from system.numbers_mt(10000000) where (c1+c2+1) < 100 limit 3;
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | explain                                                                                                                                                                                                                                                                                                               |
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| └─ Limit: 10
-  └─ Projection: number as a, number / 2 as b, number + 1 as c
-    └─ Filter: number < 4
-      └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table)                                                                                                                                         |
+| └─ Limit: 3
+  └─ Projection: (number + 1) as c1, (number / 2) as c2
+    └─ Filter: ((((number + 1) + (number / 2)) + 1) < 100)
+      └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table)                                                                                                             |
 | 
   └─ LimitTransform × 1 processor
     └─ Merge (LimitTransform × 8 processors) to (MergeProcessor × 1)
@@ -99,23 +111,21 @@ mysql> explain select number as a, number/2 as b, number+1 as c  from system.num
           └─ FilterTransform × 8 processors
             └─ SourceTransform × 8 processors                                |
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-2 rows in set (0.01 sec)
-
+2 rows in set (0.00 sec)
 ```
 
 ###### Select
 
 ```
-mysql> select number as a, number/2 as b, number+1 as c  from system.numbers_mt(10000000) where number < 4 limit 10;
-+------+------+------+
-| a    | b    | c    |
-+------+------+------+
-|    0 |    0 |    1 |
-|    1 |    0 |    2 |
-|    2 |    1 |    3 |
-|    3 |    1 |    4 |
-+------+------+------+
-4 rows in set (0.10 sec)
+mysql> select (number+1) as c1, number/2 as c2 from system.numbers_mt(10000000) where (c1+c2+1) < 100 limit 3;
++------+------+
+| c1   | c2   |
++------+------+
+|    1 |    0 |
+|    2 |    0 |
+|    3 |    1 |
++------+------+
+3 rows in set (0.06 sec)
 ```
 
 ## How to Test?

@@ -144,9 +144,11 @@ impl Planner {
                 alias.value.clone(),
                 Box::new(self.sql_to_rex(&expr, schema)?),
             )),
-            _ => Err(FuseQueryError::Internal(
-                "Qualified wildcards are not supported".to_string(),
-            )),
+            sqlparser::ast::SelectItem::Wildcard => Ok(ExpressionPlan::Wildcard),
+            _ => Err(FuseQueryError::Internal(format!(
+                "SelectItem: {:?} are not supported",
+                sql
+            ))),
         }
     }
 

@@ -5,7 +5,7 @@
 use std::fmt;
 
 use crate::datavalues::{DataField, DataSchemaRef, DataValue};
-use crate::error::FuseQueryResult;
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::{
     AliasFunction, ConstantFunction, FieldFunction, Function, ScalarFunctionFactory,
 };
@@ -24,6 +24,7 @@ pub enum ExpressionPlan {
         op: String,
         args: Vec<ExpressionPlan>,
     },
+    Wildcard,
 }
 
 impl ExpressionPlan {
@@ -63,6 +64,9 @@ impl ExpressionPlan {
                 func.set_depth(depth);
                 AliasFunction::try_create(alias.clone(), func)
             }
+            ExpressionPlan::Wildcard => Err(FuseQueryError::Internal(
+                "Cannot transform wildcard to function".to_string(),
+            )),
         }
     }
 
@@ -92,9 +96,10 @@ impl fmt::Debug for ExpressionPlan {
             ExpressionPlan::Field(ref v) => write!(f, "{:#}", v),
             ExpressionPlan::Constant(ref v) => write!(f, "{:#}", v),
             ExpressionPlan::BinaryExpression { left, op, right } => {
-                write!(f, "{:?} {} {:?}", left, op, right,)
+                write!(f, "({:?} {} {:?})", left, op, right,)
             }
             ExpressionPlan::Function { op, args } => write!(f, "{}({:?})", op, args),
+            ExpressionPlan::Wildcard => write!(f, "*"),
         }
     }
 }

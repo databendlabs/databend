@@ -58,7 +58,6 @@ impl IProcessor for AggregateFinalTransform {
                     DataValue::try_from_array(block.column(0), i)?
                 {
                     let deserialized: DataValue = serde_json::from_str(&serialized)?;
-
                     if let DataValue::Struct(states) = deserialized {
                         func.merge_state(&states)?;
                     }

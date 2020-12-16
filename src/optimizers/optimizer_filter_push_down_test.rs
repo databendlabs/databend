@@ -3,7 +3,7 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 #[test]
-fn test_filter_push_down() -> crate::error::FuseQueryResult<()> {
+fn test_filter_push_down_optimizer() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
     use crate::contexts::*;
@@ -18,14 +18,14 @@ fn test_filter_push_down() -> crate::error::FuseQueryResult<()> {
     ));
     let plan = Planner::new().build_from_sql(
         ctx.clone(),
-        "select (number+1) as c1, number from system.numbers_mt where c1=1",
+        "select (number+1) as c1, number as c2 from system.numbers_mt where (c1+c2+1)=1",
     )?;
 
     let mut filter_push_down = FilterPushDownOptimizer::create();
     let optimized = filter_push_down.optimize(&plan)?;
     let expect = "\
-    └─ Projection: number + 1 as c1, number\
-    \n  └─ Filter: number + 1 = 1\
+    └─ Projection: (number + 1) as c1, number as c2\
+    \n  └─ Filter: ((((number + 1) + number) + 1) = 1)\
     \n    └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table)";
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);

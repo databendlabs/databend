@@ -52,7 +52,7 @@ impl PlanNode {
         }
     }
 
-    pub fn to_plans(&self) -> FuseQueryResult<Vec<PlanNode>> {
+    fn to_array(&self, with_parent: bool) -> FuseQueryResult<Vec<PlanNode>> {
         let max_depth = 128;
         let mut depth = 0;
         let mut result = vec![];
@@ -88,10 +88,16 @@ impl PlanNode {
                     depth += 1;
                 }
                 PlanNode::Select(v) => {
+                    if with_parent {
+                        result.push(PlanNode::Select(v.clone()));
+                    }
                     plan = v.plan.as_ref().clone();
                     depth += 1;
                 }
                 PlanNode::Explain(v) => {
+                    if with_parent {
+                        result.push(PlanNode::Explain(v.clone()));
+                    }
                     plan = v.plan.as_ref().clone();
                     depth += 1;
                 }
@@ -114,6 +120,14 @@ impl PlanNode {
         Ok(result)
     }
 
+    pub fn children_to_plans(&self) -> FuseQueryResult<Vec<PlanNode>> {
+        self.to_array(false)
+    }
+
+    pub fn node_to_plans(&self) -> FuseQueryResult<Vec<PlanNode>> {
+        self.to_array(true)
+    }
+
     pub fn plans_to_node(array: &[PlanNode]) -> FuseQueryResult<PlanNode> {
         let mut builder = PlanBuilder::empty(false);
         for plan in array {
@@ -134,14 +148,10 @@ impl PlanNode {
                     builder = PlanBuilder::from(&PlanNode::ReadSource(v.clone()))
                 }
                 PlanNode::Explain(_v) => {
-                    return Ok(PlanNode::Explain(ExplainPlan {
-                        plan: Box::new(builder.build()?),
-                    }))
+                    builder = builder.explain()?;
                 }
                 PlanNode::Select(_v) => {
-                    return Ok(PlanNode::Select(SelectPlan {
-                        plan: Box::new(builder.build()?),
-                    }))
+                    builder = builder.select()?;
                 }
                 PlanNode::Empty(_) => {}
                 PlanNode::Scan(_) => {}

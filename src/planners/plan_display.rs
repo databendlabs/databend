@@ -61,7 +61,9 @@ impl PlanNode {
             // Empty.
             PlanNode::Empty(_) => write!(f, ""),
             PlanNode::Scan(_) => write!(f, ""),
-            PlanNode::Select(_) => write!(f, ""),
+            PlanNode::Select(_) => {
+                write!(f, "")
+            }
             PlanNode::Explain(_) => write!(f, ""),
         }
     }
@@ -75,7 +77,7 @@ impl fmt::Debug for PlanNode {
             prefix: "└─",
         };
 
-        let mut plans = self.to_plans().map_err(|_| std::fmt::Error)?;
+        let mut plans = self.children_to_plans().map_err(|_| std::fmt::Error)?;
         plans.reverse();
         for node in plans.iter() {
             node.format(f, setting)?;

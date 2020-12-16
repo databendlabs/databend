@@ -7,8 +7,8 @@ use std::sync::Arc;
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef};
 use crate::error::FuseQueryResult;
 use crate::planners::{
-    AggregatePlan, EmptyPlan, ExpressionPlan, FilterPlan, LimitPlan, PlanNode, ProjectionPlan,
-    ScanPlan,
+    field, AggregatePlan, EmptyPlan, ExplainPlan, ExpressionPlan, FilterPlan, LimitPlan, PlanNode,
+    ProjectionPlan, ScanPlan, SelectPlan,
 };
 
 pub struct PlanBuilder {
@@ -37,14 +37,24 @@ impl PlanBuilder {
     /// Apply a projection.
     pub fn project(&self, exprs: Vec<ExpressionPlan>) -> FuseQueryResult<Self> {
         let input_schema = self.plan.schema();
-        let fields: Vec<DataField> = exprs
+
+        let mut projection_exprs = vec![];
+        exprs.iter().for_each(|v| match v {
+            ExpressionPlan::Wildcard => {
+                for i in 0..input_schema.fields().len() {
+                    projection_exprs.push(field(input_schema.fields()[i].name()))
+                }
+            }
+            _ => projection_exprs.push(v.clone()),
+        });
+        let fields: Vec<DataField> = projection_exprs
             .iter()
             .map(|expr| expr.to_field(&input_schema))
             .collect::<FuseQueryResult<_>>()?;
 
         Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
             input: Arc::new(self.plan.clone()),
-            expr: exprs,
+            expr: projection_exprs,
             schema: Arc::new(DataSchema::new(fields)),
         })))
     }
@@ -111,6 +121,18 @@ impl PlanBuilder {
         Ok(Self::from(&PlanNode::Limit(LimitPlan {
             n,
             input: Arc::new(self.plan.clone()),
+        })))
+    }
+
+    pub fn select(&self) -> FuseQueryResult<Self> {
+        Ok(Self::from(&PlanNode::Select(SelectPlan {
+            plan: Box::new(self.plan.clone()),
+        })))
+    }
+
+    pub fn explain(&self) -> FuseQueryResult<Self> {
+        Ok(Self::from(&PlanNode::Explain(ExplainPlan {
+            plan: Box::new(self.plan.clone()),
         })))
     }
 

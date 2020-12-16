@@ -16,7 +16,7 @@ impl FilterPushDownOptimizer {
 }
 
 /// replaces columns by its name on the projection.
-fn rewrite(
+fn rewrite_alias_expr(
     expr: &ExpressionPlan,
     projection: &HashMap<String, ExpressionPlan>,
 ) -> FuseQueryResult<ExpressionPlan> {
@@ -24,7 +24,7 @@ fn rewrite(
 
     let expressions = expressions
         .iter()
-        .map(|e| rewrite(e, &projection))
+        .map(|e| rewrite_alias_expr(e, &projection))
         .collect::<FuseQueryResult<Vec<_>>>()?;
 
     if let ExpressionPlan::Field(name) = expr {
@@ -32,10 +32,13 @@ fn rewrite(
             return Ok(expr.clone());
         }
     }
-    Ok(rewrite_expression(&expr, &expressions))
+    Ok(rebuild_alias_from_exprs(&expr, &expressions))
 }
 
-fn rewrite_expression(expr: &ExpressionPlan, expressions: &[ExpressionPlan]) -> ExpressionPlan {
+fn rebuild_alias_from_exprs(
+    expr: &ExpressionPlan,
+    expressions: &[ExpressionPlan],
+) -> ExpressionPlan {
     match expr {
         ExpressionPlan::Alias(alias, _) => {
             ExpressionPlan::Alias(alias.clone(), Box::from(expressions[0].clone()))
@@ -51,6 +54,7 @@ fn rewrite_expression(expr: &ExpressionPlan, expressions: &[ExpressionPlan]) -> 
             op: op.clone(),
             args: expressions.to_vec(),
         },
+        other => other.clone(),
     }
 }
 
@@ -60,12 +64,12 @@ impl IOptimizer for FilterPushDownOptimizer {
     }
 
     fn optimize(&mut self, plan: &PlanNode) -> FuseQueryResult<PlanNode> {
-        let mut plans = plan.to_plans()?;
+        let mut plans = plan.node_to_plans()?;
         let projection_map = Optimizer::projection_to_map(plan)?;
 
         for plan in plans.iter_mut() {
             if let PlanNode::Filter(filter) = plan {
-                let rewritten = rewrite(&filter.predicate, &projection_map)?;
+                let rewritten = rewrite_alias_expr(&filter.predicate, &projection_map)?;
                 let new_filter = FilterPlan {
                     predicate: rewritten,
                     input: filter.input.clone(),

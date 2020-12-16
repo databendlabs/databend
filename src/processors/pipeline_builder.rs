@@ -25,7 +25,7 @@ impl PipelineBuilder {
 
     pub fn build(&self) -> FuseQueryResult<Pipeline> {
         let mut pipeline = Pipeline::create();
-        let plans = self.plan.to_plans()?;
+        let plans = self.plan.children_to_plans()?;
         for plan in &plans {
             match plan {
                 PlanNode::Limit(plan) => {

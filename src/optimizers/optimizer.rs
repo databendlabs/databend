@@ -70,6 +70,7 @@ impl Optimizer {
                 vec![left.as_ref().clone(), right.as_ref().clone()]
             }
             ExpressionPlan::Function { args, .. } => args.clone(),
+            ExpressionPlan::Wildcard => vec![expr.clone()],
         })
     }
 }
