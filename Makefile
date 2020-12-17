@@ -15,7 +15,7 @@ lint:
 	cargo +nightly clippy -- -D warnings
 
 docker:
-	docker build -f docker/Dockerfile .
+	docker build --network host -f docker/Dockerfile -t datafusedev/fuse-query .
 
 clean:
 	cargo clean

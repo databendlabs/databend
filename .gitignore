@@ -7,3 +7,6 @@
 # Rust
 target/*
 Cargo.lock
+
+# cargo
+.cargo/

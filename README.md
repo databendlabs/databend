@@ -85,7 +85,20 @@ $ make run
 12:46:15 [ INFO] Usage: mysql -h127.0.0.1 -P3307
 ```
 
+or run with docker:
+
+```
+$ docker pull datafusedev/fuse-query
+...
+
+$ docker run --rm -p 3307:3307 datafusedev/fuse-query
+05:12:36 [ INFO] Options { log_level: "debug", num_cpus: 6, mysql_handler_port: 3307 }
+05:12:36 [ INFO] Fuse-Query Cloud Compute Starts...
+05:12:36 [ INFO] Usage: mysql -h127.0.0.1 -P3307
+```
+
 #### Query with MySQL client
+
 ###### Connect
 
 ```
