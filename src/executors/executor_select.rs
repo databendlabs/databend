@@ -9,20 +9,21 @@ use crate::contexts::FuseQueryContext;
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::FuseQueryResult;
 use crate::executors::IExecutor;
-use crate::planners::{PlanNode, SelectPlan};
+use crate::optimizers::Optimizer;
+use crate::planners::SelectPlan;
 use crate::processors::PipelineBuilder;
 
 pub struct SelectExecutor {
     ctx: Arc<FuseQueryContext>,
-    plan: SelectPlan,
+    select: SelectPlan,
 }
 
 impl SelectExecutor {
     pub fn try_create(
         ctx: Arc<FuseQueryContext>,
-        plan: SelectPlan,
+        select: SelectPlan,
     ) -> FuseQueryResult<Arc<dyn IExecutor>> {
-        Ok(Arc::new(SelectExecutor { ctx, plan }))
+        Ok(Arc::new(SelectExecutor { ctx, select }))
     }
 }
 
@@ -33,7 +34,8 @@ impl IExecutor for SelectExecutor {
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
-        PipelineBuilder::create(self.ctx.clone(), PlanNode::Select(self.plan.clone()))
+        let plan = Optimizer::create().optimize(&self.select.plan)?;
+        PipelineBuilder::create(self.ctx.clone(), plan)
             .build()?
             .execute()
             .await

@@ -21,20 +21,21 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 #### SQL Support
 
 - [x] Projection
-- [x] Filter (WHERE)
+- [x] Filter
 - [x] Limit
 - [x] Aggregate
-- [x] Common math functions
+- [x] Functions
+- [ ] Distributed Query
 - [ ] Sorting
-- [ ] Subqueries
 - [ ] Joins
+- [ ] SubQueries
 
 
 ## Architecture
 
 | Crate     | Description |  Status |
 |-----------|-------------|-------------|
-| distributed | Distributed scheduler and executor for planner | TODO |
+| distributed | Distributed scheduler and executor for planner | WIP |
 | [optimizers](src/optimizers) | Optimizer for distributed plan | WIP |
 | [datablocks](src/datablocks) | Vectorized data processing unit | WIP |
 | [datastreams](src/datastreams) | Async streaming iterators | WIP |

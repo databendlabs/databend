@@ -2,7 +2,6 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-
 #[test]
 fn test_select_wildcard_plan() -> crate::error::FuseQueryResult<()> {
     use pretty_assertions::assert_eq;

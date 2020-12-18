@@ -64,7 +64,7 @@ impl IOptimizer for FilterPushDownOptimizer {
     }
 
     fn optimize(&mut self, plan: &PlanNode) -> FuseQueryResult<PlanNode> {
-        let mut plans = plan.node_to_plans()?;
+        let mut plans = plan.plan_to_list()?;
         let projection_map = Optimizer::projection_to_map(plan)?;
 
         for plan in plans.iter_mut() {
@@ -77,6 +77,6 @@ impl IOptimizer for FilterPushDownOptimizer {
                 *filter = new_filter;
             }
         }
-        PlanNode::plans_to_node(&plans)
+        PlanNode::plan_list_to_node(&plans)
     }
 }

@@ -77,7 +77,7 @@ impl fmt::Debug for PlanNode {
             prefix: "└─",
         };
 
-        let mut plans = self.children_to_plans().map_err(|_| std::fmt::Error)?;
+        let mut plans = self.subplan_to_list().map_err(|_| std::fmt::Error)?;
         plans.reverse();
         for node in plans.iter() {
             node.format(f, setting)?;

@@ -52,10 +52,12 @@ impl PlanNode {
         }
     }
 
-    fn to_array(&self, with_parent: bool) -> FuseQueryResult<Vec<PlanNode>> {
+    /// build plan node to list
+    /// with_parent only affected select/explain
+    fn build_plan_list(&self, with_parent: bool) -> FuseQueryResult<Vec<PlanNode>> {
         let max_depth = 128;
         let mut depth = 0;
-        let mut result = vec![];
+        let mut list = vec![];
         let mut plan = self.clone();
 
         loop {
@@ -68,35 +70,35 @@ impl PlanNode {
 
             match plan {
                 PlanNode::Aggregate(v) => {
-                    result.push(PlanNode::Aggregate(v.clone()));
+                    list.push(PlanNode::Aggregate(v.clone()));
                     plan = v.input.as_ref().clone();
                     depth += 1;
                 }
                 PlanNode::Projection(v) => {
-                    result.push(PlanNode::Projection(v.clone()));
+                    list.push(PlanNode::Projection(v.clone()));
                     plan = v.input.as_ref().clone();
                     depth += 1;
                 }
                 PlanNode::Filter(v) => {
-                    result.push(PlanNode::Filter(v.clone()));
+                    list.push(PlanNode::Filter(v.clone()));
                     plan = v.input.as_ref().clone();
                     depth += 1;
                 }
                 PlanNode::Limit(v) => {
-                    result.push(PlanNode::Limit(v.clone()));
+                    list.push(PlanNode::Limit(v.clone()));
                     plan = v.input.as_ref().clone();
                     depth += 1;
                 }
                 PlanNode::Select(v) => {
                     if with_parent {
-                        result.push(PlanNode::Select(v.clone()));
+                        list.push(PlanNode::Select(v.clone()));
                     }
                     plan = v.plan.as_ref().clone();
                     depth += 1;
                 }
                 PlanNode::Explain(v) => {
                     if with_parent {
-                        result.push(PlanNode::Explain(v.clone()));
+                        list.push(PlanNode::Explain(v.clone()));
                     }
                     plan = v.plan.as_ref().clone();
                     depth += 1;
@@ -107,30 +109,30 @@ impl PlanNode {
                     break;
                 }
                 PlanNode::Scan(v) => {
-                    result.push(PlanNode::Scan(v));
+                    list.push(PlanNode::Scan(v));
                     break;
                 }
                 PlanNode::ReadSource(v) => {
-                    result.push(PlanNode::ReadSource(v));
+                    list.push(PlanNode::ReadSource(v));
                     break;
                 }
             }
         }
-        result.reverse();
-        Ok(result)
+        list.reverse();
+        Ok(list)
     }
 
-    pub fn children_to_plans(&self) -> FuseQueryResult<Vec<PlanNode>> {
-        self.to_array(false)
+    pub fn subplan_to_list(&self) -> FuseQueryResult<Vec<PlanNode>> {
+        self.build_plan_list(false)
     }
 
-    pub fn node_to_plans(&self) -> FuseQueryResult<Vec<PlanNode>> {
-        self.to_array(true)
+    pub fn plan_to_list(&self) -> FuseQueryResult<Vec<PlanNode>> {
+        self.build_plan_list(true)
     }
 
-    pub fn plans_to_node(array: &[PlanNode]) -> FuseQueryResult<PlanNode> {
+    pub fn plan_list_to_node(list: &[PlanNode]) -> FuseQueryResult<PlanNode> {
         let mut builder = PlanBuilder::empty(false);
-        for plan in array {
+        for plan in list {
             match plan {
                 PlanNode::Projection(v) => {
                     builder = builder.project(v.expr.clone())?;

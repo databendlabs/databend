@@ -12,6 +12,7 @@ use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::datavalues::{DataField, DataSchema, DataType, StringArray};
 use crate::error::FuseQueryResult;
 use crate::executors::IExecutor;
+use crate::optimizers::Optimizer;
 use crate::planners::{ExplainPlan, PlanNode};
 use crate::processors::PipelineBuilder;
 
@@ -42,10 +43,8 @@ impl IExecutor for ExplainExecutor {
             false,
         )]));
 
-        let pipeline =
-            PipelineBuilder::create(self.ctx.clone(), self.explain.plan.as_ref().clone())
-                .build()?;
-
+        let plan = Optimizer::create().optimize(&self.explain.plan)?;
+        let pipeline = PipelineBuilder::create(self.ctx.clone(), plan).build()?;
         let block = DataBlock::create(
             schema.clone(),
             vec![Arc::new(StringArray::from(vec![

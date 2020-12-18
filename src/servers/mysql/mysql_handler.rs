@@ -15,7 +15,6 @@ use crate::datablocks::DataBlock;
 use crate::datasources::IDataSource;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::executors::ExecutorFactory;
-use crate::optimizers::Optimizer;
 use crate::planners::Planner;
 use crate::servers::mysql::MySQLStream;
 
@@ -54,49 +53,44 @@ impl<W: io::Write> MysqlShim<W> for Session {
 
         let plan = Planner::new().build_from_sql(self.ctx.clone(), query);
         match plan {
-            Ok(v) => {
-                let v = Optimizer::create().optimize(&v)?;
-                match ExecutorFactory::get(self.ctx.clone(), v) {
-                    Ok(executor) => {
-                        let result: FuseQueryResult<Vec<DataBlock>> =
-                            tokio::runtime::Builder::new_multi_thread()
-                                .worker_threads(self.ctx.worker_threads)
-                                .build()?
-                                .block_on(async move {
-                                    let start = Instant::now();
-                                    let mut r = vec![];
-                                    let mut stream = executor.execute().await?;
-                                    while let Some(block) = stream.next().await {
-                                        r.push(block?);
-                                    }
-                                    let duration = start.elapsed();
-                                    debug!("MySQLHandler executor cost:{:?}", duration);
-                                    Ok(r)
-                                });
-
-                        match result {
-                            Ok(blocks) => {
+            Ok(v) => match ExecutorFactory::get(self.ctx.clone(), v) {
+                Ok(executor) => {
+                    let result: FuseQueryResult<Vec<DataBlock>> =
+                        tokio::runtime::Builder::new_multi_thread()
+                            .worker_threads(self.ctx.worker_threads)
+                            .build()?
+                            .block_on(async move {
                                 let start = Instant::now();
-                                let stream = MySQLStream::create(blocks);
-                                stream.execute(writer)?;
+                                let mut r = vec![];
+                                let mut stream = executor.execute().await?;
+                                while let Some(block) = stream.next().await {
+                                    r.push(block?);
+                                }
                                 let duration = start.elapsed();
-                                debug!("MySQLHandler send to client cost:{:?}", duration);
-                            }
-                            Err(e) => {
-                                error!("{}", e);
-                                writer.error(
-                                    ErrorKind::ER_UNKNOWN_ERROR,
-                                    format!("{:?}", e).as_bytes(),
-                                )?
-                            }
+                                debug!("MySQLHandler executor cost:{:?}", duration);
+                                Ok(r)
+                            });
+
+                    match result {
+                        Ok(blocks) => {
+                            let start = Instant::now();
+                            let stream = MySQLStream::create(blocks);
+                            stream.execute(writer)?;
+                            let duration = start.elapsed();
+                            debug!("MySQLHandler send to client cost:{:?}", duration);
+                        }
+                        Err(e) => {
+                            error!("{}", e);
+                            writer
+                                .error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?
                         }
                     }
-                    Err(e) => {
-                        error!("{}", e);
-                        writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?
-                    }
                 }
-            }
+                Err(e) => {
+                    error!("{}", e);
+                    writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?
+                }
+            },
             Err(e) => {
                 error!("{}", e);
                 writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?;
