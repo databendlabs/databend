@@ -8,8 +8,8 @@ use msql_srv::*;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use std::{io, net};
-use tokio::stream::StreamExt;
 use threadpool::ThreadPool;
+use tokio::stream::StreamExt;
 
 use crate::contexts::{FuseQueryContext, Options};
 use crate::datablocks::DataBlock;
@@ -125,7 +125,7 @@ impl MySQLHandler {
 
         let worker_threads = self.opts.num_cpus;
         for stream in listener.incoming() {
-            let stream = stream.unwrap();
+            let stream = stream?;
             let datasource = self.datasource.clone();
             let ctx = Arc::new(FuseQueryContext::create_ctx(worker_threads, datasource));
 
