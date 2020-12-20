@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use std::{io, net, thread};
 use tokio::stream::StreamExt;
+use threadpool::ThreadPool;
 
 use crate::contexts::{FuseQueryContext, Options};
 use crate::datablocks::DataBlock;
@@ -120,21 +121,18 @@ impl MySQLHandler {
         let listener =
             net::TcpListener::bind(format!("0.0.0.0:{}", self.opts.mysql_handler_port)).unwrap();
 
+        let pool = ThreadPool::new(4096);
+
         let worker_threads = self.opts.num_cpus;
-        let datasource = self.datasource.clone();
-        let jh = thread::spawn(move || {
-            if let Ok((s, client)) = listener.accept() {
-                let ctx = Arc::new(FuseQueryContext::create_ctx(worker_threads, datasource));
-                debug!(
-                    "New client from {:?}:{} with {} worker threads",
-                    client.ip(),
-                    client.port(),
-                    ctx.worker_threads
-                );
-                MysqlIntermediary::run_on_tcp(Session::create(ctx), s).unwrap();
-            }
-        });
-        jh.join().unwrap();
+        for stream in listener.incoming() {
+            let stream = stream.unwrap();
+            let datasource = self.datasource.clone();
+            let ctx = Arc::new(FuseQueryContext::create_ctx(worker_threads, datasource));
+
+            pool.execute(move || {
+                MysqlIntermediary::run_on_tcp(Session::create(ctx), stream).unwrap();
+            })
+        }
         Ok(())
     }
 
