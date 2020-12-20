@@ -7,7 +7,7 @@ use log::{debug, error};
 use msql_srv::*;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use std::{io, net, thread};
+use std::{io, net};
 use tokio::stream::StreamExt;
 use threadpool::ThreadPool;
 
