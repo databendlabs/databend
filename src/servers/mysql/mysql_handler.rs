@@ -121,7 +121,7 @@ impl MySQLHandler {
         let listener =
             net::TcpListener::bind(format!("0.0.0.0:{}", self.opts.mysql_handler_port)).unwrap();
 
-        let pool = ThreadPool::new(4096);
+        let pool = ThreadPool::new(self.opts.mysql_handler_thread_num);
 
         let worker_threads = self.opts.num_cpus;
         for stream in listener.incoming() {
