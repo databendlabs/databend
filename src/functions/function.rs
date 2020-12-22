@@ -104,15 +104,15 @@ impl Function {
     // Merge partial accumulator results(state) to one.
     // merge(state) = sum(state1) + sum(state2)
     // This is used in aggregation.
-    pub fn merge_state(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
+    pub fn merge(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
         match self {
-            Function::Alias(v) => v.merge_state(states),
-            Function::Constant(v) => v.merge_state(states),
-            Function::Variable(v) => v.merge_state(states),
-            Function::Arithmetic(v) => v.merge_state(states),
-            Function::Comparison(v) => v.merge_state(states),
-            Function::Logic(v) => v.merge_state(states),
-            Function::Aggregator(v) => v.merge_state(states),
+            Function::Alias(v) => v.merge(states),
+            Function::Constant(v) => v.merge(states),
+            Function::Variable(v) => v.merge(states),
+            Function::Arithmetic(v) => v.merge(states),
+            Function::Comparison(v) => v.merge(states),
+            Function::Logic(v) => v.merge(states),
+            Function::Aggregator(v) => v.merge(states),
         }
     }
 

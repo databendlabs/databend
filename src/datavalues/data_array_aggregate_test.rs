@@ -111,6 +111,37 @@ fn test_array_aggregate() {
             ],
             error: vec!["Internal Error: Unsupported data_array_sum for data type: Utf8"],
         },
+        ArrayTest {
+            name: "avg-failed",
+            args: vec![
+                Arc::new(StringArray::from(vec!["xx"])),
+                Arc::new(Int8Array::from(vec![1, 2, 3, 4])),
+                Arc::new(Int16Array::from(vec![4, 3, 2, 1])),
+                Arc::new(Int32Array::from(vec![4, 3, 2, 1])),
+                Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
+                Arc::new(UInt8Array::from(vec![4, 3, 2, 1])),
+                Arc::new(UInt16Array::from(vec![4, 3, 2, 1])),
+                Arc::new(UInt32Array::from(vec![4, 3, 2, 1])),
+                Arc::new(UInt64Array::from(vec![4, 3, 2, 1])),
+                Arc::new(Float32Array::from(vec![4.0, 3.0, 2.0, 1.0])),
+                Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0])),
+            ],
+            op: DataValueAggregateOperator::Avg,
+            expect: vec![],
+            error: vec![
+                "Internal Error: Unsupported data_array_avg for data type: Utf8",
+                "Internal Error: Unsupported data_array_avg for data type: Int8",
+                "Internal Error: Unsupported data_array_avg for data type: Int16",
+                "Internal Error: Unsupported data_array_avg for data type: Int32",
+                "Internal Error: Unsupported data_array_avg for data type: Int64",
+                "Internal Error: Unsupported data_array_avg for data type: UInt8",
+                "Internal Error: Unsupported data_array_avg for data type: UInt16",
+                "Internal Error: Unsupported data_array_avg for data type: UInt32",
+                "Internal Error: Unsupported data_array_avg for data type: UInt64",
+                "Internal Error: Unsupported data_array_avg for data type: Float32",
+                "Internal Error: Unsupported data_array_avg for data type: Float64",
+            ],
+        },
     ];
 
     for t in tests {

@@ -41,7 +41,7 @@ impl ConstantFunction {
         Ok(vec![self.value.clone()])
     }
 
-    pub fn merge_state(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
+    pub fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
         Ok(())
     }
 

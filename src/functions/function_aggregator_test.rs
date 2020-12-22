@@ -45,10 +45,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Count(a)",
             nullable: false,
-            func: AggregatorFunction::try_create(
-                DataValueAggregateOperator::Count,
-                &[FieldFunction::try_create("a")?],
-            )?,
+            func: AggregatorFunction::try_create_count_func(&[FieldFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::UInt64(Some(4)),
             error: "",
@@ -59,10 +56,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Max(a)",
             nullable: false,
-            func: AggregatorFunction::try_create(
-                DataValueAggregateOperator::Max,
-                &[FieldFunction::try_create("a")?],
-            )?,
+            func: AggregatorFunction::try_create_max_func(&[FieldFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::Int64(Some(4)),
             error: "",
@@ -73,12 +67,20 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Min(a)",
             nullable: false,
-            func: AggregatorFunction::try_create(
-                DataValueAggregateOperator::Min,
-                &[FieldFunction::try_create("a")?],
-            )?,
+            func: AggregatorFunction::try_create_min_func(&[FieldFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::Int64(Some(1)),
+            error: "",
+        },
+        Test {
+            name: "avg-passed",
+            evals: 1,
+            args: vec![field_a.clone(), field_b.clone()],
+            display: "Avg(a)",
+            nullable: false,
+            func: AggregatorFunction::try_create_avg_func(&[FieldFunction::try_create("a")?])?,
+            block: block.clone(),
+            expect: DataValue::Float64(Some(2.5)),
             error: "",
         },
         Test {
@@ -87,10 +89,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Sum(a)",
             nullable: false,
-            func: AggregatorFunction::try_create(
-                DataValueAggregateOperator::Sum,
-                &[FieldFunction::try_create("a")?],
-            )?,
+            func: AggregatorFunction::try_create_sum_func(&[FieldFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::Int64(Some(10)),
             error: "",
@@ -101,16 +100,10 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Sum(a) + 1",
             nullable: false,
-            func: ArithmeticFunction::try_create(
-                DataValueArithmeticOperator::Add,
-                &[
-                    AggregatorFunction::try_create(
-                        DataValueAggregateOperator::Sum,
-                        &[FieldFunction::try_create("a")?],
-                    )?,
-                    ConstantFunction::try_create(DataValue::Int64(Some(1)))?,
-                ],
-            )?,
+            func: ArithmeticFunction::try_create_add_func(&[
+                AggregatorFunction::try_create_sum_func(&[FieldFunction::try_create("a")?])?,
+                ConstantFunction::try_create(DataValue::Int64(Some(1)))?,
+            ])?,
             block: block.clone(),
             expect: DataValue::Int64(Some(71)),
             error: "",
@@ -121,19 +114,10 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Sum(a)/Count(a)",
             nullable: false,
-            func: ArithmeticFunction::try_create(
-                DataValueArithmeticOperator::Div,
-                &[
-                    AggregatorFunction::try_create(
-                        DataValueAggregateOperator::Sum,
-                        &[FieldFunction::try_create("a")?],
-                    )?,
-                    AggregatorFunction::try_create(
-                        DataValueAggregateOperator::Count,
-                        &[FieldFunction::try_create("a")?],
-                    )?,
-                ],
-            )?,
+            func: ArithmeticFunction::try_create_div_func(&[
+                AggregatorFunction::try_create_sum_func(&[FieldFunction::try_create("a")?])?,
+                AggregatorFunction::try_create_count_func(&[FieldFunction::try_create("a")?])?,
+            ])?,
             block: block.clone(),
             expect: DataValue::Int64(Some(2)),
             error: "",
@@ -144,22 +128,15 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Sum(a+1)+2",
             nullable: false,
-            func: ArithmeticFunction::try_create(
-                DataValueArithmeticOperator::Add,
-                &[
-                    AggregatorFunction::try_create(
-                        DataValueAggregateOperator::Sum,
-                        &[ArithmeticFunction::try_create(
-                            DataValueArithmeticOperator::Add,
-                            &[
-                                FieldFunction::try_create("a")?,
-                                ConstantFunction::try_create(DataValue::Int8(Some(1)))?,
-                            ],
-                        )?],
-                    )?,
-                    ConstantFunction::try_create(DataValue::Int8(Some(2)))?,
-                ],
-            )?,
+            func: ArithmeticFunction::try_create_add_func(&[
+                AggregatorFunction::try_create_sum_func(&[
+                    ArithmeticFunction::try_create_add_func(&[
+                        FieldFunction::try_create("a")?,
+                        ConstantFunction::try_create(DataValue::Int8(Some(1)))?,
+                    ])?,
+                ])?,
+                ConstantFunction::try_create(DataValue::Int8(Some(2)))?,
+            ])?,
             block,
             expect: DataValue::Int64(Some(100)),
             error: "",
@@ -181,8 +158,8 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
 
         let mut final_func = t.func.clone();
         final_func.set_depth(0);
-        final_func.merge_state(&*state1)?;
-        final_func.merge_state(&*state2)?;
+        final_func.merge(&*state1)?;
+        final_func.merge(&*state2)?;
 
         let result = final_func.merge_result()?;
 

@@ -24,10 +24,10 @@ impl DataSource {
             databases: Default::default(),
         };
 
-        // Register system database.
+        // Register system.
         datasource.add_database("system")?;
-        // Register system.numbers table.
         datasource.add_table("system", Arc::new(system::NumbersTable::create()))?;
+        datasource.add_table("system", Arc::new(system::FunctionsTable::create()))?;
 
         Ok(datasource)
     }

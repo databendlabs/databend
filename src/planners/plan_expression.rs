@@ -6,9 +6,7 @@ use std::fmt;
 
 use crate::datavalues::{DataField, DataSchemaRef, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::functions::{
-    AliasFunction, ConstantFunction, FieldFunction, Function, ScalarFunctionFactory,
-};
+use crate::functions::{AliasFunction, ConstantFunction, FieldFunction, Function, FunctionFactory};
 
 #[derive(Clone)]
 pub enum ExpressionPlan {
@@ -44,7 +42,7 @@ impl ExpressionPlan {
             ExpressionPlan::BinaryExpression { left, op, right } => {
                 let l = left.plan_to_function(depth)?;
                 let r = right.plan_to_function(depth + 1)?;
-                let mut func = ScalarFunctionFactory::get(op, &[l, r])?;
+                let mut func = FunctionFactory::get(op, &[l, r])?;
                 func.set_depth(depth);
                 Ok(func)
             }
@@ -55,7 +53,7 @@ impl ExpressionPlan {
                     func.set_depth(depth);
                     funcs.push(func);
                 }
-                let mut func = ScalarFunctionFactory::get(op, &funcs)?;
+                let mut func = FunctionFactory::get(op, &funcs)?;
                 func.set_depth(depth);
                 Ok(func)
             }

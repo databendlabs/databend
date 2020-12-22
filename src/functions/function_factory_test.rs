@@ -83,7 +83,7 @@ fn test_factory() -> crate::error::FuseQueryResult<()> {
         Test {
             name: "count-function-passed",
             fun: "count",
-            args: vec![field_a.clone(), field_b.clone()],
+            args: vec![field_a.clone()],
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -121,7 +121,7 @@ fn test_factory() -> crate::error::FuseQueryResult<()> {
         },
     ];
     for t in tests {
-        let result = ScalarFunctionFactory::get(t.fun, &*t.args);
+        let result = FunctionFactory::get(t.fun, &*t.args);
         match result {
             Ok(_) => {}
             Err(e) => assert_eq!(t.error, e.to_string()),

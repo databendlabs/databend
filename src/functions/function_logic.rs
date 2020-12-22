@@ -23,7 +23,21 @@ pub struct LogicFunction {
 }
 
 impl LogicFunction {
-    pub fn try_create(op: DataValueLogicOperator, args: &[Function]) -> FuseQueryResult<Function> {
+    pub fn try_create_and_func(args: &[Function]) -> FuseQueryResult<Function> {
+        Self::try_create(DataValueLogicOperator::And, args)
+    }
+
+    pub fn try_create_or_func(args: &[Function]) -> FuseQueryResult<Function> {
+        Self::try_create(DataValueLogicOperator::Or, args)
+    }
+
+    fn try_create(op: DataValueLogicOperator, args: &[Function]) -> FuseQueryResult<Function> {
+        if args.len() != 2 {
+            return Err(FuseQueryError::Internal(
+                "Logic function args length must be 2".to_string(),
+            ));
+        }
+
         Ok(Function::Logic(LogicFunction {
             depth: 0,
             op,
@@ -65,7 +79,7 @@ impl LogicFunction {
         )))
     }
 
-    pub fn merge_state(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
+    pub fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
         Err(FuseQueryError::Internal(format!(
             "Unsupported aggregate operation for function {}",
             self.op

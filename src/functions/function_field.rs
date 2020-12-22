@@ -59,7 +59,7 @@ impl FieldFunction {
         ))
     }
 
-    pub fn merge_state(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
+    pub fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
         Err(FuseQueryError::Internal(
             "Unsupported aggregate operation for function field".to_string(),
         ))
