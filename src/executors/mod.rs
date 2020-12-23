@@ -9,8 +9,10 @@ mod executor;
 mod executor_explain;
 mod executor_factory;
 mod executor_select;
+mod executor_setting;
 
 pub use self::executor::IExecutor;
 pub use self::executor_explain::ExplainExecutor;
 pub use self::executor_factory::ExecutorFactory;
 pub use self::executor_select::SelectExecutor;
+pub use self::executor_setting::SettingExecutor;

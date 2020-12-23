@@ -4,19 +4,25 @@
 
 #[test]
 fn test_filter_plan() -> crate::error::FuseQueryResult<()> {
+    use pretty_assertions::assert_eq;
+    use std::sync::Arc;
+
+    use crate::contexts::*;
     use crate::planners::*;
     use crate::testdata;
-    use pretty_assertions::assert_eq;
 
     let test_source = testdata::NumberTestData::create();
-    let source = test_source.number_read_source_plan_for_test(8)?;
+    let ctx = Arc::new(FuseQueryContext::create_ctx(
+        test_source.number_source_for_test()?,
+    ));
+    let source = test_source.number_read_source_plan_for_test(ctx, 8)?;
     let plan = PlanBuilder::from(&PlanNode::ReadSource(source))
         .filter(field("number").eq(constant(1i64)))?
         .project(vec![field("number")])?
         .build()?;
 
     let expect = "\
-    └─ Projection: number\
+    └─ Projection: number:UInt64\
     \n  └─ Filter: (number = 1)\
     \n    └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table)";
     let actual = format!("{:?}", plan);

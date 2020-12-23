@@ -14,7 +14,6 @@ async fn test_explain_executor() -> crate::error::FuseQueryResult<()> {
 
     let test_source = testdata::NumberTestData::create();
     let ctx = Arc::new(FuseQueryContext::create_ctx(
-        0,
         test_source.number_source_for_test()?,
     ));
 

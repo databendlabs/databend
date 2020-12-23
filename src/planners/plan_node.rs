@@ -6,7 +6,7 @@ use crate::datavalues::DataSchemaRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
     AggregatePlan, EmptyPlan, ExplainPlan, FilterPlan, LimitPlan, PlanBuilder, ProjectionPlan,
-    ReadDataSourcePlan, ScanPlan, SelectPlan,
+    ReadDataSourcePlan, ScanPlan, SelectPlan, SettingPlan,
 };
 
 #[derive(Clone)]
@@ -20,6 +20,7 @@ pub enum PlanNode {
     ReadSource(ReadDataSourcePlan),
     Explain(ExplainPlan),
     Select(SelectPlan),
+    SetVariable(SettingPlan),
 }
 
 impl PlanNode {
@@ -35,6 +36,7 @@ impl PlanNode {
             PlanNode::ReadSource(v) => v.schema(),
             PlanNode::Select(v) => v.plan.schema(),
             PlanNode::Explain(_) => unimplemented!(),
+            PlanNode::SetVariable(_) => unimplemented!(),
         }
     }
 
@@ -47,8 +49,9 @@ impl PlanNode {
             PlanNode::Filter(_) => "FilterPlan",
             PlanNode::Limit(_) => "LimitPlan",
             PlanNode::ReadSource(_) => "ReadSourcePlan",
-            PlanNode::Explain(_) => "ExplainPlan",
             PlanNode::Select(_) => "SelectPlan",
+            PlanNode::Explain(_) => "ExplainPlan",
+            PlanNode::SetVariable(_) => "SetVariablePlan",
         }
     }
 
@@ -105,6 +108,9 @@ impl PlanNode {
                 }
 
                 // Return.
+                PlanNode::SetVariable(_) => {
+                    break;
+                }
                 PlanNode::Empty(_) => {
                     break;
                 }
@@ -131,7 +137,7 @@ impl PlanNode {
     }
 
     pub fn plan_list_to_node(list: &[PlanNode]) -> FuseQueryResult<PlanNode> {
-        let mut builder = PlanBuilder::empty(false);
+        let mut builder = PlanBuilder::empty();
         for plan in list {
             match plan {
                 PlanNode::Projection(v) => {
@@ -157,6 +163,7 @@ impl PlanNode {
                 }
                 PlanNode::Empty(_) => {}
                 PlanNode::Scan(_) => {}
+                PlanNode::SetVariable(_) => {}
             }
         }
         builder.build()

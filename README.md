@@ -23,21 +23,9 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 * **High Reliability**
   - True Separation of Storage and Compute
 
-## Status
-#### SQL Support
-
-- [x] Projection
-- [x] Filter
-- [x] Limit
-- [x] Aggregate
-- [x] Functions
-- [ ] Distributed Query
-- [ ] Sorting
-- [ ] Joins
-- [ ] SubQueries
-
-
 ## Architecture
+
+![DataFuse Architecture](./docs/images/datafuse.svg)
 
 | Crate     | Description |  Status |
 |-----------|-------------|-------------|
@@ -53,11 +41,25 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 | [servers](src/servers) | Server handler([MySQL](src/servers/mysql)/HTTP) | MySQL |
 | [transforms](src/transforms) | Query execution transform([Source](src/transforms/transform_source.rs)/[Filter](src/transforms/transform_filter.rs)/[Projection](src/transforms/transform_projection.rs)/[AggregatorPartial](src/transforms/transform_aggregate_partial.rs)/[AggregatorFinal](src/transforms/transform_aggregate_final.rs)/[Limit](src/transforms/transform_limit.rs)) | WIP |
 
+## Status
+#### SQL Support
+
+- [x] Projection
+- [x] Filter
+- [x] Limit
+- [x] Aggregate
+- [x] Functions
+- [ ] Distributed Query
+- [ ] Sorting
+- [ ] Joins
+- [ ] SubQueries
+
+
 ## Performance
 
 * **Memory SIMD-Vector processing performance only**
 * Dataset: 10,000,000,000 (10 Billion)
-* Hardware: 8vCPUx16G KVM Cloud Instance
+* Hardware: 8vCPUx16G Cloud Instance
 * Rust: rustc 1.50.0-nightly (f76ecd066 2020-12-15)
 
 |Query |FuseQuery Cost| ClickHouse Cost|
@@ -76,7 +78,7 @@ Note:
 
 ## How to install Rust(nightly)?
 
-```
+``` shell
 $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 $ rustup toolchain install nightly
 ```
@@ -86,7 +88,7 @@ $ rustup toolchain install nightly
 
 #### Fuse-Query Server
 
-```
+```shell
 $ make run
 
 12:46:15 [ INFO] Options { log_level: "debug", num_cpus: 8, mysql_handler_port: 3307 }
@@ -96,7 +98,7 @@ $ make run
 
 or run with docker:
 
-```
+```shell
 $ docker pull datafusedev/fuse-query
 ...
 
@@ -110,21 +112,21 @@ $ docker run --init --rm -p 3307:3307 datafusedev/fuse-query
 
 ###### Connect
 
-```
+```shell
 $ mysql -h127.0.0.1 -P3307
 ```
 
 ###### Explain
 
-```
+```shell
 mysql> explain select (number+1) as c1, number/2 as c2 from system.numbers_mt(10000000) where (c1+c2+1) < 100 limit 3;
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | explain                                                                                                                                                                                                                                                                                                               |
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | └─ Limit: 3
-  └─ Projection: (number + 1) as c1, (number / 2) as c2
-    └─ Filter: ((((number + 1) + (number / 2)) + 1) < 100)
-      └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table)                                                                                                             |
+  └─ Projection: (number + 1) as c1:UInt64, (number / 2) as c2:UInt64
+    └─ Filter: (((c1 + c2) + 1) < 100)
+      └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table)                                                                                                                   |
 | 
   └─ LimitTransform × 1 processor
     └─ Merge (LimitTransform × 8 processors) to (MergeProcessor × 1)
@@ -138,7 +140,7 @@ mysql> explain select (number+1) as c1, number/2 as c2 from system.numbers_mt(10
 
 ###### Select
 
-```
+```shell
 mysql> select (number+1) as c1, number/2 as c2 from system.numbers_mt(10000000) where (c1+c2+1) < 100 limit 3;
 +------+------+
 | c1   | c2   |
@@ -152,6 +154,6 @@ mysql> select (number+1) as c1, number/2 as c2 from system.numbers_mt(10000000) 
 
 ## How to Test?
 
-```
+```shell
 $ make test
 ```

@@ -26,9 +26,7 @@ impl PlanBuilder {
     }
 
     /// Create an empty relation.
-    ///
-    /// `produce_one_row` set to true means this empty node needs to produce a placeholder row.
-    pub fn empty(_produce_one_row: bool) -> Self {
+    pub fn empty() -> Self {
         Self::from(&PlanNode::Empty(EmptyPlan {
             schema: DataSchemaRef::new(DataSchema::empty()),
         }))

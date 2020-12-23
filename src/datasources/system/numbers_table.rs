@@ -5,6 +5,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
+use crate::contexts::FuseQueryContextRef;
 use crate::datasources::{system::NumbersStream, ITable, Partition, Partitions};
 use crate::datastreams::SendableDataBlockStream;
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, DataValue};
@@ -26,8 +27,7 @@ impl NumbersTable {
         }
     }
 
-    pub fn generate_parts(&self, total: u64) -> Partitions {
-        let workers = 8u64;
+    pub fn generate_parts(&self, workers: u64, total: u64) -> Partitions {
         let chunk_size = total / workers;
         let mut partitions = Vec::with_capacity(workers as usize);
 
@@ -65,8 +65,12 @@ impl ITable for NumbersTable {
         Ok(self.schema.clone())
     }
 
-    fn read_plan(&self, push_down_plan: PlanNode) -> FuseQueryResult<ReadDataSourcePlan> {
-        let mut total = 10000_u64;
+    fn read_plan(
+        &self,
+        ctx: FuseQueryContextRef,
+        push_down_plan: PlanNode,
+    ) -> FuseQueryResult<ReadDataSourcePlan> {
+        let mut total = ctx.get_max_block_size()? as u64;
 
         if let PlanNode::Scan(plan) = push_down_plan {
             let ScanPlan { table_args, .. } = plan;
@@ -84,14 +88,21 @@ impl ITable for NumbersTable {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
-            table_type: "System",
             schema: self.schema.clone(),
-            partitions: self.generate_parts(total),
+            partitions: self.generate_parts(ctx.get_max_threads()?, total),
             description: "(Read from system.numbers_mt table)".to_string(),
         })
     }
 
-    async fn read(&self, parts: Vec<Partition>) -> FuseQueryResult<SendableDataBlockStream> {
-        Ok(Box::pin(NumbersStream::create(self.schema.clone(), parts)))
+    async fn read(
+        &self,
+        ctx: FuseQueryContextRef,
+        parts: Vec<Partition>,
+    ) -> FuseQueryResult<SendableDataBlockStream> {
+        Ok(Box::pin(NumbersStream::create(
+            ctx.get_max_block_size()?,
+            self.schema.clone(),
+            parts,
+        )))
     }
 }

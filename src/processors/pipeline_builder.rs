@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use crate::contexts::FuseQueryContext;
+use crate::contexts::FuseQueryContextRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::PlanNode;
 use crate::processors::Pipeline;
@@ -14,12 +14,12 @@ use crate::transforms::{
 };
 
 pub struct PipelineBuilder {
-    ctx: Arc<FuseQueryContext>,
+    ctx: FuseQueryContextRef,
     plan: PlanNode,
 }
 
 impl PipelineBuilder {
-    pub fn create(ctx: Arc<FuseQueryContext>, plan: PlanNode) -> Self {
+    pub fn create(ctx: FuseQueryContextRef, plan: PlanNode) -> Self {
         PipelineBuilder { ctx, plan }
     }
 
@@ -72,7 +72,7 @@ impl PipelineBuilder {
                 }
                 PlanNode::ReadSource(plan) => {
                     let mut shuffle = vec![];
-                    let workers = self.ctx.worker_threads;
+                    let workers = self.ctx.get_max_threads()? as usize;
                     let workers = if workers == 0 || workers >= plan.partitions.len() {
                         1
                     } else {

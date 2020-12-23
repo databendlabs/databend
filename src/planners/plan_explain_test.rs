@@ -13,17 +13,21 @@ fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
 
     let test_source = testdata::NumberTestData::create();
     let ctx = Arc::new(FuseQueryContext::create_ctx(
-        0,
         test_source.number_source_for_test()?,
     ));
     let plan = Planner::new().build_from_sql(
         ctx.clone(),
-        "explain select number as c1, number as c2, number as c3,(number+1) from system.numbers_mt where (number+1)=4",
+        "select number as c1, number as c2, number as c3,(number+1) from system.numbers_mt where (number+1)=4",
     )?;
-    let expect = "└─ Projection: number as c1, number as c2, number as c3, (number + 1)\
+
+    let explain = PlanNode::Explain(ExplainPlan {
+        plan: Box::new(plan),
+    });
+    let expect = "\
+    └─ Projection: number as c1:UInt64, number as c2:UInt64, number as c3:UInt64, (number + 1):UInt64\
     \n  └─ Filter: ((number + 1) = 4)\
     \n    └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table)";
-    let actual = format!("{:?}", plan);
+    let actual = format!("{:?}", explain);
     assert_eq!(expect, actual);
     Ok(())
 }

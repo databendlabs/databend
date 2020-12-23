@@ -23,40 +23,55 @@ impl PlanNode {
         }
         match self {
             PlanNode::Projection(v) => {
+                let schema = v.schema();
                 write!(f, "{} Projection: ", setting.prefix)?;
                 for i in 0..v.expr.len() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{:?}", v.expr[i])?;
+                    write!(f, "{:?}:{:?}", v.expr[i], schema.fields()[i].data_type())?;
                 }
                 write!(f, "")
             }
             PlanNode::Aggregate(v) => {
+                let schema = v.schema();
                 write!(f, "{} Aggregate: ", setting.prefix)?;
                 for i in 0..v.aggr_expr.len() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{:?}", v.aggr_expr[i])?;
+                    write!(
+                        f,
+                        "{:?}:{:?}",
+                        v.aggr_expr[i],
+                        schema.fields()[i].data_type()
+                    )?;
                 }
                 for i in 0..v.group_expr.len() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{:?}", v.group_expr[i])?;
+                    write!(
+                        f,
+                        "{:?}:{:?}",
+                        v.group_expr[i],
+                        schema.fields()[i].data_type()
+                    )?;
                 }
                 write!(f, "")
             }
             PlanNode::Filter(v) => write!(f, "{} Filter: {:?}", setting.prefix, v.predicate),
             PlanNode::Limit(v) => write!(f, "{} Limit: {}", setting.prefix, v.n),
-            PlanNode::ReadSource(v) => write!(
-                f,
-                "{} ReadDataSource: scan parts [{}]{}",
-                setting.prefix,
-                v.partitions.len(),
-                v.description
-            ),
+            PlanNode::ReadSource(v) => {
+                write!(
+                    f,
+                    "{} ReadDataSource: scan parts [{}]{}",
+                    setting.prefix,
+                    v.partitions.len(),
+                    v.description
+                )?;
+                write!(f, "")
+            }
 
             // Empty.
             PlanNode::Empty(_) => write!(f, ""),
@@ -65,6 +80,7 @@ impl PlanNode {
                 write!(f, "")
             }
             PlanNode::Explain(_) => write!(f, ""),
+            PlanNode::SetVariable(_) => write!(f, ""),
         }
     }
 }

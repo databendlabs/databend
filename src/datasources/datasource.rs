@@ -28,6 +28,7 @@ impl DataSource {
         datasource.add_database("system")?;
         datasource.add_table("system", Arc::new(system::NumbersTable::create()))?;
         datasource.add_table("system", Arc::new(system::FunctionsTable::create()))?;
+        datasource.add_table("system", Arc::new(system::SettingsTable::create()))?;
 
         Ok(datasource)
     }
