@@ -33,7 +33,7 @@ sqlparser = "0.6"
 simplelog = "0.9"
 thiserror = "1.0"
 threadpool = "1.8.1"
-tokio = { version = "0.3", features = ["macros", "rt", "rt-multi-thread", "stream", "signal", "sync"] }
+tokio = { version = "1.0", features = ["macros", "rt", "rt-multi-thread", "stream", "signal", "sync"] }
 
 [dev-dependencies]
 criterion = "0.3"
