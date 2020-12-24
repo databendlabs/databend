@@ -4,12 +4,13 @@
 
 use log::{debug, error};
 
-use msql_srv::*;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use std::{io, net};
+
+use futures::stream::StreamExt;
+use msql_srv::*;
 use threadpool::ThreadPool;
-use tokio::stream::StreamExt;
 
 use crate::contexts::{FuseQueryContext, FuseQueryContextRef, Options};
 use crate::datablocks::DataBlock;

@@ -5,5 +5,6 @@
 use crate::datablocks::DataBlock;
 use crate::error::FuseQueryResult;
 
-pub type SendableDataBlockStream =
-    std::pin::Pin<Box<dyn tokio::stream::Stream<Item = FuseQueryResult<DataBlock>> + Sync + Send>>;
+pub type SendableDataBlockStream = std::pin::Pin<
+    Box<dyn futures::stream::Stream<Item = FuseQueryResult<DataBlock>> + Sync + Send>,
+>;

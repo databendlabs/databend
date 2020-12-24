@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tokio::stream::StreamExt;
+use futures::stream::StreamExt;
 use tokio::sync::mpsc;
 
 use crate::datablocks::DataBlock;

@@ -3,7 +3,8 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use std::task::{Context, Poll};
-use tokio::stream::Stream;
+
+use futures::stream::Stream;
 
 use crate::datablocks::DataBlock;
 use crate::datasources::Partitions;

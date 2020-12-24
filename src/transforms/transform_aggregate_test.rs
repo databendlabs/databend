@@ -4,8 +4,8 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_projection() -> crate::error::FuseQueryResult<()> {
+    use futures::stream::StreamExt;
     use std::sync::Arc;
-    use tokio::stream::StreamExt;
 
     use crate::contexts::*;
     use crate::datavalues::*;

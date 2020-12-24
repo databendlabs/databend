@@ -4,7 +4,7 @@
 
 use std::task::{Context, Poll};
 
-use tokio::stream::Stream;
+use futures::stream::Stream;
 
 use crate::datablocks::DataBlock;
 use crate::datavalues::DataSchemaRef;

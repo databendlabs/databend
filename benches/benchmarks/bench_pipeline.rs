@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use tokio::stream::StreamExt;
+use futures::stream::StreamExt;
 
 use fuse_query::contexts::FuseQueryContext;
 use fuse_query::error::FuseQueryResult;
