@@ -77,18 +77,11 @@ Note:
 * ClickHouse system.numbers_mt is <b>8-way</b> parallelism processing
 * FuseQuery system.numbers_mt is <b>8-way</b> parallelism processing
 
-## How to install Rust(nightly)?
-
-``` shell
-$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-$ rustup toolchain install nightly
-```
-
-
 ## How to Run?
 
 #### Fuse-Query Server
 
+***Build from source***
 ```shell
 $ make run
 
@@ -97,7 +90,7 @@ $ make run
 12:46:15 [ INFO] Usage: mysql -h127.0.0.1 -P3307
 ```
 
-or run with docker:
+or ***Run with docker***(Recommended):
 
 ```shell
 $ docker pull datafusedev/fuse-query
