@@ -28,19 +28,21 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 
 ![DataFuse Architecture](./docs/images/datafuse.svg)
 
+## Crates
+
 | Crate     | Description |  Status |
 |-----------|-------------|-------------|
 | distributed | Distributed scheduler and executor for planner | WIP |
-| [optimizers](src/optimizers) | Optimizer for distributed plan | WIP |
+| [optimizers](src/optimizers) | Optimizer for Distributed&Local plan | WIP |
 | [datablocks](src/datablocks) | Vectorized data processing unit | WIP |
 | [datastreams](src/datastreams) | Async streaming iterators | WIP |
-| [datasources](src/datasources) | Interface to the datasource([system.numbers for performance](src/datasources/system)/Remote(S3 or other table storage engine)) | WIP |
+| [datasources](src/datasources) | Interface to the datasource([system.numbers for performance](src/datasources/system)/Fuse-Store) | WIP|
 | [execturos](src/executors) | Executor([EXPLAIN](src/executors/executor_explain.rs)/[SELECT](src/executors/executor_select.rs)) for the Pipeline | WIP |
-| [functions](src/functions) | Scalar([Arithmetic](src/functions/function_arithmetic.rs)/[Comparison](src/functions/function_comparison.rs)) and Aggregation([Aggregator](src/functions/function_aggregator.rs)) functions | WIP |
-| [processors](src/processors) | Dataflow streaming processor([Pipeline](src/processors/pipeline.rs)) | WIP |
-| [planners](src/planners) | Distributed plan for queries and DML statements([SELECT](src/planners/plan_select.rs)/[EXPLAIN](src/planners/plan_explain.rs)) | WIP |
+| [functions](src/functions) | Scalar and Aggregation Functions | WIP |
+| [processors](src/processors) | Dataflow Streaming Processor| WIP |
+| [planners](src/planners) | Distributed&Local planners for transforming to pipeline| WIP |
 | [servers](src/servers) | Server handler([MySQL](src/servers/mysql)/HTTP) | MySQL |
-| [transforms](src/transforms) | Query execution transform([Source](src/transforms/transform_source.rs)/[Filter](src/transforms/transform_filter.rs)/[Projection](src/transforms/transform_projection.rs)/[AggregatorPartial](src/transforms/transform_aggregate_partial.rs)/[AggregatorFinal](src/transforms/transform_aggregate_final.rs)/[Limit](src/transforms/transform_limit.rs)) | WIP |
+| [transforms](src/transforms) | Data Stream Transform([Source](src/transforms/transform_source.rs)/[Filter](src/transforms/transform_filter.rs)/[Projection](src/transforms/transform_projection.rs)/[AggregatorPartial](src/transforms/transform_aggregate_partial.rs)/[AggregatorFinal](src/transforms/transform_aggregate_final.rs)/[Limit](src/transforms/transform_limit.rs)) | WIP |
 
 ## Status
 #### SQL Support
@@ -50,6 +52,8 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 - [x] Limit
 - [x] Aggregate
 - [x] Functions
+- [x] Filter Push-Down
+- [ ] Projection Push-Down
 - [ ] Distributed Query
 - [ ] Sorting
 - [ ] Joins
@@ -81,7 +85,7 @@ Note:
 
 #### Fuse-Query Server
 
-***Build from source***
+***Run from source***
 ```shell
 $ make run
 
