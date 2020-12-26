@@ -47,12 +47,11 @@ impl ProjectionTransform {
         block: DataBlock,
         funcs: Vec<Function>,
     ) -> FuseQueryResult<DataBlock> {
-        let mut arrays = Vec::with_capacity(funcs.len());
-
+        let mut column_values = Vec::with_capacity(funcs.len());
         for mut func in funcs {
-            arrays.push(func.eval(&block)?.to_array(block.num_rows())?);
+            column_values.push(func.eval(&block)?.to_array(block.num_rows())?);
         }
-        Ok(DataBlock::create(projected_schema.clone(), arrays))
+        Ok(DataBlock::create(projected_schema.clone(), column_values))
     }
 }
 

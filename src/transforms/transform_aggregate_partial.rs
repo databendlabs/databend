@@ -58,17 +58,20 @@ impl IProcessor for AggregatePartialTransform {
             }
         }
 
-        let mut column = Vec::with_capacity(funcs.len());
+        let mut acc_results = Vec::with_capacity(funcs.len());
         for func in &funcs {
             let states = DataValue::Struct(func.accumulate_result()?);
             let serialized = serde_json::to_string(&states)?;
-            column.push(serialized);
+            acc_results.push(serialized);
         }
 
-        let column_str = column.iter().map(|x| x.as_str()).collect::<Vec<&str>>();
+        let partial_results = acc_results
+            .iter()
+            .map(|x| x.as_str())
+            .collect::<Vec<&str>>();
         let block = DataBlock::create(
             self.schema.clone(),
-            vec![Arc::new(StringArray::from(column_str))],
+            vec![Arc::new(StringArray::from(partial_results))],
         );
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
