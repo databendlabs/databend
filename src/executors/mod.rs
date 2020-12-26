@@ -4,6 +4,7 @@
 
 mod executor_explain_test;
 mod executor_select_test;
+mod executor_setting_test;
 
 mod executor;
 mod executor_explain;
