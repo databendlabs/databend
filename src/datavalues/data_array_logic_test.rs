@@ -48,13 +48,7 @@ fn test_array_logic() {
                 &DataColumnarValue::Array(args[1].clone()),
             );
             match result {
-                Ok(ref v) => {
-                    // Result check.
-                    if !v.equals(&*t.expect[i]) {
-                        println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect[i], v);
-                        assert!(false);
-                    }
-                }
+                Ok(v) => assert_eq!(v.as_ref(), t.expect[i].as_ref()),
                 Err(e) => assert_eq!(t.error[i], e.to_string()),
             }
         }

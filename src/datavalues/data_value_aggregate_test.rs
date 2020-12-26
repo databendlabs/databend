@@ -186,13 +186,7 @@ fn test_data_value_arithmetic() {
         for (i, args) in t.args.iter().enumerate() {
             let result = data_value_aggregate_op(t.op.clone(), args[0].clone(), args[1].clone());
             match result {
-                Ok(ref v) => {
-                    // Result check.
-                    if *v != t.expect[i] {
-                        println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect[i], v);
-                        assert!(false);
-                    }
-                }
+                Ok(v) => assert_eq!(v, t.expect[i]),
                 Err(e) => assert_eq!(t.error[i], e.to_string()),
             }
         }

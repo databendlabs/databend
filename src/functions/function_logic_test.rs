@@ -86,12 +86,7 @@ fn test_logic_function() -> crate::error::FuseQueryResult<()> {
         let expect_type = func.return_type(t.block.schema())?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
-
-        // Result check.
-        if !v.to_array(t.block.num_rows())?.equals(&*t.expect) {
-            println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect, v);
-            assert!(false);
-        }
+        assert_eq!(v.to_array(t.block.num_rows())?.as_ref(), t.expect.as_ref());
     }
     Ok(())
 }

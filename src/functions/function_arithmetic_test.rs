@@ -136,16 +136,12 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         let actual_null = func.nullable(t.block.schema())?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&t.block)?;
-        // Type check.
         let expect_type = func.return_type(t.block.schema())?.clone();
+        let ref v = func.eval(&t.block)?;
         let actual_type = v.data_type().clone();
         assert_eq!(expect_type, actual_type);
 
-        if !v.to_array(0)?.equals(&*t.expect) {
-            println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect, v);
-            assert!(false);
-        }
+        assert_eq!(v.to_array(0)?.as_ref(), t.expect.as_ref());
     }
     Ok(())
 }
