@@ -8,7 +8,7 @@ use num::range;
 
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::processors::{FormatterSettings, IProcessor, MergeProcessor, ThroughProcessor};
+use crate::processors::{FormatterSettings, IProcessor, MergeProcessor};
 
 pub type Pipe = Vec<Arc<dyn IProcessor>>;
 
@@ -95,34 +95,6 @@ impl Pipeline {
             }
             self.processors.push(vec![Arc::from(p)]);
         }
-        Ok(())
-    }
-
-    /// Expand one(many) processors into size-ways.
-    /// Assume the expand size is 3:
-    ///
-    /// //              processor1
-    /// //            /
-    /// // processor -> processor2
-    /// //            \
-    /// //              processor3
-    ///
-    pub fn expand_processor(&mut self, size: u32) -> FuseQueryResult<()> {
-        let last = self.processors.last().ok_or_else(|| {
-            FuseQueryError::Internal(
-                "Can't expand processor when the last pipe is empty".to_string(),
-            )
-        })?;
-
-        let mut items: Vec<Arc<dyn IProcessor>> = Vec::with_capacity(last.len());
-        for _i in 0..size {
-            for x in last {
-                let mut p = ThroughProcessor::create();
-                p.connect_to(x.clone())?;
-                items.push(Arc::new(p));
-            }
-        }
-        self.processors.push(items);
         Ok(())
     }
 

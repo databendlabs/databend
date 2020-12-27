@@ -4,9 +4,10 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_projection() -> crate::error::FuseQueryResult<()> {
+    use futures::stream::StreamExt;
     use std::sync::Arc;
-    use tokio::stream::StreamExt;
 
+    use crate::contexts::*;
     use crate::datavalues::*;
     use crate::planners::{self, *};
     use crate::processors::*;
@@ -14,9 +15,12 @@ async fn test_transform_projection() -> crate::error::FuseQueryResult<()> {
     use crate::transforms::*;
 
     let test_source = testdata::NumberTestData::create();
+    let ctx = Arc::new(FuseQueryContext::create_ctx(
+        test_source.number_source_for_test()?,
+    ));
     let mut pipeline = Pipeline::create();
 
-    let a = test_source.number_source_transform_for_test(16)?;
+    let a = test_source.number_source_transform_for_test(ctx, 16)?;
     pipeline.add_source(Arc::new(a))?;
 
     if let PlanNode::Aggregate(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)

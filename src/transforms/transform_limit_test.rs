@@ -7,15 +7,19 @@ async fn test_transform_limit() -> crate::error::FuseQueryResult<()> {
     use futures::TryStreamExt;
     use std::sync::Arc;
 
+    use crate::contexts::*;
     use crate::planners::*;
     use crate::processors::*;
     use crate::testdata;
     use crate::transforms::*;
 
     let test_source = testdata::NumberTestData::create();
+    let ctx = Arc::new(FuseQueryContext::create_ctx(
+        test_source.number_source_for_test()?,
+    ));
     let mut pipeline = Pipeline::create();
 
-    let a = test_source.number_source_transform_for_test(8)?;
+    let a = test_source.number_source_transform_for_test(ctx, 8)?;
     pipeline.add_source(Arc::new(a))?;
 
     pipeline.merge_processor()?;

@@ -9,7 +9,6 @@ use crate::datavalues::DataSchemaRef;
 pub struct ReadDataSourcePlan {
     pub db: String,
     pub table: String,
-    pub table_type: &'static str,
     pub schema: DataSchemaRef,
     pub partitions: Partitions,
     pub description: String,

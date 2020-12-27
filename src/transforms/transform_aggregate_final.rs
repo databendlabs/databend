@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tokio::stream::StreamExt;
+use futures::stream::StreamExt;
 
 use crate::datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
@@ -52,24 +52,23 @@ impl IProcessor for AggregateFinalTransform {
         let mut stream = self.input.execute().await?;
         while let Some(block) = stream.next().await {
             let block = block?;
-
             for (i, func) in funcs.iter_mut().enumerate() {
                 if let DataValue::String(Some(serialized)) =
                     DataValue::try_from_array(block.column(0), i)?
                 {
                     let deserialized: DataValue = serde_json::from_str(&serialized)?;
                     if let DataValue::Struct(states) = deserialized {
-                        func.merge_state(&states)?;
+                        func.merge(&states)?;
                     }
                 }
             }
         }
 
-        let mut arrays = Vec::with_capacity(funcs.len());
+        let mut final_results = Vec::with_capacity(funcs.len());
         for func in &funcs {
-            arrays.push(func.merge_result()?.to_array(1)?);
+            final_results.push(func.merge_result()?.to_array(1)?);
         }
-        let block = DataBlock::create(self.schema.clone(), arrays);
+        let block = DataBlock::create(self.schema.clone(), final_results);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,

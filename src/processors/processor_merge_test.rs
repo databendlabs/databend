@@ -4,17 +4,21 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_processor_merge() -> crate::error::FuseQueryResult<()> {
+    use futures::stream::StreamExt;
     use std::sync::Arc;
-    use tokio::stream::StreamExt;
 
+    use crate::contexts::*;
     use crate::datavalues::*;
     use crate::processors::*;
     use crate::testdata;
 
     let test_source = testdata::NumberTestData::create();
+    let ctx = Arc::new(FuseQueryContext::create_ctx(
+        test_source.number_source_for_test()?,
+    ));
     let mut pipeline = Pipeline::create();
 
-    let a = test_source.number_source_transform_for_test(16)?;
+    let a = test_source.number_source_transform_for_test(ctx, 16)?;
     pipeline.add_source(Arc::new(a))?;
 
     pipeline.merge_processor()?;

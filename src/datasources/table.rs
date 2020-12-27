@@ -4,6 +4,7 @@
 
 use async_trait::async_trait;
 
+use crate::contexts::FuseQueryContextRef;
 use crate::datasources::Partition;
 use crate::datastreams::SendableDataBlockStream;
 use crate::datavalues::DataSchemaRef;
@@ -16,7 +17,15 @@ pub trait ITable: Sync + Send {
 
     fn schema(&self) -> FuseQueryResult<DataSchemaRef>;
 
-    fn read_plan(&self, push_down_plan: PlanNode) -> FuseQueryResult<ReadDataSourcePlan>;
+    fn read_plan(
+        &self,
+        ctx: FuseQueryContextRef,
+        push_down_plan: PlanNode,
+    ) -> FuseQueryResult<ReadDataSourcePlan>;
 
-    async fn read(&self, parts: Vec<Partition>) -> FuseQueryResult<SendableDataBlockStream>;
+    async fn read(
+        &self,
+        ctx: FuseQueryContextRef,
+        parts: Vec<Partition>,
+    ) -> FuseQueryResult<SendableDataBlockStream>;
 }

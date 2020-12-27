@@ -9,7 +9,7 @@ use crate::datavalues;
 use crate::datavalues::{
     DataColumnarValue, DataSchema, DataType, DataValue, DataValueArithmeticOperator,
 };
-use crate::error::FuseQueryResult;
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::Function;
 
 #[derive(Clone)]
@@ -21,10 +21,29 @@ pub struct ArithmeticFunction {
 }
 
 impl ArithmeticFunction {
-    pub fn try_create(
-        op: DataValueArithmeticOperator,
-        args: &[Function],
-    ) -> FuseQueryResult<Function> {
+    pub fn try_create_add_func(args: &[Function]) -> FuseQueryResult<Function> {
+        Self::try_create(DataValueArithmeticOperator::Add, args)
+    }
+
+    pub fn try_create_sub_func(args: &[Function]) -> FuseQueryResult<Function> {
+        Self::try_create(DataValueArithmeticOperator::Sub, args)
+    }
+
+    pub fn try_create_mul_func(args: &[Function]) -> FuseQueryResult<Function> {
+        Self::try_create(DataValueArithmeticOperator::Mul, args)
+    }
+
+    pub fn try_create_div_func(args: &[Function]) -> FuseQueryResult<Function> {
+        Self::try_create(DataValueArithmeticOperator::Div, args)
+    }
+
+    fn try_create(op: DataValueArithmeticOperator, args: &[Function]) -> FuseQueryResult<Function> {
+        if args.len() != 2 {
+            return Err(FuseQueryError::Internal(
+                "Arithmetic function args length must be 2".to_string(),
+            ));
+        }
+
         Ok(Function::Arithmetic(ArithmeticFunction {
             depth: 0,
             op,
@@ -74,9 +93,9 @@ impl ArithmeticFunction {
         .concat())
     }
 
-    pub fn merge_state(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
-        self.left.merge_state(states)?;
-        self.right.merge_state(states)
+    pub fn merge(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
+        self.left.merge(states)?;
+        self.right.merge(states)
     }
 
     pub fn merge_result(&self) -> FuseQueryResult<DataValue> {

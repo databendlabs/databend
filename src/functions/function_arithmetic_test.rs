@@ -14,13 +14,12 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
     struct Test {
         name: &'static str,
         evals: usize,
-        args: Vec<Function>,
         display: &'static str,
         nullable: bool,
         block: DataBlock,
         expect: DataArrayRef,
         error: &'static str,
-        op: DataValueArithmeticOperator,
+        func: Function,
     }
 
     let schema = Arc::new(DataSchema::new(vec![
@@ -37,10 +36,9 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         Test {
             name: "add-int64-passed",
             evals: 2,
-            args: vec![field_a.clone(), field_b.clone()],
             display: "a + b",
             nullable: false,
-            op: DataValueArithmeticOperator::Add,
+            func: ArithmeticFunction::try_create_add_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -55,10 +53,9 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         Test {
             name: "add-diff-passed",
             evals: 2,
-            args: vec![field_c.clone(), field_a.clone()],
             display: "c + a",
             nullable: false,
-            op: DataValueArithmeticOperator::Add,
+            func: ArithmeticFunction::try_create_add_func(&[field_c.clone(), field_a.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -73,10 +70,9 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         Test {
             name: "sub-int64-passed",
             evals: 2,
-            args: vec![field_a.clone(), field_b.clone()],
             display: "a - b",
             nullable: false,
-            op: DataValueArithmeticOperator::Sub,
+            func: ArithmeticFunction::try_create_sub_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -91,10 +87,9 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         Test {
             name: "mul-int64-passed",
             evals: 2,
-            args: vec![field_a.clone(), field_b.clone()],
             display: "a * b",
             nullable: false,
-            op: DataValueArithmeticOperator::Mul,
+            func: ArithmeticFunction::try_create_mul_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -109,10 +104,9 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         Test {
             name: "div-int64-passed",
             evals: 2,
-            args: vec![field_a.clone(), field_b.clone()],
             display: "a / b",
             nullable: false,
-            op: DataValueArithmeticOperator::Div,
+            func: ArithmeticFunction::try_create_div_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -127,8 +121,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
     ];
 
     for t in tests {
-        let mut func =
-            ArithmeticFunction::try_create(t.op, &[t.args[0].clone(), t.args[1].clone()])?;
+        let mut func = t.func;
         if let Err(e) = func.eval(&t.block) {
             assert_eq!(t.error, e.to_string());
         }
@@ -143,16 +136,12 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         let actual_null = func.nullable(t.block.schema())?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&t.block)?;
-        // Type check.
         let expect_type = func.return_type(t.block.schema())?.clone();
+        let ref v = func.eval(&t.block)?;
         let actual_type = v.data_type().clone();
         assert_eq!(expect_type, actual_type);
 
-        if !v.to_array(0)?.equals(&*t.expect) {
-            println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect, v);
-            assert!(false);
-        }
+        assert_eq!(v.to_array(0)?.as_ref(), t.expect.as_ref());
     }
     Ok(())
 }

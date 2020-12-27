@@ -14,13 +14,12 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
     struct Test {
         name: &'static str,
         func_name: &'static str,
-        args: Vec<Function>,
         display: &'static str,
         nullable: bool,
         block: DataBlock,
         expect: DataArrayRef,
         error: &'static str,
-        op: DataValueComparisonOperator,
+        func: Function,
     }
 
     let schema = Arc::new(DataSchema::new(vec![
@@ -34,10 +33,9 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
     let tests = vec![Test {
         name: "equal-passed",
         func_name: "EqualFunction",
-        args: vec![field_a.clone(), field_b.clone()],
         display: "a = b",
         nullable: false,
-        op: DataValueComparisonOperator::Eq,
+        func: ComparisonFunction::try_create_eq_func(&[field_a.clone(), field_b.clone()])?,
         block: DataBlock::create(
             schema.clone(),
             vec![
@@ -50,8 +48,7 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
     }];
 
     for t in tests {
-        let mut func =
-            ComparisonFunction::try_create(t.op, &[t.args[0].clone(), t.args[1].clone()])?;
+        let mut func = t.func;
         if let Err(e) = func.eval(&t.block) {
             assert_eq!(t.error, e.to_string());
         }
@@ -73,11 +70,7 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
 
-        // Result check.
-        if !v.to_array(t.block.num_rows())?.equals(&*t.expect) {
-            println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect, v);
-            assert!(false);
-        }
+        assert_eq!(v.to_array(t.block.num_rows())?.as_ref(), t.expect.as_ref());
     }
     Ok(())
 }

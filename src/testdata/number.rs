@@ -4,7 +4,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::contexts::FuseQueryContext;
+use crate::contexts::FuseQueryContextRef;
 use crate::datasources::IDataSource;
 use crate::datavalues::{DataSchema, DataSchemaRef, DataValue};
 use crate::error::FuseQueryResult;
@@ -38,34 +38,29 @@ impl NumberTestData {
 
     pub fn number_read_source_plan_for_test(
         &self,
+        ctx: FuseQueryContextRef,
         numbers: i64,
     ) -> FuseQueryResult<ReadDataSourcePlan> {
         let datasource = crate::datasources::DataSource::try_create()?;
         let table = datasource.get_table(self.db, self.table)?;
-        table.read_plan(PlanNode::Scan(ScanPlan {
-            schema_name: self.db.to_string(),
-            table_schema: Arc::new(DataSchema::empty()),
-            table_args: Some(ExpressionPlan::Constant(DataValue::Int64(Some(numbers)))),
-            projection: None,
-            projected_schema: Arc::new(DataSchema::empty()),
-        }))
+        table.read_plan(
+            ctx,
+            PlanNode::Scan(ScanPlan {
+                schema_name: self.db.to_string(),
+                table_schema: Arc::new(DataSchema::empty()),
+                table_args: Some(ExpressionPlan::Constant(DataValue::Int64(Some(numbers)))),
+                projection: None,
+                projected_schema: Arc::new(DataSchema::empty()),
+            }),
+        )
     }
 
     pub fn number_source_transform_for_test(
         &self,
+        ctx: FuseQueryContextRef,
         numbers: i64,
     ) -> FuseQueryResult<SourceTransform> {
-        let datasource = crate::datasources::DataSource::try_create()?;
-        let table = datasource.get_table(self.db, self.table)?;
-        let plan = table.read_plan(PlanNode::Scan(ScanPlan {
-            schema_name: self.db.to_string(),
-            table_schema: Arc::new(DataSchema::empty()),
-            table_args: Some(ExpressionPlan::Constant(DataValue::Int64(Some(numbers)))),
-            projection: None,
-            projected_schema: Arc::new(DataSchema::empty()),
-        }))?;
-        let ctx = FuseQueryContext::create_ctx(0, Arc::new(Mutex::new(datasource)));
-
-        SourceTransform::try_create(Arc::new(ctx), self.db, self.table, plan.partitions)
+        let plan = self.number_read_source_plan_for_test(ctx.clone(), numbers)?;
+        SourceTransform::try_create(ctx, self.db, self.table, plan.partitions)
     }
 }

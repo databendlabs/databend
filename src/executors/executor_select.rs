@@ -5,7 +5,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::contexts::FuseQueryContext;
+use crate::contexts::FuseQueryContextRef;
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::FuseQueryResult;
 use crate::executors::IExecutor;
@@ -14,13 +14,13 @@ use crate::planners::SelectPlan;
 use crate::processors::PipelineBuilder;
 
 pub struct SelectExecutor {
-    ctx: Arc<FuseQueryContext>,
+    ctx: FuseQueryContextRef,
     select: SelectPlan,
 }
 
 impl SelectExecutor {
     pub fn try_create(
-        ctx: Arc<FuseQueryContext>,
+        ctx: FuseQueryContextRef,
         select: SelectPlan,
     ) -> FuseQueryResult<Arc<dyn IExecutor>> {
         Ok(Arc::new(SelectExecutor { ctx, select }))

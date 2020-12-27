@@ -23,10 +23,33 @@ pub struct ComparisonFunction {
 }
 
 impl ComparisonFunction {
-    pub fn try_create(
-        op: DataValueComparisonOperator,
-        args: &[Function],
-    ) -> FuseQueryResult<Function> {
+    pub fn try_create_eq_func(args: &[Function]) -> FuseQueryResult<Function> {
+        Self::try_create(DataValueComparisonOperator::Eq, args)
+    }
+
+    pub fn try_create_gt_func(args: &[Function]) -> FuseQueryResult<Function> {
+        Self::try_create(DataValueComparisonOperator::Gt, args)
+    }
+
+    pub fn try_create_gt_eq_func(args: &[Function]) -> FuseQueryResult<Function> {
+        Self::try_create(DataValueComparisonOperator::GtEq, args)
+    }
+
+    pub fn try_create_lt_func(args: &[Function]) -> FuseQueryResult<Function> {
+        Self::try_create(DataValueComparisonOperator::Lt, args)
+    }
+
+    pub fn try_create_lt_eq_func(args: &[Function]) -> FuseQueryResult<Function> {
+        Self::try_create(DataValueComparisonOperator::LtEq, args)
+    }
+
+    fn try_create(op: DataValueComparisonOperator, args: &[Function]) -> FuseQueryResult<Function> {
+        if args.len() != 2 {
+            return Err(FuseQueryError::Internal(
+                "Comparison function args length must be 2".to_string(),
+            ));
+        }
+
         Ok(Function::Comparison(ComparisonFunction {
             depth: 0,
             op,
@@ -70,7 +93,7 @@ impl ComparisonFunction {
         )))
     }
 
-    pub fn merge_state(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
+    pub fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
         Err(FuseQueryError::Internal(format!(
             "Unsupported aggregate operation for function {}",
             self.op

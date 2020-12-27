@@ -3,7 +3,8 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use std::task::{Context, Poll};
-use tokio::stream::Stream;
+
+use futures::stream::Stream;
 
 use crate::datablocks::DataBlock;
 use crate::datasources::Partitions;
@@ -24,9 +25,9 @@ pub struct NumbersStream {
 }
 
 impl NumbersStream {
-    pub fn create(schema: DataSchemaRef, partitions: Partitions) -> Self {
+    pub fn create(max_block_size: u64, schema: DataSchemaRef, partitions: Partitions) -> Self {
         let mut blocks = vec![];
-        let block_size = 10000;
+        let block_size = max_block_size;
 
         for part in partitions {
             let names: Vec<_> = part.name.split('-').collect();

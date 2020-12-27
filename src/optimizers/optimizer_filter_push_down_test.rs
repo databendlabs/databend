@@ -4,6 +4,7 @@
 
 #[test]
 fn test_filter_push_down_optimizer() -> crate::error::FuseQueryResult<()> {
+    use pretty_assertions::assert_eq;
     use std::sync::Arc;
 
     use crate::contexts::*;
@@ -13,7 +14,6 @@ fn test_filter_push_down_optimizer() -> crate::error::FuseQueryResult<()> {
 
     let test_source = testdata::NumberTestData::create();
     let ctx = Arc::new(FuseQueryContext::create_ctx(
-        0,
         test_source.number_source_for_test()?,
     ));
     let plan = Planner::new().build_from_sql(
@@ -24,7 +24,7 @@ fn test_filter_push_down_optimizer() -> crate::error::FuseQueryResult<()> {
     let mut filter_push_down = FilterPushDownOptimizer::create();
     let optimized = filter_push_down.optimize(&plan)?;
     let expect = "\
-    └─ Projection: (number + 1) as c1, number as c2\
+    └─ Projection: (number + 1) as c1:UInt64, number as c2:UInt64\
     \n  └─ Filter: ((((number + 1) + number) + 1) = 1)\
     \n    └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table)";
     let actual = format!("{:?}", optimized);

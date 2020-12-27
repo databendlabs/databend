@@ -24,6 +24,6 @@ pub use self::function_alias::AliasFunction;
 pub use self::function_arithmetic::ArithmeticFunction;
 pub use self::function_comparison::ComparisonFunction;
 pub use self::function_constant::ConstantFunction;
-pub use self::function_factory::ScalarFunctionFactory;
+pub use self::function_factory::FunctionFactory;
 pub use self::function_field::FieldFunction;
 pub use self::function_logic::LogicFunction;

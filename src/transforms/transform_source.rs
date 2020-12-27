@@ -5,14 +5,14 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::contexts::FuseQueryContext;
+use crate::contexts::FuseQueryContextRef;
 use crate::datasources::Partition;
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::IProcessor;
 
 pub struct SourceTransform {
-    ctx: Arc<FuseQueryContext>,
+    ctx: FuseQueryContextRef,
     db: String,
     table: String,
     partitions: Vec<Partition>,
@@ -20,7 +20,7 @@ pub struct SourceTransform {
 
 impl SourceTransform {
     pub fn try_create(
-        ctx: Arc<FuseQueryContext>,
+        ctx: FuseQueryContextRef,
         db: &str,
         table: &str,
         partitions: Vec<Partition>,
@@ -48,6 +48,6 @@ impl IProcessor for SourceTransform {
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
         let table = self.ctx.get_table(self.db.as_str(), self.table.as_str())?;
-        table.read(self.partitions.clone()).await
+        table.read(self.ctx.clone(), self.partitions.clone()).await
     }
 }

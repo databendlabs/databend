@@ -42,7 +42,7 @@ impl FilterTransform {
     ) -> FuseQueryResult<DataBlock> {
         let mut func = funcs[0].clone();
         let result = func.eval(&block)?.to_array(block.num_rows())?;
-        let filter_array = result
+        let filter_result = result
             .as_any()
             .downcast_ref::<BooleanArray>()
             .ok_or_else(|| {
@@ -50,7 +50,7 @@ impl FilterTransform {
             })?;
         Ok(DataBlock::try_from_arrow_batch(&filter_record_batch(
             &block.to_arrow_batch()?,
-            filter_array,
+            filter_result,
         )?)?)
     }
 }

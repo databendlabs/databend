@@ -2,20 +2,18 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use std::sync::Arc;
-
-use crate::contexts::FuseQueryContext;
+use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::{DataSchema, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
     DFExplainPlan, DFParser, DFStatement, ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode,
-    Planner, SelectPlan,
+    Planner, SelectPlan, SettingPlan,
 };
 
 impl Planner {
     pub fn build_from_sql(
         &self,
-        ctx: Arc<FuseQueryContext>,
+        ctx: FuseQueryContextRef,
         query: &str,
     ) -> FuseQueryResult<PlanNode> {
         let statements = DFParser::parse_sql(query)?;
@@ -30,14 +28,14 @@ impl Planner {
     /// Builds plan from AST statement.
     pub fn statement_to_plan(
         &self,
-        ctx: Arc<FuseQueryContext>,
+        ctx: FuseQueryContextRef,
         statement: &DFStatement,
     ) -> FuseQueryResult<PlanNode> {
         match statement {
             DFStatement::Statement(s) => self.sql_statement_to_plan(ctx, &s),
             DFStatement::Explain(s) => self.explain_statement_to_plan(ctx, &s),
             _ => Err(FuseQueryError::Internal(format!(
-                "Unsupported statement: {:?} in planner.build()",
+                "Unsupported statement: {:?} for planner.build()",
                 statement
             ))),
         }
@@ -45,11 +43,14 @@ impl Planner {
 
     pub fn sql_statement_to_plan(
         &self,
-        ctx: Arc<FuseQueryContext>,
+        ctx: FuseQueryContextRef,
         sql: &sqlparser::ast::Statement,
     ) -> FuseQueryResult<PlanNode> {
         match sql {
             sqlparser::ast::Statement::Query(query) => self.query_to_plan(ctx, query),
+            sqlparser::ast::Statement::SetVariable {
+                variable, value, ..
+            } => self.set_variable_to_plan(ctx, variable, value),
             _ => Err(FuseQueryError::Internal(format!(
                 "Unsupported statement {:?} for planner.statement_to_plan",
                 sql
@@ -60,7 +61,7 @@ impl Planner {
     /// Generate a plan for EXPLAIN ... that will print out a plan
     pub fn explain_statement_to_plan(
         &self,
-        ctx: Arc<FuseQueryContext>,
+        ctx: FuseQueryContextRef,
         explain_plan: &DFExplainPlan,
     ) -> FuseQueryResult<PlanNode> {
         let plan = self.statement_to_plan(ctx, &explain_plan.statement)?;
@@ -72,7 +73,7 @@ impl Planner {
     /// Generate a logic plan from an SQL query
     pub fn query_to_plan(
         &self,
-        ctx: Arc<FuseQueryContext>,
+        ctx: FuseQueryContextRef,
         query: &sqlparser::ast::Query,
     ) -> FuseQueryResult<PlanNode> {
         match &query.body {
@@ -89,7 +90,7 @@ impl Planner {
     /// Generate a logic plan from an SQL select
     fn select_to_plan(
         &self,
-        ctx: Arc<FuseQueryContext>,
+        ctx: FuseQueryContextRef,
         select: &sqlparser::ast::Select,
         limit: &Option<sqlparser::ast::Expr>,
     ) -> FuseQueryResult<PlanNode> {
@@ -154,24 +155,21 @@ impl Planner {
 
     fn plan_tables_with_joins(
         &self,
-        ctx: Arc<FuseQueryContext>,
+        ctx: FuseQueryContextRef,
         from: &[sqlparser::ast::TableWithJoins],
     ) -> FuseQueryResult<PlanNode> {
         match from.len() {
-            0 => Ok(PlanBuilder::empty(true).build()?),
+            0 => Ok(PlanBuilder::empty().build()?),
             1 => self.plan_table_with_joins(ctx, &from[0]),
-            _ => {
-                // https://issues.apache.org/jira/browse/ARROW-10729
-                Err(FuseQueryError::Internal(
-                    "Cannot support JOIN clause".to_string(),
-                ))
-            }
+            _ => Err(FuseQueryError::Internal(
+                "Cannot support JOIN clause".to_string(),
+            )),
         }
     }
 
     fn plan_table_with_joins(
         &self,
-        ctx: Arc<FuseQueryContext>,
+        ctx: FuseQueryContextRef,
         t: &sqlparser::ast::TableWithJoins,
     ) -> FuseQueryResult<PlanNode> {
         self.create_relation(ctx, &t.relation)
@@ -179,7 +177,7 @@ impl Planner {
 
     fn create_relation(
         &self,
-        ctx: Arc<FuseQueryContext>,
+        ctx: FuseQueryContextRef,
         relation: &sqlparser::ast::TableFactor,
     ) -> FuseQueryResult<PlanNode> {
         match relation {
@@ -201,7 +199,7 @@ impl Planner {
                 let scan =
                     PlanBuilder::scan(&db_name, &table_name, schema.as_ref(), None, table_args)?
                         .build()?;
-                Ok(PlanNode::ReadSource(table.read_plan(scan)?))
+                Ok(PlanNode::ReadSource(table.read_plan(ctx, scan)?))
             }
             sqlparser::ast::TableFactor::Derived { subquery, .. } => {
                 self.query_to_plan(ctx, subquery)
@@ -259,6 +257,20 @@ impl Planner {
                 sql
             ))),
         }
+    }
+
+    pub fn set_variable_to_plan(
+        &self,
+        _ctx: FuseQueryContextRef,
+        variable: &sqlparser::ast::Ident,
+        value: &sqlparser::ast::SetVariableValue,
+    ) -> FuseQueryResult<PlanNode> {
+        let variable = variable.value.clone();
+        let value = match value {
+            sqlparser::ast::SetVariableValue::Ident(v) => v.value.clone(),
+            sqlparser::ast::SetVariableValue::Literal(v) => v.to_string(),
+        };
+        Ok(PlanNode::SetVariable(SettingPlan { variable, value }))
     }
 
     /// Apply a filter to the plan

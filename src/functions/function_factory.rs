@@ -2,39 +2,58 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use crate::datavalues::{
-    DataValueAggregateOperator, DataValueArithmeticOperator, DataValueComparisonOperator,
-    DataValueLogicOperator,
-};
+use lazy_static::lazy_static;
+use std::collections::HashMap;
+
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::{
     AggregatorFunction, ArithmeticFunction, ComparisonFunction, Function, LogicFunction,
 };
 
-pub struct ScalarFunctionFactory;
+pub struct FunctionFactory;
+type Func = fn(args: &[Function]) -> FuseQueryResult<Function>;
 
-impl ScalarFunctionFactory {
+lazy_static! {
+    static ref FACTORY: HashMap<&'static str, Func> = {
+        let mut map: HashMap<&'static str, Func> = HashMap::new();
+
+        // Arithmetic functions.
+        map.insert("+", ArithmeticFunction::try_create_add_func);
+        map.insert("-", ArithmeticFunction::try_create_sub_func);
+        map.insert("*", ArithmeticFunction::try_create_mul_func);
+        map.insert("/", ArithmeticFunction::try_create_div_func);
+
+        // Comparison functions.
+        map.insert("=", ComparisonFunction::try_create_eq_func);
+        map.insert("<", ComparisonFunction::try_create_lt_func);
+        map.insert(">", ComparisonFunction::try_create_gt_func);
+        map.insert("<=", ComparisonFunction::try_create_lt_eq_func);
+        map.insert(">=", ComparisonFunction::try_create_gt_eq_func);
+
+        // Logic functions.
+        map.insert("and", LogicFunction::try_create_and_func);
+        map.insert("or", LogicFunction::try_create_or_func);
+
+        // Aggregate functions.
+        map.insert("count", AggregatorFunction::try_create_count_func);
+        map.insert("min", AggregatorFunction::try_create_min_func);
+        map.insert("max", AggregatorFunction::try_create_max_func);
+        map.insert("sum", AggregatorFunction::try_create_sum_func);
+        map.insert("avg", AggregatorFunction::try_create_avg_func);
+
+        map
+    };
+}
+
+impl FunctionFactory {
     pub fn get(name: &str, args: &[Function]) -> FuseQueryResult<Function> {
-        match name.to_lowercase().as_str() {
-            "+" => ArithmeticFunction::try_create(DataValueArithmeticOperator::Add, args),
-            "-" => ArithmeticFunction::try_create(DataValueArithmeticOperator::Sub, args),
-            "*" => ArithmeticFunction::try_create(DataValueArithmeticOperator::Mul, args),
-            "/" => ArithmeticFunction::try_create(DataValueArithmeticOperator::Div, args),
-            "=" => ComparisonFunction::try_create(DataValueComparisonOperator::Eq, args),
-            "<" => ComparisonFunction::try_create(DataValueComparisonOperator::Lt, args),
-            ">" => ComparisonFunction::try_create(DataValueComparisonOperator::Gt, args),
-            "<=" => ComparisonFunction::try_create(DataValueComparisonOperator::LtEq, args),
-            ">=" => ComparisonFunction::try_create(DataValueComparisonOperator::GtEq, args),
-            "and" => LogicFunction::try_create(DataValueLogicOperator::And, args),
-            "or" => LogicFunction::try_create(DataValueLogicOperator::Or, args),
-            "count" => AggregatorFunction::try_create(DataValueAggregateOperator::Count, args),
-            "min" => AggregatorFunction::try_create(DataValueAggregateOperator::Min, args),
-            "max" => AggregatorFunction::try_create(DataValueAggregateOperator::Max, args),
-            "sum" => AggregatorFunction::try_create(DataValueAggregateOperator::Sum, args),
-            _ => Err(FuseQueryError::Internal(format!(
-                "Unsupported Function: {}",
-                name
-            ))),
-        }
+        let creator = FACTORY
+            .get(name)
+            .ok_or_else(|| FuseQueryError::Internal(format!("Unsupported Function: {}", name)))?;
+        (creator)(args)
+    }
+
+    pub fn registered_names() -> Vec<String> {
+        FACTORY.keys().into_iter().map(|x| x.to_string()).collect()
     }
 }

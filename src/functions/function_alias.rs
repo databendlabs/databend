@@ -49,8 +49,8 @@ impl AliasFunction {
         self.func.accumulate_result()
     }
 
-    pub fn merge_state(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
-        self.func.merge_state(states)
+    pub fn merge(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
+        self.func.merge(states)
     }
 
     pub fn merge_result(&self) -> FuseQueryResult<DataValue> {

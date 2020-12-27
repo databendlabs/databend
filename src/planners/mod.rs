@@ -3,6 +3,8 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 mod plan_filter_test;
+mod plan_limit_test;
+mod plan_projection_test;
 mod plan_select_test;
 
 mod parser;
@@ -25,6 +27,7 @@ mod plan_projection;
 mod plan_read_datasource;
 mod plan_scan;
 mod plan_select;
+mod plan_setting;
 mod planner;
 
 pub use self::parser::{DFExplainPlan, DFParser, DFStatement};
@@ -44,4 +47,5 @@ pub use self::plan_projection::ProjectionPlan;
 pub use self::plan_read_datasource::ReadDataSourcePlan;
 pub use self::plan_scan::ScanPlan;
 pub use self::plan_select::SelectPlan;
+pub use self::plan_setting::SettingPlan;
 pub use self::planner::Planner;

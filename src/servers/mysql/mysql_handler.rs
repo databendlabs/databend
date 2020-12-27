@@ -4,14 +4,15 @@
 
 use log::{debug, error};
 
-use msql_srv::*;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use std::{io, net};
-use threadpool::ThreadPool;
-use tokio::stream::StreamExt;
 
-use crate::contexts::{FuseQueryContext, Options};
+use futures::stream::StreamExt;
+use msql_srv::*;
+use threadpool::ThreadPool;
+
+use crate::contexts::{FuseQueryContext, FuseQueryContextRef, Options};
 use crate::datablocks::DataBlock;
 use crate::datasources::IDataSource;
 use crate::error::{FuseQueryError, FuseQueryResult};
@@ -20,11 +21,11 @@ use crate::planners::Planner;
 use crate::servers::mysql::MySQLStream;
 
 struct Session {
-    ctx: Arc<FuseQueryContext>,
+    ctx: FuseQueryContextRef,
 }
 
 impl Session {
-    pub fn create(ctx: Arc<FuseQueryContext>) -> Self {
+    pub fn create(ctx: FuseQueryContextRef) -> Self {
         Session { ctx }
     }
 }
@@ -58,7 +59,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
                 Ok(executor) => {
                     let result: FuseQueryResult<Vec<DataBlock>> =
                         tokio::runtime::Builder::new_multi_thread()
-                            .worker_threads(self.ctx.worker_threads)
+                            .worker_threads(self.ctx.get_max_threads()? as usize)
                             .build()?
                             .block_on(async move {
                                 let start = Instant::now();
@@ -123,11 +124,11 @@ impl MySQLHandler {
 
         let pool = ThreadPool::new(self.opts.mysql_handler_thread_num);
 
-        let worker_threads = self.opts.num_cpus;
         for stream in listener.incoming() {
             let stream = stream?;
             let datasource = self.datasource.clone();
-            let ctx = Arc::new(FuseQueryContext::create_ctx(worker_threads, datasource));
+            let ctx = Arc::new(FuseQueryContext::create_ctx(datasource));
+            ctx.set_max_threads(self.opts.num_cpus as u64)?;
 
             pool.execute(move || {
                 MysqlIntermediary::run_on_tcp(Session::create(ctx), stream).unwrap();

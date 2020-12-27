@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use tokio::stream::StreamExt;
+use futures::stream::StreamExt;
 
 use fuse_query::contexts::FuseQueryContext;
 use fuse_query::error::FuseQueryResult;
@@ -16,7 +16,6 @@ use fuse_query::testdata;
 async fn pipeline_executor(sql: &str) -> FuseQueryResult<()> {
     let test_source = testdata::NumberTestData::create();
     let ctx = Arc::new(FuseQueryContext::create_ctx(
-        0,
         test_source.number_source_for_test()?,
     ));
 
@@ -43,14 +42,14 @@ fn criterion_benchmark_suite(c: &mut Criterion, sql: &str) {
 fn criterion_benchmark_memory_table_processor(c: &mut Criterion) {
     criterion_benchmark_suite(
         c,
-        "select number from system.numbers(1000000) where number < 4 limit 10",
+        "select number from system.numbers_mt(1000000) where number < 4 limit 10",
     );
-    criterion_benchmark_suite(c, "select number as a, number/2 as b, number+1 as c from system.numbers(1000000) where number < 4 limit 10");
+    criterion_benchmark_suite(c, "select number as a, number/2 as b, number+1 as c from system.numbers_mt(1000000) where number < 4 limit 10");
     criterion_benchmark_suite(
         c,
-        "select sum(number), max(number) from system.numbers(1000000)",
+        "select sum(number), max(number) from system.numbers_mt(1000000)",
     );
-    criterion_benchmark_suite(c, "select sum(number+1) from system.numbers(10000000)");
+    criterion_benchmark_suite(c, "select sum(number+1) from system.numbers_mt(10000000)");
 }
 
 criterion_group!(benches, criterion_benchmark_memory_table_processor,);

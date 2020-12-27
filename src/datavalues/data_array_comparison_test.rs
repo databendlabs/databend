@@ -101,13 +101,7 @@ fn test_array_comparison() {
                 &DataColumnarValue::Array(args[1].clone()),
             );
             match result {
-                Ok(ref v) => {
-                    // Result check.
-                    if !v.equals(&*t.expect[i]) {
-                        println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect[i], v);
-                        assert!(false);
-                    }
-                }
+                Ok(v) => assert_eq!(v.as_ref(), t.expect[i].as_ref()),
                 Err(e) => assert_eq!(t.error[i], e.to_string()),
             }
         }
@@ -188,13 +182,7 @@ fn test_array_scalar_comparison() {
             &DataColumnarValue::Scalar(t.scalar),
         );
         match result {
-            Ok(ref v) => {
-                // Result check.
-                if !v.equals(&*t.expect) {
-                    println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect, v);
-                    assert!(false);
-                }
-            }
+            Ok(v) => assert_eq!(v.as_ref(), t.expect.as_ref()),
             Err(e) => assert_eq!(t.error, e.to_string()),
         }
     }
@@ -274,13 +262,7 @@ fn test_scalar_array_comparison() {
             &DataColumnarValue::Array(t.array),
         );
         match result {
-            Ok(ref v) => {
-                // Result check.
-                if !v.equals(&*t.expect) {
-                    println!("{}, expect:\n{:?} \nactual:\n{:?}", t.name, t.expect, v);
-                    assert!(false);
-                }
-            }
+            Ok(v) => assert_eq!(v.as_ref(), t.expect.as_ref()),
             Err(e) => assert_eq!(t.error, e.to_string()),
         }
     }
