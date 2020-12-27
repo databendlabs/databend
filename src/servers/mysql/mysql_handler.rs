@@ -120,15 +120,14 @@ impl MySQLHandler {
 
     pub fn start(&self) -> FuseQueryResult<()> {
         let listener =
-            net::TcpListener::bind(format!("0.0.0.0:{}", self.opts.mysql_handler_port)).unwrap();
-
-        let pool = ThreadPool::new(self.opts.mysql_handler_thread_num);
+            net::TcpListener::bind(format!("0.0.0.0:{}", self.opts.get_mysql_handler_port()?))?;
+        let pool = ThreadPool::new(self.opts.get_mysql_handler_thread_num()? as usize);
 
         for stream in listener.incoming() {
             let stream = stream?;
             let datasource = self.datasource.clone();
-            let ctx = Arc::new(FuseQueryContext::create_ctx(datasource));
-            ctx.set_max_threads(self.opts.num_cpus as u64)?;
+            let ctx = FuseQueryContext::try_create_ctx(datasource)?;
+            ctx.set_max_threads(self.opts.get_num_cpus()?)?;
 
             pool.execute(move || {
                 MysqlIntermediary::run_on_tcp(Session::create(ctx), stream).unwrap();

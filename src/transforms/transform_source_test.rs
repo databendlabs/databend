@@ -12,9 +12,7 @@ async fn transform_source_test() -> crate::error::FuseQueryResult<()> {
     use crate::testdata;
 
     let testdata = testdata::NumberTestData::create();
-    let ctx = Arc::new(FuseQueryContext::create_ctx(
-        testdata.number_source_for_test()?,
-    ));
+    let ctx = FuseQueryContext::try_create_ctx(testdata.number_source_for_test()?)?;
     let mut pipeline = Pipeline::create();
 
     let a = testdata.number_source_transform_for_test(ctx.clone(), 8)?;

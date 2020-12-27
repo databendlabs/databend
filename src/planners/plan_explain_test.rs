@@ -5,16 +5,13 @@
 #[test]
 fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
     use pretty_assertions::assert_eq;
-    use std::sync::Arc;
 
     use crate::contexts::*;
     use crate::planners::*;
     use crate::testdata;
 
     let test_source = testdata::NumberTestData::create();
-    let ctx = Arc::new(FuseQueryContext::create_ctx(
-        test_source.number_source_for_test()?,
-    ));
+    let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
     let plan = Planner::new().build_from_sql(
         ctx.clone(),
         "select number as c1, number as c2, number as c3,(number+1) from system.numbers_mt where (number+1)=4",

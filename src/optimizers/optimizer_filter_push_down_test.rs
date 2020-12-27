@@ -5,7 +5,6 @@
 #[test]
 fn test_filter_push_down_optimizer() -> crate::error::FuseQueryResult<()> {
     use pretty_assertions::assert_eq;
-    use std::sync::Arc;
 
     use crate::contexts::*;
     use crate::optimizers::*;
@@ -13,9 +12,7 @@ fn test_filter_push_down_optimizer() -> crate::error::FuseQueryResult<()> {
     use crate::testdata;
 
     let test_source = testdata::NumberTestData::create();
-    let ctx = Arc::new(FuseQueryContext::create_ctx(
-        test_source.number_source_for_test()?,
-    ));
+    let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
     let plan = Planner::new().build_from_sql(
         ctx.clone(),
         "select (number+1) as c1, number as c2 from system.numbers_mt where (c1+c2+1)=1",

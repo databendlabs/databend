@@ -14,9 +14,9 @@ use fuse_query::servers::MySQLHandler;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let opts = Options::default();
+    let opts = Options::try_create()?;
 
-    match opts.log_level.to_lowercase().as_str() {
+    match opts.get_log_level()?.to_lowercase().as_str() {
         "debug" => SimpleLogger::init(LevelFilter::Debug, Config::default())?,
         "info" => SimpleLogger::init(LevelFilter::Info, Config::default())?,
         _ => SimpleLogger::init(LevelFilter::Error, Config::default())?,
@@ -28,7 +28,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(async move { mysql_handler.start() });
 
     info!("Fuse-Query Cloud Compute Starts...");
-    info!("Usage: mysql -h127.0.0.1 -P{:?}", opts.mysql_handler_port);
+    info!(
+        "Usage: mysql -h127.0.0.1 -P{:?}",
+        opts.get_mysql_handler_port()?
+    );
     signal(SignalKind::hangup())?.recv().await;
     Ok(())
 }

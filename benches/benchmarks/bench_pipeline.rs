@@ -2,8 +2,6 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use std::sync::Arc;
-
 use criterion::{criterion_group, criterion_main, Criterion};
 use futures::stream::StreamExt;
 
@@ -15,9 +13,7 @@ use fuse_query::testdata;
 
 async fn pipeline_executor(sql: &str) -> FuseQueryResult<()> {
     let test_source = testdata::NumberTestData::create();
-    let ctx = Arc::new(FuseQueryContext::create_ctx(
-        test_source.number_source_for_test()?,
-    ));
+    let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
 
     if let PlanNode::Select(plan) = Planner::new().build_from_sql(ctx.clone(), sql)? {
         let executor = SelectExecutor::try_create(ctx, plan)?;

@@ -4,18 +4,14 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_setting_executor() -> crate::error::FuseQueryResult<()> {
-    use futures::stream::StreamExt;
-    use std::sync::Arc;
-
     use crate::contexts::*;
     use crate::executors::*;
     use crate::planners::*;
     use crate::testdata;
+    use futures::stream::StreamExt;
 
     let test_source = testdata::NumberTestData::create();
-    let ctx = Arc::new(FuseQueryContext::create_ctx(
-        test_source.number_source_for_test()?,
-    ));
+    let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
 
     if let PlanNode::SetVariable(plan) =
         Planner::new().build_from_sql(ctx.clone(), "set max_block_size=1")?
@@ -34,17 +30,13 @@ async fn test_setting_executor() -> crate::error::FuseQueryResult<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_setting_executor_error() -> crate::error::FuseQueryResult<()> {
-    use std::sync::Arc;
-
     use crate::contexts::*;
     use crate::executors::*;
     use crate::planners::*;
     use crate::testdata;
 
     let test_source = testdata::NumberTestData::create();
-    let ctx = Arc::new(FuseQueryContext::create_ctx(
-        test_source.number_source_for_test()?,
-    ));
+    let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
 
     if let PlanNode::SetVariable(plan) = Planner::new().build_from_sql(ctx.clone(), "set xx=1")? {
         let executor = SettingExecutor::try_create(ctx, plan)?;

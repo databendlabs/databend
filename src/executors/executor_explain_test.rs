@@ -5,7 +5,6 @@
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_explain_executor() -> crate::error::FuseQueryResult<()> {
     use futures::stream::StreamExt;
-    use std::sync::Arc;
 
     use crate::contexts::*;
     use crate::executors::*;
@@ -13,9 +12,7 @@ async fn test_explain_executor() -> crate::error::FuseQueryResult<()> {
     use crate::testdata;
 
     let test_source = testdata::NumberTestData::create();
-    let ctx = Arc::new(FuseQueryContext::create_ctx(
-        test_source.number_source_for_test()?,
-    ));
+    let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
 
     if let PlanNode::Explain(plan) = Planner::new().build_from_sql(
         ctx.clone(),

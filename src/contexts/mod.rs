@@ -4,6 +4,8 @@
 
 mod context;
 mod options;
+mod setting_map;
 
 pub use self::context::{FuseQueryContext, FuseQueryContextRef};
 pub use self::options::Options;
+pub use self::setting_map::SettingMap;

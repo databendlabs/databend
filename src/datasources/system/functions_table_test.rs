@@ -5,7 +5,6 @@
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_functions_table() -> crate::error::FuseQueryResult<()> {
     use futures::TryStreamExt;
-    use std::sync::Arc;
 
     use crate::contexts::*;
     use crate::datasources::system::*;
@@ -14,9 +13,7 @@ async fn test_functions_table() -> crate::error::FuseQueryResult<()> {
     use crate::testdata;
 
     let test_source = testdata::NumberTestData::create();
-    let ctx = Arc::new(FuseQueryContext::create_ctx(
-        test_source.number_source_for_test()?,
-    ));
+    let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
 
     let table = FunctionsTable::create();
     table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
