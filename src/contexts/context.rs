@@ -35,6 +35,7 @@ impl FuseQueryContext {
 
     pub fn set_current_database(&self, val: &str) -> FuseQueryResult<()> {
         let key = "default_db";
+        self.datasource.lock()?.check_database(val)?;
         self.settings.try_set_string(key, val.to_string())
     }
 

@@ -101,9 +101,18 @@ impl<W: io::Write> MysqlShim<W> for Session {
         Ok(())
     }
 
-    fn on_init(&mut self, db: &str, _writer: InitWriter<W>) -> FuseQueryResult<()> {
+    fn on_init(&mut self, db: &str, writer: InitWriter<W>) -> FuseQueryResult<()> {
         debug!("MySQL use db:{}", db);
-        self.ctx.set_current_database(db)?;
+        match self.ctx.set_current_database(db) {
+            Ok(..) => {}
+            Err(e) => {
+                error!("{}", e);
+                writer.error(
+                    ErrorKind::ER_BAD_DB_ERROR,
+                    format!("Unknown database: {:?}", db).as_bytes(),
+                )?;
+            }
+        };
         Ok(())
     }
 }

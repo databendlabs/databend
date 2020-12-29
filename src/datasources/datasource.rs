@@ -10,6 +10,7 @@ use crate::error::{FuseQueryError, FuseQueryResult};
 
 pub trait IDataSource: Sync + Send {
     fn add_database(&mut self, db_name: &str) -> FuseQueryResult<()>;
+    fn check_database(&mut self, db_name: &str) -> FuseQueryResult<()>;
     fn add_table(&mut self, db_name: &str, table: Arc<dyn ITable>) -> FuseQueryResult<()>;
     fn get_table(&self, db_name: &str, table_name: &str) -> FuseQueryResult<Arc<dyn ITable>>;
 }
@@ -41,22 +42,28 @@ impl IDataSource for DataSource {
         Ok(())
     }
 
+    fn check_database(&mut self, db_name: &str) -> FuseQueryResult<()> {
+        self.databases
+            .get(db_name)
+            .ok_or_else(|| FuseQueryError::Internal(format!("Unknown database: '{}'", db_name)))?;
+        Ok(())
+    }
+
     fn add_table(&mut self, db_name: &str, table: Arc<dyn ITable>) -> FuseQueryResult<()> {
         self.databases
             .get_mut(db_name)
-            .ok_or_else(|| {
-                FuseQueryError::Internal(format!("Cannot find the database: {}", db_name))
-            })?
+            .ok_or_else(|| FuseQueryError::Internal(format!("Unknown database: '{}'", db_name)))?
             .insert(table.name().to_string(), table);
         Ok(())
     }
 
     fn get_table(&self, db_name: &str, table_name: &str) -> FuseQueryResult<Arc<dyn ITable>> {
-        let database = self.databases.get(db_name).ok_or_else(|| {
-            FuseQueryError::Internal(format!("Cannot find the database: {}", db_name))
-        })?;
+        let database = self
+            .databases
+            .get(db_name)
+            .ok_or_else(|| FuseQueryError::Internal(format!("Unknown database: '{}'", db_name)))?;
         let table = database.get(table_name).ok_or_else(|| {
-            FuseQueryError::Internal(format!("Cannot find the table: {}", table_name))
+            FuseQueryError::Internal(format!("Unknown table: '{}.{}'", db_name, table_name))
         })?;
         Ok(table.clone())
     }
