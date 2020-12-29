@@ -7,7 +7,6 @@ mod plan_limit_test;
 mod plan_projection_test;
 mod plan_select_test;
 
-mod parser;
 mod plan_aggregate;
 mod plan_builder;
 mod plan_display;
@@ -30,7 +29,6 @@ mod plan_select;
 mod plan_setting;
 mod planner;
 
-pub use self::parser::{DFExplainPlan, DFParser, DFStatement};
 pub use self::plan_aggregate::AggregatePlan;
 pub use self::plan_builder::PlanBuilder;
 pub use self::plan_empty::EmptyPlan;

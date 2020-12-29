@@ -27,7 +27,7 @@ num = "0.3"
 num_cpus = "1.0"
 paste = "^1.0"
 serde_json = "1.0"
-sqlparser = "0.6"
+sqlparser = "0.7"
 simplelog = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"

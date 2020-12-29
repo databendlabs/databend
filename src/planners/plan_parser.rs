@@ -6,9 +6,9 @@ use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::{DataSchema, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
-    DFExplainPlan, DFParser, DFStatement, ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode,
-    Planner, SelectPlan, SettingPlan,
+    ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, Planner, SelectPlan, SettingPlan,
 };
+use sqlparser::ast::{FunctionArg, Statement, TableFactor};
 
 impl Planner {
     pub fn build_from_sql(
@@ -16,7 +16,8 @@ impl Planner {
         ctx: FuseQueryContextRef,
         query: &str,
     ) -> FuseQueryResult<PlanNode> {
-        let statements = DFParser::parse_sql(query)?;
+        let dialect = sqlparser::dialect::GenericDialect {};
+        let statements = sqlparser::parser::Parser::parse_sql(&dialect, query)?;
         if statements.len() != 1 {
             return Err(FuseQueryError::Internal(
                 "Only support single query".to_string(),
@@ -29,42 +30,28 @@ impl Planner {
     pub fn statement_to_plan(
         &self,
         ctx: FuseQueryContextRef,
-        statement: &DFStatement,
+        statement: &sqlparser::ast::Statement,
     ) -> FuseQueryResult<PlanNode> {
         match statement {
-            DFStatement::Statement(s) => self.sql_statement_to_plan(ctx, &s),
-            DFStatement::Explain(s) => self.explain_statement_to_plan(ctx, &s),
+            Statement::Query(query) => self.query_to_plan(ctx, query),
+            Statement::SetVariable {
+                variable, value, ..
+            } => self.set_variable_to_plan(ctx, variable, value),
+            Statement::Explain { statement, .. } => self.explain_to_plan(ctx, statement),
             _ => Err(FuseQueryError::Internal(format!(
-                "Unsupported statement: {:?} for planner.build()",
+                "Unsupported statement {:?}",
                 statement
             ))),
         }
     }
 
-    pub fn sql_statement_to_plan(
+    /// Generate a logic plan from an EXPLAIN
+    pub fn explain_to_plan(
         &self,
         ctx: FuseQueryContextRef,
-        sql: &sqlparser::ast::Statement,
+        statement: &sqlparser::ast::Statement,
     ) -> FuseQueryResult<PlanNode> {
-        match sql {
-            sqlparser::ast::Statement::Query(query) => self.query_to_plan(ctx, query),
-            sqlparser::ast::Statement::SetVariable {
-                variable, value, ..
-            } => self.set_variable_to_plan(ctx, variable, value),
-            _ => Err(FuseQueryError::Internal(format!(
-                "Unsupported statement {:?} for planner.statement_to_plan",
-                sql
-            ))),
-        }
-    }
-
-    /// Generate a plan for EXPLAIN ... that will print out a plan
-    pub fn explain_statement_to_plan(
-        &self,
-        ctx: FuseQueryContextRef,
-        explain_plan: &DFExplainPlan,
-    ) -> FuseQueryResult<PlanNode> {
-        let plan = self.statement_to_plan(ctx, &explain_plan.statement)?;
+        let plan = self.statement_to_plan(ctx, statement)?;
         Ok(PlanNode::Explain(ExplainPlan {
             plan: Box::new(plan),
         }))
@@ -193,7 +180,14 @@ impl Planner {
 
                 let mut table_args = None;
                 if !args.is_empty() {
-                    table_args = Some(self.sql_to_rex(&args[0], &schema)?);
+                    match &args[0] {
+                        FunctionArg::Named { arg, .. } => {
+                            table_args = Some(self.sql_to_rex(&arg, &schema)?);
+                        }
+                        FunctionArg::Unnamed(arg) => {
+                            table_args = Some(self.sql_to_rex(&arg, &schema)?);
+                        }
+                    }
                 }
 
                 let scan =
@@ -207,6 +201,9 @@ impl Planner {
             sqlparser::ast::TableFactor::NestedJoin(table_with_joins) => {
                 self.plan_table_with_joins(ctx, table_with_joins)
             }
+            TableFactor::TableFunction { .. } => Err(FuseQueryError::Internal(
+                "Unsupported table function".to_string(),
+            )),
         }
     }
 
@@ -245,7 +242,14 @@ impl Planner {
             sqlparser::ast::Expr::Function(e) => {
                 let mut args = Vec::with_capacity(e.args.len());
                 for arg in &e.args {
-                    args.push(self.sql_to_rex(arg, schema)?);
+                    match &arg {
+                        FunctionArg::Named { arg, .. } => {
+                            args.push(self.sql_to_rex(arg, schema)?);
+                        }
+                        FunctionArg::Unnamed(arg) => {
+                            args.push(self.sql_to_rex(arg, schema)?);
+                        }
+                    }
                 }
                 Ok(ExpressionPlan::Function {
                     op: e.name.to_string(),
