@@ -222,6 +222,6 @@ impl AggregatorFunction {
 
 impl fmt::Display for AggregatorFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}({:?})", self.op, self.arg)
+        write!(f, "{}({:?})", self.op, self.arg)
     }
 }

@@ -82,7 +82,7 @@ fn test_factory() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "count-function-passed",
-            fun: "count",
+            fun: "COUNT",
             args: vec![field_a.clone()],
             block: DataBlock::create(
                 schema.clone(),

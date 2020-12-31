@@ -109,6 +109,6 @@ impl ArithmeticFunction {
 
 impl fmt::Display for ArithmeticFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?} {} {:?}", self.left, self.op, self.right)
+        write!(f, "({:?} {} {:?})", self.left, self.op, self.right)
     }
 }

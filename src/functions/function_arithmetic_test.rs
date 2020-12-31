@@ -36,7 +36,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         Test {
             name: "add-int64-passed",
             evals: 2,
-            display: "a + b",
+            display: "(a + b)",
             nullable: false,
             func: ArithmeticFunction::try_create_add_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
@@ -53,7 +53,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         Test {
             name: "add-diff-passed",
             evals: 2,
-            display: "c + a",
+            display: "(c + a)",
             nullable: false,
             func: ArithmeticFunction::try_create_add_func(&[field_c.clone(), field_a.clone()])?,
             block: DataBlock::create(
@@ -70,7 +70,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         Test {
             name: "sub-int64-passed",
             evals: 2,
-            display: "a - b",
+            display: "(a - b)",
             nullable: false,
             func: ArithmeticFunction::try_create_sub_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
@@ -87,7 +87,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         Test {
             name: "mul-int64-passed",
             evals: 2,
-            display: "a * b",
+            display: "(a * b)",
             nullable: false,
             func: ArithmeticFunction::try_create_mul_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
@@ -104,7 +104,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         Test {
             name: "div-int64-passed",
             evals: 2,
-            display: "a / b",
+            display: "(a / b)",
             nullable: false,
             func: ArithmeticFunction::try_create_div_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(

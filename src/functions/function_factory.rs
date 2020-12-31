@@ -48,7 +48,7 @@ lazy_static! {
 impl FunctionFactory {
     pub fn get(name: &str, args: &[Function]) -> FuseQueryResult<Function> {
         let creator = FACTORY
-            .get(name)
+            .get(&*name.to_lowercase())
             .ok_or_else(|| FuseQueryError::Internal(format!("Unsupported Function: {}", name)))?;
         (creator)(args)
     }
