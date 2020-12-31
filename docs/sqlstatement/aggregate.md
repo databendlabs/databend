@@ -1,6 +1,6 @@
 ---
-id: sql-statement-aggregation
-title: Aggregation
+id: select-aggregate
+title: AGGREGATE
 ---
 
 
@@ -31,6 +31,7 @@ title: Aggregation
 ## Max
 
     SELECT max(number) FROM system.numbers_mt(3);
+
     +-------------+
     | max(number) |
     +-------------+

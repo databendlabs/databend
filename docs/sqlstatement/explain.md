@@ -1,6 +1,6 @@
 ---
 id: explain-statement
-title: Explain
+title: EXPLAIN
 ---
 
 Show the execution plan of a statement.

@@ -1,5 +1,5 @@
 ---
-id: sql-statement-select
+id: select-statement
 title: SELECT
 ---
 
