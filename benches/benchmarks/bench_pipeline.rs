@@ -9,10 +9,10 @@ use fuse_query::contexts::FuseQueryContext;
 use fuse_query::error::FuseQueryResult;
 use fuse_query::executors::SelectExecutor;
 use fuse_query::planners::{PlanNode, Planner};
-use fuse_query::testdata;
+use fuse_query::tests;
 
 async fn pipeline_executor(sql: &str) -> FuseQueryResult<()> {
-    let test_source = testdata::NumberTestData::create();
+    let test_source = tests::NumberTestData::create();
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
 
     if let PlanNode::Select(plan) = Planner::new().build_from_sql(ctx.clone(), sql)? {

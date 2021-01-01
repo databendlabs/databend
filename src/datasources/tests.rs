@@ -4,9 +4,9 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_datasource() -> crate::error::FuseQueryResult<()> {
-    use crate::testdata;
+    use crate::tests;
 
-    let datasource = testdata::NumberTestData::create().number_source_for_test()?;
+    let datasource = tests::NumberTestData::create().number_source_for_test()?;
 
     // Database check.
     let actual = format!("{:?}", datasource.lock()?.check_database("xx"));

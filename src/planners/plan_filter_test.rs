@@ -8,9 +8,9 @@ fn test_filter_plan() -> crate::error::FuseQueryResult<()> {
 
     use crate::contexts::*;
     use crate::planners::*;
-    use crate::testdata;
+    use crate::tests;
 
-    let test_source = testdata::NumberTestData::create();
+    let test_source = tests::NumberTestData::create();
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
     let source = test_source.number_read_source_plan_for_test(ctx, 8)?;
     let plan = PlanBuilder::from(&PlanNode::ReadSource(source))

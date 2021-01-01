@@ -11,10 +11,10 @@ async fn test_transform_filter() -> crate::error::FuseQueryResult<()> {
     use crate::datavalues::*;
     use crate::planners::*;
     use crate::processors::*;
-    use crate::testdata;
+    use crate::tests;
     use crate::transforms::*;
 
-    let test_source = testdata::NumberTestData::create();
+    let test_source = tests::NumberTestData::create();
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
     let mut pipeline = Pipeline::create();
 

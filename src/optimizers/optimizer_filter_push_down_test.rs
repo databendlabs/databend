@@ -9,9 +9,9 @@ fn test_filter_push_down_optimizer() -> crate::error::FuseQueryResult<()> {
     use crate::contexts::*;
     use crate::optimizers::*;
     use crate::planners::*;
-    use crate::testdata;
+    use crate::tests;
 
-    let test_source = testdata::NumberTestData::create();
+    let test_source = tests::NumberTestData::create();
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
     let plan = Planner::new().build_from_sql(
         ctx.clone(),

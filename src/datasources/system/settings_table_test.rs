@@ -10,9 +10,9 @@ async fn test_settings_table() -> crate::error::FuseQueryResult<()> {
     use crate::datasources::system::*;
     use crate::datasources::*;
     use crate::planners::*;
-    use crate::testdata;
+    use crate::tests;
 
-    let test_source = testdata::NumberTestData::create();
+    let test_source = tests::NumberTestData::create();
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
 
     let table = SettingsTable::create();
