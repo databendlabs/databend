@@ -9,7 +9,7 @@
 
 FuseQuery is a Cloud Distributed SQL Query Engine at scale.
 
-Distributed ClickHouse from scratch in Rust.
+Distributed and Cloud ClickHouse from scratch in Rust.
 
 Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow](https://github.com/apache/arrow).
 
