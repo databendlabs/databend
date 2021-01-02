@@ -9,7 +9,7 @@
 
 FuseQuery is a Cloud Distributed SQL Query Engine at scale.
 
-Distributed and Cloud ClickHouse from scratch in Rust.
+Cloud-Native and Distributed ClickHouse from scratch in Rust.
 
 Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow](https://github.com/apache/arrow).
 
@@ -53,11 +53,11 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 - [x] Aggregate
 - [x] Functions
 - [x] Filter Push-Down
-- [ ] Projection Push-Down
-- [ ] Distributed Query
-- [ ] Sorting
-- [ ] Joins
-- [ ] SubQueries
+- [ ] Projection Push-Down (TODO)
+- [ ] Distributed Query (WIP)
+- [ ] Sorting (TODO)
+- [ ] Joins (TODO)
+- [ ] SubQueries (TODO)
 
 
 ## Performance
@@ -155,3 +155,11 @@ mysql> select (number+1) as c1, number/2 as c2 from system.numbers_mt(10000000) 
 ```shell
 $ make test
 ```
+
+## Roadmap
+
+- [ ] 0.1 support Aggregation, GroupBy, OrderBy distributed query
+- [ ] 0.2 support join
+- [ ] 0.3 support sub queries
+- [ ] 0.4 support TPC-H benchmark
+
