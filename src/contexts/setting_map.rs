@@ -20,9 +20,26 @@ impl SettingMap {
         }
     }
 
-    pub fn try_set_u64(&self, key: &'static str, val: u64) -> FuseQueryResult<()> {
+    pub fn try_set_u64(&self, key: &'static str, val: u64, desc: &str) -> FuseQueryResult<()> {
         let mut settings = self.settings.lock()?;
-        settings.insert(key, DataValue::UInt64(Some(val)));
+        let v = DataValue::Struct(vec![
+            DataValue::UInt64(Some(val)),
+            DataValue::String(Some(desc.to_string())),
+        ]);
+        settings.insert(key, v);
+        Ok(())
+    }
+
+    pub fn try_update_u64(&self, key: &'static str, v: u64) -> FuseQueryResult<()> {
+        let mut settings = self.settings.lock()?;
+        let val = settings
+            .get(key)
+            .ok_or_else(|| FuseQueryError::Internal(format!("Cannot find the setting: {}", key)))?;
+
+        if let DataValue::Struct(values) = val {
+            let v = DataValue::Struct(vec![DataValue::UInt64(Some(v)), values[1].clone()]);
+            settings.insert(key, v);
+        }
         Ok(())
     }
 
@@ -32,8 +49,15 @@ impl SettingMap {
             .get(key)
             .ok_or_else(|| FuseQueryError::Internal(format!("Cannot find the setting: {}", key)))?;
 
-        if let DataValue::UInt64(Some(result)) = val.clone() {
-            Ok(result)
+        if let DataValue::Struct(values) = val.clone() {
+            if let DataValue::UInt64(Some(result)) = values[0] {
+                Ok(result)
+            } else {
+                Err(FuseQueryError::Internal(format!(
+                    "Cannot find the setting: {}",
+                    key
+                )))
+            }
         } else {
             Err(FuseQueryError::Internal(format!(
                 "Cannot find the setting: {}",
@@ -42,9 +66,31 @@ impl SettingMap {
         }
     }
 
-    pub fn try_set_string(&self, key: &'static str, val: String) -> FuseQueryResult<()> {
+    pub fn try_set_string(
+        &self,
+        key: &'static str,
+        val: String,
+        desc: &str,
+    ) -> FuseQueryResult<()> {
         let mut settings = self.settings.lock()?;
-        settings.insert(key, DataValue::String(Some(val)));
+        let v = DataValue::Struct(vec![
+            DataValue::String(Some(val)),
+            DataValue::String(Some(desc.to_string())),
+        ]);
+        settings.insert(key, v);
+        Ok(())
+    }
+
+    pub fn try_update_string(&self, key: &'static str, v: String) -> FuseQueryResult<()> {
+        let mut settings = self.settings.lock()?;
+        let val = settings
+            .get(key)
+            .ok_or_else(|| FuseQueryError::Internal(format!("Cannot find the setting: {}", key)))?;
+
+        if let DataValue::Struct(values) = val {
+            let v = DataValue::Struct(vec![DataValue::String(Some(v)), values[1].clone()]);
+            settings.insert(key, v);
+        }
         Ok(())
     }
 
@@ -54,8 +100,15 @@ impl SettingMap {
             .get(key)
             .ok_or_else(|| FuseQueryError::Internal(format!("Cannot find the setting: {}", key)))?;
 
-        if let DataValue::String(Some(result)) = val.clone() {
-            Ok(result)
+        if let DataValue::Struct(values) = val.clone() {
+            if let DataValue::String(Some(result)) = values[0].clone() {
+                Ok(result)
+            } else {
+                Err(FuseQueryError::Internal(format!(
+                    "Cannot find the setting: {}",
+                    key
+                )))
+            }
         } else {
             Err(FuseQueryError::Internal(format!(
                 "Cannot find the setting: {}",
@@ -64,14 +117,20 @@ impl SettingMap {
         }
     }
 
-    pub fn get_settings(&self) -> FuseQueryResult<(Vec<String>, Vec<String>)> {
+    pub fn get_settings(&self) -> FuseQueryResult<Vec<DataValue>> {
         let settings = self.settings.lock()?;
-        let names: Vec<String> = settings.keys().into_iter().map(|x| x.to_string()).collect();
-        let values: Vec<String> = settings
-            .values()
-            .into_iter()
-            .map(|x| format!("{}", x))
-            .collect();
-        Ok((names, values))
+
+        let mut result = vec![];
+        for (k, v) in settings.iter() {
+            if let DataValue::Struct(values) = v {
+                let res = DataValue::Struct(vec![
+                    DataValue::String(Some(k.to_string())),
+                    values[0].clone(),
+                    values[1].clone(),
+                ]);
+                result.push(res);
+            }
+        }
+        Ok(result)
     }
 }

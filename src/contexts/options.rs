@@ -13,10 +13,14 @@ pub struct Options {
 impl Options {
     pub fn try_create() -> FuseQueryResult<Options> {
         let settings = SettingMap::create();
-        settings.try_set_string("log_level", "debug".to_string())?;
-        settings.try_set_u64("num_cpus", num_cpus::get() as u64)?;
-        settings.try_set_u64("mysql_handler_port", 3307)?;
-        settings.try_set_u64("mysql_handler_thread_num", 256)?;
+        settings.try_set_string("log_level", "debug".to_string(), "Log level")?;
+        settings.try_set_u64("num_cpus", num_cpus::get() as u64, "The numbers of the pc")?;
+        settings.try_set_u64("mysql_handler_port", 3307, "MySQL protocol port")?;
+        settings.try_set_u64(
+            "mysql_handler_thread_num",
+            256,
+            "MySQL handler thread pool numbers",
+        )?;
         Ok(Options { settings })
     }
 
