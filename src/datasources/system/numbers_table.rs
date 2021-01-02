@@ -13,12 +13,14 @@ use crate::error::FuseQueryResult;
 use crate::planners::{ExpressionPlan, PlanNode, ReadDataSourcePlan, ScanPlan};
 
 pub struct NumbersTable {
+    table: &'static str,
     schema: DataSchemaRef,
 }
 
 impl NumbersTable {
-    pub fn create() -> Self {
+    pub fn create(table: &'static str) -> Self {
         NumbersTable {
+            table,
             schema: Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
                 DataType::UInt64,
@@ -58,7 +60,7 @@ impl NumbersTable {
 #[async_trait]
 impl ITable for NumbersTable {
     fn name(&self) -> &str {
-        "numbers_mt"
+        self.table
     }
 
     fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
