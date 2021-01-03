@@ -43,11 +43,30 @@ Contains information about session settings for current user.
     3 rows in set (0.00 sec)
 
 
+## system.functions
 
+Contains information about normal and aggregate functions.
 
-
-
-
-
-
-
+```
+mysql> SELECT * FROM system.functions;
++-------+
+| name  |
++-------+
+| +     |
+| -     |
+| *     |
+| /     |
+| =     |
+| <     |
+| >     |
+| <=    |
+| >=    |
+| and   |
+| or    |
+| count |
+| min   |
+| max   |
+| sum   |
+| avg   |
++-------+
+```

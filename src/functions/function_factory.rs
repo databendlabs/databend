@@ -2,8 +2,8 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
+use indexmap::IndexMap;
 use lazy_static::lazy_static;
-use std::collections::HashMap;
 
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::{
@@ -14,8 +14,8 @@ pub struct FunctionFactory;
 type Func = fn(args: &[Function]) -> FuseQueryResult<Function>;
 
 lazy_static! {
-    static ref FACTORY: HashMap<&'static str, Func> = {
-        let mut map: HashMap<&'static str, Func> = HashMap::new();
+    static ref FACTORY: IndexMap<&'static str, Func> = {
+        let mut map: IndexMap<&'static str, Func> = IndexMap::new();
 
         // Arithmetic functions.
         map.insert("+", ArithmeticFunction::try_create_add_func);
