@@ -91,6 +91,16 @@ fn test_array_comparison() {
             expect: vec![Arc::new(BooleanArray::from(vec![true, true, false, true]))],
             error: vec![""],
         },
+        ArrayTest {
+            name: "not-eq-passed",
+            args: vec![vec![
+                Arc::new(Int8Array::from(vec![4, 3, 1, 2])),
+                Arc::new(Int8Array::from(vec![4, 3, 2, 1])),
+            ]],
+            op: DataValueComparisonOperator::NotEq,
+            expect: vec![Arc::new(BooleanArray::from(vec![false, false, true, true]))],
+            error: vec![""],
+        },
     ];
 
     for t in tests {

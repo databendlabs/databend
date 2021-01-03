@@ -43,6 +43,10 @@ impl ComparisonFunction {
         Self::try_create(DataValueComparisonOperator::LtEq, args)
     }
 
+    pub fn try_create_not_eq_func(args: &[Function]) -> FuseQueryResult<Function> {
+        Self::try_create(DataValueComparisonOperator::NotEq, args)
+    }
+
     fn try_create(op: DataValueComparisonOperator, args: &[Function]) -> FuseQueryResult<Function> {
         if args.len() != 2 {
             return Err(FuseQueryError::Internal(

@@ -36,6 +36,9 @@ pub fn data_array_comparison_op(
                 DataValueComparisonOperator::GtEq => {
                     arrow_array_op!(&left_array, &right_array, gt_eq)
                 }
+                DataValueComparisonOperator::NotEq => {
+                    arrow_array_op!(&left_array, &right_array, neq)
+                }
             }
         }
 
@@ -59,6 +62,9 @@ pub fn data_array_comparison_op(
                 DataValueComparisonOperator::GtEq => {
                     arrow_array_op_scalar!(left_array, scalar, gt_eq)
                 }
+                DataValueComparisonOperator::NotEq => {
+                    arrow_array_op_scalar!(left_array, scalar, neq)
+                }
             }
         }
 
@@ -81,6 +87,9 @@ pub fn data_array_comparison_op(
                 DataValueComparisonOperator::Gt => arrow_array_op_scalar!(right_array, scalar, lt),
                 DataValueComparisonOperator::GtEq => {
                     arrow_array_op_scalar!(right_array, scalar, lt_eq)
+                }
+                DataValueComparisonOperator::NotEq => {
+                    arrow_array_op_scalar!(right_array, scalar, neq)
                 }
             }
         }
