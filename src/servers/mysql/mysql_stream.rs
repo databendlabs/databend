@@ -54,6 +54,12 @@ impl MySQLStream {
                     coltype: ColumnType::MYSQL_TYPE_VARCHAR,
                     colflags: ColumnFlags::empty(),
                 },
+                DataType::Boolean=> Column {
+                    table: "".to_string(),
+                    column: field.name().to_string(),
+                    coltype: ColumnType::MYSQL_TYPE_SHORT,
+                    colflags: ColumnFlags::empty(),
+                },
                 _ => {
                     return Err(FuseQueryError::Internal(format!(
                         "Unsupported column type:{:?}",

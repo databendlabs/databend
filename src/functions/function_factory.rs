@@ -30,6 +30,7 @@ lazy_static! {
         map.insert("<=", ComparisonFunction::try_create_lt_eq_func);
         map.insert(">=", ComparisonFunction::try_create_gt_eq_func);
         map.insert("!=", ComparisonFunction::try_create_not_eq_func);
+        map.insert("<>", ComparisonFunction::try_create_not_eq_func);
 
         // Logic functions.
         map.insert("and", LogicFunction::try_create_and_func);

@@ -61,6 +61,8 @@ mysql> SELECT * FROM system.functions;
 | >     |
 | <=    |
 | >=    |
+| !=    |
+| <>    |
 | and   |
 | or    |
 | count |
@@ -69,4 +71,5 @@ mysql> SELECT * FROM system.functions;
 | sum   |
 | avg   |
 +-------+
+18 rows in set (0.00 sec)
 ```
