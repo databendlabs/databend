@@ -1,6 +1,6 @@
 ---
 id: datatypes-integer
-title: Integer
+title: Integer Types
 ---
 
 ## Int Ranges

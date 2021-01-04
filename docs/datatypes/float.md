@@ -1,6 +1,6 @@
 ---
 id: datatypes-float
-title: Float
+title: Float Types
 ---
 
 * Float32 - float

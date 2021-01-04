@@ -1,6 +1,6 @@
 ---
 id: datatypes-string
-title: String
+title: String Types
 ---
 
 Strings of an arbitrary length.
