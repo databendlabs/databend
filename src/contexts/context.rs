@@ -5,13 +5,14 @@
 use std::sync::{Arc, Mutex};
 
 use crate::contexts::SettingMap;
-use crate::datasources::{IDataSource, ITable};
+use crate::datasources::{IDataSource, ITable, Statistics};
 use crate::datavalues::DataValue;
 use crate::error::FuseQueryResult;
 
 pub struct FuseQueryContext {
-    datasource: Arc<Mutex<dyn IDataSource>>,
     settings: SettingMap,
+    datasource: Arc<Mutex<dyn IDataSource>>,
+    statistics: Mutex<Statistics>,
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
@@ -30,6 +31,7 @@ impl FuseQueryContext {
         Ok(Arc::new(FuseQueryContext {
             datasource,
             settings,
+            statistics: Mutex::new(Statistics::default()),
         }))
     }
 
@@ -66,6 +68,19 @@ impl FuseQueryContext {
 
     pub fn get_settings(&self) -> FuseQueryResult<Vec<DataValue>> {
         self.settings.get_settings()
+    }
+
+    pub fn set_statistics(&self, val: &Statistics) -> FuseQueryResult<()> {
+        *self.statistics.lock()? = val.clone();
+        Ok(())
+    }
+
+    pub fn get_statistics(&self) -> FuseQueryResult<Statistics> {
+        let statistics = self.statistics.lock()?;
+        Ok(Statistics {
+            read_rows: statistics.read_rows,
+            read_bytes: statistics.read_bytes,
+        })
     }
 
     pub fn get_table(&self, db_name: &str, table_name: &str) -> FuseQueryResult<Arc<dyn ITable>> {

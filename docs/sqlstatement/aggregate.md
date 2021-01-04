@@ -6,7 +6,7 @@ title: AGGREGATE
 
 ## Count
 
-    mysql> SELECT count(number) FROM system.numbers_mt(3);
+    mysql> SELECT count(number) FROM system.numbers(3);
 
     +---------------+
     | count(number) |
@@ -18,7 +18,7 @@ title: AGGREGATE
 
 ## Min
 
-    mysql> SELECT min(number) FROM system.numbers_mt(3);
+    mysql> SELECT min(number) FROM system.numbers(3);
 
     +-------------+
     | min(number) |
@@ -30,7 +30,7 @@ title: AGGREGATE
 
 ## Max
 
-    SELECT max(number) FROM system.numbers_mt(3);
+    SELECT max(number) FROM system.numbers(3);
 
     +-------------+
     | max(number) |
@@ -41,7 +41,7 @@ title: AGGREGATE
 
 ## Avg
 
-    mysql> SELECT avg(number) FROM system.numbers_mt(3);
+    mysql> SELECT avg(number) FROM system.numbers(3);
 
     +-------------+
     | avg(number) |
@@ -52,7 +52,7 @@ title: AGGREGATE
 
 ## Sum
 
-    mysql> SELECT sum(number) FROM system.numbers_mt(3);
+    mysql> SELECT sum(number) FROM system.numbers(3);
 
     +-------------+
     | sum(number) |
@@ -65,7 +65,7 @@ title: AGGREGATE
 
 Aggregation also supports arithmetic operation.
 
-    mysql> SELECT sum(number+3)/count(number) FROM system.numbers_mt(3);
+    mysql> SELECT sum(number+3)/count(number) FROM system.numbers(3);
 
     +-------------------------------------+
     | (sum((number + 3)) / count(number)) |

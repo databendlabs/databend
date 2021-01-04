@@ -61,7 +61,7 @@ Running:
 
 ### Avg Demo
 ```
-mysql> SELECT avg(number) FROM system.numbers_mt(10000);
+mysql> SELECT avg(number) FROM system.numbers(10000);
 +-------------+
 | Avg(number) |
 +-------------+
@@ -71,33 +71,14 @@ mysql> SELECT avg(number) FROM system.numbers_mt(10000);
 
 ```
 
-### Explain Demo
-```
-mysql> explain SELECT avg(number) FROM system.numbers_mt(10000);
-+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| explain                                                                                                                                                                                                                                      |
-+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| └─ Aggregate: avg([number]):UInt64
-  └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table)                                                                                                                                    |
-| 
-  └─ AggregateFinalTransform × 1 processor
-    └─ Merge (AggregatePartialTransform × 8 processors) to (MergeProcessor × 1)
-      └─ AggregatePartialTransform × 8 processors
-        └─ SourceTransform × 8 processors                      |
-+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-2 rows in set (0.00 sec)
-
-```
-
 
 ### 10 Billion Performance
 ```
-mysql> SELECT avg(number) FROM system.numbers_mt(10000000000);
+mysql> SELECT avg(number) FROM system.numbers(10000000000);
 +-------------------+
 | Avg(number)       |
 +-------------------+
 | 4999999999.494631 |
 +-------------------+
 1 row in set (2.02 sec)
-
 ```

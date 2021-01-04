@@ -193,7 +193,8 @@ impl Planner {
                 let scan =
                     PlanBuilder::scan(&db_name, &table_name, schema.as_ref(), None, table_args)?
                         .build()?;
-                Ok(PlanNode::ReadSource(table.read_plan(ctx, scan)?))
+                let datasource_plan = table.read_plan(ctx, scan)?;
+                Ok(PlanNode::ReadSource(datasource_plan))
             }
             sqlparser::ast::TableFactor::Derived { subquery, .. } => {
                 self.query_to_plan(ctx, subquery)

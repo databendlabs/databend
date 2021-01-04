@@ -54,7 +54,7 @@ impl MySQLStream {
                     coltype: ColumnType::MYSQL_TYPE_VARCHAR,
                     colflags: ColumnFlags::empty(),
                 },
-                DataType::Boolean=> Column {
+                DataType::Boolean => Column {
                     table: "".to_string(),
                     column: field.name().to_string(),
                     coltype: ColumnType::MYSQL_TYPE_SHORT,

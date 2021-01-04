@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
-use crate::datasources::{ITable, Partition};
+use crate::datasources::{ITable, Partition, Statistics};
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, StringArray};
 use crate::error::FuseQueryResult;
@@ -53,6 +53,7 @@ impl ITable for FunctionsTable {
                 name: "".to_string(),
                 version: 0,
             }],
+            statistics: Statistics::default(),
             description: "(Read from system.functions table)".to_string(),
         })
     }

@@ -14,7 +14,7 @@ Syntax:
 
 ## SELECT
 
-    mysql> SELECT * FROM system.numbers_mt(3)
+    mysql> SELECT * FROM system.numbers(3)
 
     +--------+
     | number |
@@ -27,7 +27,7 @@ Syntax:
 
 ## SELECT Expression
 
-    SELECT (2*number+2)/(number+1) FROM system.numbers_mt(3);
+    SELECT (2*number+2)/(number+1) FROM system.numbers(3);
 
     +-------------------------------------+
     | (((2 * number) + 2) / (number + 1)) |
@@ -54,7 +54,7 @@ Syntax:
 
 ## FROM Table Function
 
-    SELECT * FROM system.numbers_mt(1);
+    SELECT * FROM system.numbers(1);
 
     +--------+
     | number |
@@ -67,7 +67,7 @@ Syntax:
 
 WHERE clause allows to filter the data that is coming from FROM clause of SELECT.
 
-    mysql> SELECT * FROM system.numbers_mt(10) WHERE (number+5)<10;
+    mysql> SELECT * FROM system.numbers(10) WHERE (number+5)<10;
 
     +--------+
     | number |
@@ -85,7 +85,7 @@ WHERE clause allows to filter the data that is coming from FROM clause of SELECT
 
 LIMIT m allows to select the first m rows from the result.
 
-    mysql> SELECT * FROM system.numbers_mt(10) LIMIT 2;
+    mysql> SELECT * FROM system.numbers(10) LIMIT 2;
 
     +--------+
     | number |

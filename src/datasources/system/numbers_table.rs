@@ -2,11 +2,13 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use async_trait::async_trait;
+use std::mem::size_of;
 use std::sync::Arc;
 
+use async_trait::async_trait;
+
 use crate::contexts::FuseQueryContextRef;
-use crate::datasources::{system::NumbersStream, ITable, Partition, Partitions};
+use crate::datasources::{system::NumbersStream, ITable, Partition, Partitions, Statistics};
 use crate::datastreams::SendableDataBlockStream;
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, DataValue};
 use crate::error::FuseQueryResult;
@@ -87,12 +89,22 @@ impl ITable for NumbersTable {
             }
         }
 
+        let statistics = Statistics {
+            read_rows: total as usize,
+            read_bytes: (total) * size_of::<u64>() as u64,
+        };
+        ctx.set_statistics(&statistics)?;
+
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
             partitions: self.generate_parts(ctx.get_max_threads()?, total),
-            description: "(Read from system.numbers_mt table)".to_string(),
+            statistics: statistics.clone(),
+            description: format!(
+                "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
+                self.table, statistics.read_rows, statistics.read_bytes
+            ),
         })
     }
 

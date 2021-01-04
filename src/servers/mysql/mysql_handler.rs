@@ -69,7 +69,11 @@ impl<W: io::Write> MysqlShim<W> for Session {
                                     r.push(block?);
                                 }
                                 let duration = start.elapsed();
-                                debug!("MySQLHandler executor cost:{:?}", duration);
+                                debug!(
+                                    "MySQLHandler executor cost:{:?}, statistics:{:?}",
+                                    duration,
+                                    self.ctx.get_statistics()?
+                                );
                                 Ok(r)
                             });
 

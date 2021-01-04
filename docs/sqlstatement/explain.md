@@ -12,13 +12,13 @@ Syntax:
 
 ## Explain
 
-    mysql> EXPLAIN SELECT sum(number+3)/count(number) FROM system.numbers_mt(100000);
+    mysql> EXPLAIN SELECT sum(number+3)/count(number) FROM system.numbers(100000);
    
     +--------------------------------------------------------------------------------+
     | explain                                                                        |
     +--------------------------------------------------------------------------------+
     | └─ Aggregate: (sum([(number + 3)]) / count([number])):UInt64
-      └─ ReadDataSource: scan parts [4](Read from system.numbers_mt table)        
+      └─ ReadDataSource: scan parts [4](Read from system.numbers_mt table, Read Rows:10000, Read Bytes:80000)        
     | 
       └─ AggregateFinalTransform × 1 processor
         └─ Merge (AggregatePartialTransform × 4 processors) to (MergeProcessor × 1)

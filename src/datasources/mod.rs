@@ -6,9 +6,11 @@ mod tests;
 
 mod datasource;
 mod partition;
+mod statistics;
 mod system;
 mod table;
 
 pub use self::datasource::{DataSource, IDataSource};
 pub use self::partition::{Partition, Partitions};
+pub use self::statistics::Statistics;
 pub use self::table::ITable;

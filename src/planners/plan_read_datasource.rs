@@ -2,7 +2,7 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use crate::datasources::Partitions;
+use crate::datasources::{Partitions, Statistics};
 use crate::datavalues::DataSchemaRef;
 
 #[derive(Clone)]
@@ -11,6 +11,7 @@ pub struct ReadDataSourcePlan {
     pub table: String,
     pub schema: DataSchemaRef,
     pub partitions: Partitions,
+    pub statistics: Statistics,
     pub description: String,
 }
 
