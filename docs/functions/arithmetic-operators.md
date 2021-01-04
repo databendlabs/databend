@@ -1,9 +1,10 @@
 ---
-id: arithmetic-functions
-title: Arithmetic Functions
+id: arithmetic-operators
+title: Arithmetic Operators
 ---
 
-Arithmetic functions work for any pair of types from UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, or Float64.
+Arithmetic Operators work for any pair of types from UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, or Float64.
+
 
 ## a + b operator
 

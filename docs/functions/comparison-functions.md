@@ -1,6 +1,6 @@
 ---
 id: comparison-functions
-title: Comparison Functions
+title: Comparison Functions and Operators
 ---
 
 Comparison functions always return true or false.

@@ -1,6 +1,6 @@
 ---
-id: logic-functions
-title: Logical Functions
+id: logical-operators
+title: Logical Operators 
 ---
 
 ## AND
