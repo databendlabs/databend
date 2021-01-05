@@ -10,7 +10,7 @@ Arithmetic Operators work for any pair of types from UInt8, UInt16, UInt32, UInt
 
 Calculates the sum of the numbers.
 
-```
+```text
 mysql> SELECT number+1 FROM system.numbers(3);
 +--------------+
 | (number + 1) |
@@ -24,7 +24,7 @@ mysql> SELECT number+1 FROM system.numbers(3);
 
 ## a - b operator
 
-```
+```text
 mysql> SELECT number-1 FROM system.numbers(3) WHERE number > 0;
 +--------------+
 | (number - 1) |
@@ -39,7 +39,7 @@ mysql> SELECT number-1 FROM system.numbers(3) WHERE number > 0;
 
 Calculates the product of the numbers.
 
-```
+```text
 mysql> SELECT number*2 FROM system.numbers(3);
 +--------------+
 | (number * 2) |
@@ -55,7 +55,7 @@ mysql> SELECT number*2 FROM system.numbers(3);
 
 Calculates the quotient of the numbers.
 
-```
+```text
 mysql> SELECT number/2 FROM system.numbers(3);
 +--------------+
 | (number / 2) |
@@ -66,9 +66,3 @@ mysql> SELECT number/2 FROM system.numbers(3);
 +--------------+
 3 rows in set (0.01 sec)
 ```
-
-
-
-
-
-

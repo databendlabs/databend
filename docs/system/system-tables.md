@@ -15,13 +15,15 @@ Reads from this table are parallelized too.
 
 Used for tests.
 
-    mysql> SELECT avg(number) FROM system.numbers(100000000);
-    +-------------+
-    | avg(number) |
-    +-------------+
-    |  49999999.5 |
-    +-------------+
-    1 row in set (0.04 sec)
+```text
+mysql> SELECT avg(number) FROM system.numbers(100000000);
++-------------+
+| avg(number) |
++-------------+
+|  49999999.5 |
++-------------+
+1 row in set (0.04 sec)
+```
 
 ## system.numbers_mt
 
@@ -32,22 +34,23 @@ The same as system.numbers
 
 Contains information about session settings for current user.
 
-    mysql> SELECT * FROM system.settings;
-    +----------------+---------+---------------------------------------------------------------------------------------------------+
-    | name           | value   | description                                                                                       |
-    +----------------+---------+---------------------------------------------------------------------------------------------------+
-    | max_block_size | 10000   | Maximum block size for reading                                                                    |
-    | max_threads    | 8       | The maximum number of threads to execute the request. By default, it is determined automatically. |
-    | default_db     | default | The default database for current session                                                          |
-    +----------------+---------+---------------------------------------------------------------------------------------------------+
-    3 rows in set (0.00 sec)
-
+```text
+mysql> SELECT * FROM system.settings;
++----------------+---------+---------------------------------------------------------------------------------------------------+
+| name           | value   | description                                                                                       |
++----------------+---------+---------------------------------------------------------------------------------------------------+
+| max_block_size | 10000   | Maximum block size for reading                                                                    |
+| max_threads    | 8       | The maximum number of threads to execute the request. By default, it is determined automatically. |
+| default_db     | default | The default database for current session                                                          |
++----------------+---------+---------------------------------------------------------------------------------------------------+
+3 rows in set (0.00 sec)
+```
 
 ## system.functions
 
 Contains information about normal and aggregate functions.
 
-```
+```text
 mysql> SELECT * FROM system.functions;
 +-------+
 | name  |

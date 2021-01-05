@@ -2,13 +2,13 @@ test:
 	cargo +nightly test -- --nocapture 
 
 bench:
-	cargo +nightly bench -- --nocapture
+	RUSTFLAGS="-C target-cpu=native" cargo +nightly bench -- --nocapture
 
 run:
-	cargo +nightly run --release -- --nocapture
+	RUSTFLAGS="-C target-cpu=native" cargo +nightly run --release -- --nocapture
 
 build:
-	cargo +nightly build --release
+	RUSTFLAGS="-C target-cpu=native" cargo +nightly build --release
 
 lint:
 	cargo fmt

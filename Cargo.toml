@@ -35,7 +35,6 @@ thiserror = "1.0"
 threadpool = "1.8.1"
 tokio = { version = "1.0", features = ["macros", "rt", "rt-multi-thread", "signal", "sync"] }
 
-
 [dev-dependencies]
 criterion = "0.3"
 pretty_assertions = "0.6"
@@ -44,3 +43,5 @@ pretty_assertions = "0.6"
 name = "bench_main"
 harness = false
 
+[profile.release]
+lto = true

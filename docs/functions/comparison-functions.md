@@ -13,7 +13,7 @@ The following types can be compared:
 
 Calculates the sum of the numbers.
 
-```
+```text
 mysql> SELECT * FROM system.numbers(3) WHERE number=1;
 +--------+
 | number |
@@ -25,7 +25,7 @@ mysql> SELECT * FROM system.numbers(3) WHERE number=1;
 
 ## !=
 
-```
+```text
 mysql> SELECT * FROM system.numbers(3) WHERE number!=1;
 +--------+
 | number |
@@ -38,7 +38,7 @@ mysql> SELECT * FROM system.numbers(3) WHERE number!=1;
 
 ## <
 
-```
+```text
 mysql> SELECT * FROM system.numbers(3) WHERE number<1;
 +--------+
 | number |
@@ -50,8 +50,7 @@ mysql> SELECT * FROM system.numbers(3) WHERE number<1;
 
 ## <=
 
-
-```
+```text
 mysql> SELECT * FROM system.numbers(3) WHERE number<=1;
 +--------+
 | number |
@@ -64,7 +63,7 @@ mysql> SELECT * FROM system.numbers(3) WHERE number<=1;
 
 ## >
 
-```
+```text
 mysql> SELECT * FROM system.numbers(3) WHERE number>1;
 +--------+
 | number |
@@ -76,8 +75,7 @@ mysql> SELECT * FROM system.numbers(3) WHERE number>1;
 
 ## >=
 
-
-```
+```text
 mysql> SELECT * FROM system.numbers(3) WHERE number>=1;
 +--------+
 | number |
@@ -87,12 +85,3 @@ mysql> SELECT * FROM system.numbers(3) WHERE number>=1;
 +--------+
 2 rows in set (0.00 sec)
 ```
-
-
-
-
-
-
-
-
-

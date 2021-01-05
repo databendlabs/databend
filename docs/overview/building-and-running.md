@@ -6,12 +6,15 @@ title: Building and Running
 This document describes how to build and run [FuseQuery](https://github.com/datafusedev/fuse-query) as a distributed query engine. 
 
 ## 1. Run with Docker (Recommended)
-    docker pull datafusedev/fuse-query
-    docker run --init --rm -p 3307:3307 datafusedev/fuse-query
-    ...
-    05:12:36 [ INFO] Options { log_level: "debug", num_cpus: 8, mysql_handler_port: 3307 }
-    05:12:36 [ INFO] Fuse-Query Cloud Compute Starts...
-    05:12:36 [ INFO] Usage: mysql -h127.0.0.1 -P3307
+
+```text
+docker pull datafusedev/fuse-query
+docker run --init --rm -p 3307:3307 datafusedev/fuse-query
+...
+05:12:36 [ INFO] Options { log_level: "debug", num_cpus: 8, mysql_handler_port: 3307 }
+05:12:36 [ INFO] Fuse-Query Cloud Compute Starts...
+05:12:36 [ INFO] Usage: mysql -h127.0.0.1 -P3307
+```
 
 Or 
 
@@ -21,46 +24,58 @@ Or
 
 FuseQuery is a Rust project. Clang, Rust are supported. 
 
-
 To install dependencies on Ubuntu:
 
-    apt install git clang
+```text
+apt install git clang
+```
 
 On Arch Linux:
 
-    pacman -S git clang
+```text
+pacman -S git clang
+```
 
 On Mac via Homebrew:
 
-    brew install git clang
-
+```text
+brew install git clang
+```
 
 To install Rust(nightly):
 
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-    rustup toolchain install nightly
+```text
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup toolchain install nightly
+```
 
 ### 2.2 Running on Linux and macOS
 
 
 Clone:
 
-    git clone https://github.com/datafusedev/fuse-query
+```text
+git clone https://github.com/datafusedev/fuse-query
+```
 
 Running:
 
-    cd fuse-query
-    make run
-
+```text
+cd fuse-query
+make run
+```
 
 ## 3. Connect
 
  Connect FuseQuery with MySQL client
 
-    mysql -h127.0.0.1 -P3307
+```text
+mysql -h127.0.0.1 -P3307
+```
 
 ### Avg Demo
-```
+
+```text
 mysql> SELECT avg(number) FROM system.numbers(10000);
 +-------------+
 | Avg(number) |
@@ -73,7 +88,8 @@ mysql> SELECT avg(number) FROM system.numbers(10000);
 
 
 ### 10 Billion Performance
-```
+
+```text
 mysql> SELECT avg(number) FROM system.numbers(10000000000);
 +-------------------+
 | Avg(number)       |

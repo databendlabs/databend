@@ -6,70 +6,82 @@ title: AGGREGATE
 
 ## Count
 
-    mysql> SELECT count(number) FROM system.numbers(3);
+```text
+mysql> SELECT count(number) FROM system.numbers(3);
 
-    +---------------+
-    | count(number) |
-    +---------------+
-    |             3 |
-    +---------------+
-    1 row in set (0.01 sec)
++---------------+
+| count(number) |
++---------------+
+|             3 |
++---------------+
+1 row in set (0.01 sec)
+```
 
 
 ## Min
 
-    mysql> SELECT min(number) FROM system.numbers(3);
+```text
+mysql> SELECT min(number) FROM system.numbers(3);
 
-    +-------------+
-    | min(number) |
-    +-------------+
-    |           0 |
-    +-------------+
-    1 row in set (0.00 sec)
++-------------+
+| min(number) |
++-------------+
+|           0 |
++-------------+
+1 row in set (0.00 sec)
+```
 
 
 ## Max
 
-    SELECT max(number) FROM system.numbers(3);
+```text
+SELECT max(number) FROM system.numbers(3);
 
-    +-------------+
-    | max(number) |
-    +-------------+
-    |           2 |
-    +-------------+
-    1 row in set (0.01 sec)
++-------------+
+| max(number) |
++-------------+
+|           2 |
++-------------+
+1 row in set (0.01 sec)
+```
 
 ## Avg
 
-    mysql> SELECT avg(number) FROM system.numbers(3);
+```text
+mysql> SELECT avg(number) FROM system.numbers(3);
 
-    +-------------+
-    | avg(number) |
-    +-------------+
-    |           1 |
-    +-------------+
-    1 row in set (0.00 sec)
++-------------+
+| avg(number) |
++-------------+
+|           1 |
++-------------+
+1 row in set (0.00 sec)
+```
 
 ## Sum
 
-    mysql> SELECT sum(number) FROM system.numbers(3);
+```text
+mysql> SELECT sum(number) FROM system.numbers(3);
 
-    +-------------+
-    | sum(number) |
-    +-------------+
-    |           3 |
-    +-------------+
-    1 row in set (0.00 sec)
++-------------+
+| sum(number) |
++-------------+
+|           3 |
++-------------+
+1 row in set (0.00 sec)
+```
 
 ## Aggregation Arithmetic
 
 Aggregation also supports arithmetic operation.
 
-    mysql> SELECT sum(number+3)/count(number) FROM system.numbers(3);
+```text
+mysql> SELECT sum(number+3)/count(number) FROM system.numbers(3);
 
-    +-------------------------------------+
-    | (sum((number + 3)) / count(number)) |
-    +-------------------------------------+
-    |                                   4 |
-    +-------------------------------------+
-    1 row in set (0.00 sec)
++-------------------------------------+
+| (sum((number + 3)) / count(number)) |
++-------------------------------------+
+|                                   4 |
++-------------------------------------+
+1 row in set (0.00 sec)
+```
