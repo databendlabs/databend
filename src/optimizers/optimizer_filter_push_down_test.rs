@@ -15,7 +15,7 @@ fn test_filter_push_down_optimizer() -> crate::error::FuseQueryResult<()> {
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
     let plan = Planner::new().build_from_sql(
         ctx.clone(),
-        "select (number+1) as c1, number as c2 from system.numbers_mt where (c1+c2+1)=1",
+        "select (number+1) as c1, number as c2 from system.numbers_mt(1000000) where (c1+c2+1)=1",
     )?;
 
     let mut filter_push_down = FilterPushDownOptimizer::create();
@@ -23,7 +23,7 @@ fn test_filter_push_down_optimizer() -> crate::error::FuseQueryResult<()> {
     let expect = "\
     └─ Projection: (number + 1) as c1:UInt64, number as c2:UInt64\
     \n  └─ Filter: ((((number + 1) + number) + 1) = 1)\
-    \n    └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table, Read Rows:10000, Read Bytes:80000)";
+    \n    └─ ReadDataSource: scan parts [100](Read from system.numbers_mt table, Read Rows:1000000, Read Bytes:8000000)";
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);
 

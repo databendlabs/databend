@@ -16,7 +16,7 @@ async fn test_processor_merge() -> crate::error::FuseQueryResult<()> {
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
     let mut pipeline = Pipeline::create();
 
-    let a = test_source.number_source_transform_for_test(ctx, 16)?;
+    let a = test_source.number_source_transform_for_test(ctx, 2)?;
     pipeline.add_source(Arc::new(a))?;
 
     pipeline.merge_processor()?;

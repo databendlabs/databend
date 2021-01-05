@@ -14,7 +14,7 @@ fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
     let plan = Planner::new().build_from_sql(
         ctx.clone(),
-        "select number as c1, number as c2, number as c3,(number+1) from system.numbers_mt where (number+1)=4",
+        "select number as c1, number as c2, number as c3,(number+1) from system.numbers_mt(1000000) where (number+1)=4",
     )?;
 
     let explain = PlanNode::Explain(ExplainPlan {
@@ -23,7 +23,7 @@ fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
     let expect = "\
     └─ Projection: number as c1:UInt64, number as c2:UInt64, number as c3:UInt64, (number + 1):UInt64\
     \n  └─ Filter: ((number + 1) = 4)\
-    \n    └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table, Read Rows:10000, Read Bytes:80000)";
+    \n    └─ ReadDataSource: scan parts [100](Read from system.numbers_mt table, Read Rows:1000000, Read Bytes:8000000)";
     let actual = format!("{:?}", explain);
     assert_eq!(expect, actual);
     Ok(())

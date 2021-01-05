@@ -76,7 +76,12 @@ impl PipelineBuilder {
                     let workers = if workers == 0 || workers >= plan.partitions.len() {
                         1
                     } else {
-                        plan.partitions.len() / workers
+                        let parts = plan.partitions.len();
+                        if parts % workers != 0 {
+                            parts / workers + 1
+                        } else {
+                            parts / workers
+                        }
                     };
 
                     for chunk in plan.partitions.chunks(workers) {

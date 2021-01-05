@@ -15,7 +15,7 @@ async fn test_pipeline_builder() -> crate::error::FuseQueryResult<()> {
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
     let plan = Planner::new().build_from_sql(
         ctx.clone(),
-        "select sum(number+1)+2 as sumx from system.numbers_mt where (number+1)=4 limit 1",
+        "select sum(number+1)+2 as sumx from system.numbers_mt(80000) where (number+1)=4 limit 1",
     )?;
     let pipeline = PipelineBuilder::create(ctx, plan).build()?;
     let expect = "\

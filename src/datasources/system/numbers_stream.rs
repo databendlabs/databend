@@ -25,34 +25,14 @@ pub struct NumbersStream {
 }
 
 impl NumbersStream {
-    pub fn create(max_block_size: u64, schema: DataSchemaRef, partitions: Partitions) -> Self {
+    pub fn create(schema: DataSchemaRef, partitions: Partitions) -> Self {
         let mut blocks = vec![];
-        let block_size = max_block_size;
 
         for part in partitions {
             let names: Vec<_> = part.name.split('-').collect();
             let begin: u64 = names[1].parse().unwrap();
             let end: u64 = names[2].parse().unwrap();
-            let count = end - begin + 1;
-
-            let block_nums = count / block_size;
-            let remain = count % block_size;
-
-            if block_nums > 0 {
-                for i in 0..block_nums {
-                    let block_begin = begin + block_size * i;
-                    let mut block_end = begin + block_size * (i + 1) - 1;
-                    if (i == block_nums - 1) && remain > 0 {
-                        block_end = block_begin + remain;
-                    }
-                    blocks.push(BlockRange {
-                        begin: block_begin,
-                        end: block_end,
-                    });
-                }
-            } else {
-                blocks.push(BlockRange { begin, end });
-            }
+            blocks.push(BlockRange { begin, end });
         }
 
         NumbersStream {
