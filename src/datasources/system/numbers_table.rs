@@ -31,26 +31,25 @@ impl NumbersTable {
         }
     }
 
-    pub fn generate_parts(&self, workers: u64, block_size: u64, total: u64) -> Partitions {
-        let block_nums = total / block_size;
-        let block_remain = total % block_size;
+    pub fn generate_parts(&self, workers: u64, total: u64) -> Partitions {
+        let part_size = total / workers;
+        let part_remain = total % workers;
 
         let mut partitions = Vec::with_capacity(workers as usize);
-
-        if block_nums == 0 {
+        if part_size == 0 {
             partitions.push(Partition {
-                name: format!("{}-{}-{}", total, 0, total - 1,),
+                name: format!("{}-{}-{}", total, 0, total,),
                 version: 0,
             })
         } else {
-            for part in 0..block_nums {
-                let start = part * block_size;
-                let mut end = (part + 1) * block_size - 1;
-                if part == (block_nums - 1) && block_remain > 0 {
-                    end += block_remain;
+            for part in 0..workers {
+                let part_begin = part * part_size;
+                let mut part_end = (part + 1) * part_size;
+                if part == (workers - 1) && part_remain > 0 {
+                    part_end += part_remain;
                 }
                 partitions.push(Partition {
-                    name: format!("{}-{}-{}", total, start, end,),
+                    name: format!("{}-{}-{}", total, part_begin, part_end,),
                     version: 0,
                 })
             }
@@ -99,11 +98,7 @@ impl ITable for NumbersTable {
             db: "system".to_string(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
-            partitions: self.generate_parts(
-                ctx.get_max_threads()?,
-                ctx.get_max_block_size()?,
-                total,
-            ),
+            partitions: self.generate_parts(ctx.get_max_threads()?, total),
             statistics: statistics.clone(),
             description: format!(
                 "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
@@ -114,9 +109,13 @@ impl ITable for NumbersTable {
 
     async fn read(
         &self,
-        _ctx: FuseQueryContextRef,
+        ctx: FuseQueryContextRef,
         parts: Vec<Partition>,
     ) -> FuseQueryResult<SendableDataBlockStream> {
-        Ok(Box::pin(NumbersStream::create(self.schema.clone(), parts)))
+        Ok(Box::pin(NumbersStream::create(
+            ctx.get_max_block_size()?,
+            self.schema.clone(),
+            parts,
+        )))
     }
 }

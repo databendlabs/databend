@@ -25,14 +25,33 @@ pub struct NumbersStream {
 }
 
 impl NumbersStream {
-    pub fn create(schema: DataSchemaRef, partitions: Partitions) -> Self {
-        let mut blocks = vec![];
+    pub fn create(block_size: u64, schema: DataSchemaRef, partitions: Partitions) -> Self {
+        let mut blocks = Vec::with_capacity(partitions.len());
 
         for part in partitions {
             let names: Vec<_> = part.name.split('-').collect();
             let begin: u64 = names[1].parse().unwrap();
             let end: u64 = names[2].parse().unwrap();
-            blocks.push(BlockRange { begin, end });
+
+            let diff = end - begin;
+            let block_nums = diff / block_size;
+            let block_remain = diff % block_size;
+
+            if block_nums == 0 {
+                blocks.push(BlockRange { begin, end });
+            } else {
+                for r in 0..block_nums {
+                    let range_begin = begin + block_size * r;
+                    let mut range_end = range_begin + block_size;
+                    if r == (block_nums - 1) && block_remain > 0 {
+                        range_end += block_remain;
+                    }
+                    blocks.push(BlockRange {
+                        begin: range_begin,
+                        end: range_end,
+                    });
+                }
+            }
         }
 
         NumbersStream {
@@ -54,7 +73,7 @@ impl Stream for NumbersStream {
             let current = self.blocks[self.block_index].clone();
             self.block_index += 1;
 
-            let data: Vec<u64> = (current.begin..=current.end).collect();
+            let data: Vec<u64> = (current.begin..current.end).collect();
             let block =
                 DataBlock::create(self.schema.clone(), vec![Arc::new(UInt64Array::from(data))]);
             Some(Ok(block))

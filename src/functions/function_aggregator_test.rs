@@ -119,7 +119,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
                 AggregatorFunction::try_create_count_func(&[FieldFunction::try_create("a")?])?,
             ])?,
             block: block.clone(),
-            expect: DataValue::Int64(Some(2)),
+            expect: DataValue::UInt64(Some(2)),
             error: "",
         },
         Test {

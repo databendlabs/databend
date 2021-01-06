@@ -44,4 +44,4 @@ name = "bench_main"
 harness = false
 
 [profile.release]
-lto = true
+lto = "thin"
