@@ -5,7 +5,7 @@
 use std::fmt;
 
 use crate::datavalues::{DataField, DataSchemaRef, DataValue};
-use crate::error::{FuseQueryError, FuseQueryResult};
+use crate::error::FuseQueryResult;
 use crate::functions::{AliasFunction, ConstantFunction, FieldFunction, Function, FunctionFactory};
 
 #[derive(Clone)]
@@ -62,9 +62,7 @@ impl ExpressionPlan {
                 func.set_depth(depth);
                 AliasFunction::try_create(alias.clone(), func)
             }
-            ExpressionPlan::Wildcard => Err(FuseQueryError::Internal(
-                "Cannot transform wildcard to function".to_string(),
-            )),
+            ExpressionPlan::Wildcard => FieldFunction::try_create("*"),
         }
     }
 

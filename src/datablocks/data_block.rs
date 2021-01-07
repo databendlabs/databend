@@ -56,7 +56,11 @@ impl DataBlock {
     }
 
     pub fn column_by_name(&self, name: &str) -> FuseQueryResult<&DataArrayRef> {
-        let idx = self.schema.index_of(name)?;
-        Ok(&self.columns[idx])
+        if name == "*" {
+            Ok(&self.columns[0])
+        } else {
+            let idx = self.schema.index_of(name)?;
+            Ok(&self.columns[idx])
+        }
     }
 }

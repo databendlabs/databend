@@ -257,6 +257,7 @@ impl Planner {
                     args,
                 })
             }
+            sqlparser::ast::Expr::Wildcard => Ok(ExpressionPlan::Wildcard),
             _ => Err(FuseQueryError::Plan(format!(
                 "Unsupported ExpressionPlan: {}",
                 sql

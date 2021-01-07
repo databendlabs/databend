@@ -26,14 +26,22 @@ impl FieldFunction {
     }
 
     pub fn return_type(&self, input_schema: &DataSchema) -> FuseQueryResult<DataType> {
-        Ok(input_schema
-            .field_with_name(&self.value)?
-            .data_type()
-            .clone())
+        let field = if self.value == "*" {
+            input_schema.field(0)
+        } else {
+            input_schema.field_with_name(self.value.as_str())?
+        };
+
+        Ok(field.data_type().clone())
     }
 
     pub fn nullable(&self, input_schema: &DataSchema) -> FuseQueryResult<bool> {
-        Ok(input_schema.field_with_name(&self.value)?.is_nullable())
+        let field = if self.value == "*" {
+            input_schema.field(0)
+        } else {
+            input_schema.field_with_name(self.value.as_str())?
+        };
+        Ok(field.is_nullable())
     }
 
     pub fn set_depth(&mut self, depth: usize) {
