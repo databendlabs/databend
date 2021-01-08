@@ -26,7 +26,7 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 
 ## Architecture
 
-![DataFuse Architecture](./docs/images/datafuse.svg)
+![DataFuse Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/datafuse.svg)
 
 ## Crates
 
@@ -68,19 +68,17 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 * Rust: rustc 1.50.0-nightly (f76ecd066 2020-12-15)
 * Build with Link-time Optimization and Using CPU Specific Instructions
 
-|Query |FuseQuery Cost| ClickHouse Cost|
+|Query |FuseQuery (v0.1)| ClickHouse (v19.17.6)|
 |-------------------------------|---------------| ----|
-|SELECT avg(number) FROM system.numbers_mt | [**1.32s**] ↓ | [1.70s], 5.90 billion rows/s., 47.16 GB/s|
-|SELECT sum(number) FROM system.numbers_mt | [1.35s] | [1.34s], 7.48 billion rows/s., 59.80 GB/s|
-|SELECT min(number) FROM system.numbers_mt | [**1.34s**] ↓ | [1.57s], 6.36 billion rows/s., 50.89 GB/s|
-|SELECT avg(number) FROM system.numbers_mt | [**1.32s**] ↓ | [1.70s], 5.90 billion rows/s., 47.16 GB/s|
-|SELECT sum(number) FROM system.numbers_mt | [1.35s] | [1.34s], 7.48 billion rows/s., 59.80 GB/s|
-|SELECT max(number) FROM system.numbers_mt | [**1.32s**] ↓ | [2.33s], 4.34 billion rows/s., 34.74 GB/s|
-|SELECT max(number+1) FROM system.numbers_mt | [3.77s] | [3.29s], 3.04 billion rows/s., 24.31 GB/s|
-|SELECT count(number) FROM system.numbers_mt | [1.31s] | [0.67s], 15.00 billion rows/s., 119.99 GB/s|
-|SELECT sum(number+number+number) FROM numbers_mt | [**4.05s**] ↓ | [4.95s], 2.02 billion rows/s., 16.17 GB/s|
-|SELECT sum(number) / count(number) FROM system.numbers_mt | [1.32s] | [1.28s], 7.84 billion rows/s., 62.73 GB/s|
-|SELECT sum(number) / count(number), max(number), min(number) FROM system.numbers_mt | [**1.76s**] ↓ | [4.30s], 2.33 billion rows/s., 18.61 GB/s|
+|SELECT avg(number) FROM system.numbers_mt | (1.32 s.)| **×1.29 (1.70 s)** <br /> 5.90 billion rows/s., 47.16 GB/s</br>|
+|SELECT sum(number) FROM system.numbers_mt | (1.35 s.)| ×0.99 (1.34 s) <br /> 7.48 billion rows/s., 59.80 GB/s|
+|SELECT min(number) FROM system.numbers_mt | (1.34 s.)| **×1.17 (1.57 s.)** <br /> 6.36 billion rows/s., 50.89 GB/s|
+|SELECT max(number) FROM system.numbers_mt | (1.32 s.)| **×1.77 (2.33 s.)** <br />  4.34 billion rows/s., 34.74 GB/s|
+|SELECT max(number+1) FROM system.numbers_mt | (3.77 s.)| ×0.87 (3.29 s.) <br />  3.04 billion rows/s., 24.31 GB/s|
+|SELECT count(number) FROM system.numbers_mt | (1.31 s.)| ×0.51 (0.67 s.) <br />  15.00 billion rows/s., 119.99 GB/s|
+|SELECT sum(number+number+number) FROM numbers_mt | (4.05 s.)|**×1.22 (4.95 s.)** <br /> 2.02 billion rows/s., 16.17 GB/s|
+|SELECT sum(number) / count(number) FROM system.numbers_mt | (1.32 s.) | ×0.97 (1.28 s.) <br /> 7.84 billion rows/s., 62.73 GB/s|
+|SELECT sum(number) / count(number), max(number), min(number) FROM system.numbers_mt |(1.76 s.)| **×2.29 (4.03 s.)** <br /> 2.33 billion rows/s., 18.61 GB/s|
 
 Note:
 * ClickHouse system.numbers_mt is <b>8-way</b> parallelism processing
@@ -163,8 +161,10 @@ $ make test
 
 ## Roadmap
 
-- [ ] 0.1 support Aggregation, GroupBy, OrderBy distributed query
-- [ ] 0.2 support join
-- [ ] 0.3 support sub queries
-- [ ] 0.4 support TPC-H benchmark
+- [x] 0.1 support aggregation select
+- [ ] 0.2 support distributed query
+- [ ] 0.3 support group by
+- [ ] 0.4 support join
+- [ ] 0.5 support sub queries
+- [ ] 0.6 support TPC-H benchmark
 
