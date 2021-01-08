@@ -162,8 +162,8 @@ $ make test
 ## Roadmap
 
 - [x] 0.1 support aggregation select
-- [ ] 0.2 support distributed query
-- [ ] 0.3 support group by
+- [ ] 0.2 support distributed query (WIP)
+- [ ] 0.3 support group by, order by
 - [ ] 0.4 support join
 - [ ] 0.5 support sub queries
 - [ ] 0.6 support TPC-H benchmark
