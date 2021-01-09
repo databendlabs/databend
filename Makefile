@@ -10,6 +10,8 @@ run:
 build:
 	RUSTFLAGS="-C target-cpu=native" cargo +nightly build --release
 
+profile:
+	RUSTFLAGS="-g" cargo flamegraph --bin=fuse-query
 lint:
 	cargo fmt
 	cargo +nightly clippy -- -D warnings
