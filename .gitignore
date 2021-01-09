@@ -10,3 +10,7 @@ Cargo.lock
 
 # cargo
 .cargo/
+
+# profile
+flamegraph.*
+perf.*
