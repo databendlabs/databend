@@ -2,7 +2,10 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use std::task::{Context, Poll};
+use std::{
+    task::{Context, Poll},
+    usize,
+};
 
 use futures::stream::Stream;
 
@@ -10,7 +13,14 @@ use crate::datablocks::DataBlock;
 use crate::datasources::Partitions;
 use crate::datavalues::{DataSchemaRef, UInt64Array};
 use crate::error::FuseQueryResult;
+use std::alloc::Layout;
+use std::mem;
+use std::ptr::NonNull;
 use std::sync::Arc;
+
+use arrow::array::ArrayData;
+use arrow::buffer::Buffer;
+use arrow::datatypes::DataType;
 
 #[derive(Debug, Clone)]
 struct BlockRange {
@@ -71,12 +81,33 @@ impl Stream for NumbersStream {
     ) -> Poll<Option<Self::Item>> {
         Poll::Ready(if (self.block_index as usize) < self.blocks.len() {
             let current = self.blocks[self.block_index].clone();
+            let length = (current.end - current.begin) as usize;
             self.block_index += 1;
 
-            let data: Vec<u64> = (current.begin..current.end).collect();
-            let block =
-                DataBlock::create(self.schema.clone(), vec![Arc::new(UInt64Array::from(data))]);
-            Some(Ok(block))
+            unsafe {
+                let layout = Layout::from_size_align_unchecked(
+                    length * mem::size_of::<u64>(),
+                    mem::size_of::<u64>(),
+                );
+                let p = std::alloc::alloc(layout) as *mut u64;
+                for i in current.begin..current.end {
+                    *p.offset((i - current.begin) as isize) = i;
+                }
+                let buffer =
+                    Buffer::from_raw_parts(NonNull::new(p as *mut u8).unwrap(), length, length);
+
+                let arr_data = ArrayData::builder(DataType::UInt64)
+                    .len(length)
+                    .offset(0)
+                    .add_buffer(buffer)
+                    .build();
+
+                let block = DataBlock::create(
+                    self.schema.clone(),
+                    vec![Arc::new(UInt64Array::from(arr_data))],
+                );
+                Some(Ok(block))
+            }
         } else {
             None
         })

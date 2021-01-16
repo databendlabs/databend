@@ -7,7 +7,7 @@ title: SET
 SET param = value
 ```
 
-Assigns value to the param setting for the current session. 
+Assigns value to the param setting for the current session.
 
 ## SETTINGS
 
@@ -18,7 +18,7 @@ mysql> SELECT * FROM system.settings;
 | name           | value   |
 +----------------+---------+
 | max_threads    | 8       |
-| max_block_size | 10000   |
+| max_block_size | 65536    |
 | default_db     | default |
 +----------------+---------+
 3 rows in set (0.00 sec)

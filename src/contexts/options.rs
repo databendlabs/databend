@@ -15,6 +15,11 @@ impl Options {
         let settings = SettingMap::create();
         settings.try_set_string("log_level", "debug".to_string(), "Log level")?;
         settings.try_set_u64("num_cpus", num_cpus::get() as u64, "The numbers of the pc")?;
+        settings.try_set_string(
+            "mysql_listen_host",
+            "127.0.0.1".to_string(),
+            "MySQL server bind host",
+        )?;
         settings.try_set_u64("mysql_handler_port", 3307, "MySQL protocol port")?;
         settings.try_set_u64(
             "mysql_handler_thread_num",
@@ -32,6 +37,11 @@ impl Options {
     pub fn get_num_cpus(&self) -> FuseQueryResult<u64> {
         let key = "num_cpus";
         self.settings.try_get_u64(key)
+    }
+
+    pub fn get_mysql_listen_host(&self) -> FuseQueryResult<String> {
+        let key = "mysql_listen_host";
+        self.settings.try_get_string(key)
     }
 
     pub fn get_mysql_handler_port(&self) -> FuseQueryResult<u64> {
