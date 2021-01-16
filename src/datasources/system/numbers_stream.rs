@@ -2,7 +2,10 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use std::{task::{Context, Poll}, usize};
+use std::{
+    task::{Context, Poll},
+    usize,
+};
 
 use futures::stream::Stream;
 
@@ -10,14 +13,14 @@ use crate::datablocks::DataBlock;
 use crate::datasources::Partitions;
 use crate::datavalues::{DataSchemaRef, UInt64Array};
 use crate::error::FuseQueryResult;
-use std::sync::Arc;
-use std::ptr::NonNull;
 use std::alloc::Layout;
 use std::mem;
+use std::ptr::NonNull;
+use std::sync::Arc;
 
-use arrow::datatypes::DataType;
 use arrow::array::ArrayData;
 use arrow::buffer::Buffer;
+use arrow::datatypes::DataType;
 
 #[derive(Debug, Clone)]
 struct BlockRange {
@@ -82,22 +85,27 @@ impl Stream for NumbersStream {
             self.block_index += 1;
 
             unsafe {
-                let layout = Layout::from_size_align_unchecked(length * mem::size_of::<u64>(), mem::size_of::<u64>());
+                let layout = Layout::from_size_align_unchecked(
+                    length * mem::size_of::<u64>(),
+                    mem::size_of::<u64>(),
+                );
                 let p = std::alloc::alloc(layout) as *mut u64;
-                for i in current.begin ..current.end {
-                    *p.offset((i-current.begin) as isize) = i;
+                for i in current.begin..current.end {
+                    *p.offset((i - current.begin) as isize) = i;
                 }
-                let buffer = Buffer::from_raw_parts(
-                    NonNull::new(p as *mut u8).unwrap(), length, length);
+                let buffer =
+                    Buffer::from_raw_parts(NonNull::new(p as *mut u8).unwrap(), length, length);
 
                 let arr_data = ArrayData::builder(DataType::UInt64)
-                .len(length)
-                .offset(0)
-                .add_buffer(buffer)
-                .build();
+                    .len(length)
+                    .offset(0)
+                    .add_buffer(buffer)
+                    .build();
 
-                let block =
-                    DataBlock::create(self.schema.clone(), vec![Arc::new(UInt64Array::from(arr_data))]);
+                let block = DataBlock::create(
+                    self.schema.clone(),
+                    vec![Arc::new(UInt64Array::from(arr_data))],
+                );
                 Some(Ok(block))
             }
         } else {

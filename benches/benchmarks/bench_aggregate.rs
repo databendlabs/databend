@@ -7,17 +7,14 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use fuse_query::datavalues::*;
 use std::sync::Arc;
 
-
 macro_rules! bench_suit {
-    ($C: expr, $OP: expr, $ARR: expr) => {
-        {
-            $C.bench_function(format!("{}", $OP).as_str(), |b| {
-                b.iter(|| {
-                    let _ = data_array_aggregate_op($OP, $ARR.clone()) ;
-                })
-            });
-        };
-    }
+    ($C: expr, $OP: expr, $ARR: expr) => {{
+        $C.bench_function(format!("{}", $OP).as_str(), |b| {
+            b.iter(|| {
+                let _ = data_array_aggregate_op($OP, $ARR.clone());
+            })
+        });
+    };};
 }
 
 fn criterion_benchmark_aggregate(c: &mut Criterion) {
