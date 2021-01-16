@@ -133,7 +133,7 @@ impl MySQLHandler {
 
     pub fn start(&self) -> FuseQueryResult<()> {
         let listener =
-            net::TcpListener::bind(format!("0.0.0.0:{}", self.opts.get_mysql_handler_port()?))?;
+            net::TcpListener::bind(format!("{}:{}", self.opts.get_mysql_listen_host()?, self.opts.get_mysql_handler_port()?))?;
         let pool = ThreadPool::new(self.opts.get_mysql_handler_thread_num()? as usize);
 
         for stream in listener.incoming() {

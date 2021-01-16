@@ -53,7 +53,7 @@ mysql> SELECT * FROM system.settings;
 +----------------+---------+
 | default_db     | default |
 | max_threads    | 8       |
-| max_block_size | 10000   |
+| max_block_size | 65536    |
 +----------------+---------+
 3 rows in set (0.00 sec)
 ```

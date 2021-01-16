@@ -44,6 +44,9 @@ impl IExecutor for SettingExecutor {
                 let value = plan.value.parse::<u64>()?;
                 self.ctx.set_max_threads(value)?;
             }
+            // To be ompatiable with some drivers
+            // eg: usql and mycli
+            "sql_mode" | "autocommit" => {}
             _ => {
                 return Err(FuseQueryError::Internal(format!(
                     "Unknown variable: {:?}",

@@ -21,7 +21,7 @@ impl FuseQueryContext {
     pub fn try_create_ctx(datasource: Arc<Mutex<dyn IDataSource>>) -> FuseQueryResult<Arc<Self>> {
         let settings = SettingMap::create();
         settings.try_set_u64("max_threads", 8, "The maximum number of threads to execute the request. By default, it is determined automatically.")?;
-        settings.try_set_u64("max_block_size", 10000, "Maximum block size for reading")?;
+        settings.try_set_u64("max_block_size", 65536, "Maximum block size for reading")?;
         settings.try_set_string(
             "default_db",
             "default".to_string(),
