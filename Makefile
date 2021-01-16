@@ -12,6 +12,7 @@ build:
 
 profile:
 	RUSTFLAGS="-g" cargo flamegraph --bin=fuse-query
+
 lint:
 	cargo fmt
 	cargo +nightly clippy -- -D warnings

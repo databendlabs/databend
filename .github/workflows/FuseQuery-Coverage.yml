@@ -19,7 +19,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         id: toolchain
         with:
-          toolchain: nightly
+          toolchain: stable
           override: true
 
       - name: Run cargo test

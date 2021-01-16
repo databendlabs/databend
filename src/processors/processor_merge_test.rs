@@ -25,6 +25,6 @@ async fn test_processor_merge() -> crate::error::FuseQueryResult<()> {
     let v = stream.next().await.unwrap().unwrap();
     let actual = v.column(0).as_any().downcast_ref::<UInt64Array>().unwrap();
     let expect = &UInt64Array::from(vec![0, 1]);
-    assert_eq!(expect.clone(), actual.clone());
+    assert_eq!(expect.clone().values(), actual.clone().values());
     Ok(())
 }
