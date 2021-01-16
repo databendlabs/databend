@@ -81,20 +81,20 @@ impl Stream for NumbersStream {
     ) -> Poll<Option<Self::Item>> {
         Poll::Ready(if (self.block_index as usize) < self.blocks.len() {
             let current = self.blocks[self.block_index].clone();
-            let length = (current.end - current.begin) as usize;
             self.block_index += 1;
 
+            let length = (current.end - current.begin) as usize;
+            let size = length * mem::size_of::<u64>();
+
             unsafe {
-                let layout = Layout::from_size_align_unchecked(
-                    length * mem::size_of::<u64>(),
-                    mem::size_of::<u64>(),
-                );
+                let layout = Layout::from_size_align_unchecked(size, mem::size_of::<u64>());
                 let p = std::alloc::alloc(layout) as *mut u64;
                 for i in current.begin..current.end {
                     *p.offset((i - current.begin) as isize) = i;
                 }
+
                 let buffer =
-                    Buffer::from_raw_parts(NonNull::new(p as *mut u8).unwrap(), length, length);
+                    Buffer::from_raw_parts(NonNull::new(p as *mut u8).unwrap(), size, size);
 
                 let arr_data = ArrayData::builder(DataType::UInt64)
                     .len(length)
