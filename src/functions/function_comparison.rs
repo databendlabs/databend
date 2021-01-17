@@ -10,8 +10,7 @@ use crate::datavalues::{
     DataColumnarValue, DataSchema, DataType, DataValue, DataValueComparisonOperator,
 };
 use crate::error::{FuseQueryError, FuseQueryResult};
-
-use crate::functions::Function;
+use crate::functions::{FactoryFuncRef, Function};
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
@@ -23,6 +22,18 @@ pub struct ComparisonFunction {
 }
 
 impl ComparisonFunction {
+    pub fn register(map: FactoryFuncRef) -> FuseQueryResult<()> {
+        let mut map = map.as_ref().lock()?;
+        map.insert("=", ComparisonFunction::try_create_eq_func);
+        map.insert("<", ComparisonFunction::try_create_lt_func);
+        map.insert(">", ComparisonFunction::try_create_gt_func);
+        map.insert("<=", ComparisonFunction::try_create_lt_eq_func);
+        map.insert(">=", ComparisonFunction::try_create_gt_eq_func);
+        map.insert("!=", ComparisonFunction::try_create_not_eq_func);
+        map.insert("<>", ComparisonFunction::try_create_not_eq_func);
+        Ok(())
+    }
+
     pub fn try_create_eq_func(args: &[Function]) -> FuseQueryResult<Function> {
         Self::try_create(DataValueComparisonOperator::Eq, args)
     }

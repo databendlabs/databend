@@ -11,7 +11,7 @@ use crate::datavalues::{
     DataValueArithmeticOperator,
 };
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::functions::Function;
+use crate::functions::{FactoryFuncRef, Function};
 
 #[derive(Clone, Debug)]
 pub struct AggregatorFunction {
@@ -22,6 +22,16 @@ pub struct AggregatorFunction {
 }
 
 impl AggregatorFunction {
+    pub fn register(map: FactoryFuncRef) -> FuseQueryResult<()> {
+        let mut map = map.as_ref().lock()?;
+        map.insert("count", AggregatorFunction::try_create_count_func);
+        map.insert("min", AggregatorFunction::try_create_min_func);
+        map.insert("max", AggregatorFunction::try_create_max_func);
+        map.insert("sum", AggregatorFunction::try_create_sum_func);
+        map.insert("avg", AggregatorFunction::try_create_avg_func);
+        Ok(())
+    }
+
     pub fn try_create_count_func(args: &[Function]) -> FuseQueryResult<Function> {
         Self::try_create(DataValueAggregateOperator::Count, args)
     }

@@ -4,58 +4,41 @@
 
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
+use std::sync::{Arc, Mutex};
 
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::{
     AggregatorFunction, ArithmeticFunction, ComparisonFunction, Function, LogicFunction,
+    UDFFunction,
 };
 
 pub struct FunctionFactory;
-type Func = fn(args: &[Function]) -> FuseQueryResult<Function>;
+pub type FactoryFunc = fn(args: &[Function]) -> FuseQueryResult<Function>;
+pub type FactoryFuncRef = Arc<Mutex<IndexMap<&'static str, FactoryFunc>>>;
 
 lazy_static! {
-    static ref FACTORY: IndexMap<&'static str, Func> = {
-        let mut map: IndexMap<&'static str, Func> = IndexMap::new();
-
-        // Arithmetic functions.
-        map.insert("+", ArithmeticFunction::try_create_add_func);
-        map.insert("-", ArithmeticFunction::try_create_sub_func);
-        map.insert("*", ArithmeticFunction::try_create_mul_func);
-        map.insert("/", ArithmeticFunction::try_create_div_func);
-
-        // Comparison functions.
-        map.insert("=", ComparisonFunction::try_create_eq_func);
-        map.insert("<", ComparisonFunction::try_create_lt_func);
-        map.insert(">", ComparisonFunction::try_create_gt_func);
-        map.insert("<=", ComparisonFunction::try_create_lt_eq_func);
-        map.insert(">=", ComparisonFunction::try_create_gt_eq_func);
-        map.insert("!=", ComparisonFunction::try_create_not_eq_func);
-        map.insert("<>", ComparisonFunction::try_create_not_eq_func);
-
-        // Logic functions.
-        map.insert("and", LogicFunction::try_create_and_func);
-        map.insert("or", LogicFunction::try_create_or_func);
-
-        // Aggregate functions.
-        map.insert("count", AggregatorFunction::try_create_count_func);
-        map.insert("min", AggregatorFunction::try_create_min_func);
-        map.insert("max", AggregatorFunction::try_create_max_func);
-        map.insert("sum", AggregatorFunction::try_create_sum_func);
-        map.insert("avg", AggregatorFunction::try_create_avg_func);
-
+    static ref FACTORY: FactoryFuncRef = {
+        let map: FactoryFuncRef = Arc::new(Mutex::new(IndexMap::new()));
+        ArithmeticFunction::register(map.clone()).unwrap();
+        ComparisonFunction::register(map.clone()).unwrap();
+        LogicFunction::register(map.clone()).unwrap();
+        AggregatorFunction::register(map.clone()).unwrap();
+        UDFFunction::register(map.clone()).unwrap();
         map
     };
 }
 
 impl FunctionFactory {
     pub fn get(name: &str, args: &[Function]) -> FuseQueryResult<Function> {
-        let creator = FACTORY
+        let map = FACTORY.as_ref().lock()?;
+        let creator = map
             .get(&*name.to_lowercase())
             .ok_or_else(|| FuseQueryError::Internal(format!("Unsupported Function: {}", name)))?;
         (creator)(args)
     }
 
     pub fn registered_names() -> Vec<String> {
-        FACTORY.keys().into_iter().map(|x| x.to_string()).collect()
+        let map = FACTORY.as_ref().lock().unwrap();
+        map.keys().into_iter().map(|x| x.to_string()).collect()
     }
 }

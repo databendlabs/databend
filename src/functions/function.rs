@@ -10,7 +10,7 @@ use crate::error::FuseQueryResult;
 use crate::functions::function_logic::LogicFunction;
 use crate::functions::{
     AggregatorFunction, AliasFunction, ArithmeticFunction, ComparisonFunction, ConstantFunction,
-    FieldFunction,
+    FieldFunction, UDFFunction,
 };
 
 #[derive(Clone)]
@@ -22,6 +22,7 @@ pub enum Function {
     Comparison(ComparisonFunction),
     Logic(LogicFunction),
     Aggregator(AggregatorFunction),
+    UDF(UDFFunction),
 }
 
 impl Function {
@@ -34,6 +35,7 @@ impl Function {
             Function::Comparison(v) => v.return_type(input_schema),
             Function::Logic(v) => v.return_type(input_schema),
             Function::Aggregator(v) => v.return_type(input_schema),
+            Function::UDF(v) => v.return_type(input_schema),
         }
     }
 
@@ -46,6 +48,7 @@ impl Function {
             Function::Comparison(v) => v.nullable(input_schema),
             Function::Logic(v) => v.nullable(input_schema),
             Function::Aggregator(v) => v.nullable(input_schema),
+            Function::UDF(v) => v.nullable(input_schema),
         }
     }
 
@@ -58,6 +61,7 @@ impl Function {
             Function::Comparison(v) => v.eval(block),
             Function::Logic(v) => v.eval(block),
             Function::Aggregator(v) => v.eval(block),
+            Function::UDF(v) => v.eval(block),
         }
     }
 
@@ -70,6 +74,7 @@ impl Function {
             Function::Comparison(v) => v.set_depth(depth),
             Function::Logic(v) => v.set_depth(depth),
             Function::Aggregator(v) => v.set_depth(depth),
+            Function::UDF(v) => v.set_depth(depth),
         }
     }
 
@@ -85,6 +90,7 @@ impl Function {
             Function::Comparison(v) => v.accumulate(block),
             Function::Logic(v) => v.accumulate(block),
             Function::Aggregator(v) => v.accumulate(block),
+            Function::UDF(v) => v.accumulate(block),
         }
     }
 
@@ -98,6 +104,7 @@ impl Function {
             Function::Comparison(v) => v.accumulate_result(),
             Function::Logic(v) => v.accumulate_result(),
             Function::Aggregator(v) => v.accumulate_result(),
+            Function::UDF(v) => v.accumulate_result(),
         }
     }
 
@@ -113,6 +120,7 @@ impl Function {
             Function::Comparison(v) => v.merge(states),
             Function::Logic(v) => v.merge(states),
             Function::Aggregator(v) => v.merge(states),
+            Function::UDF(v) => v.merge(states),
         }
     }
 
@@ -127,6 +135,7 @@ impl Function {
             Function::Comparison(v) => v.merge_result(),
             Function::Logic(v) => v.merge_result(),
             Function::Aggregator(v) => v.merge_result(),
+            Function::UDF(v) => v.merge_result(),
         }
     }
 }
@@ -141,6 +150,7 @@ impl fmt::Debug for Function {
             Function::Comparison(v) => write!(f, "{}", v),
             Function::Logic(v) => write!(f, "{}", v),
             Function::Aggregator(v) => write!(f, "{}", v),
+            Function::UDF(v) => write!(f, "{}", v),
         }
     }
 }

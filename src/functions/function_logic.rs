@@ -10,8 +10,7 @@ use crate::datavalues::{
     DataColumnarValue, DataSchema, DataType, DataValue, DataValueLogicOperator,
 };
 use crate::error::{FuseQueryError, FuseQueryResult};
-
-use crate::functions::Function;
+use crate::functions::{FactoryFuncRef, Function};
 
 #[derive(Clone)]
 pub struct LogicFunction {
@@ -23,6 +22,13 @@ pub struct LogicFunction {
 }
 
 impl LogicFunction {
+    pub fn register(map: FactoryFuncRef) -> FuseQueryResult<()> {
+        let mut map = map.as_ref().lock()?;
+        map.insert("and", LogicFunction::try_create_and_func);
+        map.insert("or", LogicFunction::try_create_or_func);
+        Ok(())
+    }
+
     pub fn try_create_and_func(args: &[Function]) -> FuseQueryResult<Function> {
         Self::try_create(DataValueLogicOperator::And, args)
     }

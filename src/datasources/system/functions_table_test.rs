@@ -20,6 +20,6 @@ async fn test_functions_table() -> crate::error::FuseQueryResult<()> {
     let stream = table.read(ctx, vec![]).await?;
     let blocks = stream.try_collect::<Vec<_>>().await?;
     let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
-    assert_eq!(18, rows);
+    assert!(rows > 18);
     Ok(())
 }

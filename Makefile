@@ -1,5 +1,5 @@
 test:
-	cargo +nightly test -- --nocapture 
+	cargo test -- --nocapture
 
 bench:
 	cargo bench -- --nocapture

@@ -10,7 +10,7 @@ use crate::datavalues::{
     DataColumnarValue, DataSchema, DataType, DataValue, DataValueArithmeticOperator,
 };
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::functions::Function;
+use crate::functions::{FactoryFuncRef, Function};
 
 #[derive(Clone)]
 pub struct ArithmeticFunction {
@@ -21,6 +21,15 @@ pub struct ArithmeticFunction {
 }
 
 impl ArithmeticFunction {
+    pub fn register(map: FactoryFuncRef) -> FuseQueryResult<()> {
+        let mut map = map.as_ref().lock()?;
+        map.insert("+", ArithmeticFunction::try_create_add_func);
+        map.insert("-", ArithmeticFunction::try_create_sub_func);
+        map.insert("*", ArithmeticFunction::try_create_mul_func);
+        map.insert("/", ArithmeticFunction::try_create_div_func);
+        Ok(())
+    }
+
     pub fn try_create_add_func(args: &[Function]) -> FuseQueryResult<Function> {
         Self::try_create(DataValueArithmeticOperator::Add, args)
     }
