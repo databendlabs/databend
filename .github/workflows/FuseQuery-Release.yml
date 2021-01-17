@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+env:
+  RUSTFLAGS: -C target-cpu=native
+
 jobs:
   publish:
     name: ${{ matrix.os }} for ${{ matrix.target }}

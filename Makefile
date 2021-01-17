@@ -5,10 +5,10 @@ bench:
 	cargo bench -- --nocapture
 
 run:
-	cargo run --release -- --nocapture
+	RUSTFLAGS="-C target-cpu=native" cargo run --release -- --nocapture
 
 build:
-	cargo build --release
+	RUSTFLAGS="-C target-cpu=native" cargo build --release
 
 profile:
 	RUSTFLAGS="-g" cargo flamegraph --bin=fuse-query

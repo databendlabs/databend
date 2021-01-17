@@ -43,8 +43,5 @@ pretty_assertions = "0.6"
 name = "bench_main"
 harness = false
 
-[build]
-rustflags = ["-C", "target-cpu=native"]
-
 [profile.release]
 lto = "thin"
