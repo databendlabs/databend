@@ -14,6 +14,7 @@ jobs:
         target:
           - x86_64-unknown-linux-musl
           - armv7-unknown-linux-musleabihf
+          - x86_64-apple-darwin
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
@@ -27,6 +28,12 @@ jobs:
             release_name: linux-armv7
             cross: true
             strip: false
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: target/x86_64-apple-darwin/release/fuse-query
+            release_name: macos-x86_64
+            cross: false
+            strip: true
 
     steps:
       - name: Checkout code
