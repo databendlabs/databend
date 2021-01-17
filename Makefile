@@ -2,20 +2,20 @@ test:
 	cargo +nightly test -- --nocapture 
 
 bench:
-	RUSTFLAGS="-C target-cpu=native" cargo +nightly bench -- --nocapture
+	cargo bench -- --nocapture
 
 run:
-	RUSTFLAGS="-C target-cpu=native" cargo +nightly run --release -- --nocapture
+	cargo run --release -- --nocapture
 
 build:
-	RUSTFLAGS="-C target-cpu=native" cargo +nightly build --release
+	cargo build --release
 
 profile:
 	RUSTFLAGS="-g" cargo flamegraph --bin=fuse-query
 
 lint:
 	cargo fmt
-	cargo +nightly clippy -- -D warnings
+	cargo clippy -- -D warnings
 
 docker:
 	docker build --network host -f docker/Dockerfile -t datafusedev/fuse-query .
