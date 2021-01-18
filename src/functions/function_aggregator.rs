@@ -62,10 +62,9 @@ impl AggregatorFunction {
 
         let state = match op {
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(0)),
-            DataValueAggregateOperator::Avg => DataValue::Struct(vec![
-                DataValue::Float64(Some(0.0)),
-                DataValue::UInt64(Some(0)),
-            ]),
+            DataValueAggregateOperator::Avg => {
+                DataValue::Struct(vec![DataValue::Null, DataValue::UInt64(Some(0))])
+            }
             _ => DataValue::Null,
         };
         Ok(Function::Aggregator(AggregatorFunction {

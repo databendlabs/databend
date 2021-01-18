@@ -205,9 +205,9 @@ macro_rules! typed_data_value_div {
     ($OLD_VALUE:expr, $DELTA:expr, $SCALAR:ident, $TYPE:ident) => {{
         DataValue::$SCALAR(match ($OLD_VALUE, $DELTA) {
             (None, None) => None,
-            (Some(a), None) => Some(a.clone() as $TYPE),
-            (None, Some(b)) => Some(b.clone() as $TYPE),
-            (Some(a), Some(b)) => Some((*a as $TYPE) / (*b as $TYPE)),
+            (Some(a), None) => Some(a.clone() as f64),
+            (None, Some(b)) => Some(b.clone() as f64),
+            (Some(a), Some(b)) => Some((*a as f64) / (*b as f64)),
         })
     }};
 }

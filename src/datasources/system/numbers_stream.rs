@@ -87,7 +87,7 @@ impl Stream for NumbersStream {
             let size = length * mem::size_of::<u64>();
 
             unsafe {
-                let layout = Layout::from_size_align_unchecked(size, mem::size_of::<u64>());
+                let layout = Layout::from_size_align_unchecked(size, arrow::memory::ALIGNMENT);
                 let p = std::alloc::alloc(layout) as *mut u64;
                 for i in current.begin..current.end {
                     *p.offset((i - current.begin) as isize) = i;

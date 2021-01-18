@@ -107,7 +107,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
 
     fn on_init(&mut self, db: &str, writer: InitWriter<W>) -> FuseQueryResult<()> {
         debug!("MySQL use db:{}", db);
-        match self.ctx.set_current_database(db) {
+        match self.ctx.set_default_db(db.to_string()) {
             Ok(..) => {}
             Err(e) => {
                 error!("{}", e);

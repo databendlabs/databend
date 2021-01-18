@@ -18,7 +18,7 @@ macro_rules! typed_data_value_operator {
                 typed_data_value_mul!($LHS, $RHS, $SCALAR, $TYPE)
             }
             DataValueArithmeticOperator::Div => {
-                typed_data_value_div!($LHS, $RHS, $SCALAR, $TYPE)
+                typed_data_value_div!($LHS, $RHS, Float64, $TYPE)
             }
         }
     }};
