@@ -2,55 +2,28 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use crate::contexts::SettingMap;
-use crate::error::FuseQueryResult;
+use crate::contexts::Settings;
+use crate::error::{FuseQueryError, FuseQueryResult};
 
 #[derive(Clone, Debug)]
 pub struct Options {
-    settings: SettingMap,
+    settings: Settings,
 }
 
 impl Options {
     pub fn try_create() -> FuseQueryResult<Options> {
-        let settings = SettingMap::create();
-        settings.try_set_string("log_level", "debug".to_string(), "Log level")?;
-        settings.try_set_u64("num_cpus", num_cpus::get() as u64, "The numbers of the pc")?;
-        settings.try_set_string(
-            "mysql_listen_host",
-            "127.0.0.1".to_string(),
-            "MySQL server bind host",
-        )?;
-        settings.try_set_u64("mysql_handler_port", 3307, "MySQL protocol port")?;
-        settings.try_set_u64(
-            "mysql_handler_thread_num",
-            256,
-            "MySQL handler thread pool numbers",
-        )?;
-        Ok(Options { settings })
+        let settings = Settings::create();
+        let options = Options { settings };
+        options.initial_settings()?;
+
+        Ok(options)
     }
 
-    pub fn get_log_level(&self) -> FuseQueryResult<String> {
-        let key = "log_level";
-        self.settings.try_get_string(key)
-    }
-
-    pub fn get_num_cpus(&self) -> FuseQueryResult<u64> {
-        let key = "num_cpus";
-        self.settings.try_get_u64(key)
-    }
-
-    pub fn get_mysql_listen_host(&self) -> FuseQueryResult<String> {
-        let key = "mysql_listen_host";
-        self.settings.try_get_string(key)
-    }
-
-    pub fn get_mysql_handler_port(&self) -> FuseQueryResult<u64> {
-        let key = "mysql_handler_port";
-        self.settings.try_get_u64(key)
-    }
-
-    pub fn get_mysql_handler_thread_num(&self) -> FuseQueryResult<u64> {
-        let key = "mysql_handler_thread_num";
-        self.settings.try_get_u64(key)
+    apply_macros! { apply_getter_setter_settings, apply_initial_settings, apply_update_settings,
+        ("log_level", String, "debug".to_string(), "Log Level".to_string()),
+        ("num_cpus", u64, num_cpus::get() as u64, "The numbers of the pc".to_string()),
+        ("mysql_listen_host", String, "127.0.0.1".to_string(), "MySQL server bind host".to_string()),
+        ("mysql_handler_port", u64, 3307, "MySQL protocol port".to_string()),
+        ("mysql_handler_thread_num", u64, 256, "MySQL handler thread pool numbers".to_string())
     }
 }

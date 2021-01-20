@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::contexts::FuseQueryContextRef;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::datavalues::{DataField, DataSchema, DataType};
-use crate::error::{FuseQueryError, FuseQueryResult};
+use crate::error::FuseQueryResult;
 use crate::executors::IExecutor;
 use crate::planners::SettingPlan;
 
@@ -36,24 +36,14 @@ impl IExecutor for SettingExecutor {
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
         let plan = self.set.clone();
         match plan.variable.to_lowercase().as_str() {
-            "max_block_size" => {
-                let value = plan.value.parse::<u64>()?;
-                self.ctx.set_max_block_size(value)?;
-            }
-            "max_threads" => {
-                let value = plan.value.parse::<u64>()?;
-                self.ctx.set_max_threads(value)?;
-            }
             // To be ompatiable with some drivers
             // eg: usql and mycli
             "sql_mode" | "autocommit" => {}
             _ => {
-                return Err(FuseQueryError::Internal(format!(
-                    "Unknown variable: {:?}",
-                    plan.variable
-                )))
+                self.ctx.update_settings(&plan.variable, plan.value)?;
             }
         }
+
         debug!("Set variable executor: {:?}", self.ctx);
 
         let schema = Arc::new(DataSchema::new(vec![DataField::new(

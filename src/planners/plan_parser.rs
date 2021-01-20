@@ -169,7 +169,7 @@ impl Planner {
     ) -> FuseQueryResult<PlanNode> {
         match relation {
             sqlparser::ast::TableFactor::Table { name, args, .. } => {
-                let mut db_name = ctx.get_current_database()?;
+                let mut db_name = ctx.get_default_db()?;
                 let mut table_name = name.to_string();
                 if name.0.len() == 2 {
                     db_name = name.0[0].to_string();
