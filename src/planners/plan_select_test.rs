@@ -21,7 +21,7 @@ fn test_select_wildcard_plan() -> crate::error::FuseQueryResult<()> {
     let select = PlanNode::Select(SelectPlan {
         plan: Box::new(plan),
     });
-    let expect = "└─ Projection: a:Utf8";
+    let expect = "Projection: a:Utf8\n  ";
     let actual = format!("{:?}", select);
     assert_eq!(expect, actual);
     Ok(())

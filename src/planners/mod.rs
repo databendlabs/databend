@@ -7,6 +7,7 @@ mod plan_limit_test;
 mod plan_projection_test;
 mod plan_select_test;
 
+mod parser;
 mod plan_aggregate;
 mod plan_builder;
 mod plan_display;
@@ -26,8 +27,10 @@ mod plan_read_datasource;
 mod plan_scan;
 mod plan_select;
 mod plan_setting;
+mod plan_visitor;
 mod planner;
 
+pub use self::parser::{DFExplainPlan, DFExplainType, DFParser, DFStatement};
 pub use self::plan_aggregate::AggregatePlan;
 pub use self::plan_builder::PlanBuilder;
 pub use self::plan_empty::EmptyPlan;
@@ -44,4 +47,5 @@ pub use self::plan_read_datasource::ReadDataSourcePlan;
 pub use self::plan_scan::ScanPlan;
 pub use self::plan_select::SelectPlan;
 pub use self::plan_setting::SettingPlan;
+pub use self::plan_visitor::{GraphvizVisitor, IndentVisitor, PlanVisitor};
 pub use self::planner::Planner;

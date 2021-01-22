@@ -7,8 +7,8 @@ use std::sync::Arc;
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef};
 use crate::error::FuseQueryResult;
 use crate::planners::{
-    field, AggregatePlan, EmptyPlan, ExplainPlan, ExpressionPlan, FilterPlan, LimitPlan, PlanNode,
-    ProjectionPlan, ScanPlan, SelectPlan,
+    field, AggregatePlan, DFExplainType, EmptyPlan, ExplainPlan, ExpressionPlan, FilterPlan,
+    LimitPlan, PlanNode, ProjectionPlan, ScanPlan, SelectPlan,
 };
 
 pub struct PlanBuilder {
@@ -130,6 +130,7 @@ impl PlanBuilder {
 
     pub fn explain(&self) -> FuseQueryResult<Self> {
         Ok(Self::from(&PlanNode::Explain(ExplainPlan {
+            typ: DFExplainType::Syntax,
             plan: Box::new(self.plan.clone()),
         })))
     }
