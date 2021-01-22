@@ -13,7 +13,7 @@ fn test_limit_plan() -> crate::error::FuseQueryResult<()> {
         n: 33,
         input: Arc::from(PlanBuilder::empty().build()?),
     });
-    let expect = "└─ Limit: 33";
+    let expect = "Limit: 33\n  ";
     let actual = format!("{:?}", limit);
     assert_eq!(expect, actual);
     Ok(())

@@ -13,7 +13,7 @@ use crate::datavalues::{DataField, DataSchema, DataType, StringArray};
 use crate::error::FuseQueryResult;
 use crate::executors::IExecutor;
 use crate::optimizers::Optimizer;
-use crate::planners::{ExplainPlan, PlanNode};
+use crate::planners::{DFExplainType, ExplainPlan, PlanNode};
 use crate::processors::PipelineBuilder;
 
 pub struct ExplainExecutor {
@@ -44,13 +44,19 @@ impl IExecutor for ExplainExecutor {
         )]));
 
         let plan = Optimizer::create().optimize(&self.explain.plan)?;
-        let pipeline = PipelineBuilder::create(self.ctx.clone(), plan).build()?;
+        let result = match self.explain.typ {
+            DFExplainType::Graph => {
+                format!("{}", plan.display_graphviz())
+            }
+            DFExplainType::Pipeline => {
+                let pipeline = PipelineBuilder::create(self.ctx.clone(), plan).build()?;
+                format!("{:?}", pipeline)
+            }
+            _ => format!("{:?}", PlanNode::Explain(self.explain.clone())),
+        };
         let block = DataBlock::create(
             schema.clone(),
-            vec![Arc::new(StringArray::from(vec![
-                format!("{:?}", PlanNode::Explain(self.explain.clone())).as_str(),
-                format!("{:?}", pipeline).as_str(),
-            ]))],
+            vec![Arc::new(StringArray::from(vec![result.as_str()]))],
         );
         debug!("Explain executor result: {:?}", block);
 

@@ -1,104 +1,151 @@
-// Copyright 2020 The FuseQuery Authors.
+// Copyright 2021 The FuseQuery Authors.
 //
 // Code is licensed under AGPL License, Version 3.0.
 
 use std::fmt;
+use std::fmt::Display;
 
-use crate::planners::PlanNode;
-
-/// Formatter settings for PlanStep debug.
-struct FormatterSettings {
-    pub indent: usize,
-    pub indent_char: &'static str,
-    pub prefix: &'static str,
-}
+use crate::planners::{GraphvizVisitor, IndentVisitor, PlanNode, PlanVisitor};
 
 impl PlanNode {
-    fn format(&self, f: &mut fmt::Formatter, setting: &mut FormatterSettings) -> fmt::Result {
-        if setting.indent > 0 {
-            writeln!(f)?;
-            for _ in 0..setting.indent {
-                write!(f, "{}", setting.indent_char)?;
-            }
+    pub fn accept<V>(&self, visitor: &mut V) -> std::result::Result<bool, V::Error>
+    where
+        V: PlanVisitor,
+    {
+        if !visitor.pre_visit(self)? {
+            return Ok(false);
         }
-        match self {
-            PlanNode::Projection(v) => {
-                let schema = v.schema();
-                write!(f, "{} Projection: ", setting.prefix)?;
-                for i in 0..v.expr.len() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{:?}:{:?}", v.expr[i], schema.fields()[i].data_type())?;
-                }
-                write!(f, "")
-            }
-            PlanNode::Aggregate(v) => {
-                let schema = v.schema();
-                write!(f, "{} Aggregate: ", setting.prefix)?;
-                for i in 0..v.aggr_expr.len() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(
-                        f,
-                        "{:?}:{:?}",
-                        v.aggr_expr[i],
-                        schema.fields()[i].data_type()
-                    )?;
-                }
-                for i in 0..v.group_expr.len() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(
-                        f,
-                        "{:?}:{:?}",
-                        v.group_expr[i],
-                        schema.fields()[i].data_type()
-                    )?;
-                }
-                write!(f, "")
-            }
-            PlanNode::Filter(v) => write!(f, "{} Filter: {:?}", setting.prefix, v.predicate),
-            PlanNode::Limit(v) => write!(f, "{} Limit: {}", setting.prefix, v.n),
-            PlanNode::ReadSource(v) => {
-                write!(
-                    f,
-                    "{} ReadDataSource: scan parts [{}]{}",
-                    setting.prefix,
-                    v.partitions.len(),
-                    v.description
-                )?;
-                write!(f, "")
-            }
 
-            // Empty.
-            PlanNode::Empty(_) => write!(f, ""),
-            PlanNode::Scan(_) => write!(f, ""),
-            PlanNode::Select(_) => {
-                write!(f, "")
-            }
-            PlanNode::Explain(_) => write!(f, ""),
-            PlanNode::SetVariable(_) => write!(f, ""),
+        let recurse = match self {
+            PlanNode::Projection(plan) => plan.input.accept(visitor)?,
+            PlanNode::Aggregate(plan) => plan.input.accept(visitor)?,
+            PlanNode::Filter(plan) => plan.input.accept(visitor)?,
+            PlanNode::Limit(plan) => plan.input.accept(visitor)?,
+            PlanNode::Scan(..)
+            | PlanNode::Empty(..)
+            | PlanNode::Select(..)
+            | PlanNode::Explain(..)
+            | PlanNode::SetVariable(..)
+            | PlanNode::ReadSource(..) => true,
+        };
+        if !recurse {
+            return Ok(false);
         }
+
+        if !visitor.post_visit(self)? {
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
+
+    pub fn display_indent(&self) -> impl fmt::Display + '_ {
+        // Boilerplate structure to wrap LogicalPlan with something
+        // that that can be formatted
+        struct Wrapper<'a>(&'a PlanNode);
+        impl<'a> fmt::Display for Wrapper<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                let with_schema = false;
+                let mut visitor = IndentVisitor::new(f, with_schema);
+                self.0.accept(&mut visitor).unwrap();
+                Ok(())
+            }
+        }
+        Wrapper(self)
+    }
+
+    pub fn display_graphviz(&self) -> impl fmt::Display + '_ {
+        // Boilerplate structure to wrap LogicalPlan with something
+        // that that can be formatted
+        struct Wrapper<'a>(&'a PlanNode);
+        impl<'a> fmt::Display for Wrapper<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                writeln!(
+                    f,
+                    "// Begin DataFuse GraphViz Plan (see https://graphviz.org)"
+                )?;
+                writeln!(f, "digraph {{")?;
+
+                let mut visitor = GraphvizVisitor::new(f);
+
+                visitor.set_with_schema(true);
+                visitor.pre_visit_plan("LogicalPlan")?;
+                self.0.accept(&mut visitor).unwrap();
+                visitor.post_visit_plan()?;
+
+                writeln!(f, "}}")?;
+                writeln!(f, "// End DataFuse GraphViz Plan")?;
+                Ok(())
+            }
+        }
+        Wrapper(self)
+    }
+
+    /// Return a `format`able structure with the a human readable
+    /// description of this LogicalPlan node per node, not including
+    /// children.
+    pub fn display(&self) -> impl fmt::Display + '_ {
+        // Boilerplate structure to wrap LogicalPlan with something
+        // that that can be formatted
+        struct Wrapper<'a>(&'a PlanNode);
+        impl<'a> fmt::Display for Wrapper<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                match self.0 {
+                    PlanNode::Empty(_) => {
+                        write!(f, "")
+                    }
+                    PlanNode::Projection(plan) => {
+                        write!(f, "Projection: ")?;
+                        for i in 0..plan.expr.len() {
+                            if i > 0 {
+                                write!(f, ", ")?;
+                            }
+                            write!(
+                                f,
+                                "{:?}:{:?}",
+                                plan.expr[i],
+                                plan.schema().fields()[i].data_type()
+                            )?;
+                        }
+                        Ok(())
+                    }
+                    PlanNode::Aggregate(plan) => write!(
+                        f,
+                        "Aggregate: groupBy=[{:?}], aggr=[{:?}]",
+                        plan.group_expr, plan.aggr_expr
+                    ),
+
+                    PlanNode::Filter(plan) => write!(f, "Filter: {:?}", plan.predicate),
+                    PlanNode::Limit(plan) => {
+                        write!(f, "Limit: {}", plan.n)
+                    }
+
+                    PlanNode::ReadSource(plan) => {
+                        write!(
+                            f,
+                            "ReadDataSource: scan parts [{}]{}",
+                            plan.partitions.len(),
+                            plan.description
+                        )
+                    }
+                    PlanNode::Explain(plan) => {
+                        write!(f, "{:?}", plan.plan)
+                    }
+                    PlanNode::Select(plan) => {
+                        write!(f, "{:?}", plan.plan)
+                    }
+                    PlanNode::Scan(_) | PlanNode::SetVariable(_) => {
+                        write!(f, "")
+                    }
+                }
+            }
+        }
+        Wrapper(self)
     }
 }
 
 impl fmt::Debug for PlanNode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let setting = &mut FormatterSettings {
-            indent: 0,
-            indent_char: "  ",
-            prefix: "└─",
-        };
-
-        let mut plans = self.subplan_to_list().map_err(|_| std::fmt::Error)?;
-        plans.reverse();
-        for node in plans.iter() {
-            node.format(f, setting)?;
-            setting.indent += 1;
-        }
-        write!(f, "")
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.display_indent().fmt(f)
     }
 }

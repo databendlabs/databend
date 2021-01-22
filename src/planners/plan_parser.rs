@@ -6,7 +6,8 @@ use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::{DataSchema, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
-    ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, Planner, SelectPlan, SettingPlan,
+    DFExplainPlan, DFParser, DFStatement, ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode,
+    Planner, SelectPlan, SettingPlan,
 };
 use sqlparser::ast::{FunctionArg, Statement, TableFactor};
 
@@ -16,8 +17,7 @@ impl Planner {
         ctx: FuseQueryContextRef,
         query: &str,
     ) -> FuseQueryResult<PlanNode> {
-        let dialect = sqlparser::dialect::GenericDialect {};
-        let statements = sqlparser::parser::Parser::parse_sql(&dialect, query)?;
+        let statements = DFParser::parse_sql(query)?;
         if statements.len() != 1 {
             return Err(FuseQueryError::Internal(
                 "Only support single query".to_string(),
@@ -26,8 +26,22 @@ impl Planner {
         self.statement_to_plan(ctx, &statements[0])
     }
 
-    /// Builds plan from AST statement.
     pub fn statement_to_plan(
+        &self,
+        ctx: FuseQueryContextRef,
+        statement: &DFStatement,
+    ) -> FuseQueryResult<PlanNode> {
+        match statement {
+            DFStatement::Statement(v) => self.sql_statement_to_plan(ctx, &v),
+            DFStatement::Explain(v) => self.sql_explain_to_plan(ctx, &v),
+            _ => Err(FuseQueryError::Internal(
+                "Only Statement are implemented".to_string(),
+            )),
+        }
+    }
+
+    /// Builds plan from AST statement.
+    pub fn sql_statement_to_plan(
         &self,
         ctx: FuseQueryContextRef,
         statement: &sqlparser::ast::Statement,
@@ -37,7 +51,6 @@ impl Planner {
             Statement::SetVariable {
                 variable, value, ..
             } => self.set_variable_to_plan(ctx, variable, value),
-            Statement::Explain { statement, .. } => self.explain_to_plan(ctx, statement),
             _ => Err(FuseQueryError::Internal(format!(
                 "Unsupported statement {:?}",
                 statement
@@ -46,13 +59,14 @@ impl Planner {
     }
 
     /// Generate a logic plan from an EXPLAIN
-    pub fn explain_to_plan(
+    pub fn sql_explain_to_plan(
         &self,
         ctx: FuseQueryContextRef,
-        statement: &sqlparser::ast::Statement,
+        explain: &DFExplainPlan,
     ) -> FuseQueryResult<PlanNode> {
-        let plan = self.statement_to_plan(ctx, statement)?;
+        let plan = self.sql_statement_to_plan(ctx, &explain.statement)?;
         Ok(PlanNode::Explain(ExplainPlan {
+            typ: explain.typ,
             plan: Box::new(plan),
         }))
     }

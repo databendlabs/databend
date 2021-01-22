@@ -4,12 +4,13 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_explain_executor() -> crate::error::FuseQueryResult<()> {
+    use crate::tests;
     use futures::stream::StreamExt;
+    use pretty_assertions::assert_eq;
 
     use crate::contexts::*;
     use crate::executors::*;
     use crate::planners::*;
-    use crate::tests;
 
     let test_source = tests::NumberTestData::create();
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;

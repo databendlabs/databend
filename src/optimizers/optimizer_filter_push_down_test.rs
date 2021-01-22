@@ -21,9 +21,9 @@ fn test_filter_push_down_optimizer() -> crate::error::FuseQueryResult<()> {
     let mut filter_push_down = FilterPushDownOptimizer::create();
     let optimized = filter_push_down.optimize(&plan)?;
     let expect = "\
-    └─ Projection: (number + 1) as c1:UInt64, number as c2:UInt64\
-    \n  └─ Filter: ((((number + 1) + number) + 1) = 1)\
-    \n    └─ ReadDataSource: scan parts [8](Read from system.numbers_mt table, Read Rows:10000, Read Bytes:80000)";
+    Projection: (number + 1) as c1:UInt64, number as c2:UInt64\
+    \n  Filter: ((((number + 1) + number) + 1) = 1)\
+    \n    ReadDataSource: scan parts [8](Read from system.numbers_mt table, Read Rows:10000, Read Bytes:80000)";
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);
 
