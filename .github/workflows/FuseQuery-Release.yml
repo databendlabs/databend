@@ -16,6 +16,7 @@ jobs:
       matrix:
         target:
           - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
           - armv7-unknown-linux-musleabihf
           - x86_64-apple-darwin
         include:
@@ -25,6 +26,12 @@ jobs:
             release_name: linux-x86_64
             cross: true
             strip: true
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            artifact_name: target/aarch64-unknown-linux-musl/release/fuse-query
+            release_name: linux-aarch64
+            cross: true
+            strip: false
           - os: ubuntu-latest
             target: armv7-unknown-linux-musleabihf
             artifact_name: target/armv7-unknown-linux-musleabihf/release/fuse-query
