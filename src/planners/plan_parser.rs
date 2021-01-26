@@ -160,12 +160,23 @@ impl Planner {
         from: &[sqlparser::ast::TableWithJoins],
     ) -> FuseQueryResult<PlanNode> {
         match from.len() {
-            0 => Ok(PlanBuilder::empty().build()?),
+            0 => self.plan_with_dummy_source(ctx),
             1 => self.plan_table_with_joins(ctx, &from[0]),
             _ => Err(FuseQueryError::Internal(
                 "Cannot support JOIN clause".to_string(),
             )),
         }
+    }
+
+    fn plan_with_dummy_source(&self, ctx: FuseQueryContextRef) -> FuseQueryResult<PlanNode> {
+        let db_name = "system";
+        let table_name = "one";
+        let table = ctx.get_table(db_name, table_name)?;
+        let schema = table.schema()?;
+
+        let scan = PlanBuilder::scan(db_name, table_name, schema.as_ref(), None, None)?.build()?;
+        let datasource_plan = table.read_plan(ctx, scan)?;
+        Ok(PlanNode::ReadSource(datasource_plan))
     }
 
     fn plan_table_with_joins(

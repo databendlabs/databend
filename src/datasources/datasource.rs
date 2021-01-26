@@ -34,6 +34,7 @@ impl DataSource {
         )?;
         datasource.add_table("system", Arc::new(system::FunctionsTable::create()))?;
         datasource.add_table("system", Arc::new(system::SettingsTable::create()))?;
+        datasource.add_table("system", Arc::new(system::OneTable::create()))?;
 
         Ok(datasource)
     }
