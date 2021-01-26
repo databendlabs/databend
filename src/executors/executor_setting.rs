@@ -36,7 +36,7 @@ impl IExecutor for SettingExecutor {
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
         let plan = self.set.clone();
         match plan.variable.to_lowercase().as_str() {
-            // To be ompatiable with some drivers
+            // To be compatible with some drivers
             // eg: usql and mycli
             "sql_mode" | "autocommit" => {}
             _ => {

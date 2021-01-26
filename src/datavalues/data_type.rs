@@ -24,6 +24,7 @@ fn is_numeric(dt: &DataType) -> bool {
     )
 }
 
+// TODO: modify this, because this function is not right, eg: UInt8 * UInt8 should be UInt16
 pub fn numerical_coercion(
     op: &str,
     lhs_type: &DataType,
