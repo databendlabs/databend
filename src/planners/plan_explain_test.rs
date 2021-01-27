@@ -14,7 +14,7 @@ fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
     let plan = Planner::new().build_from_sql(
         ctx.clone(),
-        "explain select number as c1, number as c2, number as c3,(number+1) from system.numbers_mt where (number+1)=4",
+        "explain select number as c1, number as c2, number as c3,(number+1) from system.numbers_mt(10000) where (number+1)=4",
     )?;
 
     let explain = PlanNode::Explain(ExplainPlan {

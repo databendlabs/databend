@@ -11,7 +11,7 @@ use crate::contexts::FuseQueryContextRef;
 use crate::datasources::{system::NumbersStream, ITable, Partition, Partitions, Statistics};
 use crate::datastreams::SendableDataBlockStream;
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, DataValue};
-use crate::error::FuseQueryResult;
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{ExpressionPlan, PlanNode, ReadDataSourcePlan, ScanPlan};
 
 pub struct NumbersTable {
@@ -85,6 +85,11 @@ impl ITable for NumbersTable {
                 if let ExpressionPlan::Constant(DataValue::Int64(Some(v))) = args {
                     total = v as u64;
                 }
+            } else {
+                return Err(FuseQueryError::Internal(format!(
+                    "Must have one argument for table: system.{}",
+                    self.name()
+                )));
             }
         }
 

@@ -24,9 +24,16 @@ impl ArithmeticFunction {
     pub fn register(map: FactoryFuncRef) -> FuseQueryResult<()> {
         let mut map = map.as_ref().lock()?;
         map.insert("+", ArithmeticFunction::try_create_add_func);
+        map.insert("add", ArithmeticFunction::try_create_add_func);
+
         map.insert("-", ArithmeticFunction::try_create_sub_func);
+        map.insert("minus", ArithmeticFunction::try_create_sub_func);
+
         map.insert("*", ArithmeticFunction::try_create_mul_func);
+        map.insert("multiply", ArithmeticFunction::try_create_mul_func);
+
         map.insert("/", ArithmeticFunction::try_create_div_func);
+        map.insert("divide", ArithmeticFunction::try_create_div_func);
         Ok(())
     }
 
@@ -80,13 +87,17 @@ impl ArithmeticFunction {
     }
 
     pub fn eval(&mut self, block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
-        Ok(DataColumnarValue::Array(
-            datavalues::data_array_arithmetic_op(
-                self.op.clone(),
-                &self.left.eval(block)?,
-                &self.right.eval(block)?,
-            )?,
-        ))
+        let left = &self.left.eval(block)?;
+        let right = &self.right.eval(block)?;
+        let result = datavalues::data_array_arithmetic_op(self.op.clone(), left, right)?;
+
+        match (left, right) {
+            (DataColumnarValue::Scalar(_), DataColumnarValue::Scalar(_)) => {
+                let data_value = DataValue::try_from_array(&result, 0)?;
+                Ok(DataColumnarValue::Scalar(data_value))
+            }
+            _ => Ok(DataColumnarValue::Array(result)),
+        }
     }
 
     pub fn accumulate(&mut self, block: &DataBlock) -> FuseQueryResult<()> {

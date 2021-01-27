@@ -115,7 +115,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
                     Arc::new(Int16Array::from(vec![1, 2, 3])),
                 ],
             ),
-            expect: Arc::new(Int64Array::from(vec![4, 1, 0])),
+            expect: Arc::new(Float64Array::from(vec![4.0, 1.5, 0.6666666666666666])),
             error: "",
         },
     ];
