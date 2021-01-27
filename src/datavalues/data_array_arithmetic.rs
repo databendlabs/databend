@@ -40,16 +40,16 @@ pub fn data_array_arithmetic_op(
     let right_array = arrow::compute::cast(&right_array, &coercion_type)?;
     match op {
         DataValueArithmeticOperator::Add => {
-            arrow_primitive_array_op!(&left_array, &right_array, add)
+            arrow_primitive_array_op!(&left_array, &right_array, &coercion_type, add)
         }
         DataValueArithmeticOperator::Sub => {
-            arrow_primitive_array_op!(&left_array, &right_array, subtract)
+            arrow_primitive_array_op!(&left_array, &right_array, &coercion_type, subtract)
         }
         DataValueArithmeticOperator::Mul => {
-            arrow_primitive_array_op!(&left_array, &right_array, multiply)
+            arrow_primitive_array_op!(&left_array, &right_array, &coercion_type, multiply)
         }
         DataValueArithmeticOperator::Div => {
-            arrow_primitive_array_op!(&left_array, &right_array, divide)
+            arrow_primitive_array_op!(&left_array, &right_array, &coercion_type, divide)
         }
     }
 }

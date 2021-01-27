@@ -24,7 +24,7 @@ fn is_numeric(dt: &DataType) -> bool {
     )
 }
 
-// TODO: modify this, because this function is not right, eg: UInt8 * UInt8 should be UInt16
+// TODO: refactor this, because this function is not right, eg: UInt8 * UInt8 should be UInt16
 pub fn numerical_coercion(
     op: &str,
     lhs_type: &DataType,
@@ -39,6 +39,10 @@ pub fn numerical_coercion(
             lhs_type, op, rhs_type,
         )));
     };
+
+    if op == "/" {
+        return Ok(Float64);
+    }
 
     // same type => all good
     if lhs_type == rhs_type {

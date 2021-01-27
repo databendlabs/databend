@@ -15,7 +15,7 @@ fn test_filter_push_down_optimizer() -> crate::error::FuseQueryResult<()> {
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
     let plan = Planner::new().build_from_sql(
         ctx.clone(),
-        "select (number+1) as c1, number as c2 from system.numbers_mt where (c1+c2+1)=1",
+        "select (number+1) as c1, number as c2 from system.numbers_mt(10000) where (c1+c2+1)=1",
     )?;
 
     let mut filter_push_down = FilterPushDownOptimizer::create();

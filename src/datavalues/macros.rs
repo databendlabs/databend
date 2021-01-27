@@ -40,8 +40,8 @@ macro_rules! compute_utf8_op {
 /// The arrow_primitive_array_op macro only evaluates for primitive types
 /// like integers and floats.
 macro_rules! arrow_primitive_array_op {
-    ($LEFT:expr, $RIGHT:expr, $OP:ident) => {
-        match ($LEFT).data_type() {
+    ($LEFT:expr, $RIGHT:expr, $RESULT:expr, $OP:ident) => {
+        match $RESULT {
             DataType::Int8 => compute_op!($LEFT, $RIGHT, $OP, Int8Array),
             DataType::Int16 => compute_op!($LEFT, $RIGHT, $OP, Int16Array),
             DataType::Int32 => compute_op!($LEFT, $RIGHT, $OP, Int32Array),
