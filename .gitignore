@@ -10,7 +10,15 @@ Cargo.lock
 
 # cargo
 .cargo/
+examples/
 
 # profile
 flamegraph.*
 perf.*
+
+# tests
+*.stderr
+*.stdout
+
+# python
+venv/
