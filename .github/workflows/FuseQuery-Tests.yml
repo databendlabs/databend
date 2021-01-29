@@ -1,0 +1,17 @@
+name: FuseQuery tests
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Builds
+        id: docker_build
+        run: |
+          docker build -t fuse-test -f docker/stateless/Dockerfile .
+      - name: Stateless Tests
+        run: docker run --rm fuse-test
