@@ -71,29 +71,23 @@ impl PipelineBuilder {
                     })?;
                 }
                 PlanNode::ReadSource(plan) => {
-                    let mut shuffle = vec![];
-                    let workers = self.ctx.get_max_threads()? as usize;
-                    let workers = if workers == 0 || workers >= plan.partitions.len() {
+                    // Bind plan partitions to context.
+                    self.ctx.try_update_partitions(plan.partitions.clone())?;
+
+                    let max_threads = self.ctx.get_max_threads()? as usize;
+                    let workers = if max_threads == 0 {
                         1
+                    } else if max_threads > plan.partitions.len() {
+                        plan.partitions.len()
                     } else {
-                        let parts = plan.partitions.len();
-                        if parts % workers != 0 {
-                            parts / workers + 1
-                        } else {
-                            parts / workers
-                        }
+                        max_threads
                     };
 
-                    for chunk in plan.partitions.chunks(workers) {
-                        shuffle.push(chunk);
-                    }
-
-                    for partition in shuffle {
+                    for _i in 0..workers {
                         let source = SourceTransform::try_create(
                             self.ctx.clone(),
                             plan.db.as_str(),
                             plan.table.as_str(),
-                            partition.to_vec(),
                         )?;
                         pipeline.add_source(Arc::new(source))?;
                     }

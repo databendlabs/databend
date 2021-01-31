@@ -2,17 +2,19 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use crate::contexts::Settings;
-use crate::datasources::{IDataSource, ITable, Statistics};
+use crate::datasources::{IDataSource, ITable, Partition, Partitions, Statistics};
 use crate::datavalues::DataValue;
 use crate::error::{FuseQueryError, FuseQueryResult};
 
 pub struct FuseQueryContext {
+    settings: Settings,
     datasource: Arc<Mutex<dyn IDataSource>>,
     statistics: Mutex<Statistics>,
-    settings: Settings,
+    partition_queue: Mutex<VecDeque<Partition>>,
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
@@ -24,10 +26,34 @@ impl FuseQueryContext {
             settings,
             datasource,
             statistics: Mutex::new(Statistics::default()),
+            partition_queue: Mutex::new(VecDeque::new()),
         };
 
         ctx.initial_settings()?;
         Ok(Arc::new(ctx))
+    }
+
+    // Steal n partitions from the partition pool by the pipeline worker.
+    // This also can steal the partitions from distributed node.
+    pub fn try_fetch_partitions(&self, num: usize) -> FuseQueryResult<Partitions> {
+        let mut partitions = vec![];
+        for _ in 0..num {
+            match self.partition_queue.lock()?.pop_back() {
+                None => break,
+                Some(partition) => {
+                    partitions.push(partition);
+                }
+            }
+        }
+        Ok(partitions)
+    }
+
+    // Update the context partition pool from the pipeline builder.
+    pub fn try_update_partitions(&self, partitions: Partitions) -> FuseQueryResult<()> {
+        for part in partitions {
+            self.partition_queue.lock()?.push_back(part);
+        }
+        Ok(())
     }
 
     pub fn get_settings(&self) -> FuseQueryResult<Vec<DataValue>> {

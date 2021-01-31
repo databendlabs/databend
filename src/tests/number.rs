@@ -61,6 +61,7 @@ impl NumberTestData {
         numbers: i64,
     ) -> FuseQueryResult<SourceTransform> {
         let plan = self.number_read_source_plan_for_test(ctx.clone(), numbers)?;
-        SourceTransform::try_create(ctx, self.db, self.table, plan.partitions)
+        ctx.try_update_partitions(plan.partitions)?;
+        SourceTransform::try_create(ctx, self.db, self.table)
     }
 }

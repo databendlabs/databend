@@ -57,11 +57,7 @@ impl ITable for OneTable {
         })
     }
 
-    async fn read(
-        &self,
-        _: FuseQueryContextRef,
-        _parts: Vec<Partition>,
-    ) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn read(&self, _: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
         let block = DataBlock::create(
             self.schema.clone(),
             vec![Arc::new(UInt8Array::from(vec![1u8]))],

@@ -17,7 +17,7 @@ async fn test_settings_table() -> crate::error::FuseQueryResult<()> {
 
     let table = SettingsTable::create();
     table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
-    let stream = table.read(ctx, vec![]).await?;
+    let stream = table.read(ctx).await?;
     let blocks = stream.try_collect::<Vec<_>>().await?;
     let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
     assert_eq!(3, rows);

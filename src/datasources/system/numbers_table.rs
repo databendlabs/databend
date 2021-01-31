@@ -112,15 +112,7 @@ impl ITable for NumbersTable {
         })
     }
 
-    async fn read(
-        &self,
-        ctx: FuseQueryContextRef,
-        parts: Vec<Partition>,
-    ) -> FuseQueryResult<SendableDataBlockStream> {
-        Ok(Box::pin(NumbersStream::create(
-            ctx.get_max_block_size()?,
-            self.schema.clone(),
-            parts,
-        )))
+    async fn read(&self, ctx: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
+        Ok(Box::pin(NumbersStream::create(ctx, self.schema.clone())))
     }
 }

@@ -58,11 +58,7 @@ impl ITable for FunctionsTable {
         })
     }
 
-    async fn read(
-        &self,
-        _ctx: FuseQueryContextRef,
-        _parts: Vec<Partition>,
-    ) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn read(&self, _ctx: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
         let func_names = FunctionFactory::registered_names();
         let names: Vec<&str> = func_names.iter().map(|x| x.as_ref()).collect();
         let block = DataBlock::create(
