@@ -17,9 +17,7 @@ mod function_constant;
 mod function_factory;
 mod function_field;
 mod function_logic;
-mod function_udf;
-mod function_udf_example;
-mod function_udf_test;
+mod udf;
 
 pub use self::function::Function;
 pub use self::function_aggregator::AggregatorFunction;
@@ -30,5 +28,3 @@ pub use self::function_constant::ConstantFunction;
 pub use self::function_factory::{FactoryFuncRef, FunctionFactory};
 pub use self::function_field::FieldFunction;
 pub use self::function_logic::LogicFunction;
-pub use self::function_udf::UDFFunction;
-pub use self::function_udf_example::UDFExampleFunction;

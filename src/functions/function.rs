@@ -9,8 +9,8 @@ use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 use crate::error::FuseQueryResult;
 use crate::functions::function_logic::LogicFunction;
 use crate::functions::{
-    AggregatorFunction, AliasFunction, ArithmeticFunction, ComparisonFunction, ConstantFunction,
-    FieldFunction, UDFFunction,
+    udf::UDFFunction, AggregatorFunction, AliasFunction, ArithmeticFunction, ComparisonFunction,
+    ConstantFunction, FieldFunction,
 };
 
 #[derive(Clone)]

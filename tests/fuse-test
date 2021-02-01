@@ -65,7 +65,7 @@ def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_fi
         pattern = "{client} {options} < " + pattern
 
     command = pattern.format(**params)
-    #print(command)
+    # print(command)
 
     proc = Popen(command, shell=True, env=os.environ)
     start_time = datetime.now()
@@ -462,6 +462,6 @@ if __name__ == '__main__':
             alphabet = string.ascii_lowercase + string.digits
             return ''.join(random.choice(alphabet) for _ in range(length))
         args.database = 'test_{suffix}'.format(suffix=random_str())
-    args.client_with_database += ' ' + args.database
+    # args.client_with_database += ' ' + args.database
 
     main(args)

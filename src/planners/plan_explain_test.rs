@@ -24,7 +24,7 @@ fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
     let expect = "\
     Projection: number as c1:UInt64, number as c2:UInt64, number as c3:UInt64, (number + 1):UInt64\
     \n  Filter: ((number + 1) = 4)\
-    \n    ReadDataSource: scan parts [8](Read from system.numbers_mt table, Read Rows:10000, Read Bytes:80000)";
+    \n    ReadDataSource: scan parts [1](Read from system.numbers_mt table, Read Rows:10000, Read Bytes:80000)";
     let actual = format!("{:?}", explain);
     assert_eq!(expect, actual);
     Ok(())

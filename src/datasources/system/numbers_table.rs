@@ -99,11 +99,22 @@ impl ITable for NumbersTable {
         };
         ctx.set_statistics(&statistics)?;
 
+        let workers = if "numbers" == self.table || total <= ctx.get_max_block_size()? {
+            1
+        } else {
+            let n = (total as f64 / ctx.get_max_block_size()? as f64).ceil() as u64;
+            if n <= ctx.get_max_threads()? {
+                n
+            } else {
+                ctx.get_max_threads()?
+            }
+        };
+
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
-            partitions: self.generate_parts(ctx.get_max_threads()?, total),
+            partitions: self.generate_parts(workers, total),
             statistics: statistics.clone(),
             description: format!(
                 "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",

@@ -7,9 +7,9 @@ use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 
 use crate::error::{FuseQueryError, FuseQueryResult};
+use crate::functions::udf;
 use crate::functions::{
     AggregatorFunction, ArithmeticFunction, ComparisonFunction, Function, LogicFunction,
-    UDFFunction,
 };
 
 pub struct FunctionFactory;
@@ -23,7 +23,7 @@ lazy_static! {
         ComparisonFunction::register(map.clone()).unwrap();
         LogicFunction::register(map.clone()).unwrap();
         AggregatorFunction::register(map.clone()).unwrap();
-        UDFFunction::register(map.clone()).unwrap();
+        udf::UDFFunction::register(map.clone()).unwrap();
         map
     };
 }
