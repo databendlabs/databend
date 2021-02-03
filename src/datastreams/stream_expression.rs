@@ -10,21 +10,24 @@ use crate::datablocks::DataBlock;
 use crate::datastreams::SendableDataBlockStream;
 use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
-use crate::functions::Function;
+use crate::functions::IFunction;
+
+type ExpressionFunc =
+    fn(&DataSchemaRef, DataBlock, Vec<Box<dyn IFunction>>) -> FuseQueryResult<DataBlock>;
 
 pub struct ExpressionStream {
     input: SendableDataBlockStream,
     schema: DataSchemaRef,
-    exprs: Vec<Function>,
-    func: fn(&DataSchemaRef, DataBlock, Vec<Function>) -> FuseQueryResult<DataBlock>,
+    exprs: Vec<Box<dyn IFunction>>,
+    func: ExpressionFunc,
 }
 
 impl ExpressionStream {
     pub fn try_create(
         input: SendableDataBlockStream,
         schema: DataSchemaRef,
-        exprs: Vec<Function>,
-        func: fn(&DataSchemaRef, DataBlock, Vec<Function>) -> FuseQueryResult<DataBlock>,
+        exprs: Vec<Box<dyn IFunction>>,
+        func: ExpressionFunc,
     ) -> FuseQueryResult<Self> {
         Ok(ExpressionStream {
             input,

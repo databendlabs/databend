@@ -11,11 +11,12 @@ async fn test_explain_executor() -> crate::error::FuseQueryResult<()> {
     use crate::contexts::*;
     use crate::executors::*;
     use crate::planners::*;
+    use crate::sql::*;
 
     let test_source = tests::NumberTestData::create();
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
 
-    if let PlanNode::Explain(plan) = Planner::new().build_from_sql(
+    if let PlanNode::Explain(plan) = PlanParser::new().build_from_sql(
         ctx.clone(),
         "explain select number from system.numbers_mt(10) where (number+1)=4",
     )? {

@@ -7,7 +7,7 @@ use std::fmt;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 use crate::error::FuseQueryResult;
-use crate::functions::Function;
+use crate::functions::IFunction;
 
 #[derive(Clone, Debug)]
 pub struct ConstantFunction {
@@ -15,37 +15,39 @@ pub struct ConstantFunction {
 }
 
 impl ConstantFunction {
-    pub fn try_create(value: DataValue) -> FuseQueryResult<Function> {
-        Ok(Function::Constant(ConstantFunction { value }))
+    pub fn try_create(value: DataValue) -> FuseQueryResult<Box<dyn IFunction>> {
+        Ok(Box::new(ConstantFunction { value }))
     }
+}
 
-    pub fn return_type(&self, _input_schema: &DataSchema) -> FuseQueryResult<DataType> {
+impl IFunction for ConstantFunction {
+    fn return_type(&self, _input_schema: &DataSchema) -> FuseQueryResult<DataType> {
         Ok(self.value.data_type())
     }
 
-    pub fn nullable(&self, _input_schema: &DataSchema) -> FuseQueryResult<bool> {
+    fn nullable(&self, _input_schema: &DataSchema) -> FuseQueryResult<bool> {
         Ok(self.value.is_null())
     }
 
-    pub fn eval(&self, _block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
+    fn eval(&self, _block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
         Ok(DataColumnarValue::Scalar(self.value.clone()))
     }
 
-    pub fn set_depth(&mut self, _depth: usize) {}
+    fn set_depth(&mut self, _depth: usize) {}
 
-    pub fn accumulate(&mut self, _block: &DataBlock) -> FuseQueryResult<()> {
+    fn accumulate(&mut self, _block: &DataBlock) -> FuseQueryResult<()> {
         Ok(())
     }
 
-    pub fn accumulate_result(&self) -> FuseQueryResult<Vec<DataValue>> {
+    fn accumulate_result(&self) -> FuseQueryResult<Vec<DataValue>> {
         Ok(vec![self.value.clone()])
     }
 
-    pub fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
+    fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
         Ok(())
     }
 
-    pub fn merge_result(&self) -> FuseQueryResult<DataValue> {
+    fn merge_result(&self) -> FuseQueryResult<DataValue> {
         Ok(self.value.clone())
     }
 }

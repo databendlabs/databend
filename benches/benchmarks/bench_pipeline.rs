@@ -8,14 +8,15 @@ use futures::stream::StreamExt;
 use fuse_query::contexts::FuseQueryContext;
 use fuse_query::error::FuseQueryResult;
 use fuse_query::executors::SelectExecutor;
-use fuse_query::planners::{PlanNode, Planner};
+use fuse_query::planners::PlanNode;
+use fuse_query::sql::PlanParser;
 use fuse_query::tests;
 
 async fn pipeline_executor(sql: &str) -> FuseQueryResult<()> {
     let test_source = tests::NumberTestData::create();
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
 
-    if let PlanNode::Select(plan) = Planner::new().build_from_sql(ctx.clone(), sql)? {
+    if let PlanNode::Select(plan) = PlanParser::new().build_from_sql(ctx.clone(), sql)? {
         let executor = SelectExecutor::try_create(ctx, plan)?;
         let mut stream = executor.execute().await?;
         while let Some(_block) = stream.next().await {}

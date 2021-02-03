@@ -1,10 +1,11 @@
-// Copyright 2020 The FuseQuery Authors.
+// Copyright 2020-2021 The FuseQuery Authors.
 //
 // Code is licensed under AGPL License, Version 3.0.
 //
 // Borrow from apache/arrow/rust/datafusion/src/sql/parser.rs
 // See NOTICE.md
 
+use crate::planners::DFExplainType;
 use sqlparser::{
     ast::{ColumnDef, ColumnOptionDef, Statement as SQLStatement, TableConstraint},
     dialect::{keywords::Keyword, Dialect, GenericDialect},
@@ -43,13 +44,6 @@ pub struct CreateExternalTable {
     pub has_header: bool,
     /// Path to file
     pub location: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum DFExplainType {
-    Syntax,
-    Graph,
-    Pipeline,
 }
 
 /// DataFusion extension DDL for `EXPLAIN` and `EXPLAIN VERBOSE`

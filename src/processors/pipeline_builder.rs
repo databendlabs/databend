@@ -9,7 +9,7 @@ use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::PlanNode;
 use crate::processors::Pipeline;
 use crate::transforms::{
-    AggregateFinalTransform, AggregatePartialTransform, FilterTransform, LimitTransform,
+    AggregatorFinalTransform, AggregatorPartialTransform, FilterTransform, LimitTransform,
     ProjectionTransform, SourceTransform,
 };
 
@@ -49,7 +49,7 @@ impl PipelineBuilder {
                 }
                 PlanNode::Aggregate(plan) => {
                     pipeline.add_simple_transform(|| {
-                        Ok(Box::new(AggregatePartialTransform::try_create(
+                        Ok(Box::new(AggregatorPartialTransform::try_create(
                             plan.schema.clone(),
                             plan.aggr_expr.clone(),
                         )?))
@@ -57,7 +57,7 @@ impl PipelineBuilder {
 
                     pipeline.merge_processor()?;
                     pipeline.add_simple_transform(|| {
-                        Ok(Box::new(AggregateFinalTransform::try_create(
+                        Ok(Box::new(AggregatorFinalTransform::try_create(
                             plan.schema.clone(),
                             plan.aggr_expr.clone(),
                         )?))

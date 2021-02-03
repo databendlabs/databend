@@ -8,6 +8,7 @@ fn test_udf_function() -> crate::error::FuseQueryResult<()> {
 
     use crate::datablocks::*;
     use crate::datavalues::*;
+    use crate::functions::udfs::UDFExampleFunction;
     use crate::functions::*;
 
     #[allow(dead_code)]
@@ -18,7 +19,7 @@ fn test_udf_function() -> crate::error::FuseQueryResult<()> {
         block: DataBlock,
         expect: DataArrayRef,
         error: &'static str,
-        func: Function,
+        func: Box<dyn IFunction>,
     }
 
     let schema = Arc::new(DataSchema::new(vec![
@@ -46,14 +47,14 @@ fn test_udf_function() -> crate::error::FuseQueryResult<()> {
     }];
 
     for t in tests {
-        let mut func = t.func;
+        let func = t.func;
         if let Err(e) = func.eval(&t.block) {
             assert_eq!(t.error, e.to_string());
         }
 
         // Display check.
         let expect_display = t.display.to_string();
-        let actual_display = format!("{:?}", func);
+        let actual_display = format!("{}", func);
         assert_eq!(expect_display, actual_display);
 
         // Nullable check.

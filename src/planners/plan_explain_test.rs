@@ -6,25 +6,23 @@
 fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
     use pretty_assertions::assert_eq;
 
-    use crate::contexts::*;
     use crate::planners::*;
     use crate::tests;
 
     let test_source = tests::NumberTestData::create();
-    let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
-    let plan = Planner::new().build_from_sql(
-        ctx.clone(),
-        "explain select number as c1, number as c2, number as c3,(number+1) from system.numbers_mt(10000) where (number+1)=4",
-    )?;
-
+    let plan = PlanBuilder::create(test_source.number_schema_for_test()?)
+        .project(vec![
+            ExpressionPlan::Alias("c1".to_string(), Box::new(field("number"))),
+            ExpressionPlan::Alias("c2".to_string(), Box::new(field("number"))),
+        ])?
+        .filter(add(field("number"), constant(1)).eq(constant(4)))?
+        .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
         typ: DFExplainType::Syntax,
         plan: Box::new(plan),
     });
-    let expect = "\
-    Projection: number as c1:UInt64, number as c2:UInt64, number as c3:UInt64, (number + 1):UInt64\
-    \n  Filter: ((number + 1) = 4)\
-    \n    ReadDataSource: scan parts [8](Read from system.numbers_mt table, Read Rows:10000, Read Bytes:80000)";
+    let expect = "Filter: ((number + 1) = 4)\
+    \n  Projection: number as c1:UInt64, number as c2:UInt64\n    ";
     let actual = format!("{:?}", explain);
     assert_eq!(expect, actual);
     Ok(())

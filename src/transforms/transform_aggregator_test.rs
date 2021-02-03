@@ -3,7 +3,7 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_transform_projection() -> crate::error::FuseQueryResult<()> {
+async fn test_transform_aggregator() -> crate::error::FuseQueryResult<()> {
     use futures::stream::StreamExt;
     use std::sync::Arc;
 
@@ -35,14 +35,14 @@ async fn test_transform_projection() -> crate::error::FuseQueryResult<()> {
         .build()?
     {
         pipeline.add_simple_transform(|| {
-            Ok(Box::new(AggregatePartialTransform::try_create(
+            Ok(Box::new(AggregatorPartialTransform::try_create(
                 plan.schema.clone(),
                 plan.aggr_expr.clone(),
             )?))
         })?;
         pipeline.merge_processor()?;
         pipeline.add_simple_transform(|| {
-            Ok(Box::new(AggregateFinalTransform::try_create(
+            Ok(Box::new(AggregatorFinalTransform::try_create(
                 plan.schema.clone(),
                 plan.aggr_expr.clone(),
             )?))

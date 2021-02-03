@@ -1,4 +1,4 @@
-// Copyright 2020 The FuseQuery Authors.
+// Copyright 2020-2021 The FuseQuery Authors.
 //
 // Code is licensed under AGPL License, Version 3.0.
 
@@ -8,19 +8,21 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
 
     use crate::datablocks::DataBlock;
     use crate::datavalues::*;
+    use crate::functions::aggregators::*;
+    use crate::functions::arithmetics::*;
     use crate::functions::*;
 
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
-        evals: usize,
-        args: Vec<Function>,
+        eval_nums: usize,
+        args: Vec<Box<dyn IFunction>>,
         display: &'static str,
         nullable: bool,
         block: DataBlock,
         expect: DataValue,
         error: &'static str,
-        func: Function,
+        func: Box<dyn IFunction>,
     }
 
     let schema = Arc::new(DataSchema::new(vec![
@@ -41,67 +43,67 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
     let tests = vec![
         Test {
             name: "count-passed",
-            evals: 1,
+            eval_nums: 1,
             args: vec![field_a.clone(), field_b.clone()],
             display: "Count(a)",
             nullable: false,
-            func: AggregatorFunction::try_create_count_func(&[FieldFunction::try_create("a")?])?,
+            func: AggregatorCountFunction::try_create(&[FieldFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::UInt64(Some(4)),
             error: "",
         },
         Test {
             name: "max-passed",
-            evals: 2,
+            eval_nums: 2,
             args: vec![field_a.clone(), field_b.clone()],
             display: "Max(a)",
             nullable: false,
-            func: AggregatorFunction::try_create_max_func(&[FieldFunction::try_create("a")?])?,
+            func: AggregatorMaxFunction::try_create(&[FieldFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::Int64(Some(4)),
             error: "",
         },
         Test {
             name: "min-passed",
-            evals: 2,
+            eval_nums: 2,
             args: vec![field_a.clone(), field_b.clone()],
             display: "Min(a)",
             nullable: false,
-            func: AggregatorFunction::try_create_min_func(&[FieldFunction::try_create("a")?])?,
+            func: AggregatorMinFunction::try_create(&[FieldFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::Int64(Some(1)),
             error: "",
         },
         Test {
             name: "avg-passed",
-            evals: 1,
+            eval_nums: 1,
             args: vec![field_a.clone(), field_b.clone()],
             display: "Avg(a)",
             nullable: false,
-            func: AggregatorFunction::try_create_avg_func(&[FieldFunction::try_create("a")?])?,
+            func: AggregatorAvgFunction::try_create(&[FieldFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::Float64(Some(2.5)),
             error: "",
         },
         Test {
             name: "sum-passed",
-            evals: 1,
+            eval_nums: 1,
             args: vec![field_a.clone(), field_b.clone()],
             display: "Sum(a)",
             nullable: false,
-            func: AggregatorFunction::try_create_sum_func(&[FieldFunction::try_create("a")?])?,
+            func: AggregatorSumFunction::try_create(&[FieldFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::Int64(Some(10)),
             error: "",
         },
         Test {
             name: "sum(a)+1-merge-passed",
-            evals: 4,
+            eval_nums: 4,
             args: vec![field_a.clone(), field_b.clone()],
             display: "Sum(a) + 1",
             nullable: false,
-            func: ArithmeticFunction::try_create_add_func(&[
-                AggregatorFunction::try_create_sum_func(&[FieldFunction::try_create("a")?])?,
+            func: ArithmeticAddFunction::try_create_func(&[
+                AggregatorSumFunction::try_create(&[FieldFunction::try_create("a")?])?,
                 ConstantFunction::try_create(DataValue::Int64(Some(1)))?,
             ])?,
             block: block.clone(),
@@ -110,13 +112,13 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "sum(a)/count(a)-merge-passed",
-            evals: 4,
+            eval_nums: 4,
             args: vec![field_a.clone(), field_b.clone()],
             display: "Sum(a)/Count(a)",
             nullable: false,
-            func: ArithmeticFunction::try_create_div_func(&[
-                AggregatorFunction::try_create_sum_func(&[FieldFunction::try_create("a")?])?,
-                AggregatorFunction::try_create_count_func(&[FieldFunction::try_create("a")?])?,
+            func: ArithmeticDivFunction::try_create_func(&[
+                AggregatorSumFunction::try_create(&[FieldFunction::try_create("a")?])?,
+                AggregatorCountFunction::try_create(&[FieldFunction::try_create("a")?])?,
             ])?,
             block: block.clone(),
             expect: DataValue::Float64(Some(2.5)),
@@ -124,17 +126,15 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "(sum(a+1)+2)-merge-passed",
-            evals: 4,
+            eval_nums: 4,
             args: vec![field_a.clone(), field_b.clone()],
             display: "Sum(a+1)+2",
             nullable: false,
-            func: ArithmeticFunction::try_create_add_func(&[
-                AggregatorFunction::try_create_sum_func(&[
-                    ArithmeticFunction::try_create_add_func(&[
-                        FieldFunction::try_create("a")?,
-                        ConstantFunction::try_create(DataValue::Int8(Some(1)))?,
-                    ])?,
-                ])?,
+            func: ArithmeticAddFunction::try_create_func(&[
+                AggregatorSumFunction::try_create(&[ArithmeticAddFunction::try_create_func(&[
+                    FieldFunction::try_create("a")?,
+                    ConstantFunction::try_create(DataValue::Int8(Some(1)))?,
+                ])?])?,
                 ConstantFunction::try_create(DataValue::Int8(Some(2)))?,
             ])?,
             block,
@@ -145,13 +145,13 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
 
     for t in tests {
         let mut func1 = t.func.clone();
-        for _ in 0..t.evals {
+        for _ in 0..t.eval_nums {
             func1.accumulate(&t.block)?;
         }
         let state1 = func1.accumulate_result()?;
 
         let mut func2 = t.func.clone();
-        for _ in 1..t.evals {
+        for _ in 1..t.eval_nums {
             func2.accumulate(&t.block)?;
         }
         let state2 = func2.accumulate_result()?;

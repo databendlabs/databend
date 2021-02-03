@@ -1,4 +1,4 @@
-// Copyright 2020 The FuseQuery Authors.
+// Copyright 2020-2021 The FuseQuery Authors.
 //
 // Code is licensed under AGPL License, Version 3.0.
 
@@ -8,18 +8,18 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
 
     use crate::datablocks::DataBlock;
     use crate::datavalues::*;
+    use crate::functions::arithmetics::*;
     use crate::functions::*;
 
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
-        evals: usize,
         display: &'static str,
         nullable: bool,
         block: DataBlock,
         expect: DataArrayRef,
         error: &'static str,
-        func: Function,
+        func: Box<dyn IFunction>,
     }
 
     let schema = Arc::new(DataSchema::new(vec![
@@ -35,10 +35,9 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
     let tests = vec![
         Test {
             name: "add-int64-passed",
-            evals: 2,
             display: "(a + b)",
             nullable: false,
-            func: ArithmeticFunction::try_create_add_func(&[field_a.clone(), field_b.clone()])?,
+            func: ArithmeticAddFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -52,10 +51,9 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "add-diff-passed",
-            evals: 2,
             display: "(c + a)",
             nullable: false,
-            func: ArithmeticFunction::try_create_add_func(&[field_c.clone(), field_a.clone()])?,
+            func: ArithmeticAddFunction::try_create_func(&[field_c.clone(), field_a.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -69,10 +67,9 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "sub-int64-passed",
-            evals: 2,
             display: "(a - b)",
             nullable: false,
-            func: ArithmeticFunction::try_create_sub_func(&[field_a.clone(), field_b.clone()])?,
+            func: ArithmeticSubFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -86,10 +83,9 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "mul-int64-passed",
-            evals: 2,
             display: "(a * b)",
             nullable: false,
-            func: ArithmeticFunction::try_create_mul_func(&[field_a.clone(), field_b.clone()])?,
+            func: ArithmeticMulFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -103,10 +99,9 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "div-int64-passed",
-            evals: 2,
             display: "(a / b)",
             nullable: false,
-            func: ArithmeticFunction::try_create_div_func(&[field_a.clone(), field_b.clone()])?,
+            func: ArithmeticDivFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -121,14 +116,14 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
     ];
 
     for t in tests {
-        let mut func = t.func;
+        let func = t.func;
         if let Err(e) = func.eval(&t.block) {
             assert_eq!(t.error, e.to_string());
         }
 
         // Display check.
         let expect_display = t.display.to_string();
-        let actual_display = format!("{:?}", func);
+        let actual_display = format!("{}", func);
         assert_eq!(expect_display, actual_display);
 
         // Nullable check.

@@ -6,7 +6,9 @@ use std::fmt;
 
 use crate::datavalues::{DataField, DataSchemaRef, DataValue};
 use crate::error::FuseQueryResult;
-use crate::functions::{AliasFunction, ConstantFunction, FieldFunction, Function, FunctionFactory};
+use crate::functions::{
+    AliasFunction, ConstantFunction, FieldFunction, FunctionFactory, IFunction,
+};
 
 #[derive(Clone)]
 pub enum ExpressionPlan {
@@ -29,19 +31,19 @@ impl ExpressionPlan {
     pub fn to_field(&self, input_schema: &DataSchemaRef) -> FuseQueryResult<DataField> {
         let func = self.to_function()?;
         Ok(DataField::new(
-            format!("{:?}", func).as_str(),
+            format!("{}", func).as_str(),
             func.return_type(&input_schema)?,
             func.nullable(&input_schema)?,
         ))
     }
 
-    fn plan_to_function(&self, depth: usize) -> FuseQueryResult<Function> {
+    fn to_function_with_depth(&self, depth: usize) -> FuseQueryResult<Box<dyn IFunction>> {
         match self {
             ExpressionPlan::Field(ref v) => FieldFunction::try_create(v.as_str()),
             ExpressionPlan::Constant(ref v) => ConstantFunction::try_create(v.clone()),
             ExpressionPlan::BinaryExpression { left, op, right } => {
-                let l = left.plan_to_function(depth)?;
-                let r = right.plan_to_function(depth + 1)?;
+                let l = left.to_function_with_depth(depth)?;
+                let r = right.to_function_with_depth(depth + 1)?;
                 let mut func = FunctionFactory::get(op, &[l, r])?;
                 func.set_depth(depth);
                 Ok(func)
@@ -49,7 +51,7 @@ impl ExpressionPlan {
             ExpressionPlan::Function { op, args } => {
                 let mut funcs = Vec::with_capacity(args.len());
                 for arg in args {
-                    let mut func = arg.plan_to_function(depth + 1)?;
+                    let mut func = arg.to_function_with_depth(depth + 1)?;
                     func.set_depth(depth);
                     funcs.push(func);
                 }
@@ -58,7 +60,7 @@ impl ExpressionPlan {
                 Ok(func)
             }
             ExpressionPlan::Alias(alias, expr) => {
-                let mut func = expr.plan_to_function(depth)?;
+                let mut func = expr.to_function_with_depth(depth)?;
                 func.set_depth(depth);
                 AliasFunction::try_create(alias.clone(), func)
             }
@@ -66,22 +68,12 @@ impl ExpressionPlan {
         }
     }
 
-    pub fn to_function(&self) -> FuseQueryResult<Function> {
-        self.plan_to_function(0)
+    pub fn to_function(&self) -> FuseQueryResult<Box<dyn IFunction>> {
+        self.to_function_with_depth(0)
     }
 
-    pub fn is_aggregate(&self) -> bool {
-        match self {
-            ExpressionPlan::Alias(_, expr) => expr.is_aggregate(),
-            ExpressionPlan::BinaryExpression { left, right, .. } => {
-                left.is_aggregate() || right.is_aggregate()
-            }
-            ExpressionPlan::Function { op, .. } => matches!(
-                op.to_lowercase().as_str(),
-                "max" | "min" | "avg" | "count" | "sum"
-            ),
-            _ => false,
-        }
+    pub fn has_aggregator(&self) -> FuseQueryResult<bool> {
+        Ok(self.to_function()?.is_aggregator())
     }
 }
 

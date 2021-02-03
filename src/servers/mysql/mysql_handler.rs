@@ -17,8 +17,8 @@ use crate::datablocks::DataBlock;
 use crate::datasources::IDataSource;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::executors::ExecutorFactory;
-use crate::planners::Planner;
 use crate::servers::mysql::MySQLStream;
+use crate::sql::PlanParser;
 
 struct Session {
     ctx: FuseQueryContextRef,
@@ -53,7 +53,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
     fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> FuseQueryResult<()> {
         debug!("{}", query);
 
-        let plan = Planner::new().build_from_sql(self.ctx.clone(), query);
+        let plan = PlanParser::new().build_from_sql(self.ctx.clone(), query);
         match plan {
             Ok(v) => match ExecutorFactory::get(self.ctx.clone(), v) {
                 Ok(executor) => {
