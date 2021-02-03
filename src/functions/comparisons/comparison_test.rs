@@ -1,4 +1,4 @@
-// Copyright 2020 The FuseQuery Authors.
+// Copyright 2020-2021 The FuseQuery Authors.
 //
 // Code is licensed under AGPL License, Version 3.0.
 
@@ -8,6 +8,7 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
 
     use crate::datablocks::*;
     use crate::datavalues::*;
+    use crate::functions::comparisons::*;
     use crate::functions::*;
 
     #[allow(dead_code)]
@@ -18,7 +19,7 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
         block: DataBlock,
         expect: DataArrayRef,
         error: &'static str,
-        func: Function,
+        func: Box<dyn IFunction>,
     }
 
     let schema = Arc::new(DataSchema::new(vec![
@@ -34,7 +35,7 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
             name: "eq-passed",
             display: "a = b",
             nullable: false,
-            func: ComparisonFunction::try_create_eq_func(&[field_a.clone(), field_b.clone()])?,
+            func: ComparisonEqFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -49,7 +50,7 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
             name: "gt-passed",
             display: "a > b",
             nullable: false,
-            func: ComparisonFunction::try_create_gt_func(&[field_a.clone(), field_b.clone()])?,
+            func: ComparisonGtFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -64,7 +65,7 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
             name: "gt-eq-passed",
             display: "a >= b",
             nullable: false,
-            func: ComparisonFunction::try_create_gt_eq_func(&[field_a.clone(), field_b.clone()])?,
+            func: ComparisonGtEqFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -79,7 +80,7 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
             name: "lt-passed",
             display: "a < b",
             nullable: false,
-            func: ComparisonFunction::try_create_lt_func(&[field_a.clone(), field_b.clone()])?,
+            func: ComparisonLtFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -94,7 +95,7 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
             name: "lt-eq-passed",
             display: "a <= b",
             nullable: false,
-            func: ComparisonFunction::try_create_lt_eq_func(&[field_a.clone(), field_b.clone()])?,
+            func: ComparisonLtEqFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -109,7 +110,7 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
             name: "not-eq-passed",
             display: "a != b",
             nullable: false,
-            func: ComparisonFunction::try_create_not_eq_func(&[field_a.clone(), field_b.clone()])?,
+            func: ComparisonNotEqFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -131,7 +132,7 @@ fn test_comparison_function() -> crate::error::FuseQueryResult<()> {
 
         // Display check.
         let expect_display = t.display.to_string();
-        let actual_display = format!("{:?}", func);
+        let actual_display = format!("{}", func);
         assert_eq!(expect_display, actual_display);
 
         // Nullable check.

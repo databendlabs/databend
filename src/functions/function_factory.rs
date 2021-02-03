@@ -7,29 +7,31 @@ use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::functions::{
-    AggregatorFunction, ArithmeticFunction, ComparisonFunction, Function, LogicFunction,
-    UDFFunction,
-};
+use crate::functions::aggregators::AggregatorFunction;
+use crate::functions::arithmetics::ArithmeticFunction;
+use crate::functions::comparisons::ComparisonFunction;
+use crate::functions::logics::LogicFunction;
+use crate::functions::udfs::UDFFunction;
+use crate::functions::IFunction;
 
 pub struct FunctionFactory;
-pub type FactoryFunc = fn(args: &[Function]) -> FuseQueryResult<Function>;
+pub type FactoryFunc = fn(args: &[Box<dyn IFunction>]) -> FuseQueryResult<Box<dyn IFunction>>;
 pub type FactoryFuncRef = Arc<Mutex<IndexMap<&'static str, FactoryFunc>>>;
 
 lazy_static! {
     static ref FACTORY: FactoryFuncRef = {
         let map: FactoryFuncRef = Arc::new(Mutex::new(IndexMap::new()));
+        AggregatorFunction::register(map.clone()).unwrap();
         ArithmeticFunction::register(map.clone()).unwrap();
         ComparisonFunction::register(map.clone()).unwrap();
         LogicFunction::register(map.clone()).unwrap();
-        AggregatorFunction::register(map.clone()).unwrap();
         UDFFunction::register(map.clone()).unwrap();
         map
     };
 }
 
 impl FunctionFactory {
-    pub fn get(name: &str, args: &[Function]) -> FuseQueryResult<Function> {
+    pub fn get(name: &str, args: &[Box<dyn IFunction>]) -> FuseQueryResult<Box<dyn IFunction>> {
         let map = FACTORY.as_ref().lock()?;
         let creator = map
             .get(&*name.to_lowercase())

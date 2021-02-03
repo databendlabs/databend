@@ -8,5 +8,5 @@ mod benchmarks;
 
 criterion_main! {
     benchmarks::bench_pipeline::benches,
-    benchmarks::bench_aggregate::benches,
+    benchmarks::bench_aggregator::benches,
 }

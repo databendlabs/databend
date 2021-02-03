@@ -1,4 +1,4 @@
-// Copyright 2020 The FuseQuery Authors.
+// Copyright 2020-2021 The FuseQuery Authors.
 //
 // Code is licensed under AGPL License, Version 3.0.
 
@@ -8,6 +8,7 @@ fn test_logic_function() -> crate::error::FuseQueryResult<()> {
 
     use crate::datablocks::*;
     use crate::datavalues::*;
+    use crate::functions::logics::*;
     use crate::functions::*;
 
     #[allow(dead_code)]
@@ -19,7 +20,7 @@ fn test_logic_function() -> crate::error::FuseQueryResult<()> {
         block: DataBlock,
         expect: DataArrayRef,
         error: &'static str,
-        func: Function,
+        func: Box<dyn IFunction>,
     }
 
     let schema = Arc::new(DataSchema::new(vec![
@@ -36,7 +37,7 @@ fn test_logic_function() -> crate::error::FuseQueryResult<()> {
             func_name: "AndFunction",
             display: "a and b",
             nullable: false,
-            func: LogicFunction::try_create_and_func(&[field_a.clone(), field_b.clone()])?,
+            func: LogicAndFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -52,7 +53,7 @@ fn test_logic_function() -> crate::error::FuseQueryResult<()> {
             func_name: "OrFunction",
             display: "a or b",
             nullable: false,
-            func: LogicFunction::try_create_or_func(&[field_a.clone(), field_b.clone()])?,
+            func: LogicOrFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -66,14 +67,14 @@ fn test_logic_function() -> crate::error::FuseQueryResult<()> {
     ];
 
     for t in tests {
-        let mut func = t.func;
+        let func = t.func;
         if let Err(e) = func.eval(&t.block) {
             assert_eq!(t.error, e.to_string());
         }
 
         // Display check.
         let expect_display = t.display.to_string();
-        let actual_display = format!("{:?}", func);
+        let actual_display = format!("{}", func);
         assert_eq!(expect_display, actual_display);
 
         // Nullable check.

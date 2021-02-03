@@ -42,7 +42,7 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 | [processors](src/processors) | Dataflow Streaming Processor| WIP |
 | [planners](src/planners) | Distributed&Local planners for building processor pipelines| WIP |
 | [servers](src/servers) | Server handler([MySQL](src/servers/mysql)/HTTP) | MySQL |
-| [transforms](src/transforms) | Data Stream Transform([Source](src/transforms/transform_source.rs)/[Filter](src/transforms/transform_filter.rs)/[Projection](src/transforms/transform_projection.rs)/[AggregatorPartial](src/transforms/transform_aggregate_partial.rs)/[AggregatorFinal](src/transforms/transform_aggregate_final.rs)/[Limit](src/transforms/transform_limit.rs)) | WIP |
+| [transforms](src/transforms) | Data Stream Transform([Source](src/transforms/transform_source.rs)/[Filter](src/transforms/transform_filter.rs)/[Projection](src/transforms/transform_projection.rs)/[AggregatorPartial](src/transforms/transform_aggregator_partial.rs)/[AggregatorFinal](src/transforms/transform_aggregator_final.rs)/[Limit](src/transforms/transform_limit.rs)) | WIP |
 
 ## Status
 #### SQL Support

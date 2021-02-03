@@ -17,7 +17,7 @@ macro_rules! bench_suit {
     };};
 }
 
-fn criterion_benchmark_aggregate(c: &mut Criterion) {
+fn criterion_benchmark_aggregator(c: &mut Criterion) {
     let data: Vec<u64> = (0..1000000).collect();
     let arr = Arc::new(UInt64Array::from(data));
     let _ = bench_suit!(c, DataValueAggregateOperator::Count, arr.clone());
@@ -27,5 +27,5 @@ fn criterion_benchmark_aggregate(c: &mut Criterion) {
     let _ = bench_suit!(c, DataValueAggregateOperator::Sum, arr.clone());
 }
 
-criterion_group!(benches, criterion_benchmark_aggregate,);
+criterion_group!(benches, criterion_benchmark_aggregator,);
 criterion_main!(benches);

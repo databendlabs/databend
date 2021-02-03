@@ -17,4 +17,5 @@ pub mod optimizers;
 pub mod planners;
 pub mod processors;
 pub mod servers;
+pub mod sql;
 pub mod transforms;

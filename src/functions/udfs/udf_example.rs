@@ -7,51 +7,51 @@ use std::fmt;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::functions::{Function, UDFFunction};
+use crate::functions::IFunction;
 
-#[derive(Clone, Debug)]
-pub struct UDFExampleFunction {}
+#[derive(Clone)]
+pub struct UDFExampleFunction;
 
 impl UDFExampleFunction {
-    pub fn try_create(_args: &[Function]) -> FuseQueryResult<Function> {
-        Ok(Function::UDF(UDFFunction::UDFExample(
-            UDFExampleFunction {},
-        )))
+    pub fn try_create(_args: &[Box<dyn IFunction>]) -> FuseQueryResult<Box<dyn IFunction>> {
+        Ok(Box::new(UDFExampleFunction {}))
     }
+}
 
-    pub fn return_type(&self, _input_schema: &DataSchema) -> FuseQueryResult<DataType> {
+impl IFunction for UDFExampleFunction {
+    fn return_type(&self, _input_schema: &DataSchema) -> FuseQueryResult<DataType> {
         Ok(DataType::Boolean)
     }
 
-    pub fn nullable(&self, _input_schema: &DataSchema) -> FuseQueryResult<bool> {
+    fn nullable(&self, _input_schema: &DataSchema) -> FuseQueryResult<bool> {
         Ok(false)
     }
 
-    pub fn set_depth(&mut self, _depth: usize) {}
-
-    pub fn eval(&mut self, _block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
+    fn eval(&self, _block: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
         Ok(DataColumnarValue::Scalar(DataValue::Boolean(Some(true))))
     }
 
-    pub fn accumulate(&mut self, _block: &DataBlock) -> FuseQueryResult<()> {
+    fn set_depth(&mut self, _depth: usize) {}
+
+    fn accumulate(&mut self, _block: &DataBlock) -> FuseQueryResult<()> {
         Err(FuseQueryError::Internal(
             "Unsupported accumulate for example UDF".to_string(),
         ))
     }
 
-    pub fn accumulate_result(&self) -> FuseQueryResult<Vec<DataValue>> {
+    fn accumulate_result(&self) -> FuseQueryResult<Vec<DataValue>> {
         Err(FuseQueryError::Internal(
             "Unsupported accumulate_result for example UDF".to_string(),
         ))
     }
 
-    pub fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
+    fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
         Err(FuseQueryError::Internal(
             "Unsupported merge for example UDF".to_string(),
         ))
     }
 
-    pub fn merge_result(&self) -> FuseQueryResult<DataValue> {
+    fn merge_result(&self) -> FuseQueryResult<DataValue> {
         Err(FuseQueryError::Internal(
             "Unsupported merge_result for example UDF".to_string(),
         ))

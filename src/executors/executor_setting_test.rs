@@ -7,6 +7,7 @@ async fn test_setting_executor() -> crate::error::FuseQueryResult<()> {
     use crate::contexts::*;
     use crate::executors::*;
     use crate::planners::*;
+    use crate::sql::*;
     use crate::tests;
     use futures::stream::StreamExt;
 
@@ -14,7 +15,7 @@ async fn test_setting_executor() -> crate::error::FuseQueryResult<()> {
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
 
     if let PlanNode::SetVariable(plan) =
-        Planner::new().build_from_sql(ctx.clone(), "set max_block_size=1")?
+        PlanParser::new().build_from_sql(ctx.clone(), "set max_block_size=1")?
     {
         let executor = SettingExecutor::try_create(ctx, plan)?;
         assert_eq!(executor.name(), "SetVariableExecutor");
@@ -33,12 +34,15 @@ async fn test_setting_executor_error() -> crate::error::FuseQueryResult<()> {
     use crate::contexts::*;
     use crate::executors::*;
     use crate::planners::*;
+    use crate::sql::*;
     use crate::tests;
 
     let test_source = tests::NumberTestData::create();
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
 
-    if let PlanNode::SetVariable(plan) = Planner::new().build_from_sql(ctx.clone(), "set xx=1")? {
+    if let PlanNode::SetVariable(plan) =
+        PlanParser::new().build_from_sql(ctx.clone(), "set xx=1")?
+    {
         let executor = SettingExecutor::try_create(ctx, plan)?;
         if let Err(e) = executor.execute().await {
             let expect = "Internal(\"Unknown variable: \\\"xx\\\"\")";

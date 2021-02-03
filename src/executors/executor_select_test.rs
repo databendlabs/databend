@@ -10,12 +10,13 @@ async fn test_select_executor() -> crate::error::FuseQueryResult<()> {
     use crate::datavalues::*;
     use crate::executors::*;
     use crate::planners::*;
+    use crate::sql::*;
     use crate::tests;
 
     let test_source = tests::NumberTestData::create();
     let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
 
-    if let PlanNode::Select(plan) = Planner::new().build_from_sql(
+    if let PlanNode::Select(plan) = PlanParser::new().build_from_sql(
         ctx.clone(),
         "select number from system.numbers_mt(10) where (number+2)<2",
     )? {
@@ -29,7 +30,7 @@ async fn test_select_executor() -> crate::error::FuseQueryResult<()> {
     }
 
     if let PlanNode::Select(plan) =
-        Planner::new().build_from_sql(ctx.clone(), "select 1 + 1, 2 + 2, 3 * 3, 4 * 4")?
+        PlanParser::new().build_from_sql(ctx.clone(), "select 1 + 1, 2 + 2, 3 * 3, 4 * 4")?
     {
         let executor = SelectExecutor::try_create(ctx.clone(), plan)?;
         assert_eq!(executor.name(), "SelectExecutor");

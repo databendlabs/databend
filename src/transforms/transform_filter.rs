@@ -5,30 +5,31 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
+use arrow::compute::filter_record_batch;
+
 use crate::datablocks::DataBlock;
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
 use crate::datavalues::{BooleanArray, DataSchema, DataSchemaRef};
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::functions::Function;
+use crate::functions::IFunction;
 use crate::planners::ExpressionPlan;
 use crate::processors::{EmptyProcessor, IProcessor};
-use arrow::compute::filter_record_batch;
 
 pub struct FilterTransform {
-    func: Function,
+    func: Box<dyn IFunction>,
     input: Arc<dyn IProcessor>,
 }
 
 impl FilterTransform {
     pub fn try_create(predicate: ExpressionPlan) -> FuseQueryResult<Self> {
-        if predicate.is_aggregate() {
+        let func = predicate.to_function()?;
+        if func.is_aggregator() {
             return Err(FuseQueryError::Internal(format!(
                 "Aggregate function {:?} is found in WHERE in query",
                 predicate
             )));
         }
 
-        let func = predicate.to_function()?;
         Ok(FilterTransform {
             func,
             input: Arc::new(EmptyProcessor::create()),
@@ -38,9 +39,9 @@ impl FilterTransform {
     pub fn expression_executor(
         _schema: &DataSchemaRef,
         block: DataBlock,
-        funcs: Vec<Function>,
+        funcs: Vec<Box<dyn IFunction>>,
     ) -> FuseQueryResult<DataBlock> {
-        let mut func = funcs[0].clone();
+        let func = funcs[0].clone();
         let result = func.eval(&block)?.to_array(block.num_rows())?;
         let filter_result = result
             .as_any()

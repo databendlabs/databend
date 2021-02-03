@@ -9,30 +9,28 @@ use crate::datablocks::DataBlock;
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
 use crate::datavalues::DataSchemaRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::functions::Function;
+use crate::functions::IFunction;
 use crate::planners::ExpressionPlan;
 use crate::processors::{EmptyProcessor, IProcessor};
 
 pub struct ProjectionTransform {
-    funcs: Vec<Function>,
+    funcs: Vec<Box<dyn IFunction>>,
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>,
 }
 
 impl ProjectionTransform {
     pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> FuseQueryResult<Self> {
-        for expr in &exprs {
-            if expr.is_aggregate() {
-                return Err(FuseQueryError::Internal(format!(
-                    "Unsupported aggregator function: {:?}",
-                    expr
-                )));
-            }
-        }
-
         let mut funcs = Vec::with_capacity(exprs.len());
         for expr in &exprs {
-            funcs.push(expr.to_function()?);
+            let func = expr.to_function()?;
+            if func.is_aggregator() {
+                return Err(FuseQueryError::Internal(format!(
+                    "Aggregate function {} is found in ProjectionTransform, should AggregatorTransform",
+                    func
+                )));
+            }
+            funcs.push(func);
         }
 
         Ok(ProjectionTransform {
@@ -45,10 +43,10 @@ impl ProjectionTransform {
     pub fn expression_executor(
         projected_schema: &DataSchemaRef,
         block: DataBlock,
-        funcs: Vec<Function>,
+        funcs: Vec<Box<dyn IFunction>>,
     ) -> FuseQueryResult<DataBlock> {
         let mut column_values = Vec::with_capacity(funcs.len());
-        for mut func in funcs {
+        for func in funcs {
             column_values.push(func.eval(&block)?.to_array(block.num_rows())?);
         }
         Ok(DataBlock::create(projected_schema.clone(), column_values))

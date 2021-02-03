@@ -1,4 +1,4 @@
-// Copyright 2020 The FuseQuery Authors.
+// Copyright 2020-2021 The FuseQuery Authors.
 //
 // Code is licensed under AGPL License, Version 3.0.
 
@@ -6,12 +6,18 @@ use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::{DataSchema, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
-    DFExplainPlan, DFParser, DFStatement, ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode,
-    Planner, SelectPlan, SettingPlan,
+    ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, SelectPlan, SettingPlan,
 };
+use crate::sql::{DFExplainPlan, DFParser, DFStatement};
 use sqlparser::ast::{FunctionArg, Statement, TableFactor};
 
-impl Planner {
+pub struct PlanParser;
+
+impl PlanParser {
+    pub fn new() -> Self {
+        Self {}
+    }
+
     pub fn build_from_sql(
         &self,
         ctx: FuseQueryContextRef,
@@ -114,14 +120,17 @@ impl Planner {
             .map(|e| self.sql_select_to_rex(&e, &plan.schema()))
             .collect::<FuseQueryResult<Vec<ExpressionPlan>>>()?;
 
-        let aggr_expr: Vec<ExpressionPlan> = projection_expr
-            .iter()
-            .filter(|x| x.is_aggregate())
-            .cloned()
-            .collect();
+        // Aggregator check.
+        let mut has_aggregator = false;
+        for expr in &projection_expr {
+            if expr.has_aggregator()? {
+                has_aggregator = true;
+                break;
+            }
+        }
 
-        let plan = if !select.group_by.is_empty() || !aggr_expr.is_empty() {
-            self.aggregate(&plan, projection_expr, aggr_expr, &select.group_by)?
+        let plan = if !select.group_by.is_empty() || has_aggregator {
+            self.aggregate(&plan, projection_expr, &select.group_by)?
         } else {
             self.project(&plan, projection_expr)?
         };
@@ -327,7 +336,6 @@ impl Planner {
     fn aggregate(
         &self,
         input: &PlanNode,
-        projection_expr: Vec<ExpressionPlan>,
         aggr_expr: Vec<ExpressionPlan>,
         group_by: &[sqlparser::ast::Expr],
     ) -> FuseQueryResult<PlanNode> {
@@ -335,15 +343,6 @@ impl Planner {
             .iter()
             .map(|e| self.sql_to_rex(&e, &input.schema()))
             .collect::<FuseQueryResult<Vec<ExpressionPlan>>>()?;
-
-        let group_by_count = group_expr.len();
-        let aggr_count = aggr_expr.len();
-
-        if group_by_count + aggr_count != projection_expr.len() {
-            return Err(FuseQueryError::Plan(
-                "Projection references non-aggregate values".to_owned(),
-            ));
-        }
 
         PlanBuilder::from(&input)
             .aggregate(group_expr, aggr_expr)?
@@ -368,5 +367,10 @@ impl Planner {
             }
             _ => Ok(input.clone()),
         }
+    }
+}
+impl Default for PlanParser {
+    fn default() -> Self {
+        Self::new()
     }
 }
