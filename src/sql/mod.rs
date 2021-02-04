@@ -2,8 +2,8 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-mod parser;
 mod plan_parser;
+mod sql_parser;
 
-pub use self::parser::{DFExplainPlan, DFParser, DFStatement};
 pub use self::plan_parser::PlanParser;
+pub use self::sql_parser::{DFExplainPlan, DFParser, DFStatement};

@@ -10,6 +10,10 @@ fn test_projection_plan() -> crate::error::FuseQueryResult<()> {
     use crate::datavalues::*;
     use crate::planners::*;
 
+    let test_source = crate::tests::NumberTestData::create();
+    let ctx =
+        crate::contexts::FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
+
     let projection = PlanNode::Projection(ProjectionPlan {
         expr: vec![ExpressionPlan::Field("a".to_string())],
         schema: Arc::new(DataSchema::new(vec![DataField::new(
@@ -17,7 +21,7 @@ fn test_projection_plan() -> crate::error::FuseQueryResult<()> {
             DataType::Utf8,
             false,
         )])),
-        input: Arc::from(PlanBuilder::empty().build()?),
+        input: Arc::from(PlanBuilder::empty(ctx).build()?),
     });
     let _ = projection.schema();
     let expect = "Projection: a:Utf8\n  ";

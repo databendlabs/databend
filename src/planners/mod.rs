@@ -26,7 +26,6 @@ mod plan_scan;
 mod plan_select;
 mod plan_setting;
 mod plan_visitor;
-mod planner;
 
 pub use self::plan_aggregate::AggregatePlan;
 pub use self::plan_builder::PlanBuilder;
@@ -45,4 +44,3 @@ pub use self::plan_scan::ScanPlan;
 pub use self::plan_select::SelectPlan;
 pub use self::plan_setting::SettingPlan;
 pub use self::plan_visitor::{GraphvizVisitor, IndentVisitor, PlanVisitor};
-pub use self::planner::Planner;

@@ -43,7 +43,7 @@ impl IExecutor for ExplainExecutor {
             false,
         )]));
 
-        let plan = Optimizer::create().optimize(&self.explain.plan)?;
+        let plan = Optimizer::create(self.ctx.clone()).optimize(&self.explain.plan)?;
         let result = match self.explain.typ {
             DFExplainType::Graph => {
                 format!("{}", plan.display_graphviz())

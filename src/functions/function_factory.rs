@@ -6,6 +6,7 @@ use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 
+use crate::contexts::FuseQueryContextRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::aggregators::AggregatorFunction;
 use crate::functions::arithmetics::ArithmeticFunction;
@@ -15,7 +16,10 @@ use crate::functions::udfs::UDFFunction;
 use crate::functions::IFunction;
 
 pub struct FunctionFactory;
-pub type FactoryFunc = fn(args: &[Box<dyn IFunction>]) -> FuseQueryResult<Box<dyn IFunction>>;
+pub type FactoryFunc = fn(
+    ctx: FuseQueryContextRef,
+    args: &[Box<dyn IFunction>],
+) -> FuseQueryResult<Box<dyn IFunction>>;
 pub type FactoryFuncRef = Arc<Mutex<IndexMap<&'static str, FactoryFunc>>>;
 
 lazy_static! {
@@ -31,12 +35,16 @@ lazy_static! {
 }
 
 impl FunctionFactory {
-    pub fn get(name: &str, args: &[Box<dyn IFunction>]) -> FuseQueryResult<Box<dyn IFunction>> {
+    pub fn get(
+        ctx: FuseQueryContextRef,
+        name: &str,
+        args: &[Box<dyn IFunction>],
+    ) -> FuseQueryResult<Box<dyn IFunction>> {
         let map = FACTORY.as_ref().lock()?;
         let creator = map
             .get(&*name.to_lowercase())
             .ok_or_else(|| FuseQueryError::Internal(format!("Unsupported Function: {}", name)))?;
-        (creator)(args)
+        (creator)(ctx, args)
     }
 
     pub fn registered_names() -> Vec<String> {

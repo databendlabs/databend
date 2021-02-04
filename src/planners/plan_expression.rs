@@ -4,6 +4,7 @@
 
 use std::fmt;
 
+use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::{DataField, DataSchemaRef, DataValue};
 use crate::error::FuseQueryResult;
 use crate::functions::{
@@ -28,39 +29,34 @@ pub enum ExpressionPlan {
 }
 
 impl ExpressionPlan {
-    pub fn to_field(&self, input_schema: &DataSchemaRef) -> FuseQueryResult<DataField> {
-        let func = self.to_function()?;
-        Ok(DataField::new(
-            format!("{}", func).as_str(),
-            func.return_type(&input_schema)?,
-            func.nullable(&input_schema)?,
-        ))
-    }
-
-    fn to_function_with_depth(&self, depth: usize) -> FuseQueryResult<Box<dyn IFunction>> {
+    fn to_function_with_depth(
+        &self,
+        ctx: FuseQueryContextRef,
+        depth: usize,
+    ) -> FuseQueryResult<Box<dyn IFunction>> {
         match self {
             ExpressionPlan::Field(ref v) => FieldFunction::try_create(v.as_str()),
             ExpressionPlan::Constant(ref v) => ConstantFunction::try_create(v.clone()),
             ExpressionPlan::BinaryExpression { left, op, right } => {
-                let l = left.to_function_with_depth(depth)?;
-                let r = right.to_function_with_depth(depth + 1)?;
-                let mut func = FunctionFactory::get(op, &[l, r])?;
+                let l = left.to_function_with_depth(ctx.clone(), depth)?;
+                let r = right.to_function_with_depth(ctx.clone(), depth + 1)?;
+                let mut func = FunctionFactory::get(ctx, op, &[l, r])?;
                 func.set_depth(depth);
                 Ok(func)
             }
             ExpressionPlan::Function { op, args } => {
                 let mut funcs = Vec::with_capacity(args.len());
                 for arg in args {
-                    let mut func = arg.to_function_with_depth(depth + 1)?;
+                    let mut func = arg.to_function_with_depth(ctx.clone(), depth + 1)?;
                     func.set_depth(depth);
                     funcs.push(func);
                 }
-                let mut func = FunctionFactory::get(op, &funcs)?;
+                let mut func = FunctionFactory::get(ctx, op, &funcs)?;
                 func.set_depth(depth);
                 Ok(func)
             }
             ExpressionPlan::Alias(alias, expr) => {
-                let mut func = expr.to_function_with_depth(depth)?;
+                let mut func = expr.to_function_with_depth(ctx, depth)?;
                 func.set_depth(depth);
                 AliasFunction::try_create(alias.clone(), func)
             }
@@ -68,12 +64,25 @@ impl ExpressionPlan {
         }
     }
 
-    pub fn to_function(&self) -> FuseQueryResult<Box<dyn IFunction>> {
-        self.to_function_with_depth(0)
+    pub fn to_function(&self, ctx: FuseQueryContextRef) -> FuseQueryResult<Box<dyn IFunction>> {
+        self.to_function_with_depth(ctx, 0)
     }
 
-    pub fn has_aggregator(&self) -> FuseQueryResult<bool> {
-        Ok(self.to_function()?.is_aggregator())
+    pub fn to_field(
+        &self,
+        ctx: FuseQueryContextRef,
+        input_schema: &DataSchemaRef,
+    ) -> FuseQueryResult<DataField> {
+        let func = self.to_function(ctx)?;
+        Ok(DataField::new(
+            format!("{}", func).as_str(),
+            func.return_type(&input_schema)?,
+            func.nullable(&input_schema)?,
+        ))
+    }
+
+    pub fn has_aggregator(&self, ctx: FuseQueryContextRef) -> FuseQueryResult<bool> {
+        Ok(self.to_function(ctx)?.is_aggregator())
     }
 }
 

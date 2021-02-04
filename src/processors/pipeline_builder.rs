@@ -25,7 +25,7 @@ impl PipelineBuilder {
 
     pub fn build(&self) -> FuseQueryResult<Pipeline> {
         let mut pipeline = Pipeline::create();
-        let plans = self.plan.subplan_to_list()?;
+        let plans = self.plan.get_children_nodes()?;
         for plan in &plans {
             match plan {
                 PlanNode::Limit(plan) => {
@@ -42,6 +42,7 @@ impl PipelineBuilder {
                 PlanNode::Projection(plan) => {
                     pipeline.add_simple_transform(|| {
                         Ok(Box::new(ProjectionTransform::try_create(
+                            self.ctx.clone(),
                             plan.schema.clone(),
                             plan.expr.clone(),
                         )?))
@@ -50,6 +51,7 @@ impl PipelineBuilder {
                 PlanNode::Aggregate(plan) => {
                     pipeline.add_simple_transform(|| {
                         Ok(Box::new(AggregatorPartialTransform::try_create(
+                            self.ctx.clone(),
                             plan.schema.clone(),
                             plan.aggr_expr.clone(),
                         )?))
@@ -58,6 +60,7 @@ impl PipelineBuilder {
                     pipeline.merge_processor()?;
                     pipeline.add_simple_transform(|| {
                         Ok(Box::new(AggregatorFinalTransform::try_create(
+                            self.ctx.clone(),
                             plan.schema.clone(),
                             plan.aggr_expr.clone(),
                         )?))
@@ -66,6 +69,7 @@ impl PipelineBuilder {
                 PlanNode::Filter(plan) => {
                     pipeline.add_simple_transform(|| {
                         Ok(Box::new(FilterTransform::try_create(
+                            self.ctx.clone(),
                             plan.predicate.clone(),
                         )?))
                     })?;

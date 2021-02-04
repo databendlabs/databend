@@ -2,6 +2,7 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
+use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::DataSchemaRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
@@ -128,16 +129,19 @@ impl PlanNode {
         Ok(list)
     }
 
-    pub fn subplan_to_list(&self) -> FuseQueryResult<Vec<PlanNode>> {
+    pub fn get_children_nodes(&self) -> FuseQueryResult<Vec<PlanNode>> {
         self.build_plan_list(false)
     }
 
-    pub fn plan_to_list(&self) -> FuseQueryResult<Vec<PlanNode>> {
+    pub fn get_all_nodes(&self) -> FuseQueryResult<Vec<PlanNode>> {
         self.build_plan_list(true)
     }
 
-    pub fn plan_list_to_node(list: &[PlanNode]) -> FuseQueryResult<PlanNode> {
-        let mut builder = PlanBuilder::empty();
+    pub fn plan_list_to_node(
+        ctx: FuseQueryContextRef,
+        list: &[PlanNode],
+    ) -> FuseQueryResult<PlanNode> {
+        let mut builder = PlanBuilder::empty(ctx.clone());
         for plan in list {
             match plan {
                 PlanNode::Projection(v) => {
@@ -153,7 +157,7 @@ impl PlanNode {
                     builder = builder.limit(v.n)?;
                 }
                 PlanNode::ReadSource(v) => {
-                    builder = PlanBuilder::from(&PlanNode::ReadSource(v.clone()))
+                    builder = PlanBuilder::from(ctx.clone(), &PlanNode::ReadSource(v.clone()))
                 }
                 PlanNode::Explain(_v) => {
                     builder = builder.explain()?;

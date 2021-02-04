@@ -7,10 +7,12 @@ fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
     use pretty_assertions::assert_eq;
 
     use crate::planners::*;
-    use crate::tests;
 
-    let test_source = tests::NumberTestData::create();
-    let plan = PlanBuilder::create(test_source.number_schema_for_test()?)
+    let test_source = crate::tests::NumberTestData::create();
+    let ctx =
+        crate::contexts::FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
+
+    let plan = PlanBuilder::create(ctx, test_source.number_schema_for_test()?)
         .project(vec![
             ExpressionPlan::Alias("c1".to_string(), Box::new(field("number"))),
             ExpressionPlan::Alias("c2".to_string(), Box::new(field("number"))),

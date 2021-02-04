@@ -7,35 +7,36 @@ async fn test_transform_aggregator() -> crate::error::FuseQueryResult<()> {
     use futures::stream::StreamExt;
     use std::sync::Arc;
 
-    use crate::contexts::*;
     use crate::datavalues::*;
     use crate::planners::{self, *};
     use crate::processors::*;
-    use crate::tests;
     use crate::transforms::*;
 
-    let test_source = tests::NumberTestData::create();
-    let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
-    let mut pipeline = Pipeline::create();
+    let test_source = crate::tests::NumberTestData::create();
+    let ctx =
+        crate::contexts::FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
 
-    let a = test_source.number_source_transform_for_test(ctx, 16)?;
+    let mut pipeline = Pipeline::create();
+    let a = test_source.number_source_transform_for_test(ctx.clone(), 16)?;
     pipeline.add_source(Arc::new(a))?;
 
-    if let PlanNode::Aggregate(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
-        .aggregate(
-            vec![],
-            vec![planners::add(
-                ExpressionPlan::Function {
-                    op: "sum".to_string(),
-                    args: vec![planners::field("number")],
-                },
-                planners::constant(2u64),
-            )],
-        )?
-        .build()?
+    if let PlanNode::Aggregate(plan) =
+        PlanBuilder::create(ctx.clone(), test_source.number_schema_for_test()?)
+            .aggregate(
+                vec![],
+                vec![planners::add(
+                    ExpressionPlan::Function {
+                        op: "sum".to_string(),
+                        args: vec![planners::field("number")],
+                    },
+                    planners::constant(2u64),
+                )],
+            )?
+            .build()?
     {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(AggregatorPartialTransform::try_create(
+                ctx.clone(),
                 plan.schema.clone(),
                 plan.aggr_expr.clone(),
             )?))
@@ -43,6 +44,7 @@ async fn test_transform_aggregator() -> crate::error::FuseQueryResult<()> {
         pipeline.merge_processor()?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(AggregatorFinalTransform::try_create(
+                ctx.clone(),
                 plan.schema.clone(),
                 plan.aggr_expr.clone(),
             )?))

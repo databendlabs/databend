@@ -34,7 +34,7 @@ impl IExecutor for SelectExecutor {
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
-        let plan = Optimizer::create().optimize(&self.select.plan)?;
+        let plan = Optimizer::create(self.ctx.clone()).optimize(&self.select.plan)?;
         PipelineBuilder::create(self.ctx.clone(), plan)
             .build()?
             .execute()

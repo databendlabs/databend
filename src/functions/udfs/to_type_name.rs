@@ -4,6 +4,7 @@
 
 use std::fmt;
 
+use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
@@ -15,7 +16,10 @@ pub struct ToTypeNameFunction {
 }
 
 impl ToTypeNameFunction {
-    pub fn try_create(args: &[Box<dyn IFunction>]) -> FuseQueryResult<Box<dyn IFunction>> {
+    pub fn try_create(
+        _ctx: FuseQueryContextRef,
+        args: &[Box<dyn IFunction>],
+    ) -> FuseQueryResult<Box<dyn IFunction>> {
         if args.len() != 1 {
             return Err(FuseQueryError::Internal(
                 "ToTypeName function args length must be 1".to_string(),
