@@ -1,0 +1,13 @@
+coverage:
+  precision: 0
+  round: down
+  range: "70...100"
+  status:
+    project:
+      default:
+        enabled: yes
+        threshold: 1%
+    patch:
+      default:
+        enabled: yes
+        threshold: 1%
