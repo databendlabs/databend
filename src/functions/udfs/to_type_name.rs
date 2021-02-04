@@ -22,7 +22,7 @@ impl ToTypeNameFunction {
     ) -> FuseQueryResult<Box<dyn IFunction>> {
         if args.len() != 1 {
             return Err(FuseQueryError::Internal(
-                "ToTypeName function args length must be 1".to_string(),
+                "The argument size of function database must be one".to_string(),
             ));
         }
 

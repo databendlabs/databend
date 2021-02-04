@@ -22,7 +22,7 @@ impl DatabaseFunction {
     ) -> FuseQueryResult<Box<dyn IFunction>> {
         if !args.is_empty() {
             return Err(FuseQueryError::Internal(
-                "ToTypeName function args length must be zero".to_string(),
+                "The argument size of function database must be zero".to_string(),
             ));
         }
 
