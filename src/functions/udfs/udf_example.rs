@@ -4,6 +4,7 @@
 
 use std::fmt;
 
+use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
@@ -13,7 +14,10 @@ use crate::functions::IFunction;
 pub struct UDFExampleFunction;
 
 impl UDFExampleFunction {
-    pub fn try_create(_args: &[Box<dyn IFunction>]) -> FuseQueryResult<Box<dyn IFunction>> {
+    pub fn try_create(
+        _ctx: FuseQueryContextRef,
+        _args: &[Box<dyn IFunction>],
+    ) -> FuseQueryResult<Box<dyn IFunction>> {
         Ok(Box::new(UDFExampleFunction {}))
     }
 }

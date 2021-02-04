@@ -4,6 +4,7 @@
 
 use std::fmt;
 
+use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{
     self, DataColumnarValue, DataSchema, DataType, DataValue, DataValueAggregateOperator,
@@ -19,7 +20,10 @@ pub struct AggregatorMinFunction {
 }
 
 impl AggregatorMinFunction {
-    pub fn try_create(args: &[Box<dyn IFunction>]) -> FuseQueryResult<Box<dyn IFunction>> {
+    pub fn try_create(
+        _ctx: FuseQueryContextRef,
+        args: &[Box<dyn IFunction>],
+    ) -> FuseQueryResult<Box<dyn IFunction>> {
         if args.len() != 1 {
             return Err(FuseQueryError::Internal(
                 "Aggregator function Min args require single argument".to_string(),

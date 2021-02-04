@@ -25,6 +25,10 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
         func: Box<dyn IFunction>,
     }
 
+    let test_source = crate::tests::NumberTestData::create();
+    let ctx =
+        crate::contexts::FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
+
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Int64, false),
@@ -47,7 +51,10 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Count(a)",
             nullable: false,
-            func: AggregatorCountFunction::try_create(&[FieldFunction::try_create("a")?])?,
+            func: AggregatorCountFunction::try_create(
+                ctx.clone(),
+                &[FieldFunction::try_create("a")?],
+            )?,
             block: block.clone(),
             expect: DataValue::UInt64(Some(4)),
             error: "",
@@ -58,7 +65,10 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Max(a)",
             nullable: false,
-            func: AggregatorMaxFunction::try_create(&[FieldFunction::try_create("a")?])?,
+            func: AggregatorMaxFunction::try_create(
+                ctx.clone(),
+                &[FieldFunction::try_create("a")?],
+            )?,
             block: block.clone(),
             expect: DataValue::Int64(Some(4)),
             error: "",
@@ -69,7 +79,10 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Min(a)",
             nullable: false,
-            func: AggregatorMinFunction::try_create(&[FieldFunction::try_create("a")?])?,
+            func: AggregatorMinFunction::try_create(
+                ctx.clone(),
+                &[FieldFunction::try_create("a")?],
+            )?,
             block: block.clone(),
             expect: DataValue::Int64(Some(1)),
             error: "",
@@ -80,7 +93,10 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Avg(a)",
             nullable: false,
-            func: AggregatorAvgFunction::try_create(&[FieldFunction::try_create("a")?])?,
+            func: AggregatorAvgFunction::try_create(
+                ctx.clone(),
+                &[FieldFunction::try_create("a")?],
+            )?,
             block: block.clone(),
             expect: DataValue::Float64(Some(2.5)),
             error: "",
@@ -91,7 +107,10 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Sum(a)",
             nullable: false,
-            func: AggregatorSumFunction::try_create(&[FieldFunction::try_create("a")?])?,
+            func: AggregatorSumFunction::try_create(
+                ctx.clone(),
+                &[FieldFunction::try_create("a")?],
+            )?,
             block: block.clone(),
             expect: DataValue::Int64(Some(10)),
             error: "",
@@ -102,10 +121,16 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Sum(a) + 1",
             nullable: false,
-            func: ArithmeticAddFunction::try_create_func(&[
-                AggregatorSumFunction::try_create(&[FieldFunction::try_create("a")?])?,
-                ConstantFunction::try_create(DataValue::Int64(Some(1)))?,
-            ])?,
+            func: ArithmeticAddFunction::try_create_func(
+                ctx.clone(),
+                &[
+                    AggregatorSumFunction::try_create(
+                        ctx.clone(),
+                        &[FieldFunction::try_create("a")?],
+                    )?,
+                    ConstantFunction::try_create(DataValue::Int64(Some(1)))?,
+                ],
+            )?,
             block: block.clone(),
             expect: DataValue::Int64(Some(71)),
             error: "",
@@ -116,10 +141,19 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Sum(a)/Count(a)",
             nullable: false,
-            func: ArithmeticDivFunction::try_create_func(&[
-                AggregatorSumFunction::try_create(&[FieldFunction::try_create("a")?])?,
-                AggregatorCountFunction::try_create(&[FieldFunction::try_create("a")?])?,
-            ])?,
+            func: ArithmeticDivFunction::try_create_func(
+                ctx.clone(),
+                &[
+                    AggregatorSumFunction::try_create(
+                        ctx.clone(),
+                        &[FieldFunction::try_create("a")?],
+                    )?,
+                    AggregatorCountFunction::try_create(
+                        ctx.clone(),
+                        &[FieldFunction::try_create("a")?],
+                    )?,
+                ],
+            )?,
             block: block.clone(),
             expect: DataValue::Float64(Some(2.5)),
             error: "",
@@ -130,13 +164,22 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Sum(a+1)+2",
             nullable: false,
-            func: ArithmeticAddFunction::try_create_func(&[
-                AggregatorSumFunction::try_create(&[ArithmeticAddFunction::try_create_func(&[
-                    FieldFunction::try_create("a")?,
-                    ConstantFunction::try_create(DataValue::Int8(Some(1)))?,
-                ])?])?,
-                ConstantFunction::try_create(DataValue::Int8(Some(2)))?,
-            ])?,
+            func: ArithmeticAddFunction::try_create_func(
+                ctx.clone(),
+                &[
+                    AggregatorSumFunction::try_create(
+                        ctx.clone(),
+                        &[ArithmeticAddFunction::try_create_func(
+                            ctx,
+                            &[
+                                FieldFunction::try_create("a")?,
+                                ConstantFunction::try_create(DataValue::Int8(Some(1)))?,
+                            ],
+                        )?],
+                    )?,
+                    ConstantFunction::try_create(DataValue::Int8(Some(2)))?,
+                ],
+            )?,
             block,
             expect: DataValue::Int64(Some(100)),
             error: "",

@@ -22,6 +22,10 @@ fn test_udf_function() -> crate::error::FuseQueryResult<()> {
         func: Box<dyn IFunction>,
     }
 
+    let test_source = crate::tests::NumberTestData::create();
+    let ctx =
+        crate::contexts::FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
+
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("a", DataType::Boolean, false),
         DataField::new("b", DataType::Boolean, false),
@@ -34,7 +38,7 @@ fn test_udf_function() -> crate::error::FuseQueryResult<()> {
         name: "udf-example-passed",
         display: "example()",
         nullable: false,
-        func: UDFExampleFunction::try_create(&[field_a.clone(), field_b.clone()])?,
+        func: UDFExampleFunction::try_create(ctx, &[field_a.clone(), field_b.clone()])?,
         block: DataBlock::create(
             schema.clone(),
             vec![

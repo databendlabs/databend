@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef};
 use crate::error::FuseQueryResult;
 use crate::planners::{
@@ -12,24 +13,31 @@ use crate::planners::{
 };
 
 pub struct PlanBuilder {
+    ctx: FuseQueryContextRef,
     plan: PlanNode,
 }
 
 impl PlanBuilder {
     /// Create a builder from an existing plan
-    pub fn from(plan: &PlanNode) -> Self {
-        Self { plan: plan.clone() }
+    pub fn from(ctx: FuseQueryContextRef, plan: &PlanNode) -> Self {
+        Self {
+            ctx,
+            plan: plan.clone(),
+        }
     }
 
-    pub fn create(schema: DataSchemaRef) -> Self {
-        Self::from(&PlanNode::Empty(EmptyPlan { schema }))
+    pub fn create(ctx: FuseQueryContextRef, schema: DataSchemaRef) -> Self {
+        Self::from(ctx, &PlanNode::Empty(EmptyPlan { schema }))
     }
 
     /// Create an empty relation.
-    pub fn empty() -> Self {
-        Self::from(&PlanNode::Empty(EmptyPlan {
-            schema: DataSchemaRef::new(DataSchema::empty()),
-        }))
+    pub fn empty(ctx: FuseQueryContextRef) -> Self {
+        Self::from(
+            ctx,
+            &PlanNode::Empty(EmptyPlan {
+                schema: DataSchemaRef::new(DataSchema::empty()),
+            }),
+        )
     }
 
     /// Apply a projection.
@@ -47,14 +55,17 @@ impl PlanBuilder {
         });
         let fields: Vec<DataField> = projection_exprs
             .iter()
-            .map(|expr| expr.to_field(&input_schema))
+            .map(|expr| expr.to_field(self.ctx.clone(), &input_schema))
             .collect::<FuseQueryResult<_>>()?;
 
-        Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
-            input: Arc::new(self.plan.clone()),
-            expr: projection_exprs,
-            schema: Arc::new(DataSchema::new(fields)),
-        })))
+        Ok(Self::from(
+            self.ctx.clone(),
+            &PlanNode::Projection(ProjectionPlan {
+                input: Arc::new(self.plan.clone()),
+                expr: projection_exprs,
+                schema: Arc::new(DataSchema::new(fields)),
+            }),
+        ))
     }
 
     /// Apply an aggregate
@@ -69,19 +80,23 @@ impl PlanBuilder {
         let input_schema = self.plan.schema();
         let aggr_fields: Vec<DataField> = all_expr
             .iter()
-            .map(|expr| expr.to_field(&input_schema))
+            .map(|expr| expr.to_field(self.ctx.clone(), &input_schema))
             .collect::<FuseQueryResult<_>>()?;
 
-        Ok(Self::from(&PlanNode::Aggregate(AggregatePlan {
-            input: Arc::new(self.plan.clone()),
-            group_expr,
-            aggr_expr,
-            schema: Arc::new(DataSchema::new(aggr_fields)),
-        })))
+        Ok(Self::from(
+            self.ctx.clone(),
+            &PlanNode::Aggregate(AggregatePlan {
+                input: Arc::new(self.plan.clone()),
+                group_expr,
+                aggr_expr,
+                schema: Arc::new(DataSchema::new(aggr_fields)),
+            }),
+        ))
     }
 
     /// Scan a data source
     pub fn scan(
+        ctx: FuseQueryContextRef,
         schema_name: &str,
         _table_name: &str,
         table_schema: &DataSchema,
@@ -97,42 +112,57 @@ impl PlanBuilder {
             Some(v) => Arc::new(v),
         };
 
-        Ok(Self::from(&PlanNode::Scan(ScanPlan {
-            schema_name: schema_name.to_owned(),
-            table_schema,
-            projected_schema,
-            projection,
-            table_args,
-        })))
+        Ok(Self::from(
+            ctx,
+            &PlanNode::Scan(ScanPlan {
+                schema_name: schema_name.to_owned(),
+                table_schema,
+                projected_schema,
+                projection,
+                table_args,
+            }),
+        ))
     }
 
     /// Apply a filter
     pub fn filter(&self, expr: ExpressionPlan) -> FuseQueryResult<Self> {
-        Ok(Self::from(&PlanNode::Filter(FilterPlan {
-            predicate: expr,
-            input: Arc::new(self.plan.clone()),
-        })))
+        Ok(Self::from(
+            self.ctx.clone(),
+            &PlanNode::Filter(FilterPlan {
+                predicate: expr,
+                input: Arc::new(self.plan.clone()),
+            }),
+        ))
     }
 
     /// Apply a limit
     pub fn limit(&self, n: usize) -> FuseQueryResult<Self> {
-        Ok(Self::from(&PlanNode::Limit(LimitPlan {
-            n,
-            input: Arc::new(self.plan.clone()),
-        })))
+        Ok(Self::from(
+            self.ctx.clone(),
+            &PlanNode::Limit(LimitPlan {
+                n,
+                input: Arc::new(self.plan.clone()),
+            }),
+        ))
     }
 
     pub fn select(&self) -> FuseQueryResult<Self> {
-        Ok(Self::from(&PlanNode::Select(SelectPlan {
-            plan: Box::new(self.plan.clone()),
-        })))
+        Ok(Self::from(
+            self.ctx.clone(),
+            &PlanNode::Select(SelectPlan {
+                plan: Box::new(self.plan.clone()),
+            }),
+        ))
     }
 
     pub fn explain(&self) -> FuseQueryResult<Self> {
-        Ok(Self::from(&PlanNode::Explain(ExplainPlan {
-            typ: DFExplainType::Syntax,
-            plan: Box::new(self.plan.clone()),
-        })))
+        Ok(Self::from(
+            self.ctx.clone(),
+            &PlanNode::Explain(ExplainPlan {
+                typ: DFExplainType::Syntax,
+                plan: Box::new(self.plan.clone()),
+            }),
+        ))
     }
 
     /// Build the plan

@@ -53,7 +53,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
     fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> FuseQueryResult<()> {
         debug!("{}", query);
 
-        let plan = PlanParser::new().build_from_sql(self.ctx.clone(), query);
+        let plan = PlanParser::create(self.ctx.clone()).build_from_sql(query);
         match plan {
             Ok(v) => match ExecutorFactory::get(self.ctx.clone(), v) {
                 Ok(executor) => {

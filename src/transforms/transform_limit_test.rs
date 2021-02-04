@@ -7,22 +7,22 @@ async fn test_transform_limit() -> crate::error::FuseQueryResult<()> {
     use futures::TryStreamExt;
     use std::sync::Arc;
 
-    use crate::contexts::*;
     use crate::planners::*;
     use crate::processors::*;
-    use crate::tests;
     use crate::transforms::*;
 
-    let test_source = tests::NumberTestData::create();
-    let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
+    let test_source = crate::tests::NumberTestData::create();
+    let ctx =
+        crate::contexts::FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
+
     let mut pipeline = Pipeline::create();
 
-    let a = test_source.number_source_transform_for_test(ctx, 8)?;
+    let a = test_source.number_source_transform_for_test(ctx.clone(), 8)?;
     pipeline.add_source(Arc::new(a))?;
 
     pipeline.merge_processor()?;
 
-    if let PlanNode::Limit(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
+    if let PlanNode::Limit(plan) = PlanBuilder::create(ctx, test_source.number_schema_for_test()?)
         .limit(2)?
         .build()?
     {

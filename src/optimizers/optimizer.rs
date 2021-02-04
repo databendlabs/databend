@@ -2,6 +2,7 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
+use crate::contexts::FuseQueryContextRef;
 use crate::error::FuseQueryResult;
 use crate::optimizers::FilterPushDownOptimizer;
 use crate::planners::{ExpressionPlan, PlanNode};
@@ -17,9 +18,9 @@ pub struct Optimizer {
 }
 
 impl Optimizer {
-    pub fn create() -> Self {
+    pub fn create(ctx: FuseQueryContextRef) -> Self {
         let mut optimizers: Vec<Box<dyn IOptimizer>> = vec![];
-        optimizers.push(Box::new(FilterPushDownOptimizer::create()));
+        optimizers.push(Box::new(FilterPushDownOptimizer::create(ctx)));
         Optimizer { optimizers }
     }
 

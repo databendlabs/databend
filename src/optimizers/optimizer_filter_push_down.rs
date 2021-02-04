@@ -2,16 +2,19 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
+use crate::contexts::FuseQueryContextRef;
 use crate::error::FuseQueryResult;
 use crate::optimizers::{IOptimizer, Optimizer};
 use crate::planners::{ExpressionPlan, FilterPlan, PlanNode};
 use std::collections::HashMap;
 
-pub struct FilterPushDownOptimizer {}
+pub struct FilterPushDownOptimizer {
+    ctx: FuseQueryContextRef,
+}
 
 impl FilterPushDownOptimizer {
-    pub fn create() -> Self {
-        FilterPushDownOptimizer {}
+    pub fn create(ctx: FuseQueryContextRef) -> Self {
+        FilterPushDownOptimizer { ctx }
     }
 }
 
@@ -64,7 +67,7 @@ impl IOptimizer for FilterPushDownOptimizer {
     }
 
     fn optimize(&mut self, plan: &PlanNode) -> FuseQueryResult<PlanNode> {
-        let mut plans = plan.plan_to_list()?;
+        let mut plans = plan.get_all_nodes()?;
         let projection_map = Optimizer::projection_to_map(plan)?;
 
         for plan in plans.iter_mut() {
@@ -77,6 +80,6 @@ impl IOptimizer for FilterPushDownOptimizer {
                 *filter = new_filter;
             }
         }
-        PlanNode::plan_list_to_node(&plans)
+        PlanNode::plan_list_to_node(self.ctx.clone(), &plans)
     }
 }

@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use arrow::compute::filter_record_batch;
 
+use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
 use crate::datavalues::{BooleanArray, DataSchema, DataSchemaRef};
@@ -21,8 +22,11 @@ pub struct FilterTransform {
 }
 
 impl FilterTransform {
-    pub fn try_create(predicate: ExpressionPlan) -> FuseQueryResult<Self> {
-        let func = predicate.to_function()?;
+    pub fn try_create(
+        ctx: FuseQueryContextRef,
+        predicate: ExpressionPlan,
+    ) -> FuseQueryResult<Self> {
+        let func = predicate.to_function(ctx)?;
         if func.is_aggregator() {
             return Err(FuseQueryError::Internal(format!(
                 "Aggregate function {:?} is found in WHERE in query",

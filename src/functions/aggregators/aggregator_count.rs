@@ -4,6 +4,7 @@
 
 use std::fmt;
 
+use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{
     self, DataColumnarValue, DataSchema, DataType, DataValue, DataValueArithmeticOperator,
@@ -19,7 +20,10 @@ pub struct AggregatorCountFunction {
 }
 
 impl AggregatorCountFunction {
-    pub fn try_create(args: &[Box<dyn IFunction>]) -> FuseQueryResult<Box<dyn IFunction>> {
+    pub fn try_create(
+        _ctx: FuseQueryContextRef,
+        args: &[Box<dyn IFunction>],
+    ) -> FuseQueryResult<Box<dyn IFunction>> {
         let arg = if args.is_empty() {
             ConstantFunction::try_create(DataValue::UInt64(Some(1)))?
         } else {

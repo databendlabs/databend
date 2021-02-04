@@ -7,25 +7,26 @@ async fn test_transform_projection() -> crate::error::FuseQueryResult<()> {
     use futures::stream::StreamExt;
     use std::sync::Arc;
 
-    use crate::contexts::*;
     use crate::planners::*;
     use crate::processors::*;
-    use crate::tests;
     use crate::transforms::*;
 
-    let test_source = tests::NumberTestData::create();
-    let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
+    let test_source = crate::tests::NumberTestData::create();
+    let ctx =
+        crate::contexts::FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
 
     let mut pipeline = Pipeline::create();
-    let a = test_source.number_source_transform_for_test(ctx, 8)?;
+    let a = test_source.number_source_transform_for_test(ctx.clone(), 8)?;
     pipeline.add_source(Arc::new(a))?;
 
-    if let PlanNode::Projection(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
-        .project(vec![field("number"), field("number")])?
-        .build()?
+    if let PlanNode::Projection(plan) =
+        PlanBuilder::create(ctx.clone(), test_source.number_schema_for_test()?)
+            .project(vec![field("number"), field("number")])?
+            .build()?
     {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ProjectionTransform::try_create(
+                ctx.clone(),
                 plan.schema.clone(),
                 plan.expr.clone(),
             )?))

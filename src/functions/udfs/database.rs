@@ -4,23 +4,29 @@
 
 use std::fmt;
 
+use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::IFunction;
 
 #[derive(Clone)]
-pub struct DatabaseFunction {}
+pub struct DatabaseFunction {
+    ctx: FuseQueryContextRef,
+}
 
 impl DatabaseFunction {
-    pub fn try_create(args: &[Box<dyn IFunction>]) -> FuseQueryResult<Box<dyn IFunction>> {
+    pub fn try_create(
+        ctx: FuseQueryContextRef,
+        args: &[Box<dyn IFunction>],
+    ) -> FuseQueryResult<Box<dyn IFunction>> {
         if !args.is_empty() {
             return Err(FuseQueryError::Internal(
                 "ToTypeName function args length must be zero".to_string(),
             ));
         }
 
-        Ok(Box::new(DatabaseFunction {}))
+        Ok(Box::new(DatabaseFunction { ctx }))
     }
 }
 
@@ -34,9 +40,8 @@ impl IFunction for DatabaseFunction {
     }
 
     fn eval(&self, _: &DataBlock) -> FuseQueryResult<DataColumnarValue> {
-        // TODO, pass context
         Ok(DataColumnarValue::Scalar(DataValue::String(Some(
-            "default".to_string(),
+            self.ctx.get_default_db()?,
         ))))
     }
 

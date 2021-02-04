@@ -10,12 +10,16 @@ fn test_select_wildcard_plan() -> crate::error::FuseQueryResult<()> {
     use crate::datavalues::*;
     use crate::planners::*;
 
+    let test_source = crate::tests::NumberTestData::create();
+    let ctx =
+        crate::contexts::FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
+
     let schema = Arc::new(DataSchema::new(vec![DataField::new(
         "a",
         DataType::Utf8,
         false,
     )]));
-    let plan = PlanBuilder::create(schema)
+    let plan = PlanBuilder::create(ctx, schema)
         .project(vec![field("a")])?
         .build()?;
     let select = PlanNode::Select(SelectPlan {

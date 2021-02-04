@@ -6,19 +6,17 @@
 fn test_filter_push_down_optimizer() -> crate::error::FuseQueryResult<()> {
     use pretty_assertions::assert_eq;
 
-    use crate::contexts::*;
     use crate::optimizers::*;
     use crate::sql::*;
-    use crate::tests;
 
-    let test_source = tests::NumberTestData::create();
-    let ctx = FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
-    let plan = PlanParser::new().build_from_sql(
-        ctx.clone(),
+    let test_source = crate::tests::NumberTestData::create();
+    let ctx =
+        crate::contexts::FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
+    let plan = PlanParser::create(ctx.clone()).build_from_sql(
         "select (number+1) as c1, number as c2 from system.numbers_mt(10000) where (c1+c2+1)=1",
     )?;
 
-    let mut filter_push_down = FilterPushDownOptimizer::create();
+    let mut filter_push_down = FilterPushDownOptimizer::create(ctx);
     let optimized = filter_push_down.optimize(&plan)?;
     let expect = "\
     Projection: (number + 1) as c1:UInt64, number as c2:UInt64\

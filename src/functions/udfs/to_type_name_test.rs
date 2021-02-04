@@ -22,6 +22,10 @@ fn test_to_type_name_function() -> crate::error::FuseQueryResult<()> {
         func: Box<dyn IFunction>,
     }
 
+    let test_source = crate::tests::NumberTestData::create();
+    let ctx =
+        crate::contexts::FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
+
     let schema = Arc::new(DataSchema::new(vec![DataField::new(
         "a",
         DataType::Boolean,
@@ -29,11 +33,12 @@ fn test_to_type_name_function() -> crate::error::FuseQueryResult<()> {
     )]));
 
     let field_a = FieldFunction::try_create("a").unwrap();
+
     let tests = vec![Test {
         name: "to_type_name-example-passed",
         display: "toTypeName(a)",
         nullable: false,
-        func: ToTypeNameFunction::try_create(&[field_a.clone()])?,
+        func: ToTypeNameFunction::try_create(ctx, &[field_a.clone()])?,
         block: DataBlock::create(
             schema.clone(),
             vec![Arc::new(BooleanArray::from(vec![true, true, true, false]))],

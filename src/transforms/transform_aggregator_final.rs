@@ -7,6 +7,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::stream::StreamExt;
 
+use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::datavalues::{DataSchemaRef, DataValue};
@@ -22,10 +23,14 @@ pub struct AggregatorFinalTransform {
 }
 
 impl AggregatorFinalTransform {
-    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> FuseQueryResult<Self> {
+    pub fn try_create(
+        ctx: FuseQueryContextRef,
+        schema: DataSchemaRef,
+        exprs: Vec<ExpressionPlan>,
+    ) -> FuseQueryResult<Self> {
         let mut funcs = Vec::with_capacity(exprs.len());
         for expr in &exprs {
-            funcs.push(expr.to_function()?);
+            funcs.push(expr.to_function(ctx.clone())?);
         }
 
         Ok(AggregatorFinalTransform {

@@ -5,6 +5,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
+use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
 use crate::datavalues::DataSchemaRef;
@@ -20,10 +21,14 @@ pub struct ProjectionTransform {
 }
 
 impl ProjectionTransform {
-    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> FuseQueryResult<Self> {
+    pub fn try_create(
+        ctx: FuseQueryContextRef,
+        schema: DataSchemaRef,
+        exprs: Vec<ExpressionPlan>,
+    ) -> FuseQueryResult<Self> {
         let mut funcs = Vec::with_capacity(exprs.len());
         for expr in &exprs {
-            let func = expr.to_function()?;
+            let func = expr.to_function(ctx.clone())?;
             if func.is_aggregator() {
                 return Err(FuseQueryError::Internal(format!(
                     "Aggregate function {} is found in ProjectionTransform, should AggregatorTransform",

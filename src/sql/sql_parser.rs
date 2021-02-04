@@ -2,7 +2,7 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 //
-// Borrow from apache/arrow/rust/datafusion/src/sql/parser.rs
+// Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See NOTICE.md
 
 use crate::planners::DFExplainType;
