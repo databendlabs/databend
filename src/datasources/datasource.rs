@@ -24,19 +24,27 @@ impl DataSource {
         let mut datasource = DataSource {
             databases: Default::default(),
         };
+        datasource.register_system_database()?;
+        datasource.register_remote_database()?;
+        Ok(datasource)
+    }
 
-        // Register system.
-        datasource.add_database("system")?;
-        datasource.add_table("system", Arc::new(system::NumbersTable::create("numbers")))?;
-        datasource.add_table(
+    fn register_system_database(&mut self) -> FuseQueryResult<()> {
+        self.add_database("system")?;
+        self.add_table("system", Arc::new(system::NumbersTable::create("numbers")))?;
+        self.add_table(
             "system",
             Arc::new(system::NumbersTable::create("numbers_mt")),
         )?;
-        datasource.add_table("system", Arc::new(system::FunctionsTable::create()))?;
-        datasource.add_table("system", Arc::new(system::SettingsTable::create()))?;
-        datasource.add_table("system", Arc::new(system::OneTable::create()))?;
+        self.add_table("system", Arc::new(system::FunctionsTable::create()))?;
+        self.add_table("system", Arc::new(system::SettingsTable::create()))?;
+        self.add_table("system", Arc::new(system::OneTable::create()))?;
+        Ok(())
+    }
 
-        Ok(datasource)
+    fn register_remote_database(&mut self) -> FuseQueryResult<()> {
+        // TODO
+        Ok(())
     }
 }
 

@@ -9,9 +9,7 @@ async fn test_pipeline_builder() -> crate::error::FuseQueryResult<()> {
     use crate::processors::*;
     use crate::sql::*;
 
-    let test_source = crate::tests::NumberTestData::create();
-    let ctx =
-        crate::contexts::FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
+    let ctx = crate::contexts::FuseQueryContext::try_create_ctx()?;
 
     let plan = PlanParser::create(ctx.clone()).build_from_sql(
         "select sum(number+1)+2 as sumx from system.numbers_mt(80000) where (number+1)=4 limit 1",

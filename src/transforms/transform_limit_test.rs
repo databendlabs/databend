@@ -12,8 +12,7 @@ async fn test_transform_limit() -> crate::error::FuseQueryResult<()> {
     use crate::transforms::*;
 
     let test_source = crate::tests::NumberTestData::create();
-    let ctx =
-        crate::contexts::FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
+    let ctx = crate::contexts::FuseQueryContext::try_create_ctx()?;
 
     let mut pipeline = Pipeline::create();
 

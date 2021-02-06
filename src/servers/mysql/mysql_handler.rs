@@ -4,7 +4,6 @@
 
 use log::{debug, error};
 
-use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use std::{io, net};
 
@@ -14,7 +13,6 @@ use threadpool::ThreadPool;
 
 use crate::contexts::{FuseQueryContext, FuseQueryContextRef, Options};
 use crate::datablocks::DataBlock;
-use crate::datasources::IDataSource;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::executors::ExecutorFactory;
 use crate::servers::mysql::MySQLStream;
@@ -123,12 +121,11 @@ impl<W: io::Write> MysqlShim<W> for Session {
 
 pub struct MySQLHandler {
     opts: Options,
-    datasource: Arc<Mutex<dyn IDataSource>>,
 }
 
 impl MySQLHandler {
-    pub fn create(opts: Options, datasource: Arc<Mutex<dyn IDataSource>>) -> Self {
-        MySQLHandler { opts, datasource }
+    pub fn create(opts: Options) -> Self {
+        MySQLHandler { opts }
     }
 
     pub fn start(&self) -> FuseQueryResult<()> {
@@ -141,8 +138,7 @@ impl MySQLHandler {
 
         for stream in listener.incoming() {
             let stream = stream?;
-            let datasource = self.datasource.clone();
-            let ctx = FuseQueryContext::try_create_ctx(datasource)?;
+            let ctx = FuseQueryContext::try_create_ctx()?;
             ctx.set_max_threads(self.opts.get_num_cpus()?)?;
 
             pool.execute(move || {

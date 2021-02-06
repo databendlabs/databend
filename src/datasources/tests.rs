@@ -4,18 +4,18 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_datasource() -> crate::error::FuseQueryResult<()> {
-    use crate::tests;
+    use crate::datasources::*;
 
-    let datasource = tests::NumberTestData::create().number_source_for_test()?;
+    let mut datasource = DataSource::try_create()?;
 
     // Database check.
-    let actual = format!("{:?}", datasource.lock()?.check_database("xx"));
+    let actual = format!("{:?}", datasource.check_database("xx"));
     let expect = "Err(Internal(\"Unknown database: \\'xx\\'\"))";
     assert_eq!(expect, actual);
 
     // Table check.
-    datasource.lock()?.get_table("system", "numbers_mt")?;
-    if let Err(e) = datasource.lock()?.get_table("system", "numbersxx") {
+    datasource.get_table("system", "numbers_mt")?;
+    if let Err(e) = datasource.get_table("system", "numbersxx") {
         let expect = "Internal(\"Unknown table: \\'system.numbersxx\\'\")";
         let actual = format!("{:?}", e);
         assert_eq!(expect, actual);

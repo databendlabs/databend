@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use crate::contexts::Settings;
-use crate::datasources::{IDataSource, ITable, Partition, Partitions, Statistics};
+use crate::datasources::{DataSource, IDataSource, ITable, Partition, Partitions, Statistics};
 use crate::datavalues::DataValue;
 use crate::error::{FuseQueryError, FuseQueryResult};
 
@@ -20,11 +20,11 @@ pub struct FuseQueryContext {
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
-    pub fn try_create_ctx(datasource: Arc<Mutex<dyn IDataSource>>) -> FuseQueryResult<Arc<Self>> {
+    pub fn try_create_ctx() -> FuseQueryResult<Arc<Self>> {
         let settings = Settings::create();
         let ctx = FuseQueryContext {
             settings,
-            datasource,
+            datasource: Arc::new(Mutex::new(DataSource::try_create()?)),
             statistics: Mutex::new(Statistics::default()),
             partition_queue: Mutex::new(VecDeque::new()),
         };

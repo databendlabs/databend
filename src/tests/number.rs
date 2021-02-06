@@ -2,7 +2,7 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::contexts::FuseQueryContextRef;
 use crate::datasources::IDataSource;
@@ -28,12 +28,6 @@ impl NumberTestData {
         let datasource = crate::datasources::DataSource::try_create()?;
         let table = datasource.get_table(self.db, self.table)?;
         table.schema()
-    }
-
-    pub fn number_source_for_test(&self) -> FuseQueryResult<Arc<Mutex<dyn IDataSource>>> {
-        Ok(Arc::new(Mutex::new(
-            crate::datasources::DataSource::try_create()?,
-        )))
     }
 
     pub fn number_read_source_plan_for_test(
