@@ -23,9 +23,7 @@ fn test_logic_function() -> crate::error::FuseQueryResult<()> {
         func: Box<dyn IFunction>,
     }
 
-    let test_source = crate::tests::NumberTestData::create();
-    let ctx =
-        crate::contexts::FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
+    let ctx = crate::contexts::FuseQueryContext::try_create_ctx()?;
 
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("a", DataType::Boolean, false),

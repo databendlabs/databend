@@ -9,8 +9,7 @@ fn test_filter_plan() -> crate::error::FuseQueryResult<()> {
     use crate::planners::*;
 
     let test_source = crate::tests::NumberTestData::create();
-    let ctx =
-        crate::contexts::FuseQueryContext::try_create_ctx(test_source.number_source_for_test()?)?;
+    let ctx = crate::contexts::FuseQueryContext::try_create_ctx()?;
 
     let source = test_source.number_read_source_plan_for_test(ctx.clone(), 8)?;
     let plan = PlanBuilder::from(ctx, &PlanNode::ReadSource(source))
