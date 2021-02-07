@@ -19,8 +19,8 @@ pub struct Optimizer {
 
 impl Optimizer {
     pub fn create(ctx: FuseQueryContextRef) -> Self {
-        let mut optimizers: Vec<Box<dyn IOptimizer>> = vec![];
-        optimizers.push(Box::new(FilterPushDownOptimizer::create(ctx)));
+        let optimizers: Vec<Box<dyn IOptimizer>> =
+            vec![Box::new(FilterPushDownOptimizer::create(ctx))];
         Optimizer { optimizers }
     }
 
@@ -71,7 +71,30 @@ impl Optimizer {
                 vec![left.as_ref().clone(), right.as_ref().clone()]
             }
             ExpressionPlan::Function { args, .. } => args.clone(),
-            ExpressionPlan::Wildcard => vec![expr.clone()],
+            ExpressionPlan::Wildcard => vec![],
         })
+    }
+
+    pub fn rebuild_from_exprs(
+        expr: &ExpressionPlan,
+        expressions: &[ExpressionPlan],
+    ) -> ExpressionPlan {
+        match expr {
+            ExpressionPlan::Alias(alias, _) => {
+                ExpressionPlan::Alias(alias.clone(), Box::from(expressions[0].clone()))
+            }
+            ExpressionPlan::Field(_) => expr.clone(),
+            ExpressionPlan::Constant(_) => expr.clone(),
+            ExpressionPlan::BinaryExpression { op, .. } => ExpressionPlan::BinaryExpression {
+                left: Box::new(expressions[0].clone()),
+                op: op.clone(),
+                right: Box::new(expressions[1].clone()),
+            },
+            ExpressionPlan::Function { op, .. } => ExpressionPlan::Function {
+                op: op.clone(),
+                args: expressions.to_vec(),
+            },
+            other => other.clone(),
+        }
     }
 }
