@@ -41,10 +41,10 @@ async fn test_select_executor() -> crate::error::FuseQueryResult<()> {
             let types: Vec<&DataType> = sc.fields().iter().map(|f| f.data_type()).collect();
             assert_eq!(
                 vec![
-                    &DataType::UInt64,
-                    &DataType::UInt64,
-                    &DataType::UInt64,
-                    &DataType::UInt64
+                    &DataType::UInt16,
+                    &DataType::UInt16,
+                    &DataType::UInt16,
+                    &DataType::UInt16
                 ],
                 types
             );

@@ -237,8 +237,8 @@ pub fn numerical_arithmetic_coercion(
     // error on any non-numeric type
     if !is_numeric(lhs_type) || !is_numeric(rhs_type) {
         return Err(FuseQueryError::Internal(format!(
-            "Can't construct numerical_arithmetic_coercion from {} and {}",
-            lhs_type, rhs_type
+            "Unsupported ({:?}) {} ({:?})",
+            lhs_type, op, rhs_type
         )));
     };
 
