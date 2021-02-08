@@ -5,7 +5,9 @@
 mod tests;
 
 mod datasource;
+mod local;
 mod partition;
+mod remote;
 mod statistics;
 mod system;
 mod table;

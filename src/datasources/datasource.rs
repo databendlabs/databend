@@ -5,7 +5,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::datasources::{system, ITable};
+use crate::datasources::local::LocalFactory;
+use crate::datasources::remote::RemoteFactory;
+use crate::datasources::system::SystemFactory;
+use crate::datasources::ITable;
 use crate::error::{FuseQueryError, FuseQueryResult};
 
 pub trait IDataSource: Sync + Send {
@@ -14,6 +17,8 @@ pub trait IDataSource: Sync + Send {
     fn add_table(&mut self, db_name: &str, table: Arc<dyn ITable>) -> FuseQueryResult<()>;
     fn get_table(&self, db_name: &str, table_name: &str) -> FuseQueryResult<Arc<dyn ITable>>;
 }
+
+pub type DatabaseHashMap = HashMap<&'static str, Vec<Arc<dyn ITable>>>;
 
 pub struct DataSource {
     databases: HashMap<String, HashMap<String, Arc<dyn ITable>>>,
@@ -25,25 +30,41 @@ impl DataSource {
             databases: Default::default(),
         };
         datasource.register_system_database()?;
+        datasource.register_local_database()?;
         datasource.register_remote_database()?;
         Ok(datasource)
     }
 
     fn register_system_database(&mut self) -> FuseQueryResult<()> {
-        self.add_database("system")?;
-        self.add_table("system", Arc::new(system::NumbersTable::create("numbers")))?;
-        self.add_table(
-            "system",
-            Arc::new(system::NumbersTable::create("numbers_mt")),
-        )?;
-        self.add_table("system", Arc::new(system::FunctionsTable::create()))?;
-        self.add_table("system", Arc::new(system::SettingsTable::create()))?;
-        self.add_table("system", Arc::new(system::OneTable::create()))?;
+        let map = SystemFactory::create().get_tables()?;
+        for (database, tables) in map {
+            self.add_database(database)?;
+            for tbl in tables {
+                self.add_table(database, tbl)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn register_local_database(&mut self) -> FuseQueryResult<()> {
+        let map = LocalFactory::create().get_tables()?;
+        for (database, tables) in map {
+            self.add_database(database)?;
+            for tbl in tables {
+                self.add_table(database, tbl)?;
+            }
+        }
         Ok(())
     }
 
     fn register_remote_database(&mut self) -> FuseQueryResult<()> {
-        // TODO
+        let map = RemoteFactory::create().get_tables()?;
+        for (database, tables) in map {
+            self.add_database(database)?;
+            for tbl in tables {
+                self.add_table(database, tbl)?;
+            }
+        }
         Ok(())
     }
 }

@@ -28,6 +28,9 @@ impl PipelineBuilder {
         let plans = self.plan.get_children_nodes()?;
         for plan in &plans {
             match plan {
+                PlanNode::Fragment(_) => {
+                    pipeline.merge_processor()?;
+                }
                 PlanNode::Limit(plan) => {
                     pipeline.add_simple_transform(|| {
                         Ok(Box::new(LimitTransform::try_create(plan.n)?))
@@ -48,20 +51,20 @@ impl PipelineBuilder {
                         )?))
                     })?;
                 }
-                PlanNode::Aggregate(plan) => {
+                PlanNode::AggregatorPartial(plan) => {
                     pipeline.add_simple_transform(|| {
                         Ok(Box::new(AggregatorPartialTransform::try_create(
                             self.ctx.clone(),
-                            plan.schema.clone(),
+                            plan.schema(),
                             plan.aggr_expr.clone(),
                         )?))
                     })?;
-
-                    pipeline.merge_processor()?;
+                }
+                PlanNode::AggregatorFinal(plan) => {
                     pipeline.add_simple_transform(|| {
                         Ok(Box::new(AggregatorFinalTransform::try_create(
                             self.ctx.clone(),
-                            plan.schema.clone(),
+                            plan.schema(),
                             plan.aggr_expr.clone(),
                         )?))
                     })?;

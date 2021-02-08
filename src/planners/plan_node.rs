@@ -6,15 +6,17 @@ use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::DataSchemaRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
-    AggregatePlan, EmptyPlan, ExplainPlan, FilterPlan, LimitPlan, PlanBuilder, ProjectionPlan,
-    ReadDataSourcePlan, ScanPlan, SelectPlan, SettingPlan,
+    AggregatorFinalPlan, AggregatorPartialPlan, EmptyPlan, ExplainPlan, FilterPlan, FragmentPlan,
+    LimitPlan, PlanBuilder, ProjectionPlan, ReadDataSourcePlan, ScanPlan, SelectPlan, SettingPlan,
 };
 
 #[derive(Clone)]
 pub enum PlanNode {
     Empty(EmptyPlan),
+    Fragment(FragmentPlan),
     Projection(ProjectionPlan),
-    Aggregate(AggregatePlan),
+    AggregatorPartial(AggregatorPartialPlan),
+    AggregatorFinal(AggregatorFinalPlan),
     Filter(FilterPlan),
     Limit(LimitPlan),
     Scan(ScanPlan),
@@ -29,9 +31,11 @@ impl PlanNode {
     pub fn schema(&self) -> DataSchemaRef {
         match self {
             PlanNode::Empty(v) => v.schema(),
+            PlanNode::Fragment(v) => v.schema(),
             PlanNode::Scan(v) => v.schema(),
             PlanNode::Projection(v) => v.schema(),
-            PlanNode::Aggregate(v) => v.schema(),
+            PlanNode::AggregatorPartial(v) => v.schema(),
+            PlanNode::AggregatorFinal(v) => v.schema(),
             PlanNode::Filter(v) => v.schema(),
             PlanNode::Limit(v) => v.schema(),
             PlanNode::ReadSource(v) => v.schema(),
@@ -44,9 +48,11 @@ impl PlanNode {
     pub fn name(&self) -> &str {
         match self {
             PlanNode::Empty(_) => "EmptyPlan",
+            PlanNode::Fragment(_) => "FragmentPlan",
             PlanNode::Scan(_) => "ScanPlan",
             PlanNode::Projection(_) => "ProjectionPlan",
-            PlanNode::Aggregate(_) => "AggregatePlan",
+            PlanNode::AggregatorPartial(_) => "AggregatorPartialPlan",
+            PlanNode::AggregatorFinal(_) => "AggregatorFinalPlan",
             PlanNode::Filter(_) => "FilterPlan",
             PlanNode::Limit(_) => "LimitPlan",
             PlanNode::ReadSource(_) => "ReadSourcePlan",
@@ -73,13 +79,23 @@ impl PlanNode {
             }
 
             match plan {
-                PlanNode::Aggregate(v) => {
-                    list.push(PlanNode::Aggregate(v.clone()));
+                PlanNode::Fragment(v) => {
+                    list.push(PlanNode::Fragment(v.clone()));
                     plan = v.input.as_ref().clone();
                     depth += 1;
                 }
                 PlanNode::Projection(v) => {
                     list.push(PlanNode::Projection(v.clone()));
+                    plan = v.input.as_ref().clone();
+                    depth += 1;
+                }
+                PlanNode::AggregatorPartial(v) => {
+                    list.push(PlanNode::AggregatorPartial(v.clone()));
+                    plan = v.input.as_ref().clone();
+                    depth += 1;
+                }
+                PlanNode::AggregatorFinal(v) => {
+                    list.push(PlanNode::AggregatorFinal(v.clone()));
                     plan = v.input.as_ref().clone();
                     depth += 1;
                 }
@@ -109,9 +125,6 @@ impl PlanNode {
                 }
 
                 // Return.
-                PlanNode::SetVariable(_) => {
-                    break;
-                }
                 PlanNode::Empty(_) => {
                     break;
                 }
@@ -121,6 +134,9 @@ impl PlanNode {
                 }
                 PlanNode::ReadSource(v) => {
                     list.push(PlanNode::ReadSource(v));
+                    break;
+                }
+                PlanNode::SetVariable(_) => {
                     break;
                 }
             }
@@ -147,8 +163,12 @@ impl PlanNode {
                 PlanNode::Projection(v) => {
                     builder = builder.project(v.expr.clone())?;
                 }
-                PlanNode::Aggregate(v) => {
-                    builder = builder.aggregate(v.group_expr.clone(), v.aggr_expr.clone())?;
+                PlanNode::AggregatorPartial(v) => {
+                    builder =
+                        builder.aggregate_partial(v.aggr_expr.clone(), v.group_expr.clone())?;
+                }
+                PlanNode::AggregatorFinal(v) => {
+                    builder = builder.aggregate_final(v.aggr_expr.clone(), v.group_expr.clone())?;
                 }
                 PlanNode::Filter(v) => {
                     builder = builder.filter(v.predicate.clone())?;
@@ -166,6 +186,7 @@ impl PlanNode {
                     builder = builder.select()?;
                 }
                 PlanNode::Empty(_) => {}
+                PlanNode::Fragment(_) => {}
                 PlanNode::Scan(_) => {}
                 PlanNode::SetVariable(_) => {}
             }
