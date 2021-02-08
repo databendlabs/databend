@@ -9,7 +9,7 @@ use crate::datavalues::{DataField, DataSchema, DataSchemaRef};
 use crate::error::FuseQueryResult;
 use crate::planners::{
     field, AggregatePlan, DFExplainType, EmptyPlan, ExplainPlan, ExpressionPlan, FilterPlan,
-    LimitPlan, PlanNode, ProjectionPlan, ScanPlan, SelectPlan,
+    LimitPlan, PlanNode, PlanRewriter, ProjectionPlan, ScanPlan, SelectPlan,
 };
 
 pub struct PlanBuilder {
@@ -42,6 +42,7 @@ impl PlanBuilder {
 
     /// Apply a projection.
     pub fn project(&self, exprs: Vec<ExpressionPlan>) -> FuseQueryResult<Self> {
+        let exprs = PlanRewriter::exprs_extract_aliases(exprs)?;
         let input_schema = self.plan.schema();
 
         let mut projection_exprs = vec![];
