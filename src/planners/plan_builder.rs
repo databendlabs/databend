@@ -53,6 +53,7 @@ impl PlanBuilder {
             }
             _ => projection_exprs.push(v.clone()),
         });
+
         let fields: Vec<DataField> = projection_exprs
             .iter()
             .map(|expr| expr.to_field(self.ctx.clone(), &input_schema))

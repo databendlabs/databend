@@ -32,6 +32,10 @@ pub enum DataValueComparisonOperator {
     Gt,
     GtEq,
     NotEq,
+    // /// Matches a wildcard pattern
+    // Like,
+    // /// Does not match a wildcard pattern
+    // NotLike,
 }
 
 impl std::fmt::Display for DataValueComparisonOperator {
@@ -43,6 +47,8 @@ impl std::fmt::Display for DataValueComparisonOperator {
             DataValueComparisonOperator::Gt => ">",
             DataValueComparisonOperator::GtEq => ">=",
             DataValueComparisonOperator::NotEq => "!=",
+            // DataValueComparisonOperator::Like => "LIKE",
+            // DataValueComparisonOperator::NotLike => "NOT LIKE",
         };
         write!(f, "{}", display)
     }

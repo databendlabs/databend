@@ -35,30 +35,7 @@ fn rewrite_alias_expr(
             return Ok(expr.clone());
         }
     }
-    Ok(rebuild_alias_from_exprs(&expr, &expressions))
-}
-
-fn rebuild_alias_from_exprs(
-    expr: &ExpressionPlan,
-    expressions: &[ExpressionPlan],
-) -> ExpressionPlan {
-    match expr {
-        ExpressionPlan::Alias(alias, _) => {
-            ExpressionPlan::Alias(alias.clone(), Box::from(expressions[0].clone()))
-        }
-        ExpressionPlan::Field(_) => expr.clone(),
-        ExpressionPlan::Constant(_) => expr.clone(),
-        ExpressionPlan::BinaryExpression { op, .. } => ExpressionPlan::BinaryExpression {
-            left: Box::new(expressions[0].clone()),
-            op: op.clone(),
-            right: Box::new(expressions[1].clone()),
-        },
-        ExpressionPlan::Function { op, .. } => ExpressionPlan::Function {
-            op: op.clone(),
-            args: expressions.to_vec(),
-        },
-        other => other.clone(),
-    }
+    Ok(Optimizer::rebuild_from_exprs(&expr, &expressions))
 }
 
 impl IOptimizer for FilterPushDownOptimizer {

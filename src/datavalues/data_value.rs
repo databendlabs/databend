@@ -74,6 +74,38 @@ impl DataValue {
         }
     }
 
+    // ConstantValue from planner, we turn Int64, UInt64 to specific minimal type
+    pub fn to_field_value(&self) -> Self {
+        match *self {
+            DataValue::Int64(Some(i)) => {
+                if i < i8::max_value() as i64 {
+                    return DataValue::Int8(Some(i as i8));
+                }
+                if i < i16::max_value() as i64 {
+                    return DataValue::Int16(Some(i as i16));
+                }
+                if i < i32::max_value() as i64 {
+                    return DataValue::Int32(Some(i as i32));
+                }
+                self.clone()
+            }
+
+            DataValue::UInt64(Some(i)) => {
+                if i < u8::max_value() as u64 {
+                    return DataValue::UInt8(Some(i as u8));
+                }
+                if i < u16::max_value() as u64 {
+                    return DataValue::UInt16(Some(i as u16));
+                }
+                if i < u32::max_value() as u64 {
+                    return DataValue::UInt32(Some(i as u32));
+                }
+                self.clone()
+            }
+            _ => self.clone(),
+        }
+    }
+
     pub fn to_array(&self, size: usize) -> FuseQueryResult<DataArrayRef> {
         Ok(match self {
             DataValue::Null => Arc::new(NullArray::new(size)),
@@ -105,7 +137,7 @@ impl DataValue {
                 return Err(FuseQueryError::Internal(format!(
                     "DataValue to array cannot be NONE {:?}",
                     other
-                )))
+                )));
             }
         })
     }
@@ -151,9 +183,22 @@ impl DataValue {
                 return Err(FuseQueryError::Internal(format!(
                     "Can't create a scalar of array of type \"{:?}\"",
                     other
-                )))
+                )));
             }
         })
+    }
+
+    pub fn try_from_literal(literal: &str) -> FuseQueryResult<Self> {
+        match literal.parse::<i64>() {
+            Ok(n) => {
+                if n >= 0 {
+                    Ok(DataValue::UInt64(Some(n as u64)))
+                } else {
+                    Ok(DataValue::Int64(Some(n)))
+                }
+            }
+            Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?))),
+        }
     }
 }
 
@@ -190,7 +235,7 @@ impl TryFrom<&DataType> for DataValue {
                 return Err(FuseQueryError::Internal(format!(
                     "Unsupported try_from() for data type: {:?}",
                     data_type
-                )))
+                )));
             }
         })
     }

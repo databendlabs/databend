@@ -238,19 +238,9 @@ impl PlanParser {
     ) -> FuseQueryResult<ExpressionPlan> {
         match sql {
             sqlparser::ast::Expr::Identifier(ref v) => Ok(ExpressionPlan::Field(v.clone().value)),
-            sqlparser::ast::Expr::Value(sqlparser::ast::Value::Number(n)) => match n.parse::<i64>()
-            {
-                Ok(n) => {
-                    if n >= 0 {
-                        Ok(ExpressionPlan::Constant(DataValue::UInt64(Some(n as u64))))
-                    } else {
-                        Ok(ExpressionPlan::Constant(DataValue::Int64(Some(n))))
-                    }
-                }
-                Err(_) => Ok(ExpressionPlan::Constant(DataValue::Float64(Some(
-                    n.parse::<f64>()?,
-                )))),
-            },
+            sqlparser::ast::Expr::Value(sqlparser::ast::Value::Number(n)) => {
+                Ok(ExpressionPlan::Constant(DataValue::try_from_literal(n)?))
+            }
             sqlparser::ast::Expr::Value(sqlparser::ast::Value::SingleQuotedString(s)) => {
                 Ok(ExpressionPlan::Constant(DataValue::String(Some(s.clone()))))
             }

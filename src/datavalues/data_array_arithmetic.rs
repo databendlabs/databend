@@ -31,8 +31,8 @@ pub fn data_array_arithmetic_op(
         }
     };
 
-    let coercion_type = super::data_type::numerical_coercion(
-        format!("{}", op).as_str(),
+    let coercion_type = super::data_type::numerical_arithmetic_coercion(
+        &op,
         &left_array.data_type(),
         &right_array.data_type(),
     )?;

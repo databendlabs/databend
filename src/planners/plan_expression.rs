@@ -36,7 +36,10 @@ impl ExpressionPlan {
     ) -> FuseQueryResult<Box<dyn IFunction>> {
         match self {
             ExpressionPlan::Field(ref v) => FieldFunction::try_create(v.as_str()),
-            ExpressionPlan::Constant(ref v) => ConstantFunction::try_create(v.clone()),
+            ExpressionPlan::Constant(ref v) => {
+                let field_value = v.to_field_value();
+                ConstantFunction::try_create(field_value)
+            }
             ExpressionPlan::BinaryExpression { left, op, right } => {
                 let l = left.to_function_with_depth(ctx.clone(), depth)?;
                 let r = right.to_function_with_depth(ctx.clone(), depth + 1)?;

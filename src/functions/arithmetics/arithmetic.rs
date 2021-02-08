@@ -59,8 +59,8 @@ impl ArithmeticFunction {
 
 impl IFunction for ArithmeticFunction {
     fn return_type(&self, input_schema: &DataSchema) -> FuseQueryResult<DataType> {
-        datavalues::numerical_coercion(
-            format!("{}", self.op).as_str(),
+        datavalues::numerical_arithmetic_coercion(
+            &self.op,
             &self.left.return_type(input_schema)?,
             &self.right.return_type(input_schema)?,
         )

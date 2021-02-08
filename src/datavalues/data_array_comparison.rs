@@ -19,7 +19,6 @@ pub fn data_array_comparison_op(
     match (left, right) {
         (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
             let coercion_type = super::data_type::equal_coercion(
-                format!("{}", op).as_str(),
                 &left_array.data_type(),
                 &right_array.data_type(),
             )?;
@@ -43,11 +42,8 @@ pub fn data_array_comparison_op(
         }
 
         (DataColumnarValue::Array(array), DataColumnarValue::Scalar(scalar)) => {
-            let coercion_type = super::data_type::equal_coercion(
-                format!("{}", op).as_str(),
-                &array.data_type(),
-                &scalar.data_type(),
-            )?;
+            let coercion_type =
+                super::data_type::equal_coercion(&array.data_type(), &scalar.data_type())?;
             let left_array = arrow::compute::cast(&array, &coercion_type)?;
             let right_array = arrow::compute::cast(&scalar.to_array(1)?, &coercion_type)?;
             let scalar = super::DataValue::try_from_array(&right_array, 0)?;
@@ -69,11 +65,8 @@ pub fn data_array_comparison_op(
         }
 
         (DataColumnarValue::Scalar(scalar), DataColumnarValue::Array(array)) => {
-            let coercion_type = super::data_type::equal_coercion(
-                format!("{}", op).as_str(),
-                &array.data_type(),
-                &scalar.data_type(),
-            )?;
+            let coercion_type =
+                super::data_type::equal_coercion(&array.data_type(), &scalar.data_type())?;
             let left_array = arrow::compute::cast(&scalar.to_array(1)?, &coercion_type)?;
             let right_array = arrow::compute::cast(&array, &coercion_type)?;
             let scalar = super::DataValue::try_from_array(&left_array, 0)?;
@@ -93,11 +86,28 @@ pub fn data_array_comparison_op(
                 }
             }
         }
-        _ => Err(FuseQueryError::Internal(format!(
-            "Cannot do data_array {}, left:{:?}, right:{:?}",
-            op,
-            left.data_type(),
-            right.data_type()
-        ))),
+        (DataColumnarValue::Scalar(left_scala), DataColumnarValue::Scalar(right_scalar)) => {
+            let coercion_type = super::data_type::equal_coercion(
+                &left_scala.data_type(),
+                &right_scalar.data_type(),
+            )?;
+            let left_array = arrow::compute::cast(&left_scala.to_array(1)?, &coercion_type)?;
+            let right_array = arrow::compute::cast(&right_scalar.to_array(1)?, &coercion_type)?;
+
+            match op {
+                DataValueComparisonOperator::Eq => arrow_array_op!(&left_array, &right_array, eq),
+                DataValueComparisonOperator::Lt => arrow_array_op!(&left_array, &right_array, lt),
+                DataValueComparisonOperator::LtEq => {
+                    arrow_array_op!(&left_array, &right_array, lt_eq)
+                }
+                DataValueComparisonOperator::Gt => arrow_array_op!(&left_array, &right_array, gt),
+                DataValueComparisonOperator::GtEq => {
+                    arrow_array_op!(&left_array, &right_array, gt_eq)
+                }
+                DataValueComparisonOperator::NotEq => {
+                    arrow_array_op!(&left_array, &right_array, neq)
+                }
+            }
+        }
     }
 }

@@ -73,16 +73,16 @@ fn test_array_arithmetic() {
             op: DataValueArithmeticOperator::Add,
             expect: vec![
                 Arc::new(StringArray::from(vec![""])),
-                Arc::new(Int16Array::from(vec![5, 5, 5, 5])),
-                Arc::new(Int8Array::from(vec![5, 5, 5, 5])),
+                Arc::new(Int32Array::from(vec![5, 5, 5, 5])),
                 Arc::new(Int16Array::from(vec![5, 5, 5, 5])),
                 Arc::new(Int32Array::from(vec![5, 5, 5, 5])),
                 Arc::new(Int64Array::from(vec![5, 5, 5, 5])),
-                Arc::new(UInt8Array::from(vec![5, 5, 5, 5])),
+                Arc::new(Int64Array::from(vec![5, 5, 5, 5])),
                 Arc::new(UInt16Array::from(vec![5, 5, 5, 5])),
                 Arc::new(UInt32Array::from(vec![5, 5, 5, 5])),
                 Arc::new(UInt64Array::from(vec![5, 5, 5, 5])),
-                Arc::new(Float32Array::from(vec![5.0, 5.0, 5.0, 5.0])),
+                Arc::new(UInt64Array::from(vec![5, 5, 5, 5])),
+                Arc::new(Float64Array::from(vec![5.0, 5.0, 5.0, 5.0])),
                 Arc::new(Float64Array::from(vec![5.0, 5.0, 5.0, 5.0])),
             ],
             error: vec!["Internal Error: Unsupported (Utf8) + (Utf8)"],
@@ -143,15 +143,15 @@ fn test_array_arithmetic() {
             expect: vec![
                 Arc::new(StringArray::from(vec![""])),
                 Arc::new(Int64Array::from(vec![3, 1, -1, -3])),
-                Arc::new(Int8Array::from(vec![3, 1, -1, -3])),
                 Arc::new(Int16Array::from(vec![3, 1, -1, -3])),
                 Arc::new(Int32Array::from(vec![3, 1, -1, -3])),
                 Arc::new(Int64Array::from(vec![3, 1, -1, -3])),
-                Arc::new(UInt8Array::from(vec![1, 1, 1, 1])),
-                Arc::new(UInt16Array::from(vec![1, 1, 1, 1])),
-                Arc::new(UInt32Array::from(vec![1, 1, 1, 1])),
-                Arc::new(UInt64Array::from(vec![1, 1, 1, 1])),
-                Arc::new(Float32Array::from(vec![3.0, 1.0, -1.0, -3.0])),
+                Arc::new(Int64Array::from(vec![3, 1, -1, -3])),
+                Arc::new(Int16Array::from(vec![1, 1, 1, 1])),
+                Arc::new(Int32Array::from(vec![1, 1, 1, 1])),
+                Arc::new(Int64Array::from(vec![1, 1, 1, 1])),
+                Arc::new(Int64Array::from(vec![1, 1, 1, 1])),
+                Arc::new(Float64Array::from(vec![3.0, 1.0, -1.0, -3.0])),
                 Arc::new(Float64Array::from(vec![3.0, 1.0, -1.0, -3.0])),
             ],
             error: vec!["Internal Error: Unsupported (Utf8) - (Utf8)"],
@@ -207,15 +207,15 @@ fn test_array_arithmetic() {
             op: DataValueArithmeticOperator::Mul,
             expect: vec![
                 Arc::new(StringArray::from(vec![""])),
-                Arc::new(Int8Array::from(vec![4, 6, 6, 4])),
                 Arc::new(Int16Array::from(vec![4, 6, 6, 4])),
                 Arc::new(Int32Array::from(vec![4, 6, 6, 4])),
                 Arc::new(Int64Array::from(vec![4, 6, 6, 4])),
-                Arc::new(UInt8Array::from(vec![4, 6, 6, 4])),
+                Arc::new(Int64Array::from(vec![4, 6, 6, 4])),
                 Arc::new(UInt16Array::from(vec![4, 6, 6, 4])),
                 Arc::new(UInt32Array::from(vec![4, 6, 6, 4])),
                 Arc::new(UInt64Array::from(vec![4, 6, 6, 4])),
-                Arc::new(Float32Array::from(vec![4.0, 6.0, 6.0, 4.0])),
+                Arc::new(UInt64Array::from(vec![4, 6, 6, 4])),
+                Arc::new(Float64Array::from(vec![4.0, 6.0, 6.0, 4.0])),
                 Arc::new(Float64Array::from(vec![4.0, 6.0, 6.0, 4.0])),
             ],
             error: vec!["Internal Error: Unsupported (Utf8) * (Utf8)"],
@@ -228,40 +228,40 @@ fn test_array_arithmetic() {
                     Arc::new(StringArray::from(vec!["yy"])),
                 ],
                 vec![
-                    Arc::new(Int8Array::from(vec![4, 3, 2, 1])),
-                    Arc::new(Int8Array::from(vec![1, 2, 3, 4])),
+                    Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0])),
+                    Arc::new(Float64Array::from(vec![1.0, 2.0, 3.0, 4.0])),
                 ],
                 vec![
-                    Arc::new(Int16Array::from(vec![4, 3, 2, 1])),
-                    Arc::new(Int16Array::from(vec![1, 2, 3, 4])),
+                    Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0])),
+                    Arc::new(Float64Array::from(vec![1.0, 2.0, 3.0, 4.0])),
                 ],
                 vec![
-                    Arc::new(Int32Array::from(vec![4, 3, 2, 1])),
-                    Arc::new(Int32Array::from(vec![1, 2, 3, 4])),
+                    Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0])),
+                    Arc::new(Float64Array::from(vec![1.0, 2.0, 3.0, 4.0])),
                 ],
                 vec![
-                    Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
-                    Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
+                    Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0])),
+                    Arc::new(Float64Array::from(vec![1.0, 2.0, 3.0, 4.0])),
                 ],
                 vec![
-                    Arc::new(UInt8Array::from(vec![4, 3, 2, 1])),
-                    Arc::new(UInt8Array::from(vec![1, 2, 3, 4])),
+                    Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0])),
+                    Arc::new(Float64Array::from(vec![1.0, 2.0, 3.0, 4.0])),
                 ],
                 vec![
-                    Arc::new(UInt16Array::from(vec![4, 3, 2, 1])),
-                    Arc::new(UInt16Array::from(vec![1, 2, 3, 4])),
+                    Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0])),
+                    Arc::new(Float64Array::from(vec![1.0, 2.0, 3.0, 4.0])),
                 ],
                 vec![
-                    Arc::new(UInt32Array::from(vec![4, 3, 2, 1])),
-                    Arc::new(UInt32Array::from(vec![1, 2, 3, 4])),
+                    Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0])),
+                    Arc::new(Float64Array::from(vec![1.0, 2.0, 3.0, 4.0])),
                 ],
                 vec![
-                    Arc::new(UInt64Array::from(vec![4, 3, 2, 1])),
-                    Arc::new(UInt64Array::from(vec![1, 2, 3, 4])),
+                    Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0])),
+                    Arc::new(Float64Array::from(vec![1.0, 2.0, 3.0, 4.0])),
                 ],
                 vec![
-                    Arc::new(Float32Array::from(vec![4.0, 3.0, 2.0, 1.0])),
-                    Arc::new(Float32Array::from(vec![1.0, 2.0, 3.0, 4.0])),
+                    Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0])),
+                    Arc::new(Float64Array::from(vec![1.0, 2.0, 3.0, 4.0])),
                 ],
                 vec![
                     Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0])),
@@ -294,8 +294,20 @@ fn test_array_arithmetic() {
                 &DataColumnarValue::Array(args[1].clone()),
             );
             match result {
-                Ok(v) => assert_eq!(v.as_ref(), t.expect[i].as_ref()),
-                Err(e) => assert_eq!(t.error[i], e.to_string()),
+                Ok(v) => assert_eq!(
+                    v.as_ref(),
+                    t.expect[i].as_ref(),
+                    "failed in the test: {}, case: {}",
+                    t.name,
+                    i
+                ),
+                Err(e) => assert_eq!(
+                    t.error[i],
+                    e.to_string(),
+                    "failed in the test: {}, case: {}",
+                    t.name,
+                    i
+                ),
             }
         }
     }
@@ -323,7 +335,7 @@ fn test_array_scalar_arithmetic() {
             array: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
             scalar: DataValue::Int8(Some(1)),
             op: DataValueArithmeticOperator::Add,
-            expect: Arc::new(Int8Array::from(vec![5, 5, 5, 5])),
+            expect: Arc::new(Int16Array::from(vec![5, 5, 5, 5])),
             error: "",
         },
         ArrayTest {
@@ -331,7 +343,7 @@ fn test_array_scalar_arithmetic() {
             array: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
             scalar: DataValue::Int8(Some(1)),
             op: DataValueArithmeticOperator::Sub,
-            expect: Arc::new(Int8Array::from(vec![3, 3, 3, 3])),
+            expect: Arc::new(Int16Array::from(vec![3, 3, 3, 3])),
             error: "",
         },
         ArrayTest {
@@ -339,7 +351,7 @@ fn test_array_scalar_arithmetic() {
             array: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
             scalar: DataValue::Int8(Some(1)),
             op: DataValueArithmeticOperator::Mul,
-            expect: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
+            expect: Arc::new(Int16Array::from(vec![4, 4, 4, 4])),
             error: "",
         },
         ArrayTest {
@@ -359,8 +371,13 @@ fn test_array_scalar_arithmetic() {
             &DataColumnarValue::Scalar(t.scalar),
         );
         match result {
-            Ok(v) => assert_eq!(v.as_ref(), t.expect.as_ref()),
-            Err(e) => assert_eq!(t.error, e.to_string()),
+            Ok(v) => assert_eq!(
+                v.as_ref(),
+                t.expect.as_ref(),
+                "failed in the test: {}",
+                t.name
+            ),
+            Err(e) => assert_eq!(t.error, e.to_string(), "failed in the test: {}", t.name),
         }
     }
 }
@@ -387,7 +404,7 @@ fn test_scalar_array_arithmetic() {
             array: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
             scalar: DataValue::Int8(Some(1)),
             op: DataValueArithmeticOperator::Add,
-            expect: Arc::new(Int8Array::from(vec![5, 5, 5, 5])),
+            expect: Arc::new(Int16Array::from(vec![5, 5, 5, 5])),
             error: "",
         },
         ArrayTest {
@@ -395,7 +412,7 @@ fn test_scalar_array_arithmetic() {
             array: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
             scalar: DataValue::Int8(Some(1)),
             op: DataValueArithmeticOperator::Sub,
-            expect: Arc::new(Int8Array::from(vec![-3, -3, -3, -3])),
+            expect: Arc::new(Int16Array::from(vec![-3, -3, -3, -3])),
             error: "",
         },
         ArrayTest {
@@ -403,7 +420,7 @@ fn test_scalar_array_arithmetic() {
             array: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
             scalar: DataValue::Int8(Some(1)),
             op: DataValueArithmeticOperator::Mul,
-            expect: Arc::new(Int8Array::from(vec![4, 4, 4, 4])),
+            expect: Arc::new(Int16Array::from(vec![4, 4, 4, 4])),
             error: "",
         },
         ArrayTest {
@@ -423,8 +440,13 @@ fn test_scalar_array_arithmetic() {
             &DataColumnarValue::Array(t.array),
         );
         match result {
-            Ok(v) => assert_eq!(v.as_ref(), t.expect.as_ref()),
-            Err(e) => assert_eq!(t.error, e.to_string()),
+            Ok(v) => assert_eq!(
+                v.as_ref(),
+                t.expect.as_ref(),
+                "failed in the test: {}",
+                t.name
+            ),
+            Err(e) => assert_eq!(t.error, e.to_string(), "failed in the test: {}", t.name),
         }
     }
 }
