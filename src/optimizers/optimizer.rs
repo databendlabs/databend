@@ -46,7 +46,8 @@ impl Optimizer {
                     map.insert(field.name().clone(), expr);
                 })
             }
-            PlanNode::Aggregate(v) => Self::projections_to_map(v.input.as_ref(), map)?,
+            PlanNode::AggregatorPartial(v) => Self::projections_to_map(v.input.as_ref(), map)?,
+            PlanNode::AggregatorFinal(v) => Self::projections_to_map(v.input.as_ref(), map)?,
             PlanNode::Filter(v) => Self::projections_to_map(v.input.as_ref(), map)?,
             PlanNode::Limit(v) => Self::projections_to_map(v.input.as_ref(), map)?,
             PlanNode::Explain(v) => Self::projections_to_map(v.plan.as_ref(), map)?,

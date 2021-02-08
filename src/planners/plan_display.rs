@@ -17,8 +17,10 @@ impl PlanNode {
         }
 
         let recurse = match self {
+            PlanNode::Fragment(plan) => plan.input.accept(visitor)?,
             PlanNode::Projection(plan) => plan.input.accept(visitor)?,
-            PlanNode::Aggregate(plan) => plan.input.accept(visitor)?,
+            PlanNode::AggregatorPartial(plan) => plan.input.accept(visitor)?,
+            PlanNode::AggregatorFinal(plan) => plan.input.accept(visitor)?,
             PlanNode::Filter(plan) => plan.input.accept(visitor)?,
             PlanNode::Limit(plan) => plan.input.accept(visitor)?,
             PlanNode::Scan(..)
@@ -94,6 +96,9 @@ impl PlanNode {
                     PlanNode::Empty(_) => {
                         write!(f, "")
                     }
+                    PlanNode::Fragment(_) => {
+                        write!(f, "Fragment for distributed")
+                    }
                     PlanNode::Projection(plan) => {
                         write!(f, "Projection: ")?;
                         for i in 0..plan.expr.len() {
@@ -109,17 +114,29 @@ impl PlanNode {
                         }
                         Ok(())
                     }
-                    PlanNode::Aggregate(plan) => write!(
-                        f,
-                        "Aggregate: groupBy=[{:?}], aggr=[{:?}]",
-                        plan.group_expr, plan.aggr_expr
-                    ),
-
-                    PlanNode::Filter(plan) => write!(f, "Filter: {:?}", plan.predicate),
+                    PlanNode::AggregatorPartial(plan) => {
+                        write!(
+                            f,
+                            "AggregatorPartial: groupBy=[{:?}], aggr=[{:?}]",
+                            plan.group_expr, plan.aggr_expr
+                        )
+                    }
+                    PlanNode::AggregatorFinal(plan) => {
+                        write!(
+                            f,
+                            "AggregatorFinal: groupBy=[{:?}], aggr=[{:?}]",
+                            plan.group_expr, plan.aggr_expr
+                        )
+                    }
+                    PlanNode::Filter(plan) => {
+                        write!(f, "Filter: {:?}", plan.predicate)
+                    }
                     PlanNode::Limit(plan) => {
                         write!(f, "Limit: {}", plan.n)
                     }
-
+                    PlanNode::Scan(_) | PlanNode::SetVariable(_) => {
+                        write!(f, "")
+                    }
                     PlanNode::ReadSource(plan) => {
                         write!(
                             f,
@@ -133,9 +150,6 @@ impl PlanNode {
                     }
                     PlanNode::Select(plan) => {
                         write!(f, "{:?}", plan.plan)
-                    }
-                    PlanNode::Scan(_) | PlanNode::SetVariable(_) => {
-                        write!(f, "")
                     }
                 }
             }

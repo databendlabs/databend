@@ -15,40 +15,40 @@ async fn test_transform_aggregator() -> crate::error::FuseQueryResult<()> {
     let test_source = crate::tests::NumberTestData::create();
     let ctx = crate::contexts::FuseQueryContext::try_create_ctx()?;
 
+    let aggr_exprs = vec![planners::add(
+        ExpressionPlan::Function {
+            op: "sum".to_string(),
+            args: vec![planners::field("number")],
+        },
+        planners::constant(2u64),
+    )];
+
+    let aggr_partial = PlanBuilder::create(ctx.clone(), test_source.number_schema_for_test()?)
+        .aggregate_partial(aggr_exprs.clone(), vec![])?
+        .build()?;
+    let aggr_final = PlanBuilder::create(ctx.clone(), test_source.number_schema_for_test()?)
+        .aggregate_final(aggr_exprs.clone(), vec![])?
+        .build()?;
+
     let mut pipeline = Pipeline::create();
     let a = test_source.number_source_transform_for_test(ctx.clone(), 16)?;
     pipeline.add_source(Arc::new(a))?;
+    pipeline.add_simple_transform(|| {
+        Ok(Box::new(AggregatorPartialTransform::try_create(
+            ctx.clone(),
+            aggr_partial.schema(),
+            aggr_exprs.clone(),
+        )?))
+    })?;
+    pipeline.merge_processor()?;
+    pipeline.add_simple_transform(|| {
+        Ok(Box::new(AggregatorFinalTransform::try_create(
+            ctx.clone(),
+            aggr_final.schema(),
+            aggr_exprs.clone(),
+        )?))
+    })?;
 
-    if let PlanNode::Aggregate(plan) =
-        PlanBuilder::create(ctx.clone(), test_source.number_schema_for_test()?)
-            .aggregate(
-                vec![],
-                vec![planners::add(
-                    ExpressionPlan::Function {
-                        op: "sum".to_string(),
-                        args: vec![planners::field("number")],
-                    },
-                    planners::constant(2u64),
-                )],
-            )?
-            .build()?
-    {
-        pipeline.add_simple_transform(|| {
-            Ok(Box::new(AggregatorPartialTransform::try_create(
-                ctx.clone(),
-                plan.schema.clone(),
-                plan.aggr_expr.clone(),
-            )?))
-        })?;
-        pipeline.merge_processor()?;
-        pipeline.add_simple_transform(|| {
-            Ok(Box::new(AggregatorFinalTransform::try_create(
-                ctx.clone(),
-                plan.schema.clone(),
-                plan.aggr_expr.clone(),
-            )?))
-        })?;
-    }
     let mut stream = pipeline.execute().await?;
     while let Some(v) = stream.next().await {
         let v = v?;

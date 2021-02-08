@@ -8,9 +8,15 @@ use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef};
 use crate::error::FuseQueryResult;
 use crate::planners::{
-    field, AggregatePlan, DFExplainType, EmptyPlan, ExplainPlan, ExpressionPlan, FilterPlan,
-    LimitPlan, PlanNode, PlanRewriter, ProjectionPlan, ScanPlan, SelectPlan,
+    field, AggregatorFinalPlan, AggregatorPartialPlan, DFExplainType, EmptyPlan, ExplainPlan,
+    ExpressionPlan, FilterPlan, FragmentPlan, LimitPlan, PlanNode, PlanRewriter, ProjectionPlan,
+    ScanPlan, SelectPlan,
 };
+
+pub enum AggregateMode {
+    Partial,
+    Final,
+}
 
 pub struct PlanBuilder {
     ctx: FuseQueryContextRef,
@@ -40,6 +46,27 @@ impl PlanBuilder {
         )
     }
 
+    pub fn exprs_to_fields(
+        &self,
+        exprs: &[ExpressionPlan],
+        input_schema: &DataSchemaRef,
+    ) -> FuseQueryResult<Vec<DataField>> {
+        exprs
+            .iter()
+            .map(|expr| expr.to_field(self.ctx.clone(), input_schema))
+            .collect::<FuseQueryResult<_>>()
+    }
+
+    /// Apply a fragment.
+    pub fn fragment(&self) -> FuseQueryResult<Self> {
+        Ok(Self::from(
+            self.ctx.clone(),
+            &PlanNode::Fragment(FragmentPlan {
+                input: Arc::new(self.plan.clone()),
+            }),
+        ))
+    }
+
     /// Apply a projection.
     pub fn project(&self, exprs: Vec<ExpressionPlan>) -> FuseQueryResult<Self> {
         let exprs = PlanRewriter::exprs_extract_aliases(exprs)?;
@@ -55,11 +82,7 @@ impl PlanBuilder {
             _ => projection_exprs.push(v.clone()),
         });
 
-        let fields: Vec<DataField> = projection_exprs
-            .iter()
-            .map(|expr| expr.to_field(self.ctx.clone(), &input_schema))
-            .collect::<FuseQueryResult<_>>()?;
-
+        let fields = self.exprs_to_fields(&projection_exprs, &input_schema)?;
         Ok(Self::from(
             self.ctx.clone(),
             &PlanNode::Projection(ProjectionPlan {
@@ -70,30 +93,55 @@ impl PlanBuilder {
         ))
     }
 
-    /// Apply an aggregate
-    pub fn aggregate(
+    fn aggregate(
         &self,
-        group_expr: Vec<ExpressionPlan>,
+        mode: AggregateMode,
         aggr_expr: Vec<ExpressionPlan>,
+        group_expr: Vec<ExpressionPlan>,
     ) -> FuseQueryResult<Self> {
         let mut all_expr: Vec<ExpressionPlan> = group_expr.clone();
         aggr_expr.iter().for_each(|x| all_expr.push(x.clone()));
 
         let input_schema = self.plan.schema();
-        let aggr_fields: Vec<DataField> = all_expr
-            .iter()
-            .map(|expr| expr.to_field(self.ctx.clone(), &input_schema))
-            .collect::<FuseQueryResult<_>>()?;
+        let aggr_fields = self.exprs_to_fields(&all_expr, &input_schema)?;
 
-        Ok(Self::from(
-            self.ctx.clone(),
-            &PlanNode::Aggregate(AggregatePlan {
-                input: Arc::new(self.plan.clone()),
-                group_expr,
-                aggr_expr,
-                schema: Arc::new(DataSchema::new(aggr_fields)),
-            }),
-        ))
+        Ok(match mode {
+            AggregateMode::Partial => Self::from(
+                self.ctx.clone(),
+                &PlanNode::AggregatorPartial(AggregatorPartialPlan {
+                    input: Arc::new(self.plan.clone()),
+                    aggr_expr,
+                    group_expr,
+                }),
+            ),
+            AggregateMode::Final => Self::from(
+                self.ctx.clone(),
+                &PlanNode::AggregatorFinal(AggregatorFinalPlan {
+                    input: Arc::new(self.plan.clone()),
+                    aggr_expr,
+                    group_expr,
+                    schema: Arc::new(DataSchema::new(aggr_fields)),
+                }),
+            ),
+        })
+    }
+
+    /// Apply a partial aggregator plan.
+    pub fn aggregate_partial(
+        &self,
+        aggr_expr: Vec<ExpressionPlan>,
+        group_expr: Vec<ExpressionPlan>,
+    ) -> FuseQueryResult<Self> {
+        self.aggregate(AggregateMode::Partial, aggr_expr, group_expr)
+    }
+
+    /// Apply a final aggregator plan.
+    pub fn aggregate_final(
+        &self,
+        aggr_expr: Vec<ExpressionPlan>,
+        group_expr: Vec<ExpressionPlan>,
+    ) -> FuseQueryResult<Self> {
+        self.aggregate(AggregateMode::Final, aggr_expr, group_expr)
     }
 
     /// Scan a data source

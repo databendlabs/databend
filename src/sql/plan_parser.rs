@@ -311,7 +311,7 @@ impl PlanParser {
             .build()
     }
 
-    /// Wrap a plan in an aggregate
+    /// Wrap a plan for an aggregate
     fn aggregate(
         &self,
         input: &PlanNode,
@@ -323,8 +323,13 @@ impl PlanParser {
             .map(|e| self.sql_to_rex(&e, &input.schema()))
             .collect::<FuseQueryResult<Vec<ExpressionPlan>>>()?;
 
+        // S0: Apply a partial aggregator plan.
+        // S1: Apply a fragment plan for distributed planners split.
+        // S2: Apply a final aggregator plan.
         PlanBuilder::from(self.ctx.clone(), &input)
-            .aggregate(group_expr, aggr_expr)?
+            .aggregate_partial(aggr_expr.clone(), group_expr.clone())?
+            .fragment()?
+            .aggregate_final(aggr_expr, group_expr)?
             .build()
     }
 
