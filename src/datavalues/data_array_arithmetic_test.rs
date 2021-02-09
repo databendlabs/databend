@@ -19,7 +19,7 @@ fn test_array_arithmetic() {
 
     let tests = vec![
         ArrayTest {
-            name: "add-passed",
+            name: "plus-passed",
             args: vec![
                 vec![
                     Arc::new(StringArray::from(vec!["xx"])),
@@ -88,7 +88,7 @@ fn test_array_arithmetic() {
             error: vec!["Internal Error: Unsupported (Utf8) plus (Utf8)"],
         },
         ArrayTest {
-            name: "sub-passed",
+            name: "minus-passed",
             args: vec![
                 vec![
                     Arc::new(StringArray::from(vec!["xx"])),
