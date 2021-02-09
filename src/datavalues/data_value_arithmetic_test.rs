@@ -137,7 +137,7 @@ fn test_data_value_arithmetic() {
         ScalarTest {
             name: "add-passed",
             args: &args,
-            op: DataValueArithmeticOperator::Add,
+            op: DataValueArithmeticOperator::Plus,
             expect: vec![
                 // Place Hold.
                 DataValue::String(Some("xx".to_string())),
@@ -252,12 +252,12 @@ fn test_data_value_arithmetic() {
                 DataValue::UInt64(Some(5)),
                 DataValue::UInt64(Some(5)),
             ],
-            error: vec!["Internal Error: Unsupported data value operator: Utf8 + Int8"],
+            error: vec!["Internal Error: Unsupported data value operator: Utf8 plus Int8"],
         },
         ScalarTest {
             name: "sub-passed",
             args: &args,
-            op: DataValueArithmeticOperator::Sub,
+            op: DataValueArithmeticOperator::Minus,
             expect: vec![
                 // Place Hold.
                 DataValue::String(Some("xx".to_string())),
@@ -372,7 +372,7 @@ fn test_data_value_arithmetic() {
                 DataValue::UInt64(Some(1)),
                 DataValue::UInt64(Some(1)),
             ],
-            error: vec!["Internal Error: Unsupported data value operator: Utf8 - Int8"],
+            error: vec!["Internal Error: Unsupported data value operator: Utf8 minus Int8"],
         },
         ScalarTest {
             name: "mul-passed",
@@ -492,7 +492,7 @@ fn test_data_value_arithmetic() {
                 DataValue::UInt64(Some(6)),
                 DataValue::UInt64(Some(6)),
             ],
-            error: vec!["Internal Error: Unsupported data value operator: Utf8 * Int8"],
+            error: vec!["Internal Error: Unsupported data value operator: Utf8 multiply Int8"],
         },
         ScalarTest {
             name: "div-passed",
@@ -612,7 +612,7 @@ fn test_data_value_arithmetic() {
                 DataValue::Float64(Some(1.5)),
                 DataValue::Float64(Some(1.5)),
             ],
-            error: vec!["Internal Error: Unsupported data value operator: Utf8 / Int8"],
+            error: vec!["Internal Error: Unsupported data value operator: Utf8 divide Int8"],
         },
     ];
 

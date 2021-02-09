@@ -39,10 +39,10 @@ pub fn data_array_arithmetic_op(
     let left_array = arrow::compute::cast(&left_array, &coercion_type)?;
     let right_array = arrow::compute::cast(&right_array, &coercion_type)?;
     match op {
-        DataValueArithmeticOperator::Add => {
+        DataValueArithmeticOperator::Plus => {
             arrow_primitive_array_op!(&left_array, &right_array, &coercion_type, add)
         }
-        DataValueArithmeticOperator::Sub => {
+        DataValueArithmeticOperator::Minus => {
             arrow_primitive_array_op!(&left_array, &right_array, &coercion_type, subtract)
         }
         DataValueArithmeticOperator::Mul => {

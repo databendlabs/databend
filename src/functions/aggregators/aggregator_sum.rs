@@ -60,7 +60,7 @@ impl IFunction for AggregatorSumFunction {
         let val = self.arg.eval(&block)?;
 
         self.state = datavalues::data_value_arithmetic_op(
-            DataValueArithmeticOperator::Add,
+            DataValueArithmeticOperator::Plus,
             self.state.clone(),
             datavalues::data_array_aggregate_op(
                 DataValueAggregateOperator::Sum,
@@ -78,7 +78,7 @@ impl IFunction for AggregatorSumFunction {
     fn merge(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
         let val = states[self.depth].clone();
         self.state = datavalues::data_value_arithmetic_op(
-            DataValueArithmeticOperator::Add,
+            DataValueArithmeticOperator::Plus,
             self.state.clone(),
             val,
         )?;

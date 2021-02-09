@@ -8,10 +8,10 @@ use crate::error::{FuseQueryError, FuseQueryResult};
 macro_rules! typed_data_value_operator {
     ($OP: expr, $LHS:expr, $RHS:expr, $SCALAR:ident, $TYPE:ident) => {{
         match $OP {
-            DataValueArithmeticOperator::Add => {
+            DataValueArithmeticOperator::Plus => {
                 typed_data_value_add!($LHS, $RHS, $SCALAR, $TYPE)
             }
-            DataValueArithmeticOperator::Sub => {
+            DataValueArithmeticOperator::Minus => {
                 typed_data_value_sub!($LHS, $RHS, $SCALAR, $TYPE)
             }
             DataValueArithmeticOperator::Mul => {

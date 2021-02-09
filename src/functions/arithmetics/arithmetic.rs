@@ -11,7 +11,7 @@ use crate::datavalues::{
 };
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::arithmetics::{
-    ArithmeticAddFunction, ArithmeticDivFunction, ArithmeticMulFunction, ArithmeticSubFunction,
+    ArithmeticDivFunction, ArithmeticMinusFunction, ArithmeticMulFunction, ArithmeticPlusFunction,
 };
 use crate::functions::{FactoryFuncRef, IFunction};
 
@@ -26,10 +26,10 @@ pub struct ArithmeticFunction {
 impl ArithmeticFunction {
     pub fn register(map: FactoryFuncRef) -> FuseQueryResult<()> {
         let mut map = map.as_ref().lock()?;
-        map.insert("+", ArithmeticAddFunction::try_create_func);
-        map.insert("add", ArithmeticAddFunction::try_create_func);
-        map.insert("-", ArithmeticSubFunction::try_create_func);
-        map.insert("minus", ArithmeticSubFunction::try_create_func);
+        map.insert("+", ArithmeticPlusFunction::try_create_func);
+        map.insert("plus", ArithmeticPlusFunction::try_create_func);
+        map.insert("-", ArithmeticMinusFunction::try_create_func);
+        map.insert("minus", ArithmeticMinusFunction::try_create_func);
         map.insert("*", ArithmeticMulFunction::try_create_func);
         map.insert("multiply", ArithmeticMulFunction::try_create_func);
         map.insert("/", ArithmeticDivFunction::try_create_func);
@@ -123,6 +123,6 @@ impl IFunction for ArithmeticFunction {
 
 impl fmt::Display for ArithmeticFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "({} {} {})", self.left, self.op, self.right)
+        write!(f, "{}({}, {})", self.op, self.left, self.right)
     }
 }

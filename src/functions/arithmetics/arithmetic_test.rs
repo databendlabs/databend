@@ -37,9 +37,9 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
     let tests = vec![
         Test {
             name: "add-int64-passed",
-            display: "(a + b)",
+            display: "plus(a, b)",
             nullable: false,
-            func: ArithmeticAddFunction::try_create_func(
+            func: ArithmeticPlusFunction::try_create_func(
                 ctx.clone(),
                 &[field_a.clone(), field_b.clone()],
             )?,
@@ -56,9 +56,9 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "add-diff-passed",
-            display: "(c + a)",
+            display: "plus(c, a)",
             nullable: false,
-            func: ArithmeticAddFunction::try_create_func(
+            func: ArithmeticPlusFunction::try_create_func(
                 ctx.clone(),
                 &[field_c.clone(), field_a.clone()],
             )?,
@@ -75,9 +75,9 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "sub-int64-passed",
-            display: "(a - b)",
+            display: "minus(a, b)",
             nullable: false,
-            func: ArithmeticSubFunction::try_create_func(
+            func: ArithmeticMinusFunction::try_create_func(
                 ctx.clone(),
                 &[field_a.clone(), field_b.clone()],
             )?,
@@ -94,7 +94,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "mul-int64-passed",
-            display: "(a * b)",
+            display: "multiply(a, b)",
             nullable: false,
             func: ArithmeticMulFunction::try_create_func(
                 ctx.clone(),
@@ -113,7 +113,7 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         },
         Test {
             name: "div-int64-passed",
-            display: "(a / b)",
+            display: "divide(a, b)",
             nullable: false,
             func: ArithmeticDivFunction::try_create_func(ctx, &[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(

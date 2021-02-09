@@ -56,8 +56,8 @@ impl std::fmt::Display for DataValueComparisonOperator {
 
 #[derive(Clone)]
 pub enum DataValueArithmeticOperator {
-    Add,
-    Sub,
+    Plus,
+    Minus,
     Mul,
     Div,
 }
@@ -65,10 +65,10 @@ pub enum DataValueArithmeticOperator {
 impl std::fmt::Display for DataValueArithmeticOperator {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let display = match &self {
-            DataValueArithmeticOperator::Add => "+",
-            DataValueArithmeticOperator::Sub => "-",
-            DataValueArithmeticOperator::Mul => "*",
-            DataValueArithmeticOperator::Div => "/",
+            DataValueArithmeticOperator::Plus => "plus",
+            DataValueArithmeticOperator::Minus => "minus",
+            DataValueArithmeticOperator::Mul => "multiply",
+            DataValueArithmeticOperator::Div => "divide",
         };
         write!(f, "{}", display)
     }

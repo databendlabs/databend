@@ -62,7 +62,7 @@ impl IFunction for AggregatorAvgFunction {
 
         if let DataValue::Struct(values) = self.state.clone() {
             let sum = datavalues::data_value_arithmetic_op(
-                DataValueArithmeticOperator::Add,
+                DataValueArithmeticOperator::Plus,
                 values[0].clone(),
                 datavalues::data_array_aggregate_op(
                     DataValueAggregateOperator::Sum,
@@ -70,7 +70,7 @@ impl IFunction for AggregatorAvgFunction {
                 )?,
             )?;
             let count = datavalues::data_value_arithmetic_op(
-                DataValueArithmeticOperator::Add,
+                DataValueArithmeticOperator::Plus,
                 values[1].clone(),
                 DataValue::UInt64(Some(rows as u64)),
             )?;
@@ -90,12 +90,12 @@ impl IFunction for AggregatorAvgFunction {
             (val, self.state.clone())
         {
             let sum = datavalues::data_value_arithmetic_op(
-                DataValueArithmeticOperator::Add,
+                DataValueArithmeticOperator::Plus,
                 new_states[0].clone(),
                 old_states[0].clone(),
             )?;
             let count = datavalues::data_value_arithmetic_op(
-                DataValueArithmeticOperator::Add,
+                DataValueArithmeticOperator::Plus,
                 new_states[1].clone(),
                 old_states[1].clone(),
             )?;
