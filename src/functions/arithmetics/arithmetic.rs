@@ -11,7 +11,8 @@ use crate::datavalues::{
 };
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::arithmetics::{
-    ArithmeticDivFunction, ArithmeticMinusFunction, ArithmeticMulFunction, ArithmeticPlusFunction,
+    ArithmeticDivFunction, ArithmeticMinusFunction, ArithmeticModuloFunction,
+    ArithmeticMulFunction, ArithmeticPlusFunction,
 };
 use crate::functions::{FactoryFuncRef, IFunction};
 
@@ -34,6 +35,8 @@ impl ArithmeticFunction {
         map.insert("multiply", ArithmeticMulFunction::try_create_func);
         map.insert("/", ArithmeticDivFunction::try_create_func);
         map.insert("divide", ArithmeticDivFunction::try_create_func);
+        map.insert("%", ArithmeticModuloFunction::try_create_func);
+        map.insert("modulo", ArithmeticModuloFunction::try_create_func);
         Ok(())
     }
 
