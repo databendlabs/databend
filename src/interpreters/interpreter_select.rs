@@ -8,29 +8,29 @@ use std::sync::Arc;
 use crate::contexts::FuseQueryContextRef;
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::FuseQueryResult;
-use crate::executors::IExecutor;
+use crate::interpreters::IInterpreter;
 use crate::optimizers::Optimizer;
 use crate::planners::SelectPlan;
 use crate::processors::PipelineBuilder;
 
-pub struct SelectExecutor {
+pub struct SelectInterpreter {
     ctx: FuseQueryContextRef,
     select: SelectPlan,
 }
 
-impl SelectExecutor {
+impl SelectInterpreter {
     pub fn try_create(
         ctx: FuseQueryContextRef,
         select: SelectPlan,
-    ) -> FuseQueryResult<Arc<dyn IExecutor>> {
-        Ok(Arc::new(SelectExecutor { ctx, select }))
+    ) -> FuseQueryResult<Arc<dyn IInterpreter>> {
+        Ok(Arc::new(SelectInterpreter { ctx, select }))
     }
 }
 
 #[async_trait]
-impl IExecutor for SelectExecutor {
+impl IInterpreter for SelectInterpreter {
     fn name(&self) -> &str {
-        "SelectExecutor"
+        "SelectInterpreter"
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {

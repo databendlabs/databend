@@ -14,7 +14,7 @@ use threadpool::ThreadPool;
 use crate::contexts::{FuseQueryContext, FuseQueryContextRef, Options};
 use crate::datablocks::DataBlock;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::executors::ExecutorFactory;
+use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::MySQLStream;
 use crate::sql::PlanParser;
 
@@ -53,7 +53,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
 
         let plan = PlanParser::create(self.ctx.clone()).build_from_sql(query);
         match plan {
-            Ok(v) => match ExecutorFactory::get(self.ctx.clone(), v) {
+            Ok(v) => match InterpreterFactory::get(self.ctx.clone(), v) {
                 Ok(executor) => {
                     let result: FuseQueryResult<Vec<DataBlock>> =
                         tokio::runtime::Builder::new_multi_thread()

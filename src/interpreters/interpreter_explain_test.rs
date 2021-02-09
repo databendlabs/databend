@@ -3,11 +3,11 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_explain_executor() -> crate::error::FuseQueryResult<()> {
+async fn test_explain_interpreter() -> crate::error::FuseQueryResult<()> {
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::executors::*;
+    use crate::interpreters::*;
     use crate::planners::*;
     use crate::sql::*;
 
@@ -16,8 +16,8 @@ async fn test_explain_executor() -> crate::error::FuseQueryResult<()> {
     if let PlanNode::Explain(plan) = PlanParser::create(ctx.clone())
         .build_from_sql("explain select number from system.numbers_mt(10) where (number+1)=4")?
     {
-        let executor = ExplainExecutor::try_create(ctx, plan)?;
-        assert_eq!(executor.name(), "ExplainExecutor");
+        let executor = ExplainInterpreter::try_create(ctx, plan)?;
+        assert_eq!(executor.name(), "ExplainInterpreter");
 
         let mut stream = executor.execute().await?;
         while let Some(_block) = stream.next().await {}

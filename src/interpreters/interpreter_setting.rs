@@ -3,34 +3,33 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use async_trait::async_trait;
-use log::debug;
 use std::sync::Arc;
 
 use crate::contexts::FuseQueryContextRef;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::datavalues::{DataField, DataSchema, DataType};
 use crate::error::FuseQueryResult;
-use crate::executors::IExecutor;
+use crate::interpreters::IInterpreter;
 use crate::planners::SettingPlan;
 
-pub struct SettingExecutor {
+pub struct SettingInterpreter {
     ctx: FuseQueryContextRef,
     set: SettingPlan,
 }
 
-impl SettingExecutor {
+impl SettingInterpreter {
     pub fn try_create(
         ctx: FuseQueryContextRef,
         set: SettingPlan,
-    ) -> FuseQueryResult<Arc<dyn IExecutor>> {
-        Ok(Arc::new(SettingExecutor { ctx, set }))
+    ) -> FuseQueryResult<Arc<dyn IInterpreter>> {
+        Ok(Arc::new(SettingInterpreter { ctx, set }))
     }
 }
 
 #[async_trait]
-impl IExecutor for SettingExecutor {
+impl IInterpreter for SettingInterpreter {
     fn name(&self) -> &str {
-        "SetVariableExecutor"
+        "SettingInterpreter"
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
@@ -43,8 +42,6 @@ impl IExecutor for SettingExecutor {
                 self.ctx.update_settings(&plan.variable, plan.value)?;
             }
         }
-
-        debug!("Set variable executor: {:?}", self.ctx);
 
         let schema = Arc::new(DataSchema::new(vec![DataField::new(
             "set",

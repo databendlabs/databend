@@ -3,11 +3,11 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_select_executor() -> crate::error::FuseQueryResult<()> {
+async fn test_select_interpreter() -> crate::error::FuseQueryResult<()> {
     use futures::stream::StreamExt;
 
     use crate::datavalues::*;
-    use crate::executors::*;
+    use crate::interpreters::*;
     use crate::planners::*;
     use crate::sql::*;
 
@@ -16,8 +16,8 @@ async fn test_select_executor() -> crate::error::FuseQueryResult<()> {
     if let PlanNode::Select(plan) = PlanParser::create(ctx.clone())
         .build_from_sql("select number from system.numbers_mt(10) where (number+2)<2")?
     {
-        let executor = SelectExecutor::try_create(ctx.clone(), plan)?;
-        assert_eq!(executor.name(), "SelectExecutor");
+        let executor = SelectInterpreter::try_create(ctx.clone(), plan)?;
+        assert_eq!(executor.name(), "SelectInterpreter");
 
         let mut stream = executor.execute().await?;
         while let Some(_block) = stream.next().await {}
@@ -28,8 +28,8 @@ async fn test_select_executor() -> crate::error::FuseQueryResult<()> {
     if let PlanNode::Select(plan) =
         PlanParser::create(ctx.clone()).build_from_sql("select 1 + 1, 2 + 2, 3 * 3, 4 * 4")?
     {
-        let executor = SelectExecutor::try_create(ctx.clone(), plan)?;
-        assert_eq!(executor.name(), "SelectExecutor");
+        let executor = SelectInterpreter::try_create(ctx.clone(), plan)?;
+        assert_eq!(executor.name(), "SelectInterpreter");
 
         let mut stream = executor.execute().await?;
         if let Some(block) = stream.next().await {

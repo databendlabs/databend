@@ -11,29 +11,29 @@ use crate::datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::datavalues::{DataField, DataSchema, DataType, StringArray};
 use crate::error::FuseQueryResult;
-use crate::executors::IExecutor;
+use crate::interpreters::IInterpreter;
 use crate::optimizers::Optimizer;
 use crate::planners::{DFExplainType, ExplainPlan, PlanNode};
 use crate::processors::PipelineBuilder;
 
-pub struct ExplainExecutor {
+pub struct ExplainInterpreter {
     ctx: FuseQueryContextRef,
     explain: ExplainPlan,
 }
 
-impl ExplainExecutor {
+impl ExplainInterpreter {
     pub fn try_create(
         ctx: FuseQueryContextRef,
         explain: ExplainPlan,
-    ) -> FuseQueryResult<Arc<dyn IExecutor>> {
-        Ok(Arc::new(ExplainExecutor { ctx, explain }))
+    ) -> FuseQueryResult<Arc<dyn IInterpreter>> {
+        Ok(Arc::new(ExplainInterpreter { ctx, explain }))
     }
 }
 
 #[async_trait]
-impl IExecutor for ExplainExecutor {
+impl IInterpreter for ExplainInterpreter {
     fn name(&self) -> &str {
-        "ExplainExecutor"
+        "ExplainInterpreter"
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
