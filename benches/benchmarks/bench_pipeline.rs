@@ -7,7 +7,7 @@ use futures::stream::StreamExt;
 
 use fuse_query::contexts::FuseQueryContext;
 use fuse_query::error::FuseQueryResult;
-use fuse_query::executors::SelectExecutor;
+use fuse_query::interpreters::SelectInterpreter;
 use fuse_query::planners::PlanNode;
 use fuse_query::sql::PlanParser;
 
@@ -15,7 +15,7 @@ async fn pipeline_executor(sql: &str) -> FuseQueryResult<()> {
     let ctx = FuseQueryContext::try_create_ctx()?;
 
     if let PlanNode::Select(plan) = PlanParser::create(ctx.clone()).build_from_sql(sql)? {
-        let executor = SelectExecutor::try_create(ctx, plan)?;
+        let executor = SelectInterpreter::try_create(ctx, plan)?;
         let mut stream = executor.execute().await?;
         while let Some(_block) = stream.next().await {}
     } else {

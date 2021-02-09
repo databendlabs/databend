@@ -8,7 +8,7 @@ use crate::datastreams::SendableDataBlockStream;
 use crate::error::FuseQueryResult;
 
 #[async_trait]
-pub trait IExecutor: Sync + Send {
+pub trait IInterpreter: Sync + Send {
     fn name(&self) -> &str;
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream>;
 }

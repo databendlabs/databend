@@ -37,7 +37,7 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 | [datablocks](src/datablocks) | Vectorized data processing unit | WIP |
 | [datastreams](src/datastreams) | Async streaming iterators | WIP |
 | [datasources](src/datasources) | Interface to the datasource([system.numbers for performance](src/datasources/system)/Fuse-Store) | WIP|
-| [executors](src/executors) | Executor([EXPLAIN](src/executors/executor_explain.rs)/[SELECT](src/executors/executor_select.rs)) for the Pipeline | WIP |
+| [interpreters](src/interpreters) | Executor for the DML&DDL query plan | WIP |
 | [functions](src/functions) | Scalar and Aggregation Functions | WIP |
 | [processors](src/processors) | Dataflow Streaming Processor| WIP |
 | [planners](src/planners) | Distributed&Local planners for building processor pipelines| WIP |
