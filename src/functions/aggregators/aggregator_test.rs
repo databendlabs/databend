@@ -119,7 +119,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Sum(a) + 1",
             nullable: false,
-            func: ArithmeticAddFunction::try_create_func(
+            func: ArithmeticPlusFunction::try_create_func(
                 ctx.clone(),
                 &[
                     AggregatorSumFunction::try_create(
@@ -162,12 +162,12 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "Sum(a+1)+2",
             nullable: false,
-            func: ArithmeticAddFunction::try_create_func(
+            func: ArithmeticPlusFunction::try_create_func(
                 ctx.clone(),
                 &[
                     AggregatorSumFunction::try_create(
                         ctx.clone(),
-                        &[ArithmeticAddFunction::try_create_func(
+                        &[ArithmeticPlusFunction::try_create_func(
                             ctx,
                             &[
                                 FieldFunction::try_create("a")?,

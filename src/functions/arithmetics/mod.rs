@@ -11,7 +11,7 @@ mod arithmetic_mul;
 mod arithmetic_sub;
 
 pub use arithmetic::ArithmeticFunction;
-pub use arithmetic_add::ArithmeticAddFunction;
+pub use arithmetic_add::ArithmeticPlusFunction;
 pub use arithmetic_div::ArithmeticDivFunction;
 pub use arithmetic_mul::ArithmeticMulFunction;
-pub use arithmetic_sub::ArithmeticSubFunction;
+pub use arithmetic_sub::ArithmeticMinusFunction;

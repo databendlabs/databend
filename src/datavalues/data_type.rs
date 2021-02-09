@@ -250,10 +250,10 @@ pub fn numerical_arithmetic_coercion(
     );
 
     match op {
-        DataValueArithmeticOperator::Add | DataValueArithmeticOperator::Mul => {
+        DataValueArithmeticOperator::Plus | DataValueArithmeticOperator::Mul => {
             construct_numeric_type(has_signed, has_float, next_size(max_size))
         }
-        DataValueArithmeticOperator::Sub => {
+        DataValueArithmeticOperator::Minus => {
             construct_numeric_type(true, has_float, next_size(max_size))
         }
 

@@ -24,7 +24,7 @@ fn test_rewriter_plan() -> crate::error::FuseQueryResult<()> {
                 ExpressionPlan::Alias(
                     "x".to_string(),
                     Box::new(ExpressionPlan::Function {
-                        op: "add".to_string(),
+                        op: "plus".to_string(),
                         args: vec![
                             ExpressionPlan::Constant(DataValue::Int32(Some(1i32))),
                             ExpressionPlan::Field("z".to_string()),
@@ -34,7 +34,7 @@ fn test_rewriter_plan() -> crate::error::FuseQueryResult<()> {
                 ExpressionPlan::Alias(
                     "y".to_string(),
                     Box::new(ExpressionPlan::Function {
-                        op: "add".to_string(),
+                        op: "plus".to_string(),
                         args: vec![
                             ExpressionPlan::Constant(DataValue::Int32(Some(1i32))),
                             ExpressionPlan::Field("x".to_string()),
@@ -44,7 +44,7 @@ fn test_rewriter_plan() -> crate::error::FuseQueryResult<()> {
                 ExpressionPlan::Alias(
                     "z".to_string(),
                     Box::new(ExpressionPlan::Function {
-                        op: "add".to_string(),
+                        op: "plus".to_string(),
                         args: vec![
                             ExpressionPlan::Constant(DataValue::Int32(Some(1i32))),
                             ExpressionPlan::Field("y".to_string()),
@@ -62,7 +62,7 @@ fn test_rewriter_plan() -> crate::error::FuseQueryResult<()> {
                 ExpressionPlan::Alias(
                     "x".to_string(),
                     Box::new(ExpressionPlan::Function {
-                        op: "add".to_string(),
+                        op: "plus".to_string(),
                         args: vec![
                             ExpressionPlan::Constant(DataValue::Int32(Some(1i32))),
                             ExpressionPlan::Field("z".to_string()),
@@ -72,7 +72,7 @@ fn test_rewriter_plan() -> crate::error::FuseQueryResult<()> {
                 ExpressionPlan::Alias(
                     "x".to_string(),
                     Box::new(ExpressionPlan::Function {
-                        op: "add".to_string(),
+                        op: "plus".to_string(),
                         args: vec![
                             ExpressionPlan::Constant(DataValue::Int32(Some(1i32))),
                             ExpressionPlan::Field("y".to_string()),

@@ -8,13 +8,13 @@ use crate::error::FuseQueryResult;
 use crate::functions::arithmetics::ArithmeticFunction;
 use crate::functions::IFunction;
 
-pub struct ArithmeticAddFunction;
+pub struct ArithmeticPlusFunction;
 
-impl ArithmeticAddFunction {
+impl ArithmeticPlusFunction {
     pub fn try_create_func(
         _ctx: FuseQueryContextRef,
         args: &[Box<dyn IFunction>],
     ) -> FuseQueryResult<Box<dyn IFunction>> {
-        ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Add, args)
+        ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus, args)
     }
 }

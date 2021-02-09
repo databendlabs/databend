@@ -57,7 +57,7 @@ impl IFunction for AggregatorCountFunction {
     fn accumulate(&mut self, block: &DataBlock) -> FuseQueryResult<()> {
         let rows = block.num_rows();
         self.state = datavalues::data_value_arithmetic_op(
-            DataValueArithmeticOperator::Add,
+            DataValueArithmeticOperator::Plus,
             self.state.clone(),
             DataValue::UInt64(Some(rows as u64)),
         )?;
@@ -71,7 +71,7 @@ impl IFunction for AggregatorCountFunction {
     fn merge(&mut self, states: &[DataValue]) -> FuseQueryResult<()> {
         let val = states[self.depth].clone();
         self.state = datavalues::data_value_arithmetic_op(
-            DataValueArithmeticOperator::Add,
+            DataValueArithmeticOperator::Plus,
             self.state.clone(),
             val,
         )?;
