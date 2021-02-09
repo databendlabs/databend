@@ -20,6 +20,9 @@ macro_rules! typed_data_value_operator {
             DataValueArithmeticOperator::Div => {
                 typed_data_value_div!($LHS, $RHS, Float64, $TYPE)
             }
+            DataValueArithmeticOperator::Modulo => {
+                typed_data_value_modulo!($LHS, $RHS, $SCALAR, $TYPE)
+            }
         }
     }};
 }

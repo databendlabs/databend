@@ -256,21 +256,20 @@ pub fn numerical_arithmetic_coercion(
         DataValueArithmeticOperator::Minus => {
             construct_numeric_type(true, has_float, next_size(max_size))
         }
-
         DataValueArithmeticOperator::Div => Ok(Float64),
-        // DataValueArithmeticOperator::Modulus => {
-        //     // https://github.com/ClickHouse/ClickHouse/pull/20063
-        //     let mut bytes_size = numeric_byte_size(rhs_type).unwrap();
-        //     if has_signed {
-        //         bytes_size = next_size(bytes_size);
-        //     }
-        //     let type0 = construct_numeric_type(has_signed, false, bytes_size)?;
-        //     if has_float {
-        //         Ok(Float64)
-        //     } else {
-        //         Ok(type0)
-        //     }
-        // }
+        DataValueArithmeticOperator::Modulo => {
+            // https://github.com/ClickHouse/ClickHouse/blob/master/src/Functions/DivisionUtils.h#L113-L117
+            let mut bytes_size = numeric_byte_size(rhs_type)?;
+            if has_signed {
+                bytes_size = next_size(bytes_size);
+            }
+            let type0 = construct_numeric_type(has_signed, false, bytes_size)?;
+            if has_float {
+                Ok(Float64)
+            } else {
+                Ok(type0)
+            }
+        }
     }
 }
 

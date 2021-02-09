@@ -60,6 +60,7 @@ pub enum DataValueArithmeticOperator {
     Minus,
     Mul,
     Div,
+    Modulo,
 }
 
 impl std::fmt::Display for DataValueArithmeticOperator {
@@ -69,6 +70,7 @@ impl std::fmt::Display for DataValueArithmeticOperator {
             DataValueArithmeticOperator::Minus => "minus",
             DataValueArithmeticOperator::Mul => "multiply",
             DataValueArithmeticOperator::Div => "divide",
+            DataValueArithmeticOperator::Modulo => "modulo",
         };
         write!(f, "{}", display)
     }

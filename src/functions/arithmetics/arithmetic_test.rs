@@ -115,7 +115,10 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
             name: "div-int64-passed",
             display: "divide(a, b)",
             nullable: false,
-            func: ArithmeticDivFunction::try_create_func(ctx, &[field_a.clone(), field_b.clone()])?,
+            func: ArithmeticDivFunction::try_create_func(
+                ctx.clone(),
+                &[field_a.clone(), field_b.clone()],
+            )?,
             block: DataBlock::create(
                 schema.clone(),
                 vec![
@@ -125,6 +128,25 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
                 ],
             ),
             expect: Arc::new(Float64Array::from(vec![4.0, 1.5, 0.6666666666666666])),
+            error: "",
+        },
+        Test {
+            name: "mod-int64-passed",
+            display: "modulo(a, b)",
+            nullable: false,
+            func: ArithmeticModuloFunction::try_create_func(
+                ctx,
+                &[field_a.clone(), field_b.clone()],
+            )?,
+            block: DataBlock::create(
+                schema.clone(),
+                vec![
+                    Arc::new(Int64Array::from(vec![4, 3, 2])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3])),
+                    Arc::new(Int16Array::from(vec![1, 2, 3])),
+                ],
+            ),
+            expect: Arc::new(Int64Array::from(vec![0, 1, 2])),
             error: "",
         },
     ];
