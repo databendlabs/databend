@@ -32,7 +32,6 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 
 | Crate     | Description |  Status |
 |-----------|-------------|-------------|
-| distributed | Distributed scheduler and executor for planner | WIP |
 | [optimizers](src/optimizers) | Optimizer for Distributed&Local plan | WIP |
 | [datablocks](src/datablocks) | Vectorized data processing unit | WIP |
 | [datastreams](src/datastreams) | Async streaming iterators | WIP |
@@ -43,6 +42,7 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 | [planners](src/planners) | Distributed&Local planners for building processor pipelines| WIP |
 | [servers](src/servers) | Server handler([MySQL](src/servers/mysql)/HTTP) | MySQL |
 | [transforms](src/transforms) | Data Stream Transform([Source](src/transforms/transform_source.rs)/[Filter](src/transforms/transform_filter.rs)/[Projection](src/transforms/transform_projection.rs)/[AggregatorPartial](src/transforms/transform_aggregator_partial.rs)/[AggregatorFinal](src/transforms/transform_aggregator_final.rs)/[Limit](src/transforms/transform_limit.rs)) | WIP |
+| [executors](src/executors) | Distributed&Local planners scheduler and executor | WIP |
 
 ## Status
 #### SQL Support
@@ -54,10 +54,10 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 - [x] Functions
 - [x] Filter Push-Down
 - [ ] Projection Push-Down (TODO)
-- [ ] Distributed Query (WIP)
+- [ ] Work-Stealing Distributed Query Engine (WIP)
 - [ ] Sorting (TODO)
-- [ ] Joins (TODO)
 - [ ] SubQueries (TODO)
+- [ ] Joins (TODO)
 
 
 ## Performance
@@ -178,7 +178,7 @@ $ make test
 - [x] 0.1 support aggregation select
 - [ ] 0.2 support distributed query (WIP)
 - [ ] 0.3 support group by, order by
-- [ ] 0.4 support join
-- [ ] 0.5 support sub queries
+- [ ] 0.4 support sub queries
+- [ ] 0.5 support join
 - [ ] 0.6 support TPC-H benchmark
 
