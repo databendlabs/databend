@@ -31,7 +31,7 @@ paste = "^1.0"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 simplelog = "0.9"
-sqlparser = "0.7"
+sqlparser = "0.8"
 structopt = "0.3"
 thiserror = "1.0"
 threadpool = "1.8.1"
