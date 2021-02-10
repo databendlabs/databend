@@ -8,11 +8,11 @@ use crate::datavalues::DataSchemaRef;
 use crate::planners::PlanNode;
 
 #[derive(Clone)]
-pub struct FragmentPlan {
+pub struct StagePlan {
     pub input: Arc<PlanNode>,
 }
 
-impl FragmentPlan {
+impl StagePlan {
     pub fn schema(&self) -> DataSchemaRef {
         self.input.schema()
     }
