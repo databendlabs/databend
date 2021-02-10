@@ -33,6 +33,13 @@ impl FuseQueryContext {
         Ok(Arc::new(ctx))
     }
 
+    // ctx.reset will reset the necessary variables in the session
+    pub fn reset(&self) -> FuseQueryResult<()> {
+        self.statistics.lock()?.clear();
+        self.partition_queue.lock()?.clear();
+        Ok(())
+    }
+
     // Steal n partitions from the partition pool by the pipeline worker.
     // This also can steal the partitions from distributed node.
     pub fn try_fetch_partitions(&self, num: usize) -> FuseQueryResult<Partitions> {

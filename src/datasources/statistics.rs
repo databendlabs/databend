@@ -17,4 +17,9 @@ impl Statistics {
             read_bytes: 0,
         }
     }
+
+    pub fn clear(&mut self) {
+        self.read_rows = 0;
+        self.read_bytes = 0;
+    }
 }

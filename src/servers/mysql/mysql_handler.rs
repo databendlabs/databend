@@ -51,6 +51,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
     fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> FuseQueryResult<()> {
         debug!("{}", query);
 
+        self.ctx.reset()?;
         let plan = PlanParser::create(self.ctx.clone()).build_from_sql(query);
         match plan {
             Ok(v) => match InterpreterFactory::get(self.ctx.clone(), v) {
