@@ -14,7 +14,7 @@ async fn test_pipeline_builder() -> crate::error::FuseQueryResult<()> {
     let plan = PlanParser::create(ctx.clone()).build_from_sql(
         "select sum(number+1)+2 as sumx from system.numbers_mt(80000) where (number+1)=4 limit 1",
     )?;
-    let pipeline = PipelineBuilder::create(ctx, plan, true).build()?;
+    let pipeline = PipelineBuilder::create(ctx, plan).build()?;
     let expect = "\
     \n  └─ LimitTransform × 1 processor\
     \n    └─ AggregateFinalTransform × 1 processor\

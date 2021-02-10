@@ -16,16 +16,11 @@ use crate::transforms::{
 pub struct PipelineBuilder {
     ctx: FuseQueryContextRef,
     plan: PlanNode,
-    is_explain: bool,
 }
 
 impl PipelineBuilder {
-    pub fn create(ctx: FuseQueryContextRef, plan: PlanNode, is_explain: bool) -> Self {
-        PipelineBuilder {
-            ctx,
-            plan,
-            is_explain,
-        }
+    pub fn create(ctx: FuseQueryContextRef, plan: PlanNode) -> Self {
+        PipelineBuilder { ctx, plan }
     }
 
     pub fn build(&self) -> FuseQueryResult<Pipeline> {
@@ -83,10 +78,8 @@ impl PipelineBuilder {
                     })?;
                 }
                 PlanNode::ReadSource(plan) => {
-                    if !self.is_explain {
-                        // Bind plan partitions to context.
-                        self.ctx.try_update_partitions(plan.partitions.clone())?;
-                    }
+                    // Bind plan partitions to context.
+                    self.ctx.try_update_partitions(plan.partitions.clone())?;
 
                     let max_threads = self.ctx.get_max_threads()? as usize;
                     let workers = if max_threads == 0 {
