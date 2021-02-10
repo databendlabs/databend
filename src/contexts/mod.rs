@@ -10,5 +10,5 @@ mod options;
 mod settings;
 
 pub use self::context::{FuseQueryContext, FuseQueryContextRef};
-pub use self::options::Options;
+pub use self::options::Opt;
 pub use self::settings::Settings;

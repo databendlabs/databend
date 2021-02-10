@@ -29,9 +29,10 @@ num = "0.3"
 num_cpus = "1.0"
 paste = "^1.0"
 serde_json = "1.0"
-sqlparser = "0.7"
-simplelog = "0.9"
 serde = { version = "1.0", features = ["derive"] }
+simplelog = "0.9"
+sqlparser = "0.7"
+structopt = "0.3"
 thiserror = "1.0"
 threadpool = "1.8.1"
 tokio = { version = "1.0", features = ["macros", "rt", "rt-multi-thread", "signal", "sync"] }

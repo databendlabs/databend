@@ -5,7 +5,7 @@ bench:
 	cargo bench -- --nocapture
 
 run:
-	RUSTFLAGS="-C target-cpu=native" cargo run --release -- --nocapture
+	RUSTFLAGS="-C target-cpu=native" cargo run --release
 
 build:
 	RUSTFLAGS="-C target-cpu=native" cargo build --release
