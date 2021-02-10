@@ -9,8 +9,8 @@ use crate::datavalues::{DataField, DataSchema, DataSchemaRef};
 use crate::error::FuseQueryResult;
 use crate::planners::{
     field, AggregatorFinalPlan, AggregatorPartialPlan, DFExplainType, EmptyPlan, ExplainPlan,
-    ExpressionPlan, FilterPlan, FragmentPlan, LimitPlan, PlanNode, PlanRewriter, ProjectionPlan,
-    ScanPlan, SelectPlan,
+    ExpressionPlan, FilterPlan, LimitPlan, PlanNode, PlanRewriter, ProjectionPlan, ScanPlan,
+    SelectPlan, StagePlan,
 };
 
 pub enum AggregateMode {
@@ -57,11 +57,11 @@ impl PlanBuilder {
             .collect::<FuseQueryResult<_>>()
     }
 
-    /// Apply a fragment.
-    pub fn fragment(&self) -> FuseQueryResult<Self> {
+    /// Apply a stage.
+    pub fn stage(&self) -> FuseQueryResult<Self> {
         Ok(Self::from(
             self.ctx.clone(),
-            &PlanNode::Fragment(FragmentPlan {
+            &PlanNode::Fragment(StagePlan {
                 input: Arc::new(self.plan.clone()),
             }),
         ))

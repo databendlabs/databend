@@ -6,14 +6,14 @@ use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::DataSchemaRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
-    AggregatorFinalPlan, AggregatorPartialPlan, EmptyPlan, ExplainPlan, FilterPlan, FragmentPlan,
-    LimitPlan, PlanBuilder, ProjectionPlan, ReadDataSourcePlan, ScanPlan, SelectPlan, SettingPlan,
+    AggregatorFinalPlan, AggregatorPartialPlan, EmptyPlan, ExplainPlan, FilterPlan, LimitPlan,
+    PlanBuilder, ProjectionPlan, ReadDataSourcePlan, ScanPlan, SelectPlan, SettingPlan, StagePlan,
 };
 
 #[derive(Clone)]
 pub enum PlanNode {
     Empty(EmptyPlan),
-    Fragment(FragmentPlan),
+    Fragment(StagePlan),
     Projection(ProjectionPlan),
     AggregatorPartial(AggregatorPartialPlan),
     AggregatorFinal(AggregatorFinalPlan),
@@ -48,7 +48,7 @@ impl PlanNode {
     pub fn name(&self) -> &str {
         match self {
             PlanNode::Empty(_) => "EmptyPlan",
-            PlanNode::Fragment(_) => "FragmentPlan",
+            PlanNode::Fragment(_) => "StagePlan",
             PlanNode::Scan(_) => "ScanPlan",
             PlanNode::Projection(_) => "ProjectionPlan",
             PlanNode::AggregatorPartial(_) => "AggregatorPartialPlan",
@@ -186,7 +186,7 @@ impl PlanNode {
                     builder = builder.select()?;
                 }
                 PlanNode::Fragment(_) => {
-                    builder = builder.fragment()?;
+                    builder = builder.stage()?;
                 }
                 // Non node in the list.
                 PlanNode::Empty(_) => {}
