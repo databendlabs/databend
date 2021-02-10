@@ -2,28 +2,34 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use crate::contexts::Settings;
-use crate::error::{FuseQueryError, FuseQueryResult};
+use structopt::StructOpt;
 
-#[derive(Clone, Debug)]
-pub struct Options {
-    settings: Settings,
+#[derive(Debug, StructOpt, Clone)]
+pub struct Opt {
+    #[structopt(short, long, default_value = "Unknown")]
+    pub version: String,
+
+    #[structopt(short, long, default_value = "debug")]
+    pub log_level: String,
+
+    #[structopt(short, long, default_value = "4")]
+    pub num_cpus: u64,
+
+    #[structopt(short, long, default_value = "127.0.0.1")]
+    pub mysql_listen_host: String,
+
+    #[structopt(short, long, default_value = "3307")]
+    pub mysql_handler_port: u64,
+
+    #[structopt(short, long, default_value = "256")]
+    pub mysql_handler_thread_num: u64,
 }
 
-impl Options {
-    pub fn try_create() -> FuseQueryResult<Options> {
-        let settings = Settings::create();
-        let options = Options { settings };
-        options.initial_settings()?;
-
-        Ok(options)
-    }
-
-    apply_macros! { apply_getter_setter_settings, apply_initial_settings, apply_update_settings,
-        ("log_level", String, "debug".to_string(), "Log Level".to_string()),
-        ("num_cpus", u64, num_cpus::get() as u64, "The numbers of the pc".to_string()),
-        ("mysql_listen_host", String, "127.0.0.1".to_string(), "MySQL server bind host".to_string()),
-        ("mysql_handler_port", u64, 3307, "MySQL protocol port".to_string()),
-        ("mysql_handler_thread_num", u64, 256, "MySQL handler thread pool numbers".to_string())
+impl Opt {
+    pub fn create() -> Self {
+        let mut opt = Opt::from_args();
+        opt.num_cpus = num_cpus::get() as u64;
+        opt.version = include_str!(concat!(env!("OUT_DIR"), "/version-info.txt")).to_string();
+        opt
     }
 }
