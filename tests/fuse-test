@@ -442,6 +442,7 @@ if __name__ == '__main__':
     parser.add_argument('--parallel', default='1/1', help='One parallel test run number/total')
     parser.add_argument('-j', '--jobs', default=1, nargs='?', type=int, help='Run all tests in parallel')
     parser.add_argument('--skip', nargs='+', help="Skip these tests")
+    parser.add_argument('--stop', action='store_true', default=None, dest='stop', help='Stop on network errors')
 
     args = parser.parse_args()
 

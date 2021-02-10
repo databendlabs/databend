@@ -49,7 +49,7 @@ impl IInterpreter for ExplainInterpreter {
                 format!("{}", plan.display_graphviz())
             }
             DFExplainType::Pipeline => {
-                let pipeline = PipelineBuilder::create(self.ctx.clone(), plan).build()?;
+                let pipeline = PipelineBuilder::create(self.ctx.clone(), plan, true).build()?;
                 format!("{:?}", pipeline)
             }
             _ => format!("{:?}", PlanNode::Explain(self.explain.clone())),
