@@ -328,7 +328,7 @@ impl PlanParser {
         // S2: Apply a final aggregator plan.
         PlanBuilder::from(self.ctx.clone(), &input)
             .aggregate_partial(aggr_expr.clone(), group_expr.clone())?
-            .fragment()?
+            .stage()?
             .aggregate_final(aggr_expr, group_expr)?
             .build()
     }
