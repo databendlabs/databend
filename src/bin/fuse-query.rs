@@ -7,14 +7,14 @@ use simplelog::{Config, LevelFilter, SimpleLogger};
 
 use tokio::signal::unix::{signal, SignalKind};
 
-use fuse_query::contexts::Options;
+use fuse_query::contexts::Opt;
 use fuse_query::servers::MySQLHandler;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let opts = Options::try_create()?;
+    let opts = Opt::create();
 
-    match opts.get_log_level()?.to_lowercase().as_str() {
+    match opts.log_level.to_lowercase().as_str() {
         "debug" => SimpleLogger::init(LevelFilter::Debug, Config::default())?,
         "info" => SimpleLogger::init(LevelFilter::Info, Config::default())?,
         _ => SimpleLogger::init(LevelFilter::Error, Config::default())?,
@@ -24,12 +24,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mysql_handler = MySQLHandler::create(opts.clone());
     tokio::spawn(async move { mysql_handler.start() });
 
-    let version = include_str!(concat!(env!("OUT_DIR"), "/version-info.txt"));
-    info!("FuseQuery v-{} Cloud Compute Starts...", version);
-    info!(
-        "Usage: mysql -h127.0.0.1 -P{:?}",
-        opts.get_mysql_handler_port()?
-    );
+    info!("FuseQuery v-{} Cloud Compute Starts...", opts.version);
+    info!("Usage: mysql -h127.0.0.1 -P{:?}", opts.mysql_handler_port);
     signal(SignalKind::hangup())?.recv().await;
     Ok(())
 }
