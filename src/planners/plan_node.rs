@@ -185,8 +185,11 @@ impl PlanNode {
                 PlanNode::Select(_v) => {
                     builder = builder.select()?;
                 }
+                PlanNode::Fragment(_) => {
+                    builder = builder.fragment()?;
+                }
+                // Non node in the list.
                 PlanNode::Empty(_) => {}
-                PlanNode::Fragment(_) => {}
                 PlanNode::Scan(_) => {}
                 PlanNode::SetVariable(_) => {}
             }
