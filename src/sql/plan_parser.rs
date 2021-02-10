@@ -6,7 +6,7 @@ use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::{DataSchema, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
-    ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, SelectPlan, SettingPlan,
+    ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, SelectPlan, SettingPlan, VarValue,
 };
 use crate::sql::{DFExplainPlan, DFParser, DFStatement};
 use sqlparser::ast::{FunctionArg, Statement, TableFactor};
@@ -238,7 +238,7 @@ impl PlanParser {
     ) -> FuseQueryResult<ExpressionPlan> {
         match sql {
             sqlparser::ast::Expr::Identifier(ref v) => Ok(ExpressionPlan::Field(v.clone().value)),
-            sqlparser::ast::Expr::Value(sqlparser::ast::Value::Number(n)) => {
+            sqlparser::ast::Expr::Value(sqlparser::ast::Value::Number(n, _)) => {
                 Ok(ExpressionPlan::Constant(DataValue::try_from_literal(n)?))
             }
             sqlparser::ast::Expr::Value(sqlparser::ast::Value::SingleQuotedString(s)) => {
@@ -280,14 +280,18 @@ impl PlanParser {
     pub fn set_variable_to_plan(
         &self,
         variable: &sqlparser::ast::Ident,
-        value: &sqlparser::ast::SetVariableValue,
+        values: &[sqlparser::ast::SetVariableValue],
     ) -> FuseQueryResult<PlanNode> {
-        let variable = variable.value.clone();
-        let value = match value {
-            sqlparser::ast::SetVariableValue::Ident(v) => v.value.clone(),
-            sqlparser::ast::SetVariableValue::Literal(v) => v.to_string(),
-        };
-        Ok(PlanNode::SetVariable(SettingPlan { variable, value }))
+        let mut vars = vec![];
+        for value in values {
+            let variable = variable.value.clone();
+            let value = match value {
+                sqlparser::ast::SetVariableValue::Ident(v) => v.value.clone(),
+                sqlparser::ast::SetVariableValue::Literal(v) => v.to_string(),
+            };
+            vars.push(VarValue { variable, value });
+        }
+        Ok(PlanNode::SetVariable(SettingPlan { vars }))
     }
 
     /// Apply a filter to the plan

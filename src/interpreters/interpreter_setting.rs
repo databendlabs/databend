@@ -34,12 +34,14 @@ impl IInterpreter for SettingInterpreter {
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
         let plan = self.set.clone();
-        match plan.variable.to_lowercase().as_str() {
-            // To be compatible with some drivers
-            // eg: usql and mycli
-            "sql_mode" | "autocommit" => {}
-            _ => {
-                self.ctx.update_settings(&plan.variable, plan.value)?;
+        for var in plan.vars {
+            match var.variable.to_lowercase().as_str() {
+                // To be compatible with some drivers
+                // eg: usql and mycli
+                "sql_mode" | "autocommit" => {}
+                _ => {
+                    self.ctx.update_settings(&var.variable, var.value)?;
+                }
             }
         }
 
