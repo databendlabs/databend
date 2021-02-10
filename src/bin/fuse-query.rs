@@ -24,7 +24,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mysql_handler = MySQLHandler::create(opts.clone());
     tokio::spawn(async move { mysql_handler.start() });
 
-    info!("Fuse-Query Cloud Compute Starts...");
+    let version = include_str!(concat!(env!("OUT_DIR"), "/version-info.txt"));
+    info!("FuseQuery v-{} Cloud Compute Starts...", version);
     info!(
         "Usage: mysql -h127.0.0.1 -P{:?}",
         opts.get_mysql_handler_port()?
