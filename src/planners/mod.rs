@@ -2,9 +2,11 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
+mod plan_aggregator_test;
 mod plan_filter_test;
 mod plan_limit_test;
 mod plan_projection_test;
+mod plan_rewriter_test;
 mod plan_select_test;
 
 mod plan_aggregator_final;
@@ -24,7 +26,6 @@ mod plan_node;
 mod plan_projection;
 mod plan_read_datasource;
 mod plan_rewriter;
-mod plan_rewriter_test;
 mod plan_scan;
 mod plan_select;
 mod plan_setting;
@@ -39,7 +40,7 @@ pub use self::plan_explain::{DFExplainType, ExplainPlan};
 pub use self::plan_expression::ExpressionPlan;
 pub use self::plan_expression_constant::constant;
 pub use self::plan_expression_field::field;
-pub use self::plan_expression_function::add;
+pub use self::plan_expression_function::{add, sum};
 pub use self::plan_filter::FilterPlan;
 pub use self::plan_limit::LimitPlan;
 pub use self::plan_node::PlanNode;

@@ -12,8 +12,8 @@ async fn test_transform_aggregator() -> crate::error::FuseQueryResult<()> {
     use crate::processors::*;
     use crate::transforms::*;
 
-    let test_source = crate::tests::NumberTestData::create();
     let ctx = crate::contexts::FuseQueryContext::try_create_ctx()?;
+    let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
     let aggr_exprs = vec![planners::add(
         ExpressionPlan::Function {
@@ -31,7 +31,7 @@ async fn test_transform_aggregator() -> crate::error::FuseQueryResult<()> {
         .build()?;
 
     let mut pipeline = Pipeline::create();
-    let a = test_source.number_source_transform_for_test(ctx.clone(), 16)?;
+    let a = test_source.number_source_transform_for_test(16)?;
     pipeline.add_source(Arc::new(a))?;
     pipeline.add_simple_transform(|| {
         Ok(Box::new(AggregatorPartialTransform::try_create(
