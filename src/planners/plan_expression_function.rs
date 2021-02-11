@@ -4,7 +4,7 @@
 
 use crate::planners::ExpressionPlan;
 
-/// return a new expression l <op> r
+/// return a new expression l <op> r.
 fn binary_expr(l: ExpressionPlan, op: &str, r: ExpressionPlan) -> ExpressionPlan {
     ExpressionPlan::BinaryExpression {
         left: Box::new(l),
@@ -13,38 +13,52 @@ fn binary_expr(l: ExpressionPlan, op: &str, r: ExpressionPlan) -> ExpressionPlan
     }
 }
 
+// Add.
 pub fn add(left: ExpressionPlan, right: ExpressionPlan) -> ExpressionPlan {
     binary_expr(left, "+", right)
 }
 
+/// sum() aggregate function.
+pub fn sum(other: ExpressionPlan) -> ExpressionPlan {
+    ExpressionPlan::Function {
+        op: "sum".to_string(),
+        args: vec![other],
+    }
+}
+
 impl ExpressionPlan {
-    /// Equal
+    /// Equal.
     pub fn eq(&self, other: ExpressionPlan) -> ExpressionPlan {
         binary_expr(self.clone(), "=", other)
     }
 
-    /// Not equal
+    /// Not equal.
     pub fn not_eq(&self, other: ExpressionPlan) -> ExpressionPlan {
         binary_expr(self.clone(), "!=", other)
     }
 
-    /// Greater than
+    /// Greater than.
     pub fn gt(&self, other: ExpressionPlan) -> ExpressionPlan {
         binary_expr(self.clone(), ">", other)
     }
 
-    /// Greater than or equal to
+    /// Greater than or equal to.
     pub fn gt_eq(&self, other: ExpressionPlan) -> ExpressionPlan {
         binary_expr(self.clone(), ">=", other)
     }
 
-    /// Less than
+    /// Less than.
     pub fn lt(&self, other: ExpressionPlan) -> ExpressionPlan {
         binary_expr(self.clone(), "<", other)
     }
 
-    /// Less than or equal to
+    /// Less than or equal to.
     pub fn lt_eq(&self, other: ExpressionPlan) -> ExpressionPlan {
         binary_expr(self.clone(), "<=", other)
+    }
+
+    /// Alias.
+    pub fn alias(&self, alias: &str) -> ExpressionPlan {
+        ExpressionPlan::Alias(alias.to_string(), Box::from(self.clone()))
     }
 }

@@ -9,15 +9,15 @@ async fn transform_source_test() -> crate::error::FuseQueryResult<()> {
 
     use crate::processors::*;
 
-    let test_source = crate::tests::NumberTestData::create();
     let ctx = crate::contexts::FuseQueryContext::try_create_ctx()?;
+    let test_source = crate::tests::NumberTestData::create(ctx);
 
     let mut pipeline = Pipeline::create();
 
-    let a = test_source.number_source_transform_for_test(ctx.clone(), 8)?;
+    let a = test_source.number_source_transform_for_test(8)?;
     pipeline.add_source(Arc::new(a))?;
 
-    let b = test_source.number_source_transform_for_test(ctx, 8)?;
+    let b = test_source.number_source_transform_for_test(8)?;
 
     pipeline.add_source(Arc::new(b))?;
     pipeline.merge_processor()?;
