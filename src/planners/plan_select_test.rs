@@ -21,7 +21,7 @@ fn test_select_wildcard_plan() -> crate::error::FuseQueryResult<()> {
         .project(vec![field("a")])?
         .build()?;
     let select = PlanNode::Select(SelectPlan {
-        plan: Box::new(plan),
+        input: Arc::new(plan),
     });
     let expect = "Projection: a:Utf8\n  ";
     let actual = format!("{:?}", select);

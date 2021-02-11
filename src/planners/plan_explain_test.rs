@@ -5,6 +5,7 @@
 #[test]
 fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
     use pretty_assertions::assert_eq;
+    use std::sync::Arc;
 
     use crate::planners::*;
 
@@ -20,7 +21,7 @@ fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
         .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
         typ: DFExplainType::Syntax,
-        plan: Box::new(plan),
+        input: Arc::new(plan),
     });
     let expect = "Filter: ((number + 1) = 4)\
     \n  Projection: number as c1:UInt64, number as c2:UInt64\n    ";
