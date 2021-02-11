@@ -13,8 +13,8 @@ fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
 
     let plan = PlanBuilder::create(ctx, test_source.number_schema_for_test()?)
         .project(vec![
-            ExpressionPlan::Alias("c1".to_string(), Box::new(field("number"))),
-            ExpressionPlan::Alias("c2".to_string(), Box::new(field("number"))),
+            field("number").alias("c1"),
+            field("number").alias("c2"),
         ])?
         .filter(add(field("number"), constant(1)).eq(constant(4)))?
         .build()?;

@@ -13,7 +13,7 @@ fn test_projection_plan() -> crate::error::FuseQueryResult<()> {
     let ctx = crate::contexts::FuseQueryContext::try_create_ctx()?;
 
     let projection = PlanNode::Projection(ProjectionPlan {
-        expr: vec![ExpressionPlan::Field("a".to_string())],
+        expr: vec![field("a")],
         schema: Arc::new(DataSchema::new(vec![DataField::new(
             "a",
             DataType::Utf8,
