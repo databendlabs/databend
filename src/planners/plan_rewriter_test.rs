@@ -6,7 +6,6 @@
 fn test_rewriter_plan() -> crate::error::FuseQueryResult<()> {
     use pretty_assertions::assert_eq;
 
-    use crate::datavalues::*;
     use crate::planners::*;
 
     #[allow(dead_code)]
@@ -21,36 +20,27 @@ fn test_rewriter_plan() -> crate::error::FuseQueryResult<()> {
         RewriteTest{
             name : "Cyclic",
             exprs: vec![
-                ExpressionPlan::Alias(
-                    "x".to_string(),
                     Box::new(ExpressionPlan::Function {
                         op: "plus".to_string(),
                         args: vec![
-                            ExpressionPlan::Constant(DataValue::Int32(Some(1i32))),
-                            ExpressionPlan::Field("z".to_string()),
+                            constant(1i32),
+                            field("z")
                         ],
-                    }),
-                ),
-                ExpressionPlan::Alias(
-                    "y".to_string(),
+                    }).alias("x"),
                     Box::new(ExpressionPlan::Function {
                         op: "plus".to_string(),
                         args: vec![
-                            ExpressionPlan::Constant(DataValue::Int32(Some(1i32))),
-                            ExpressionPlan::Field("x".to_string()),
+                            constant(1i32),
+                            field("x")
                         ],
-                    }),
-                ),
-                ExpressionPlan::Alias(
-                    "z".to_string(),
+                    }).alias("y"),
                     Box::new(ExpressionPlan::Function {
                         op: "plus".to_string(),
                         args: vec![
-                            ExpressionPlan::Constant(DataValue::Int32(Some(1i32))),
-                            ExpressionPlan::Field("y".to_string()),
+                            constant(1i32),
+                            field("y")
                         ],
-                    }),
-                ),
+                    }).alias("z"),
             ],
             expect_str: "",
             error_msg : "Error during plan: Cyclic aliases: x",
@@ -59,26 +49,20 @@ fn test_rewriter_plan() -> crate::error::FuseQueryResult<()> {
         RewriteTest{
             name : "Duplicate aliases",
             exprs: vec![
-                ExpressionPlan::Alias(
-                    "x".to_string(),
                     Box::new(ExpressionPlan::Function {
                         op: "plus".to_string(),
                         args: vec![
-                            ExpressionPlan::Constant(DataValue::Int32(Some(1i32))),
-                            ExpressionPlan::Field("z".to_string()),
+                            constant(1i32),
+                            field("z")
                         ],
-                    }),
-                ),
-                ExpressionPlan::Alias(
-                    "x".to_string(),
+                    }).alias("x"),
                     Box::new(ExpressionPlan::Function {
                         op: "plus".to_string(),
                         args: vec![
-                            ExpressionPlan::Constant(DataValue::Int32(Some(1i32))),
-                            ExpressionPlan::Field("y".to_string()),
+                            constant(1i32),
+                            field("y")
                         ],
-                    }),
-                ),
+                    }).alias("x"),
             ],
             expect_str: "",
             error_msg : "Error during plan: Different expressions with the same alias x",
@@ -87,22 +71,19 @@ fn test_rewriter_plan() -> crate::error::FuseQueryResult<()> {
         RewriteTest{
             name: "normal",
             exprs: vec![
-                ExpressionPlan::Field("x".to_string()),
-                ExpressionPlan::Alias(
-                    "y".to_string(),
+                field("x"),
                     Box::new(ExpressionPlan::Function {
                         op: "add".to_string(),
                         args: vec![
-                            ExpressionPlan::Constant(DataValue::Int32(Some(1i32))),
-                            ExpressionPlan::Field("x".to_string()),
+                            constant(1i32),
+                            field("x")
                         ],
-                    }),
-                ),
+                    }).alias("y"),
                 ExpressionPlan::Function {
                     op: "multiply".to_string(),
                     args: vec![
-                        ExpressionPlan::Field("y".to_string()),
-                        ExpressionPlan::Field("y".to_string()),
+                        field("y"),
+                        field("y"),
                     ],
                 },
             ],
@@ -113,31 +94,25 @@ fn test_rewriter_plan() -> crate::error::FuseQueryResult<()> {
         RewriteTest{
             name: "normal2",
             exprs: vec![
-                ExpressionPlan::Alias(
-                    "x".to_string(),
                     Box::new(ExpressionPlan::Function {
                         op: "add".to_string(),
                         args: vec![
-                            ExpressionPlan::Constant(DataValue::Int32(Some(1i32))),
-                            ExpressionPlan::Constant(DataValue::Int64(Some(1i64))),
+                            constant(1i32),
+                            constant(1i64),
                         ],
-                    }),
-                ),
-                ExpressionPlan::Alias(
-                    "y".to_string(),
+                    }).alias("x"),
                     Box::new(ExpressionPlan::Function {
                         op: "add".to_string(),
                         args: vec![
-                            ExpressionPlan::Constant(DataValue::Int32(Some(1i32))),
-                            ExpressionPlan::Field("x".to_string()),
+                            constant(1i32),
+                            field("x")
                         ],
-                    }),
-                ),
+                    }).alias("y"),
                 ExpressionPlan::Function {
                     op: "multiply".to_string(),
                     args: vec![
-                        ExpressionPlan::Field("x".to_string()),
-                        ExpressionPlan::Field("y".to_string()),
+                            field("x"),
+                            field("y")
                     ],
                 },
             ],
