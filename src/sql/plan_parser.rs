@@ -6,7 +6,8 @@ use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::{DataSchema, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
-    ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, SelectPlan, SettingPlan, VarValue,
+    ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, SelectPlan, SettingPlan, StageState,
+    VarValue,
 };
 use crate::sql::{DFExplainPlan, DFParser, DFStatement};
 use sqlparser::ast::{FunctionArg, Statement, TableFactor};
@@ -332,7 +333,7 @@ impl PlanParser {
         // S2: Apply a final aggregator plan.
         PlanBuilder::from(self.ctx.clone(), &input)
             .aggregate_partial(aggr_expr.clone(), group_expr.clone())?
-            .stage()?
+            .stage(StageState::AggregatorMerge)?
             .aggregate_final(aggr_expr, group_expr)?
             .build()
     }

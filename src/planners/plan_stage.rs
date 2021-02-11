@@ -7,8 +7,18 @@ use std::sync::Arc;
 use crate::datavalues::DataSchemaRef;
 use crate::planners::PlanNode;
 
+#[derive(Clone, Debug)]
+pub enum StageState {
+    Normal,
+    Through,
+    SortMerge,
+    GroupByMerge,
+    AggregatorMerge,
+}
+
 #[derive(Clone)]
 pub struct StagePlan {
+    pub state: StageState,
     pub input: Arc<PlanNode>,
 }
 

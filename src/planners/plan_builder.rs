@@ -10,7 +10,7 @@ use crate::error::FuseQueryResult;
 use crate::planners::{
     field, AggregatorFinalPlan, AggregatorPartialPlan, DFExplainType, EmptyPlan, ExplainPlan,
     ExpressionPlan, FilterPlan, LimitPlan, PlanNode, PlanRewriter, ProjectionPlan, ScanPlan,
-    SelectPlan, StagePlan,
+    SelectPlan, StagePlan, StageState,
 };
 
 pub enum AggregateMode {
@@ -58,10 +58,11 @@ impl PlanBuilder {
     }
 
     /// Apply a stage.
-    pub fn stage(&self) -> FuseQueryResult<Self> {
+    pub fn stage(&self, state: StageState) -> FuseQueryResult<Self> {
         Ok(Self::from(
             self.ctx.clone(),
             &PlanNode::Fragment(StagePlan {
+                state,
                 input: Arc::new(self.plan.clone()),
             }),
         ))

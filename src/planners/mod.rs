@@ -50,4 +50,4 @@ pub use self::plan_scan::ScanPlan;
 pub use self::plan_select::SelectPlan;
 pub use self::plan_setting::{SettingPlan, VarValue};
 pub use self::plan_visitor::{GraphvizVisitor, IndentVisitor, PlanVisitor};
-pub use plan_stage::StagePlan;
+pub use plan_stage::{StagePlan, StageState};

@@ -185,8 +185,8 @@ impl PlanNode {
                 PlanNode::Select(_v) => {
                     builder = builder.select()?;
                 }
-                PlanNode::Fragment(_) => {
-                    builder = builder.stage()?;
+                PlanNode::Fragment(v) => {
+                    builder = builder.stage(v.state.clone())?;
                 }
                 // Non node in the list.
                 PlanNode::Empty(_) => {}
