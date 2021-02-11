@@ -96,8 +96,8 @@ impl PlanNode {
                     PlanNode::Empty(_) => {
                         write!(f, "")
                     }
-                    PlanNode::Fragment(_) => {
-                        write!(f, "Stage for distributed query execute")
+                    PlanNode::Fragment(v) => {
+                        write!(f, "Stage[{:?}] for distributed query execute", v.state)
                     }
                     PlanNode::Projection(plan) => {
                         write!(f, "Projection: ")?;
