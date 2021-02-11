@@ -5,6 +5,7 @@
 #[test]
 fn test_aggregator_plan() -> crate::error::FuseQueryResult<()> {
     use pretty_assertions::assert_eq;
+    use std::sync::Arc;
 
     use crate::planners::*;
 
@@ -21,7 +22,7 @@ fn test_aggregator_plan() -> crate::error::FuseQueryResult<()> {
     .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
         typ: DFExplainType::Syntax,
-        plan: Box::new(plan),
+        input: Arc::new(plan),
     });
     let expect = "Projection: sumx:UInt64\
     \n  AggregatorFinal: groupBy=[[]], aggr=[[sum([number]) as sumx]]\

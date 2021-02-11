@@ -34,7 +34,7 @@ impl IInterpreter for SelectInterpreter {
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
-        let plan = Optimizer::create(self.ctx.clone()).optimize(&self.select.plan)?;
+        let plan = Optimizer::create(self.ctx.clone()).optimize(&self.select.input)?;
         PipelineBuilder::create(self.ctx.clone(), plan)
             .build()?
             .execute()

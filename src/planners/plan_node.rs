@@ -39,7 +39,7 @@ impl PlanNode {
             PlanNode::Filter(v) => v.schema(),
             PlanNode::Limit(v) => v.schema(),
             PlanNode::ReadSource(v) => v.schema(),
-            PlanNode::Select(v) => v.plan.schema(),
+            PlanNode::Select(v) => v.input.schema(),
             PlanNode::Explain(_) => unimplemented!(),
             PlanNode::SetVariable(_) => unimplemented!(),
         }
@@ -113,14 +113,14 @@ impl PlanNode {
                     if with_parent {
                         list.push(PlanNode::Select(v.clone()));
                     }
-                    plan = v.plan.as_ref().clone();
+                    plan = v.input.as_ref().clone();
                     depth += 1;
                 }
                 PlanNode::Explain(v) => {
                     if with_parent {
                         list.push(PlanNode::Explain(v.clone()));
                     }
-                    plan = v.plan.as_ref().clone();
+                    plan = v.input.as_ref().clone();
                     depth += 1;
                 }
 

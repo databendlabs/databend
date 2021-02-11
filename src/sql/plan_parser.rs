@@ -2,6 +2,8 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
+use std::sync::Arc;
+
 use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::{DataSchema, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
@@ -63,7 +65,7 @@ impl PlanParser {
         let plan = self.sql_statement_to_plan(&explain.statement)?;
         Ok(PlanNode::Explain(ExplainPlan {
             typ: explain.typ,
-            plan: Box::new(plan),
+            input: Arc::new(plan),
         }))
     }
 
@@ -122,7 +124,7 @@ impl PlanParser {
         let plan = self.limit(&plan, limit)?;
 
         Ok(PlanNode::Select(SelectPlan {
-            plan: Box::new(plan),
+            input: Arc::new(plan),
         }))
     }
 

@@ -146,10 +146,10 @@ impl PlanNode {
                         )
                     }
                     PlanNode::Explain(plan) => {
-                        write!(f, "{:?}", plan.plan)
+                        write!(f, "{:?}", plan.input)
                     }
                     PlanNode::Select(plan) => {
-                        write!(f, "{:?}", plan.plan)
+                        write!(f, "{:?}", plan.input)
                     }
                 }
             }

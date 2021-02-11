@@ -50,8 +50,8 @@ impl Optimizer {
             PlanNode::AggregatorFinal(v) => Self::projections_to_map(v.input.as_ref(), map)?,
             PlanNode::Filter(v) => Self::projections_to_map(v.input.as_ref(), map)?,
             PlanNode::Limit(v) => Self::projections_to_map(v.input.as_ref(), map)?,
-            PlanNode::Explain(v) => Self::projections_to_map(v.plan.as_ref(), map)?,
-            PlanNode::Select(v) => Self::projections_to_map(v.plan.as_ref(), map)?,
+            PlanNode::Explain(v) => Self::projections_to_map(v.input.as_ref(), map)?,
+            PlanNode::Select(v) => Self::projections_to_map(v.input.as_ref(), map)?,
             _ => {}
         }
         Ok(())

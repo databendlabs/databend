@@ -201,7 +201,7 @@ impl PlanBuilder {
         Ok(Self::from(
             self.ctx.clone(),
             &PlanNode::Select(SelectPlan {
-                plan: Box::new(self.plan.clone()),
+                input: Arc::new(self.plan.clone()),
             }),
         ))
     }
@@ -211,7 +211,7 @@ impl PlanBuilder {
             self.ctx.clone(),
             &PlanNode::Explain(ExplainPlan {
                 typ: DFExplainType::Syntax,
-                plan: Box::new(self.plan.clone()),
+                input: Arc::new(self.plan.clone()),
             }),
         ))
     }
