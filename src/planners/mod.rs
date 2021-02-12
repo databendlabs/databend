@@ -8,6 +8,7 @@ mod plan_limit_test;
 mod plan_projection_test;
 mod plan_rewriter_test;
 mod plan_select_test;
+mod plan_stage_test;
 
 mod plan_aggregator_final;
 mod plan_aggregator_partial;
