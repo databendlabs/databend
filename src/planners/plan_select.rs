@@ -4,9 +4,16 @@
 
 use std::sync::Arc;
 
+use crate::datavalues::DataSchemaRef;
 use crate::planners::PlanNode;
 
 #[derive(Clone)]
 pub struct SelectPlan {
     pub input: Arc<PlanNode>,
+}
+
+impl SelectPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        self.input.schema()
+    }
 }

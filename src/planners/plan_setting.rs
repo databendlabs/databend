@@ -2,6 +2,10 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
+use std::sync::Arc;
+
+use crate::datavalues::{DataSchema, DataSchemaRef};
+
 #[derive(Clone)]
 pub struct VarValue {
     pub variable: String,
@@ -11,4 +15,10 @@ pub struct VarValue {
 #[derive(Clone)]
 pub struct SettingPlan {
     pub vars: Vec<VarValue>,
+}
+
+impl SettingPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
 }

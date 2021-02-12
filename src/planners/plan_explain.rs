@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use crate::datavalues::DataSchemaRef;
 use crate::planners::PlanNode;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -17,4 +18,10 @@ pub enum DFExplainType {
 pub struct ExplainPlan {
     pub typ: DFExplainType,
     pub input: Arc<PlanNode>,
+}
+
+impl ExplainPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        self.input.schema()
+    }
 }
