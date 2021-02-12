@@ -27,6 +27,11 @@ pub fn sum(other: ExpressionPlan) -> ExpressionPlan {
 }
 
 impl ExpressionPlan {
+    // And.
+    pub fn and(&self, other: ExpressionPlan) -> ExpressionPlan {
+        binary_expr(self.clone(), "and", other)
+    }
+
     /// Equal.
     pub fn eq(&self, other: ExpressionPlan) -> ExpressionPlan {
         binary_expr(self.clone(), "=", other)

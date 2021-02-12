@@ -6,22 +6,22 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt, Clone)]
 pub struct Opt {
-    #[structopt(short, long, default_value = "Unknown")]
+    #[structopt(default_value = "Unknown")]
     pub version: String,
 
-    #[structopt(short, long, default_value = "debug")]
+    #[structopt(default_value = "debug")]
     pub log_level: String,
 
-    #[structopt(short, long, default_value = "4")]
+    #[structopt(default_value = "4")]
     pub num_cpus: u64,
 
-    #[structopt(short, long, default_value = "127.0.0.1")]
+    #[structopt(default_value = "127.0.0.1")]
     pub mysql_listen_host: String,
 
-    #[structopt(short, long, default_value = "3307")]
+    #[structopt(default_value = "3307")]
     pub mysql_handler_port: u64,
 
-    #[structopt(short, long, default_value = "256")]
+    #[structopt(default_value = "256")]
     pub mysql_handler_thread_num: u64,
 }
 

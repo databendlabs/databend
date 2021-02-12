@@ -39,9 +39,9 @@ impl PlanNode {
             PlanNode::Filter(v) => v.schema(),
             PlanNode::Limit(v) => v.schema(),
             PlanNode::ReadSource(v) => v.schema(),
-            PlanNode::Select(v) => v.input.schema(),
-            PlanNode::Explain(_) => unimplemented!(),
-            PlanNode::SetVariable(_) => unimplemented!(),
+            PlanNode::Select(v) => v.schema(),
+            PlanNode::Explain(v) => v.schema(),
+            PlanNode::SetVariable(v) => v.schema(),
         }
     }
 
