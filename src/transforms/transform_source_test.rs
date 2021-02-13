@@ -9,7 +9,7 @@ async fn transform_source_test() -> crate::error::FuseQueryResult<()> {
 
     use crate::processors::*;
 
-    let ctx = crate::contexts::FuseQueryContext::try_create_ctx()?;
+    let ctx = crate::sessions::FuseQueryContext::try_create_ctx()?;
     let test_source = crate::tests::NumberTestData::create(ctx);
 
     let mut pipeline = Pipeline::create();

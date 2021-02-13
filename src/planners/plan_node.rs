@@ -2,13 +2,13 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::DataSchemaRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
     AggregatorFinalPlan, AggregatorPartialPlan, EmptyPlan, ExplainPlan, FilterPlan, LimitPlan,
     PlanBuilder, ProjectionPlan, ReadDataSourcePlan, ScanPlan, SelectPlan, SettingPlan, StagePlan,
 };
+use crate::sessions::FuseQueryContextRef;
 
 #[derive(Clone)]
 pub enum PlanNode {

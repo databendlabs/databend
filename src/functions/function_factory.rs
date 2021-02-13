@@ -6,7 +6,6 @@ use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 
-use crate::contexts::FuseQueryContextRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::aggregators::AggregatorFunction;
 use crate::functions::arithmetics::ArithmeticFunction;
@@ -14,6 +13,7 @@ use crate::functions::comparisons::ComparisonFunction;
 use crate::functions::logics::LogicFunction;
 use crate::functions::udfs::UDFFunction;
 use crate::functions::IFunction;
+use crate::sessions::FuseQueryContextRef;
 
 pub struct FunctionFactory;
 pub type FactoryFunc = fn(

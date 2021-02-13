@@ -4,7 +4,7 @@
 
 pub mod tests;
 
-pub mod contexts;
+pub mod configs;
 pub mod datablocks;
 pub mod datasources;
 pub mod datastreams;
@@ -17,5 +17,6 @@ pub mod optimizers;
 pub mod planners;
 pub mod processors;
 pub mod servers;
+pub mod sessions;
 pub mod sql;
 pub mod transforms;

@@ -5,7 +5,6 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
 use crate::datavalues::DataSchemaRef;
@@ -13,6 +12,7 @@ use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::IFunction;
 use crate::planners::ExpressionPlan;
 use crate::processors::{EmptyProcessor, IProcessor};
+use crate::sessions::FuseQueryContextRef;
 
 pub struct ProjectionTransform {
     funcs: Vec<Box<dyn IFunction>>,

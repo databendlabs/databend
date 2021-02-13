@@ -4,4 +4,4 @@ ignore:
   - "*/error.rs"
   - "*/bin/*"
   - "*/servers/*"
-  - "*/contexts/*"
+  - "*/sessions/*"

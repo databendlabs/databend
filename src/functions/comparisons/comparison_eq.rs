@@ -2,11 +2,11 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::DataValueComparisonOperator;
 use crate::error::FuseQueryResult;
 use crate::functions::comparisons::ComparisonFunction;
 use crate::functions::IFunction;
+use crate::sessions::FuseQueryContextRef;
 
 pub struct ComparisonEqFunction;
 

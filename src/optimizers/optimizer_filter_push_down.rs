@@ -2,10 +2,10 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use crate::contexts::FuseQueryContextRef;
 use crate::error::FuseQueryResult;
 use crate::optimizers::{IOptimizer, Optimizer};
 use crate::planners::{ExpressionPlan, FilterPlan, PlanNode};
+use crate::sessions::FuseQueryContextRef;
 use std::collections::HashMap;
 
 pub struct FilterPushDownOptimizer {

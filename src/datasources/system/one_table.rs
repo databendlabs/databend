@@ -5,13 +5,13 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datasources::{ITable, Partition, Statistics};
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, UInt8Array};
 use crate::error::FuseQueryResult;
 use crate::planners::{PlanNode, ReadDataSourcePlan};
+use crate::sessions::FuseQueryContextRef;
 
 pub struct OneTable {
     schema: DataSchemaRef,

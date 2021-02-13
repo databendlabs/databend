@@ -6,7 +6,6 @@ use async_trait::async_trait;
 use log::debug;
 use std::sync::Arc;
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::datavalues::{DataField, DataSchema, DataType, StringArray};
@@ -15,6 +14,7 @@ use crate::interpreters::IInterpreter;
 use crate::optimizers::Optimizer;
 use crate::planners::{DFExplainType, ExplainPlan, PlanNode};
 use crate::processors::PipelineBuilder;
+use crate::sessions::FuseQueryContextRef;
 
 pub struct ExplainInterpreter {
     ctx: FuseQueryContextRef,

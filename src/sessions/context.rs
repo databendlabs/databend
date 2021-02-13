@@ -4,13 +4,15 @@
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
+use uuid::Uuid;
 
-use crate::contexts::Settings;
 use crate::datasources::{DataSource, IDataSource, ITable, Partition, Partitions, Statistics};
 use crate::datavalues::DataValue;
 use crate::error::{FuseQueryError, FuseQueryResult};
+use crate::sessions::Settings;
 
 pub struct FuseQueryContext {
+    id: String,
     settings: Settings,
     datasource: Arc<Mutex<dyn IDataSource>>,
     statistics: Mutex<Statistics>,
@@ -23,6 +25,7 @@ impl FuseQueryContext {
     pub fn try_create_ctx() -> FuseQueryResult<Arc<Self>> {
         let settings = Settings::create();
         let ctx = FuseQueryContext {
+            id: Uuid::new_v4().to_string(),
             settings,
             datasource: Arc::new(Mutex::new(DataSource::try_create()?)),
             statistics: Mutex::new(Statistics::default()),
@@ -82,6 +85,10 @@ impl FuseQueryContext {
 
     pub fn get_table(&self, db_name: &str, table_name: &str) -> FuseQueryResult<Arc<dyn ITable>> {
         self.datasource.lock()?.get_table(db_name, table_name)
+    }
+
+    pub fn get_id(&self) -> String {
+        self.id.clone()
     }
 
     apply_macros! { apply_getter_setter_settings, apply_initial_settings, apply_update_settings,

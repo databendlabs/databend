@@ -17,7 +17,7 @@ use std::mem;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
-use crate::contexts::FuseQueryContextRef;
+use crate::sessions::FuseQueryContextRef;
 use arrow::array::ArrayData;
 use arrow::buffer::Buffer;
 use arrow::datatypes::DataType;

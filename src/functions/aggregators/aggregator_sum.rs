@@ -4,7 +4,6 @@
 
 use std::fmt;
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{
     self, DataColumnarValue, DataSchema, DataType, DataValue, DataValueAggregateOperator,
@@ -12,6 +11,7 @@ use crate::datavalues::{
 };
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::IFunction;
+use crate::sessions::FuseQueryContextRef;
 
 #[derive(Clone)]
 pub struct AggregatorSumFunction {

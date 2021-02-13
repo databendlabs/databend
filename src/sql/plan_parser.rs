@@ -4,15 +4,16 @@
 
 use std::sync::Arc;
 
-use crate::contexts::FuseQueryContextRef;
+use sqlparser::ast::{FunctionArg, Statement, TableFactor};
+
 use crate::datavalues::{DataSchema, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
     ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, SelectPlan, SettingPlan, StageState,
     VarValue,
 };
+use crate::sessions::FuseQueryContextRef;
 use crate::sql::{DFExplainPlan, DFParser, DFStatement};
-use sqlparser::ast::{FunctionArg, Statement, TableFactor};
 
 pub struct PlanParser {
     ctx: FuseQueryContextRef,

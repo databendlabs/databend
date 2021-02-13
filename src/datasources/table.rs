@@ -4,11 +4,11 @@
 
 use async_trait::async_trait;
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datastreams::SendableDataBlockStream;
 use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::planners::{PlanNode, ReadDataSourcePlan};
+use crate::sessions::FuseQueryContextRef;
 
 #[async_trait]
 pub trait ITable: Sync + Send {
