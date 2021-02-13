@@ -4,11 +4,11 @@
 
 use std::sync::Arc;
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datasources::IDataSource;
 use crate::datavalues::{DataSchema, DataSchemaRef, DataValue};
 use crate::error::FuseQueryResult;
 use crate::planners::{ExpressionPlan, PlanNode, ReadDataSourcePlan, ScanPlan};
+use crate::sessions::FuseQueryContextRef;
 use crate::transforms::SourceTransform;
 
 pub struct NumberTestData {

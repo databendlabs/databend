@@ -7,12 +7,12 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datasources::{system::NumbersStream, ITable, Partition, Partitions, Statistics};
 use crate::datastreams::SendableDataBlockStream;
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{ExpressionPlan, PlanNode, ReadDataSourcePlan, ScanPlan};
+use crate::sessions::FuseQueryContextRef;
 
 pub struct NumbersTable {
     table: &'static str,

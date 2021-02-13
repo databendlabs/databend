@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use arrow::compute::filter_record_batch;
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
 use crate::datavalues::{BooleanArray, DataSchema, DataSchemaRef};
@@ -15,6 +14,7 @@ use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::IFunction;
 use crate::planners::ExpressionPlan;
 use crate::processors::{EmptyProcessor, IProcessor};
+use crate::sessions::FuseQueryContextRef;
 
 pub struct FilterTransform {
     func: Box<dyn IFunction>,

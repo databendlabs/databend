@@ -5,13 +5,13 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::FuseQueryResult;
 use crate::interpreters::IInterpreter;
 use crate::optimizers::Optimizer;
 use crate::planners::SelectPlan;
 use crate::processors::PipelineBuilder;
+use crate::sessions::FuseQueryContextRef;
 
 pub struct SelectInterpreter {
     ctx: FuseQueryContextRef,

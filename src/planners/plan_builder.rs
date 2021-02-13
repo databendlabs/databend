@@ -4,7 +4,6 @@
 
 use std::sync::Arc;
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef};
 use crate::error::FuseQueryResult;
 use crate::planners::{
@@ -12,6 +11,7 @@ use crate::planners::{
     ExpressionPlan, FilterPlan, LimitPlan, PlanNode, PlanRewriter, ProjectionPlan, ScanPlan,
     SelectPlan, StagePlan, StageState,
 };
+use crate::sessions::FuseQueryContextRef;
 
 pub enum AggregateMode {
     Partial,

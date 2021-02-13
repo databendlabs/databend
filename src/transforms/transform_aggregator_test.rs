@@ -12,7 +12,7 @@ async fn test_transform_aggregator() -> crate::error::FuseQueryResult<()> {
     use crate::processors::*;
     use crate::transforms::*;
 
-    let ctx = crate::contexts::FuseQueryContext::try_create_ctx()?;
+    let ctx = crate::sessions::FuseQueryContext::try_create_ctx()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
     let aggr_exprs = vec![planners::add(

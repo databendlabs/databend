@@ -5,7 +5,6 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datasources::{ITable, Partition, Statistics};
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
@@ -13,6 +12,7 @@ use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, StringAr
 use crate::error::FuseQueryResult;
 use crate::functions::FunctionFactory;
 use crate::planners::{PlanNode, ReadDataSourcePlan};
+use crate::sessions::FuseQueryContextRef;
 
 pub struct FunctionsTable {
     schema: DataSchemaRef,

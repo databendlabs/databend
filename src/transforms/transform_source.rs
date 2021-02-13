@@ -5,10 +5,10 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::IProcessor;
+use crate::sessions::FuseQueryContextRef;
 
 pub struct SourceTransform {
     ctx: FuseQueryContextRef,

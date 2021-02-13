@@ -3,29 +3,34 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use log::info;
-use simplelog::{Config, LevelFilter, SimpleLogger};
+use simplelog::{Config as LogConfig, LevelFilter, SimpleLogger};
 
 use tokio::signal::unix::{signal, SignalKind};
 
-use fuse_query::contexts::Opt;
+use fuse_query::configs::Config;
 use fuse_query::servers::MySQLHandler;
+use fuse_query::sessions::SessionManager;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let opts = Opt::create();
+    let cfg = Config::create();
+    let session_mgr = SessionManager::create();
 
-    match opts.log_level.to_lowercase().as_str() {
-        "debug" => SimpleLogger::init(LevelFilter::Debug, Config::default())?,
-        "info" => SimpleLogger::init(LevelFilter::Info, Config::default())?,
-        _ => SimpleLogger::init(LevelFilter::Error, Config::default())?,
+    match cfg.log_level.to_lowercase().as_str() {
+        "debug" => SimpleLogger::init(LevelFilter::Debug, LogConfig::default())?,
+        "info" => SimpleLogger::init(LevelFilter::Info, LogConfig::default())?,
+        _ => SimpleLogger::init(LevelFilter::Error, LogConfig::default())?,
     }
-    info!("{:?}", opts.clone());
+    info!("{:?}", cfg.clone());
 
-    let mysql_handler = MySQLHandler::create(opts.clone());
+    let mysql_handler = MySQLHandler::create(cfg.clone(), session_mgr.clone());
     tokio::spawn(async move { mysql_handler.start() });
 
-    info!("FuseQuery v-{} Cloud Compute Starts...", opts.version);
-    info!("Usage: mysql -h127.0.0.1 -P{:?}", opts.mysql_handler_port);
+    info!("FuseQuery v-{} Cloud Compute Starts...", cfg.version);
+    info!(
+        "Usage: mysql -h{} -P{:?}",
+        cfg.mysql_listen_host, cfg.mysql_handler_port
+    );
     signal(SignalKind::hangup())?.recv().await;
     Ok(())
 }

@@ -7,7 +7,6 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::stream::StreamExt;
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::datavalues::{DataSchemaRef, DataValue};
@@ -15,6 +14,7 @@ use crate::error::FuseQueryResult;
 use crate::functions::IFunction;
 use crate::planners::ExpressionPlan;
 use crate::processors::{EmptyProcessor, IProcessor};
+use crate::sessions::FuseQueryContextRef;
 
 pub struct AggregatorFinalTransform {
     funcs: Vec<Box<dyn IFunction>>,

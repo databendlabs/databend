@@ -11,11 +11,12 @@ use futures::stream::StreamExt;
 use msql_srv::*;
 use threadpool::ThreadPool;
 
-use crate::contexts::{FuseQueryContext, FuseQueryContextRef, Opt};
+use crate::configs::Config;
 use crate::datablocks::DataBlock;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::MySQLStream;
+use crate::sessions::{FuseQueryContextRef, SessionManagerRef};
 use crate::sql::PlanParser;
 
 struct Session {
@@ -123,28 +124,31 @@ impl<W: io::Write> MysqlShim<W> for Session {
 }
 
 pub struct MySQLHandler {
-    opts: Opt,
+    cfg: Config,
+    session_mgr: SessionManagerRef,
 }
 
 impl MySQLHandler {
-    pub fn create(opts: Opt) -> Self {
-        MySQLHandler { opts }
+    pub fn create(cfg: Config, session_mgr: SessionManagerRef) -> Self {
+        MySQLHandler { cfg, session_mgr }
     }
 
     pub fn start(&self) -> FuseQueryResult<()> {
         let listener = net::TcpListener::bind(format!(
             "{}:{}",
-            self.opts.mysql_listen_host, self.opts.mysql_handler_port
+            self.cfg.mysql_listen_host, self.cfg.mysql_handler_port
         ))?;
-        let pool = ThreadPool::new(self.opts.mysql_handler_thread_num as usize);
+        let pool = ThreadPool::new(self.cfg.mysql_handler_thread_num as usize);
 
         for stream in listener.incoming() {
             let stream = stream?;
-            let ctx = FuseQueryContext::try_create_ctx()?;
-            ctx.set_max_threads(self.opts.num_cpus)?;
+            let ctx = self.session_mgr.try_create_context()?;
+            ctx.set_max_threads(self.cfg.num_cpus)?;
 
+            let session_mgr = self.session_mgr.clone();
             pool.execute(move || {
-                MysqlIntermediary::run_on_tcp(Session::create(ctx), stream).unwrap();
+                MysqlIntermediary::run_on_tcp(Session::create(ctx.clone()), stream).unwrap();
+                session_mgr.try_remove_context(ctx).unwrap();
             })
         }
         Ok(())

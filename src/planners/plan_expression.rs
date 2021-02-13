@@ -4,12 +4,12 @@
 
 use std::fmt;
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datavalues::{DataField, DataSchemaRef, DataValue};
 use crate::error::FuseQueryResult;
 use crate::functions::{
     AliasFunction, ConstantFunction, FieldFunction, FunctionFactory, IFunction,
 };
+use crate::sessions::FuseQueryContextRef;
 
 #[derive(Clone)]
 pub enum ExpressionPlan {

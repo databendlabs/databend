@@ -4,11 +4,11 @@
 
 use std::fmt;
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::IFunction;
+use crate::sessions::FuseQueryContextRef;
 
 #[derive(Clone)]
 pub struct ToTypeNameFunction {

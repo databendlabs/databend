@@ -6,9 +6,9 @@
 mod macros;
 
 mod context;
-mod options;
+mod session_manager;
 mod settings;
 
 pub use self::context::{FuseQueryContext, FuseQueryContextRef};
-pub use self::options::Opt;
+pub use self::session_manager::{SessionManager, SessionManagerRef};
 pub use self::settings::Settings;

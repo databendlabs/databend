@@ -5,10 +5,10 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use futures::stream::StreamExt;
 
-use fuse_query::contexts::FuseQueryContext;
 use fuse_query::error::FuseQueryResult;
 use fuse_query::interpreters::SelectInterpreter;
 use fuse_query::planners::PlanNode;
+use fuse_query::sessions::FuseQueryContext;
 use fuse_query::sql::PlanParser;
 
 async fn pipeline_executor(sql: &str) -> FuseQueryResult<()> {

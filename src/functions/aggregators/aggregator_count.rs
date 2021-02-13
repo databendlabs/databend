@@ -4,13 +4,13 @@
 
 use std::fmt;
 
-use crate::contexts::FuseQueryContextRef;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{
     self, DataColumnarValue, DataSchema, DataType, DataValue, DataValueArithmeticOperator,
 };
 use crate::error::FuseQueryResult;
 use crate::functions::{ConstantFunction, IFunction};
+use crate::sessions::FuseQueryContextRef;
 
 #[derive(Clone)]
 pub struct AggregatorCountFunction {

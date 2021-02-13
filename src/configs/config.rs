@@ -5,7 +5,7 @@
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt, Clone)]
-pub struct Opt {
+pub struct Config {
     #[structopt(default_value = "Unknown")]
     pub version: String,
 
@@ -25,11 +25,11 @@ pub struct Opt {
     pub mysql_handler_thread_num: u64,
 }
 
-impl Opt {
+impl Config {
     pub fn create() -> Self {
-        let mut opt = Opt::from_args();
-        opt.num_cpus = num_cpus::get() as u64;
-        opt.version = include_str!(concat!(env!("OUT_DIR"), "/version-info.txt")).to_string();
-        opt
+        let mut cfg = Config::from_args();
+        cfg.num_cpus = num_cpus::get() as u64;
+        cfg.version = include_str!(concat!(env!("OUT_DIR"), "/version-info.txt")).to_string();
+        cfg
     }
 }
