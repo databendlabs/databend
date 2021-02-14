@@ -23,6 +23,9 @@ pub struct Config {
 
     #[structopt(default_value = "256")]
     pub mysql_handler_thread_num: u64,
+
+    #[structopt(default_value = "127.0.0.1:9000")]
+    pub prometheus_exporter_address: String,
 }
 
 impl Config {

@@ -5,6 +5,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use metrics::counter;
+
 use crate::error::FuseQueryResult;
 use crate::sessions::{FuseQueryContext, FuseQueryContextRef};
 
@@ -22,12 +24,16 @@ impl SessionManager {
     }
 
     pub fn try_create_context(&self) -> FuseQueryResult<FuseQueryContextRef> {
+        counter!(super::session_metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
+
         let ctx = FuseQueryContext::try_create_ctx()?;
         self.sessions.lock()?.insert(ctx.get_id(), ctx.clone());
         Ok(ctx)
     }
 
     pub fn try_remove_context(&self, ctx: FuseQueryContextRef) -> FuseQueryResult<()> {
+        counter!(super::session_metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
+
         self.sessions.lock()?.remove(&*ctx.get_id());
         Ok(())
     }
