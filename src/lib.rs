@@ -4,6 +4,7 @@
 
 pub mod tests;
 
+pub mod admins;
 pub mod configs;
 pub mod datablocks;
 pub mod datasources;
@@ -13,6 +14,7 @@ pub mod error;
 pub mod executors;
 pub mod functions;
 pub mod interpreters;
+pub mod metrics;
 pub mod optimizers;
 pub mod planners;
 pub mod processors;
