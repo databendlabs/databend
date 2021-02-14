@@ -7,6 +7,7 @@ mod macros;
 
 mod context;
 mod session_manager;
+mod session_metrics;
 mod settings;
 
 pub use self::context::{FuseQueryContext, FuseQueryContextRef};
