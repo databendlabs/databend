@@ -4,6 +4,7 @@
 
 pub mod tests;
 
+pub mod admins;
 pub mod configs;
 pub mod datablocks;
 pub mod datasources;

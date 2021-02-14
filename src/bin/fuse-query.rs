@@ -8,6 +8,7 @@ use simplelog::{Config as LogConfig, LevelFilter, SimpleLogger};
 
 use tokio::signal::unix::{signal, SignalKind};
 
+use fuse_query::admins::Admin;
 use fuse_query::configs::Config;
 use fuse_query::servers::MySQLHandler;
 use fuse_query::sessions::SessionManager;
@@ -47,11 +48,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!(
         "Listening for MySQL handler {}:{}, Usage: mysql -h{} -P{}",
-        cfg.mysql_listen_host,
+        cfg.mysql_handler_host,
         cfg.mysql_handler_port,
-        cfg.mysql_listen_host,
+        cfg.mysql_handler_host,
         cfg.mysql_handler_port
     );
+
+    let admin = Admin::create(cfg.clone());
+    admin.start().await;
 
     // Wait.
     signal(SignalKind::hangup())?.recv().await;
