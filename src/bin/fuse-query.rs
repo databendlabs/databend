@@ -3,13 +3,13 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use log::info;
-use metrics_exporter_prometheus::PrometheusBuilder;
 use simplelog::{Config as LogConfig, LevelFilter, SimpleLogger};
 
 use tokio::signal::unix::{signal, SignalKind};
 
 use fuse_query::admins::Admin;
 use fuse_query::configs::Config;
+use fuse_query::metrics::Metric;
 use fuse_query::servers::MySQLHandler;
 use fuse_query::sessions::SessionManager;
 
@@ -26,16 +26,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", cfg.clone());
     info!("FuseQuery v-{}", cfg.version);
 
-    // Run a Prometheus scrape endpoint on 127.0.0.1:9000.
-    let _ = PrometheusBuilder::new()
-        .listen_address(
-            cfg.prometheus_exporter_address
-                .parse::<std::net::SocketAddr>()
-                .expect("Failed to parse prometheus exporter address"),
-        )
-        .install()
-        .expect("Failed to install prometheus exporter");
-
+    // Metrics exporter.
+    let metric = Metric::create(cfg.clone());
+    metric.start()?;
     info!(
         "Listening for Prometheus exporter {}",
         cfg.prometheus_exporter_address
