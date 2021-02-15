@@ -11,7 +11,7 @@ async fn test_transform_projection() -> crate::error::FuseQueryResult<()> {
     use crate::processors::*;
     use crate::transforms::*;
 
-    let ctx = crate::sessions::FuseQueryContext::try_create_ctx()?;
+    let ctx = crate::sessions::FuseQueryContext::try_create()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
     let mut pipeline = Pipeline::create();

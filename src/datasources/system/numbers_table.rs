@@ -97,7 +97,7 @@ impl ITable for NumbersTable {
             read_rows: total as usize,
             read_bytes: (total) * size_of::<u64>() as u64,
         };
-        ctx.set_statistics(&statistics)?;
+        ctx.try_set_statistics(&statistics)?;
 
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),

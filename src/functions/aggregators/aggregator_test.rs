@@ -25,7 +25,7 @@ fn test_aggregator_function() -> crate::error::FuseQueryResult<()> {
         func: Box<dyn IFunction>,
     }
 
-    let ctx = crate::sessions::FuseQueryContext::try_create_ctx()?;
+    let ctx = crate::sessions::FuseQueryContext::try_create()?;
 
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),

@@ -8,6 +8,7 @@ use simplelog::{Config as LogConfig, LevelFilter, SimpleLogger};
 use tokio::signal::unix::{signal, SignalKind};
 
 use fuse_query::admins::Admin;
+use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
 use fuse_query::metrics::Metric;
 use fuse_query::servers::MySQLHandler;
@@ -34,9 +35,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         cfg.prometheus_exporter_address
     );
 
+    let cluster = Cluster::create(cfg.clone());
+
     // MySQL handler.
     let session_mgr = SessionManager::create();
-    let mysql_handler = MySQLHandler::create(cfg.clone(), session_mgr.clone());
+    let mysql_handler = MySQLHandler::create(cfg.clone(), session_mgr.clone(), cluster.clone());
     tokio::spawn(async move { mysql_handler.start() });
 
     info!(

@@ -12,7 +12,7 @@ use fuse_query::sessions::FuseQueryContext;
 use fuse_query::sql::PlanParser;
 
 async fn pipeline_executor(sql: &str) -> FuseQueryResult<()> {
-    let ctx = FuseQueryContext::try_create_ctx()?;
+    let ctx = FuseQueryContext::try_create()?;
 
     if let PlanNode::Select(plan) = PlanParser::create(ctx.clone()).build_from_sql(sql)? {
         let executor = SelectInterpreter::try_create(ctx, plan)?;
