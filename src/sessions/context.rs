@@ -6,34 +6,43 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
+use crate::clusters::{Cluster, ClusterRef};
 use crate::datasources::{DataSource, IDataSource, ITable, Partition, Partitions, Statistics};
 use crate::datavalues::DataValue;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::sessions::Settings;
 
+#[derive(Clone)]
 pub struct FuseQueryContext {
     id: String,
     settings: Settings,
+    cluster: Arc<Mutex<ClusterRef>>,
     datasource: Arc<Mutex<dyn IDataSource>>,
-    statistics: Mutex<Statistics>,
-    partition_queue: Mutex<VecDeque<Partition>>,
+    statistics: Arc<Mutex<Statistics>>,
+    partition_queue: Arc<Mutex<VecDeque<Partition>>>,
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
-    pub fn try_create_ctx() -> FuseQueryResult<Arc<Self>> {
+    pub fn try_create() -> FuseQueryResult<FuseQueryContextRef> {
         let settings = Settings::create();
         let ctx = FuseQueryContext {
             id: Uuid::new_v4().to_string(),
             settings,
+            cluster: Arc::new(Mutex::new(Cluster::empty())),
             datasource: Arc::new(Mutex::new(DataSource::try_create()?)),
-            statistics: Mutex::new(Statistics::default()),
-            partition_queue: Mutex::new(VecDeque::new()),
+            statistics: Arc::new(Mutex::new(Statistics::default())),
+            partition_queue: Arc::new(Mutex::new(VecDeque::new())),
         };
 
         ctx.initial_settings()?;
         Ok(Arc::new(ctx))
+    }
+
+    pub fn with_cluster(&self, cluster: ClusterRef) -> FuseQueryResult<FuseQueryContextRef> {
+        *self.cluster.lock()? = cluster;
+        Ok(Arc::new(self.clone()))
     }
 
     // ctx.reset will reset the necessary variables in the session
@@ -45,7 +54,7 @@ impl FuseQueryContext {
 
     // Steal n partitions from the partition pool by the pipeline worker.
     // This also can steal the partitions from distributed node.
-    pub fn try_fetch_partitions(&self, num: usize) -> FuseQueryResult<Partitions> {
+    pub fn try_get_partitions(&self, num: usize) -> FuseQueryResult<Partitions> {
         let mut partitions = vec![];
         for _ in 0..num {
             match self.partition_queue.lock()?.pop_back() {
@@ -59,23 +68,14 @@ impl FuseQueryContext {
     }
 
     // Update the context partition pool from the pipeline builder.
-    pub fn try_update_partitions(&self, partitions: Partitions) -> FuseQueryResult<()> {
+    pub fn try_set_partitions(&self, partitions: Partitions) -> FuseQueryResult<()> {
         for part in partitions {
             self.partition_queue.lock()?.push_back(part);
         }
         Ok(())
     }
 
-    pub fn get_settings(&self) -> FuseQueryResult<Vec<DataValue>> {
-        self.settings.get_settings()
-    }
-
-    pub fn set_statistics(&self, val: &Statistics) -> FuseQueryResult<()> {
-        *self.statistics.lock()? = val.clone();
-        Ok(())
-    }
-
-    pub fn get_statistics(&self) -> FuseQueryResult<Statistics> {
+    pub fn try_get_statistics(&self) -> FuseQueryResult<Statistics> {
         let statistics = self.statistics.lock()?;
         Ok(Statistics {
             read_rows: statistics.read_rows,
@@ -83,8 +83,17 @@ impl FuseQueryContext {
         })
     }
 
+    pub fn try_set_statistics(&self, val: &Statistics) -> FuseQueryResult<()> {
+        *self.statistics.lock()? = val.clone();
+        Ok(())
+    }
+
     pub fn get_table(&self, db_name: &str, table_name: &str) -> FuseQueryResult<Arc<dyn ITable>> {
         self.datasource.lock()?.get_table(db_name, table_name)
+    }
+
+    pub fn get_settings(&self) -> FuseQueryResult<Vec<DataValue>> {
+        self.settings.get_settings()
     }
 
     pub fn get_id(&self) -> String {

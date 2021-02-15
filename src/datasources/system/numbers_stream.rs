@@ -47,7 +47,7 @@ impl NumbersStream {
 
     fn try_get_one_block(&mut self) -> FuseQueryResult<Option<BlockRange>> {
         if (self.block_index as usize) == self.blocks.len() {
-            let partitions = self.ctx.try_fetch_partitions(1)?;
+            let partitions = self.ctx.try_get_partitions(1)?;
             if partitions.is_empty() {
                 return Ok(None);
             }

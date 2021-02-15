@@ -79,7 +79,7 @@ impl PipelineBuilder {
                 }
                 PlanNode::ReadSource(plan) => {
                     // Bind plan partitions to context.
-                    self.ctx.try_update_partitions(plan.partitions.clone())?;
+                    self.ctx.try_set_partitions(plan.partitions.clone())?;
 
                     let max_threads = self.ctx.get_max_threads()? as usize;
                     let workers = if max_threads == 0 {

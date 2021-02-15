@@ -26,7 +26,7 @@ impl SessionManager {
     pub fn try_create_context(&self) -> FuseQueryResult<FuseQueryContextRef> {
         counter!(super::session_metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
 
-        let ctx = FuseQueryContext::try_create_ctx()?;
+        let ctx = FuseQueryContext::try_create()?;
         self.sessions.lock()?.insert(ctx.get_id(), ctx.clone());
         Ok(ctx)
     }
