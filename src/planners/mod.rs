@@ -1,6 +1,6 @@
 // Copyright 2020 The FuseQuery Authors.
 //
-// Code is licensed under AGPL License, Version 3.0.
+// Code is licensed under Apache License, Version 2.0.
 
 mod plan_aggregator_test;
 mod plan_expression_test;
