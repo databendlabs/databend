@@ -1,6 +1,6 @@
 // Copyright 2020 The VectorQuery Authors.
 //
-// Code is licensed under AGPL License, Version 3.0.
+// Code is licensed under Apache License, Version 2.0.
 
 use criterion::{criterion_group, criterion_main, Criterion};
 

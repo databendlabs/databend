@@ -1,6 +1,6 @@
 // Copyright 2020 The FuseQuery Authors.
 //
-// Code is licensed under AGPL License, Version 3.0.
+// Code is licensed under Apache License, Version 2.0.
 
 mod interpreter_explain_test;
 mod interpreter_select_test;
