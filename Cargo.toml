@@ -2,8 +2,8 @@
 name = "fuse-query"
 version = "0.1.0"
 description = "A Distributed Query Engine"
-authors = ["BohuTANG <bohu@datafuse.dev>", "Peter <peter@datafuse.dev>", "Kevin <kevin@datafuse.dev>"]
-license = "AGPL-3.0"
+authors = ["BohuTANG <overred.shuttler@gmail.com>"]
+license = "Apache-2.0"
 include = [
     "benches/*.rs",
     "src/**/*.rs",
