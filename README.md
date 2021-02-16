@@ -182,3 +182,6 @@ $ make test
 - [ ] 0.5 support join
 - [ ] 0.6 support TPC-H benchmark
 
+## License
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdatafusedev%2Ffuse-query.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fdatafusedev%2Ffuse-query?ref=badge_large)
