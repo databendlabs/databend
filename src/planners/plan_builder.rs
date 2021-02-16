@@ -61,7 +61,7 @@ impl PlanBuilder {
     pub fn stage(&self, state: StageState) -> FuseQueryResult<Self> {
         Ok(Self::from(
             self.ctx.clone(),
-            &PlanNode::Fragment(StagePlan {
+            &PlanNode::Stage(StagePlan {
                 uuid: self.ctx.get_id()?,
                 id: 0,
                 state,

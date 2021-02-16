@@ -28,7 +28,7 @@ impl PipelineBuilder {
         let plans = self.plan.get_children_nodes()?;
         for plan in &plans {
             match plan {
-                PlanNode::Fragment(_) => {
+                PlanNode::Stage(_) => {
                     pipeline.merge_processor()?;
                 }
                 PlanNode::Limit(plan) => {

@@ -17,7 +17,7 @@ impl PlanNode {
         }
 
         let recurse = match self {
-            PlanNode::Fragment(plan) => plan.input.accept(visitor)?,
+            PlanNode::Stage(plan) => plan.input.accept(visitor)?,
             PlanNode::Projection(plan) => plan.input.accept(visitor)?,
             PlanNode::AggregatorPartial(plan) => plan.input.accept(visitor)?,
             PlanNode::AggregatorFinal(plan) => plan.input.accept(visitor)?,
@@ -96,7 +96,7 @@ impl PlanNode {
                     PlanNode::Empty(_) => {
                         write!(f, "")
                     }
-                    PlanNode::Fragment(v) => {
+                    PlanNode::Stage(v) => {
                         write!(
                             f,
                             "RedistributeStage[state: {:?}, uuid: {}, id: {}]",
