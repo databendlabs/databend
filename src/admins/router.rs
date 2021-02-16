@@ -2,10 +2,11 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
+use warp::Filter;
+
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::error::FuseQueryResult;
-use warp::Filter;
 
 pub struct Router {
     cfg: Config,
