@@ -6,10 +6,10 @@
 mod macros;
 
 mod context;
-mod session_manager;
-mod session_metrics;
+mod metrics;
+mod session;
 mod settings;
 
 pub use self::context::{FuseQueryContext, FuseQueryContextRef};
-pub use self::session_manager::{SessionManager, SessionManagerRef};
+pub use self::session::{Session, SessionRef};
 pub use self::settings::Settings;

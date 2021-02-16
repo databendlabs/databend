@@ -2,39 +2,48 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use crate::clusters::Node;
 use crate::configs::Config;
 use crate::error::FuseQueryResult;
-
-#[derive(Clone)]
-pub struct ClusterMeta;
 
 pub type ClusterRef = Arc<Cluster>;
 
 pub struct Cluster {
-    metas: Mutex<Vec<ClusterMeta>>,
+    nodes: Mutex<HashMap<String, Node>>,
 }
 
 impl Cluster {
     pub fn create(_cfg: Config) -> ClusterRef {
         Arc::new(Cluster {
-            metas: Mutex::new(vec![]),
+            nodes: Mutex::new(HashMap::new()),
         })
     }
 
     pub fn empty() -> ClusterRef {
         Arc::new(Cluster {
-            metas: Mutex::new(vec![]),
+            nodes: Mutex::new(HashMap::new()),
         })
     }
 
-    pub fn get_clusters(&self) -> FuseQueryResult<Vec<ClusterMeta>> {
-        let mut metas = vec![];
+    pub fn add_node(&self, node: &Node) -> FuseQueryResult<()> {
+        self.nodes.lock()?.insert(node.id.clone(), node.clone());
+        Ok(())
+    }
 
-        for meta in self.metas.lock()?.iter() {
-            metas.push(meta.clone());
+    pub fn remove_node(&self, id: String) -> FuseQueryResult<()> {
+        self.nodes.lock()?.remove(&*id);
+        Ok(())
+    }
+
+    pub fn get_nodes(&self) -> FuseQueryResult<Vec<Node>> {
+        let mut nodes = vec![];
+
+        for (_, node) in self.nodes.lock()?.iter() {
+            nodes.push(node.clone());
         }
-        Ok(metas)
+        Ok(nodes)
     }
 }
