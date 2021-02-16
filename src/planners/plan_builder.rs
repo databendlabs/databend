@@ -62,6 +62,8 @@ impl PlanBuilder {
         Ok(Self::from(
             self.ctx.clone(),
             &PlanNode::Fragment(StagePlan {
+                uuid: self.ctx.get_id()?,
+                id: 0,
                 state,
                 input: Arc::new(self.plan.clone()),
             }),

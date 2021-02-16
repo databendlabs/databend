@@ -11,7 +11,8 @@ async fn test_select_interpreter() -> crate::error::FuseQueryResult<()> {
     use crate::planners::*;
     use crate::sql::*;
 
-    let ctx = crate::sessions::FuseQueryContext::try_create()?;
+    let ctx = crate::sessions::FuseQueryContext::try_create()?
+        .with_id("cf6db5fe-7595-4d85-97ee-71f051b21cbe")?;
 
     if let PlanNode::Select(plan) = PlanParser::create(ctx.clone())
         .build_from_sql("select number from system.numbers_mt(10) where (number+2)<2")?

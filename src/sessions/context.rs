@@ -14,7 +14,7 @@ use crate::sessions::Settings;
 
 #[derive(Clone)]
 pub struct FuseQueryContext {
-    id: String,
+    uuid: Arc<Mutex<String>>,
     settings: Settings,
     cluster: Arc<Mutex<ClusterRef>>,
     datasource: Arc<Mutex<dyn IDataSource>>,
@@ -28,7 +28,7 @@ impl FuseQueryContext {
     pub fn try_create() -> FuseQueryResult<FuseQueryContextRef> {
         let settings = Settings::create();
         let ctx = FuseQueryContext {
-            id: Uuid::new_v4().to_string(),
+            uuid: Arc::new(Mutex::new(Uuid::new_v4().to_string())),
             settings,
             cluster: Arc::new(Mutex::new(Cluster::empty())),
             datasource: Arc::new(Mutex::new(DataSource::try_create()?)),
@@ -42,6 +42,11 @@ impl FuseQueryContext {
 
     pub fn with_cluster(&self, cluster: ClusterRef) -> FuseQueryResult<FuseQueryContextRef> {
         *self.cluster.lock()? = cluster;
+        Ok(Arc::new(self.clone()))
+    }
+
+    pub fn with_id(&self, uuid: &str) -> FuseQueryResult<FuseQueryContextRef> {
+        *self.uuid.lock()? = uuid.to_string();
         Ok(Arc::new(self.clone()))
     }
 
@@ -96,8 +101,8 @@ impl FuseQueryContext {
         self.settings.get_settings()
     }
 
-    pub fn get_id(&self) -> String {
-        self.id.clone()
+    pub fn get_id(&self) -> FuseQueryResult<String> {
+        Ok(self.uuid.as_ref().lock()?.clone())
     }
 
     apply_macros! { apply_getter_setter_settings, apply_initial_settings, apply_update_settings,

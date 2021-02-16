@@ -18,6 +18,8 @@ pub enum StageState {
 
 #[derive(Clone)]
 pub struct StagePlan {
+    pub uuid: String,
+    pub id: usize,
     pub state: StageState,
     pub input: Arc<PlanNode>,
 }

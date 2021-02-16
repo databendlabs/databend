@@ -27,14 +27,14 @@ impl Session {
         counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
 
         let ctx = FuseQueryContext::try_create()?;
-        self.sessions.lock()?.insert(ctx.get_id(), ctx.clone());
+        self.sessions.lock()?.insert(ctx.get_id()?, ctx.clone());
         Ok(ctx)
     }
 
     pub fn try_remove_context(&self, ctx: FuseQueryContextRef) -> FuseQueryResult<()> {
         counter!(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
 
-        self.sessions.lock()?.remove(&*ctx.get_id());
+        self.sessions.lock()?.remove(&*ctx.get_id()?);
         Ok(())
     }
 }
