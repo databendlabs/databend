@@ -51,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let admin = Admin::create(cfg.clone(), cluster.clone());
-    admin.start().await;
+    admin.start().await?;
 
     // Wait.
     signal(SignalKind::hangup())?.recv().await;
