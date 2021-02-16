@@ -2,6 +2,10 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
-mod cluster;
+mod cluster_test;
 
-pub use self::cluster::{Cluster, ClusterMeta, ClusterRef};
+mod cluster;
+mod node;
+
+pub use self::cluster::{Cluster, ClusterRef};
+pub use self::node::Node;

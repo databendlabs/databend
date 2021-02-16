@@ -12,7 +12,7 @@ use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
 use fuse_query::metrics::Metric;
 use fuse_query::servers::MySQLHandler;
-use fuse_query::sessions::SessionManager;
+use fuse_query::sessions::Session;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cluster = Cluster::create(cfg.clone());
 
     // MySQL handler.
-    let session_mgr = SessionManager::create();
+    let session_mgr = Session::create();
     let mysql_handler = MySQLHandler::create(cfg.clone(), session_mgr.clone(), cluster.clone());
     tokio::spawn(async move { mysql_handler.start() });
 
@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         cfg.mysql_handler_port
     );
 
-    let admin = Admin::create(cfg.clone());
+    let admin = Admin::create(cfg.clone(), cluster.clone());
     admin.start().await;
 
     // Wait.

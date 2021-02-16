@@ -18,7 +18,7 @@ use crate::datablocks::DataBlock;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::MySQLStream;
-use crate::sessions::{FuseQueryContextRef, SessionManagerRef};
+use crate::sessions::{FuseQueryContextRef, SessionRef};
 use crate::sql::PlanParser;
 
 struct Session {
@@ -133,12 +133,12 @@ impl<W: io::Write> MysqlShim<W> for Session {
 
 pub struct MySQLHandler {
     cfg: Config,
-    session_mgr: SessionManagerRef,
+    session_mgr: SessionRef,
     cluster: ClusterRef,
 }
 
 impl MySQLHandler {
-    pub fn create(cfg: Config, session_mgr: SessionManagerRef, cluster: ClusterRef) -> Self {
+    pub fn create(cfg: Config, session_mgr: SessionRef, cluster: ClusterRef) -> Self {
         MySQLHandler {
             cfg,
             session_mgr,

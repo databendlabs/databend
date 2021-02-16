@@ -10,21 +10,21 @@ use metrics::counter;
 use crate::error::FuseQueryResult;
 use crate::sessions::{FuseQueryContext, FuseQueryContextRef};
 
-pub struct SessionManager {
+pub struct Session {
     sessions: Mutex<HashMap<String, FuseQueryContextRef>>,
 }
 
-pub type SessionManagerRef = Arc<SessionManager>;
+pub type SessionRef = Arc<Session>;
 
-impl SessionManager {
-    pub fn create() -> SessionManagerRef {
-        Arc::new(SessionManager {
+impl Session {
+    pub fn create() -> SessionRef {
+        Arc::new(Session {
             sessions: Mutex::new(HashMap::new()),
         })
     }
 
     pub fn try_create_context(&self) -> FuseQueryResult<FuseQueryContextRef> {
-        counter!(super::session_metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
+        counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
 
         let ctx = FuseQueryContext::try_create()?;
         self.sessions.lock()?.insert(ctx.get_id(), ctx.clone());
@@ -32,7 +32,7 @@ impl SessionManager {
     }
 
     pub fn try_remove_context(&self, ctx: FuseQueryContextRef) -> FuseQueryResult<()> {
-        counter!(super::session_metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
+        counter!(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
 
         self.sessions.lock()?.remove(&*ctx.get_id());
         Ok(())
