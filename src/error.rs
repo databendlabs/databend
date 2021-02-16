@@ -68,3 +68,9 @@ impl From<serde_json::Error> for FuseQueryError {
         FuseQueryError::Internal(err.to_string())
     }
 }
+
+impl From<std::net::AddrParseError> for FuseQueryError {
+    fn from(err: std::net::AddrParseError) -> Self {
+        FuseQueryError::Internal(err.to_string())
+    }
+}

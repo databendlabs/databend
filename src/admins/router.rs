@@ -2,9 +2,11 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
+use warp::Filter;
+
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use warp::Filter;
+use crate::error::FuseQueryResult;
 
 pub struct Router {
     cfg: Config,
@@ -18,11 +20,13 @@ impl Router {
 
     pub fn router(
         &self,
-    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        super::v1::config::config_handler(self.cfg.clone())
-            .or(super::v1::hello::hello_handler(self.cfg.clone()))
-            .or(super::v1::cluster::cluster_nodes_handler(
-                self.cluster.clone(),
-            ))
+    ) -> FuseQueryResult<impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone>
+    {
+        let config_handler = super::v1::config::config_handler(self.cfg.clone())?;
+        let hello_handler = super::v1::hello::hello_handler(self.cfg.clone())?;
+        let cluster_nodes_handler =
+            super::v1::cluster::cluster_nodes_handler(self.cluster.clone())?;
+        let v1 = config_handler.or(hello_handler).or(cluster_nodes_handler);
+        Ok(v1)
     }
 }
