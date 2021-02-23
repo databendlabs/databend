@@ -10,7 +10,6 @@ fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
     use crate::planners::*;
 
     let ctx = crate::tests::try_create_context()?;
-    ctx.set_max_threads(8)?;
 
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 

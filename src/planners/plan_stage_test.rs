@@ -9,8 +9,8 @@ fn test_stage_plan() -> crate::error::FuseQueryResult<()> {
 
     use crate::planners::*;
 
-    let ctx = crate::sessions::FuseQueryContext::try_create()?
-        .with_id("cf6db5fe-7595-4d85-97ee-71f051b21cbe")?;
+    let ctx =
+        crate::tests::try_create_context()?.with_id("cf6db5fe-7595-4d85-97ee-71f051b21cbe")?;
 
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
