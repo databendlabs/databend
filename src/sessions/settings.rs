@@ -222,6 +222,7 @@ impl Settings {
                     DataValue::String(Some(k.to_string())),
                     values[0].clone(),
                     values[1].clone(),
+                    values[2].clone(),
                 ]);
                 result.push(res);
             }
