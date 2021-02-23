@@ -9,7 +9,7 @@ fn test_limit_plan() -> crate::error::FuseQueryResult<()> {
 
     use crate::planners::*;
 
-    let ctx = crate::sessions::FuseQueryContext::try_create()?;
+    let ctx = crate::tests::try_create_context()?;
 
     let limit = PlanNode::Limit(LimitPlan {
         n: 33,

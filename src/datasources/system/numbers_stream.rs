@@ -2,7 +2,11 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
+use std::ptr::NonNull;
+use std::sync::Arc;
 use std::{
+    mem,
+    mem::ManuallyDrop,
     task::{Context, Poll},
     usize,
 };
@@ -12,12 +16,8 @@ use futures::stream::Stream;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataSchemaRef, UInt64Array};
 use crate::error::FuseQueryResult;
-use std::alloc::Layout;
-use std::mem;
-use std::ptr::NonNull;
-use std::sync::Arc;
-
 use crate::sessions::FuseQueryContextRef;
+
 use arrow::array::ArrayData;
 use arrow::buffer::Buffer;
 use arrow::datatypes::DataType;
@@ -98,24 +98,23 @@ impl Stream for NumbersStream {
         _: &mut Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         let current = self.try_get_one_block()?;
+
         Poll::Ready(match current {
             None => None,
             Some(current) => {
-                let length = (current.end - current.begin) as usize;
-                let size = length * mem::size_of::<u64>();
+                let v = (current.begin..current.end).collect::<Vec<u64>>();
+                let mut me = ManuallyDrop::new(v);
+                let byte_size = mem::size_of::<u64>();
 
                 unsafe {
-                    let layout = Layout::from_size_align_unchecked(size, arrow::memory::ALIGNMENT);
-                    let p = std::alloc::alloc(layout) as *mut u64;
-                    for i in current.begin..current.end {
-                        *p.offset((i - current.begin) as isize) = i;
-                    }
-
-                    let buffer =
-                        Buffer::from_raw_parts(NonNull::new(p as *mut u8).unwrap(), size, size);
+                    let buffer = Buffer::from_raw_parts(
+                        NonNull::new(me.as_mut_ptr() as *mut u8).unwrap(),
+                        me.len() * byte_size,
+                        me.capacity() * byte_size,
+                    );
 
                     let arr_data = ArrayData::builder(DataType::UInt64)
-                        .len(length)
+                        .len(me.len())
                         .offset(0)
                         .add_buffer(buffer)
                         .build();

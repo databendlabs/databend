@@ -9,7 +9,8 @@ fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
 
     use crate::planners::*;
 
-    let ctx = crate::sessions::FuseQueryContext::try_create()?;
+    let ctx = crate::tests::try_create_context()?;
+
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
     let plan = PlanBuilder::from(

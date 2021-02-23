@@ -9,7 +9,8 @@ fn test_filter_push_down_optimizer() -> crate::error::FuseQueryResult<()> {
     use crate::optimizers::*;
     use crate::sql::*;
 
-    let ctx = crate::sessions::FuseQueryContext::try_create()?;
+    let ctx = crate::tests::try_create_context()?;
+
     let plan = PlanParser::create(ctx.clone()).build_from_sql(
         "select (number+1) as c1, number as c2 from system.numbers_mt(10000) where (c1+c2+1)=1",
     )?;
