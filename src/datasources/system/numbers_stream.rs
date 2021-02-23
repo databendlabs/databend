@@ -2,8 +2,11 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
+use std::ptr::NonNull;
+use std::sync::Arc;
 use std::{
     mem,
+    mem::ManuallyDrop,
     task::{Context, Poll},
     usize,
 };
@@ -13,14 +16,11 @@ use futures::stream::Stream;
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataSchemaRef, UInt64Array};
 use crate::error::FuseQueryResult;
-use std::ptr::NonNull;
-use std::sync::Arc;
-
 use crate::sessions::FuseQueryContextRef;
+
 use arrow::array::ArrayData;
 use arrow::buffer::Buffer;
 use arrow::datatypes::DataType;
-use std::mem::ManuallyDrop;
 
 #[derive(Debug, Clone)]
 struct BlockRange {
