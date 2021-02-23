@@ -10,7 +10,7 @@ async fn test_setting_interpreter() -> crate::error::FuseQueryResult<()> {
     use crate::planners::*;
     use crate::sql::*;
 
-    let ctx = crate::sessions::FuseQueryContext::try_create()?;
+    let ctx = crate::tests::try_create_context()?;
 
     if let PlanNode::SetVariable(plan) =
         PlanParser::create(ctx.clone()).build_from_sql("set max_block_size=1")?
@@ -33,7 +33,7 @@ async fn test_setting_interpreter_error() -> crate::error::FuseQueryResult<()> {
     use crate::planners::*;
     use crate::sql::*;
 
-    let ctx = crate::sessions::FuseQueryContext::try_create()?;
+    let ctx = crate::tests::try_create_context()?;
 
     if let PlanNode::SetVariable(plan) =
         PlanParser::create(ctx.clone()).build_from_sql("set xx=1")?

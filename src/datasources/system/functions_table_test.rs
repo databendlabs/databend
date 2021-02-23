@@ -10,7 +10,7 @@ async fn test_functions_table() -> crate::error::FuseQueryResult<()> {
     use crate::datasources::*;
     use crate::planners::*;
 
-    let ctx = crate::sessions::FuseQueryContext::try_create()?;
+    let ctx = crate::tests::try_create_context()?;
 
     let table = FunctionsTable::create();
     table.read_plan(ctx.clone(), PlanBuilder::empty(ctx.clone()).build()?)?;

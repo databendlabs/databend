@@ -9,7 +9,9 @@ fn test_aggregator_plan() -> crate::error::FuseQueryResult<()> {
 
     use crate::planners::*;
 
-    let ctx = crate::sessions::FuseQueryContext::try_create()?;
+    let ctx = crate::tests::try_create_context()?;
+    ctx.set_max_threads(8)?;
+
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
     let plan = PlanBuilder::from(

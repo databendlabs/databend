@@ -10,7 +10,7 @@ fn test_select_wildcard_plan() -> crate::error::FuseQueryResult<()> {
     use crate::datavalues::*;
     use crate::planners::*;
 
-    let ctx = crate::sessions::FuseQueryContext::try_create()?;
+    let ctx = crate::tests::try_create_context()?;
 
     let schema = Arc::new(DataSchema::new(vec![DataField::new(
         "a",

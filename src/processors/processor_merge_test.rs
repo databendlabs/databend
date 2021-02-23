@@ -11,7 +11,7 @@ async fn test_processor_merge() -> crate::error::FuseQueryResult<()> {
     use crate::processors::*;
     use crate::tests;
 
-    let ctx = crate::sessions::FuseQueryContext::try_create()?;
+    let ctx = crate::tests::try_create_context()?;
     let test_source = tests::NumberTestData::create(ctx.clone());
 
     let mut pipeline = Pipeline::create();

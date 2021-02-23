@@ -3,6 +3,7 @@
 // Code is licensed under Apache License, Version 2.0.
 
 use std::{
+    mem,
     task::{Context, Poll},
     usize,
 };
@@ -97,17 +98,19 @@ impl Stream for NumbersStream {
         _: &mut Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         let current = self.try_get_one_block()?;
+
         Poll::Ready(match current {
             None => None,
             Some(current) => {
                 let v = (current.begin..current.end).collect::<Vec<u64>>();
                 let mut me = ManuallyDrop::new(v);
+                let byte_size = mem::size_of::<u64>();
 
                 unsafe {
                     let buffer = Buffer::from_raw_parts(
                         NonNull::new(me.as_mut_ptr() as *mut u8).unwrap(),
-                        me.len(),
-                        me.capacity(),
+                        me.len() * byte_size,
+                        me.capacity() * byte_size,
                     );
 
                     let arr_data = ArrayData::builder(DataType::UInt64)
