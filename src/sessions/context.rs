@@ -106,7 +106,7 @@ impl FuseQueryContext {
     }
 
     apply_macros! { apply_getter_setter_settings, apply_initial_settings, apply_update_settings,
-        ("max_threads", u64, 8, "The maximum number of threads to execute the request. By default, it is determined automatically.".to_string()),
+        ("max_threads", u64, num_cpus::get() as u64, "The maximum number of threads to execute the request. By default, it is determined automatically.".to_string()),
         ("max_block_size", u64, 10000, "Maximum block size for reading".to_string()),
         ("default_db", String, "default".to_string(), "the default database for current session".to_string())
     }

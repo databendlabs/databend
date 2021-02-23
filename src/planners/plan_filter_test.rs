@@ -8,7 +8,7 @@ fn test_filter_plan() -> crate::error::FuseQueryResult<()> {
 
     use crate::planners::*;
 
-    let ctx = crate::sessions::FuseQueryContext::try_create()?;
+    let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
     let source = test_source.number_read_source_plan_for_test(8)?;

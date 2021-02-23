@@ -10,7 +10,7 @@ fn test_projection_plan() -> crate::error::FuseQueryResult<()> {
     use crate::datavalues::*;
     use crate::planners::*;
 
-    let ctx = crate::sessions::FuseQueryContext::try_create()?;
+    let ctx = crate::tests::try_create_context()?;
 
     let projection = PlanNode::Projection(ProjectionPlan {
         expr: vec![field("a")],

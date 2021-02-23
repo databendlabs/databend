@@ -12,7 +12,7 @@ pub struct Config {
     #[structopt(long, default_value = "debug")]
     pub log_level: String,
 
-    #[structopt(long, default_value = "4")]
+    #[structopt(long, default_value = "0")]
     pub num_cpus: u64,
 
     #[structopt(long, default_value = "127.0.0.1")]

@@ -23,6 +23,7 @@ impl SettingsTable {
             schema: Arc::new(DataSchema::new(vec![
                 DataField::new("name", DataType::Utf8, false),
                 DataField::new("value", DataType::Utf8, false),
+                DataField::new("default_value", DataType::Utf8, false),
                 DataField::new("description", DataType::Utf8, false),
             ])),
         }
@@ -62,28 +63,27 @@ impl ITable for SettingsTable {
 
         let mut names: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
+        let mut default_values: Vec<String> = vec![];
         let mut descs: Vec<String> = vec![];
         for setting in settings.iter() {
             if let DataValue::Struct(vals) = setting {
-                let name = format!("{:?}", vals[0]);
-                names.push(name);
-
-                let value = format!("{:?}", vals[1]);
-                values.push(value);
-
-                let desc = format!("{:?}", vals[2]);
-                descs.push(desc);
+                names.push(format!("{:?}", vals[0]));
+                values.push(format!("{:?}", vals[1]));
+                default_values.push(format!("{:?}", vals[2]));
+                descs.push(format!("{:?}", vals[3]));
             }
         }
 
         let names: Vec<&str> = names.iter().map(|x| x.as_str()).collect();
         let values: Vec<&str> = values.iter().map(|x| x.as_str()).collect();
+        let default_values: Vec<&str> = default_values.iter().map(|x| x.as_str()).collect();
         let descs: Vec<&str> = descs.iter().map(|x| x.as_str()).collect();
         let block = DataBlock::create(
             self.schema.clone(),
             vec![
                 Arc::new(StringArray::from(names)),
                 Arc::new(StringArray::from(values)),
+                Arc::new(StringArray::from(default_values)),
                 Arc::new(StringArray::from(descs)),
             ],
         );
