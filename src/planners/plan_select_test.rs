@@ -23,7 +23,7 @@ fn test_select_wildcard_plan() -> crate::error::FuseQueryResult<()> {
     let select = PlanNode::Select(SelectPlan {
         input: Arc::new(plan),
     });
-    let expect = "Projection: a:Utf8\n  ";
+    let expect = "Projection: a:Utf8";
     let actual = format!("{:?}", select);
     assert_eq!(expect, actual);
     Ok(())

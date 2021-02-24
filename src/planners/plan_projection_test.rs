@@ -22,7 +22,7 @@ fn test_projection_plan() -> crate::error::FuseQueryResult<()> {
         input: Arc::from(PlanBuilder::empty(ctx).build()?),
     });
     let _ = projection.schema();
-    let expect = "Projection: a:Utf8\n  ";
+    let expect = "Projection: a:Utf8";
     let actual = format!("{:?}", projection);
     assert_eq!(expect, actual);
     Ok(())
