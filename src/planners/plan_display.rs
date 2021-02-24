@@ -5,7 +5,7 @@
 use std::fmt;
 use std::fmt::Display;
 
-use crate::planners::{walk_preorder, PlanNode};
+use crate::planners::PlanNode;
 
 impl PlanNode {
     pub fn display_indent(&self) -> impl fmt::Display + '_ {
@@ -24,79 +24,80 @@ impl PlanNode {
                     Ok(())
                 };
 
-                walk_preorder(self.0, |node| {
-                    write_indent(f)?;
-                    match node {
-                        PlanNode::Stage(plan) => {
-                            write!(
-                                f,
-                                "RedistributeStage[state: {:?}, id: {}]",
-                                plan.state, plan.id
-                            )?;
-                            Ok(true)
-                        }
-                        PlanNode::Projection(plan) => {
-                            write!(f, "Projection: ")?;
-                            for i in 0..plan.expr.len() {
-                                if i > 0 {
-                                    write!(f, ", ")?;
-                                }
+                self.0
+                    .walk_preorder(|node| {
+                        write_indent(f)?;
+                        match node {
+                            PlanNode::Stage(plan) => {
                                 write!(
                                     f,
-                                    "{:?}:{:?}",
-                                    plan.expr[i],
-                                    plan.schema().fields()[i].data_type()
+                                    "RedistributeStage[state: {:?}, id: {}]",
+                                    plan.state, plan.id
                                 )?;
+                                Ok(true)
                             }
-                            Ok(true)
+                            PlanNode::Projection(plan) => {
+                                write!(f, "Projection: ")?;
+                                for i in 0..plan.expr.len() {
+                                    if i > 0 {
+                                        write!(f, ", ")?;
+                                    }
+                                    write!(
+                                        f,
+                                        "{:?}:{:?}",
+                                        plan.expr[i],
+                                        plan.schema().fields()[i].data_type()
+                                    )?;
+                                }
+                                Ok(true)
+                            }
+                            PlanNode::AggregatorPartial(plan) => {
+                                write!(
+                                    f,
+                                    "AggregatorPartial: groupBy=[{:?}], aggr=[{:?}]",
+                                    plan.group_expr, plan.aggr_expr
+                                )?;
+                                Ok(true)
+                            }
+                            PlanNode::AggregatorFinal(plan) => {
+                                write!(
+                                    f,
+                                    "AggregatorFinal: groupBy=[{:?}], aggr=[{:?}]",
+                                    plan.group_expr, plan.aggr_expr
+                                )?;
+                                Ok(true)
+                            }
+                            PlanNode::Filter(plan) => {
+                                write!(f, "Filter: {:?}", plan.predicate)?;
+                                Ok(true)
+                            }
+                            PlanNode::Limit(plan) => {
+                                write!(f, "Limit: {}", plan.n)?;
+                                Ok(true)
+                            }
+                            PlanNode::ReadSource(plan) => {
+                                write!(
+                                    f,
+                                    "ReadDataSource: scan parts [{}]{}",
+                                    plan.partitions.len(),
+                                    plan.description
+                                )?;
+                                Ok(false)
+                            }
+                            PlanNode::Explain(plan) => {
+                                write!(f, "{:?}", plan.input())?;
+                                Ok(false)
+                            }
+                            PlanNode::Select(plan) => {
+                                write!(f, "{:?}", plan.input())?;
+                                Ok(false)
+                            }
+                            PlanNode::Scan(_) | PlanNode::SetVariable(_) | PlanNode::Empty(_) => {
+                                Ok(false)
+                            }
                         }
-                        PlanNode::AggregatorPartial(plan) => {
-                            write!(
-                                f,
-                                "AggregatorPartial: groupBy=[{:?}], aggr=[{:?}]",
-                                plan.group_expr, plan.aggr_expr
-                            )?;
-                            Ok(true)
-                        }
-                        PlanNode::AggregatorFinal(plan) => {
-                            write!(
-                                f,
-                                "AggregatorFinal: groupBy=[{:?}], aggr=[{:?}]",
-                                plan.group_expr, plan.aggr_expr
-                            )?;
-                            Ok(true)
-                        }
-                        PlanNode::Filter(plan) => {
-                            write!(f, "Filter: {:?}", plan.predicate)?;
-                            Ok(true)
-                        }
-                        PlanNode::Limit(plan) => {
-                            write!(f, "Limit: {}", plan.n)?;
-                            Ok(true)
-                        }
-                        PlanNode::ReadSource(plan) => {
-                            write!(
-                                f,
-                                "ReadDataSource: scan parts [{}]{}",
-                                plan.partitions.len(),
-                                plan.description
-                            )?;
-                            Ok(false)
-                        }
-                        PlanNode::Explain(plan) => {
-                            write!(f, "{:?}", plan.input())?;
-                            Ok(false)
-                        }
-                        PlanNode::Select(plan) => {
-                            write!(f, "{:?}", plan.input())?;
-                            Ok(false)
-                        }
-                        PlanNode::Scan(_) | PlanNode::SetVariable(_) | PlanNode::Empty(_) => {
-                            Ok(false)
-                        }
-                    }
-                })
-                .map_err(|_| fmt::Error)?;
+                    })
+                    .map_err(|_| fmt::Error)?;
                 Ok(())
             }
         }

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::datavalues::DataSchema;
 use crate::error::FuseQueryResult;
 use crate::optimizers::{IOptimizer, Optimizer};
-use crate::planners::{walk_postorder, EmptyPlan, ExpressionPlan, FilterPlan, PlanNode};
+use crate::planners::{EmptyPlan, ExpressionPlan, FilterPlan, PlanNode};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct FilterPushDownOptimizer {}
@@ -50,7 +50,7 @@ impl IOptimizer for FilterPushDownOptimizer {
         });
 
         let projection_map = Optimizer::projection_to_map(plan)?;
-        walk_postorder(plan, |node| {
+        plan.walk_postorder(|node| {
             if let PlanNode::Filter(filter) = node {
                 let rewritten_expr = rewrite_alias_expr(&filter.predicate, &projection_map)?;
                 let mut new_filter_node = PlanNode::Filter(FilterPlan {
