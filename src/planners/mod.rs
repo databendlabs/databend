@@ -54,4 +54,3 @@ pub use self::plan_scan::ScanPlan;
 pub use self::plan_select::SelectPlan;
 pub use self::plan_setting::{SettingPlan, VarValue};
 pub use self::plan_stage::{StagePlan, StageState};
-pub use self::plan_walker::{walk_postorder, walk_preorder};

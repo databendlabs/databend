@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::planners::{walk_postorder, PlanNode};
+use crate::planners::PlanNode;
 use crate::processors::Pipeline;
 use crate::sessions::FuseQueryContextRef;
 use crate::transforms::{
@@ -25,7 +25,7 @@ impl PipelineBuilder {
 
     pub fn build(&self) -> FuseQueryResult<Pipeline> {
         let mut pipeline = Pipeline::create();
-        walk_postorder(&self.plan, |plan| match plan {
+        self.plan.walk_postorder(|plan| match plan {
             PlanNode::Stage(_) => {
                 pipeline.merge_processor()?;
                 Ok(true)

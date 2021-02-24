@@ -23,7 +23,7 @@ fn test_plan_walker() -> crate::error::FuseQueryResult<()> {
     // PreOrder.
     {
         let mut actual: Vec<String> = vec![];
-        walk_preorder(plan.input().as_ref(), |plan| {
+        plan.input().as_ref().walk_preorder(|plan| {
             actual.push(plan.name().to_string());
             return Ok(true);
         })?;
@@ -39,7 +39,7 @@ fn test_plan_walker() -> crate::error::FuseQueryResult<()> {
     // PostOrder.
     {
         let mut actual: Vec<String> = vec![];
-        walk_postorder(plan.input().as_ref(), |plan| {
+        plan.input().as_ref().walk_postorder(|plan| {
             actual.push(plan.name().to_string());
             return Ok(true);
         })?;
