@@ -29,7 +29,7 @@ fn test_stage_plan() -> crate::error::FuseQueryResult<()> {
     });
     let expect = "Projection: sumx:UInt64\
     \n  AggregatorFinal: groupBy=[[]], aggr=[[sum([number]) as sumx]]\
-    \n    RedistributeStage[state: AggregatorMerge, uuid: cf6db5fe-7595-4d85-97ee-71f051b21cbe, id: 0]\
+    \n    RedistributeStage[state: AggregatorMerge, id: 0]\
     \n      AggregatorPartial: groupBy=[[]], aggr=[[sum([number]) as sumx]]\
     \n        ReadDataSource: scan parts [8](Read from system.numbers_mt table, Read Rows:10000, Read Bytes:80000)";
     let actual = format!("{:?}", explain);

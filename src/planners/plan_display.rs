@@ -5,7 +5,7 @@
 use std::fmt;
 use std::fmt::Display;
 
-use crate::planners::{GraphvizVisitor, IndentVisitor, PlanNode, PlanVisitor};
+use crate::planners::{walk_preorder, GraphvizVisitor, IndentVisitor, PlanNode, PlanVisitor};
 
 impl PlanNode {
     pub fn accept<V>(&self, visitor: &mut V) -> std::result::Result<bool, V::Error>
@@ -83,25 +83,18 @@ impl PlanNode {
         Wrapper(self)
     }
 
-    /// Return a `format`able structure with the a human readable
-    /// description of this LogicalPlan node per node, not including
-    /// children.
     pub fn display(&self) -> impl fmt::Display + '_ {
-        // Boilerplate structure to wrap LogicalPlan with something
-        // that that can be formatted
         struct Wrapper<'a>(&'a PlanNode);
         impl<'a> fmt::Display for Wrapper<'a> {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                match self.0 {
-                    PlanNode::Empty(_) => {
-                        write!(f, "")
-                    }
-                    PlanNode::Stage(v) => {
+                walk_preorder(self.0, |node| match node {
+                    PlanNode::Stage(plan) => {
                         write!(
                             f,
-                            "RedistributeStage[state: {:?}, uuid: {}, id: {}]",
-                            v.state, v.uuid, v.id
-                        )
+                            "RedistributeStage[state: {:?}, id: {}]",
+                            plan.state, plan.id
+                        )?;
+                        Ok(false)
                     }
                     PlanNode::Projection(plan) => {
                         write!(f, "Projection: ")?;
@@ -116,30 +109,35 @@ impl PlanNode {
                                 plan.schema().fields()[i].data_type()
                             )?;
                         }
-                        Ok(())
+                        Ok(false)
                     }
                     PlanNode::AggregatorPartial(plan) => {
                         write!(
                             f,
                             "AggregatorPartial: groupBy=[{:?}], aggr=[{:?}]",
                             plan.group_expr, plan.aggr_expr
-                        )
+                        )?;
+                        Ok(false)
                     }
                     PlanNode::AggregatorFinal(plan) => {
                         write!(
                             f,
                             "AggregatorFinal: groupBy=[{:?}], aggr=[{:?}]",
                             plan.group_expr, plan.aggr_expr
-                        )
+                        )?;
+                        Ok(false)
                     }
                     PlanNode::Filter(plan) => {
-                        write!(f, "Filter: {:?}", plan.predicate)
+                        write!(f, "Filter: {:?}", plan.predicate)?;
+                        Ok(false)
                     }
                     PlanNode::Limit(plan) => {
-                        write!(f, "Limit: {}", plan.n)
+                        write!(f, "Limit: {}", plan.n)?;
+                        Ok(false)
                     }
-                    PlanNode::Scan(_) | PlanNode::SetVariable(_) => {
-                        write!(f, "")
+                    PlanNode::Scan(_) => {
+                        write!(f, "")?;
+                        Ok(false)
                     }
                     PlanNode::ReadSource(plan) => {
                         write!(
@@ -147,15 +145,21 @@ impl PlanNode {
                             "ReadDataSource: scan parts [{}]{}",
                             plan.partitions.len(),
                             plan.description
-                        )
+                        )?;
+                        Ok(false)
                     }
                     PlanNode::Explain(plan) => {
-                        write!(f, "{:?}", plan.input)
+                        write!(f, "{:?}", plan.input())?;
+                        Ok(false)
                     }
                     PlanNode::Select(plan) => {
-                        write!(f, "{:?}", plan.input)
+                        write!(f, "{:?}", plan.input())?;
+                        Ok(false)
                     }
-                }
+                    PlanNode::SetVariable(_) | PlanNode::Empty(_) => Ok(false),
+                })
+                .unwrap();
+                Ok(())
             }
         }
         Wrapper(self)
