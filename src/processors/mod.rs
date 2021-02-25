@@ -3,6 +3,7 @@
 // Code is licensed under Apache License, Version 2.0.
 
 mod pipeline_builder_test;
+mod pipeline_display_test;
 mod pipeline_walker_test;
 mod processor_empty_test;
 mod processor_merge_test;
