@@ -32,7 +32,7 @@ impl IProcessor for EmptyProcessor {
     }
 
     fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
-        unimplemented!()
+        vec![Arc::new(EmptyProcessor::create())]
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
