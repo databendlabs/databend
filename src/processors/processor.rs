@@ -27,6 +27,8 @@ pub trait IProcessor: Sync + Send {
     /// Connect to the input processor, add an edge on the DAG.
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()>;
 
+    fn inputs(&self) -> Vec<Arc<dyn IProcessor>>;
+
     /// Execute the processor.
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream>;
 

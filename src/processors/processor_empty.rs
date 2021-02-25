@@ -31,6 +31,10 @@ impl IProcessor for EmptyProcessor {
         ))
     }
 
+    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+        unimplemented!()
+    }
+
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
         Ok(Box::pin(DataBlockStream::create(
             Arc::new(DataSchema::empty()),

@@ -71,6 +71,10 @@ impl IProcessor for FilterTransform {
         Ok(())
     }
 
+    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+        vec![self.input.clone()]
+    }
+
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
         Ok(Box::pin(ExpressionStream::try_create(
             self.input.execute().await?,

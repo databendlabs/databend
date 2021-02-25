@@ -14,12 +14,12 @@ use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::{FormatterSettings, IProcessor};
 
 pub struct MergeProcessor {
-    list: Vec<Arc<dyn IProcessor>>,
+    inputs: Vec<Arc<dyn IProcessor>>,
 }
 
 impl MergeProcessor {
     pub fn create() -> Self {
-        MergeProcessor { list: vec![] }
+        MergeProcessor { inputs: vec![] }
     }
 }
 
@@ -30,21 +30,25 @@ impl IProcessor for MergeProcessor {
     }
 
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
-        self.list.push(input);
+        self.inputs.push(input);
         Ok(())
     }
 
+    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+        self.inputs.clone()
+    }
+
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
-        let partitions = self.list.len();
+        let partitions = self.inputs.len();
         match partitions {
             0 => Err(FuseQueryError::Internal(
                 "Merge processor cannot be zero".to_string(),
             )),
-            1 => self.list[0].execute().await,
+            1 => self.inputs[0].execute().await,
             _ => {
                 let (sender, receiver) = mpsc::channel::<FuseQueryResult<DataBlock>>(partitions);
                 for i in 0..partitions {
-                    let input = self.list[i].clone();
+                    let input = self.inputs[i].clone();
                     let sender = sender.clone();
                     tokio::spawn(async move {
                         let mut stream = match input.execute().await {

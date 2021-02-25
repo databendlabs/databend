@@ -38,6 +38,10 @@ impl IProcessor for SourceTransform {
         ))
     }
 
+    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+        unimplemented!()
+    }
+
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
         let table = self.ctx.get_table(self.db.as_str(), self.table.as_str())?;
         table.read(self.ctx.clone()).await
