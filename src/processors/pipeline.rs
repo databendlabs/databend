@@ -6,42 +6,46 @@ use std::sync::Arc;
 
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::processors::{IProcessor, MergeProcessor};
-
-pub type Pipe = Vec<Arc<dyn IProcessor>>;
+use crate::processors::{IProcessor, MergeProcessor, Pipe};
 
 pub struct Pipeline {
-    pub processors: Vec<Pipe>,
+    pipes: Vec<Pipe>,
 }
 
 impl Pipeline {
     pub fn create() -> Self {
-        Pipeline { processors: vec![] }
+        Pipeline { pipes: vec![] }
     }
 
-    pub fn create_from_pipeline(from: Pipeline) -> Self {
-        let mut pipeline = Pipeline { processors: vec![] };
-
-        for x in from.processors {
-            pipeline.processors.push(x);
-        }
-        pipeline
-    }
-
-    pub fn pipe_num(&self) -> usize {
-        match self.processors.last() {
+    pub fn nums(&self) -> usize {
+        match self.pipes.last() {
             None => 0,
-            Some(v) => v.len(),
+            Some(v) => v.nums(),
         }
+    }
+
+    pub fn pipes(&self) -> Vec<Pipe> {
+        self.pipes.clone()
+    }
+
+    pub fn pipe_by_index(&self, index: usize) -> Pipe {
+        self.pipes[index].clone()
+    }
+
+    /// Last pipe of the pipeline.
+    pub fn last_pipe(&self) -> Result<&Pipe, FuseQueryError> {
+        self.pipes.last().ok_or_else(|| {
+            FuseQueryError::Internal("Pipeline last pipe can not be none".to_string())
+        })
     }
 
     pub fn add_source(&mut self, source: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
-        if self.processors.first().is_none() {
-            let mut first = vec![];
-            first.push(source);
-            self.processors.push(first);
+        if self.pipes.first().is_none() {
+            let mut first = Pipe::create();
+            first.add(source);
+            self.pipes.push(first);
         } else {
-            self.processors[0].push(source);
+            self.pipes[0].add(source);
         }
         Ok(())
     }
@@ -58,16 +62,14 @@ impl Pipeline {
         &mut self,
         f: impl Fn() -> FuseQueryResult<Box<dyn IProcessor>>,
     ) -> FuseQueryResult<()> {
-        let last = self.processors.last().ok_or_else(|| {
-            FuseQueryError::Internal("Can't add transform to an empty pipe list".to_string())
-        })?;
-        let mut items = Vec::with_capacity(last.len());
-        for x in last {
+        let last_pipe = self.last_pipe()?;
+        let mut new_pipe = Pipe::create();
+        for x in last_pipe.processors() {
             let mut p = f()?;
             p.connect_to(x.clone())?;
-            items.push(Arc::from(p));
+            new_pipe.add(Arc::from(p));
         }
-        self.processors.push(items);
+        self.pipes.push(new_pipe);
         Ok(())
     }
 
@@ -80,26 +82,23 @@ impl Pipeline {
     /// processor3 --
     ///
     pub fn merge_processor(&mut self) -> FuseQueryResult<()> {
-        let last = self.processors.last().ok_or_else(|| {
-            FuseQueryError::Internal(
-                "Can't merge processor when the last pipe is empty".to_string(),
-            )
-        })?;
-
-        if last.len() > 1 {
-            let mut p = MergeProcessor::create();
-            for x in last {
-                p.connect_to(x.clone())?;
+        let last_pipe = self.last_pipe()?;
+        if last_pipe.nums() > 1 {
+            let mut merge = MergeProcessor::create();
+            for x in last_pipe.processors() {
+                merge.connect_to(x.clone())?;
             }
-            self.processors.push(vec![Arc::from(p)]);
+            let mut new_pipe = Pipe::create();
+            new_pipe.add(Arc::from(merge));
+            self.pipes.push(new_pipe);
         }
         Ok(())
     }
 
     pub async fn execute(&mut self) -> FuseQueryResult<SendableDataBlockStream> {
-        if self.processors.last().unwrap().len() > 1 {
+        if self.last_pipe()?.nums() > 1 {
             self.merge_processor()?;
         }
-        self.processors.last().unwrap()[0].execute().await
+        self.last_pipe()?.first().execute().await
     }
 }

@@ -19,8 +19,8 @@ impl Pipeline {
     ) -> FuseQueryResult<()> {
         let mut pipes = vec![];
 
-        for pipe in &pipeline.processors {
-            pipes.push(pipe);
+        for pipe in &pipeline.pipes() {
+            pipes.push(pipe.clone());
         }
 
         if order == WalkOrder::PreOrder {
@@ -28,7 +28,7 @@ impl Pipeline {
         }
 
         for pipe in pipes {
-            if !visitor(pipe)? {
+            if !visitor(&pipe)? {
                 return Ok(());
             }
         }
