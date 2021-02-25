@@ -20,8 +20,8 @@ async fn test_pipeline_walker() -> crate::error::FuseQueryResult<()> {
     {
         let mut actual: Vec<String> = vec![];
         pipeline.walk_preorder(|pipe| {
-            let processor = pipe[0].clone();
-            actual.push(processor.name().to_string() + " x " + &*format!("{}", pipe.len()));
+            let processor = pipe.processor_by_index(0).clone();
+            actual.push(processor.name().to_string() + " x " + &*format!("{}", pipe.nums()));
             Ok(true)
         })?;
 
@@ -40,8 +40,8 @@ async fn test_pipeline_walker() -> crate::error::FuseQueryResult<()> {
     {
         let mut actual: Vec<String> = vec![];
         pipeline.walk_postorder(|pipe| {
-            let processor = pipe[0].clone();
-            actual.push(processor.name().to_string() + " x " + &*format!("{}", pipe.len()));
+            let processor = pipe.processor_by_index(0).clone();
+            actual.push(processor.name().to_string() + " x " + &*format!("{}", pipe.nums()));
             Ok(true)
         })?;
 

@@ -72,7 +72,7 @@ impl PipelineBuilder {
             PlanNode::Limit(plan) => {
                 pipeline
                     .add_simple_transform(|| Ok(Box::new(LimitTransform::try_create(plan.n)?)))?;
-                if pipeline.pipe_num() > 1 {
+                if pipeline.nums() > 1 {
                     pipeline.merge_processor()?;
                     pipeline.add_simple_transform(|| {
                         Ok(Box::new(LimitTransform::try_create(plan.n)?))

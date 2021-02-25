@@ -29,19 +29,19 @@ impl Pipeline {
                     .walk_preorder(|pipe| {
                         write_indent(f)?;
 
-                        let ways = pipe.len();
-                        let processor = pipe[0].clone();
+                        let ways = pipe.nums();
+                        let processor = pipe.processor_by_index(0);
 
                         processor_match_downcast!(processor, {
                         empty:EmptyProcessor  => write!(f, "")?,
                         merge:MergeProcessor => {
-                            let prev_pipe = self.0.processors[index].clone();
-                            let prev_name = prev_pipe[0].name().to_string();
-                            let prev_ways = prev_pipe.len();
+                            let prev_pipe = self.0.pipe_by_index(index);
+                            let prev_name = prev_pipe.processor_by_index(0).name().to_string();
+                            let prev_ways = prev_pipe.nums();
 
-                            let post_pipe = self.0.processors[index + 2].clone();
-                            let post_name = post_pipe[0].name().to_string();
-                            let post_ways = post_pipe.len();
+                            let post_pipe = self.0.pipe_by_index(index + 2);
+                            let post_name = post_pipe.processor_by_index(0).name().to_string();
+                            let post_ways = post_pipe.nums();
 
                             write!(
                                 f,
