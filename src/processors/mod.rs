@@ -9,6 +9,7 @@ mod processor_merge_test;
 
 mod pipeline;
 mod pipeline_builder;
+mod pipeline_display;
 mod pipeline_walker;
 mod processor;
 mod processor_empty;

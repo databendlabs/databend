@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::datavalues::DataSchema;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::processors::{FormatterSettings, IProcessor};
+use crate::processors::IProcessor;
 
 pub struct EmptyProcessor {}
 
@@ -46,13 +46,5 @@ impl IProcessor for EmptyProcessor {
             None,
             vec![],
         )))
-    }
-
-    fn format(
-        &self,
-        f: &mut std::fmt::Formatter,
-        _setting: &mut FormatterSettings,
-    ) -> std::fmt::Result {
-        write!(f, "")
     }
 }

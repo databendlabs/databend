@@ -12,7 +12,7 @@ use tokio::sync::mpsc;
 use crate::datablocks::DataBlock;
 use crate::datastreams::{ChannelStream, SendableDataBlockStream};
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::processors::{FormatterSettings, IProcessor};
+use crate::processors::IProcessor;
 
 pub struct MergeProcessor {
     inputs: Vec<Arc<dyn IProcessor>>,
@@ -72,32 +72,5 @@ impl IProcessor for MergeProcessor {
                 Ok(Box::pin(ChannelStream { input: receiver }))
             }
         }
-    }
-
-    fn format(
-        &self,
-        f: &mut std::fmt::Formatter,
-        setting: &mut FormatterSettings,
-    ) -> std::fmt::Result {
-        if setting.indent > 0 {
-            writeln!(f)?;
-            for _ in 0..setting.indent {
-                write!(f, "{}", setting.indent_char)?;
-            }
-        }
-        write!(
-            f,
-            "{} Merge ({} × {} {}) to ({} × {})",
-            setting.prefix,
-            setting.prev_name,
-            setting.prev_ways,
-            if setting.prev_ways == 1 {
-                "processor"
-            } else {
-                "processors"
-            },
-            self.name(),
-            setting.ways
-        )
     }
 }
