@@ -1,7 +1,8 @@
-// Copyright 2020 The FuseQuery Authors.
+// Copyright 2020-2021 The FuseQuery Authors.
 //
 // Code is licensed under Apache License, Version 2.0.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -9,7 +10,7 @@ use async_trait::async_trait;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::datavalues::DataSchema;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::processors::{FormatterSettings, IProcessor};
+use crate::processors::IProcessor;
 
 pub struct EmptyProcessor {}
 
@@ -31,19 +32,19 @@ impl IProcessor for EmptyProcessor {
         ))
     }
 
+    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+        vec![Arc::new(EmptyProcessor::create())]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
         Ok(Box::pin(DataBlockStream::create(
             Arc::new(DataSchema::empty()),
             None,
             vec![],
         )))
-    }
-
-    fn format(
-        &self,
-        f: &mut std::fmt::Formatter,
-        _setting: &mut FormatterSettings,
-    ) -> std::fmt::Result {
-        write!(f, "")
     }
 }

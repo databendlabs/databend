@@ -2,10 +2,11 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
-use async_trait::async_trait;
+use std::any::Any;
 use std::sync::Arc;
 
 use arrow::compute::filter_record_batch;
+use async_trait::async_trait;
 
 use crate::datablocks::DataBlock;
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
@@ -69,6 +70,14 @@ impl IProcessor for FilterTransform {
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
         self.input = input;
         Ok(())
+    }
+
+    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+        vec![self.input.clone()]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {

@@ -3,7 +3,7 @@
 // Code is licensed under Apache License, Version 2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_pipeline_builder() -> crate::error::FuseQueryResult<()> {
+async fn test_pipeline_display() -> crate::error::FuseQueryResult<()> {
     use pretty_assertions::assert_eq;
 
     use crate::processors::*;
@@ -12,7 +12,7 @@ async fn test_pipeline_builder() -> crate::error::FuseQueryResult<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let plan = PlanParser::create(ctx.clone()).build_from_sql(
-        "select sum(number+1)+2 as sumx from system.numbers_mt(80000) where (number+1)=4 limit 1",
+        "explain pipeline select sum(number+1)+2 as sumx from system.numbers_mt(80000) where (number+1)=4 limit 1",
     )?;
     let pipeline = PipelineBuilder::create(ctx, plan).build()?;
     let expect = "LimitTransform × 1 processor\

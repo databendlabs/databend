@@ -1,19 +1,17 @@
-// Copyright 2020 The FuseQuery Authors.
+// Copyright 2020-2021 The FuseQuery Authors.
 //
 // Code is licensed under Apache License, Version 2.0.
 
 use std::sync::Arc;
 
-use num::range;
-
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::processors::{FormatterSettings, IProcessor, MergeProcessor};
+use crate::processors::{IProcessor, MergeProcessor};
 
 pub type Pipe = Vec<Arc<dyn IProcessor>>;
 
 pub struct Pipeline {
-    processors: Vec<Pipe>,
+    pub processors: Vec<Pipe>,
 }
 
 impl Pipeline {
@@ -103,32 +101,5 @@ impl Pipeline {
             self.merge_processor()?;
         }
         self.processors.last().unwrap()[0].execute().await
-    }
-}
-
-impl std::fmt::Debug for Pipeline {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let setting = &mut FormatterSettings {
-            ways: 0,
-            indent: 0,
-            indent_char: "  ",
-            prefix: "└─",
-            prev_ways: 0,
-            prev_name: "".to_string(),
-        };
-
-        let pipes = self.processors.iter().as_slice();
-        for i in range(0, pipes.len()).rev() {
-            let cur = &pipes[i];
-            if i > 0 {
-                let next = &pipes[i - 1];
-                setting.prev_ways = next.len();
-                setting.prev_name = next[0].name().to_string();
-            }
-            setting.ways = cur.len();
-            setting.indent += 1;
-            cur.first().unwrap().format(f, setting)?;
-        }
-        write!(f, "")
     }
 }

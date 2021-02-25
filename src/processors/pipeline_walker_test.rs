@@ -1,0 +1,59 @@
+// Copyright 2020-2021 The FuseQuery Authors.
+//
+// Code is licensed under Apache License, Version 2.0.
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_pipeline_walker() -> crate::error::FuseQueryResult<()> {
+    use pretty_assertions::assert_eq;
+
+    use crate::processors::*;
+    use crate::sql::*;
+
+    let ctx = crate::tests::try_create_context()?;
+
+    let plan = PlanParser::create(ctx.clone()).build_from_sql(
+        "select sum(number+1)+2 as sumx from system.numbers_mt(80000) where (number+1)=4 limit 1",
+    )?;
+    let pipeline = PipelineBuilder::create(ctx, plan).build()?;
+
+    // PreOrder.
+    {
+        let mut actual: Vec<String> = vec![];
+        pipeline.walk_preorder(|pipe| {
+            let processor = pipe[0].clone();
+            actual.push(processor.name().to_string() + " x " + &*format!("{}", pipe.len()));
+            Ok(true)
+        })?;
+
+        let expect = vec![
+            "LimitTransform x 1".to_string(),
+            "AggregatorFinalTransform x 1".to_string(),
+            "MergeProcessor x 1".to_string(),
+            "AggregatorPartialTransform x 8".to_string(),
+            "FilterTransform x 8".to_string(),
+            "SourceTransform x 8".to_string(),
+        ];
+        assert_eq!(expect, actual);
+    }
+
+    // PostOrder.
+    {
+        let mut actual: Vec<String> = vec![];
+        pipeline.walk_postorder(|pipe| {
+            let processor = pipe[0].clone();
+            actual.push(processor.name().to_string() + " x " + &*format!("{}", pipe.len()));
+            Ok(true)
+        })?;
+
+        let expect = vec![
+            "SourceTransform x 8".to_string(),
+            "FilterTransform x 8".to_string(),
+            "AggregatorPartialTransform x 8".to_string(),
+            "MergeProcessor x 1".to_string(),
+            "AggregatorFinalTransform x 1".to_string(),
+            "LimitTransform x 1".to_string(),
+        ];
+        assert_eq!(expect, actual);
+    }
+    Ok(())
+}
