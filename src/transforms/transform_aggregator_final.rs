@@ -2,6 +2,7 @@
 //
 // Code is licensed under Apache License, Version 2.0.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -44,7 +45,7 @@ impl AggregatorFinalTransform {
 #[async_trait]
 impl IProcessor for AggregatorFinalTransform {
     fn name(&self) -> &str {
-        "AggregateFinalTransform"
+        "AggregatorFinalTransform"
     }
 
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
@@ -54,6 +55,10 @@ impl IProcessor for AggregatorFinalTransform {
 
     fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
         vec![self.input.clone()]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {

@@ -3,7 +3,7 @@
 // Code is licensed under Apache License, Version 2.0.
 
 use crate::error::FuseQueryResult;
-use crate::planners::PlanNode;
+use crate::processors::{Pipe, Pipeline};
 
 #[derive(PartialEq)]
 enum WalkOrder {
@@ -11,29 +11,24 @@ enum WalkOrder {
     PostOrder,
 }
 
-impl PlanNode {
+impl Pipeline {
     fn walk_base(
         order: WalkOrder,
-        node: &PlanNode,
-        mut visitor: impl FnMut(&PlanNode) -> FuseQueryResult<bool>,
+        pipeline: &Pipeline,
+        mut visitor: impl FnMut(&Pipe) -> FuseQueryResult<bool>,
     ) -> FuseQueryResult<()> {
-        let mut nodes = vec![];
-        let mut tmp = node.clone();
+        let mut pipes = vec![];
 
-        loop {
-            if let PlanNode::Empty(_) = tmp {
-                break;
-            }
-            nodes.push(tmp.clone());
-            tmp = tmp.input().as_ref().clone();
+        for pipe in &pipeline.processors {
+            pipes.push(pipe);
         }
 
-        if order == WalkOrder::PostOrder {
-            nodes.reverse();
+        if order == WalkOrder::PreOrder {
+            pipes.reverse();
         }
 
-        for plan in nodes {
-            if !visitor(&plan)? {
+        for pipe in pipes {
+            if !visitor(pipe)? {
                 return Ok(());
             }
         }
@@ -49,7 +44,7 @@ impl PlanNode {
     /// A Preorder walk of this graph is A B C
     pub fn walk_preorder(
         &self,
-        visitor: impl FnMut(&PlanNode) -> FuseQueryResult<bool>,
+        visitor: impl FnMut(&Pipe) -> FuseQueryResult<bool>,
     ) -> FuseQueryResult<()> {
         Self::walk_base(WalkOrder::PreOrder, self, visitor)
     }
@@ -63,7 +58,7 @@ impl PlanNode {
     /// A Postorder walk of this graph is C B A
     pub fn walk_postorder(
         &self,
-        visitor: impl FnMut(&PlanNode) -> FuseQueryResult<bool>,
+        visitor: impl FnMut(&Pipe) -> FuseQueryResult<bool>,
     ) -> FuseQueryResult<()> {
         Self::walk_base(WalkOrder::PostOrder, self, visitor)
     }

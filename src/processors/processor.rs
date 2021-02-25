@@ -1,7 +1,8 @@
-// Copyright 2020 The FuseQuery Authors.
+// Copyright 2020-2021 The FuseQuery Authors.
 //
 // Code is licensed under Apache License, Version 2.0.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -27,7 +28,11 @@ pub trait IProcessor: Sync + Send {
     /// Connect to the input processor, add an edge on the DAG.
     fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()>;
 
+    /// Inputs.
     fn inputs(&self) -> Vec<Arc<dyn IProcessor>>;
+
+    /// Reference used for downcast.
+    fn as_any(&self) -> &dyn Any;
 
     /// Execute the processor.
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream>;

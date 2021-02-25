@@ -1,7 +1,8 @@
-// Copyright 2020 The FuseQuery Authors.
+// Copyright 2020-2021 The FuseQuery Authors.
 //
 // Code is licensed under Apache License, Version 2.0.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -33,6 +34,10 @@ impl IProcessor for EmptyProcessor {
 
     fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
         vec![Arc::new(EmptyProcessor::create())]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {

@@ -1,4 +1,4 @@
-// Copyright 2020 The FuseQuery Authors.
+// Copyright 2020-2021 The FuseQuery Authors.
 //
 // Code is licensed under Apache License, Version 2.0.
 
@@ -13,7 +13,7 @@ use crate::processors::{FormatterSettings, IProcessor, MergeProcessor};
 pub type Pipe = Vec<Arc<dyn IProcessor>>;
 
 pub struct Pipeline {
-    processors: Vec<Pipe>,
+    pub processors: Vec<Pipe>,
 }
 
 impl Pipeline {
