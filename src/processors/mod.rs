@@ -8,6 +8,9 @@ mod pipeline_walker_test;
 mod processor_empty_test;
 mod processor_merge_test;
 
+#[macro_use]
+mod macros;
+
 mod pipeline;
 mod pipeline_builder;
 mod pipeline_display;
