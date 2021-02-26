@@ -4,7 +4,7 @@
 
 pub use rpc_server::ExecutorRPCServer;
 
-mod executor;
-mod rpc;
+pub mod executor;
+pub mod rpc;
 pub mod rpc_server;
-mod scheduler;
+pub mod scheduler;
