@@ -29,6 +29,9 @@ pub struct Config {
 
     #[structopt(long, default_value = "127.0.0.1:3000")]
     pub admin_api_address: String,
+
+    #[structopt(long, default_value = "127.0.0.1:5000")]
+    pub rpc_api_address: String,
 }
 
 impl Config {
