@@ -1,0 +1,23 @@
+// Copyright 2020-2021 The FuseQuery Authors.
+//
+// Code is licensed under Apache License, Version 2.0.
+
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "org.fusequery.ping";
+option java_outer_classname = "PingProto";
+
+package ping;
+
+service Greeter {
+  rpc SayHello (PingRequest) returns (PingResponse) {}
+}
+
+message PingRequest {
+  string name = 1;
+}
+
+message PingResponse {
+  string message = 1;
+}

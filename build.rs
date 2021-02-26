@@ -21,6 +21,7 @@ fn main() {
     }
 
     create_version_info();
+    build_proto();
 }
 
 fn create_version_info() {
@@ -59,4 +60,12 @@ fn commit_date() -> Option<String> {
         .output()
         .ok()
         .and_then(|r| String::from_utf8(r.stdout).ok())
+}
+
+fn build_proto() {
+    println!("cargo:rerun-if-changed=proto/");
+    tonic_build::configure()
+        .compile(&["proto/ping.proto"], &["proto"])
+        .map_err(|e| format!("tonic_build proto compile failed: {}", e))
+        .unwrap();
 }
