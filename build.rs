@@ -1,6 +1,6 @@
-// Copyright 2020 The VectorQuery Authors.
+// Copyright 2020-2021 The FuseQuery Authors.
 //
-// Code is licensed under Apache License, Version 2.0.
+// SPDX-License-Identifier: Apache-2.0.
 //
 // https://github.com/rust-lang/rustfmt/blob/e1ab878ccb24cda1b9e1c48865b375230385fede/build.rs
 

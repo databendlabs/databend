@@ -1,5 +1,5 @@
-// Copyright 2020 The FuseQuery Authors.
+// Copyright 2020-2021 The FuseQuery Authors.
 //
-// Code is licensed under Apache License, Version 2.0.
+// SPDX-License-Identifier: Apache-2.0.
 
 tonic::include_proto!("executor");
