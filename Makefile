@@ -17,6 +17,9 @@ build:
 profile:
 	RUSTFLAGS="-g" cargo flamegraph --bin=fuse-query
 
+fmt:
+	cargo fmt
+
 lint:
 	cargo fmt
 	cargo clippy -- -D warnings
@@ -27,4 +30,4 @@ docker:
 clean:
 	cargo clean
 
-.PHONY: setup test bench run build lint docker clean
+.PHONY: setup test bench run build fmt lint docker clean

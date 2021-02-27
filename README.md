@@ -44,22 +44,6 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 | [transforms](src/transforms) | Data Stream Transform([Source](src/transforms/transform_source.rs)/[Filter](src/transforms/transform_filter.rs)/[Projection](src/transforms/transform_projection.rs)/[AggregatorPartial](src/transforms/transform_aggregator_partial.rs)/[AggregatorFinal](src/transforms/transform_aggregator_final.rs)/[Limit](src/transforms/transform_limit.rs)) | WIP |
 | [executors](src/executors) | Distributed&Local planners scheduler and executor | WIP |
 
-## Status
-#### SQL Support
-
-- [x] Projection
-- [x] Filter
-- [x] Limit
-- [x] Aggregate
-- [x] Functions
-- [x] Filter Push-Down
-- [ ] Projection Push-Down (TODO)
-- [ ] Work-Stealing Distributed Query Engine (WIP)
-- [ ] Sorting (TODO)
-- [ ] SubQueries (TODO)
-- [ ] Joins (TODO)
-
-
 ## Performance
 
 * **Memory SIMD-Vector processing performance only**
@@ -84,104 +68,34 @@ Note:
 * ClickHouse system.numbers_mt is <b>16-way</b> parallelism processing
 * FuseQuery system.numbers_mt is <b>16-way</b> parallelism processing
 
-## How to Run?
+## Status
 
-#### Fuse-Query Server
-
-***Run from source***
-```shell
-$ make run
-
-12:46:15 [ INFO] Options { log_level: "debug", num_cpus: 8, mysql_handler_port: 3307 }
-12:46:15 [ INFO] Fuse-Query Cloud Compute Starts...
-12:46:15 [ INFO] Usage: mysql -h127.0.0.1 -P3307
-```
-
-or ***Run with docker***(Recommended):
-
-```shell
-$ docker pull datafusedev/fuse-query
-...
-
-$ docker run --init --rm -p 3307:3307 datafusedev/fuse-query
-05:12:36 [ INFO] Options { log_level: "debug", num_cpus: 6, mysql_handler_port: 3307 }
-05:12:36 [ INFO] Fuse-Query Cloud Compute Starts...
-05:12:36 [ INFO] Usage: mysql -h127.0.0.1 -P3307
-```
-
-or ***Download the release binary*** here:
-
-https://github.com/datafusedev/fuse-query/releases
-
-#### Query with MySQL client
-
-###### Connect
-
-```shell
-$ mysql -h127.0.0.1 -P3307
-```
-
-###### Explain  Plan
-
-```text
-mysql> explain select (number+1) as c1, number/2 as c2 from system.numbers_mt(10000000) where (c1+c2+1) < 100 limit 3;
-+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| explain                                                                                                                                                                                                                          |
-+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| Limit: 3
-  Projection: (number + 1) as c1:UInt64, (number / 2) as c2:UInt64
-    Filter: (((c1 + c2) + 1) < 100)
-      ReadDataSource: scan parts [8](Read from system.numbers_mt table, Read Rows:10000000, Read Bytes:80000000) |
-+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-1 row in set (0.01 sec)
-```
-
-###### Explain Pipeline
-```text
-mysql> explain pipeline select (number+1) as c1, number/2 as c2 from system.numbers_mt(10000000) where (c1+c2+1) < 100 limit 3;
-+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| explain                                                                                                                                                                                                                                                                                                               |
-+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| 
-  └─ LimitTransform × 1 processor
-    └─ Merge (LimitTransform × 8 processors) to (MergeProcessor × 1)
-      └─ LimitTransform × 8 processors
-        └─ ProjectionTransform × 8 processors
-          └─ FilterTransform × 8 processors
-            └─ SourceTransform × 8 processors                                |
-+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-1 row in set (0.00 sec)
-```
-
-###### Select
-
-```shell
-mysql> select (number+1) as c1, number/2 as c2 from system.numbers_mt(10000000) where (c1+c2+1) < 100 limit 3;
-+------+------+
-| c1   | c2   |
-+------+------+
-|    1 |    0 |
-|    2 |    0 |
-|    3 |    1 |
-+------+------+
-3 rows in set (0.06 sec)
-```
-
-## How to Test?
-
-```shell
-$ make test
-```
+- [x] Projection
+- [x] Filter
+- [x] Limit
+- [x] Aggregate
+- [x] Functions
+- [x] Filter Push-Down
+- [ ] Projection Push-Down (TODO)
+- [ ] Work-Stealing Distributed Query Engine (WIP)
+- [ ] Sorting (TODO)
+- [ ] SubQueries (TODO)
+- [ ] Joins (TODO)
 
 ## Roadmap
 
 - [x] 0.1 support aggregation select
 - [ ] 0.2 support distributed query (WIP)
-- [ ] 0.3 support group by, order by
-- [ ] 0.4 support sub queries
-- [ ] 0.5 support join
-- [ ] 0.6 support TPC-H benchmark
+- [ ] 0.3 support order by
+- [ ] 0.5 support group by
+- [ ] 0.6 support sub queries
+- [ ] 0.7 support join
+- [ ] 0.8 support TPC-H benchmark
+
+## Contributing
+
+You can learn more about contributing to the FuseQuery project by reading our [Contribution Guide](docs/development/contributing.md) and by viewing our [Code of Conduct](docs/policies/code-of-conduct.md).
 
 ## License
 
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdatafusedev%2Ffuse-query.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fdatafusedev%2Ffuse-query?ref=badge_large)
+FuseQuery is licensed under [Apache 2.0](LICENSE).
