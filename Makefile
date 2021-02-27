@@ -1,3 +1,7 @@
+# Setup dev toolchain
+setup:
+	bash ./scripts/dev_setup.sh
+
 test:
 	cargo test -- --nocapture
 
@@ -13,6 +17,9 @@ build:
 profile:
 	RUSTFLAGS="-g" cargo flamegraph --bin=fuse-query
 
+fmt:
+	cargo fmt
+
 lint:
 	cargo fmt
 	cargo clippy -- -D warnings
@@ -23,4 +30,4 @@ docker:
 clean:
 	cargo clean
 
-.PHONY: test bench run build lint docker clean
+.PHONY: setup test bench run build fmt lint docker clean

@@ -18,54 +18,36 @@ docker run --init --rm -p 3307:3307 datafusedev/fuse-query
 
 Or 
 
-## 2. Run from Source
+## 2. Download the release binary
 
-### 2.1 Dependencies
+https://github.com/datafusedev/fuse-query/releases
 
-FuseQuery is a Rust project. Clang, Rust are supported. 
+Or
 
-To install dependencies on Ubuntu:
+## 3. Run from Source
 
-```text
-apt install git clang
-```
+### 3.1 Dependencies
 
-On Arch Linux:
-
-```text
-pacman -S git clang
-```
-
-On Mac via Homebrew:
-
-```text
-brew install git clang
-```
-
-To install Rust(nightly):
-
-```text
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup toolchain install nightly
-```
-
-### 2.2 Running on Linux and macOS
-
-
-Clone:
+1. Clone:
 
 ```text
 git clone https://github.com/datafusedev/fuse-query
 ```
 
-Running:
+2. Setup development toolchain:
 
 ```text
-cd fuse-query
-make run
+$ cd fuse-query
+$ make setup
 ```
 
-## 3. Connect
+3. Running:
+
+```text
+$ make run
+```
+
+## 4. Connect
 
  Connect FuseQuery with MySQL client
 
@@ -97,4 +79,50 @@ mysql> SELECT avg(number) FROM system.numbers(10000000000);
 | 4999999999.494631 |
 +-------------------+
 1 row in set (2.02 sec)
+```
+
+### Explain  Plan
+
+```text
+mysql> explain select (number+1) as c1, number/2 as c2 from system.numbers_mt(10000000) where (c1+c2+1) < 100 limit 3;
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| explain                                                                                                                                                                                                                          |
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Limit: 3
+  Projection: (number + 1) as c1:UInt64, (number / 2) as c2:UInt64
+    Filter: (((c1 + c2) + 1) < 100)
+      ReadDataSource: scan parts [8](Read from system.numbers_mt table, Read Rows:10000000, Read Bytes:80000000) |
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+1 row in set (0.01 sec)
+```
+
+### Explain Pipeline
+```text
+mysql> explain pipeline select (number+1) as c1, number/2 as c2 from system.numbers_mt(10000000) where (c1+c2+1) < 100 limit 3;
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| explain                                                                                                                                                                                                                                                                                                               |
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| 
+  └─ LimitTransform × 1 processor
+    └─ Merge (LimitTransform × 8 processors) to (MergeProcessor × 1)
+      └─ LimitTransform × 8 processors
+        └─ ProjectionTransform × 8 processors
+          └─ FilterTransform × 8 processors
+            └─ SourceTransform × 8 processors                                |
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+1 row in set (0.00 sec)
+```
+
+### Select
+
+```shell
+mysql> select (number+1) as c1, number/2 as c2 from system.numbers_mt(10000000) where (c1+c2+1) < 100 limit 3;
++------+------+
+| c1   | c2   |
++------+------+
+|    1 |    0 |
+|    2 |    0 |
+|    3 |    1 |
++------+------+
+3 rows in set (0.06 sec)
 ```
