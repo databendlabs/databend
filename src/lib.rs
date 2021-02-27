@@ -19,6 +19,7 @@ pub mod metrics;
 pub mod optimizers;
 pub mod planners;
 pub mod processors;
+pub mod proto;
 pub mod servers;
 pub mod sessions;
 pub mod sql;

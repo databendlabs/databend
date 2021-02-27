@@ -6,11 +6,14 @@ use log::info;
 use simplelog::{Config as LogConfig, LevelFilter, SimpleLogger};
 
 use tokio::signal::unix::{signal, SignalKind};
+use tonic::transport::Server;
 
 use fuse_query::admins::Admin;
 use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
+use fuse_query::executors::ExecutorRPCServer;
 use fuse_query::metrics::Metric;
+use fuse_query::proto::executor_server::ExecutorServer;
 use fuse_query::servers::MySQLHandler;
 use fuse_query::sessions::Session;
 
@@ -27,31 +30,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", cfg.clone());
     info!("FuseQuery v-{}", cfg.version);
 
-    // Metrics exporter.
-    let metric = Metric::create(cfg.clone());
-    metric.start()?;
-    info!(
-        "Listening for Prometheus exporter {}",
-        cfg.prometheus_exporter_address
-    );
-
     let cluster = Cluster::create(cfg.clone());
 
     // MySQL handler.
-    let session_mgr = Session::create();
-    let mysql_handler = MySQLHandler::create(cfg.clone(), session_mgr.clone(), cluster.clone());
-    tokio::spawn(async move { mysql_handler.start() });
+    {
+        let session_mgr = Session::create();
+        let mysql_handler = MySQLHandler::create(cfg.clone(), session_mgr, cluster.clone());
+        tokio::spawn(async move { mysql_handler.start() });
 
-    info!(
-        "Listening for MySQL handler {}:{}, Usage: mysql -h{} -P{}",
-        cfg.mysql_handler_host,
-        cfg.mysql_handler_port,
-        cfg.mysql_handler_host,
-        cfg.mysql_handler_port
-    );
+        info!(
+            "MySQL handler listening on {}:{}, Usage: mysql -h{} -P{}",
+            cfg.mysql_handler_host,
+            cfg.mysql_handler_port,
+            cfg.mysql_handler_host,
+            cfg.mysql_handler_port
+        );
+    }
 
-    let admin = Admin::create(cfg.clone(), cluster.clone());
-    admin.start().await?;
+    // RPC server.
+    {
+        let rpc_addr = cfg.rpc_api_address.parse()?;
+        info!("RPC Server listening on {}", rpc_addr);
+
+        let rpc_executor = ExecutorRPCServer::default();
+        Server::builder()
+            .add_service(ExecutorServer::new(rpc_executor))
+            .serve(rpc_addr)
+            .await?;
+    }
+
+    // Admin API.
+    {
+        let admin = Admin::create(cfg.clone(), cluster);
+        admin.start().await?;
+    }
+
+    // Metrics exporter.
+    {
+        let metric = Metric::create(cfg.clone());
+        metric.start()?;
+        info!(
+            "Prometheus exporter listening on {}",
+            cfg.prometheus_exporter_address
+        );
+    }
 
     // Wait.
     signal(SignalKind::hangup())?.recv().await;

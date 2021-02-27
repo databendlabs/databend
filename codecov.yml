@@ -1,3 +1,7 @@
+---
+ignore:
+  - tests/*
+
 coverage:
   precision: 0
   round: down

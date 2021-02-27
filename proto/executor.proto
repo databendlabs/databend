@@ -1,0 +1,19 @@
+// Copyright 2020-2021 The FuseQuery Authors.
+//
+// Code is licensed under Apache License, Version 2.0.
+
+syntax = "proto3";
+
+package executor;
+
+service Executor {
+  rpc Ping(PingRequest) returns (PingResponse) {}
+}
+
+message PingRequest {
+  string name = 1;
+}
+
+message PingResponse {
+  string message = 1;
+}

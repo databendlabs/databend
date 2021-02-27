@@ -6,3 +6,4 @@ ignore:
   - "*/servers/*"
   - "*/sessions/*"
   - "*/admins/*"
+  - "*/executors/*"
