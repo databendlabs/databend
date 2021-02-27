@@ -1,3 +1,7 @@
+# Setup dev toolchain
+setup:
+	bash ./scripts/dev_setup.sh
+
 test:
 	cargo test -- --nocapture
 
@@ -23,4 +27,4 @@ docker:
 clean:
 	cargo clean
 
-.PHONY: test bench run build lint docker clean
+.PHONY: setup test bench run build lint docker clean
