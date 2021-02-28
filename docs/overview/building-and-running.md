@@ -3,7 +3,7 @@ id: building-and-running
 title: Building and Running
 ---
 
-This document describes how to build and run [FuseQuery](https://github.com/datafusedev/fuse-query) as a distributed query engine. 
+This document describes how to build and run [FuseQuery](https://github.com/datafuselabs/fuse-query) as a distributed query engine. 
 
 ## 1. Run with Docker (Recommended)
 
@@ -20,7 +20,7 @@ Or
 
 ## 2. Download the release binary
 
-https://github.com/datafusedev/fuse-query/releases
+https://github.com/datafuselabs/fuse-query/releases
 
 Or
 
@@ -31,7 +31,7 @@ Or
 1. Clone:
 
 ```text
-git clone https://github.com/datafusedev/fuse-query
+git clone https://github.com/datafuselabs/fuse-query
 ```
 
 2. Setup development toolchain:
