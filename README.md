@@ -1,8 +1,8 @@
 # FuseQuery
-[![Github Actions Status](https://github.com/datafusedev/fuse-query/workflows/FuseQuery%20Lint/badge.svg)](https://github.com/datafusedev/fuse-query/actions?query=workflow%3A%22FuseQuery+Lint%22)
-[![Github Actions Status](https://github.com/datafusedev/fuse-query/workflows/FuseQuery%20Test/badge.svg)](https://github.com/datafusedev/fuse-query/actions?query=workflow%3A%22FuseQuery+Test%22)
-[![Github Actions Status](https://github.com/datafusedev/fuse-query/workflows/FuseQuery%20Docker%20build/badge.svg)](https://github.com/datafusedev/fuse-query/actions?query=workflow%3A%22FuseQuery+Docker+build%22)
-[![codecov.io](https://codecov.io/gh/datafusedev/fuse-query/graphs/badge.svg)](https://codecov.io/gh/datafusedev/fuse-query/branch/master)
+[![Github Actions Status](https://github.com/datafuselabs/fuse-query/workflows/FuseQuery%20Lint/badge.svg)](https://github.com/datafuselabs/fuse-query/actions?query=workflow%3A%22FuseQuery+Lint%22)
+[![Github Actions Status](https://github.com/datafuselabs/fuse-query/workflows/FuseQuery%20Test/badge.svg)](https://github.com/datafuselabs/fuse-query/actions?query=workflow%3A%22FuseQuery+Test%22)
+[![Github Actions Status](https://github.com/datafuselabs/fuse-query/workflows/FuseQuery%20Docker%20build/badge.svg)](https://github.com/datafuselabs/fuse-query/actions?query=workflow%3A%22FuseQuery+Docker+build%22)
+[![codecov.io](https://codecov.io/gh/datafuselabs/fuse-query/graphs/badge.svg)](https://codecov.io/gh/datafuselabs/fuse-query/branch/master)
 ![Platform](https://img.shields.io/badge/Platform-Linux,%20ARM,%20OS%20X,%20Windows-green.svg?style=flat)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -27,22 +27,6 @@ Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow
 ## Architecture
 
 ![DataFuse Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/datafuse.svg)
-
-## Crates
-
-| Crate     | Description |  Status |
-|-----------|-------------|-------------|
-| [optimizers](src/optimizers) | Optimizer for Distributed&Local plan | WIP |
-| [datablocks](src/datablocks) | Vectorized data processing unit | WIP |
-| [datastreams](src/datastreams) | Async streaming iterators | WIP |
-| [datasources](src/datasources) | Interface to the datasource([system.numbers for performance](src/datasources/system)/Fuse-Store) | WIP|
-| [interpreters](src/interpreters) | Executor for the DML&DDL query plan | WIP |
-| [functions](src/functions) | Scalar and Aggregation Functions | WIP |
-| [processors](src/processors) | Dataflow Streaming Processor| WIP |
-| [planners](src/planners) | Distributed&Local planners for building processor pipelines| WIP |
-| [servers](src/servers) | Server handler([MySQL](src/servers/mysql)/HTTP) | MySQL |
-| [transforms](src/transforms) | Data Stream Transform([Source](src/transforms/transform_source.rs)/[Filter](src/transforms/transform_filter.rs)/[Projection](src/transforms/transform_projection.rs)/[AggregatorPartial](src/transforms/transform_aggregator_partial.rs)/[AggregatorFinal](src/transforms/transform_aggregator_final.rs)/[Limit](src/transforms/transform_limit.rs)) | WIP |
-| [executors](src/executors) | Distributed&Local planners scheduler and executor | WIP |
 
 ## Performance
 

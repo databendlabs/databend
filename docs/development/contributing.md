@@ -9,12 +9,13 @@ Our goal is to make contributing to the FuseQuery project easy and transparent.
 
 To contribute to FuseQuery, ensure that you have the latest version of the codebase, run the following:
 ```
-$ git clone https://github.com/datafusedev/fuse-query
+$ git clone https://github.com/datafuselabs/fuse-query
 $ cd fuse-query
 $ make setup
 $ source ~/.cargo/env
 $ make build
 $ make test
+$ make coverage
 ```
 
 ## Coding Guidelines
@@ -41,4 +42,4 @@ Please refer to the [Code of Conduct](../policies/code-of-conduct.md), which des
 
 ## Issues
 
-FuseQuery uses [GitHub issues](https://github.com/datafusedev/fuse-query/issues) to track bugs. Please include necessary information and instructions to reproduce your issue. 
+FuseQuery uses [GitHub issues](https://github.com/datafuselabs/fuse-query/issues) to track bugs. Please include necessary information and instructions to reproduce your issue. 
