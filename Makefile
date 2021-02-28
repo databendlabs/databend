@@ -27,7 +27,10 @@ lint:
 docker:
 	docker build --network host -f docker/Dockerfile -t datafusedev/fuse-query .
 
+coverage:
+	bash ./scripts/dev_codecov.sh
+
 clean:
 	cargo clean
 
-.PHONY: setup test bench run build fmt lint docker clean
+.PHONY: setup test bench run build fmt lint docker coverage clean

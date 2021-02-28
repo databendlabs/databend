@@ -184,7 +184,6 @@ EOF
 cat <<EOF
 Build tools (since -t or no option was provided):
   * Rust (and the necessary components, e.g. rust-fmt, clippy)
-  * CMake
   * Clang
   * grcov
   * lcov
