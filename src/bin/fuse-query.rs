@@ -7,6 +7,7 @@ use simplelog::{Config as LogConfig, LevelFilter, SimpleLogger};
 
 use tokio::signal::unix::{signal, SignalKind};
 use tonic::transport::Server;
+use mimalloc::MiMalloc;
 
 use fuse_query::admins::Admin;
 use fuse_query::clusters::Cluster;
@@ -16,6 +17,9 @@ use fuse_query::metrics::Metric;
 use fuse_query::proto::executor_server::ExecutorServer;
 use fuse_query::servers::MySQLHandler;
 use fuse_query::sessions::Session;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

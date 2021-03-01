@@ -42,6 +42,7 @@ tokio = { version = "1.0", features = ["macros", "rt", "rt-multi-thread", "signa
 tonic = "0.4.0"
 warp = "0.3.0"
 uuid = { version = "0.8", features = ["serde", "v4"] }
+mimalloc = { version = "0.1.24", default-features = false }
 
 [dev-dependencies]
 criterion = "0.3"
