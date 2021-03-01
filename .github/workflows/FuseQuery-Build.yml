@@ -14,7 +14,8 @@ jobs:
           - x86_64-linux-android
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v2
+
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
@@ -34,14 +35,16 @@ jobs:
     name: Build on Mac
     runs-on: macos-latest
     steps:
-      - name: Checkout sources
+      - name: Checkout
         uses: actions/checkout@v2
+
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
+
       - name: Build target
         uses: actions-rs/cargo@v1
         with:
