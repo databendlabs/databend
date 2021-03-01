@@ -9,11 +9,15 @@ jobs:
     name: Code Coverage
     runs-on: ubuntu-latest
     steps:
-      - names: Checkout
+      - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Setup devtool
-        run: make setup
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
 
       - uses: actions-rs/cargo@v1
         with:
