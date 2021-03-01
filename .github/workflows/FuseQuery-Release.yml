@@ -46,7 +46,7 @@ jobs:
             strip: true
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v2
 
       - name: Setup Rust toolchain
@@ -55,7 +55,7 @@ jobs:
           toolchain: stable
           target: ${{ matrix.target }}
 
-      - name: cargo build
+      - name: Cargo build
         uses: actions-rs/cargo@v1
         with:
           command: build
@@ -90,4 +90,3 @@ jobs:
           tag: ${{ github.ref }}
           asset_name: fusequery-$tag-${{ matrix.release_name }}
           body: ${{ steps.changelog_reader.outputs.log_entry }}
-

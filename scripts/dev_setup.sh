@@ -59,6 +59,7 @@ function install_rustup {
   else
 	  curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
     PATH="${HOME}/.cargo/bin:${PATH}"
+    source $HOME/.cargo/env
   fi
 }
 
@@ -159,6 +160,7 @@ function install_toolchain {
   if [[ "$FOUND" == "0" ]]; then
     echo "Installing ${version} of rust toolchain"
     rustup install "$version"
+    rustup component add rustfmt --toolchain "$version"
   else
     echo "${version} rust toolchain already installed"
   fi
@@ -346,6 +348,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
   install_rustup "$BATCH_MODE"
   install_toolchain "$(cat ./cargo-toolchain)"
   install_toolchain "$(cat ./rust-toolchain)"
+
   # Add all the components that we need
   rustup component add rustfmt
   rustup component add clippy
