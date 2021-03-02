@@ -161,6 +161,8 @@ function install_toolchain {
     echo "Installing ${version} of rust toolchain"
     rustup install "$version"
     rustup component add rustfmt --toolchain "$version"
+    rustup default "$version"
+
   else
     echo "${version} rust toolchain already installed"
   fi
@@ -346,7 +348,6 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
   install_pkg_config "$PACKAGE_MANAGER"
 
   install_rustup "$BATCH_MODE"
-  install_toolchain "$(cat ./cargo-toolchain)"
   install_toolchain "$(cat ./rust-toolchain)"
 
   # Add all the components that we need

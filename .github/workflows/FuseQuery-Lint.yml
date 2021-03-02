@@ -9,12 +9,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-
-      - run: rustup component add rustfmt
+      - name: Setup
+        run: make setup
 
       - uses: actions-rs/cargo@v1
         with:
@@ -26,14 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          components: clippy
+      - uses: ./.github/actions/build-setup
 
       - name: Run cargo clippy
         uses: actions-rs/cargo@v1
