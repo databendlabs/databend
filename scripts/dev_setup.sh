@@ -160,6 +160,7 @@ function install_toolchain {
   if [[ "$FOUND" == "0" ]]; then
     echo "Installing ${version} of rust toolchain"
     rustup install "$version"
+    rustup set profile minimal
     rustup component add rustfmt --toolchain "$version"
     rustup default "$version"
 
