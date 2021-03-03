@@ -14,7 +14,7 @@ jobs:
 
       - name: Install common dependencies
         shell: bash
-        run: scripts/dev_setup.sh -t -o -b -p -y -s
+        run: make setup
 
       - uses: actions-rs/cargo@v1
         with:
@@ -30,12 +30,19 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./target/debug/lcov.info
 
-      - name: Upload to s3
+      - name: Install coscmd
+        run: sudo pip install coscmd
+      - name: Configure coscmd
+        env:
+          SECRET_ID: ${{ secrets.CI_TENCENT_COS_ID }}
+          SECRET_KEY: ${{ secrets.CI_TENCENT_COS_KEY }}
+          BUCKET: ${{ secrets.CI_TENCENT_COS_BUCKET }}
+          REGION: ${{ secrets.CI_TENCENT_COS_REGION }}}
+        run: #coscmd config -a ${SECRET_ID} -s ${SECRET_KEY} -b ${BUCKET} -r ${REGION}
+
+      - name: Upload to COS
         run: |
-          # TODO
-          #SUFFIX="$(date +"%Y-%m-%d")-$(git rev-parse --short=8 HEAD)"
+          SUFFIX="$(date +"%Y-%m-%d")-$(git rev-parse --short=8 HEAD)"
           genhtml -o ./target/debug/coverage/ --show-details --highlight --ignore-errors source --legend ./target/debug/lcov.info
-          #coscmd config -a ${{ secrets.CI_TENCENT_COS_ID }} -s ${{ secrets.CI_TENCENT_COS_KEY }} -b ${{ secrets.CI_TENCENT_COS_BUCKET }} -r ${{ secrets.CI_TENCENT_COS_REGION}} -m 30
           #coscmd upload -r ./target/debug/coverage/ coverage/${SUFFIX}
           #coscmd upload -r ./target/debug/coverage/ coverage/latest
-
