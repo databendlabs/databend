@@ -1,7 +1,6 @@
 # FuseQuery
-[![Github Actions Status](https://github.com/datafuselabs/fuse-query/workflows/FuseQuery%20Lint/badge.svg)](https://github.com/datafuselabs/fuse-query/actions?query=workflow%3A%22FuseQuery+Lint%22)
-[![Github Actions Status](https://github.com/datafuselabs/fuse-query/workflows/FuseQuery%20Test/badge.svg)](https://github.com/datafuselabs/fuse-query/actions?query=workflow%3A%22FuseQuery+Test%22)
-[![Github Actions Status](https://github.com/datafuselabs/fuse-query/workflows/FuseQuery%20Docker%20build/badge.svg)](https://github.com/datafuselabs/fuse-query/actions?query=workflow%3A%22FuseQuery+Docker+build%22)
+[![FuseQuery Lint](https://github.com/datafuselabs/fuse-query/actions/workflows/fusequery-lint.yml/badge.svg)](https://github.com/datafuselabs/fuse-query/actions/workflows/fusequery-lint.yml)
+[![FuseQuery Unit Tests](https://github.com/datafuselabs/fuse-query/actions/workflows/fusequery-unit-tests.yml/badge.svg)](https://github.com/datafuselabs/fuse-query/actions/workflows/fusequery-unit-tests.yml)
 [![codecov.io](https://codecov.io/gh/datafuselabs/fuse-query/graphs/badge.svg)](https://codecov.io/gh/datafuselabs/fuse-query/branch/master)
 ![Platform](https://img.shields.io/badge/Platform-Linux,%20ARM,%20OS%20X,%20Windows-green.svg?style=flat)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
