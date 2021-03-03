@@ -160,7 +160,10 @@ function install_toolchain {
   if [[ "$FOUND" == "0" ]]; then
     echo "Installing ${version} of rust toolchain"
     rustup install "$version"
+    rustup set profile minimal
     rustup component add rustfmt --toolchain "$version"
+    rustup default "$version"
+
   else
     echo "${version} rust toolchain already installed"
   fi
@@ -186,7 +189,6 @@ EOF
 cat <<EOF
 Build tools (since -t or no option was provided):
   * Rust (and the necessary components, e.g. rust-fmt, clippy)
-  * Clang
   * grcov
   * lcov
   * pkg-config
@@ -206,7 +208,6 @@ EOF
   if [[ "$INSTALL_CODEGEN" == "true" ]]; then
 cat <<EOF
 Codegen tools (since -s was provided):
-  * Clang
   * Python3 (numpy, pyre-check)
 EOF
   fi
@@ -346,7 +347,6 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
   install_pkg_config "$PACKAGE_MANAGER"
 
   install_rustup "$BATCH_MODE"
-  install_toolchain "$(cat ./cargo-toolchain)"
   install_toolchain "$(cat ./rust-toolchain)"
 
   # Add all the components that we need
@@ -376,6 +376,7 @@ if [[ "$INSTALL_CODEGEN" == "true" ]]; then
   else
     install_pkg python3 "$PACKAGE_MANAGER"
   fi
+  "${PRE_COMMAND[@]}" python3 -m pip install coscmd
 fi
 
 [[ "${BATCH_MODE}" == "false" ]] && cat <<EOF

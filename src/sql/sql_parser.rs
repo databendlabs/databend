@@ -28,7 +28,7 @@ pub enum FileType {
     /// Apache Parquet columnar storage
     Parquet,
     /// Comma separated values
-    CSV,
+    Csv,
 }
 
 /// DataFusion extension DDL for `CREATE EXTERNAL TABLE`
@@ -176,7 +176,7 @@ impl<'a> DFParser<'a> {
         };
 
         let statement = Box::new(self.parser.parse_statement()?);
-        let explain_plan = DFExplainPlan { statement, typ };
+        let explain_plan = DFExplainPlan { typ, statement };
         Ok(DFStatement::Explain(explain_plan))
     }
 
@@ -289,7 +289,7 @@ impl<'a> DFParser<'a> {
             Token::Word(w) => match &*w.value {
                 "PARQUET" => Ok(FileType::Parquet),
                 "NDJSON" => Ok(FileType::NdJson),
-                "CSV" => Ok(FileType::CSV),
+                "CSV" => Ok(FileType::Csv),
                 _ => self.expected("one of PARQUET, NDJSON, or CSV", Token::Word(w)),
             },
             unexpected => self.expected("one of PARQUET, NDJSON, or CSV", unexpected),
@@ -367,7 +367,7 @@ mod tests {
         let expected = DFStatement::CreateExternalTable(CreateExternalTable {
             name: "t".into(),
             columns: vec![make_column_def("c1", DataType::Int)],
-            file_type: FileType::CSV,
+            file_type: FileType::Csv,
             has_header: false,
             location: "foo.csv".into(),
         });

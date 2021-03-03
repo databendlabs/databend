@@ -1,23 +1,20 @@
 on: [push, pull_request]
-name: FuseQuery Coverage
+name: FuseQuery Unit Tests
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   coverage:
-    name: Code Coverage
+    name: Unit tests and code coverage
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Install latest nightly
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          override: true
-          components: rustfmt, clippy
+      - name: Install common dependencies
+        shell: bash
+        run: scripts/dev_setup.sh -t -o -b -p -y -s
 
       - uses: actions-rs/cargo@v1
         with:
@@ -40,3 +37,13 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ${{ steps.coverage.outputs.report }}
+
+      - name: Upload to s3
+        run: |
+          # TODO
+          #SUFFIX="$(date +"%Y-%m-%d")-$(git rev-parse --short=8 HEAD)"
+          #genhtml -o ./target/debug/coverage/ --show-details --highlight --ignore-errors source --legend "${{ steps.coverage.outputs.report }}"/lcov.info
+          #coscmd config -a ${{ secrets.CI_TENCENT_COS_ID }} -s ${{ secrets.CI_TENCENT_COS_KEY }} -b ${{ secrets.CI_TENCENT_COS_BUCKET }} -r ${{ secrets.CI_TENCENT_COS_REGION}} -m 30
+          #coscmd upload -r ./target/debug/coverage/ coverage/${SUFFIX}
+          #coscmd upload -r ./target/debug/coverage/ coverage/latest
+
