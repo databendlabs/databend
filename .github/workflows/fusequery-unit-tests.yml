@@ -20,29 +20,21 @@ jobs:
         with:
           command: clean
 
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          components: rustfmt
-          args: --all-features --no-fail-fast
-        env:
-          CARGO_INCREMENTAL: '0'
-          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
-          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
-      - uses: actions-rs/grcov@v0.1.5
-        id: coverage
+      - name: Coverage
+        shell: bash
+        run: make coverage
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: ${{ steps.coverage.outputs.report }}
+          file: ./target/debug/lcov.info
 
       - name: Upload to s3
         run: |
           # TODO
           #SUFFIX="$(date +"%Y-%m-%d")-$(git rev-parse --short=8 HEAD)"
-          #genhtml -o ./target/debug/coverage/ --show-details --highlight --ignore-errors source --legend "${{ steps.coverage.outputs.report }}"/lcov.info
+          genhtml -o ./target/debug/coverage/ --show-details --highlight --ignore-errors source --legend ./target/debug/lcov.info
           #coscmd config -a ${{ secrets.CI_TENCENT_COS_ID }} -s ${{ secrets.CI_TENCENT_COS_KEY }} -b ${{ secrets.CI_TENCENT_COS_BUCKET }} -r ${{ secrets.CI_TENCENT_COS_REGION}} -m 30
           #coscmd upload -r ./target/debug/coverage/ coverage/${SUFFIX}
           #coscmd upload -r ./target/debug/coverage/ coverage/latest
