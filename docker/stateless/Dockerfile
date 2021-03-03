@@ -1,8 +1,9 @@
 FROM rust:1.48.0-buster AS builder
+RUN rustup toolchain install stable; \
+rustup component add rustfmt;
 
 COPY ./ /app
 WORKDIR /app
-RUN make setup
 RUN make build
 
 FROM ubuntu:20.04

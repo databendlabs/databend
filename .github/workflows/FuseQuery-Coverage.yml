@@ -12,8 +12,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Setup
-        run: make setup
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
 
       - uses: actions-rs/cargo@v1
         with:
@@ -36,3 +40,12 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ${{ steps.coverage.outputs.report }}
+
+      - name: Push coverage report to S3
+        run: |
+          SUFFIX="$(date +"%Y-%m-%d")-$(git rev-parse --short=8 HEAD)"
+          genhtml -o ./target/debug/coverage/ --show-details --highlight --ignore-errors source --legend  "${{ steps.coverage.outputs.report }}/lcov.info"
+          coscmd config -a ${{ secrets.CI_TENCENT_COS_ID }} -s ${{ secrets.CI_TENCENT_COS_KEY }} -b ${{ secrets.CI_TENCENT_COS_BUCKET }} -r ${{ secrets.CI_TENCENT_COS_REGION}} -m 30
+          coscmd upload -r ./target/debug/coverage/ coverage/${SUFFIX}
+          coscmd upload -r ./target/debug/coverage/ coverage/latest
+

@@ -49,8 +49,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Setup
-        run: make setup
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
