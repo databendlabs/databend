@@ -14,35 +14,35 @@ jobs:
 
       - name: Install common dependencies
         shell: bash
-        run: make setup
+        run: scripts/dev_setup.sh -t -o -b -p -y -s
 
       - uses: actions-rs/cargo@v1
         with:
           command: clean
 
-      - name: Coverage
-        shell: bash
-        run: make coverage
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          components: rustfmt
+          args: --all-features --no-fail-fast
+        env:
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+      - uses: actions-rs/grcov@v0.1.5
+        id: coverage
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: ./target/debug/lcov.info
+          file: ${{ steps.coverage.outputs.report }}
 
-      - name: Install coscmd
-        run: sudo pip install coscmd
-      - name: Configure coscmd
-        env:
-          SECRET_ID: ${{ secrets.CI_TENCENT_COS_ID }}
-          SECRET_KEY: ${{ secrets.CI_TENCENT_COS_KEY }}
-          BUCKET: ${{ secrets.CI_TENCENT_COS_BUCKET }}
-          REGION: ${{ secrets.CI_TENCENT_COS_REGION }}}
-        run: #coscmd config -a ${SECRET_ID} -s ${SECRET_KEY} -b ${BUCKET} -r ${REGION}
-
-      - name: Upload to COS
+      - name: Upload to s3
         run: |
-          SUFFIX="$(date +"%Y-%m-%d")-$(git rev-parse --short=8 HEAD)"
-          genhtml -o ./target/debug/coverage/ --show-details --highlight --ignore-errors source --legend ./target/debug/lcov.info
+          # TODO
+          #SUFFIX="$(date +"%Y-%m-%d")-$(git rev-parse --short=8 HEAD)"
+          #genhtml -o ./target/debug/coverage/ --show-details --highlight --ignore-errors source --legend "${{ steps.coverage.outputs.report }}"/lcov.info
+          #coscmd config -a ${{ secrets.CI_TENCENT_COS_ID }} -s ${{ secrets.CI_TENCENT_COS_KEY }} -b ${{ secrets.CI_TENCENT_COS_BUCKET }} -r ${{ secrets.CI_TENCENT_COS_REGION}} -m 30
           #coscmd upload -r ./target/debug/coverage/ coverage/${SUFFIX}
           #coscmd upload -r ./target/debug/coverage/ coverage/latest
