@@ -1,4 +1,4 @@
-name: FuseQuery tests
+name: FuseQuery Stateless Tests
 on: [push, pull_request]
 
 jobs:

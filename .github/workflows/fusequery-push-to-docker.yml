@@ -1,4 +1,4 @@
-name: FuseQuery Docker build
+name: FuseQuery Push to Dockerhub
 on:
   push:
     branches: master
