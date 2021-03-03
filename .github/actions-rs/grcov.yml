@@ -1,4 +1,6 @@
 ignore-not-existing: true
+output-type: lcov
+output-path: ./lcov.info
 ignore:
   - "*/lib.rs"
   - "*/error.rs"

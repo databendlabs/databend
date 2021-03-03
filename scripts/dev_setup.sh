@@ -189,7 +189,6 @@ EOF
 cat <<EOF
 Build tools (since -t or no option was provided):
   * Rust (and the necessary components, e.g. rust-fmt, clippy)
-  * Clang
   * grcov
   * lcov
   * pkg-config
@@ -209,7 +208,6 @@ EOF
   if [[ "$INSTALL_CODEGEN" == "true" ]]; then
 cat <<EOF
 Codegen tools (since -s was provided):
-  * Clang
   * Python3 (numpy, pyre-check)
 EOF
   fi
