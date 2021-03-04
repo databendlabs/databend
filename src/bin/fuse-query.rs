@@ -6,14 +6,11 @@ use log::info;
 use simplelog::{Config as LogConfig, LevelFilter, SimpleLogger};
 
 use tokio::signal::unix::{signal, SignalKind};
-use tonic::transport::Server;
 
-use fuse_query::admins::Admin;
 use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
-use fuse_query::executors::ExecutorRPCServer;
-use fuse_query::metrics::Metric;
-use fuse_query::proto::executor_server::ExecutorServer;
+use fuse_query::metrics::MetricService;
+use fuse_query::rpcs::{HttpService, RpcService};
 use fuse_query::servers::MySQLHandler;
 use fuse_query::sessions::Session;
 
@@ -47,32 +44,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    // RPC server.
+    // Metric API service.
     {
-        let rpc_addr = cfg.rpc_api_address.parse()?;
-        info!("RPC Server listening on {}", rpc_addr);
-
-        let rpc_executor = ExecutorRPCServer::default();
-        Server::builder()
-            .add_service(ExecutorServer::new(rpc_executor))
-            .serve(rpc_addr)
-            .await?;
+        let conf = cfg.clone();
+        tokio::spawn(async move {
+            info!("Metric API server listening on {}", conf.metric_api_address);
+            MetricService::create(conf.clone()).make_server().unwrap();
+        });
     }
 
-    // Admin API.
+    // HTTP API service.
     {
-        let admin = Admin::create(cfg.clone(), cluster);
-        admin.start().await?;
+        let conf = cfg.clone();
+        tokio::spawn(async move {
+            info!("HTTP API server listening on {}", conf.metric_api_address);
+            HttpService::create(conf.clone(), cluster)
+                .make_server()
+                .await
+                .unwrap();
+        });
     }
 
-    // Metrics exporter.
+    // RPC API service.
     {
-        let metric = Metric::create(cfg.clone());
-        metric.start()?;
-        info!(
-            "Prometheus exporter listening on {}",
-            cfg.prometheus_exporter_address
-        );
+        let conf = cfg.clone();
+        tokio::spawn(async move {
+            info!("RPC API server listening on {}", conf.rpc_api_address);
+            RpcService::create(conf.clone())
+                .make_server()
+                .await
+                .unwrap();
+        });
     }
 
     // Wait.

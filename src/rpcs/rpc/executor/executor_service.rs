@@ -5,14 +5,21 @@
 use tonic::{Request, Response, Status};
 
 use crate::proto::executor_server::Executor;
+use crate::proto::executor_server::ExecutorServer;
 use crate::proto::{PingRequest, PingResponse};
 
 #[derive(Default)]
-pub struct ExecutorRPCServer {}
+pub struct ExecutorRPCService {}
+
+impl ExecutorRPCService {
+    pub fn make_server() -> ExecutorServer<impl Executor> {
+        ExecutorServer::new(ExecutorRPCService::default())
+    }
+}
 
 #[tonic::async_trait]
-impl Executor for ExecutorRPCServer {
+impl Executor for ExecutorRPCService {
     async fn ping(&self, request: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
-        super::rpc::rpc_ping::ping(request)
+        super::executor_ping::ping(request)
     }
 }

@@ -24,14 +24,14 @@ pub struct Config {
     #[structopt(long, default_value = "256")]
     pub mysql_handler_thread_num: u64,
 
-    #[structopt(long, default_value = "127.0.0.1:9000")]
-    pub prometheus_exporter_address: String,
-
-    #[structopt(long, default_value = "127.0.0.1:3000")]
-    pub admin_api_address: String,
-
-    #[structopt(long, default_value = "127.0.0.1:5000")]
+    #[structopt(long, default_value = "127.0.0.1:9090")]
     pub rpc_api_address: String,
+
+    #[structopt(long, default_value = "127.0.0.1:8080")]
+    pub http_api_address: String,
+
+    #[structopt(long, default_value = "127.0.0.1:7070")]
+    pub metric_api_address: String,
 }
 
 impl Config {

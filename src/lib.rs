@@ -4,7 +4,6 @@
 
 pub mod tests;
 
-pub mod admins;
 pub mod clusters;
 pub mod configs;
 pub mod datablocks;
@@ -20,6 +19,7 @@ pub mod optimizers;
 pub mod planners;
 pub mod processors;
 pub mod proto;
+pub mod rpcs;
 pub mod servers;
 pub mod sessions;
 pub mod sql;

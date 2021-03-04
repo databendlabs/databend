@@ -2,9 +2,5 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-mod admin;
-mod router;
-mod v1;
-
-pub use self::admin::Admin;
-pub use self::router::Router;
+pub mod router;
+pub mod v1;
