@@ -20,6 +20,7 @@ async fn test_executor_service() -> Result<(), Box<dyn std::error::Error>> {
             .await
             .unwrap()
     });
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
     let mut client = ExecutorClient::connect(format!("http://{}", addr)).await?;
     let request = tonic::Request::new(PingRequest {
