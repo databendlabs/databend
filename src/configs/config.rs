@@ -28,7 +28,7 @@ pub struct Config {
     pub rpc_api_address: String,
 
     #[structopt(long, default_value = "127.0.0.1:8080")]
-    pub admin_api_address: String,
+    pub http_api_address: String,
 
     #[structopt(long, default_value = "127.0.0.1:7070")]
     pub metric_api_address: String,

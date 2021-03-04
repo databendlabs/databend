@@ -7,11 +7,10 @@ use simplelog::{Config as LogConfig, LevelFilter, SimpleLogger};
 
 use tokio::signal::unix::{signal, SignalKind};
 
-use fuse_query::admins::AdminService;
 use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
 use fuse_query::metrics::MetricService;
-use fuse_query::rpcs::RpcService;
+use fuse_query::rpcs::{HttpService, RpcService};
 use fuse_query::servers::MySQLHandler;
 use fuse_query::sessions::Session;
 
@@ -54,12 +53,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    // Admin API service.
+    // HTTP API service.
     {
         let conf = cfg.clone();
         tokio::spawn(async move {
             info!("HTTP API server listening on {}", conf.metric_api_address);
-            AdminService::create(conf.clone(), cluster)
+            HttpService::create(conf.clone(), cluster)
                 .make_server()
                 .await
                 .unwrap();
