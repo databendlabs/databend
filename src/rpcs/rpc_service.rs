@@ -6,13 +6,15 @@ use std::net::SocketAddr;
 
 use tonic::transport::{Error, Server};
 
-use crate::proto::executor_server::ExecutorServer;
 use crate::rpcs::rpc::ExecutorRPCService;
 
-pub async fn make_service(addr: SocketAddr) -> Result<(), Error> {
-    let rpc_executor = ExecutorRPCService::default();
-    Server::builder()
-        .add_service(ExecutorServer::new(rpc_executor))
-        .serve(addr)
-        .await
+pub struct RpcService {}
+
+impl RpcService {
+    pub async fn make_server(addr: SocketAddr) -> Result<(), Error> {
+        Server::builder()
+            .add_service(ExecutorRPCService::make_server())
+            .serve(addr)
+            .await
+    }
 }

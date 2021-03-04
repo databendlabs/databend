@@ -2,6 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-mod metric;
+mod metric_service;
 
-pub use self::metric::Metric;
+pub use self::metric_service::MetricService;

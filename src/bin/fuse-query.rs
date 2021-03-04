@@ -10,8 +10,8 @@ use tokio::signal::unix::{signal, SignalKind};
 use fuse_query::admins::Admin;
 use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
-use fuse_query::metrics::Metric;
-use fuse_query::rpcs::rpc_service;
+use fuse_query::metrics::MetricService;
+use fuse_query::rpcs::RpcService;
 use fuse_query::servers::MySQLHandler;
 use fuse_query::sessions::Session;
 
@@ -48,9 +48,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // RPC server.
     {
         let rpc_addr = cfg.rpc_api_address.parse()?;
+        RpcService::make_server(rpc_addr).await?;
         info!("RPC server listening on {}", rpc_addr);
-
-        rpc_service::make_service(rpc_addr).await?;
     }
 
     // Admin API.
@@ -61,12 +60,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Metrics exporter.
     {
-        let metric = Metric::create(cfg.clone());
-        metric.start()?;
-        info!(
-            "Prometheus exporter listening on {}",
-            cfg.prometheus_exporter_address
-        );
+        let prometheus_addr = cfg.prometheus_exporter_address.parse()?;
+        MetricService::make_server(prometheus_addr)?;
+        info!("Prometheus exporter listening on {}", prometheus_addr);
     }
 
     // Wait.

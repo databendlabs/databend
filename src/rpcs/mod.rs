@@ -6,3 +6,5 @@
 
 pub mod rpc;
 pub mod rpc_service;
+
+pub use self::rpc_service::RpcService;
