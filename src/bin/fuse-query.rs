@@ -6,14 +6,12 @@ use log::info;
 use simplelog::{Config as LogConfig, LevelFilter, SimpleLogger};
 
 use tokio::signal::unix::{signal, SignalKind};
-use tonic::transport::Server;
 
 use fuse_query::admins::Admin;
 use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
-use fuse_query::executors::ExecutorRPCServer;
 use fuse_query::metrics::Metric;
-use fuse_query::proto::executor_server::ExecutorServer;
+use fuse_query::rpcs::rpc_service;
 use fuse_query::servers::MySQLHandler;
 use fuse_query::sessions::Session;
 
@@ -50,13 +48,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // RPC server.
     {
         let rpc_addr = cfg.rpc_api_address.parse()?;
-        info!("RPC Server listening on {}", rpc_addr);
+        info!("RPC server listening on {}", rpc_addr);
 
-        let rpc_executor = ExecutorRPCServer::default();
-        Server::builder()
-            .add_service(ExecutorServer::new(rpc_executor))
-            .serve(rpc_addr)
-            .await?;
+        rpc_service::make_service(rpc_addr).await?;
     }
 
     // Admin API.

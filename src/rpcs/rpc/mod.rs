@@ -2,4 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-pub mod rpc_ping;
+pub mod executor;
+
+pub use self::executor::executor_service::ExecutorRPCService;

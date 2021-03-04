@@ -8,11 +8,11 @@ use crate::proto::executor_server::Executor;
 use crate::proto::{PingRequest, PingResponse};
 
 #[derive(Default)]
-pub struct ExecutorRPCServer {}
+pub struct ExecutorRPCService {}
 
 #[tonic::async_trait]
-impl Executor for ExecutorRPCServer {
+impl Executor for ExecutorRPCService {
     async fn ping(&self, request: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
-        super::rpc::rpc_ping::ping(request)
+        super::executor_ping::ping(request)
     }
 }
