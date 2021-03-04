@@ -7,7 +7,7 @@ use simplelog::{Config as LogConfig, LevelFilter, SimpleLogger};
 
 use tokio::signal::unix::{signal, SignalKind};
 
-use fuse_query::admins::Admin;
+use fuse_query::admins::AdminService;
 use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
 use fuse_query::metrics::MetricService;
@@ -45,24 +45,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    // RPC server.
+    // RPC API service.
     {
-        let rpc_addr = cfg.rpc_api_address.parse()?;
-        RpcService::make_server(rpc_addr).await?;
-        info!("RPC server listening on {}", rpc_addr);
+        RpcService::create(cfg.clone()).make_server().await?;
+        info!("RPC API server listening on {}", cfg.rpc_api_address);
     }
 
-    // Admin API.
+    // Admin API service.
     {
-        let admin = Admin::create(cfg.clone(), cluster);
-        admin.start().await?;
+        AdminService::create(cfg.clone(), cluster)
+            .make_server()
+            .await?;
+        info!("HTTP API server listening on {}", cfg.metric_api_address);
     }
 
-    // Metrics exporter.
+    // Metric API service.
     {
-        let prometheus_addr = cfg.prometheus_exporter_address.parse()?;
-        MetricService::make_server(prometheus_addr)?;
-        info!("Prometheus exporter listening on {}", prometheus_addr);
+        MetricService::create(cfg.clone()).make_server()?;
+        info!("Metric API server listening on {}", cfg.metric_api_address);
     }
 
     // Wait.

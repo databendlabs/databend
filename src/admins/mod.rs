@@ -6,5 +6,5 @@ mod admin;
 mod router;
 mod v1;
 
-pub use self::admin::Admin;
+pub use self::admin::AdminService;
 pub use self::router::Router;

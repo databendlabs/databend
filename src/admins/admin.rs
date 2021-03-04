@@ -7,17 +7,17 @@ use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::error::FuseQueryResult;
 
-pub struct Admin {
+pub struct AdminService {
     cfg: Config,
     cluster: ClusterRef,
 }
 
-impl Admin {
+impl AdminService {
     pub fn create(cfg: Config, cluster: ClusterRef) -> Self {
-        Admin { cfg, cluster }
+        AdminService { cfg, cluster }
     }
 
-    pub async fn start(&self) -> FuseQueryResult<()> {
+    pub async fn make_server(&self) -> FuseQueryResult<()> {
         let address = self.cfg.admin_api_address.parse::<std::net::SocketAddr>()?;
         let router = Router::create(self.cfg.clone(), self.cluster.clone());
         warp::serve(router.router()?).run(address).await;
