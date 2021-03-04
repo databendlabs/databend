@@ -45,24 +45,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    // RPC API service.
+    // Metric API service.
     {
-        RpcService::create(cfg.clone()).make_server().await?;
-        info!("RPC API server listening on {}", cfg.rpc_api_address);
+        let conf = cfg.clone();
+        tokio::spawn(async move {
+            info!("Metric API server listening on {}", conf.metric_api_address);
+            MetricService::create(conf.clone()).make_server().unwrap();
+        });
     }
 
     // Admin API service.
     {
-        AdminService::create(cfg.clone(), cluster)
-            .make_server()
-            .await?;
-        info!("HTTP API server listening on {}", cfg.metric_api_address);
+        let conf = cfg.clone();
+        tokio::spawn(async move {
+            info!("HTTP API server listening on {}", conf.metric_api_address);
+            AdminService::create(conf.clone(), cluster)
+                .make_server()
+                .await
+                .unwrap();
+        });
     }
 
-    // Metric API service.
+    // RPC API service.
     {
-        MetricService::create(cfg.clone()).make_server()?;
-        info!("Metric API server listening on {}", cfg.metric_api_address);
+        let conf = cfg.clone();
+        tokio::spawn(async move {
+            info!("RPC API server listening on {}", conf.rpc_api_address);
+            RpcService::create(conf.clone())
+                .make_server()
+                .await
+                .unwrap();
+        });
     }
 
     // Wait.
