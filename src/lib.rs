@@ -1,4 +1,3 @@
-#![feature(crate_visibility_modifier)]
 // Copyright 2020 The VectorQuery Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
