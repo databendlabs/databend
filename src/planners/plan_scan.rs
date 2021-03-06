@@ -5,7 +5,7 @@
 use crate::datavalues::DataSchemaRef;
 use crate::planners::ExpressionPlan;
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct ScanPlan {
     /// The name of the schema
     pub schema_name: String,

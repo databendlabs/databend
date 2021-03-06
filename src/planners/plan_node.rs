@@ -11,7 +11,7 @@ use crate::planners::{
     ProjectionPlan, ReadDataSourcePlan, ScanPlan, SelectPlan, SettingPlan, StagePlan,
 };
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub enum PlanNode {
     Empty(EmptyPlan),
     Stage(StagePlan),

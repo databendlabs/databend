@@ -5,5 +5,5 @@
 mod plan_parser;
 mod sql_parser;
 
-pub use self::plan_parser::PlanParser;
-pub use self::sql_parser::{DFExplainPlan, DFParser, DFStatement};
+pub use plan_parser::PlanParser;
+pub use sql_parser::{DFExplainPlan, DFParser, DFStatement};

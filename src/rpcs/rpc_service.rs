@@ -6,7 +6,7 @@ use tonic::transport::Server;
 
 use crate::configs::Config;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::rpcs::rpc::ExecutorRPCService;
+use crate::rpcs::rpc::{ExecutorRPCService, FlightService};
 
 pub struct RpcService {
     conf: Config,
@@ -22,6 +22,7 @@ impl RpcService {
 
         Server::builder()
             .add_service(ExecutorRPCService::make_server())
+            .add_service(FlightService::make_server())
             .serve(addr)
             .await
             .map_err(|e| {

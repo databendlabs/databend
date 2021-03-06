@@ -11,7 +11,7 @@ use crate::functions::{
 };
 use crate::sessions::FuseQueryContextRef;
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub enum ExpressionPlan {
     Alias(String, Box<ExpressionPlan>),
     Field(String),

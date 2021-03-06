@@ -4,7 +4,7 @@
 
 syntax = "proto3";
 
-package executor;
+package fusequery.executor;
 
 service Executor {
   rpc Ping(PingRequest) returns (PingResponse) {}
@@ -16,4 +16,8 @@ message PingRequest {
 
 message PingResponse {
   string message = 1;
+}
+
+message ExecuteRequest {
+  string action = 1;
 }

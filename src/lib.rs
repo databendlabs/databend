@@ -18,9 +18,14 @@ pub mod metrics;
 pub mod optimizers;
 pub mod planners;
 pub mod processors;
-pub mod proto;
 pub mod rpcs;
 pub mod servers;
 pub mod sessions;
 pub mod sql;
 pub mod transforms;
+
+// ProtoBuf generated files.
+#[allow(clippy::all)]
+pub mod protobuf {
+    tonic::include_proto!("fusequery.executor");
+}

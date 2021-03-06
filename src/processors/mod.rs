@@ -21,9 +21,9 @@ mod processor;
 mod processor_empty;
 mod processor_merge;
 
-pub use self::pipe::Pipe;
-pub use self::pipeline::Pipeline;
-pub use self::pipeline_builder::PipelineBuilder;
-pub use self::processor::{FormatterSettings, IProcessor};
-pub use self::processor_empty::EmptyProcessor;
-pub use self::processor_merge::MergeProcessor;
+pub use pipe::Pipe;
+pub use pipeline::Pipeline;
+pub use pipeline_builder::PipelineBuilder;
+pub use processor::{FormatterSettings, IProcessor};
+pub use processor_empty::EmptyProcessor;
+pub use processor_merge::MergeProcessor;

@@ -6,13 +6,13 @@ use std::sync::Arc;
 
 use crate::datavalues::{DataSchema, DataSchemaRef};
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct VarValue {
     pub variable: String,
     pub value: String,
 }
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct SettingPlan {
     pub vars: Vec<VarValue>,
 }

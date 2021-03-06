@@ -8,14 +8,14 @@ use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::planners::PlanNode;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
 pub enum DFExplainType {
     Syntax,
     Graph,
     Pipeline,
 }
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct ExplainPlan {
     pub typ: DFExplainType,
     pub input: Arc<PlanNode>,

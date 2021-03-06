@@ -74,3 +74,15 @@ impl From<std::net::AddrParseError> for FuseQueryError {
         FuseQueryError::Internal(err.to_string())
     }
 }
+
+impl From<prost::EncodeError> for FuseQueryError {
+    fn from(err: prost::EncodeError) -> Self {
+        FuseQueryError::Internal(err.to_string())
+    }
+}
+
+impl From<tonic::transport::Error> for FuseQueryError {
+    fn from(err: tonic::transport::Error) -> Self {
+        FuseQueryError::Internal(err.to_string())
+    }
+}

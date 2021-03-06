@@ -7,5 +7,5 @@ mod cluster_test;
 mod cluster;
 mod node;
 
-pub use self::cluster::{Cluster, ClusterRef};
-pub use self::node::Node;
+pub use cluster::{Cluster, ClusterRef};
+pub use node::Node;

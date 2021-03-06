@@ -10,6 +10,6 @@ mod metrics;
 mod session;
 mod settings;
 
-pub use self::context::{FuseQueryContext, FuseQueryContextRef};
-pub use self::session::{Session, SessionRef};
-pub use self::settings::Settings;
+pub use context::{FuseQueryContext, FuseQueryContextRef};
+pub use session::{Session, SessionRef};
+pub use settings::Settings;

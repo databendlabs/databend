@@ -4,4 +4,4 @@
 
 mod metric_service;
 
-pub use self::metric_service::MetricService;
+pub use metric_service::MetricService;

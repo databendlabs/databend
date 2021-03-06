@@ -10,7 +10,7 @@ use crate::planners::{ExpressionPlan, PlanNode};
 
 /// Evaluates an arbitrary list of expressions (essentially a
 /// SELECT with an expression list) on its input.
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct ProjectionPlan {
     /// The list of expressions
     pub expr: Vec<ExpressionPlan>,

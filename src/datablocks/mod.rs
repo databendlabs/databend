@@ -6,4 +6,4 @@ mod tests;
 
 pub mod data_block;
 
-pub use self::data_block::DataBlock;
+pub use data_block::DataBlock;

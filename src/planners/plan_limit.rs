@@ -8,7 +8,7 @@ use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::planners::PlanNode;
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct LimitPlan {
     /// The limit
     pub n: usize,

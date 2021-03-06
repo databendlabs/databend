@@ -5,7 +5,7 @@
 use crate::datasources::{Partitions, Statistics};
 use crate::datavalues::DataSchemaRef;
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct ReadDataSourcePlan {
     pub db: String,
     pub table: String,
