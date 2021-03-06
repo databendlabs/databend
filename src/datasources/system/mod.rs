@@ -12,9 +12,9 @@ mod one_table;
 mod settings_table;
 mod system_factory;
 
-pub use self::functions_table::FunctionsTable;
-pub use self::numbers_stream::NumbersStream;
-pub use self::numbers_table::NumbersTable;
-pub use self::one_table::OneTable;
-pub use self::settings_table::SettingsTable;
-pub use self::system_factory::SystemFactory;
+pub use functions_table::FunctionsTable;
+pub use numbers_stream::NumbersStream;
+pub use numbers_table::NumbersTable;
+pub use one_table::OneTable;
+pub use settings_table::SettingsTable;
+pub use system_factory::SystemFactory;

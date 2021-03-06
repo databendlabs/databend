@@ -5,5 +5,5 @@
 mod context;
 mod number;
 
-pub use self::context::try_create_context;
-pub use self::number::NumberTestData;
+pub use context::try_create_context;
+pub use number::NumberTestData;

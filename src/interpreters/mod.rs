@@ -12,8 +12,8 @@ mod interpreter_factory;
 mod interpreter_select;
 mod interpreter_setting;
 
-pub use self::interpreter::IInterpreter;
-pub use self::interpreter_explain::ExplainInterpreter;
-pub use self::interpreter_factory::InterpreterFactory;
-pub use self::interpreter_select::SelectInterpreter;
-pub use self::interpreter_setting::SettingInterpreter;
+pub use interpreter::IInterpreter;
+pub use interpreter_explain::ExplainInterpreter;
+pub use interpreter_factory::InterpreterFactory;
+pub use interpreter_select::SelectInterpreter;
+pub use interpreter_setting::SettingInterpreter;

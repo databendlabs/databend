@@ -10,8 +10,8 @@ mod stream_datablock;
 mod stream_expression;
 mod stream_limit;
 
-pub use self::stream::SendableDataBlockStream;
-pub use self::stream_channel::ChannelStream;
-pub use self::stream_datablock::DataBlockStream;
-pub use self::stream_expression::ExpressionStream;
-pub use self::stream_limit::LimitStream;
+pub use stream::SendableDataBlockStream;
+pub use stream_channel::ChannelStream;
+pub use stream_datablock::DataBlockStream;
+pub use stream_expression::ExpressionStream;
+pub use stream_limit::LimitStream;

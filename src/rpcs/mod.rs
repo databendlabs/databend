@@ -9,5 +9,5 @@ mod http_service;
 pub mod rpc;
 mod rpc_service;
 
-pub use self::http_service::HttpService;
-pub use self::rpc_service::RpcService;
+pub use http_service::HttpService;
+pub use rpc_service::RpcService;

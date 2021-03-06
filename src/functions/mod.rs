@@ -13,8 +13,8 @@ mod function_field;
 mod logics;
 mod udfs;
 
-pub use self::function::IFunction;
-pub use self::function_alias::AliasFunction;
-pub use self::function_constant::ConstantFunction;
-pub use self::function_factory::{FactoryFuncRef, FunctionFactory};
-pub use self::function_field::FieldFunction;
+pub use function::IFunction;
+pub use function_alias::AliasFunction;
+pub use function_constant::ConstantFunction;
+pub use function_factory::{FactoryFuncRef, FunctionFactory};
+pub use function_field::FieldFunction;
