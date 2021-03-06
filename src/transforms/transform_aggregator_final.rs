@@ -67,11 +67,10 @@ impl IProcessor for AggregatorFinalTransform {
         while let Some(block) = stream.next().await {
             let block = block?;
             for (i, func) in funcs.iter_mut().enumerate() {
-                if let DataValue::String(Some(serialized)) =
-                    DataValue::try_from_array(block.column(0), i)?
+                if let DataValue::String(Some(ser)) = DataValue::try_from_array(block.column(0), i)?
                 {
-                    let deserialized: DataValue = serde_json::from_str(&serialized)?;
-                    if let DataValue::Struct(states) = deserialized {
+                    let de: DataValue = serde_json::from_str(&ser)?;
+                    if let DataValue::Struct(states) = de {
                         func.merge(&states)?;
                     }
                 }

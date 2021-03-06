@@ -4,12 +4,14 @@
 
 use std::pin::Pin;
 
+use crate::datablocks::DataBlock;
 use arrow_flight::{
     flight_service_server::{FlightService as Flight, FlightServiceServer as FlightServer},
     Action, ActionType, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo,
     HandshakeRequest, HandshakeResponse, PutResult, SchemaResult, Ticket,
 };
 use futures::Stream;
+use log::debug;
 use tonic::{Request, Response, Status, Streaming};
 
 pub type FlightStream<T> =
@@ -58,9 +60,21 @@ impl Flight for FlightService {
     type DoGetStream = FlightStream<FlightData>;
     async fn do_get(
         &self,
-        _request: Request<Ticket>,
+        request: Request<Ticket>,
     ) -> Result<Response<Self::DoGetStream>, Status> {
-        unimplemented!()
+        let ticket = request.into_inner();
+        debug!("do_get: action: {:?}", ticket.ticket);
+
+        // TODO(BohuTANG): return the pipeline executed results.
+        let mut flights: Vec<Result<FlightData, Status>> = vec![];
+        let block = DataBlock::empty();
+        let options = arrow::ipc::writer::IpcWriteOptions::default();
+        let schema_flight_data =
+            arrow_flight::utils::flight_data_from_arrow_schema(block.schema(), &options);
+        flights.push(Ok(schema_flight_data));
+
+        let output = futures::stream::iter(flights);
+        Ok(Response::new(Box::pin(output) as Self::DoGetStream))
     }
 
     type DoPutStream = FlightStream<PutResult>;

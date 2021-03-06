@@ -10,7 +10,7 @@ async fn test_flight_service() -> Result<(), Box<dyn std::error::Error>> {
     use crate::planners::*;
     use crate::rpcs::rpc::*;
 
-    let addr = "127.0.0.1:50051";
+    let addr = "127.0.0.1:50052";
     let socket = addr.parse::<std::net::SocketAddr>()?;
 
     tokio::spawn(async move {
