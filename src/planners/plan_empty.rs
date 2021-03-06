@@ -4,7 +4,7 @@
 
 use crate::datavalues::DataSchemaRef;
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct EmptyPlan {
     pub(crate) schema: DataSchemaRef,
 }

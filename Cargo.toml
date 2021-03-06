@@ -16,7 +16,7 @@ name = "fuse-query"
 path = "src/bin/fuse-query.rs"
 
 [dependencies]
-arrow = "3.0"
+arrow = { git = "https://github.com/apache/arrow", rev="5647e90" }
 arrow-flight = { git = "https://github.com/apache/arrow", rev="5647e90" }
 async-trait = "0.1"
 dyn-clone = "1.0.4"

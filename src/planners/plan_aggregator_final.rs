@@ -8,7 +8,7 @@ use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::planners::{ExpressionPlan, PlanNode};
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct AggregatorFinalPlan {
     pub aggr_expr: Vec<ExpressionPlan>,
     pub group_expr: Vec<ExpressionPlan>,

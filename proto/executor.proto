@@ -17,3 +17,7 @@ message PingRequest {
 message PingResponse {
   string message = 1;
 }
+
+message ExecuteRequest {
+  string action = 1;
+}

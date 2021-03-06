@@ -8,7 +8,7 @@ use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::planners::PlanNode;
 
-#[derive(Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum StageState {
     Normal,
     Through,
@@ -17,7 +17,7 @@ pub enum StageState {
     AggregatorMerge,
 }
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct StagePlan {
     pub uuid: String,
     pub id: usize,

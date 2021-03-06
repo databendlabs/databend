@@ -12,7 +12,8 @@ use arrow_flight::{
 use futures::Stream;
 use tonic::{Request, Response, Status, Streaming};
 
-type TonicStream<T> = Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
+pub type FlightStream<T> =
+    Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct FlightService {}
 
@@ -24,14 +25,7 @@ impl FlightService {
 
 #[tonic::async_trait]
 impl Flight for FlightService {
-    type HandshakeStream = TonicStream<HandshakeResponse>;
-    type ListFlightsStream = TonicStream<FlightInfo>;
-    type DoGetStream = TonicStream<FlightData>;
-    type DoPutStream = TonicStream<PutResult>;
-    type DoActionStream = TonicStream<arrow_flight::Result>;
-    type ListActionsStream = TonicStream<ActionType>;
-    type DoExchangeStream = TonicStream<FlightData>;
-
+    type HandshakeStream = FlightStream<HandshakeResponse>;
     async fn handshake(
         &self,
         _request: Request<Streaming<HandshakeRequest>>,
@@ -39,6 +33,7 @@ impl Flight for FlightService {
         unimplemented!()
     }
 
+    type ListFlightsStream = FlightStream<FlightInfo>;
     async fn list_flights(
         &self,
         _request: Request<Criteria>,
@@ -60,6 +55,7 @@ impl Flight for FlightService {
         unimplemented!()
     }
 
+    type DoGetStream = FlightStream<FlightData>;
     async fn do_get(
         &self,
         _request: Request<Ticket>,
@@ -67,6 +63,7 @@ impl Flight for FlightService {
         unimplemented!()
     }
 
+    type DoPutStream = FlightStream<PutResult>;
     async fn do_put(
         &self,
         _request: Request<Streaming<FlightData>>,
@@ -74,6 +71,7 @@ impl Flight for FlightService {
         unimplemented!()
     }
 
+    type DoExchangeStream = FlightStream<FlightData>;
     async fn do_exchange(
         &self,
         _request: Request<Streaming<FlightData>>,
@@ -81,6 +79,7 @@ impl Flight for FlightService {
         unimplemented!()
     }
 
+    type DoActionStream = FlightStream<arrow_flight::Result>;
     async fn do_action(
         &self,
         _request: Request<Action>,
@@ -88,6 +87,7 @@ impl Flight for FlightService {
         unimplemented!()
     }
 
+    type ListActionsStream = FlightStream<ActionType>;
     async fn list_actions(
         &self,
         _request: Request<Empty>,

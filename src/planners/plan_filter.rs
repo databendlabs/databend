@@ -8,7 +8,7 @@ use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::planners::{ExpressionPlan, PlanNode};
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct FilterPlan {
     /// The predicate expression, which must have Boolean type.
     pub predicate: ExpressionPlan,

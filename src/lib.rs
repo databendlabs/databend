@@ -1,3 +1,4 @@
+#![feature(crate_visibility_modifier)]
 // Copyright 2020 The VectorQuery Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
@@ -28,5 +29,4 @@ pub mod transforms;
 #[allow(clippy::all)]
 pub mod protobuf {
     tonic::include_proto!("fusequery.executor");
-    tonic::include_proto!("fusequery.request");
 }
