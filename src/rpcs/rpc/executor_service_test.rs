@@ -6,8 +6,8 @@
 async fn test_executor_service() -> Result<(), Box<dyn std::error::Error>> {
     use tonic::transport::Server;
 
-    use crate::proto::executor_client::ExecutorClient;
-    use crate::proto::{PingRequest, PingResponse};
+    use crate::protobuf::executor_client::ExecutorClient;
+    use crate::protobuf::{PingRequest, PingResponse};
     use crate::rpcs::rpc::ExecutorRPCService;
 
     let addr = "127.0.0.1:50051";

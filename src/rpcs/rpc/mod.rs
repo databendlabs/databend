@@ -2,6 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-pub mod executor;
+mod executor_service_test;
 
-pub use self::executor::executor_service::ExecutorRPCService;
+mod executor_service;
+mod flight_service;
+
+pub use self::flight_service::FlightService;
+pub use executor_service::ExecutorRPCService;
