@@ -16,65 +16,59 @@ use fuse_query::sessions::Session;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg = Config::create();
+    let conf = Config::create_from_args();
 
     // Log level.
-    match cfg.log_level.to_lowercase().as_str() {
+    match conf.log_level.to_lowercase().as_str() {
         "debug" => SimpleLogger::init(LevelFilter::Debug, LogConfig::default())?,
         "info" => SimpleLogger::init(LevelFilter::Info, LogConfig::default())?,
         _ => SimpleLogger::init(LevelFilter::Error, LogConfig::default())?,
     }
-    info!("{:?}", cfg.clone());
-    info!("FuseQuery v-{}", cfg.version);
+    info!("{:?}", conf.clone());
+    info!("FuseQuery v-{}", conf.version);
 
-    let cluster = Cluster::create(cfg.clone());
+    let cluster = Cluster::create(conf.clone());
+    let session_manager = Session::create();
 
     // MySQL handler.
     {
-        let session_mgr = Session::create();
-        let mysql_handler = MySQLHandler::create(cfg.clone(), session_mgr, cluster.clone());
-        tokio::spawn(async move { mysql_handler.start() });
+        let handler = MySQLHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
+        tokio::spawn(async move { handler.start() });
 
         info!(
             "MySQL handler listening on {}:{}, Usage: mysql -h{} -P{}",
-            cfg.mysql_handler_host,
-            cfg.mysql_handler_port,
-            cfg.mysql_handler_host,
-            cfg.mysql_handler_port
+            conf.mysql_handler_host,
+            conf.mysql_handler_port,
+            conf.mysql_handler_host,
+            conf.mysql_handler_port
         );
     }
 
     // Metric API service.
     {
-        let conf = cfg.clone();
+        let srv = MetricService::create(conf.clone());
         tokio::spawn(async move {
-            info!("Metric API server listening on {}", conf.metric_api_address);
-            MetricService::create(conf.clone()).make_server().unwrap();
+            srv.make_server().unwrap();
         });
+        info!("Metric API server listening on {}", conf.metric_api_address);
     }
 
     // HTTP API service.
     {
-        let conf = cfg.clone();
+        let srv = HttpService::create(conf.clone(), cluster.clone());
         tokio::spawn(async move {
-            info!("HTTP API server listening on {}", conf.metric_api_address);
-            HttpService::create(conf.clone(), cluster)
-                .make_server()
-                .await
-                .unwrap();
+            srv.make_server().await.unwrap();
         });
+        info!("HTTP API server listening on {}", conf.metric_api_address);
     }
 
     // RPC API service.
     {
-        let conf = cfg.clone();
+        let srv = RpcService::create(conf.clone(), cluster.clone(), session_manager.clone());
         tokio::spawn(async move {
-            info!("RPC API server listening on {}", conf.rpc_api_address);
-            RpcService::create(conf.clone())
-                .make_server()
-                .await
-                .unwrap();
+            srv.make_server().await.unwrap();
         });
+        info!("RPC API server listening on {}", conf.rpc_api_address);
     }
 
     // Wait.

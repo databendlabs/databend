@@ -35,12 +35,26 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn create() -> Self {
+    pub fn create_from_args() -> Self {
         let mut cfg = Config::from_args();
         if cfg.num_cpus == 0 {
             cfg.num_cpus = num_cpus::get() as u64;
         }
         cfg.version = include_str!(concat!(env!("OUT_DIR"), "/version-info.txt")).to_string();
         cfg
+    }
+
+    pub fn default() -> Self {
+        Config {
+            version: "".to_string(),
+            log_level: "debug".to_string(),
+            num_cpus: 8,
+            mysql_handler_host: "127.0.0.1".to_string(),
+            mysql_handler_port: 3307,
+            mysql_handler_thread_num: 1024,
+            rpc_api_address: "127.0.0.1:9090".to_string(),
+            http_api_address: "127.0.0.1:8080".to_string(),
+            metric_api_address: "127.0.0.1:7070".to_string(),
+        }
     }
 }

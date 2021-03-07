@@ -132,36 +132,36 @@ impl<W: io::Write> MysqlShim<W> for Session {
 }
 
 pub struct MySQLHandler {
-    cfg: Config,
-    session_mgr: SessionRef,
+    conf: Config,
     cluster: ClusterRef,
+    session_manager: SessionRef,
 }
 
 impl MySQLHandler {
-    pub fn create(cfg: Config, session_mgr: SessionRef, cluster: ClusterRef) -> Self {
-        MySQLHandler {
-            cfg,
-            session_mgr,
+    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionRef) -> Self {
+        Self {
+            conf,
             cluster,
+            session_manager,
         }
     }
 
     pub fn start(&self) -> FuseQueryResult<()> {
         let listener = net::TcpListener::bind(format!(
             "{}:{}",
-            self.cfg.mysql_handler_host, self.cfg.mysql_handler_port
+            self.conf.mysql_handler_host, self.conf.mysql_handler_port
         ))?;
-        let pool = ThreadPool::new(self.cfg.mysql_handler_thread_num as usize);
+        let pool = ThreadPool::new(self.conf.mysql_handler_thread_num as usize);
 
         for stream in listener.incoming() {
             let stream = stream?;
             let ctx = self
-                .session_mgr
+                .session_manager
                 .try_create_context()?
                 .with_cluster(self.cluster.clone())?;
-            ctx.set_max_threads(self.cfg.num_cpus)?;
+            ctx.set_max_threads(self.conf.num_cpus)?;
 
-            let session_mgr = self.session_mgr.clone();
+            let session_mgr = self.session_manager.clone();
             pool.execute(move || {
                 MysqlIntermediary::run_on_tcp(Session::create(ctx.clone()), stream).unwrap();
                 session_mgr.try_remove_context(ctx).unwrap();

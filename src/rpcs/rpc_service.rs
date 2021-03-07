@@ -4,17 +4,25 @@
 
 use tonic::transport::Server;
 
+use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::rpcs::rpc::{ExecutorRPCService, FlightService};
+use crate::sessions::SessionRef;
 
 pub struct RpcService {
     conf: Config,
+    cluster: ClusterRef,
+    session_manager: SessionRef,
 }
 
 impl RpcService {
-    pub fn create(conf: Config) -> Self {
-        RpcService { conf }
+    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionRef) -> Self {
+        Self {
+            conf,
+            cluster,
+            session_manager,
+        }
     }
 
     pub async fn make_server(&self) -> FuseQueryResult<()> {
@@ -22,7 +30,14 @@ impl RpcService {
 
         Server::builder()
             .add_service(ExecutorRPCService::make_server())
-            .add_service(FlightService::make_server())
+            .add_service(
+                FlightService::create(
+                    self.conf.clone(),
+                    self.cluster.clone(),
+                    self.session_manager.clone(),
+                )
+                .make_server(),
+            )
             .serve(addr)
             .await
             .map_err(|e| {
