@@ -44,15 +44,15 @@ impl IProcessor for MergeProcessor {
     }
 
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
-        let partitions = self.inputs.len();
-        match partitions {
+        let inputs = self.inputs.len();
+        match inputs {
             0 => Err(FuseQueryError::Internal(
-                "Merge processor cannot be zero".to_string(),
+                "Merge processor inputs cannot be zero".to_string(),
             )),
             1 => self.inputs[0].execute().await,
             _ => {
-                let (sender, receiver) = mpsc::channel::<FuseQueryResult<DataBlock>>(partitions);
-                for i in 0..partitions {
+                let (sender, receiver) = mpsc::channel::<FuseQueryResult<DataBlock>>(inputs);
+                for i in 0..inputs {
                     let input = self.inputs[i].clone();
                     let sender = sender.clone();
                     tokio::spawn(async move {
