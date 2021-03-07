@@ -105,12 +105,11 @@ impl Flight for FlightService {
             ExecuteAction::ExecutePlan(action) => {
                 let plan = action.plan;
                 let ctx = self.try_create_ctx().map_err(|e| from_fuse_err(&e))?;
-                let mut stream = PipelineBuilder::create(ctx.clone(), plan.clone())
+                let mut pipeline = PipelineBuilder::create(ctx.clone(), plan.clone())
                     .build()
-                    .map_err(|e| from_fuse_err(&e))?
-                    .execute()
-                    .await
                     .map_err(|e| from_fuse_err(&e))?;
+
+                let mut stream = pipeline.execute().await.map_err(|e| from_fuse_err(&e))?;
                 let mut batches = vec![];
 
                 // TODO(BohuTANG): change to stream instead the batch

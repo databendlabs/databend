@@ -7,15 +7,18 @@ use std::task::{Context, Poll};
 use futures::stream::Stream;
 use tokio::sync::mpsc::Receiver;
 
-use crate::datablocks::DataBlock;
-use crate::error::FuseQueryResult;
-
-pub struct ChannelStream {
-    pub input: Receiver<FuseQueryResult<DataBlock>>,
+pub struct ChannelStream<T> {
+    pub input: Receiver<T>,
 }
 
-impl Stream for ChannelStream {
-    type Item = FuseQueryResult<DataBlock>;
+impl<T> ChannelStream<T> {
+    pub fn create(input: Receiver<T>) -> Self {
+        Self { input }
+    }
+}
+
+impl<T> Stream for ChannelStream<T> {
+    type Item = T;
 
     fn poll_next(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut this = self;

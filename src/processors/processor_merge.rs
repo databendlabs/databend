@@ -69,7 +69,7 @@ impl IProcessor for MergeProcessor {
                         }
                     });
                 }
-                Ok(Box::pin(ChannelStream { input: receiver }))
+                Ok(Box::pin(ChannelStream::create(receiver)))
             }
         }
     }
