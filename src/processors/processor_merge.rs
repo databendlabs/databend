@@ -10,7 +10,7 @@ use futures::stream::StreamExt;
 use tokio::sync::mpsc;
 
 use crate::datablocks::DataBlock;
-use crate::datastreams::{ChannelStream, SendableDataBlockStream};
+use crate::datastreams::SendableDataBlockStream;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::IProcessor;
 
@@ -69,7 +69,9 @@ impl IProcessor for MergeProcessor {
                         }
                     });
                 }
-                Ok(Box::pin(ChannelStream::create(receiver)))
+                Ok(Box::pin(tokio_stream::wrappers::ReceiverStream::new(
+                    receiver,
+                )))
             }
         }
     }
