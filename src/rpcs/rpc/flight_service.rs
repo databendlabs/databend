@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::io::Cursor;
 use std::pin::Pin;
 
 use arrow_flight::{
@@ -10,14 +11,15 @@ use arrow_flight::{
     HandshakeRequest, HandshakeResponse, PutResult, SchemaResult, Ticket,
 };
 use futures::{Stream, StreamExt};
-use log::debug;
+use prost::Message;
 use tonic::{Request, Response, Status, Streaming};
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::error::FuseQueryResult;
-use crate::planners::PlanNode;
 use crate::processors::PipelineBuilder;
+use crate::protobuf::ExecuteRequest;
+use crate::rpcs::rpc::ExecuteAction;
 use crate::sessions::{FuseQueryContextRef, SessionRef};
 
 pub type FlightStream<T> =
@@ -94,46 +96,58 @@ impl Flight for FlightService {
         request: Request<Ticket>,
     ) -> Result<Response<Self::DoGetStream>, Status> {
         let ticket = request.into_inner();
-        let plan: PlanNode =
-            serde_json::from_str(String::from_utf8(ticket.ticket.to_vec()).unwrap().as_str())
-                .unwrap();
-        debug!("do_get: {:?}", plan);
+        let mut buf = Cursor::new(&ticket.ticket);
+        let request: ExecuteRequest = ExecuteRequest::decode(&mut buf).unwrap();
 
-        let ctx = self.try_create_ctx().map_err(|e| from_fuse_err(&e))?;
-        let mut stream = PipelineBuilder::create(ctx.clone(), plan.clone())
-            .build()
-            .map_err(|e| from_fuse_err(&e))?
-            .execute()
-            .await
-            .map_err(|e| from_fuse_err(&e))?;
-        let mut batches = vec![];
-        // TODO(BohuTANG): move the stream instead the batch
-        while let Some(block) = stream.next().await {
-            let block = block.map_err(|e| from_fuse_err(&e))?;
-            batches.push(block.to_arrow_batch().map_err(|e| from_fuse_err(&e))?);
+        let action = serde_json::from_str::<ExecuteAction>(request.action.as_str()).unwrap();
+
+        match action {
+            ExecuteAction::ExecutePlan(action) => {
+                let plan = action.plan;
+                let ctx = self.try_create_ctx().map_err(|e| from_fuse_err(&e))?;
+                let mut stream = PipelineBuilder::create(ctx.clone(), plan.clone())
+                    .build()
+                    .map_err(|e| from_fuse_err(&e))?
+                    .execute()
+                    .await
+                    .map_err(|e| from_fuse_err(&e))?;
+                let mut batches = vec![];
+
+                // TODO(BohuTANG): change to stream instead the batch
+                while let Some(block) = stream.next().await {
+                    let block = block.map_err(|e| from_fuse_err(&e))?;
+                    batches.push(block.to_arrow_batch().map_err(|e| from_fuse_err(&e))?);
+                }
+
+                let options = arrow::ipc::writer::IpcWriteOptions::default();
+                let schema_flight_data = arrow_flight::utils::flight_data_from_arrow_schema(
+                    plan.schema().as_ref(),
+                    &options,
+                );
+                let mut flights: Vec<Result<FlightData, tonic::Status>> =
+                    vec![Ok(schema_flight_data)];
+
+                let mut results: Vec<Result<FlightData, tonic::Status>> = batches
+                    .iter()
+                    .flat_map(|batch| {
+                        let (flight_dictionaries, flight_batch) =
+                            arrow_flight::utils::flight_data_from_arrow_batch(batch, &options);
+                        flight_dictionaries
+                            .into_iter()
+                            .chain(std::iter::once(flight_batch))
+                            .map(Ok)
+                    })
+                    .collect();
+
+                flights.append(&mut results);
+
+                let output = futures::stream::iter(flights);
+                Ok(Response::new(Box::pin(output) as Self::DoGetStream))
+            }
+            ExecuteAction::FetchPartition(_) => {
+                unimplemented!()
+            }
         }
-
-        let options = arrow::ipc::writer::IpcWriteOptions::default();
-        let schema_flight_data =
-            arrow_flight::utils::flight_data_from_arrow_schema(plan.schema().as_ref(), &options);
-        let mut flights: Vec<Result<FlightData, tonic::Status>> = vec![Ok(schema_flight_data)];
-
-        let mut results: Vec<Result<FlightData, tonic::Status>> = batches
-            .iter()
-            .flat_map(|batch| {
-                let (flight_dictionaries, flight_batch) =
-                    arrow_flight::utils::flight_data_from_arrow_batch(batch, &options);
-                flight_dictionaries
-                    .into_iter()
-                    .chain(std::iter::once(flight_batch))
-                    .map(Ok)
-            })
-            .collect();
-
-        flights.append(&mut results);
-
-        let output = futures::stream::iter(flights);
-        Ok(Response::new(Box::pin(output) as Self::DoGetStream))
     }
 
     type DoPutStream = FlightStream<PutResult>;

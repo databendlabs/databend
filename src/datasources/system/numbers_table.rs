@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashMap;
 use std::mem::size_of;
 use std::sync::Arc;
 
@@ -21,13 +22,18 @@ pub struct NumbersTable {
 
 impl NumbersTable {
     pub fn create(table: &'static str) -> Self {
+        // Custom metadata is for deser_json, or it will returns error: value: Error("missing field `metadata`")
+        let metadata: HashMap<String, String> = [("Key".to_string(), "Value".to_string())]
+            .iter()
+            .cloned()
+            .collect();
+
         NumbersTable {
             table,
-            schema: Arc::new(DataSchema::new(vec![DataField::new(
-                "number",
-                DataType::UInt64,
-                false,
-            )])),
+            schema: Arc::new(DataSchema::new_with_metadata(
+                vec![DataField::new("number", DataType::UInt64, false)],
+                metadata,
+            )),
         }
     }
 

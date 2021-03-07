@@ -4,7 +4,7 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_service() -> Result<(), Box<dyn std::error::Error>> {
-    use futures::stream::StreamExt;
+    use futures::TryStreamExt;
     use tonic::transport::Server;
 
     use crate::clusters::Cluster;
@@ -28,22 +28,22 @@ async fn test_flight_service() -> Result<(), Box<dyn std::error::Error>> {
             .await
             .unwrap()
     });
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
     let plan = PlanBuilder::from(
         ctx.clone(),
-        &PlanNode::ReadSource(test_source.number_read_source_plan_for_test(10000)?),
+        &PlanNode::ReadSource(test_source.number_read_source_plan_for_test(111)?),
     )
     .build()?;
 
     let mut client = FlightClient::try_create(addr.to_string()).await?;
     let action = ExecuteAction::ExecutePlan(ExecutePlanAction::create("xx".to_string(), plan));
-    let mut stream = client.execute(&action).await?;
-    while let Some(v) = stream.next().await {
-        print!("{:?}", v);
-    }
+    let stream = client.execute(&action).await?;
+    let blocks = stream.try_collect::<Vec<_>>().await?;
+    let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
+    assert_eq!(111, rows);
 
     Ok(())
 }
