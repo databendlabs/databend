@@ -6,7 +6,7 @@ env:
 
 jobs:
   coverage:
-    name: Unit tests and code coverage
+    name: Unit tests, miri tests and code coverage
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -29,6 +29,13 @@ jobs:
           CARGO_INCREMENTAL: '0'
           RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
           RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+
+      - name: Miri Tests
+        shell: bash
+        run: |
+          #TODO: uncomment this after https://issues.apache.org/jira/browse/ARROW-11714
+          #cargo miri test
+
       - uses: actions-rs/grcov@v0.1.5
         id: coverage
 

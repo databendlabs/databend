@@ -175,6 +175,21 @@ function install_grcov {
   fi
 }
 
+function usage {
+  cat <<EOF
+  usage: $0 [options]"
+
+    options:
+      -b Enable BATCH_MODE for installation
+      -t Install build tools
+      -o Install some operation tools
+      -p Install profile
+      -v Verbose mode
+      -y Install prover
+      -s Install codegen tools
+EOF
+}
+
 function welcome_message {
 cat <<EOF
 Welcome to FuseQuery!
@@ -233,7 +248,7 @@ INSTALL_PROVER=false;
 INSTALL_CODEGEN=false;
 
 #parse args
-while getopts "btopvysh" arg; do
+while getopts "bmtopvysh" arg; do
   case "$arg" in
     b)
       BATCH_MODE="true"
@@ -352,6 +367,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
   # Add all the components that we need
   rustup component add rustfmt
   rustup component add clippy
+  rustup component add miri
 
   install_grcov
   install_pkg lcov "$PACKAGE_MANAGER"
@@ -377,6 +393,7 @@ if [[ "$INSTALL_CODEGEN" == "true" ]]; then
     install_pkg python3 "$PACKAGE_MANAGER"
   fi
 fi
+
 
 [[ "${BATCH_MODE}" == "false" ]] && cat <<EOF
 Finished installing all dependencies.
