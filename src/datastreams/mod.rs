@@ -5,13 +5,11 @@
 mod tests;
 
 mod stream;
-mod stream_channel;
 mod stream_datablock;
 mod stream_expression;
 mod stream_limit;
 
 pub use stream::SendableDataBlockStream;
-pub use stream_channel::ChannelStream;
 pub use stream_datablock::DataBlockStream;
 pub use stream_expression::ExpressionStream;
 pub use stream_limit::LimitStream;

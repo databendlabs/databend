@@ -19,6 +19,9 @@ pub enum FuseQueryError {
 
     #[error("Internal Error: {0}")]
     Internal(String),
+
+    #[error("Grpc Error: {0}")]
+    GrpcError(tonic::Status),
 }
 
 impl From<ArrowError> for FuseQueryError {
@@ -84,5 +87,11 @@ impl From<prost::EncodeError> for FuseQueryError {
 impl From<tonic::transport::Error> for FuseQueryError {
     fn from(err: tonic::transport::Error) -> Self {
         FuseQueryError::Internal(err.to_string())
+    }
+}
+
+impl From<tonic::Status> for FuseQueryError {
+    fn from(e: tonic::Status) -> Self {
+        FuseQueryError::GrpcError(e)
     }
 }

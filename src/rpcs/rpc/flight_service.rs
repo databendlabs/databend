@@ -2,27 +2,60 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::io::Cursor;
 use std::pin::Pin;
 
-use crate::datablocks::DataBlock;
 use arrow_flight::{
     flight_service_server::{FlightService as Flight, FlightServiceServer as FlightServer},
     Action, ActionType, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo,
     HandshakeRequest, HandshakeResponse, PutResult, SchemaResult, Ticket,
 };
-use futures::Stream;
-use log::debug;
+use futures::{Stream, StreamExt};
+use prost::Message;
 use tonic::{Request, Response, Status, Streaming};
+
+use crate::clusters::ClusterRef;
+use crate::configs::Config;
+use crate::error::FuseQueryResult;
+use crate::processors::PipelineBuilder;
+use crate::protobuf::ExecuteRequest;
+use crate::rpcs::rpc::ExecuteAction;
+use crate::sessions::{FuseQueryContextRef, SessionRef};
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
-pub struct FlightService {}
+pub struct FlightService {
+    conf: Config,
+    cluster: ClusterRef,
+    session_manager: SessionRef,
+}
 
 impl FlightService {
-    pub fn make_server() -> FlightServer<impl Flight> {
-        FlightServer::new(FlightService {})
+    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionRef) -> Self {
+        Self {
+            conf,
+            cluster,
+            session_manager,
+        }
     }
+
+    pub fn make_server(self) -> FlightServer<impl Flight> {
+        FlightServer::new(self)
+    }
+
+    pub fn try_create_ctx(&self) -> FuseQueryResult<FuseQueryContextRef> {
+        let ctx = self
+            .session_manager
+            .try_create_context()?
+            .with_cluster(self.cluster.clone())?;
+        ctx.set_max_threads(self.conf.num_cpus)?;
+        Ok(ctx)
+    }
+}
+
+fn from_fuse_err(e: &crate::error::FuseQueryError) -> Status {
+    Status::internal(format!("{:?}", e))
 }
 
 #[tonic::async_trait]
@@ -63,18 +96,57 @@ impl Flight for FlightService {
         request: Request<Ticket>,
     ) -> Result<Response<Self::DoGetStream>, Status> {
         let ticket = request.into_inner();
-        debug!("do_get: action: {:?}", ticket.ticket);
+        let mut buf = Cursor::new(&ticket.ticket);
+        let request: ExecuteRequest = ExecuteRequest::decode(&mut buf).unwrap();
 
-        // TODO(BohuTANG): return the pipeline executed results.
-        let mut flights: Vec<Result<FlightData, Status>> = vec![];
-        let block = DataBlock::empty();
-        let options = arrow::ipc::writer::IpcWriteOptions::default();
-        let schema_flight_data =
-            arrow_flight::utils::flight_data_from_arrow_schema(block.schema(), &options);
-        flights.push(Ok(schema_flight_data));
+        let action = serde_json::from_str::<ExecuteAction>(request.action.as_str()).unwrap();
 
-        let output = futures::stream::iter(flights);
-        Ok(Response::new(Box::pin(output) as Self::DoGetStream))
+        match action {
+            ExecuteAction::ExecutePlan(action) => {
+                let plan = action.plan;
+                let ctx = self.try_create_ctx().map_err(|e| from_fuse_err(&e))?;
+                let mut pipeline = PipelineBuilder::create(ctx.clone(), plan.clone())
+                    .build()
+                    .map_err(|e| from_fuse_err(&e))?;
+
+                let mut stream = pipeline.execute().await.map_err(|e| from_fuse_err(&e))?;
+                let mut batches = vec![];
+
+                // TODO(BohuTANG): change to stream instead the batch
+                while let Some(block) = stream.next().await {
+                    let block = block.map_err(|e| from_fuse_err(&e))?;
+                    batches.push(block.to_arrow_batch().map_err(|e| from_fuse_err(&e))?);
+                }
+
+                let options = arrow::ipc::writer::IpcWriteOptions::default();
+                let schema_flight_data = arrow_flight::utils::flight_data_from_arrow_schema(
+                    plan.schema().as_ref(),
+                    &options,
+                );
+                let mut flights: Vec<Result<FlightData, tonic::Status>> =
+                    vec![Ok(schema_flight_data)];
+
+                let mut results: Vec<Result<FlightData, tonic::Status>> = batches
+                    .iter()
+                    .flat_map(|batch| {
+                        let (flight_dictionaries, flight_batch) =
+                            arrow_flight::utils::flight_data_from_arrow_batch(batch, &options);
+                        flight_dictionaries
+                            .into_iter()
+                            .chain(std::iter::once(flight_batch))
+                            .map(Ok)
+                    })
+                    .collect();
+
+                flights.append(&mut results);
+
+                let output = futures::stream::iter(flights);
+                Ok(Response::new(Box::pin(output) as Self::DoGetStream))
+            }
+            ExecuteAction::FetchPartition(_) => {
+                unimplemented!()
+            }
+        }
     }
 
     type DoPutStream = FlightStream<PutResult>;

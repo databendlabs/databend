@@ -3,10 +3,10 @@ setup:
 	bash ./scripts/dev_setup.sh
 
 test:
-	cargo test -- --nocapture
+	cargo test
 
 bench:
-	cargo bench -- --nocapture
+	cargo bench
 
 run:
 	RUSTFLAGS="-C target-cpu=native" cargo run --release
