@@ -113,28 +113,34 @@ impl Flight for FlightService {
                 let cpus = self.conf.num_cpus;
                 let cluster = self.cluster.clone();
                 let session_manager = self.session_manager.clone();
-
                 let (sender, receiver): (FlightDataSender, FlightDataReceiver) = mpsc::channel(2);
+
                 tokio::spawn(async move {
+                    // Create the context from manager.
                     let ctx = session_manager
                         .try_create_context()?
                         .with_cluster(cluster.clone())?;
                     ctx.set_max_threads(cpus)?;
 
+                    // Pipeline stream.
                     let mut stream = PipelineBuilder::create(ctx.clone(), plan.clone())
                         .build()?
                         .execute()
                         .await?;
 
+                    // Send flight schema first.
                     let options = arrow::ipc::writer::IpcWriteOptions::default();
                     let schema_flight_data = arrow_flight::utils::flight_data_from_arrow_schema(
                         plan.schema().as_ref(),
                         &options,
                     );
-                    sender.send(Ok(schema_flight_data)).await.ok();
+                    sender.send(Ok(schema_flight_data)).await?;
 
+                    // Get the batch from the stream and send to one channel.
                     while let Some(item) = stream.next().await {
                         let batch = item?.to_arrow_batch()?;
+
+                        // Convert batch to flight data.
                         let (flight_dicts, flight_batch) =
                             arrow_flight::utils::flight_data_from_arrow_batch(&batch, &options);
                         let batch_flight_data = flight_dicts
@@ -143,10 +149,11 @@ impl Flight for FlightService {
                             .map(Ok);
 
                         for batch in batch_flight_data {
-                            send_response(&sender, batch.clone()).await.ok();
+                            send_response(&sender, batch.clone()).await?;
                         }
-                        session_manager.try_remove_context(ctx.clone()).ok();
                     }
+                    // Remove the context from the manager.
+                    session_manager.try_remove_context(ctx.clone())?;
                     Ok::<(), FuseQueryError>(())
                 });
 
