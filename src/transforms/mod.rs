@@ -6,6 +6,7 @@ mod transform_aggregator_test;
 mod transform_filter_test;
 mod transform_limit_test;
 mod transform_projection_test;
+mod transform_remote_test;
 mod transform_source_test;
 
 mod transform_aggregator_final;
