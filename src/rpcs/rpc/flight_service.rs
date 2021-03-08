@@ -12,15 +12,21 @@ use arrow_flight::{
 };
 use futures::{Stream, StreamExt};
 use prost::Message;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::{Receiver, Sender};
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::error::FuseQueryResult;
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::PipelineBuilder;
 use crate::protobuf::ExecuteRequest;
 use crate::rpcs::rpc::ExecuteAction;
 use crate::sessions::{FuseQueryContextRef, SessionRef};
+
+type FlightDataSender = Sender<Result<FlightData, Status>>;
+type FlightDataReceiver = Receiver<Result<FlightData, Status>>;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -52,10 +58,10 @@ impl FlightService {
         ctx.set_max_threads(self.conf.num_cpus)?;
         Ok(ctx)
     }
-}
 
-fn from_fuse_err(e: &crate::error::FuseQueryError) -> Status {
-    Status::internal(format!("{:?}", e))
+    pub fn try_remove_ctx(&self, ctx: FuseQueryContextRef) -> FuseQueryResult<()> {
+        self.session_manager.try_remove_context(ctx)
+    }
 }
 
 #[tonic::async_trait]
@@ -104,44 +110,56 @@ impl Flight for FlightService {
         match action {
             ExecuteAction::ExecutePlan(action) => {
                 let plan = action.plan;
-                let ctx = self.try_create_ctx().map_err(|e| from_fuse_err(&e))?;
-                let mut pipeline = PipelineBuilder::create(ctx.clone(), plan.clone())
-                    .build()
-                    .map_err(|e| from_fuse_err(&e))?;
+                let cpus = self.conf.num_cpus;
+                let cluster = self.cluster.clone();
+                let session_manager = self.session_manager.clone();
+                let (sender, receiver): (FlightDataSender, FlightDataReceiver) = mpsc::channel(2);
 
-                let mut stream = pipeline.execute().await.map_err(|e| from_fuse_err(&e))?;
-                let mut batches = vec![];
+                tokio::spawn(async move {
+                    // Create the context from manager.
+                    let ctx = session_manager
+                        .try_create_context()?
+                        .with_cluster(cluster.clone())?;
+                    ctx.set_max_threads(cpus)?;
 
-                // TODO(BohuTANG): change to stream instead the batch
-                while let Some(block) = stream.next().await {
-                    let block = block.map_err(|e| from_fuse_err(&e))?;
-                    batches.push(block.to_arrow_batch().map_err(|e| from_fuse_err(&e))?);
-                }
+                    // Pipeline stream.
+                    let mut stream = PipelineBuilder::create(ctx.clone(), plan.clone())
+                        .build()?
+                        .execute()
+                        .await?;
 
-                let options = arrow::ipc::writer::IpcWriteOptions::default();
-                let schema_flight_data = arrow_flight::utils::flight_data_from_arrow_schema(
-                    plan.schema().as_ref(),
-                    &options,
-                );
-                let mut flights: Vec<Result<FlightData, tonic::Status>> =
-                    vec![Ok(schema_flight_data)];
+                    // Send flight schema first.
+                    let options = arrow::ipc::writer::IpcWriteOptions::default();
+                    let schema_flight_data = arrow_flight::utils::flight_data_from_arrow_schema(
+                        plan.schema().as_ref(),
+                        &options,
+                    );
+                    sender.send(Ok(schema_flight_data)).await?;
 
-                let mut results: Vec<Result<FlightData, tonic::Status>> = batches
-                    .iter()
-                    .flat_map(|batch| {
-                        let (flight_dictionaries, flight_batch) =
-                            arrow_flight::utils::flight_data_from_arrow_batch(batch, &options);
-                        flight_dictionaries
+                    // Get the batch from the stream and send to one channel.
+                    while let Some(item) = stream.next().await {
+                        let batch = item?.to_arrow_batch()?;
+
+                        // Convert batch to flight data.
+                        let (flight_dicts, flight_batch) =
+                            arrow_flight::utils::flight_data_from_arrow_batch(&batch, &options);
+                        let batch_flight_data = flight_dicts
                             .into_iter()
                             .chain(std::iter::once(flight_batch))
-                            .map(Ok)
-                    })
-                    .collect();
+                            .map(Ok);
 
-                flights.append(&mut results);
+                        for batch in batch_flight_data {
+                            send_response(&sender, batch.clone()).await?;
+                        }
+                    }
+                    // Remove the context from the manager.
+                    session_manager.try_remove_context(ctx.clone())?;
+                    Ok::<(), FuseQueryError>(())
+                });
 
-                let output = futures::stream::iter(flights);
-                Ok(Response::new(Box::pin(output) as Self::DoGetStream))
+                Ok(Response::new(
+                    Box::pin(ReceiverStream::new(receiver)) as Self::DoGetStream
+                ))
             }
             ExecuteAction::FetchPartition(_) => {
                 unimplemented!()
@@ -180,4 +198,13 @@ impl Flight for FlightService {
     ) -> Result<Response<Self::ListActionsStream>, Status> {
         unimplemented!()
     }
+}
+
+async fn send_response(
+    tx: &FlightDataSender,
+    data: Result<FlightData, Status>,
+) -> Result<(), Status> {
+    tx.send(data)
+        .await
+        .map_err(|e| Status::internal(format!("{:?}", e)))
 }

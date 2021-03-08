@@ -8,6 +8,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::stream::StreamExt;
 use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
 use crate::datablocks::DataBlock;
 use crate::datastreams::SendableDataBlockStream;
@@ -69,9 +70,7 @@ impl IProcessor for MergeProcessor {
                         }
                     });
                 }
-                Ok(Box::pin(tokio_stream::wrappers::ReceiverStream::new(
-                    receiver,
-                )))
+                Ok(Box::pin(ReceiverStream::new(receiver)))
             }
         }
     }

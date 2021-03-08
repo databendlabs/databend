@@ -95,3 +95,14 @@ impl From<tonic::Status> for FuseQueryError {
         FuseQueryError::GrpcError(e)
     }
 }
+
+// Use for flight service.
+impl From<tokio::sync::mpsc::error::SendError<Result<arrow_flight::FlightData, tonic::Status>>>
+    for FuseQueryError
+{
+    fn from(
+        e: tokio::sync::mpsc::error::SendError<Result<arrow_flight::FlightData, tonic::Status>>,
+    ) -> Self {
+        FuseQueryError::Internal(format!("{}", e))
+    }
+}
