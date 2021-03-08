@@ -17,6 +17,12 @@ impl Pipeline {
         Pipeline { pipes: vec![] }
     }
 
+    /// Reset the pipeline.
+    pub fn reset(&mut self) {
+        self.pipes.clear();
+    }
+
+    /// The number of pipes.
     pub fn nums(&self) -> usize {
         match self.pipes.last() {
             None => 0,
