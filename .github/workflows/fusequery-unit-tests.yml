@@ -5,6 +5,20 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  miri-checks:
+    name: Miri
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+      - name: Install Rust
+        run: |
+          rustup toolchain install nightly-2021-01-19
+          rustup default nightly-2021-01-19
+          rustup component add rustfmt miri
+      - name: Run
+        run: |
+          cargo miri test -- --nocapture
   coverage:
     name: Unit tests and code coverage
     runs-on: ubuntu-latest
