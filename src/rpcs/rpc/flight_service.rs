@@ -19,11 +19,11 @@ use tonic::{Request, Response, Status, Streaming};
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::error::{FuseQueryError, FuseQueryResult};
+use crate::error::FuseQueryError;
 use crate::processors::PipelineBuilder;
 use crate::protobuf::ExecuteRequest;
 use crate::rpcs::rpc::ExecuteAction;
-use crate::sessions::{FuseQueryContextRef, SessionRef};
+use crate::sessions::SessionRef;
 
 type FlightDataSender = Sender<Result<FlightData, Status>>;
 type FlightDataReceiver = Receiver<Result<FlightData, Status>>;
@@ -48,19 +48,6 @@ impl FlightService {
 
     pub fn make_server(self) -> FlightServer<impl Flight> {
         FlightServer::new(self)
-    }
-
-    pub fn try_create_ctx(&self) -> FuseQueryResult<FuseQueryContextRef> {
-        let ctx = self
-            .session_manager
-            .try_create_context()?
-            .with_cluster(self.cluster.clone())?;
-        ctx.set_max_threads(self.conf.num_cpus)?;
-        Ok(ctx)
-    }
-
-    pub fn try_remove_ctx(&self, ctx: FuseQueryContextRef) -> FuseQueryResult<()> {
-        self.session_manager.try_remove_context(ctx)
     }
 }
 
