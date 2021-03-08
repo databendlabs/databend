@@ -35,18 +35,10 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn create_from_args() -> Self {
-        let mut cfg = Config::from_args();
-        if cfg.num_cpus == 0 {
-            cfg.num_cpus = num_cpus::get() as u64;
-        }
-        cfg.version = include_str!(concat!(env!("OUT_DIR"), "/version-info.txt")).to_string();
-        cfg
-    }
-
+    /// Default config.
     pub fn default() -> Self {
         Config {
-            version: "".to_string(),
+            version: include_str!(concat!(env!("OUT_DIR"), "/version-info.txt")).to_string(),
             log_level: "debug".to_string(),
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
@@ -56,5 +48,15 @@ impl Config {
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
         }
+    }
+
+    /// Create config from args.
+    pub fn create_from_args() -> Self {
+        let mut cfg = Config::from_args();
+        if cfg.num_cpus == 0 {
+            cfg.num_cpus = num_cpus::get() as u64;
+        }
+        cfg.version = include_str!(concat!(env!("OUT_DIR"), "/version-info.txt")).to_string();
+        cfg
     }
 }

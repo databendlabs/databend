@@ -90,9 +90,29 @@ impl Flight for FlightService {
     ) -> Result<Response<Self::DoGetStream>, Status> {
         let ticket = request.into_inner();
         let mut buf = Cursor::new(&ticket.ticket);
-        let request: ExecuteRequest = ExecuteRequest::decode(&mut buf).unwrap();
 
-        let action = serde_json::from_str::<ExecuteAction>(request.action.as_str()).unwrap();
+        // Decode ExecuteRequest from buffer.
+        let request: ExecuteRequest = match ExecuteRequest::decode(&mut buf) {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(tonic::Status::internal(format!(
+                    "ExecuteRequest decode error: {:?}",
+                    e
+                )))
+            }
+        };
+
+        // Decode ExecuteAction from request.
+        let json_str = request.action.as_str();
+        let action = match serde_json::from_str::<ExecuteAction>(json_str) {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(tonic::Status::internal(format!(
+                    "ExecuteAction:{} decode error: {:?}",
+                    json_str, e
+                )))
+            }
+        };
 
         match action {
             ExecuteAction::ExecutePlan(action) => {

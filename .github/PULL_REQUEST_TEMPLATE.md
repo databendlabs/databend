@@ -16,6 +16,8 @@ Thank you for sending a PR. Thank you for spending time to help improve the Fuse
 - Documentation (changelog entry is not required)
 - Other
 
+## Related Issues
+
 ## Test Plan
 
 (Share your test plan here. If you changed code, please provide us with clear instructions for verifying that your changes work.)
