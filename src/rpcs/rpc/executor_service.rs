@@ -12,7 +12,11 @@ use crate::protobuf::{PingRequest, PingResponse};
 pub struct ExecutorRPCService {}
 
 impl ExecutorRPCService {
-    pub fn make_server() -> ExecutorServer<impl Executor> {
+    pub fn create() -> Self {
+        Self {}
+    }
+
+    pub fn make_server(&self) -> ExecutorServer<impl Executor> {
         ExecutorServer::new(ExecutorRPCService::default())
     }
 }

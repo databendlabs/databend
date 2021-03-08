@@ -4,23 +4,11 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_executor_service() -> Result<(), Box<dyn std::error::Error>> {
-    use tonic::transport::Server;
-
     use crate::protobuf::executor_client::ExecutorClient;
     use crate::protobuf::{PingRequest, PingResponse};
-    use crate::rpcs::rpc::ExecutorRPCService;
 
-    let addr = "127.0.0.1:50051";
-    let socket = addr.parse::<std::net::SocketAddr>()?;
-
-    tokio::spawn(async move {
-        Server::builder()
-            .add_service(ExecutorRPCService::make_server())
-            .serve(socket)
-            .await
-            .unwrap()
-    });
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    // Test service starts.
+    let addr = crate::tests::try_start_service().await?;
 
     let mut client = ExecutorClient::connect(format!("http://{}", addr)).await?;
     let request = tonic::Request::new(PingRequest {

@@ -4,6 +4,8 @@
 
 mod context;
 mod number;
+mod service;
 
 pub use context::try_create_context;
 pub use number::NumberTestData;
+pub use service::try_start_service;
