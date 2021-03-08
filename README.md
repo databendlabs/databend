@@ -6,11 +6,9 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 
-FuseQuery is a Cloud Distributed SQL Query Engine at scale.
+FuseQuery is a real-time Cloud Query Engine implemented in Rust.
 
-Cloud-Native and Distributed ClickHouse from scratch in Rust.
-
-Give thanks to [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [Arrow](https://github.com/apache/arrow).
+Inspired by [ClickHouse](https://github.com/ClickHouse/ClickHouse) and powered by [Arrow](https://github.com/apache/arrow).
 
 ## Features
 
