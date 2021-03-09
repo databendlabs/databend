@@ -47,7 +47,7 @@ uuid = { version = "0.8", features = ["serde", "v4"] }
 
 [dev-dependencies]
 criterion = "0.3.4"
-pretty_assertions = "0.6"
+pretty_assertions = "0.7"
 
 [build-dependencies]
 tonic-build = { version = "0.4" }
