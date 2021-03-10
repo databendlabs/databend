@@ -10,13 +10,14 @@ async fn test_datasource() -> crate::error::FuseQueryResult<()> {
 
     // Database check.
     let actual = format!("{:?}", datasource.check_database("xx"));
-    let expect = "Err(Internal(\"Unknown database: \\'xx\\'\"))";
+    let expect =
+        "Err(Internal { message: \"Unknown database: \\\'xx\\\'\", backtrace: Backtrace(()) })";
     assert_eq!(expect, actual);
 
     // Table check.
     datasource.get_table("system", "numbers_mt")?;
     if let Err(e) = datasource.get_table("system", "numbersxx") {
-        let expect = "Internal(\"Unknown table: \\'system.numbersxx\\'\")";
+        let expect = "Internal { message: \"Unknown table: \\\'system.numbersxx\\\'\", backtrace: Backtrace(()) }";
         let actual = format!("{:?}", e);
         assert_eq!(expect, actual);
     }

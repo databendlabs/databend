@@ -40,7 +40,8 @@ async fn test_setting_interpreter_error() -> crate::error::FuseQueryResult<()> {
     {
         let executor = SettingInterpreter::try_create(ctx, plan)?;
         if let Err(e) = executor.execute().await {
-            let expect = "Internal(\"Unknown variable: \\\"xx\\\"\")";
+            let expect =
+                "Internal { message: \"Unknown variable: \\\"xx\\\"\", backtrace: Backtrace(()) }";
             let actual = format!("{:?}", e);
             assert_eq!(expect, actual);
         } else {
