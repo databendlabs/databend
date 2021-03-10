@@ -134,7 +134,7 @@ impl DataValue {
             }
             DataValue::String(v) => Arc::new(StringArray::from(vec![v.as_deref(); size])),
             other => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "DataValue to array cannot be NONE {:?}",
                     other
                 )));
@@ -180,7 +180,7 @@ impl DataValue {
                 typed_cast_from_array_to_data_value!(array, index, StringArray, String)
             }
             other => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Can't create a scalar of array of type \"{:?}\"",
                     other
                 )));
@@ -232,7 +232,7 @@ impl TryFrom<&DataType> for DataValue {
             DataType::Float32 => DataValue::Float32(None),
             DataType::Float64 => DataValue::Float64(None),
             _ => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported try_from() for data type: {:?}",
                     data_type
                 )));

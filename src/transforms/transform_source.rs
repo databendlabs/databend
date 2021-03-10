@@ -35,7 +35,7 @@ impl IProcessor for SourceTransform {
     }
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
-        Err(FuseQueryError::Internal(
+        Err(FuseQueryError::build_internal_error(
             "Cannot call SourceTransform connect_to".to_string(),
         ))
     }

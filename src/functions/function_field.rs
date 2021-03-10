@@ -60,19 +60,19 @@ impl IFunction for FieldFunction {
     }
 
     fn accumulate_result(&self) -> FuseQueryResult<Vec<DataValue>> {
-        Err(FuseQueryError::Internal(
+        Err(FuseQueryError::build_internal_error(
             "Unsupported aggregate operation for function field".to_string(),
         ))
     }
 
     fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
-        Err(FuseQueryError::Internal(
+        Err(FuseQueryError::build_internal_error(
             "Unsupported aggregate operation for function field".to_string(),
         ))
     }
 
     fn merge_result(&self) -> FuseQueryResult<DataValue> {
-        Err(FuseQueryError::Internal(
+        Err(FuseQueryError::build_internal_error(
             "Unsupported aggregate operation for function field".to_string(),
         ))
     }

@@ -357,7 +357,7 @@ pub fn data_value_arithmetic_op(
             }
 
             (lhs, rhs) => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data value operator: {:?} {} {:?}",
                     lhs.data_type(),
                     op,

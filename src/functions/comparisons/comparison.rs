@@ -43,7 +43,7 @@ impl ComparisonFunction {
         args: &[Box<dyn IFunction>],
     ) -> FuseQueryResult<Box<dyn IFunction>> {
         if args.len() != 2 {
-            return Err(FuseQueryError::Internal(format!(
+            return Err(FuseQueryError::build_internal_error(format!(
                 "Comparison function {} args length must be 2",
                 op
             )));
@@ -88,21 +88,21 @@ impl IFunction for ComparisonFunction {
     }
 
     fn accumulate_result(&self) -> FuseQueryResult<Vec<DataValue>> {
-        Err(FuseQueryError::Internal(format!(
+        Err(FuseQueryError::build_internal_error(format!(
             "Unsupported accumulate_result operation for function {}",
             self.op
         )))
     }
 
     fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
-        Err(FuseQueryError::Internal(format!(
+        Err(FuseQueryError::build_internal_error(format!(
             "Unsupported merge operation for function {}",
             self.op
         )))
     }
 
     fn merge_result(&self) -> FuseQueryResult<DataValue> {
-        Err(FuseQueryError::Internal(format!(
+        Err(FuseQueryError::build_internal_error(format!(
             "Unsupported merge_result operation for function {}",
             self.op
         )))

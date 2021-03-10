@@ -19,7 +19,7 @@ impl InterpreterFactory {
             PlanNode::Select(v) => SelectInterpreter::try_create(ctx, v),
             PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx, v),
-            _ => Err(FuseQueryError::Internal(format!(
+            _ => Err(FuseQueryError::build_internal_error(format!(
                 "Can't get the interpreter by plan:{}",
                 plan.name()
             ))),

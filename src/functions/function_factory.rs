@@ -41,9 +41,9 @@ impl FunctionFactory {
         args: &[Box<dyn IFunction>],
     ) -> FuseQueryResult<Box<dyn IFunction>> {
         let map = FACTORY.as_ref().lock()?;
-        let creator = map
-            .get(&*name.to_lowercase())
-            .ok_or_else(|| FuseQueryError::Internal(format!("Unsupported Function: {}", name)))?;
+        let creator = map.get(&*name.to_lowercase()).ok_or_else(|| {
+            FuseQueryError::build_internal_error(format!("Unsupported Function: {}", name))
+        })?;
         (creator)(ctx, args)
     }
 

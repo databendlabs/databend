@@ -29,7 +29,7 @@ impl FilterTransform {
     ) -> FuseQueryResult<Self> {
         let func = predicate.to_function(ctx)?;
         if func.is_aggregator() {
-            return Err(FuseQueryError::Internal(format!(
+            return Err(FuseQueryError::build_internal_error(format!(
                 "Aggregate function {:?} is found in WHERE in query",
                 predicate
             )));
@@ -52,7 +52,7 @@ impl FilterTransform {
             .as_any()
             .downcast_ref::<BooleanArray>()
             .ok_or_else(|| {
-                FuseQueryError::Internal("cannot downcast to boolean array".to_string())
+                FuseQueryError::build_internal_error("cannot downcast to boolean array".to_string())
             })?;
         DataBlock::try_from_arrow_batch(&filter_record_batch(
             &block.to_arrow_batch()?,

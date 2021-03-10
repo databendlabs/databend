@@ -21,7 +21,7 @@ impl DatabaseFunction {
         args: &[Box<dyn IFunction>],
     ) -> FuseQueryResult<Box<dyn IFunction>> {
         if !args.is_empty() {
-            return Err(FuseQueryError::Internal(
+            return Err(FuseQueryError::build_internal_error(
                 "The argument size of function database must be zero".to_string(),
             ));
         }
@@ -48,25 +48,25 @@ impl IFunction for DatabaseFunction {
     fn set_depth(&mut self, _depth: usize) {}
 
     fn accumulate(&mut self, _block: &DataBlock) -> FuseQueryResult<()> {
-        Err(FuseQueryError::Internal(
+        Err(FuseQueryError::build_internal_error(
             "Unsupported accumulate for database Function".to_string(),
         ))
     }
 
     fn accumulate_result(&self) -> FuseQueryResult<Vec<DataValue>> {
-        Err(FuseQueryError::Internal(
+        Err(FuseQueryError::build_internal_error(
             "Unsupported accumulate_result for database Function".to_string(),
         ))
     }
 
     fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
-        Err(FuseQueryError::Internal(
+        Err(FuseQueryError::build_internal_error(
             "Unsupported merge for database Function".to_string(),
         ))
     }
 
     fn merge_result(&self) -> FuseQueryResult<DataValue> {
-        Err(FuseQueryError::Internal(
+        Err(FuseQueryError::build_internal_error(
             "Unsupported merge_result for database Function".to_string(),
         ))
     }

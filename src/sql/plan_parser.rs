@@ -27,7 +27,7 @@ impl PlanParser {
     pub fn build_from_sql(&self, query: &str) -> FuseQueryResult<PlanNode> {
         let statements = DFParser::parse_sql(query)?;
         if statements.len() != 1 {
-            return Err(FuseQueryError::Internal(
+            return Err(FuseQueryError::build_internal_error(
                 "Only support single query".to_string(),
             ));
         }
@@ -38,7 +38,7 @@ impl PlanParser {
         match statement {
             DFStatement::Statement(v) => self.sql_statement_to_plan(&v),
             DFStatement::Explain(v) => self.sql_explain_to_plan(&v),
-            _ => Err(FuseQueryError::Internal(
+            _ => Err(FuseQueryError::build_internal_error(
                 "Only Statement are implemented".to_string(),
             )),
         }
@@ -54,7 +54,7 @@ impl PlanParser {
             Statement::SetVariable {
                 variable, value, ..
             } => self.set_variable_to_plan(variable, value),
-            _ => Err(FuseQueryError::Internal(format!(
+            _ => Err(FuseQueryError::build_internal_error(format!(
                 "Unsupported statement {:?}",
                 statement
             ))),
@@ -74,7 +74,7 @@ impl PlanParser {
     pub fn query_to_plan(&self, query: &sqlparser::ast::Query) -> FuseQueryResult<PlanNode> {
         match &query.body {
             sqlparser::ast::SetExpr::Select(s) => self.select_to_plan(s.as_ref(), &query.limit),
-            _ => Err(FuseQueryError::Internal(format!(
+            _ => Err(FuseQueryError::build_internal_error(format!(
                 "Query {} not implemented yet",
                 query.body
             ))),
@@ -88,7 +88,7 @@ impl PlanParser {
         limit: &Option<sqlparser::ast::Expr>,
     ) -> FuseQueryResult<PlanNode> {
         if select.having.is_some() {
-            return Err(FuseQueryError::Internal(
+            return Err(FuseQueryError::build_internal_error(
                 "HAVING is not implemented yet".to_string(),
             ));
         }
@@ -142,7 +142,7 @@ impl PlanParser {
                 Box::new(self.sql_to_rex(&expr, schema)?),
             )),
             sqlparser::ast::SelectItem::Wildcard => Ok(ExpressionPlan::Wildcard),
-            _ => Err(FuseQueryError::Internal(format!(
+            _ => Err(FuseQueryError::build_internal_error(format!(
                 "SelectItem: {:?} are not supported",
                 sql
             ))),
@@ -156,7 +156,7 @@ impl PlanParser {
         match from.len() {
             0 => self.plan_with_dummy_source(),
             1 => self.plan_table_with_joins(&from[0]),
-            _ => Err(FuseQueryError::Internal(
+            _ => Err(FuseQueryError::build_internal_error(
                 "Cannot support JOIN clause".to_string(),
             )),
         }
@@ -228,7 +228,7 @@ impl PlanParser {
             sqlparser::ast::TableFactor::NestedJoin(table_with_joins) => {
                 self.plan_table_with_joins(table_with_joins)
             }
-            TableFactor::TableFunction { .. } => Err(FuseQueryError::Internal(
+            TableFactor::TableFunction { .. } => Err(FuseQueryError::build_internal_error(
                 "Unsupported table function".to_string(),
             )),
         }
@@ -274,7 +274,7 @@ impl PlanParser {
                 })
             }
             sqlparser::ast::Expr::Wildcard => Ok(ExpressionPlan::Wildcard),
-            _ => Err(FuseQueryError::Plan(format!(
+            _ => Err(FuseQueryError::build_plan_error(format!(
                 "Unsupported ExpressionPlan: {}",
                 sql
             ))),
@@ -351,7 +351,7 @@ impl PlanParser {
             Some(ref limit_expr) => {
                 let n = match self.sql_to_rex(&limit_expr, &input.schema())? {
                     ExpressionPlan::Constant(DataValue::UInt64(Some(n))) => Ok(n as usize),
-                    _ => Err(FuseQueryError::Plan(
+                    _ => Err(FuseQueryError::build_plan_error(
                         "Unexpected expression for LIMIT clause".to_string(),
                     )),
                 }?;

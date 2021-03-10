@@ -28,7 +28,7 @@ pub fn data_array_aggregate_op(
             }
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
             DataValueAggregateOperator::Avg => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
@@ -47,7 +47,7 @@ pub fn data_array_aggregate_op(
             }
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
             DataValueAggregateOperator::Avg => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
@@ -67,7 +67,7 @@ pub fn data_array_aggregate_op(
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
 
             DataValueAggregateOperator::Avg => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
@@ -87,7 +87,7 @@ pub fn data_array_aggregate_op(
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
 
             DataValueAggregateOperator::Avg => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
@@ -107,7 +107,7 @@ pub fn data_array_aggregate_op(
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
 
             DataValueAggregateOperator::Avg => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
@@ -127,7 +127,7 @@ pub fn data_array_aggregate_op(
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
 
             DataValueAggregateOperator::Avg => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
@@ -147,7 +147,7 @@ pub fn data_array_aggregate_op(
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
 
             DataValueAggregateOperator::Avg => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
@@ -166,7 +166,7 @@ pub fn data_array_aggregate_op(
             }
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
             DataValueAggregateOperator::Avg => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
@@ -185,7 +185,7 @@ pub fn data_array_aggregate_op(
             }
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
             DataValueAggregateOperator::Avg => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
@@ -204,7 +204,7 @@ pub fn data_array_aggregate_op(
             }
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
             DataValueAggregateOperator::Avg => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
@@ -220,7 +220,7 @@ pub fn data_array_aggregate_op(
             }
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
             _ => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
@@ -228,7 +228,7 @@ pub fn data_array_aggregate_op(
             }
         },
         _ => {
-            return Err(FuseQueryError::Internal(format!(
+            return Err(FuseQueryError::build_internal_error(format!(
                 "Unsupported data_array_{} for data type: {:?}",
                 op,
                 value.data_type()

@@ -105,7 +105,7 @@ impl PipelineBuilder {
             }
             PlanNode::Select(_) => Ok(true),
             other => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Build pipeline from the plan node unsupported:{:?}",
                     other.name()
                 )))

@@ -92,7 +92,7 @@ impl ITable for NumbersTable {
                     total = v as u64;
                 }
             } else {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Must have one argument for table: system.{}",
                     self.name()
                 )));

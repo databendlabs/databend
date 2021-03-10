@@ -43,7 +43,7 @@ impl PlanRewriter {
                     let hash_expr = format!("{:?}", expr);
 
                     if hash_result != hash_expr {
-                        return Err(FuseQueryError::Plan(format!(
+                        return Err(FuseQueryError::build_plan_error(format!(
                             "Different expressions with the same alias {}",
                             alias
                         )));
@@ -64,7 +64,10 @@ impl PlanRewriter {
         match expr {
             ExpressionPlan::Field(field) => {
                 if inside_aliases.contains(field) {
-                    return Err(FuseQueryError::Plan(format!("Cyclic aliases: {}", field)));
+                    return Err(FuseQueryError::build_plan_error(format!(
+                        "Cyclic aliases: {}",
+                        field
+                    )));
                 }
 
                 if let Some(e) = mp.get(field) {
@@ -109,7 +112,10 @@ impl PlanRewriter {
 
             ExpressionPlan::Alias(alias, plan) => {
                 if inside_aliases.contains(alias) {
-                    return Err(FuseQueryError::Plan(format!("Cyclic aliases: {}", alias)));
+                    return Err(FuseQueryError::build_plan_error(format!(
+                        "Cyclic aliases: {}",
+                        alias
+                    )));
                 }
                 inside_aliases.insert(alias.clone());
                 let new_expr =
