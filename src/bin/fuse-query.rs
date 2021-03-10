@@ -5,8 +5,6 @@
 use log::info;
 use simplelog::{Config as LogConfig, LevelFilter, SimpleLogger};
 
-use tokio::signal::unix::{signal, SignalKind};
-
 use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
 use fuse_query::metrics::MetricService;
@@ -65,13 +63,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // RPC API service.
     {
         let srv = RpcService::create(conf.clone(), cluster.clone(), session_manager.clone());
-        tokio::spawn(async move {
-            srv.make_server().await.unwrap();
-        });
+        srv.make_server().await.unwrap();
         info!("RPC API server listening on {}", conf.rpc_api_address);
     }
 
-    // Wait.
-    signal(SignalKind::hangup())?.recv().await;
     Ok(())
 }
