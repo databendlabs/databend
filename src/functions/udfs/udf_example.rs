@@ -38,25 +38,25 @@ impl IFunction for UDFExampleFunction {
     fn set_depth(&mut self, _depth: usize) {}
 
     fn accumulate(&mut self, _block: &DataBlock) -> FuseQueryResult<()> {
-        Err(FuseQueryError::Internal(
+        Err(FuseQueryError::build_internal_error(
             "Unsupported accumulate for example UDF".to_string(),
         ))
     }
 
     fn accumulate_result(&self) -> FuseQueryResult<Vec<DataValue>> {
-        Err(FuseQueryError::Internal(
+        Err(FuseQueryError::build_internal_error(
             "Unsupported accumulate_result for example UDF".to_string(),
         ))
     }
 
     fn merge(&mut self, _states: &[DataValue]) -> FuseQueryResult<()> {
-        Err(FuseQueryError::Internal(
+        Err(FuseQueryError::build_internal_error(
             "Unsupported merge for example UDF".to_string(),
         ))
     }
 
     fn merge_result(&self) -> FuseQueryResult<DataValue> {
-        Err(FuseQueryError::Internal(
+        Err(FuseQueryError::build_internal_error(
             "Unsupported merge_result for example UDF".to_string(),
         ))
     }

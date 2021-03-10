@@ -54,7 +54,7 @@ macro_rules! apply_update_settings {
                     }
                 )*
             }
-            Err(FuseQueryError::Internal(format!(
+            Err(FuseQueryError::build_internal_error(format!(
                 "Unknown variable: {:?}",
                 key
             )))

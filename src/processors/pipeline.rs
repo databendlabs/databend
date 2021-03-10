@@ -41,7 +41,7 @@ impl Pipeline {
     /// Last pipe of the pipeline.
     pub fn last_pipe(&self) -> Result<&Pipe, FuseQueryError> {
         self.pipes.last().ok_or_else(|| {
-            FuseQueryError::Internal("Pipeline last pipe can not be none".to_string())
+            FuseQueryError::build_internal_error("Pipeline last pipe can not be none".to_string())
         })
     }
 

@@ -32,7 +32,7 @@ impl ProjectionTransform {
         for expr in &exprs {
             let func = expr.to_function(ctx.clone())?;
             if func.is_aggregator() {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Aggregate function {} is found in ProjectionTransform, should AggregatorTransform",
                     func
                 )));

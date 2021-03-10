@@ -2,97 +2,171 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::fmt::Debug;
 use std::result;
 
 use arrow::error::ArrowError;
+use snafu::{Backtrace, Snafu};
+use snafu::{ErrorCompat, IntoError};
 use sqlparser::parser::ParserError;
 
 pub type FuseQueryResult<T> = result::Result<T, FuseQueryError>;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug, Snafu)]
+#[non_exhaustive]
 pub enum FuseQueryError {
-    #[error("SQLParser Error: {0}")]
-    SQLParse(#[from] ParserError),
+    #[snafu(display("SQLParser Error"))]
+    SQLParse {
+        source: ParserError,
+        backtrace: Backtrace,
+    },
 
-    #[error("Error during plan: {0}")]
-    Plan(String),
+    #[snafu(display("Error during plan: {}", message))]
+    Plan {
+        message: String,
+        backtrace: Backtrace,
+    },
 
-    #[error("Internal Error: {0}")]
-    Internal(String),
+    #[snafu(display("Internal Error: {}", message))]
+    Internal {
+        message: String,
+        backtrace: Backtrace,
+    },
 
-    #[error("Grpc Error: {0}")]
-    GrpcError(tonic::Status),
+    #[snafu(display("Arrow Error"))]
+    Arrow {
+        source: ArrowError,
+        backtrace: Backtrace,
+    },
+
+    #[snafu(display("Grpc Error: {}", status))]
+    GrpcError {
+        status: tonic::Status,
+        backtrace: Backtrace,
+    },
+}
+
+impl FuseQueryError {
+    pub fn build_internal_error(message: String) -> FuseQueryError {
+        Internal { message }.build()
+    }
+
+    pub fn build_plan_error(message: String) -> FuseQueryError {
+        Plan { message }.build()
+    }
 }
 
 impl From<ArrowError> for FuseQueryError {
     fn from(e: ArrowError) -> Self {
-        FuseQueryError::Internal(e.to_string())
+        Arrow.into_error(e)
+    }
+}
+
+impl From<ParserError> for FuseQueryError {
+    fn from(e: ParserError) -> Self {
+        SQLParse.into_error(e)
+    }
+}
+
+impl From<String> for FuseQueryError {
+    fn from(message: String) -> Self {
+        Internal { message }.build()
     }
 }
 
 impl From<std::num::ParseFloatError> for FuseQueryError {
     fn from(err: std::num::ParseFloatError) -> Self {
-        FuseQueryError::Internal(err.to_string())
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
     }
 }
 
 impl From<std::num::ParseIntError> for FuseQueryError {
     fn from(err: std::num::ParseIntError) -> Self {
-        FuseQueryError::Internal(err.to_string())
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
     }
 }
 
 impl From<std::io::Error> for FuseQueryError {
     fn from(err: std::io::Error) -> Self {
-        FuseQueryError::Internal(err.to_string())
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
     }
 }
 
 impl From<std::fmt::Error> for FuseQueryError {
     fn from(err: std::fmt::Error) -> Self {
-        FuseQueryError::Internal(err.to_string())
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
     }
 }
 
 impl<T> From<std::sync::PoisonError<T>> for FuseQueryError {
     fn from(err: std::sync::PoisonError<T>) -> Self {
-        FuseQueryError::Internal(err.to_string())
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
     }
 }
 
 impl From<tokio::task::JoinError> for FuseQueryError {
     fn from(err: tokio::task::JoinError) -> Self {
-        FuseQueryError::Internal(err.to_string())
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
     }
 }
 
 impl From<serde_json::Error> for FuseQueryError {
     fn from(err: serde_json::Error) -> Self {
-        FuseQueryError::Internal(err.to_string())
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
     }
 }
 
 impl From<std::net::AddrParseError> for FuseQueryError {
     fn from(err: std::net::AddrParseError) -> Self {
-        FuseQueryError::Internal(err.to_string())
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
     }
 }
 
 impl From<prost::EncodeError> for FuseQueryError {
     fn from(err: prost::EncodeError) -> Self {
-        FuseQueryError::Internal(err.to_string())
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
     }
 }
 
 impl From<tonic::transport::Error> for FuseQueryError {
     fn from(err: tonic::transport::Error) -> Self {
-        FuseQueryError::Internal(err.to_string())
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
     }
 }
 
 impl From<tonic::Status> for FuseQueryError {
-    fn from(e: tonic::Status) -> Self {
-        FuseQueryError::GrpcError(e)
+    fn from(status: tonic::Status) -> Self {
+        GrpcError { status }.build()
     }
 }
 
@@ -103,6 +177,35 @@ impl From<tokio::sync::mpsc::error::SendError<Result<arrow_flight::FlightData, t
     fn from(
         e: tokio::sync::mpsc::error::SendError<Result<arrow_flight::FlightData, tonic::Status>>,
     ) -> Self {
-        FuseQueryError::Internal(format!("{}", e))
+        Internal {
+            message: format!("{}", e),
+        }
+        .build()
+    }
+}
+
+// a better eprintln function for error
+pub fn report<E: 'static>(err: &E)
+where
+    E: std::error::Error,
+    E: ErrorCompat,
+{
+    eprintln!("[ERROR] {}", err);
+    if let Some(source) = err.source() {
+        eprintln!();
+        eprintln!("Caused by:");
+        for (i, e) in std::iter::successors(Some(source), |e| e.source()).enumerate() {
+            eprintln!("   {}: {}", i, e);
+        }
+    }
+
+    let env_backtrace = std::env::var("RUST_BACKTRACE").unwrap_or_default();
+    let env_lib_backtrace = std::env::var("RUST_LIB_BACKTRACE").unwrap_or_default();
+    if env_lib_backtrace == "1" || (env_backtrace == "1" && env_lib_backtrace != "0") {
+        if let Some(backtrace) = ErrorCompat::backtrace(&err) {
+            eprintln!();
+            eprintln!("Backtrace:");
+            eprintln!("{}", backtrace);
+        }
     }
 }

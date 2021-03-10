@@ -19,7 +19,7 @@ pub fn data_value_aggregate_op(
             DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, Int8, i8),
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(1)),
             _ => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                     op,
                     left.data_type(),
@@ -33,7 +33,7 @@ pub fn data_value_aggregate_op(
             DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, Int16, i16),
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(1)),
             _ => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                     op,
                     left.data_type(),
@@ -47,7 +47,7 @@ pub fn data_value_aggregate_op(
             DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, Int32, i32),
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(1)),
             _ => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                     op,
                     left.data_type(),
@@ -61,7 +61,7 @@ pub fn data_value_aggregate_op(
             DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, Int64, i64),
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(1)),
             _ => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                     op,
                     left.data_type(),
@@ -75,7 +75,7 @@ pub fn data_value_aggregate_op(
             DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, UInt8, u8),
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(1)),
             _ => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                     op,
                     left.data_type(),
@@ -89,7 +89,7 @@ pub fn data_value_aggregate_op(
             DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, UInt16, u16),
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(1)),
             _ => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                     op,
                     left.data_type(),
@@ -103,7 +103,7 @@ pub fn data_value_aggregate_op(
             DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, UInt32, u32),
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(1)),
             _ => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                     op,
                     left.data_type(),
@@ -117,7 +117,7 @@ pub fn data_value_aggregate_op(
             DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, UInt64, u64),
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(1)),
             _ => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                     op,
                     left.data_type(),
@@ -131,7 +131,7 @@ pub fn data_value_aggregate_op(
             DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, Float32, f32),
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(1)),
             _ => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                     op,
                     left.data_type(),
@@ -145,7 +145,7 @@ pub fn data_value_aggregate_op(
             DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, Float64, f64),
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(1)),
             _ => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                     op,
                     left.data_type(),
@@ -161,7 +161,7 @@ pub fn data_value_aggregate_op(
                 typed_data_value_min_max_string!(lhs, rhs, String, max)
             }
             _ => {
-                return Err(FuseQueryError::Internal(format!(
+                return Err(FuseQueryError::build_internal_error(format!(
                     "Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                     op,
                     left.data_type(),
@@ -170,7 +170,7 @@ pub fn data_value_aggregate_op(
             }
         },
         _ => {
-            return Err(FuseQueryError::Internal(format!(
+            return Err(FuseQueryError::build_internal_error(format!(
                 "Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                 op,
                 left.data_type(),

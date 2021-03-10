@@ -45,7 +45,10 @@ impl RpcService {
             .serve(addr)
             .await
             .map_err(|e| {
-                FuseQueryError::Internal(format!("Metrics prometheus exporter error: {:?}", e))
+                FuseQueryError::build_internal_error(format!(
+                    "Metrics prometheus exporter error: {:?}",
+                    e
+                ))
             })
     }
 }

@@ -89,19 +89,19 @@ impl<W: io::Write> MysqlShim<W> for Session {
                             debug!("MySQLHandler send to client cost:{:?}", duration);
                         }
                         Err(e) => {
-                            error!("{}", e);
+                            error!("FuseQueryResultError {:?}", e);
                             writer
                                 .error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?
                         }
                     }
                 }
                 Err(e) => {
-                    error!("{}", e);
+                    error!("FuseQueryResultError {:?}", e);
                     writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?
                 }
             },
             Err(e) => {
-                error!("{}", e);
+                error!("FuseQueryResultError {:?}", e);
                 writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?;
             }
         }

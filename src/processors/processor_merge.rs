@@ -47,7 +47,7 @@ impl IProcessor for MergeProcessor {
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
         let inputs = self.inputs.len();
         match inputs {
-            0 => Err(FuseQueryError::Internal(
+            0 => Err(FuseQueryError::build_internal_error(
                 "Merge processor inputs cannot be zero".to_string(),
             )),
             1 => self.inputs[0].execute().await,

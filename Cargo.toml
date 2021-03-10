@@ -44,6 +44,7 @@ tokio-stream = "0.1"
 tonic = "0.4"
 warp = "0.3.0"
 uuid = { version = "0.8", features = ["serde", "v4"] }
+snafu = "0.6.8"
 
 [dev-dependencies]
 criterion = "0.3.4"

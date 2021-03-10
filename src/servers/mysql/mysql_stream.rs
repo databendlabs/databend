@@ -61,7 +61,7 @@ impl MySQLStream {
                     colflags: ColumnFlags::empty(),
                 },
                 _ => {
-                    return Err(FuseQueryError::Internal(format!(
+                    return Err(FuseQueryError::build_internal_error(format!(
                         "Unsupported column type:{:?}",
                         field.data_type()
                     )))

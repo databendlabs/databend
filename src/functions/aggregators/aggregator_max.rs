@@ -25,7 +25,7 @@ impl AggregatorMaxFunction {
         args: &[Box<dyn IFunction>],
     ) -> FuseQueryResult<Box<dyn IFunction>> {
         if args.len() != 1 {
-            return Err(FuseQueryError::Internal(
+            return Err(FuseQueryError::build_internal_error(
                 "Aggregator function Max args require single argument".to_string(),
             ));
         }

@@ -45,7 +45,7 @@ impl ArithmeticFunction {
         args: &[Box<dyn IFunction>],
     ) -> FuseQueryResult<Box<dyn IFunction>> {
         if args.len() != 2 {
-            return Err(FuseQueryError::Internal(format!(
+            return Err(FuseQueryError::build_internal_error(format!(
                 "Arithmetic function {} args length must be 2",
                 op
             )));

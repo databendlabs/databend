@@ -27,7 +27,7 @@ impl FlightClient {
         let client = FlightServiceClient::connect(format!("http://{}", addr))
             .await
             .map_err(|e| {
-                FuseQueryError::Internal(format!(
+                FuseQueryError::build_internal_error(format!(
                     "Error connecting to flight server: {}, error: {}",
                     addr, e
                 ))
@@ -50,13 +50,13 @@ impl FlightClient {
             .client
             .do_get(request)
             .await
-            .map_err(|e| FuseQueryError::Internal(format!("{:?}", e)))?
+            .map_err(|e| FuseQueryError::build_internal_error(format!("{:?}", e)))?
             .into_inner();
 
         match stream
             .message()
             .await
-            .map_err(|e| FuseQueryError::Internal(format!("{:?}", e)))?
+            .map_err(|e| FuseQueryError::build_internal_error(format!("{:?}", e)))?
         {
             Some(flight_data) => {
                 let schema = Arc::new(Schema::try_from(&flight_data)?);
@@ -64,14 +64,14 @@ impl FlightClient {
                 while let Some(flight_data) = stream
                     .message()
                     .await
-                    .map_err(|e| FuseQueryError::Internal(format!("{:?}", e)))?
+                    .map_err(|e| FuseQueryError::build_internal_error(format!("{:?}", e)))?
                 {
                     let batch = flight_data_to_arrow_batch(&flight_data, schema.clone(), &[])?;
                     blocks.push(DataBlock::try_from_arrow_batch(&batch)?);
                 }
                 Ok(Box::pin(DataBlockStream::create(schema, None, blocks)))
             }
-            None => Err(FuseQueryError::Internal(format!(
+            None => Err(FuseQueryError::build_internal_error(format!(
                 "Can not receive data from flight server, action:{:?}",
                 action
             ))),
