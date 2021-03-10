@@ -2,13 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::fmt::Debug;
 use std::result;
 
 use arrow::error::ArrowError;
 use snafu::{Backtrace, Snafu};
 use snafu::{ErrorCompat, IntoError};
 use sqlparser::parser::ParserError;
-use std::fmt::Debug;
 
 pub type FuseQueryResult<T> = result::Result<T, FuseQueryError>;
 
