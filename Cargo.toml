@@ -35,16 +35,16 @@ rand = "0.8.3"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 simplelog = "0.9"
+snafu = "0.6.8"
 sqlparser = "0.8"
 structopt = "0.3"
 thiserror = "1.0"
 threadpool = "1.8.1"
-tokio = { version = "1.0", features = ["macros", "rt","rt-multi-thread", "signal", "sync"] }
+tokio = { version = "1.0", features = ["macros", "rt","rt-multi-thread", "sync"] }
 tokio-stream = "0.1"
 tonic = "0.4"
 warp = "0.3.0"
 uuid = { version = "0.8", features = ["serde", "v4"] }
-snafu = "0.6.8"
 
 [dev-dependencies]
 criterion = "0.3.4"
