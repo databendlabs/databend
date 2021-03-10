@@ -67,12 +67,14 @@ Note:
 ## Getting Started
 
 ### Learn FuseQuery
+
 * [Architecture](docs/overview/architecture.md)
 * [Performance](docs/overview/performance.md)
 * [SQL](docs/sqlstatement/)
 * [Functions](docs/functions/)
 
 ### Try FuseQuery
+
 * [How to Run](docs/overview/building-and-running.md)
 
 ## Roadmap
