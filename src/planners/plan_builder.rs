@@ -76,6 +76,11 @@ impl PlanBuilder {
         let input_schema = self.plan.schema();
 
         let mut projection_exprs = vec![];
+
+        exprs.iter().for_each(|v| {
+            println!("{:?}", v);
+        });
+
         exprs.iter().for_each(|v| match v {
             ExpressionPlan::Wildcard => {
                 for i in 0..input_schema.fields().len() {

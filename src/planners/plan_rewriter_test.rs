@@ -119,6 +119,34 @@ fn test_rewriter_plan() -> crate::error::FuseQueryResult<()> {
             expect_str: "[add([1, 1]) as x, add([1, add([1, 1])]) as y, multiply([add([1, 1]), add([1, add([1, 1])])])]",
             error_msg: "",
         },
+        RewriteTest{
+            name: "x+1->x",
+            exprs: vec![
+                Box::new(ExpressionPlan::Function {
+                    op: "add".to_string(),
+                    args: vec![
+                        field("x"),
+                        constant(1i64),
+                    ],
+                }).alias("x"),
+                Box::new(ExpressionPlan::Function {
+                    op: "add".to_string(),
+                    args: vec![
+                        constant(1i32),
+                        field("x")
+                    ],
+                }).alias("y"),
+                ExpressionPlan::Function {
+                    op: "multiply".to_string(),
+                    args: vec![
+                        field("x"),
+                        field("y")
+                    ],
+                },
+            ],
+            expect_str: "[add([x, 1]) as x, add([1, add([x, 1])]) as y, multiply([add([x, 1]), add([1, add([x, 1])])])]",
+            error_msg: "",
+        },
     ];
 
     for t in tests {

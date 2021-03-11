@@ -15,4 +15,4 @@ function run_tests()
 
 export -f run_tests
 
-timeout "$MAX_RUN_TIME" bash -c run_tests ||:
+timeout "$MAX_RUN_TIME" bash -c run_tests
