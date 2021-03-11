@@ -8,6 +8,13 @@ use std::collections::{HashMap, HashSet};
 
 pub struct PlanRewriter {}
 
+struct QueryAliasData {
+    aliases: HashMap<String, ExpressionPlan>,
+    inside_aliases: HashSet<String>,
+    // deepest alias current step in
+    current_alias: String,
+}
+
 impl PlanRewriter {
     /// Recursively extract the aliases in exprs
     pub fn exprs_extract_aliases(
@@ -16,19 +23,15 @@ impl PlanRewriter {
         let mut mp = HashMap::new();
         PlanRewriter::exprs_to_map(&exprs, &mut mp)?;
 
-        let mut forbidden_aliases = HashSet::new();
-        let mut inside_aliases = HashSet::new();
+        let mut data = QueryAliasData {
+            aliases: mp,
+            inside_aliases: HashSet::new(),
+            current_alias: "".into(),
+        };
 
         exprs
             .iter()
-            .map(|expr| {
-                PlanRewriter::expr_rewrite_alias(
-                    expr,
-                    &mp,
-                    &mut inside_aliases,
-                    &mut forbidden_aliases,
-                )
-            })
+            .map(|expr| PlanRewriter::expr_rewrite_alias(expr, &mut data))
             .collect()
     }
 
@@ -57,34 +60,41 @@ impl PlanRewriter {
 
     fn expr_rewrite_alias(
         expr: &ExpressionPlan,
-        mp: &HashMap<String, ExpressionPlan>,
-        inside_aliases: &mut HashSet<String>,
-        forbidden_aliases: &mut HashSet<String>,
+        data: &mut QueryAliasData,
     ) -> FuseQueryResult<ExpressionPlan> {
         match expr {
             ExpressionPlan::Field(field) => {
-                if inside_aliases.contains(field) {
+                // x + 1 --> x
+                if *field == data.current_alias {
+                    return Ok(expr.clone());
+                }
+
+                // x + 1 --> y, y + 1 --> x
+                if data.inside_aliases.contains(field) {
                     return Err(FuseQueryError::build_plan_error(format!(
                         "Cyclic aliases: {}",
                         field
                     )));
                 }
 
-                if let Some(e) = mp.get(field) {
-                    forbidden_aliases.insert(field.clone());
-                    let c =
-                        PlanRewriter::expr_rewrite_alias(e, mp, inside_aliases, forbidden_aliases)?;
-                    forbidden_aliases.remove(field);
+                let tmp = data.aliases.get(field).cloned();
+                if let Some(e) = tmp {
+                    let previous_alias = data.current_alias.clone();
+
+                    data.current_alias = field.clone();
+                    data.inside_aliases.insert(field.clone());
+                    let c = PlanRewriter::expr_rewrite_alias(&e, data)?;
+                    data.inside_aliases.remove(field);
+                    data.current_alias = previous_alias;
+
                     return Ok(c);
                 }
                 Ok(expr.clone())
             }
 
             ExpressionPlan::BinaryExpression { left, op, right } => {
-                let left_new =
-                    PlanRewriter::expr_rewrite_alias(left, mp, inside_aliases, forbidden_aliases)?;
-                let right_new =
-                    PlanRewriter::expr_rewrite_alias(right, mp, inside_aliases, forbidden_aliases)?;
+                let left_new = PlanRewriter::expr_rewrite_alias(left, data)?;
+                let right_new = PlanRewriter::expr_rewrite_alias(right, data)?;
 
                 Ok(ExpressionPlan::BinaryExpression {
                     left: Box::new(left_new),
@@ -96,9 +106,7 @@ impl PlanRewriter {
             ExpressionPlan::Function { op, args } => {
                 let new_args: FuseQueryResult<Vec<ExpressionPlan>> = args
                     .iter()
-                    .map(|v| {
-                        PlanRewriter::expr_rewrite_alias(v, mp, inside_aliases, forbidden_aliases)
-                    })
+                    .map(|v| PlanRewriter::expr_rewrite_alias(v, data))
                     .collect();
 
                 match new_args {
@@ -111,16 +119,19 @@ impl PlanRewriter {
             }
 
             ExpressionPlan::Alias(alias, plan) => {
-                if inside_aliases.contains(alias) {
+                if data.inside_aliases.contains(alias) {
                     return Err(FuseQueryError::build_plan_error(format!(
                         "Cyclic aliases: {}",
                         alias
                     )));
                 }
-                inside_aliases.insert(alias.clone());
-                let new_expr =
-                    PlanRewriter::expr_rewrite_alias(plan, mp, inside_aliases, forbidden_aliases)?;
-                inside_aliases.remove(alias);
+
+                let previous_alias = data.current_alias.clone();
+                data.current_alias = alias.clone();
+                data.inside_aliases.insert(alias.clone());
+                let new_expr = PlanRewriter::expr_rewrite_alias(plan, data)?;
+                data.inside_aliases.remove(alias);
+                data.current_alias = previous_alias;
 
                 Ok(ExpressionPlan::Alias(alias.clone(), Box::new(new_expr)))
             }
