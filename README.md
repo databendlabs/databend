@@ -1,4 +1,5 @@
 # FuseQuery
+[![](https://badgen.net/badge/Slack/Join%20Datafuse/0abd59?icon=slack)](https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA)
 [![FuseQuery Lint](https://github.com/datafuselabs/fuse-query/actions/workflows/fusequery-lint.yml/badge.svg)](https://github.com/datafuselabs/fuse-query/actions/workflows/fusequery-lint.yml)
 [![FuseQuery Unit Tests](https://github.com/datafuselabs/fuse-query/actions/workflows/fusequery-unit-tests.yml/badge.svg)](https://github.com/datafuselabs/fuse-query/actions/workflows/fusequery-unit-tests.yml)
 [![codecov.io](https://codecov.io/gh/datafuselabs/fuse-query/graphs/badge.svg)](https://codecov.io/gh/datafuselabs/fuse-query/branch/master)
