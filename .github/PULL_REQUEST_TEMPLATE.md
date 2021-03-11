@@ -8,13 +8,13 @@ Thank you for sending a PR. Thank you for spending time to help improve the Fuse
 
 ## Changelog
 
-- New Feature
-- Bug Fix
-- Improvement
-- Performance Improvement
-- Build/Testing/Packaging Improvement
-- Documentation (changelog entry is not required)
--  Other
+- [ ] New Feature
+- [ ] Bug Fix
+- [ ] Improvement
+- [ ] Performance Improvement
+- [ ] Build/Testing/Packaging Improvement
+- [ ] Documentation (changelog entry is not required)
+- [ ] Other
 
 ## Related Issues
 <!--
