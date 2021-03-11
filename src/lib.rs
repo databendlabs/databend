@@ -13,7 +13,6 @@ pub mod datasources;
 pub mod datastreams;
 pub mod datavalues;
 pub mod error;
-pub mod executors;
 pub mod functions;
 pub mod interpreters;
 pub mod metrics;
