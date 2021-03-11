@@ -93,11 +93,6 @@ impl FuseQueryContext {
         Ok(())
     }
 
-    pub fn try_get_cluster(&self) -> FuseQueryResult<ClusterRef> {
-        let cluster = self.cluster.lock()?;
-        Ok(cluster.clone())
-    }
-
     pub fn get_table(&self, db_name: &str, table_name: &str) -> FuseQueryResult<Arc<dyn ITable>> {
         self.datasource.lock()?.get_table(db_name, table_name)
     }
