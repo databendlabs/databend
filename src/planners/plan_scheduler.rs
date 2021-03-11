@@ -42,7 +42,7 @@ impl PlanScheduler {
         let mut results = vec![];
         let cluster = ctx.try_get_cluster()?;
         let cluster_nodes = cluster.get_nodes()?;
-        let cluster_nums = if cluster_nodes.len() == 0 {
+        let cluster_nums = if cluster_nodes.is_empty() {
             1
         } else {
             cluster_nodes.len()
