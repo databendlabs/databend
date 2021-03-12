@@ -57,7 +57,7 @@ jobs:
       - name: Upload COS
         uses: zkqiang/tencent-cos-action@v0.1.0
         with:
-          args: upload -r ./target/debug/coverage/ coverage/latest && coscmd upload -r ./target/debug/coverage/ coverage/$(date +"%Y-%m-%d")-$(git rev-parse --short=8 HEAD)
+          args: upload -r ./target/debug/coverage/ coverage/latest && coscmd -r ./target/debug/coverage/ coverage/$(date +"%Y-%m-%d")-$(git rev-parse --short=8 HEAD)
           secret_id: ${{ secrets.CI_TENCENT_COS_ID }}
           secret_key: ${{ secrets.CI_TENCENT_COS_KEY }}
           bucket: ${{ secrets.CI_TENCENT_COS_BUCKET }}
