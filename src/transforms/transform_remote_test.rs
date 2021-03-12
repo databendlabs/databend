@@ -13,7 +13,7 @@ async fn test_transform_remote() -> crate::error::FuseQueryResult<()> {
 
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
-    let remote_addr = crate::tests::try_start_service().await?;
+    let remote_addr = crate::tests::try_start_service(1).await?[0].clone();
 
     let plan = PlanBuilder::from(
         ctx.clone(),

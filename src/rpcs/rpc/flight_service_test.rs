@@ -10,7 +10,7 @@ async fn test_flight_service() -> Result<(), Box<dyn std::error::Error>> {
     use crate::rpcs::rpc::*;
 
     // Test service starts.
-    let addr = crate::tests::try_start_service().await?;
+    let addr = crate::tests::try_start_service(1).await?[0].clone();
 
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
