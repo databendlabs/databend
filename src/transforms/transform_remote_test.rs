@@ -19,7 +19,7 @@ async fn test_transform_remote() -> crate::error::FuseQueryResult<()> {
         ctx.clone(),
         &PlanNode::ReadSource(test_source.number_read_source_plan_for_test(100)?),
     )
-    .filter(field("number").eq(constant(99)))?
+    .filter(col("number").eq(lit(99)))?
     .build()?;
 
     let remote = RemoteTransform::try_create(ctx.get_id()?, remote_addr, plan)?;

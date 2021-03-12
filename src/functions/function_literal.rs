@@ -10,17 +10,17 @@ use crate::error::FuseQueryResult;
 use crate::functions::IFunction;
 
 #[derive(Clone, Debug)]
-pub struct ConstantFunction {
+pub struct LiteralFunction {
     value: DataValue,
 }
 
-impl ConstantFunction {
+impl LiteralFunction {
     pub fn try_create(value: DataValue) -> FuseQueryResult<Box<dyn IFunction>> {
-        Ok(Box::new(ConstantFunction { value }))
+        Ok(Box::new(LiteralFunction { value }))
     }
 }
 
-impl IFunction for ConstantFunction {
+impl IFunction for LiteralFunction {
     fn return_type(&self, _input_schema: &DataSchema) -> FuseQueryResult<DataType> {
         Ok(self.value.data_type())
     }
@@ -52,7 +52,7 @@ impl IFunction for ConstantFunction {
     }
 }
 
-impl fmt::Display for ConstantFunction {
+impl fmt::Display for LiteralFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.value)
     }

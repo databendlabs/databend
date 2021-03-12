@@ -17,11 +17,8 @@ fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
         ctx.clone(),
         &PlanNode::ReadSource(test_source.number_read_source_plan_for_test(10000)?),
     )
-    .project(vec![
-        field("number").alias("c1"),
-        field("number").alias("c2"),
-    ])?
-    .filter(add(field("number"), constant(1)).eq(constant(4)))?
+    .project(vec![col("number").alias("c1"), col("number").alias("c2")])?
+    .filter(add(col("number"), lit(1)).eq(lit(4)))?
     .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
         typ: DFExplainType::Syntax,

@@ -17,13 +17,13 @@ fn test_expression_plan() -> crate::error::FuseQueryResult<()> {
         &PlanNode::ReadSource(test_source.number_read_source_plan_for_test(10000)?),
     )
     .filter(
-        add(field("number"), constant(1))
-            .eq(constant(4))
-            .and(field("number").not_eq(constant(4)))
-            .and(field("number").lt(constant(4)))
-            .and(field("number").lt_eq(constant(4)))
-            .and(field("number").gt(constant(4)))
-            .and(field("number").gt_eq(constant(4))),
+        add(col("number"), lit(1))
+            .eq(lit(4))
+            .and(col("number").not_eq(lit(4)))
+            .and(col("number").lt(lit(4)))
+            .and(col("number").lt_eq(lit(4)))
+            .and(col("number").gt(lit(4)))
+            .and(col("number").gt_eq(lit(4))),
     )?
     .build()?;
     let explain = PlanNode::Explain(ExplainPlan {

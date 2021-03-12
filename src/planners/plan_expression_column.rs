@@ -4,6 +4,6 @@
 
 use crate::planners::ExpressionPlan;
 
-pub fn field(name: &str) -> ExpressionPlan {
-    ExpressionPlan::Field(name.to_string())
+pub fn col(name: &str) -> ExpressionPlan {
+    ExpressionPlan::Column(name.to_string())
 }

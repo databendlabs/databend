@@ -241,12 +241,12 @@ impl PlanParser {
         schema: &DataSchema,
     ) -> FuseQueryResult<ExpressionPlan> {
         match sql {
-            sqlparser::ast::Expr::Identifier(ref v) => Ok(ExpressionPlan::Field(v.clone().value)),
+            sqlparser::ast::Expr::Identifier(ref v) => Ok(ExpressionPlan::Column(v.clone().value)),
             sqlparser::ast::Expr::Value(sqlparser::ast::Value::Number(n, _)) => {
-                Ok(ExpressionPlan::Constant(DataValue::try_from_literal(n)?))
+                Ok(ExpressionPlan::Literal(DataValue::try_from_literal(n)?))
             }
             sqlparser::ast::Expr::Value(sqlparser::ast::Value::SingleQuotedString(s)) => {
-                Ok(ExpressionPlan::Constant(DataValue::String(Some(s.clone()))))
+                Ok(ExpressionPlan::Literal(DataValue::String(Some(s.clone()))))
             }
             sqlparser::ast::Expr::BinaryOp { left, op, right } => {
                 Ok(ExpressionPlan::BinaryExpression {
@@ -350,7 +350,7 @@ impl PlanParser {
         match *limit {
             Some(ref limit_expr) => {
                 let n = match self.sql_to_rex(&limit_expr, &input.schema())? {
-                    ExpressionPlan::Constant(DataValue::UInt64(Some(n))) => Ok(n as usize),
+                    ExpressionPlan::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
                     _ => Err(FuseQueryError::build_plan_error(
                         "Unexpected expression for LIMIT clause".to_string(),
                     )),

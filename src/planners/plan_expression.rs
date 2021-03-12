@@ -7,24 +7,30 @@ use std::fmt;
 use crate::datavalues::{DataField, DataSchemaRef, DataValue};
 use crate::error::FuseQueryResult;
 use crate::functions::{
-    AliasFunction, ConstantFunction, FieldFunction, FunctionFactory, IFunction,
+    AliasFunction, ColumnFunction, FunctionFactory, IFunction, LiteralFunction,
 };
 use crate::sessions::FuseQueryContextRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub enum ExpressionPlan {
+    /// An expression with a alias name.
     Alias(String, Box<ExpressionPlan>),
-    Field(String),
-    Constant(DataValue),
+    /// Column name.
+    Column(String),
+    /// Constant value.
+    Literal(DataValue),
+    /// A binary expression such as "age > 40"
     BinaryExpression {
         left: Box<ExpressionPlan>,
         op: String,
         right: Box<ExpressionPlan>,
     },
+    /// Functions with a set of arguments.
     Function {
         op: String,
         args: Vec<ExpressionPlan>,
     },
+    /// All fields(*) in a schema.
     Wildcard,
 }
 
@@ -35,10 +41,10 @@ impl ExpressionPlan {
         depth: usize,
     ) -> FuseQueryResult<Box<dyn IFunction>> {
         match self {
-            ExpressionPlan::Field(ref v) => FieldFunction::try_create(v.as_str()),
-            ExpressionPlan::Constant(ref v) => {
+            ExpressionPlan::Column(ref v) => ColumnFunction::try_create(v.as_str()),
+            ExpressionPlan::Literal(ref v) => {
                 let field_value = v.to_field_value();
-                ConstantFunction::try_create(field_value)
+                LiteralFunction::try_create(field_value)
             }
             ExpressionPlan::BinaryExpression { left, op, right } => {
                 let l = left.to_function_with_depth(ctx.clone(), depth)?;
@@ -63,7 +69,7 @@ impl ExpressionPlan {
                 func.set_depth(depth);
                 AliasFunction::try_create(alias.clone(), func)
             }
-            ExpressionPlan::Wildcard => FieldFunction::try_create("*"),
+            ExpressionPlan::Wildcard => ColumnFunction::try_create("*"),
         }
     }
 
@@ -71,7 +77,7 @@ impl ExpressionPlan {
         self.to_function_with_depth(ctx, 0)
     }
 
-    pub fn to_field(
+    pub fn to_data_field(
         &self,
         ctx: FuseQueryContextRef,
         input_schema: &DataSchemaRef,
@@ -93,8 +99,8 @@ impl fmt::Debug for ExpressionPlan {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ExpressionPlan::Alias(alias, v) => write!(f, "{:?} as {:#}", v, alias),
-            ExpressionPlan::Field(ref v) => write!(f, "{:#}", v),
-            ExpressionPlan::Constant(ref v) => write!(f, "{:#}", v),
+            ExpressionPlan::Column(ref v) => write!(f, "{:#}", v),
+            ExpressionPlan::Literal(ref v) => write!(f, "{:#}", v),
             ExpressionPlan::BinaryExpression { left, op, right } => {
                 write!(f, "({:?} {} {:?})", left, op, right,)
             }

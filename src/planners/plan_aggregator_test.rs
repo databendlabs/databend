@@ -17,9 +17,9 @@ fn test_aggregator_plan() -> crate::error::FuseQueryResult<()> {
         ctx.clone(),
         &PlanNode::ReadSource(test_source.number_read_source_plan_for_test(10000)?),
     )
-    .aggregate_partial(vec![sum(field("number")).alias("sumx")], vec![])?
-    .aggregate_final(vec![sum(field("number")).alias("sumx")], vec![])?
-    .project(vec![field("sumx")])?
+    .aggregate_partial(vec![sum(col("number")).alias("sumx")], vec![])?
+    .aggregate_final(vec![sum(col("number")).alias("sumx")], vec![])?
+    .project(vec![col("sumx")])?
     .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
         typ: DFExplainType::Syntax,

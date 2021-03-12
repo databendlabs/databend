@@ -10,21 +10,21 @@ use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::IFunction;
 
 #[derive(Clone, Debug)]
-pub struct FieldFunction {
+pub struct ColumnFunction {
     value: String,
     saved: Option<DataColumnarValue>,
 }
 
-impl FieldFunction {
+impl ColumnFunction {
     pub fn try_create(value: &str) -> FuseQueryResult<Box<dyn IFunction>> {
-        Ok(Box::new(FieldFunction {
+        Ok(Box::new(ColumnFunction {
             value: value.to_string(),
             saved: None,
         }))
     }
 }
 
-impl IFunction for FieldFunction {
+impl IFunction for ColumnFunction {
     fn return_type(&self, input_schema: &DataSchema) -> FuseQueryResult<DataType> {
         let field = if self.value == "*" {
             input_schema.field(0)
@@ -78,7 +78,7 @@ impl IFunction for FieldFunction {
     }
 }
 
-impl fmt::Display for FieldFunction {
+impl fmt::Display for ColumnFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:#}", self.value)
     }

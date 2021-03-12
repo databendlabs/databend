@@ -74,7 +74,7 @@ impl DataValue {
         }
     }
 
-    // ConstantValue from planner, we turn Int64, UInt64 to specific minimal type
+    // LiteralValue from planner, we turn Int64, UInt64 to specific minimal type
     pub fn to_field_value(&self) -> Self {
         match *self {
             DataValue::Int64(Some(i)) => {

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef};
 use crate::error::FuseQueryResult;
 use crate::planners::{
-    field, AggregatorFinalPlan, AggregatorPartialPlan, DFExplainType, EmptyPlan, ExplainPlan,
+    col, AggregatorFinalPlan, AggregatorPartialPlan, DFExplainType, EmptyPlan, ExplainPlan,
     ExpressionPlan, FilterPlan, LimitPlan, PlanNode, PlanRewriter, ProjectionPlan, ScanPlan,
     SelectPlan, StagePlan, StageState,
 };
@@ -53,7 +53,7 @@ impl PlanBuilder {
     ) -> FuseQueryResult<Vec<DataField>> {
         exprs
             .iter()
-            .map(|expr| expr.to_field(self.ctx.clone(), input_schema))
+            .map(|expr| expr.to_data_field(self.ctx.clone(), input_schema))
             .collect::<FuseQueryResult<_>>()
     }
 
@@ -79,7 +79,7 @@ impl PlanBuilder {
         exprs.iter().for_each(|v| match v {
             ExpressionPlan::Wildcard => {
                 for i in 0..input_schema.fields().len() {
-                    projection_exprs.push(field(input_schema.fields()[i].name()))
+                    projection_exprs.push(col(input_schema.fields()[i].name()))
                 }
             }
             _ => projection_exprs.push(v.clone()),

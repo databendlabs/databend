@@ -30,9 +30,9 @@ fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
         DataField::new("c", DataType::Int16, false),
     ]));
 
-    let field_a = FieldFunction::try_create("a")?;
-    let field_b = FieldFunction::try_create("b")?;
-    let field_c = FieldFunction::try_create("c")?;
+    let field_a = ColumnFunction::try_create("a")?;
+    let field_b = ColumnFunction::try_create("b")?;
+    let field_c = ColumnFunction::try_create("c")?;
 
     let tests = vec![
         Test {

@@ -18,9 +18,9 @@ async fn test_transform_aggregator() -> crate::error::FuseQueryResult<()> {
     let aggr_exprs = vec![planners::add(
         ExpressionPlan::Function {
             op: "sum".to_string(),
-            args: vec![planners::field("number")],
+            args: vec![planners::col("number")],
         },
-        planners::constant(2u64),
+        planners::lit(2u64),
     )];
 
     let aggr_partial = PlanBuilder::create(ctx.clone(), test_source.number_schema_for_test()?)

@@ -7,14 +7,14 @@ mod arithmetics;
 mod comparisons;
 mod function;
 mod function_alias;
-mod function_constant;
+mod function_column;
 mod function_factory;
-mod function_field;
+mod function_literal;
 mod logics;
 mod udfs;
 
 pub use function::IFunction;
 pub use function_alias::AliasFunction;
-pub use function_constant::ConstantFunction;
+pub use function_column::ColumnFunction;
 pub use function_factory::{FactoryFuncRef, FunctionFactory};
-pub use function_field::FieldFunction;
+pub use function_literal::LiteralFunction;
