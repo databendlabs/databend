@@ -4,7 +4,9 @@ Thank you for sending a PR. Thank you for spending time to help improve the Fuse
 
 ## Summary
 
-(Write your motivation for proposed changes here.)
+<!--
+Write your motivation for proposed changes here.
+-->
 
 ## Changelog
 
@@ -17,12 +19,13 @@ Thank you for sending a PR. Thank you for spending time to help improve the Fuse
 - Other
 
 ## Related Issues
+
 <!--
-The issue fixed or related of this patch if have
+The issue fixed or related of this patch if have.
 -->
 
 ## Test Plan
 
 <!--
-Share your test plan here. If you changed code, please provide us with clear instructions for verifying that your changes work.)
+Share your test plan here. If you changed code, please provide us with clear instructions for verifying that your changes work.
 -->
