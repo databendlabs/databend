@@ -45,11 +45,21 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ${{ steps.coverage.outputs.report }}
 
-      - name: Upload to s3
+      - name: Genhtml
         run: |
           # TODO
           SUFFIX="$(date +"%Y-%m-%d")-$(git rev-parse --short=8 HEAD)"
           genhtml -o ./target/debug/coverage/ --show-details --highlight --ignore-errors source --legend ${{ steps.coverage.outputs.report }}
-          coscmd config -a ${{ secrets.CI_TENCENT_COS_ID }} -s ${{ secrets.CI_TENCENT_COS_KEY }} -b ${{ secrets.CI_TENCENT_COS_BUCKET }} -r ${{ secrets.CI_TENCENT_COS_REGION}} -m 30
-          coscmd upload -r ./target/debug/coverage/ coverage/${SUFFIX}
-          coscmd upload -r ./target/debug/coverage/ coverage/latest
+#          coscmd config -a ${{ secrets.CI_TENCENT_COS_ID }} -s ${{ secrets.CI_TENCENT_COS_KEY }} -b ${{ secrets.CI_TENCENT_COS_BUCKET }} -r ${{ secrets.CI_TENCENT_COS_REGION}} -m 30
+#          coscmd upload -r ./target/debug/coverage/ coverage/${SUFFIX}
+#          coscmd upload -r ./target/debug/coverage/ coverage/latest
+
+      - name: Upload COS
+          uses: zkqiang/tencent-cos-action@v0.1.0
+          with:
+            args: upload -r ./target/debug/coverage/ coverage/latest
+            secret_id: ${{ secrets.CI_TENCENT_COS_ID }}
+            secret_key: ${{ secrets.CI_TENCENT_COS_KEY }}
+            bucket: ${{ secrets.CI_TENCENT_COS_BUCKET }}
+            region: ${{ secrets.CI_TENCENT_COS_REGION }}
+
