@@ -4,11 +4,11 @@
 
 use rand::Rng;
 
-use crate::clusters::Cluster;
+use crate::clusters::{Cluster, Node};
 use crate::configs::Config;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::rpcs::RpcService;
-use crate::sessions::Session;
+use crate::sessions::{FuseQueryContextRef, Session};
 
 /// Start services and return the random address.
 pub async fn try_start_service(nums: usize) -> FuseQueryResult<Vec<String>> {
@@ -34,4 +34,17 @@ pub async fn try_start_service(nums: usize) -> FuseQueryResult<Vec<String>> {
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
     Ok(results)
+}
+
+pub async fn try_create_context_with_nodes(nums: usize) -> FuseQueryResult<FuseQueryContextRef> {
+    let addrs = try_start_service(nums).await?;
+    let ctx = crate::tests::try_create_context()?;
+    for (i, addr) in addrs.iter().enumerate() {
+        ctx.try_get_cluster()?.add_node(&Node {
+            id: format!("node{}", i),
+            cpus: 4,
+            address: addr.clone(),
+        })?;
+    }
+    Ok(ctx)
 }
