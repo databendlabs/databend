@@ -392,6 +392,7 @@ if [[ "$INSTALL_CODEGEN" == "true" ]]; then
   else
     install_pkg python3 "$PACKAGE_MANAGER"
   fi
+  "${PRE_COMMAND[@]}" python3 -m pip install coscmd
 fi
 
 
