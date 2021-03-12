@@ -5,7 +5,7 @@
 use std::fmt;
 use std::fmt::Display;
 
-use crate::processors::{EmptyProcessor, MergeProcessor, Pipeline};
+use crate::processors::Pipeline;
 
 impl Pipeline {
     pub fn display_indent(&self) -> impl fmt::Display + '_ {
@@ -25,6 +25,7 @@ impl Pipeline {
                 };
 
                 let mut index = 0;
+
                 self.0
                     .walk_preorder(|pipe| {
                         write_indent(f)?;
@@ -32,41 +33,45 @@ impl Pipeline {
                         let ways = pipe.nums();
                         let processor = pipe.processor_by_index(0);
 
-                        processor_match_downcast!(processor, {
-                        empty:EmptyProcessor  => write!(f, "")?,
-                        merge:MergeProcessor => {
-                            let prev_pipe = self.0.pipe_by_index(index);
-                            let prev_name = prev_pipe.processor_by_index(0).name().to_string();
-                            let prev_ways = prev_pipe.nums();
+                        match processor.name() {
+                            "EmptyProcessor" => write!(f, "")?,
+                            "MergeProcessor" => {
+                                let mut pipes = self.0.pipes();
+                                pipes.reverse();
 
-                            let post_pipe = self.0.pipe_by_index(index + 2);
-                            let post_name = post_pipe.processor_by_index(0).name().to_string();
-                            let post_ways = post_pipe.nums();
+                                let prev_pipe = pipes[index - 1].clone();
+                                let prev_name = prev_pipe.name().to_string();
+                                let prev_ways = prev_pipe.nums();
 
-                            write!(
-                                f,
-                                "Merge ({} × {} {}) to ({} × {})",
-                                prev_name,
-                                prev_ways,
-                                if prev_ways == 1 {
-                                    "processor"
-                                } else {
-                                    "processors"
-                                },
-                                post_name,
-                                post_ways,
-                            )?;
-                        },
-                        _=> {
-                             write!(
-                                f,
-                                "{} × {} {}",
-                                processor.name(),
-                                ways,
-                                if ways == 1 { "processor" } else { "processors" },
-                            )?;
+                                let post_pipe = pipes[index + 1].clone();
+                                let post_name = post_pipe.name().to_string();
+                                let post_ways = post_pipe.nums();
+
+                                write!(
+                                    f,
+                                    "Merge ({} × {} {}) to ({} × {})",
+                                    post_name,
+                                    post_ways,
+                                    if post_ways == 1 {
+                                        "processor"
+                                    } else {
+                                        "processors"
+                                    },
+                                    prev_name,
+                                    prev_ways,
+                                )?;
+                            }
+                            _ => {
+                                write!(
+                                    f,
+                                    "{} × {} {}",
+                                    processor.name(),
+                                    ways,
+                                    if ways == 1 { "processor" } else { "processors" },
+                                )?;
+                            }
                         }
-                        });
+
                         index += 1;
                         Ok(true)
                     })

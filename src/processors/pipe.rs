@@ -20,6 +20,10 @@ impl Pipe {
         self.processors.len()
     }
 
+    pub fn name(&self) -> &str {
+        self.processors[0].name()
+    }
+
     pub fn processors(&self) -> Vec<Arc<dyn IProcessor>> {
         self.processors.clone()
     }
