@@ -14,7 +14,7 @@ Thank you for sending a PR. Thank you for spending time to help improve the Fuse
 - Performance Improvement
 - Build/Testing/Packaging Improvement
 - Documentation (changelog entry is not required)
--  Other
+- Other
 
 ## Related Issues
 <!--
