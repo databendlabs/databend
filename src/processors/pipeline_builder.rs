@@ -5,12 +5,12 @@
 use std::sync::Arc;
 
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::planners::PlanNode;
+use crate::planners::{PlanNode, PlanScheduler};
 use crate::processors::Pipeline;
 use crate::sessions::FuseQueryContextRef;
 use crate::transforms::{
     AggregatorFinalTransform, AggregatorPartialTransform, FilterTransform, LimitTransform,
-    ProjectionTransform, SourceTransform,
+    ProjectionTransform, RemoteTransform, SourceTransform,
 };
 
 pub struct PipelineBuilder {
@@ -25,8 +25,28 @@ impl PipelineBuilder {
 
     pub fn build(&self) -> FuseQueryResult<Pipeline> {
         let mut pipeline = Pipeline::create();
-        self.plan.walk_postorder(|plan| match plan {
-            PlanNode::Stage(_) => {
+        self.plan.walk_postorder(|node| match node {
+            PlanNode::Stage(plan) => {
+                let executors = self.ctx.try_get_cluster()?.get_nodes()?;
+                if !executors.is_empty() {
+                    // Reset the pipes already in the pipeline.
+                    pipeline.reset();
+
+                    // Build the distributed plan for the executors.
+                    let children = plan.input().as_ref().clone();
+                    let remote_plan_nodes = PlanScheduler::schedule(self.ctx.clone(), &children)?;
+
+                    // Add remote transform as the new source.
+                    for (i, remote_plan_node) in remote_plan_nodes.iter().enumerate() {
+                        let executor = executors[i % executors.len()].clone();
+                        let remote_transform = RemoteTransform::try_create(
+                            self.ctx.get_id()?,
+                            executor.address,
+                            remote_plan_node.clone(),
+                        )?;
+                        pipeline.add_source(Arc::new(remote_transform))?;
+                    }
+                }
                 pipeline.merge_processor()?;
                 Ok(true)
             }
