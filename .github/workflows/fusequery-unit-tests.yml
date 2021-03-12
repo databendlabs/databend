@@ -55,11 +55,11 @@ jobs:
 #          coscmd upload -r ./target/debug/coverage/ coverage/latest
 
       - name: Upload COS
-          uses: zkqiang/tencent-cos-action@v0.1.0
-          with:
-            args: upload -r ./target/debug/coverage/ coverage/latest
-            secret_id: ${{ secrets.CI_TENCENT_COS_ID }}
-            secret_key: ${{ secrets.CI_TENCENT_COS_KEY }}
-            bucket: ${{ secrets.CI_TENCENT_COS_BUCKET }}
-            region: ${{ secrets.CI_TENCENT_COS_REGION }}
+        uses: zkqiang/tencent-cos-action@v0.1.0
+        with:
+          args: upload -r ./target/debug/coverage/ coverage/latest
+          secret_id: ${{ secrets.CI_TENCENT_COS_ID }}
+          secret_key: ${{ secrets.CI_TENCENT_COS_KEY }}
+          bucket: ${{ secrets.CI_TENCENT_COS_BUCKET }}
+          region: ${{ secrets.CI_TENCENT_COS_REGION }}
 
