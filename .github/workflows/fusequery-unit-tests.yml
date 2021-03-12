@@ -50,7 +50,7 @@ jobs:
           genhtml -o ./target/debug/coverage/ --show-details --highlight --ignore-errors source --legend ${{ steps.coverage.outputs.report }}
 
       - name: Upload COS
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.repository_owner == 'datafuselabs'
         uses: zkqiang/tencent-cos-action@v0.1.0
         with:
           args: upload -r ./target/debug/coverage/ coverage/latest && upload -r ./target/debug/coverage/ "coverage/$(date +"%Y_%m_%d")_$(git rev-parse --short=8 HEAD)"
