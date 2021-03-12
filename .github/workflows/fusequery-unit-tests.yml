@@ -49,8 +49,7 @@ jobs:
         run: |
           # TODO
           SUFFIX="$(date +"%Y-%m-%d")-$(git rev-parse --short=8 HEAD)"
-          ls -aril "${{ steps.coverage.outputs.report }}"
-          genhtml -o ./target/debug/coverage/ --show-details --highlight --ignore-errors source --legend "${{ steps.coverage.outputs.report }}"/lcov.info
+          genhtml -o ./target/debug/coverage/ --show-details --highlight --ignore-errors source --legend ${{ steps.coverage.outputs.report }}
           coscmd config -a ${{ secrets.CI_TENCENT_COS_ID }} -s ${{ secrets.CI_TENCENT_COS_KEY }} -b ${{ secrets.CI_TENCENT_COS_BUCKET }} -r ${{ secrets.CI_TENCENT_COS_REGION}} -m 30
           coscmd upload -r ./target/debug/coverage/ coverage/${SUFFIX}
           coscmd upload -r ./target/debug/coverage/ coverage/latest
