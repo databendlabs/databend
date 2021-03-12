@@ -66,7 +66,7 @@ impl Optimizer {
     pub fn expression_plan_children(expr: &ExpressionPlan) -> FuseQueryResult<Vec<ExpressionPlan>> {
         Ok(match expr {
             ExpressionPlan::Alias(_, expr) => vec![expr.as_ref().clone()],
-            ExpressionPlan::Field(_) => vec![],
+            ExpressionPlan::Column(_) => vec![],
             ExpressionPlan::Literal(_) => vec![],
             ExpressionPlan::BinaryExpression { left, right, .. } => {
                 vec![left.as_ref().clone(), right.as_ref().clone()]
@@ -84,7 +84,7 @@ impl Optimizer {
             ExpressionPlan::Alias(alias, _) => {
                 ExpressionPlan::Alias(alias.clone(), Box::from(expressions[0].clone()))
             }
-            ExpressionPlan::Field(_) => expr.clone(),
+            ExpressionPlan::Column(_) => expr.clone(),
             ExpressionPlan::Literal(_) => expr.clone(),
             ExpressionPlan::BinaryExpression { op, .. } => ExpressionPlan::BinaryExpression {
                 left: Box::new(expressions[0].clone()),

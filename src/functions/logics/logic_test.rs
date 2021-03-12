@@ -30,8 +30,8 @@ fn test_logic_function() -> crate::error::FuseQueryResult<()> {
         DataField::new("b", DataType::Boolean, false),
     ]));
 
-    let field_a = FieldFunction::try_create("a").unwrap();
-    let field_b = FieldFunction::try_create("b").unwrap();
+    let field_a = ColumnFunction::try_create("a").unwrap();
+    let field_b = ColumnFunction::try_create("b").unwrap();
 
     let tests = vec![
         Test {

@@ -14,8 +14,8 @@ fn test_scheduler_plan_with_one_node() -> crate::error::FuseQueryResult<()> {
     let source = test_source.number_read_source_plan_for_test(100000)?;
 
     let plan = PlanBuilder::from(ctx.clone(), &PlanNode::ReadSource(source))
-        .filter(field("number").eq(literal(1i64)))?
-        .project(vec![field("number")])?
+        .filter(col("number").eq(lit(1i64)))?
+        .project(vec![col("number")])?
         .build()?;
 
     let plans = PlanScheduler::schedule(ctx, &plan)?;
@@ -46,8 +46,8 @@ fn test_scheduler_plan_with_more_cpus_1_node() -> crate::error::FuseQueryResult<
     let source = test_source.number_read_source_plan_for_test(100000)?;
 
     let plan = PlanBuilder::from(ctx.clone(), &PlanNode::ReadSource(source))
-        .filter(field("number").eq(literal(1i64)))?
-        .project(vec![field("number")])?
+        .filter(col("number").eq(lit(1i64)))?
+        .project(vec![col("number")])?
         .build()?;
 
     let plans = PlanScheduler::schedule(ctx, &plan)?;
@@ -100,8 +100,8 @@ fn test_scheduler_plan_with_3_nodes() -> crate::error::FuseQueryResult<()> {
     let source = test_source.number_read_source_plan_for_test(100000)?;
 
     let plan = PlanBuilder::from(ctx.clone(), &PlanNode::ReadSource(source))
-        .filter(field("number").eq(literal(1i64)))?
-        .project(vec![field("number")])?
+        .filter(col("number").eq(lit(1i64)))?
+        .project(vec![col("number")])?
         .build()?;
 
     let plans = PlanScheduler::schedule(ctx, &plan)?;

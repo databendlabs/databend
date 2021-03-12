@@ -22,7 +22,7 @@ async fn test_transform_filter() -> crate::error::FuseQueryResult<()> {
 
     if let PlanNode::Filter(plan) =
         PlanBuilder::create(ctx.clone(), test_source.number_schema_for_test()?)
-            .filter(field("number").eq(literal(1)))?
+            .filter(col("number").eq(lit(1)))?
             .build()?
     {
         pipeline.add_simple_transform(|| {

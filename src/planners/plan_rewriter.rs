@@ -2,9 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::{HashMap, HashSet};
+
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::ExpressionPlan;
-use std::collections::{HashMap, HashSet};
 
 pub struct PlanRewriter {}
 
@@ -63,7 +64,7 @@ impl PlanRewriter {
         data: &mut QueryAliasData,
     ) -> FuseQueryResult<ExpressionPlan> {
         match expr {
-            ExpressionPlan::Field(field) => {
+            ExpressionPlan::Column(field) => {
                 // x + 1 --> x
                 if *field == data.current_alias {
                     return Ok(expr.clone());

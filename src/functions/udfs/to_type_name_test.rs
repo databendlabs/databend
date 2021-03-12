@@ -30,7 +30,7 @@ fn test_to_type_name_function() -> crate::error::FuseQueryResult<()> {
         false,
     )]));
 
-    let field_a = FieldFunction::try_create("a").unwrap();
+    let field_a = ColumnFunction::try_create("a").unwrap();
 
     let tests = vec![Test {
         name: "to_type_name-example-passed",

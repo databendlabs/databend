@@ -23,22 +23,22 @@ fn test_rewriter_plan() -> crate::error::FuseQueryResult<()> {
                     Box::new(ExpressionPlan::Function {
                         op: "plus".to_string(),
                         args: vec![
-                            literal(1i32),
-                            field("z")
+                            lit(1i32),
+                            col("z")
                         ],
                     }).alias("x"),
                     Box::new(ExpressionPlan::Function {
                         op: "plus".to_string(),
                         args: vec![
-                            literal(1i32),
-                            field("x")
+                            lit(1i32),
+                            col("x")
                         ],
                     }).alias("y"),
                     Box::new(ExpressionPlan::Function {
                         op: "plus".to_string(),
                         args: vec![
-                            literal(1i32),
-                            field("y")
+                            lit(1i32),
+                            col("y")
                         ],
                     }).alias("z"),
             ],
@@ -52,15 +52,15 @@ fn test_rewriter_plan() -> crate::error::FuseQueryResult<()> {
                     Box::new(ExpressionPlan::Function {
                         op: "plus".to_string(),
                         args: vec![
-                            literal(1i32),
-                            field("z")
+                            lit(1i32),
+                            col("z")
                         ],
                     }).alias("x"),
                     Box::new(ExpressionPlan::Function {
                         op: "plus".to_string(),
                         args: vec![
-                            literal(1i32),
-                            field("y")
+                            lit(1i32),
+                            col("y")
                         ],
                     }).alias("x"),
             ],
@@ -71,19 +71,19 @@ fn test_rewriter_plan() -> crate::error::FuseQueryResult<()> {
         RewriteTest{
             name: "normal",
             exprs: vec![
-                field("x"),
-                    Box::new(ExpressionPlan::Function {
+                col("x"),
+                Box::new(ExpressionPlan::Function {
                         op: "add".to_string(),
                         args: vec![
-                            literal(1i32),
-                            field("x")
+                            lit(1i32),
+                            col("x")
                         ],
                     }).alias("y"),
                 ExpressionPlan::Function {
                     op: "multiply".to_string(),
                     args: vec![
-                        field("y"),
-                        field("y"),
+                        col("y"),
+                        col("y"),
                     ],
                 },
             ],
@@ -97,22 +97,22 @@ fn test_rewriter_plan() -> crate::error::FuseQueryResult<()> {
                     Box::new(ExpressionPlan::Function {
                         op: "add".to_string(),
                         args: vec![
-                            literal(1i32),
-                            literal(1i64),
+                            lit(1i32),
+                            lit(1i64),
                         ],
                     }).alias("x"),
                     Box::new(ExpressionPlan::Function {
                         op: "add".to_string(),
                         args: vec![
-                            literal(1i32),
-                            field("x")
+                            lit(1i32),
+                            col("x")
                         ],
                     }).alias("y"),
                 ExpressionPlan::Function {
                     op: "multiply".to_string(),
                     args: vec![
-                            field("x"),
-                            field("y")
+                        col("x"),
+                        col("y")
                     ],
                 },
             ],
@@ -125,22 +125,22 @@ fn test_rewriter_plan() -> crate::error::FuseQueryResult<()> {
                 Box::new(ExpressionPlan::Function {
                     op: "add".to_string(),
                     args: vec![
-                        field("x"),
-                        literal(1i64),
+                        col("x"),
+                        lit(1i64),
                     ],
                 }).alias("x"),
                 Box::new(ExpressionPlan::Function {
                     op: "add".to_string(),
                     args: vec![
-                        literal(1i32),
-                        field("x")
+                        lit(1i32),
+                        col("x")
                     ],
                 }).alias("y"),
                 ExpressionPlan::Function {
                     op: "multiply".to_string(),
                     args: vec![
-                        field("x"),
-                        field("y")
+                        col("x"),
+                        col("y")
                     ],
                 },
             ],

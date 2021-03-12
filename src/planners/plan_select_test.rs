@@ -18,7 +18,7 @@ fn test_select_wildcard_plan() -> crate::error::FuseQueryResult<()> {
         false,
     )]));
     let plan = PlanBuilder::create(ctx, schema)
-        .project(vec![field("a")])?
+        .project(vec![col("a")])?
         .build()?;
     let select = PlanNode::Select(SelectPlan {
         input: Arc::new(plan),

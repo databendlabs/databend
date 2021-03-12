@@ -31,7 +31,7 @@ fn rewrite_alias_expr(
         .map(|e| rewrite_alias_expr(e, &projection))
         .collect::<FuseQueryResult<Vec<_>>>()?;
 
-    if let ExpressionPlan::Field(name) = expr {
+    if let ExpressionPlan::Column(name) = expr {
         if let Some(expr) = projection.get(name) {
             return Ok(expr.clone());
         }

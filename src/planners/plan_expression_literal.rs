@@ -44,6 +44,6 @@ make_literal!(u16, UInt16);
 make_literal!(u32, UInt32);
 make_literal!(u64, UInt64);
 
-pub fn literal<T: ILiteral>(n: T) -> ExpressionPlan {
+pub fn lit<T: ILiteral>(n: T) -> ExpressionPlan {
     n.to_literal()
 }

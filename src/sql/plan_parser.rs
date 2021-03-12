@@ -241,7 +241,7 @@ impl PlanParser {
         schema: &DataSchema,
     ) -> FuseQueryResult<ExpressionPlan> {
         match sql {
-            sqlparser::ast::Expr::Identifier(ref v) => Ok(ExpressionPlan::Field(v.clone().value)),
+            sqlparser::ast::Expr::Identifier(ref v) => Ok(ExpressionPlan::Column(v.clone().value)),
             sqlparser::ast::Expr::Value(sqlparser::ast::Value::Number(n, _)) => {
                 Ok(ExpressionPlan::Literal(DataValue::try_from_literal(n)?))
             }

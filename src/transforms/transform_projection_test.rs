@@ -20,7 +20,7 @@ async fn test_transform_projection() -> crate::error::FuseQueryResult<()> {
 
     if let PlanNode::Projection(plan) =
         PlanBuilder::create(ctx.clone(), test_source.number_schema_for_test()?)
-            .project(vec![field("number"), field("number")])?
+            .project(vec![col("number"), col("number")])?
             .build()?
     {
         pipeline.add_simple_transform(|| {
