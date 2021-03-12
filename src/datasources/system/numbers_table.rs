@@ -84,11 +84,11 @@ impl ITable for NumbersTable {
         if let PlanNode::Scan(plan) = push_down_plan {
             let ScanPlan { table_args, .. } = plan;
             if let Some(args) = table_args {
-                if let ExpressionPlan::Constant(DataValue::UInt64(Some(v))) = args {
+                if let ExpressionPlan::Literal(DataValue::UInt64(Some(v))) = args {
                     total = v;
                 }
 
-                if let ExpressionPlan::Constant(DataValue::Int64(Some(v))) = args {
+                if let ExpressionPlan::Literal(DataValue::Int64(Some(v))) = args {
                     total = v as u64;
                 }
             } else {

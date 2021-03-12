@@ -136,7 +136,7 @@ impl PlanRewriter {
                 Ok(ExpressionPlan::Alias(alias.clone(), Box::new(new_expr)))
             }
 
-            ExpressionPlan::Wildcard | ExpressionPlan::Constant(_) => Ok(expr.clone()),
+            ExpressionPlan::Wildcard | ExpressionPlan::Literal(_) => Ok(expr.clone()),
         }
     }
 }

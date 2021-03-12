@@ -13,7 +13,7 @@ fn test_filter_plan() -> crate::error::FuseQueryResult<()> {
 
     let source = test_source.number_read_source_plan_for_test(8)?;
     let plan = PlanBuilder::from(ctx, &PlanNode::ReadSource(source))
-        .filter(field("number").eq(constant(1i64)))?
+        .filter(field("number").eq(literal(1i64)))?
         .project(vec![field("number")])?
         .build()?;
 

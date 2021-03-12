@@ -20,7 +20,7 @@ async fn test_transform_aggregator() -> crate::error::FuseQueryResult<()> {
             op: "sum".to_string(),
             args: vec![planners::field("number")],
         },
-        planners::constant(2u64),
+        planners::literal(2u64),
     )];
 
     let aggr_partial = PlanBuilder::create(ctx.clone(), test_source.number_schema_for_test()?)

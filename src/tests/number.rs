@@ -43,7 +43,7 @@ impl NumberTestData {
             PlanNode::Scan(ScanPlan {
                 schema_name: self.db.to_string(),
                 table_schema: Arc::new(DataSchema::empty()),
-                table_args: Some(ExpressionPlan::Constant(DataValue::Int64(Some(numbers)))),
+                table_args: Some(ExpressionPlan::Literal(DataValue::Int64(Some(numbers)))),
                 projection: None,
                 projected_schema: Arc::new(DataSchema::empty()),
             }),

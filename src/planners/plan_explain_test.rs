@@ -21,7 +21,7 @@ fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
         field("number").alias("c1"),
         field("number").alias("c2"),
     ])?
-    .filter(add(field("number"), constant(1)).eq(constant(4)))?
+    .filter(add(field("number"), literal(1)).eq(literal(4)))?
     .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
         typ: DFExplainType::Syntax,

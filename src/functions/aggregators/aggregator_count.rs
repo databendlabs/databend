@@ -9,7 +9,7 @@ use crate::datavalues::{
     self, DataColumnarValue, DataSchema, DataType, DataValue, DataValueArithmeticOperator,
 };
 use crate::error::FuseQueryResult;
-use crate::functions::{ConstantFunction, IFunction};
+use crate::functions::{IFunction, LiteralFunction};
 use crate::sessions::FuseQueryContextRef;
 
 #[derive(Clone)]
@@ -25,7 +25,7 @@ impl AggregatorCountFunction {
         args: &[Box<dyn IFunction>],
     ) -> FuseQueryResult<Box<dyn IFunction>> {
         let arg = if args.is_empty() {
-            ConstantFunction::try_create(DataValue::UInt64(Some(1)))?
+            LiteralFunction::try_create(DataValue::UInt64(Some(1)))?
         } else {
             args[0].clone()
         };

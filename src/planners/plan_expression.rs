@@ -6,16 +6,14 @@ use std::fmt;
 
 use crate::datavalues::{DataField, DataSchemaRef, DataValue};
 use crate::error::FuseQueryResult;
-use crate::functions::{
-    AliasFunction, ConstantFunction, FieldFunction, FunctionFactory, IFunction,
-};
+use crate::functions::{AliasFunction, FieldFunction, FunctionFactory, IFunction, LiteralFunction};
 use crate::sessions::FuseQueryContextRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub enum ExpressionPlan {
     Alias(String, Box<ExpressionPlan>),
     Field(String),
-    Constant(DataValue),
+    Literal(DataValue),
     BinaryExpression {
         left: Box<ExpressionPlan>,
         op: String,
@@ -36,9 +34,9 @@ impl ExpressionPlan {
     ) -> FuseQueryResult<Box<dyn IFunction>> {
         match self {
             ExpressionPlan::Field(ref v) => FieldFunction::try_create(v.as_str()),
-            ExpressionPlan::Constant(ref v) => {
+            ExpressionPlan::Literal(ref v) => {
                 let field_value = v.to_field_value();
-                ConstantFunction::try_create(field_value)
+                LiteralFunction::try_create(field_value)
             }
             ExpressionPlan::BinaryExpression { left, op, right } => {
                 let l = left.to_function_with_depth(ctx.clone(), depth)?;
@@ -94,7 +92,7 @@ impl fmt::Debug for ExpressionPlan {
         match self {
             ExpressionPlan::Alias(alias, v) => write!(f, "{:?} as {:#}", v, alias),
             ExpressionPlan::Field(ref v) => write!(f, "{:#}", v),
-            ExpressionPlan::Constant(ref v) => write!(f, "{:#}", v),
+            ExpressionPlan::Literal(ref v) => write!(f, "{:#}", v),
             ExpressionPlan::BinaryExpression { left, op, right } => {
                 write!(f, "({:?} {} {:?})", left, op, right,)
             }
