@@ -5,6 +5,8 @@
 use std::io::Cursor;
 use std::pin::Pin;
 
+use log::debug;
+
 use arrow_flight::{
     flight_service_server::{FlightService as Flight, FlightServiceServer as FlightServer},
     Action, ActionType, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo,
@@ -118,9 +120,15 @@ impl Flight for FlightService {
             ExecuteAction::ExecutePlan(action) => {
                 let plan = action.plan;
                 let cpus = self.conf.num_cpus;
+                let conf = self.conf.clone();
                 let cluster = self.cluster.clone();
                 let session_manager = self.session_manager.clone();
                 let (sender, receiver): (FlightDataSender, FlightDataReceiver) = mpsc::channel(2);
+
+                debug!(
+                    "flight_service:{} plan:{:?}",
+                    self.conf.rpc_api_address, plan
+                );
 
                 tokio::spawn(async move {
                     // Create the context from manager.
@@ -130,10 +138,15 @@ impl Flight for FlightService {
                     ctx.set_max_threads(cpus)?;
 
                     // Pipeline stream.
-                    let mut stream = PipelineBuilder::create(ctx.clone(), plan.clone())
-                        .build()?
-                        .execute()
-                        .await?;
+                    let mut pipeline =
+                        PipelineBuilder::create(ctx.clone(), plan.clone()).build()?;
+
+                    debug!(
+                        "flight_service:{} pipeline:{:?}",
+                        conf.rpc_api_address, pipeline
+                    );
+
+                    let mut stream = pipeline.execute().await?;
 
                     // Send flight schema first.
                     let options = arrow::ipc::writer::IpcWriteOptions::default();

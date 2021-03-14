@@ -5,12 +5,12 @@
 use std::sync::Arc;
 
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::planners::PlanNode;
+use crate::planners::{PlanNode, PlanScheduler};
 use crate::processors::Pipeline;
 use crate::sessions::FuseQueryContextRef;
 use crate::transforms::{
     AggregatorFinalTransform, AggregatorPartialTransform, FilterTransform, LimitTransform,
-    ProjectionTransform, SourceTransform,
+    ProjectionTransform, RemoteTransform, SourceTransform,
 };
 
 pub struct PipelineBuilder {
@@ -25,9 +25,31 @@ impl PipelineBuilder {
 
     pub fn build(&self) -> FuseQueryResult<Pipeline> {
         let mut pipeline = Pipeline::create();
-        self.plan.walk_postorder(|plan| match plan {
-            PlanNode::Stage(_) => {
-                pipeline.merge_processor()?;
+        self.plan.walk_postorder(|node| match node {
+            PlanNode::Stage(plan) => {
+                let executors = self.ctx.try_get_cluster()?.get_nodes()?;
+                if !executors.is_empty() {
+                    // Reset the pipes already in the pipeline.
+                    pipeline.reset();
+
+                    // Reset the context partition.
+                    self.ctx.reset()?;
+
+                    // Build the distributed plan for the executors.
+                    let children = plan.input().as_ref().clone();
+                    let remote_plan_nodes = PlanScheduler::schedule(self.ctx.clone(), &children)?;
+
+                    // Add remote transform as the new source.
+                    for (i, remote_plan_node) in remote_plan_nodes.iter().enumerate() {
+                        let executor = executors[i % executors.len()].clone();
+                        let remote_transform = RemoteTransform::try_create(
+                            self.ctx.get_id()?,
+                            executor.address,
+                            remote_plan_node.clone(),
+                        )?;
+                        pipeline.add_source(Arc::new(remote_transform))?;
+                    }
+                }
                 Ok(true)
             }
             PlanNode::Projection(plan) => {
@@ -51,6 +73,7 @@ impl PipelineBuilder {
                 Ok(true)
             }
             PlanNode::AggregatorFinal(plan) => {
+                pipeline.merge_processor()?;
                 pipeline.add_simple_transform(|| {
                     Ok(Box::new(AggregatorFinalTransform::try_create(
                         self.ctx.clone(),
@@ -70,14 +93,9 @@ impl PipelineBuilder {
                 Ok(true)
             }
             PlanNode::Limit(plan) => {
+                pipeline.merge_processor()?;
                 pipeline
                     .add_simple_transform(|| Ok(Box::new(LimitTransform::try_create(plan.n)?)))?;
-                if pipeline.nums() > 1 {
-                    pipeline.merge_processor()?;
-                    pipeline.add_simple_transform(|| {
-                        Ok(Box::new(LimitTransform::try_create(plan.n)?))
-                    })?;
-                }
                 Ok(false)
             }
             PlanNode::ReadSource(plan) => {
@@ -112,7 +130,6 @@ impl PipelineBuilder {
             }
         })?;
 
-        pipeline.merge_processor()?;
         Ok(pipeline)
     }
 }

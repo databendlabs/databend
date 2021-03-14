@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_transform_remote() -> crate::error::FuseQueryResult<()> {
+async fn test_transform_remote_with_local() -> crate::error::FuseQueryResult<()> {
     use futures::stream::StreamExt;
 
     use crate::datavalues::*;
@@ -13,7 +13,7 @@ async fn test_transform_remote() -> crate::error::FuseQueryResult<()> {
 
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
-    let remote_addr = crate::tests::try_start_service().await?;
+    let remote_addr = crate::tests::try_start_service(1).await?[0].clone();
 
     let plan = PlanBuilder::from(
         ctx.clone(),

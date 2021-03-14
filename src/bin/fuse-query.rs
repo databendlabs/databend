@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use log::info;
-use simplelog::{Config as LogConfig, LevelFilter, SimpleLogger};
 
 use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
@@ -18,9 +17,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Log level.
     match conf.log_level.to_lowercase().as_str() {
-        "debug" => SimpleLogger::init(LevelFilter::Debug, LogConfig::default())?,
-        "info" => SimpleLogger::init(LevelFilter::Info, LogConfig::default())?,
-        _ => SimpleLogger::init(LevelFilter::Error, LogConfig::default())?,
+        "debug" => simplelog::SimpleLogger::init(
+            simplelog::LevelFilter::Debug,
+            simplelog::Config::default(),
+        )?,
+        "info" => simplelog::SimpleLogger::init(
+            simplelog::LevelFilter::Info,
+            simplelog::Config::default(),
+        )?,
+        _ => simplelog::SimpleLogger::init(
+            simplelog::LevelFilter::Error,
+            simplelog::Config::default(),
+        )?,
     }
     info!("{:?}", conf.clone());
     info!("FuseQuery v-{}", conf.version);

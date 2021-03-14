@@ -8,7 +8,7 @@ async fn test_executor_service() -> Result<(), Box<dyn std::error::Error>> {
     use crate::protobuf::{PingRequest, PingResponse};
 
     // Test service starts.
-    let addr = crate::tests::try_start_service().await?;
+    let addr = crate::tests::try_start_service(1).await?[0].clone();
 
     let mut client = ExecutorClient::connect(format!("http://{}", addr)).await?;
     let request = tonic::Request::new(PingRequest {
