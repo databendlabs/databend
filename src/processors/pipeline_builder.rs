@@ -32,6 +32,9 @@ impl PipelineBuilder {
                     // Reset the pipes already in the pipeline.
                     pipeline.reset();
 
+                    // Reset the context partition.
+                    self.ctx.reset()?;
+
                     // Build the distributed plan for the executors.
                     let children = plan.input().as_ref().clone();
                     let remote_plan_nodes = PlanScheduler::schedule(self.ctx.clone(), &children)?;
@@ -47,7 +50,6 @@ impl PipelineBuilder {
                         pipeline.add_source(Arc::new(remote_transform))?;
                     }
                 }
-                pipeline.merge_processor()?;
                 Ok(true)
             }
             PlanNode::Projection(plan) => {
@@ -71,6 +73,7 @@ impl PipelineBuilder {
                 Ok(true)
             }
             PlanNode::AggregatorFinal(plan) => {
+                pipeline.merge_processor()?;
                 pipeline.add_simple_transform(|| {
                     Ok(Box::new(AggregatorFinalTransform::try_create(
                         self.ctx.clone(),
@@ -90,14 +93,9 @@ impl PipelineBuilder {
                 Ok(true)
             }
             PlanNode::Limit(plan) => {
+                pipeline.merge_processor()?;
                 pipeline
                     .add_simple_transform(|| Ok(Box::new(LimitTransform::try_create(plan.n)?)))?;
-                if pipeline.nums() > 1 {
-                    pipeline.merge_processor()?;
-                    pipeline.add_simple_transform(|| {
-                        Ok(Box::new(LimitTransform::try_create(plan.n)?))
-                    })?;
-                }
                 Ok(false)
             }
             PlanNode::ReadSource(plan) => {
@@ -132,7 +130,6 @@ impl PipelineBuilder {
             }
         })?;
 
-        pipeline.merge_processor()?;
         Ok(pipeline)
     }
 }

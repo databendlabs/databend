@@ -130,10 +130,9 @@ impl Flight for FlightService {
                     ctx.set_max_threads(cpus)?;
 
                     // Pipeline stream.
-                    let mut stream = PipelineBuilder::create(ctx.clone(), plan.clone())
-                        .build()?
-                        .execute()
-                        .await?;
+                    let mut pipeline =
+                        PipelineBuilder::create(ctx.clone(), plan.clone()).build()?;
+                    let mut stream = pipeline.execute().await?;
 
                     // Send flight schema first.
                     let options = arrow::ipc::writer::IpcWriteOptions::default();
