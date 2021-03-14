@@ -1,7 +1,7 @@
 [package]
 name = "fuse-query"
 version = "0.1.0"
-description = "A Distributed Query Engine"
+description = "A real-time Cloud Distributed Query Engine"
 authors = ["BohuTANG <overred.shuttler@gmail.com>"]
 license = "Apache-2.0"
 include = [
@@ -16,8 +16,8 @@ name = "fuse-query"
 path = "src/bin/fuse-query.rs"
 
 [dependencies]
-arrow = { git = "https://github.com/apache/arrow", rev="5647e90" }
-arrow-flight = { git = "https://github.com/apache/arrow", rev="5647e90" }
+arrow = { git = "https://github.com/apache/arrow", rev="46161d2" }
+arrow-flight = { git = "https://github.com/apache/arrow", rev="46161d2" }
 async-trait = "0.1"
 dyn-clone = "1.0.4"
 futures = "0.3"
