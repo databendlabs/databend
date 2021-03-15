@@ -23,6 +23,7 @@ impl SystemFactory {
             Arc::new(system::SettingsTable::create()),
             Arc::new(system::NumbersTable::create("numbers")),
             Arc::new(system::NumbersTable::create("numbers_mt")),
+            Arc::new(system::TablesTable::create()),
         ];
 
         let mut hashmap: DatabaseHashMap = HashMap::default();

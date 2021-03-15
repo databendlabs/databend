@@ -8,35 +8,35 @@ use std::sync::Arc;
 use crate::datablocks::DataBlock;
 use crate::datasources::{ITable, Partition, Statistics};
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, UInt8Array};
+use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, StringArray};
 use crate::error::FuseQueryResult;
 use crate::planners::{PlanNode, ReadDataSourcePlan};
 use crate::sessions::FuseQueryContextRef;
 
-pub struct OneTable {
+pub struct TablesTable {
     schema: DataSchemaRef,
 }
 
-impl OneTable {
+impl TablesTable {
     pub fn create() -> Self {
-        OneTable {
-            schema: Arc::new(DataSchema::new(vec![DataField::new(
-                "dummy",
-                DataType::UInt8,
-                false,
-            )])),
+        TablesTable {
+            schema: Arc::new(DataSchema::new(vec![
+                DataField::new("database", DataType::Utf8, false),
+                DataField::new("name", DataType::Utf8, false),
+                DataField::new("engine", DataType::Utf8, false),
+            ])),
         }
     }
 }
 
 #[async_trait]
-impl ITable for OneTable {
+impl ITable for TablesTable {
     fn name(&self) -> &str {
-        "one"
+        "tables"
     }
 
     fn engine(&self) -> &str {
-        "SystemOne"
+        "SystemTables"
     }
 
     fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
@@ -57,15 +57,26 @@ impl ITable for OneTable {
                 version: 0,
             }],
             statistics: Statistics::default(),
-            description: "(Read from system.one table)".to_string(),
+            description: "(Read from system.functions table)".to_string(),
         })
     }
 
-    async fn read(&self, _: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn read(&self, ctx: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
+        let database_tables = ctx.get_datasource().lock()?.list_database_tables();
+
+        let databases: Vec<&str> = database_tables.iter().map(|(d, _)| d.as_str()).collect();
+        let names: Vec<&str> = database_tables.iter().map(|(_, v)| v.name()).collect();
+        let engines: Vec<&str> = database_tables.iter().map(|(_, v)| v.engine()).collect();
+
         let block = DataBlock::create(
             self.schema.clone(),
-            vec![Arc::new(UInt8Array::from(vec![1u8]))],
+            vec![
+                Arc::new(StringArray::from(databases)),
+                Arc::new(StringArray::from(names)),
+                Arc::new(StringArray::from(engines)),
+            ],
         );
+
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
