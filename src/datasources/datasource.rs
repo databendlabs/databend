@@ -16,6 +16,7 @@ pub trait IDataSource: Sync + Send {
     fn check_database(&mut self, db_name: &str) -> FuseQueryResult<()>;
     fn add_table(&mut self, db_name: &str, table: Arc<dyn ITable>) -> FuseQueryResult<()>;
     fn get_table(&self, db_name: &str, table_name: &str) -> FuseQueryResult<Arc<dyn ITable>>;
+    fn list_database_tables(&self) -> Vec<(String, Arc<dyn ITable>)>;
 }
 
 pub type DatabaseHashMap = HashMap<&'static str, Vec<Arc<dyn ITable>>>;
@@ -104,5 +105,15 @@ impl IDataSource for DataSource {
             ))
         })?;
         Ok(table.clone())
+    }
+
+    fn list_database_tables(&self) -> Vec<(String, Arc<dyn ITable>)> {
+        let mut results = vec![];
+        for (k, v) in self.databases.iter() {
+            for (_, table) in v.iter() {
+                results.push((k.clone(), table.clone()));
+            }
+        }
+        results
     }
 }

@@ -39,7 +39,7 @@ impl PlanParser {
             DFStatement::Statement(v) => self.sql_statement_to_plan(&v),
             DFStatement::Explain(v) => self.sql_explain_to_plan(&v),
             _ => Err(FuseQueryError::build_internal_error(
-                "Only Statement are implemented".to_string(),
+                "Only [SELECT|CREATE|EXPLAIN] Statement are implemented".to_string(),
             )),
         }
     }

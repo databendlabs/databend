@@ -13,6 +13,7 @@ use crate::sessions::FuseQueryContextRef;
 #[async_trait]
 pub trait ITable: Sync + Send {
     fn name(&self) -> &str;
+    fn engine(&self) -> &str;
 
     fn schema(&self) -> FuseQueryResult<DataSchemaRef>;
 

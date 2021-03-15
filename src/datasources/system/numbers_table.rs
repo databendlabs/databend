@@ -70,6 +70,14 @@ impl ITable for NumbersTable {
         self.table
     }
 
+    fn engine(&self) -> &str {
+        match self.table {
+            "numbers" => "SystemNumbers",
+            "numbers_mt" => "SystemNumbersMt",
+            _ => unreachable!(),
+        }
+    }
+
     fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
         Ok(self.schema.clone())
     }

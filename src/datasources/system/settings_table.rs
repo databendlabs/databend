@@ -36,6 +36,10 @@ impl ITable for SettingsTable {
         "settings"
     }
 
+    fn engine(&self) -> &str {
+        "SystemSettings"
+    }
+
     fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
         Ok(self.schema.clone())
     }

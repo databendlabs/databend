@@ -98,6 +98,10 @@ impl FuseQueryContext {
         Ok(cluster.clone())
     }
 
+    pub fn get_datasource(&self) -> Arc<Mutex<dyn IDataSource>> {
+        self.datasource.clone()
+    }
+
     pub fn get_table(&self, db_name: &str, table_name: &str) -> FuseQueryResult<Arc<dyn ITable>> {
         self.datasource.lock()?.get_table(db_name, table_name)
     }

@@ -36,6 +36,10 @@ impl ITable for FunctionsTable {
         "functions"
     }
 
+    fn engine(&self) -> &str {
+        "SystemFunctions"
+    }
+
     fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
         Ok(self.schema.clone())
     }
