@@ -59,6 +59,7 @@ Note:
 - [x] Functions
 - [x] Filter Push-Down
 - [ ] Projection Push-Down (TODO)
+- [ ] Limit Push-Down (TODO)
 - [ ] Work-Stealing Distributed Query Engine (WIP)
 - [ ] Sorting (TODO)
 - [ ] SubQueries (TODO)
