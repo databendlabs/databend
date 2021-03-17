@@ -26,11 +26,9 @@ async fn test_transform_remote_with_local() -> crate::error::FuseQueryResult<()>
     let mut stream = remote.execute().await?;
     while let Some(v) = stream.next().await {
         let v = v?;
-        if v.num_rows() > 0 {
-            let actual = v.column(0).as_any().downcast_ref::<UInt64Array>().unwrap();
-            let expect = &UInt64Array::from(vec![99]);
-            assert_eq!(expect.clone(), actual.clone());
-        }
+        let actual = v.column(0).as_any().downcast_ref::<UInt64Array>().unwrap();
+        let expect = &UInt64Array::from(vec![99]);
+        assert_eq!(expect.clone(), actual.clone());
     }
     Ok(())
 }

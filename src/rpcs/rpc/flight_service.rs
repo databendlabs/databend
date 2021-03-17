@@ -148,28 +148,36 @@ impl Flight for FlightService {
 
                     let mut stream = pipeline.execute().await?;
 
-                    // Send flight schema first.
                     let options = arrow::ipc::writer::IpcWriteOptions::default();
-                    let schema_flight_data = arrow_flight::utils::flight_data_from_arrow_schema(
-                        plan.schema().as_ref(),
-                        &options,
-                    );
-                    sender.send(Ok(schema_flight_data)).await?;
 
+                    let mut has_send = false;
                     // Get the batch from the stream and send to one channel.
                     while let Some(item) = stream.next().await {
-                        let batch = item?.to_arrow_batch()?;
+                        let block = item?;
+                        if !has_send {
+                            let schema_flight_data =
+                                arrow_flight::utils::flight_data_from_arrow_schema(
+                                    block.schema(),
+                                    &options,
+                                );
+                            sender.send(Ok(schema_flight_data)).await?;
+                            has_send = true;
+                        }
 
-                        // Convert batch to flight data.
-                        let (flight_dicts, flight_batch) =
-                            arrow_flight::utils::flight_data_from_arrow_batch(&batch, &options);
-                        let batch_flight_data = flight_dicts
-                            .into_iter()
-                            .chain(std::iter::once(flight_batch))
-                            .map(Ok);
+                        // Check block is empty.
+                        if !block.is_empty() {
+                            // Convert batch to flight data.
+                            let batch = block.to_arrow_batch()?;
+                            let (flight_dicts, flight_batch) =
+                                arrow_flight::utils::flight_data_from_arrow_batch(&batch, &options);
+                            let batch_flight_data = flight_dicts
+                                .into_iter()
+                                .chain(std::iter::once(flight_batch))
+                                .map(Ok);
 
-                        for batch in batch_flight_data {
-                            send_response(&sender, batch.clone()).await?;
+                            for batch in batch_flight_data {
+                                send_response(&sender, batch.clone()).await?;
+                            }
                         }
                     }
                     // Remove the context from the manager.

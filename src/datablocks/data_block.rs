@@ -39,6 +39,10 @@ impl DataBlock {
         )?)
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.num_columns() == 0 || self.num_rows() == 0
+    }
+
     pub fn schema(&self) -> &DataSchemaRef {
         &self.schema
     }
