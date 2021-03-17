@@ -68,8 +68,8 @@ async fn test_distributed_pipeline_build() -> crate::error::FuseQueryResult<()> 
     let pipeline = PipelineBuilder::create(ctx, plan).build()?;
     let expect = "LimitTransform × 1 processor\
     \n  AggregatorFinalTransform × 1 processor\
-    \n    Merge (RemoteTransform × 4 processors) to (AggregatorFinalTransform × 1)\
-    \n      RemoteTransform × 4 processor(s): AggregatorPartialTransform × 8 processors -> FilterTransform × 8 processors ->   SourceTransform × 8 processors";
+    \n    Merge (RemoteTransform × 3 processors) to (AggregatorFinalTransform × 1)\
+    \n      RemoteTransform × 3 processor(s): AggregatorPartialTransform × 8 processors -> FilterTransform × 8 processors ->   SourceTransform × 8 processors";
     let actual = format!("{:?}", pipeline);
     assert_eq!(expect, actual);
     Ok(())

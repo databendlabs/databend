@@ -47,7 +47,10 @@ impl PlanScheduler {
         } else {
             cluster_nodes.len()
         };
-        let chunk_size = partitions.len() / cluster_nums;
+
+        // Align to the cluster numbers.
+        let remainder = partitions.len() % cluster_nums;
+        let chunk_size = (partitions.len() + remainder) / cluster_nums + 1;
         for chunks in partitions.chunks(chunk_size) {
             let mut new_source_plan = source_plan.clone();
             new_source_plan.partitions = Vec::from(chunks);
