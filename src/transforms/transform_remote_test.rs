@@ -23,7 +23,7 @@ async fn test_transform_remote_with_local() -> crate::error::FuseQueryResult<()>
     .filter(col("number").eq(lit(99)))?
     .build()?;
 
-    let remote = RemoteTransform::try_create(ctx.get_id()?, remote_addr, plan)?;
+    let remote = RemoteTransform::try_create(ctx.clone(), ctx.get_id()?, remote_addr, plan)?;
     let mut stream = remote.execute().await?;
     while let Some(v) = stream.next().await {
         let v = v?;
@@ -61,7 +61,7 @@ async fn test_transform_remote_with_cluster() -> crate::error::FuseQueryResult<(
     let expect = format!("{:?}", pipeline);
     let actual = "AggregatorFinalTransform × 1 processor\
     \n  Merge (RemoteTransform × 4 processors) to (AggregatorFinalTransform × 1)\
-    \n    RemoteTransform × 4 processors";
+    \n    RemoteTransform × 4 processor(s): AggregatorPartialTransform × 2 processors -> SourceTransform × 2 processors";
     assert_eq!(expect, actual);
 
     let mut stream = pipeline.execute().await?;
