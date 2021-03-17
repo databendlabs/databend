@@ -12,16 +12,19 @@ use crate::error::FuseQueryResult;
 use crate::planners::PlanNode;
 use crate::processors::{EmptyProcessor, IProcessor};
 use crate::rpcs::rpc::{ExecuteAction, ExecutePlanAction, FlightClient};
+use crate::sessions::FuseQueryContextRef;
 
 pub struct RemoteTransform {
     job_id: String,
     remote_addr: String,
-    plan: PlanNode,
+    pub ctx: FuseQueryContextRef,
+    pub plan: PlanNode,
     input: Arc<dyn IProcessor>,
 }
 
 impl RemoteTransform {
     pub fn try_create(
+        ctx: FuseQueryContextRef,
         job_id: String,
         remote_addr: String,
         plan: PlanNode,
@@ -29,6 +32,7 @@ impl RemoteTransform {
         Ok(Self {
             job_id,
             remote_addr,
+            ctx,
             plan,
             input: Arc::new(EmptyProcessor::create()),
         })

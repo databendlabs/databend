@@ -43,6 +43,7 @@ impl PipelineBuilder {
                     for (i, remote_plan_node) in remote_plan_nodes.iter().enumerate() {
                         let executor = executors[i % executors.len()].clone();
                         let remote_transform = RemoteTransform::try_create(
+                            self.ctx.clone(),
                             self.ctx.get_id()?,
                             executor.address,
                             remote_plan_node.clone(),
