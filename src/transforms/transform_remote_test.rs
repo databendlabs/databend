@@ -60,8 +60,8 @@ async fn test_transform_remote_with_cluster() -> crate::error::FuseQueryResult<(
     // Check the distributed pipeline.
     let expect = format!("{:?}", pipeline);
     let actual = "AggregatorFinalTransform × 1 processor\
-    \n  Merge (RemoteTransform × 4 processors) to (AggregatorFinalTransform × 1)\
-    \n    RemoteTransform × 4 processors";
+    \n  Merge (RemoteTransform × 3 processors) to (AggregatorFinalTransform × 1)\
+    \n    RemoteTransform × 3 processors";
     assert_eq!(expect, actual);
 
     let mut stream = pipeline.execute().await?;
