@@ -120,7 +120,6 @@ impl Flight for FlightService {
             ExecuteAction::ExecutePlan(action) => {
                 let plan = action.plan;
                 let cpus = self.conf.num_cpus;
-                let conf = self.conf.clone();
                 let cluster = self.cluster.clone();
                 let session_manager = self.session_manager.clone();
                 let (sender, receiver): (FlightDataSender, FlightDataReceiver) = mpsc::channel(2);
@@ -130,44 +129,40 @@ impl Flight for FlightService {
                     self.conf.rpc_api_address, plan
                 );
 
+                // Create the context.
+                let ctx = session_manager
+                    .try_create_context()
+                    .map_err(|e| from_fuse_err(&e))?
+                    .with_cluster(cluster.clone())
+                    .map_err(|e| from_fuse_err(&e))?;
+                ctx.set_max_threads(cpus).map_err(|e| from_fuse_err(&e))?;
+
+                // Pipeline.
+                let mut pipeline = PipelineBuilder::create(ctx.clone(), plan.clone())
+                    .build()
+                    .map_err(|e| from_fuse_err(&e))?;
+                let mut stream = pipeline.execute().await.map_err(|e| from_fuse_err(&e))?;
+
                 tokio::spawn(async move {
-                    // Create the context from manager.
-                    let ctx = session_manager
-                        .try_create_context()?
-                        .with_cluster(cluster.clone())?;
-                    ctx.set_max_threads(cpus)?;
-
-                    // Pipeline stream.
-                    let mut pipeline =
-                        PipelineBuilder::create(ctx.clone(), plan.clone()).build()?;
-
-                    debug!(
-                        "flight_service:{} pipeline:{:?}",
-                        conf.rpc_api_address, pipeline
-                    );
-
-                    let mut stream = pipeline.execute().await?;
-
                     let options = arrow::ipc::writer::IpcWriteOptions::default();
-
                     let mut has_send = false;
                     // Get the batch from the stream and send to one channel.
                     while let Some(item) = stream.next().await {
-                        let block = item?;
+                        let block = item.unwrap();
                         if !has_send {
                             let schema_flight_data =
                                 arrow_flight::utils::flight_data_from_arrow_schema(
                                     block.schema(),
                                     &options,
                                 );
-                            sender.send(Ok(schema_flight_data)).await?;
+                            sender.send(Ok(schema_flight_data)).await.ok();
                             has_send = true;
                         }
 
                         // Check block is empty.
                         if !block.is_empty() {
                             // Convert batch to flight data.
-                            let batch = block.to_arrow_batch()?;
+                            let batch = match_async_result!(block.to_arrow_batch(), sender);
                             let (flight_dicts, flight_batch) =
                                 arrow_flight::utils::flight_data_from_arrow_batch(&batch, &options);
                             let batch_flight_data = flight_dicts
@@ -176,13 +171,12 @@ impl Flight for FlightService {
                                 .map(Ok);
 
                             for batch in batch_flight_data {
-                                send_response(&sender, batch.clone()).await?;
+                                send_response(&sender, batch.clone()).await.ok();
                             }
                         }
                     }
                     // Remove the context from the manager.
-                    session_manager.try_remove_context(ctx.clone())?;
-                    Ok::<(), FuseQueryError>(())
+                    session_manager.try_remove_context(ctx.clone()).ok();
                 });
 
                 Ok(Response::new(
@@ -235,4 +229,8 @@ async fn send_response(
     tx.send(data)
         .await
         .map_err(|e| Status::internal(format!("{:?}", e)))
+}
+
+fn from_fuse_err(e: &FuseQueryError) -> Status {
+    Status::internal(format!("FuseQuery Error: {:?}", e))
 }

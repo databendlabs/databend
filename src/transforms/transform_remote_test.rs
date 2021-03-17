@@ -32,3 +32,27 @@ async fn test_transform_remote_with_local() -> crate::error::FuseQueryResult<()>
     }
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_transform_remote() -> crate::error::FuseQueryResult<()> {
+    use futures::stream::StreamExt;
+
+    use crate::datavalues::*;
+    use crate::processors::*;
+    use crate::sql::*;
+
+    let ctx = crate::tests::try_create_context_with_nodes(3).await?;
+    let plan = PlanParser::create(ctx.clone())
+        .build_from_sql("select sum(number+1)+2 as sumx from system.numbers_mt(80000)")?;
+    let mut pipeline = PipelineBuilder::create(ctx, plan).build()?;
+
+    let mut stream = pipeline.execute().await?;
+    while let Some(v) = stream.next().await {
+        let v = v?;
+        println!("{:?}", v);
+        let actual = v.column(0).as_any().downcast_ref::<UInt64Array>().unwrap();
+        let expect = &UInt64Array::from(vec![99]);
+        assert_eq!(expect.clone(), actual.clone());
+    }
+    Ok(())
+}
