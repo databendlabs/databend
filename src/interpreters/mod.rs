@@ -7,6 +7,7 @@ mod interpreter_select_test;
 mod interpreter_setting_test;
 
 mod interpreter;
+mod interpreter_create;
 mod interpreter_explain;
 mod interpreter_factory;
 mod interpreter_select;

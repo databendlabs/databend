@@ -7,8 +7,8 @@ use std::sync::Arc;
 use crate::datavalues::{DataSchema, DataSchemaRef};
 use crate::error::FuseQueryResult;
 use crate::planners::{
-    AggregatorFinalPlan, AggregatorPartialPlan, EmptyPlan, ExplainPlan, FilterPlan, LimitPlan,
-    ProjectionPlan, ReadDataSourcePlan, ScanPlan, SelectPlan, SettingPlan, StagePlan,
+    AggregatorFinalPlan, AggregatorPartialPlan, CreatePlan, EmptyPlan, ExplainPlan, FilterPlan,
+    LimitPlan, ProjectionPlan, ReadDataSourcePlan, ScanPlan, SelectPlan, SettingPlan, StagePlan,
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -24,6 +24,7 @@ pub enum PlanNode {
     ReadSource(ReadDataSourcePlan),
     Explain(ExplainPlan),
     Select(SelectPlan),
+    Create(CreatePlan),
     SetVariable(SettingPlan),
 }
 
@@ -43,6 +44,7 @@ impl PlanNode {
             PlanNode::Select(v) => v.schema(),
             PlanNode::Explain(v) => v.schema(),
             PlanNode::SetVariable(v) => v.schema(),
+            PlanNode::Create(v) => v.schema(),
         }
     }
 
@@ -60,6 +62,7 @@ impl PlanNode {
             PlanNode::Select(_) => "SelectPlan",
             PlanNode::Explain(_) => "ExplainPlan",
             PlanNode::SetVariable(_) => "SetVariablePlan",
+            PlanNode::Create(_) => "CreatePlan",
         }
     }
 
@@ -73,10 +76,8 @@ impl PlanNode {
             PlanNode::Limit(v) => v.input(),
             PlanNode::Explain(v) => v.input(),
             PlanNode::Select(v) => v.input(),
-            PlanNode::SetVariable(_)
-            | PlanNode::Empty(_)
-            | PlanNode::Scan(_)
-            | PlanNode::ReadSource(_) => Arc::new(PlanNode::Empty(EmptyPlan {
+
+            _ => Arc::new(PlanNode::Empty(EmptyPlan {
                 schema: Arc::new(DataSchema::empty()),
             })),
         }
@@ -92,10 +93,8 @@ impl PlanNode {
             PlanNode::Limit(v) => v.set_input(node),
             PlanNode::Explain(v) => v.set_input(node),
             PlanNode::Select(v) => v.set_input(node),
-            PlanNode::Scan(_)
-            | PlanNode::Empty(_)
-            | PlanNode::ReadSource(_)
-            | PlanNode::SetVariable(_) => Ok(()),
+
+            _ => Ok(()),
         }
     }
 }

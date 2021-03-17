@@ -6,6 +6,7 @@
 // See NOTICE.md
 
 use crate::planners::DFExplainType;
+use sqlparser::ast::{ObjectName, SqlOption};
 use sqlparser::{
     ast::{ColumnDef, ColumnOptionDef, Statement as SQLStatement, TableConstraint},
     dialect::{keywords::Keyword, Dialect, GenericDialect},
@@ -16,34 +17,43 @@ use sqlparser::{
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
     ($MSG:expr) => {
-        Err(ParserError::ParserError($MSG.to_string()))
+        Err(ParserError::ParserError($MSG.to_string().into()))
     };
 }
 
 /// Types of files to parse as DataFrames
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum FileType {
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum EngineType {
     /// Newline-delimited JSON
-    NdJson,
+    JSONEachRaw,
     /// Apache Parquet columnar storage
     Parquet,
     /// Comma separated values
     Csv,
+    /// Null ENGINE
+    Null,
 }
 
-/// DataFusion extension DDL for `CREATE EXTERNAL TABLE`
+impl ToString for EngineType {
+    fn to_string(&self) -> String {
+        match self {
+            EngineType::JSONEachRaw => "JSON".into(),
+            EngineType::Parquet => "Parquet".into(),
+            EngineType::Csv => "CSV".into(),
+            EngineType::Null => "Null".into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub struct CreateExternalTable {
+pub struct FuseCreateTable {
+    pub if_not_exists: bool,
     /// Table name
-    pub name: String,
+    pub name: ObjectName,
     /// Optional schema
     pub columns: Vec<ColumnDef>,
-    /// File type (Parquet, NDJSON, CSV)
-    pub file_type: FileType,
-    /// CSV Header row?
-    pub has_header: bool,
-    /// Path to file
-    pub location: String,
+    pub engine: EngineType,
+    pub table_properties: Vec<SqlOption>,
 }
 
 /// DataFusion extension DDL for `EXPLAIN` and `EXPLAIN VERBOSE`
@@ -61,10 +71,9 @@ pub struct DFExplainPlan {
 pub enum DFStatement {
     /// ANSI SQL AST node
     Statement(SQLStatement),
-    /// Extension: `CREATE EXTERNAL TABLE`
-    CreateExternalTable(CreateExternalTable),
     /// Extension: `EXPLAIN <SQL>`
     Explain(DFExplainPlan),
+    Create(FuseCreateTable),
 }
 
 /// SQL Parser
@@ -180,15 +189,6 @@ impl<'a> DFParser<'a> {
         Ok(DFStatement::Explain(explain_plan))
     }
 
-    /// Parse a SQL CREATE statement
-    pub fn parse_create(&mut self) -> Result<DFStatement, ParserError> {
-        if self.parser.parse_keyword(Keyword::EXTERNAL) {
-            self.parse_create_external_table()
-        } else {
-            Ok(DFStatement::Statement(self.parser.parse_create()?))
-        }
-    }
-
     // This is a copy of the equivalent implementation in sqlparser.
     fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
         let mut columns = vec![];
@@ -258,41 +258,49 @@ impl<'a> DFParser<'a> {
         })
     }
 
-    fn parse_create_external_table(&mut self) -> Result<DFStatement, ParserError> {
+    fn parse_create(&mut self) -> Result<DFStatement, ParserError> {
         self.parser.expect_keyword(Keyword::TABLE)?;
+        let if_not_exists =
+            self.parser
+                .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parser.parse_object_name()?;
         let (columns, _) = self.parse_columns()?;
-        self.parser
-            .expect_keywords(&[Keyword::STORED, Keyword::AS])?;
+        let engine = self.parse_engine()?;
 
-        // THIS is the main difference: we parse a different file format.
-        let file_type = self.parse_file_format()?;
+        self.parser.consume_token(&Token::Comma);
+        // parse table options: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
+        let table_properties = self
+            .parser
+            .parse_comma_separated(Parser::parse_sql_option)?;
 
-        let has_header = self.parse_csv_has_header();
-
-        self.parser.expect_keyword(Keyword::LOCATION)?;
-        let location = self.parser.parse_literal_string()?;
-
-        let create = CreateExternalTable {
-            name: table_name.to_string(),
+        let create = FuseCreateTable {
+            if_not_exists,
+            name: table_name,
             columns,
-            file_type,
-            has_header,
-            location,
+            engine,
+            table_properties,
         };
-        Ok(DFStatement::CreateExternalTable(create))
+
+        Ok(DFStatement::Create(create))
     }
 
     /// Parses the set of valid formats
-    fn parse_file_format(&mut self) -> Result<FileType, ParserError> {
+    fn parse_engine(&mut self) -> Result<EngineType, ParserError> {
+        // TODO make ENGINE as a keyword
+        if !self.consume_token("ENGINE") {
+            return Ok(EngineType::Null);
+        }
+
+        self.parser.expect_token(&Token::Eq)?;
+
         match self.parser.next_token() {
             Token::Word(w) => match &*w.value {
-                "PARQUET" => Ok(FileType::Parquet),
-                "NDJSON" => Ok(FileType::NdJson),
-                "CSV" => Ok(FileType::Csv),
-                _ => self.expected("one of PARQUET, NDJSON, or CSV", Token::Word(w)),
+                "Parquet" => Ok(EngineType::Parquet),
+                "JSONEachRaw" => Ok(EngineType::JSONEachRaw),
+                "CSV" => Ok(EngineType::Csv),
+                _ => self.expected("one of Parquet, JSONEachRaw, or CSV", Token::Word(w)),
             },
-            unexpected => self.expected("one of PARQUET, NDJSON, or CSV", unexpected),
+            unexpected => self.expected("one of Parquet, JSONEachRaw, or CSV", unexpected),
         }
     }
 
@@ -304,16 +312,12 @@ impl<'a> DFParser<'a> {
             false
         }
     }
-
-    fn parse_csv_has_header(&mut self) -> bool {
-        self.consume_token("WITH") & self.consume_token("HEADER") & self.consume_token("ROW")
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlparser::ast::{DataType, Ident};
+    use sqlparser::ast::{DataType, Ident, Value};
 
     fn expect_parse_ok(sql: &str, expected: DFStatement) -> Result<(), ParserError> {
         let statements = DFParser::parse_sql(sql)?;
@@ -361,34 +365,40 @@ mod tests {
     }
 
     #[test]
-    fn create_external_table() -> Result<(), ParserError> {
+    fn create_table() -> Result<(), ParserError> {
         // positive case
-        let sql = "CREATE EXTERNAL TABLE t(c1 int) STORED AS CSV LOCATION 'foo.csv'";
-        let expected = DFStatement::CreateExternalTable(CreateExternalTable {
-            name: "t".into(),
+        let sql = "CREATE TABLE t(c1 int) ENGINE = CSV location = '/data/33.csv' ";
+        let expected = DFStatement::Create(FuseCreateTable {
+            if_not_exists: false,
+            name: ObjectName(vec![Ident::new("t")]),
             columns: vec![make_column_def("c1", DataType::Int)],
-            file_type: FileType::Csv,
-            has_header: false,
-            location: "foo.csv".into(),
+            engine: EngineType::Csv,
+            table_properties: vec![SqlOption {
+                name: Ident::new("location".to_string()),
+                value: Value::SingleQuotedString("/data/33.csv".into()),
+            }],
         });
         expect_parse_ok(sql, expected)?;
 
         // positive case: it is ok for parquet files not to have columns specified
-        let sql = "CREATE EXTERNAL TABLE t STORED AS PARQUET LOCATION 'foo.parquet'";
-        let expected = DFStatement::CreateExternalTable(CreateExternalTable {
-            name: "t".into(),
-            columns: vec![],
-            file_type: FileType::Parquet,
-            has_header: false,
-            location: "foo.parquet".into(),
+        let sql = "CREATE TABLE t(c1 int) ENGINE = Parquet location = 'foo.parquet' ";
+        let expected = DFStatement::Create(FuseCreateTable {
+            if_not_exists: false,
+            name: ObjectName(vec![Ident::new("t")]),
+            columns: vec![make_column_def("c1", DataType::Int)],
+            engine: EngineType::Parquet,
+            table_properties: vec![SqlOption {
+                name: Ident::new("location".to_string()),
+                value: Value::SingleQuotedString("foo.parquet".into()),
+            }],
         });
         expect_parse_ok(sql, expected)?;
 
         // Error cases: Invalid type
-        let sql = "CREATE EXTERNAL TABLE t(c1 int) STORED AS UNKNOWN_TYPE LOCATION 'foo.csv'";
+        let sql = "CREATE TABLE t(c1 int) ENGINE = XX location = 'foo.parquet' ";
         expect_parse_error(
             sql,
-            "Expected one of PARQUET, NDJSON, or CSV, found: UNKNOWN_TYPE",
+            "Expected one of Parquet, JSONEachRaw, or CSV, found: XX",
         )?;
 
         Ok(())
