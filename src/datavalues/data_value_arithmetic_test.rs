@@ -4,6 +4,8 @@
 
 #[test]
 fn test_data_value_arithmetic() {
+    use pretty_assertions::assert_eq;
+
     use super::*;
 
     #[allow(dead_code)]

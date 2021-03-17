@@ -5,6 +5,7 @@
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_limit() -> crate::error::FuseQueryResult<()> {
     use futures::TryStreamExt;
+    use pretty_assertions::assert_eq;
     use std::sync::Arc;
 
     use crate::planners::*;

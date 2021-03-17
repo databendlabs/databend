@@ -5,6 +5,9 @@
 mod executor_service_test;
 mod flight_service_test;
 
+#[macro_use]
+mod macros;
+
 mod executor_service;
 mod flight_action;
 mod flight_client;
