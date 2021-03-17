@@ -4,6 +4,8 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_executor_service() -> Result<(), Box<dyn std::error::Error>> {
+    use pretty_assertions::assert_eq;
+
     use crate::protobuf::executor_client::ExecutorClient;
     use crate::protobuf::{PingRequest, PingResponse};
 

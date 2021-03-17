@@ -5,6 +5,7 @@
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_service() -> Result<(), Box<dyn std::error::Error>> {
     use futures::TryStreamExt;
+    use pretty_assertions::assert_eq;
 
     use crate::planners::*;
     use crate::rpcs::rpc::*;

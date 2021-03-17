@@ -4,6 +4,8 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_processor_empty() -> crate::error::FuseQueryResult<()> {
+    use pretty_assertions::assert_eq;
+
     use crate::processors::*;
 
     let empty = EmptyProcessor::create();

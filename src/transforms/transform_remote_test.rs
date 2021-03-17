@@ -5,6 +5,7 @@
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_remote_with_local() -> crate::error::FuseQueryResult<()> {
     use futures::stream::StreamExt;
+    use pretty_assertions::assert_eq;
 
     use crate::datavalues::*;
     use crate::planners::*;
