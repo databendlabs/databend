@@ -10,7 +10,7 @@ use futures::stream::StreamExt;
 
 use crate::datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::datavalues::{DataSchemaRef, DataValue, StringArray};
+use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, DataValue, StringArray};
 use crate::error::FuseQueryResult;
 use crate::functions::IFunction;
 use crate::planners::ExpressionPlan;
@@ -79,12 +79,17 @@ impl IProcessor for AggregatorPartialTransform {
             acc_results.push(serialized);
         }
 
+        let partial_schema = Arc::new(DataSchema::new(vec![DataField::new(
+            "partial_result",
+            DataType::Utf8,
+            false,
+        )]));
         let partial_results = acc_results
             .iter()
             .map(|x| x.as_str())
             .collect::<Vec<&str>>();
         let block = DataBlock::create(
-            self.schema.clone(),
+            partial_schema,
             vec![Arc::new(StringArray::from(partial_results))],
         );
         Ok(Box::pin(DataBlockStream::create(

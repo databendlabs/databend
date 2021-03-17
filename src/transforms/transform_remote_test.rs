@@ -34,8 +34,9 @@ async fn test_transform_remote_with_local() -> crate::error::FuseQueryResult<()>
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_transform_remote() -> crate::error::FuseQueryResult<()> {
+async fn test_transform_remote_with_cluster() -> crate::error::FuseQueryResult<()> {
     use futures::stream::StreamExt;
+    use pretty_assertions::assert_eq;
 
     use crate::datavalues::*;
     use crate::processors::*;
@@ -43,15 +44,30 @@ async fn test_transform_remote() -> crate::error::FuseQueryResult<()> {
 
     let ctx = crate::tests::try_create_context_with_nodes(3).await?;
     let plan = PlanParser::create(ctx.clone())
-        .build_from_sql("select sum(number+1)+2 as sumx from system.numbers_mt(80000)")?;
+        .build_from_sql("select sum(number+1)+2 as sumx from system.numbers_mt(100000)")?;
+
+    // Check the distributed plan.
+    let expect = "AggregatorFinal: groupBy=[[]], aggr=[[(sum([(number + 1)]) + 2) as sumx]]\
+    \n  RedistributeStage[state: AggregatorMerge, id: 0]\
+    \n    AggregatorPartial: groupBy=[[]], aggr=[[(sum([(number + 1)]) + 2) as sumx]]\
+    \n      ReadDataSource: scan parts [8](Read from system.numbers_mt table, Read Rows:100000, Read Bytes:800000)";
+    let actual = format!("{:?}", plan);
+    assert_eq!(expect, actual);
+
     let mut pipeline = PipelineBuilder::create(ctx, plan).build()?;
+
+    // Check the distributed pipeline.
+    let expect = format!("{:?}", pipeline);
+    let actual = "AggregatorFinalTransform × 1 processor\
+    \n  Merge (RemoteTransform × 4 processors) to (AggregatorFinalTransform × 1)\
+    \n    RemoteTransform × 4 processors";
+    assert_eq!(expect, actual);
 
     let mut stream = pipeline.execute().await?;
     while let Some(v) = stream.next().await {
         let v = v?;
-        println!("{:?}", v);
+        let expect = &UInt64Array::from(vec![5000050002]);
         let actual = v.column(0).as_any().downcast_ref::<UInt64Array>().unwrap();
-        let expect = &UInt64Array::from(vec![99]);
         assert_eq!(expect.clone(), actual.clone());
     }
     Ok(())
