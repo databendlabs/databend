@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-mod tests;
+mod data_block_test;
 
 pub mod data_block;
 
