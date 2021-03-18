@@ -41,7 +41,7 @@ pub async fn try_create_context_with_nodes(nums: usize) -> FuseQueryResult<FuseQ
     let ctx = crate::tests::try_create_context()?;
     for (i, addr) in addrs.iter().enumerate() {
         ctx.try_get_cluster()?.add_node(&Node {
-            id: format!("node{}", i),
+            name: format!("node{}", i),
             cpus: 4,
             address: addr.clone(),
         })?;

@@ -29,7 +29,7 @@ impl Cluster {
     }
 
     pub fn add_node(&self, node: &Node) -> FuseQueryResult<()> {
-        self.nodes.lock()?.insert(node.id.clone(), node.clone());
+        self.nodes.lock()?.insert(node.name.clone(), node.clone());
         Ok(())
     }
 

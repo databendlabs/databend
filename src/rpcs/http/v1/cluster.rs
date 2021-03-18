@@ -85,7 +85,7 @@ mod handlers {
         // TODO(BohuTANG): error handler
         cluster
             .add_node(&Node {
-                id: req.name,
+                name: req.name,
                 cpus: req.cpus,
                 address: req.address,
             })

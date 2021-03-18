@@ -11,14 +11,14 @@ fn test_cluster() -> crate::error::FuseQueryResult<()> {
     let cluster = Cluster::empty();
 
     let node1 = Node {
-        id: "node1".to_string(),
+        name: "node1".to_string(),
         cpus: 4,
         address: "127.0.0.1:9001".to_string(),
     };
     cluster.add_node(&node1)?;
 
     let node2 = Node {
-        id: "node2".to_string(),
+        name: "node2".to_string(),
         cpus: 8,
         address: "127.0.0.1:9002".to_string(),
     };
