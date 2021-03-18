@@ -9,7 +9,7 @@ bench:
 	cargo bench
 
 run:
-	RUSTFLAGS="-C target-cpu=native" cargo run --release
+	RUST_BACKTRACE=full RUSTFLAGS="-C target-cpu=native" cargo run --release
 
 build:
 	RUSTFLAGS="-C target-cpu=native" cargo build --release
