@@ -16,7 +16,9 @@ pub struct ClusterNodeRequest {
 pub fn cluster_handler(
     cluster: ClusterRef,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    cluster_list_node(cluster.clone()).or(cluster_add_node(cluster))
+    cluster_list_node(cluster.clone())
+        .or(cluster_add_node(cluster.clone()))
+        .or(cluster_remove_node(cluster))
 }
 
 /// GET /v1/cluster/list
@@ -39,6 +41,16 @@ fn cluster_add_node(
         .and_then(handlers::add_node)
 }
 
+fn cluster_remove_node(
+    cluster: ClusterRef,
+) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    warp::path!("v1" / "cluster" / "remove")
+        .and(warp::post())
+        .and(json_body())
+        .and(with_cluster(cluster))
+        .and_then(handlers::remove_node)
+}
+
 fn with_cluster(
     cluster: ClusterRef,
 ) -> impl Filter<Extract = (ClusterRef,), Error = std::convert::Infallible> + Clone {
@@ -52,6 +64,8 @@ fn json_body() -> impl Filter<Extract = (ClusterNodeRequest,), Error = warp::Rej
 }
 
 mod handlers {
+    use log::info;
+
     use crate::clusters::{ClusterRef, Node};
     use crate::rpcs::http::v1::cluster::ClusterNodeRequest;
 
@@ -67,6 +81,7 @@ mod handlers {
         req: ClusterNodeRequest,
         cluster: ClusterRef,
     ) -> Result<impl warp::Reply, std::convert::Infallible> {
+        info!("Cluster add node: {:?}", req);
         // TODO(BohuTANG): error handler
         cluster
             .add_node(&Node {
@@ -75,6 +90,16 @@ mod handlers {
                 address: req.address,
             })
             .unwrap();
+        Ok(warp::http::StatusCode::OK)
+    }
+
+    pub async fn remove_node(
+        req: ClusterNodeRequest,
+        cluster: ClusterRef,
+    ) -> Result<impl warp::Reply, std::convert::Infallible> {
+        info!("Cluster remove node: {:?}", req);
+        // TODO(BohuTANG): error handler
+        cluster.remove_node(req.name).unwrap();
         Ok(warp::http::StatusCode::OK)
     }
 }
