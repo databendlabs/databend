@@ -5,11 +5,76 @@
 use warp::Filter;
 
 use crate::clusters::ClusterRef;
-use crate::error::FuseQueryResult;
 
-pub fn cluster_nodes_handler(
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct ClusterNodeRequest {
+    pub name: String,
+    pub cpus: usize,
+    pub address: String,
+}
+
+pub fn cluster_handler(
     cluster: ClusterRef,
-) -> FuseQueryResult<impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone> {
-    let nodes = cluster.get_nodes()?;
-    Ok(warp::path!("v1" / "cluster" / "nodes").map(move || format!("{:?}", nodes)))
+) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    cluster_list_node(cluster.clone()).or(cluster_add_node(cluster))
+}
+
+/// GET /v1/cluster/list
+fn cluster_list_node(
+    cluster: ClusterRef,
+) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    warp::path!("v1" / "cluster" / "list")
+        .and(warp::get())
+        .and(with_cluster(cluster))
+        .and_then(handlers::list_node)
+}
+
+fn cluster_add_node(
+    cluster: ClusterRef,
+) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    warp::path!("v1" / "cluster" / "add")
+        .and(warp::post())
+        .and(json_body())
+        .and(with_cluster(cluster))
+        .and_then(handlers::add_node)
+}
+
+fn with_cluster(
+    cluster: ClusterRef,
+) -> impl Filter<Extract = (ClusterRef,), Error = std::convert::Infallible> + Clone {
+    warp::any().map(move || cluster.clone())
+}
+
+fn json_body() -> impl Filter<Extract = (ClusterNodeRequest,), Error = warp::Rejection> + Clone {
+    // When accepting a body, we want a JSON body
+    // (and to reject huge payloads)...
+    warp::body::content_length_limit(1024 * 16).and(warp::body::json())
+}
+
+mod handlers {
+    use crate::clusters::{ClusterRef, Node};
+    use crate::rpcs::http::v1::cluster::ClusterNodeRequest;
+
+    pub async fn list_node(
+        cluster: ClusterRef,
+    ) -> Result<impl warp::Reply, std::convert::Infallible> {
+        // TODO(BohuTANG): error handler
+        let nodes = cluster.get_nodes().unwrap();
+        Ok(warp::reply::json(&nodes))
+    }
+
+    pub async fn add_node(
+        req: ClusterNodeRequest,
+        cluster: ClusterRef,
+    ) -> Result<impl warp::Reply, std::convert::Infallible> {
+        // TODO(BohuTANG): error handler
+        cluster
+            .add_node(&Node {
+                id: req.name,
+                cpus: req.cpus,
+                address: req.address,
+            })
+            .unwrap();
+        Ok(warp::http::StatusCode::OK)
+    }
 }

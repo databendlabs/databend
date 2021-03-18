@@ -24,10 +24,12 @@ fn test_cluster() -> crate::error::FuseQueryResult<()> {
     };
     cluster.add_node(&node2)?;
 
-    cluster.remove_node("node1".to_string())?;
+    let cluster_clone = cluster.clone();
+    cluster_clone.remove_node("node1".to_string())?;
+    cluster_clone.remove_node("node2".to_string())?;
 
-    let nodes = cluster.get_nodes()?[0].clone();
+    let nodes = cluster.get_nodes()?;
 
-    assert_eq!(node2, nodes);
+    assert_eq!(0, nodes.len());
     Ok(())
 }
