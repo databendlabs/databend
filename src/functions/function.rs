@@ -2,8 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use dyn_clone::DynClone;
 use std::fmt;
+
+use dyn_clone::DynClone;
 
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};

@@ -2,13 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use log::{debug, error};
-
-use metrics::histogram;
 use std::time::Instant;
 use std::{io, net};
 
 use futures::stream::StreamExt;
+use log::{debug, error};
+use metrics::histogram;
 use msql_srv::*;
 use threadpool::ThreadPool;
 

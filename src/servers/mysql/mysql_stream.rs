@@ -2,12 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use arrow::datatypes::DataType;
+use arrow::util::display::array_value_to_string;
 use msql_srv::*;
 
 use crate::datablocks::DataBlock;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use arrow::datatypes::DataType;
-use arrow::util::display::array_value_to_string;
 
 pub struct MySQLStream {
     blocks: Vec<DataBlock>,

@@ -4,8 +4,9 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_chunk_stream() {
-    use futures::stream::StreamExt;
     use std::sync::Arc;
+
+    use futures::stream::StreamExt;
 
     use crate::datablocks::*;
     use crate::datastreams::*;

@@ -2,9 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::{Arc, Mutex};
+
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
-use std::sync::{Arc, Mutex};
 
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::aggregators::AggregatorFunction;

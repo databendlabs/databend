@@ -4,8 +4,9 @@
 
 #[test]
 fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
-    use pretty_assertions::assert_eq;
     use std::sync::Arc;
+
+    use pretty_assertions::assert_eq;
 
     use crate::planners::*;
 

@@ -5,12 +5,11 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
 
-use prost::Message;
-
 use arrow::datatypes::Schema;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::utils::flight_data_to_arrow_batch;
 use arrow_flight::Ticket;
+use prost::Message;
 
 use crate::datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};

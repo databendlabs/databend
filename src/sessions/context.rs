@@ -4,6 +4,7 @@
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
+
 use uuid::Uuid;
 
 use crate::clusters::{Cluster, ClusterRef};

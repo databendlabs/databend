@@ -4,8 +4,9 @@
 
 #[test]
 fn test_array_aggregate() {
-    use pretty_assertions::assert_eq;
     use std::sync::Arc;
+
+    use pretty_assertions::assert_eq;
 
     use super::*;
 

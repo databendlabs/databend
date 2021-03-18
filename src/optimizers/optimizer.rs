@@ -2,11 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashMap;
+
 use crate::error::FuseQueryResult;
 use crate::optimizers::FilterPushDownOptimizer;
 use crate::planners::{ExpressionPlan, PlanNode};
 use crate::sessions::FuseQueryContextRef;
-use std::collections::HashMap;
 
 pub trait IOptimizer {
     fn name(&self) -> &str;

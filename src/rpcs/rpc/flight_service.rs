@@ -6,15 +6,14 @@ use std::io::Cursor;
 use std::pin::Pin;
 use std::time::Instant;
 
-use log::debug;
-use metrics::histogram;
-
 use arrow_flight::{
     flight_service_server::{FlightService as Flight, FlightServiceServer as FlightServer},
     Action, ActionType, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo,
     HandshakeRequest, HandshakeResponse, PutResult, SchemaResult, Ticket,
 };
 use futures::{Stream, StreamExt};
+use log::debug;
+use metrics::histogram;
 use prost::Message;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};

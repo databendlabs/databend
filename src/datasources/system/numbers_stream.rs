@@ -11,16 +11,15 @@ use std::{
     usize,
 };
 
+use arrow::array::ArrayData;
+use arrow::buffer::Buffer;
+use arrow::datatypes::DataType;
 use futures::stream::Stream;
 
 use crate::datablocks::DataBlock;
 use crate::datavalues::{DataSchemaRef, UInt64Array};
 use crate::error::FuseQueryResult;
 use crate::sessions::FuseQueryContextRef;
-
-use arrow::array::ArrayData;
-use arrow::buffer::Buffer;
-use arrow::datatypes::DataType;
 
 #[derive(Debug, Clone)]
 struct BlockRange {
