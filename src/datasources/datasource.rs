@@ -30,6 +30,8 @@ impl DataSource {
         let mut datasource = DataSource {
             databases: Default::default(),
         };
+        datasource.add_database("default")?;
+
         datasource.register_system_database()?;
         datasource.register_local_database()?;
         datasource.register_remote_database()?;

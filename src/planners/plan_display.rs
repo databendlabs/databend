@@ -92,9 +92,7 @@ impl PlanNode {
                                 write!(f, "{:?}", plan.input())?;
                                 Ok(false)
                             }
-                            PlanNode::Scan(_) | PlanNode::SetVariable(_) | PlanNode::Empty(_) => {
-                                Ok(false)
-                            }
+                            _ => Ok(false),
                         }
                     })
                     .map_err(|_| fmt::Error)?;

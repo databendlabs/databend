@@ -2,18 +2,21 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use arrow::datatypes::{Field, Schema};
 use sqlparser::ast::{FunctionArg, Statement, TableFactor};
 
 use crate::datavalues::{DataSchema, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
-    ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, SelectPlan, SettingPlan, StageState,
-    VarValue,
+    CreatePlan, ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, SelectPlan, SettingPlan,
+    StageState, VarValue,
 };
 use crate::sessions::FuseQueryContextRef;
-use crate::sql::{DFExplainPlan, DFParser, DFStatement};
+use crate::sql::sql_parser::FuseCreateTable;
+use crate::sql::{make_data_type, DFExplainPlan, DFParser, DFStatement};
 
 pub struct PlanParser {
     ctx: FuseQueryContextRef,
@@ -38,9 +41,7 @@ impl PlanParser {
         match statement {
             DFStatement::Statement(v) => self.sql_statement_to_plan(&v),
             DFStatement::Explain(v) => self.sql_explain_to_plan(&v),
-            _ => Err(FuseQueryError::build_internal_error(
-                "Only [SELECT|CREATE|EXPLAIN] Statement are implemented".to_string(),
-            )),
+            DFStatement::Create(v) => self.sql_create_to_plan(&v),
         }
     }
 
@@ -67,6 +68,43 @@ impl PlanParser {
         Ok(PlanNode::Explain(ExplainPlan {
             typ: explain.typ,
             input: Arc::new(plan),
+        }))
+    }
+
+    pub fn sql_create_to_plan(&self, create: &FuseCreateTable) -> FuseQueryResult<PlanNode> {
+        let mut db = self.ctx.get_default_db()?;
+        if create.name.0.is_empty() {
+            return Err(FuseQueryError::build_internal_error(
+                "Create table name is empty".into(),
+            ));
+        }
+        let mut table = create.name.0[0].value.clone();
+        if create.name.0.len() > 1 {
+            db = table;
+            table = create.name.0[1].value.clone();
+        }
+
+        let mut fields = vec![];
+        for col in create.columns.iter() {
+            fields.push(Field::new(
+                &col.name.value,
+                make_data_type(&col.data_type)?,
+                false,
+            ));
+        }
+
+        let mut options = HashMap::new();
+        for p in create.table_properties.iter() {
+            options.insert(p.name.value.to_lowercase(), p.value.to_string());
+        }
+
+        Ok(PlanNode::Create(CreatePlan {
+            if_not_exists: create.if_not_exists,
+            db,
+            table,
+            schema: Arc::new(Schema::new(fields)),
+            engine: create.engine,
+            options,
         }))
     }
 

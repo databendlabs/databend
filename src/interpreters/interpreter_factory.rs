@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use crate::error::{FuseQueryError, FuseQueryResult};
+use crate::interpreters::interpreter_create::CreateInterpreter;
 use crate::interpreters::{
     ExplainInterpreter, IInterpreter, SelectInterpreter, SettingInterpreter,
 };
@@ -17,6 +18,7 @@ impl InterpreterFactory {
     pub fn get(ctx: FuseQueryContextRef, plan: PlanNode) -> FuseQueryResult<Arc<dyn IInterpreter>> {
         match plan {
             PlanNode::Select(v) => SelectInterpreter::try_create(ctx, v),
+            PlanNode::Create(v) => CreateInterpreter::try_create(ctx, v),
             PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx, v),
             _ => Err(FuseQueryError::build_internal_error(format!(

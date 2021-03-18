@@ -11,8 +11,10 @@ mod remote;
 mod statistics;
 mod system;
 mod table;
+mod table_factory;
 
 pub use datasource::{DataSource, IDataSource};
 pub use partition::{Partition, Partitions};
 pub use statistics::Statistics;
 pub use table::ITable;
+pub use table_factory::TableFactory;
