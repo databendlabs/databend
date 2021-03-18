@@ -7,7 +7,7 @@ mod tests {
     use sqlparser::ast::{ColumnDef, DataType, Ident, ObjectName, SqlOption, Value};
     use sqlparser::parser::ParserError;
 
-    use crate::sql::sql_parser::FuseCreateTable;
+    use crate::sql::sql_parser::{FuseCreateTable, FuseShowSettings, FuseShowTables};
     use crate::sql::{DFParser, DFStatement, EngineType};
 
     fn expect_parse_ok(sql: &str, expected: DFStatement) -> Result<(), ParserError> {
@@ -95,6 +95,15 @@ mod tests {
             sql,
             "Expected one of Parquet, JSONEachRaw, Null or CSV, found: XX",
         )?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn show_queries() -> Result<(), ParserError> {
+        // positive case
+        expect_parse_ok("SHOW TABLES", DFStatement::ShowTables(FuseShowTables))?;
+        expect_parse_ok("SHOW SETTINGS", DFStatement::ShowSettings(FuseShowSettings))?;
 
         Ok(())
     }

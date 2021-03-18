@@ -57,6 +57,11 @@ pub struct FuseCreateTable {
     pub table_properties: Vec<SqlOption>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct FuseShowTables;
+#[derive(Debug, Clone, PartialEq)]
+pub struct FuseShowSettings;
+
 /// DataFusion extension DDL for `EXPLAIN` and `EXPLAIN VERBOSE`
 #[derive(Debug, Clone, PartialEq)]
 pub struct DFExplainPlan {
@@ -75,6 +80,8 @@ pub enum DFStatement {
     /// Extension: `EXPLAIN <SQL>`
     Explain(DFExplainPlan),
     Create(FuseCreateTable),
+    ShowTables(FuseShowTables),
+    ShowSettings(FuseShowSettings),
 }
 
 /// SQL Parser
@@ -152,6 +159,18 @@ impl<'a> DFParser<'a> {
                     Keyword::EXPLAIN => {
                         self.parser.next_token();
                         self.parse_explain()
+                    }
+
+                    Keyword::SHOW => {
+                        self.parser.next_token();
+
+                        if self.consume_token("TABLES") {
+                            Ok(DFStatement::ShowTables(FuseShowTables))
+                        } else if self.consume_token("SETTINGS") {
+                            Ok(DFStatement::ShowSettings(FuseShowSettings))
+                        } else {
+                            self.expected("tables or settings", self.parser.peek_token())
+                        }
                     }
                     _ => {
                         // use the native parser

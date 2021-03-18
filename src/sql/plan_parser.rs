@@ -42,6 +42,16 @@ impl PlanParser {
             DFStatement::Statement(v) => self.sql_statement_to_plan(&v),
             DFStatement::Explain(v) => self.sql_explain_to_plan(&v),
             DFStatement::Create(v) => self.sql_create_to_plan(&v),
+
+            // TODO: support like and other filters in show queries
+            DFStatement::ShowTables(_) => self.build_from_sql(
+                format!(
+                    "SELECT name FROM system.tables where database = '{}'",
+                    self.ctx.get_default_db()?
+                )
+                .as_str(),
+            ),
+            DFStatement::ShowSettings(_) => self.build_from_sql("SELECT name FROM system.settings"),
         }
     }
 
