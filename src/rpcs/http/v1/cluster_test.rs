@@ -40,14 +40,6 @@ async fn test_cluster() -> crate::error::FuseQueryResult<()> {
         assert_eq!(200, res.await.status());
     }
 
-    // Check.
-    {
-        let res = warp::test::request()
-            .path("/v1/cluster/list")
-            .reply(&filter);
-        assert_eq!("[{\"name\":\"9090\",\"cpus\":4,\"address\":\"127.0.0.1:9090\"},{\"name\":\"9091\",\"cpus\":4,\"address\":\"127.0.0.1:9091\"}]", res.await.body());
-    }
-
     // Remove.
     {
         // Add node.
