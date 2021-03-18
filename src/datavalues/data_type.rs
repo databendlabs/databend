@@ -2,10 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::cmp;
+
+use arrow::datatypes;
+
 use crate::datavalues::DataValueArithmeticOperator;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use arrow::datatypes;
-use std::cmp;
 
 pub type DataType = datatypes::DataType;
 

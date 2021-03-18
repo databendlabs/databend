@@ -3,13 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use futures::stream::StreamExt;
-
 use fuse_query::error::FuseQueryResult;
 use fuse_query::interpreters::SelectInterpreter;
 use fuse_query::planners::PlanNode;
 use fuse_query::sessions::FuseQueryContext;
 use fuse_query::sql::PlanParser;
+use futures::stream::StreamExt;
 
 async fn pipeline_executor(sql: &str) -> FuseQueryResult<()> {
     let ctx = FuseQueryContext::try_create()?;

@@ -2,13 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
+use arrow::datatypes::Schema;
+
 use crate::datasources::Statistics;
 use crate::datavalues::DataSchema;
 use crate::error::FuseQueryResult;
 use crate::planners::{EmptyPlan, PlanNode, ReadDataSourcePlan};
 use crate::sessions::FuseQueryContextRef;
-use arrow::datatypes::Schema;
-use std::sync::Arc;
 
 pub struct PlanScheduler {}
 

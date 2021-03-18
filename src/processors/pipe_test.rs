@@ -4,8 +4,9 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_pipe() -> crate::error::FuseQueryResult<()> {
-    use pretty_assertions::assert_eq;
     use std::sync::Arc;
+
+    use pretty_assertions::assert_eq;
 
     use crate::processors::*;
 

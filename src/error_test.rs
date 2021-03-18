@@ -19,8 +19,9 @@ fn test_build_errors() {
 fn test_from_error() {
     use std::str::FromStr;
 
-    use crate::error::*;
     use arrow::error::ArrowError;
+
+    use crate::error::*;
 
     let e: FuseQueryError = ArrowError::MemoryError("Out Of Memory".into()).into();
     assert_eq!(

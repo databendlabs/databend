@@ -4,9 +4,10 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn transform_source_test() -> crate::error::FuseQueryResult<()> {
+    use std::sync::Arc;
+
     use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
-    use std::sync::Arc;
 
     use crate::processors::*;
 
