@@ -2,10 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+mod clusters_table_test;
 mod functions_table_test;
 mod settings_table_test;
 mod tables_table_test;
 
+mod clusters_table;
 mod functions_table;
 mod numbers_stream;
 mod numbers_table;
@@ -14,6 +16,7 @@ mod settings_table;
 mod system_factory;
 mod tables_table;
 
+pub use clusters_table::ClustersTable;
 pub use functions_table::FunctionsTable;
 pub use numbers_stream::NumbersStream;
 pub use numbers_table::NumbersTable;
