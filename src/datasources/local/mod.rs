@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 mod local_factory;
-mod null;
+mod null_table;
 
-mod null_test;
+mod null_table_test;
 
 pub use local_factory::LocalFactory;
-pub use null::NullTable;
+pub use null_table::NullTable;

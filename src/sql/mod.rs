@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+mod sql_parser_test;
+
 mod plan_parser;
 mod sql_parser;
 mod util;
