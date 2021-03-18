@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Node {
-    pub id: String,
+    pub name: String,
     pub cpus: usize,
     pub address: String,
 }

@@ -22,11 +22,10 @@ impl Router {
         &self,
     ) -> FuseQueryResult<impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone>
     {
-        let config_handler = super::v1::config::config_handler(self.cfg.clone())?;
-        let hello_handler = super::v1::hello::hello_handler(self.cfg.clone())?;
-        let cluster_nodes_handler =
-            super::v1::cluster::cluster_nodes_handler(self.cluster.clone())?;
-        let v1 = config_handler.or(hello_handler).or(cluster_nodes_handler);
-        Ok(v1)
+        let v1 = super::v1::hello::hello_handler(self.cfg.clone())
+            .or(super::v1::config::config_handler(self.cfg.clone()))
+            .or(super::v1::cluster::cluster_handler(self.cluster.clone()));
+        let routes = v1.with(warp::log("v1"));
+        Ok(routes)
     }
 }
