@@ -4,9 +4,10 @@
 
 use std::sync::Arc;
 
+use arrow::array::new_empty_array;
+
 use crate::datavalues::{DataArrayRef, DataSchema, DataSchemaRef};
 use crate::error::FuseQueryResult;
-use arrow::array::new_empty_array;
 
 #[derive(Debug, Clone)]
 pub struct DataBlock {
