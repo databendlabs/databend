@@ -2,42 +2,33 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
-use std::sync::Arc;
 
 use crate::datablocks::DataBlock;
 use crate::datasources::table_factory::TableCreatorFactory;
 use crate::datasources::{ITable, Partition, Statistics};
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, StringArray};
+use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::planners::{PlanNode, ReadDataSourcePlan, TableOptions};
 use crate::sessions::FuseQueryContextRef;
-use arrow::datatypes::SchemaRef;
 
 pub struct NullTable {
-    ctx: FuseQueryContextRef,
     db: String,
     name: String,
     schema: DataSchemaRef,
-    options: TableOptions,
 }
 
 impl NullTable {
     pub fn try_create(
-        ctx: FuseQueryContextRef,
+        _ctx: FuseQueryContextRef,
         db: String,
         name: String,
         schema: SchemaRef,
-        options: TableOptions,
+        _options: TableOptions,
     ) -> FuseQueryResult<Box<dyn ITable>> {
-        let table = Self {
-            ctx,
-            db,
-            name,
-            schema,
-            options,
-        };
+        let table = Self { db, name, schema };
         Ok(Box::new(table))
     }
 
@@ -80,14 +71,8 @@ impl ITable for NullTable {
         })
     }
 
-    async fn read(&self, ctx: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
-        let database_tables = ctx.get_datasource().lock()?.list_database_tables();
-
-        let databases: Vec<&str> = database_tables.iter().map(|(d, _)| d.as_str()).collect();
-        let names: Vec<&str> = database_tables.iter().map(|(_, v)| v.name()).collect();
-        let engines: Vec<&str> = database_tables.iter().map(|(_, v)| v.engine()).collect();
-
-        let block = DataBlock::empty();
+    async fn read(&self, _ctx: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
+        let block = DataBlock::empty_with_schema(self.schema.clone());
 
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),

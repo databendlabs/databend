@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use crate::datavalues::{DataArrayRef, DataSchema, DataSchemaRef};
 use crate::error::FuseQueryResult;
+use arrow::array::new_empty_array;
 
 #[derive(Debug, Clone)]
 pub struct DataBlock {
@@ -30,6 +31,14 @@ impl DataBlock {
             schema: Arc::new(DataSchema::empty()),
             columns: vec![],
         }
+    }
+
+    pub fn empty_with_schema(schema: DataSchemaRef) -> Self {
+        let mut columns = vec![];
+        for f in schema.fields().iter() {
+            columns.push(new_empty_array(f.data_type()))
+        }
+        DataBlock { schema, columns }
     }
 
     pub fn to_arrow_batch(&self) -> FuseQueryResult<arrow::record_batch::RecordBatch> {

@@ -2,13 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
+use std::collections::HashMap;
 
 use crate::datavalues::DataSchemaRef;
-use crate::error::FuseQueryResult;
-use crate::planners::{ExpressionPlan, PlanNode};
 use crate::sql::EngineType;
-use std::collections::HashMap;
 
 pub type TableOptions = HashMap<String, String>;
 

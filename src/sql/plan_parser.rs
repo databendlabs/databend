@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use arrow::datatypes::{Field, Schema};
 use sqlparser::ast::{FunctionArg, Statement, TableFactor};
 
 use crate::datavalues::{DataSchema, DataValue};
@@ -15,8 +17,6 @@ use crate::planners::{
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::sql_parser::FuseCreateTable;
 use crate::sql::{make_data_type, DFExplainPlan, DFParser, DFStatement};
-use arrow::datatypes::{Field, Schema};
-use std::collections::HashMap;
 
 pub struct PlanParser {
     ctx: FuseQueryContextRef,
@@ -42,9 +42,6 @@ impl PlanParser {
             DFStatement::Statement(v) => self.sql_statement_to_plan(&v),
             DFStatement::Explain(v) => self.sql_explain_to_plan(&v),
             DFStatement::Create(v) => self.sql_create_to_plan(&v),
-            _ => Err(FuseQueryError::build_internal_error(
-                "Only [SELECT|CREATE|EXPLAIN] Statement are implemented".to_string(),
-            )),
         }
     }
 

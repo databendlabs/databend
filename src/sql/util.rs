@@ -1,8 +1,8 @@
-use crate::datavalues::DataType;
-use crate::error::{FuseQueryError, FuseQueryResult};
 use arrow::datatypes::TimeUnit;
 use sqlparser::ast::DataType as SQLDataType;
-use sqlparser::parser::ParserError;
+
+use crate::datavalues::DataType;
+use crate::error::{FuseQueryError, FuseQueryResult};
 
 /// Maps the SQL type to the corresponding Arrow `DataType`
 pub fn make_data_type(sql_type: &SQLDataType) -> FuseQueryResult<DataType> {

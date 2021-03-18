@@ -5,14 +5,15 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See NOTICE.md
 
-use crate::planners::DFExplainType;
-use sqlparser::ast::{ObjectName, SqlOption};
+use sqlparser::ast::{Ident, ObjectName, SqlOption, Value};
 use sqlparser::{
     ast::{ColumnDef, ColumnOptionDef, Statement as SQLStatement, TableConstraint},
     dialect::{keywords::Keyword, Dialect, GenericDialect},
     parser::{Parser, ParserError},
     tokenizer::{Token, Tokenizer},
 };
+
+use crate::planners::DFExplainType;
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
@@ -224,6 +225,35 @@ impl<'a> DFParser<'a> {
         Ok((columns, constraints))
     }
 
+    /// This is a copy from sqlparser
+    /// Parse a literal value (numbers, strings, date/time, booleans)
+    fn parse_value(&mut self) -> Result<Value, ParserError> {
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::TRUE => Ok(Value::Boolean(true)),
+                Keyword::FALSE => Ok(Value::Boolean(false)),
+                Keyword::NULL => Ok(Value::Null),
+                Keyword::NoKeyword if w.quote_style.is_some() => match w.quote_style {
+                    Some('"') => Ok(Value::DoubleQuotedString(w.value)),
+                    Some('\'') => Ok(Value::SingleQuotedString(w.value)),
+                    _ => self.expected("A value?", Token::Word(w))?,
+                },
+                _ => self.expected("a concrete value", Token::Word(w)),
+            },
+            // The call to n.parse() returns a bigdecimal when the
+            // bigdecimal feature is enabled, and is otherwise a no-op
+            // (i.e., it returns the input string).
+            Token::Number(ref n, l) => match n.parse() {
+                Ok(n) => Ok(Value::Number(n, l)),
+                Err(e) => parser_err!(format!("Could not parse '{}' as number: {}", n, e)),
+            },
+            Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
+            Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
+            Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
+            unexpected => self.expected("a value", unexpected),
+        }
+    }
+
     fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
         let name = self.parser.parse_identifier()?;
         let data_type = self.parser.parse_data_type()?;
@@ -267,11 +297,17 @@ impl<'a> DFParser<'a> {
         let (columns, _) = self.parse_columns()?;
         let engine = self.parse_engine()?;
 
-        self.parser.consume_token(&Token::Comma);
+        let mut table_properties = vec![];
+
         // parse table options: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
-        let table_properties = self
-            .parser
-            .parse_comma_separated(Parser::parse_sql_option)?;
+        if self.consume_token("LOCATION") {
+            self.parser.expect_token(&Token::Eq)?;
+            let value = self.parse_value()?;
+            table_properties.push(SqlOption {
+                name: Ident::new("LOCATION"),
+                value,
+            })
+        }
 
         let create = FuseCreateTable {
             if_not_exists,
@@ -298,14 +334,15 @@ impl<'a> DFParser<'a> {
                 "Parquet" => Ok(EngineType::Parquet),
                 "JSONEachRaw" => Ok(EngineType::JSONEachRaw),
                 "CSV" => Ok(EngineType::Csv),
-                _ => self.expected("one of Parquet, JSONEachRaw, or CSV", Token::Word(w)),
+                "Null" => Ok(EngineType::Null),
+                _ => self.expected("one of Parquet, JSONEachRaw, Null or CSV", Token::Word(w)),
             },
-            unexpected => self.expected("one of Parquet, JSONEachRaw, or CSV", unexpected),
+            unexpected => self.expected("one of Parquet, JSONEachRaw, Null or CSV", unexpected),
         }
     }
 
     fn consume_token(&mut self, expected: &str) -> bool {
-        if self.parser.peek_token().to_string() == *expected {
+        if self.parser.peek_token().to_string().to_uppercase() == *expected.to_uppercase() {
             self.parser.next_token();
             true
         } else {
@@ -316,8 +353,9 @@ impl<'a> DFParser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use sqlparser::ast::{DataType, Ident, Value};
+
+    use super::*;
 
     fn expect_parse_ok(sql: &str, expected: DFStatement) -> Result<(), ParserError> {
         let statements = DFParser::parse_sql(sql)?;
@@ -374,7 +412,7 @@ mod tests {
             columns: vec![make_column_def("c1", DataType::Int)],
             engine: EngineType::Csv,
             table_properties: vec![SqlOption {
-                name: Ident::new("location".to_string()),
+                name: Ident::new("LOCATION".to_string()),
                 value: Value::SingleQuotedString("/data/33.csv".into()),
             }],
         });
@@ -388,7 +426,7 @@ mod tests {
             columns: vec![make_column_def("c1", DataType::Int)],
             engine: EngineType::Parquet,
             table_properties: vec![SqlOption {
-                name: Ident::new("location".to_string()),
+                name: Ident::new("LOCATION".to_string()),
                 value: Value::SingleQuotedString("foo.parquet".into()),
             }],
         });
@@ -398,7 +436,7 @@ mod tests {
         let sql = "CREATE TABLE t(c1 int) ENGINE = XX location = 'foo.parquet' ";
         expect_parse_error(
             sql,
-            "Expected one of Parquet, JSONEachRaw, or CSV, found: XX",
+            "Expected one of Parquet, JSONEachRaw, Null or CSV, found: XX",
         )?;
 
         Ok(())
