@@ -58,9 +58,9 @@ Note:
 - [x] Aggregate
 - [x] Functions
 - [x] Filter Push-Down
+- [x] Work-Stealing Distributed Query Engine
 - [ ] Projection Push-Down (TODO)
 - [ ] Limit Push-Down (TODO)
-- [ ] Work-Stealing Distributed Query Engine (WIP)
 - [ ] Sorting (TODO)
 - [ ] SubQueries (TODO)
 - [ ] Joins (TODO)
@@ -82,7 +82,7 @@ Note:
 ## Roadmap
 
 - [x] 0.1 support aggregation select
-- [ ] 0.2 support distributed query (WIP)
+- [x] 0.2 support distributed query
 - [ ] 0.3 support order by
 - [ ] 0.5 support group by
 - [ ] 0.6 support sub queries
