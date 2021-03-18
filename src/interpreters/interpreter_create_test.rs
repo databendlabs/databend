@@ -7,6 +7,7 @@ async fn test_explain_interpreter() -> crate::error::FuseQueryResult<()> {
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
+    use crate::datavalues::DataType;
     use crate::interpreters::*;
     use crate::planners::*;
     use crate::sql::*;
@@ -14,10 +15,16 @@ async fn test_explain_interpreter() -> crate::error::FuseQueryResult<()> {
     let ctx = crate::tests::try_create_context()?;
 
     if let PlanNode::Create(plan) = PlanParser::create(ctx.clone())
-        .build_from_sql("create table default.a(a bigint, b int) Engine = Null")?
+        .build_from_sql("create table default.a(a bigint, b int, c varchar(255), d smallint, e Date ) Engine = Null")?
     {
-        let executor = CreateInterpreter::try_create(ctx, plan)?;
+        let executor = CreateInterpreter::try_create(ctx, plan.clone())?;
         assert_eq!(executor.name(), "CreateInterpreter");
+
+        assert_eq!(plan.schema().field_with_name("a")?.data_type(), &DataType::Int64);
+        assert_eq!(plan.schema().field_with_name("b")?.data_type(), &DataType::Int32);
+        assert_eq!(plan.schema().field_with_name("c")?.data_type(), &DataType::Utf8);
+        assert_eq!(plan.schema().field_with_name("d")?.data_type(), &DataType::Int16);
+        assert_eq!(plan.schema().field_with_name("e")?.data_type(), &DataType::Date32);
 
         let mut stream = executor.execute().await?;
         while let Some(_block) = stream.next().await {}

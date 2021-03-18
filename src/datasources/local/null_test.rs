@@ -21,6 +21,8 @@ async fn test_null_table() -> crate::error::FuseQueryResult<()> {
         TableOptions::default(),
     )?;
     table.read_plan(ctx.clone(), PlanBuilder::empty(ctx.clone()).build()?)?;
+    assert_eq!(table.engine(), "Null");
+
     let stream = table.read(ctx).await?;
     let blocks = stream.try_collect::<Vec<_>>().await?;
     let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();

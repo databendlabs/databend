@@ -419,11 +419,15 @@ mod tests {
         expect_parse_ok(sql, expected)?;
 
         // positive case: it is ok for parquet files not to have columns specified
-        let sql = "CREATE TABLE t(c1 int) ENGINE = Parquet location = 'foo.parquet' ";
+        let sql = "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' ";
         let expected = DFStatement::Create(FuseCreateTable {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("t")]),
-            columns: vec![make_column_def("c1", DataType::Int)],
+            columns: vec![
+                make_column_def("c1", DataType::Int),
+                make_column_def("c2", DataType::BigInt),
+                make_column_def("c3", DataType::Varchar(Some(255))),
+            ],
             engine: EngineType::Parquet,
             table_properties: vec![SqlOption {
                 name: Ident::new("LOCATION".to_string()),
