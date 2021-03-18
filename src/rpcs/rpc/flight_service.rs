@@ -4,8 +4,10 @@
 
 use std::io::Cursor;
 use std::pin::Pin;
+use std::time::Instant;
 
 use log::debug;
+use metrics::histogram;
 
 use arrow_flight::{
     flight_service_server::{FlightService as Flight, FlightServiceServer as FlightServer},
@@ -146,6 +148,8 @@ impl Flight for FlightService {
                 tokio::spawn(async move {
                     let options = arrow::ipc::writer::IpcWriteOptions::default();
                     let mut has_send = false;
+                    let start = Instant::now();
+
                     // Get the batch from the stream and send to one channel.
                     while let Some(item) = stream.next().await {
                         let block = item.unwrap();
@@ -175,6 +179,11 @@ impl Flight for FlightService {
                             }
                         }
                     }
+
+                    // Cost.
+                    let delta = start.elapsed();
+                    histogram!(super::metrics::METRIC_FLIGHT_EXECUTE_COST, delta);
+
                     // Remove the context from the manager.
                     session_manager.try_remove_context(ctx.clone()).ok();
                 });
