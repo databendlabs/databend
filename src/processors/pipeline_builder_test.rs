@@ -39,21 +39,21 @@ async fn test_distributed_pipeline_build() -> crate::error::FuseQueryResult<()> 
 
     // Add node1 to cluster.
     ctx.try_get_cluster()?.add_node(&Node {
-        id: "node1".to_string(),
+        name: "node1".to_string(),
         cpus: 4,
         address: "127.0.0.1:9001".to_string(),
     })?;
 
     // Add node2 to cluster.
     ctx.try_get_cluster()?.add_node(&Node {
-        id: "node2".to_string(),
+        name: "node2".to_string(),
         cpus: 4,
         address: "127.0.0.1:9002".to_string(),
     })?;
 
     // Add node3 to cluster.
     ctx.try_get_cluster()?.add_node(&Node {
-        id: "node3".to_string(),
+        name: "node3".to_string(),
         cpus: 4,
         address: "127.0.0.1:9003".to_string(),
     })?;

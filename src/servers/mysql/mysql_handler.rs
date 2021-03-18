@@ -62,6 +62,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
                 Ok(executor) => {
                     let result: FuseQueryResult<Vec<DataBlock>> =
                         tokio::runtime::Builder::new_multi_thread()
+                            .enable_io()
                             .worker_threads(self.ctx.get_max_threads()? as usize)
                             .build()?
                             .block_on(async move {

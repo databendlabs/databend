@@ -2,8 +2,4 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-mod cluster_test;
-
-pub mod cluster;
-pub mod config;
-pub mod hello;
+pub static METRIC_FLIGHT_EXECUTE_COST: &str = "flight.execute.cost";

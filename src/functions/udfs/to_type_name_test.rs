@@ -4,6 +4,7 @@
 
 #[test]
 fn test_to_type_name_function() -> crate::error::FuseQueryResult<()> {
+    use pretty_assertions::assert_eq;
     use std::sync::Arc;
 
     use crate::datablocks::*;
