@@ -1,0 +1,2 @@
+CREATE TABLE t(c1 int) ENGINE = Null;
+SHOW TABLES;
