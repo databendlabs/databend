@@ -7,7 +7,5 @@ assignees: ''
 
 ---
 
-(you don't have to strictly follow this form)
-
 **Summary**
 Description for this feature.
