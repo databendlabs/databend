@@ -52,18 +52,33 @@ Note:
 
 ## Status
 
-- [x] Projection
-- [x] Filter
-- [x] Limit
-- [x] Aggregate
-- [x] Functions
-- [x] Filter Push-Down
-- [x] Work-Stealing Distributed Query Engine
-- [ ] Projection Push-Down (TODO)
-- [ ] Limit Push-Down (TODO)
-- [ ] Sorting (TODO)
-- [ ] SubQueries (TODO)
+#### General
+
+- [x] SQL Parser
+- [x] Query Planner
+- [x] Query Optimizer
+- [x] Predicate Push Down
+- [ ] Projection Push Down (TODO)
+- [ ] Limit Push Down (TODO)
+- [x] Type coercion
+- [x] Parallel Query Execution
+- [x] Distributed Query Execution
+- [ ] Sorting (WIP)
+- [ ] GroupBy (TODO)
 - [ ] Joins (TODO)
+
+#### SQL Support
+
+- [x] Projection
+- [x] Filter (WHERE)
+- [x] Limit
+- [x] Aggregate Functions
+- [x] Scalar Functions
+- [x] UDF Functions
+- [ ] Sorting (WIP)
+- [ ] SubQueries (TOO)
+- [ ] Joins (TODO)
+- [ ] Window (TODO)
 
 
 ## Getting Started
@@ -81,13 +96,13 @@ Note:
 
 ## Roadmap
 
-- [x] 0.1 support aggregation select
-- [x] 0.2 support distributed query
-- [ ] 0.3 support order by
-- [ ] 0.5 support group by
-- [ ] 0.6 support sub queries
-- [ ] 0.7 support join
-- [ ] 0.8 support TPC-H benchmark
+- [x] 0.1 Support aggregation select (2021.02)
+- [x] 0.2 Support distributed query (2021.03)
+- [ ] 0.3 Support order by
+- [ ] 0.5 Support group by
+- [ ] 0.6 Support sub queries
+- [ ] 0.7 Support join
+- [ ] 0.8 Support TPC-H benchmark
 
 ## Contributing
 
