@@ -133,16 +133,16 @@ impl Flight for FlightService {
                 // Create the context.
                 let ctx = session_manager
                     .try_create_context()
-                    .map_err(|e| from_fuse_err(&e))?
+                    .map_err(fuse_to_tonic_err)?
                     .with_cluster(cluster.clone())
-                    .map_err(|e| from_fuse_err(&e))?;
-                ctx.set_max_threads(cpus).map_err(|e| from_fuse_err(&e))?;
+                    .map_err(fuse_to_tonic_err)?;
+                ctx.set_max_threads(cpus).map_err(fuse_to_tonic_err)?;
 
                 // Pipeline.
                 let mut pipeline = PipelineBuilder::create(ctx.clone(), plan.clone())
                     .build()
-                    .map_err(|e| from_fuse_err(&e))?;
-                let mut stream = pipeline.execute().await.map_err(|e| from_fuse_err(&e))?;
+                    .map_err(fuse_to_tonic_err)?;
+                let mut stream = pipeline.execute().await.map_err(fuse_to_tonic_err)?;
 
                 tokio::spawn(async move {
                     let options = arrow::ipc::writer::IpcWriteOptions::default();
@@ -239,6 +239,6 @@ async fn send_response(
         .map_err(|e| Status::internal(format!("{:?}", e)))
 }
 
-fn from_fuse_err(e: &FuseQueryError) -> Status {
+fn fuse_to_tonic_err(e: FuseQueryError) -> Status {
     Status::internal(format!("FuseQuery Error: {:?}", e))
 }
