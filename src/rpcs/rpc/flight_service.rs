@@ -22,6 +22,7 @@ use tonic::{Request, Response, Status, Streaming};
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
+use crate::error::FuseQueryError;
 use crate::processors::PipelineBuilder;
 use crate::protobuf::ExecuteRequest;
 use crate::rpcs::rpc::ExecuteAction;
@@ -94,27 +95,13 @@ impl Flight for FlightService {
         let mut buf = Cursor::new(&ticket.ticket);
 
         // Decode ExecuteRequest from buffer.
-        let request: ExecuteRequest = match ExecuteRequest::decode(&mut buf) {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(tonic::Status::internal(format!(
-                    "ExecuteRequest decode error: {:?}",
-                    e
-                )))
-            }
-        };
+        let request: ExecuteRequest = ExecuteRequest::decode(&mut buf)
+            .map_err(|e| FuseQueryError::build_internal_error(e.to_string()))?;
 
         // Decode ExecuteAction from request.
         let json_str = request.action.as_str();
-        let action = match serde_json::from_str::<ExecuteAction>(json_str) {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(tonic::Status::internal(format!(
-                    "ExecuteAction:{} decode error: {:?}",
-                    json_str, e
-                )))
-            }
-        };
+        let action = serde_json::from_str::<ExecuteAction>(json_str)
+            .map_err(|e| FuseQueryError::build_internal_error(e.to_string()))?;
 
         match action {
             ExecuteAction::ExecutePlan(action) => {
