@@ -10,7 +10,6 @@ use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::utils::flight_data_to_arrow_batch;
 use arrow_flight::Ticket;
 use prost::Message;
-use tonic::Status;
 
 use crate::datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
@@ -50,14 +49,22 @@ impl FlightClient {
             .client
             .do_get(request)
             .await
-            .map_err(tonic_to_fuse_err)?
+            .map_err(super::error::tonic_to_fuse_err)?
             .into_inner();
 
-        match stream.message().await.map_err(tonic_to_fuse_err)? {
+        match stream
+            .message()
+            .await
+            .map_err(super::error::tonic_to_fuse_err)?
+        {
             Some(flight_data) => {
                 let schema = Arc::new(Schema::try_from(&flight_data)?);
                 let mut blocks = vec![];
-                while let Some(flight_data) = stream.message().await.map_err(tonic_to_fuse_err)? {
+                while let Some(flight_data) = stream
+                    .message()
+                    .await
+                    .map_err(super::error::tonic_to_fuse_err)?
+                {
                     let batch = flight_data_to_arrow_batch(&flight_data, schema.clone(), &[])?;
                     blocks.push(DataBlock::try_from_arrow_batch(&batch)?);
                 }
@@ -69,8 +76,4 @@ impl FlightClient {
             ))),
         }
     }
-}
-
-fn tonic_to_fuse_err(e: Status) -> FuseQueryError {
-    FuseQueryError::build_internal_error(format!("{:?}", e))
 }

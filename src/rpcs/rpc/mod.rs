@@ -8,6 +8,7 @@ mod flight_service_test;
 #[macro_use]
 mod macros;
 
+mod error;
 mod executor_service;
 mod flight_action;
 mod flight_client;
