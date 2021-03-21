@@ -23,14 +23,7 @@ pub struct FlightClient {
 
 impl FlightClient {
     pub async fn try_create(addr: String) -> FuseQueryResult<Self> {
-        let client = FlightServiceClient::connect(format!("http://{}", addr))
-            .await
-            .map_err(|e| {
-                FuseQueryError::build_internal_error(format!(
-                    "Error connecting to flight server: {}, error: {}",
-                    addr, e
-                ))
-            })?;
+        let client = FlightServiceClient::connect(format!("http://{}", addr)).await?;
         Ok(Self { client })
     }
 
@@ -45,26 +38,12 @@ impl FlightClient {
         execute_request.encode(&mut buf)?;
         let request = tonic::Request::new(Ticket { ticket: buf });
 
-        let mut stream = self
-            .client
-            .do_get(request)
-            .await
-            .map_err(super::error::tonic_to_fuse_err)?
-            .into_inner();
-
-        match stream
-            .message()
-            .await
-            .map_err(super::error::tonic_to_fuse_err)?
-        {
+        let mut stream = self.client.do_get(request).await?.into_inner();
+        match stream.message().await? {
             Some(flight_data) => {
                 let schema = Arc::new(Schema::try_from(&flight_data)?);
                 let mut blocks = vec![];
-                while let Some(flight_data) = stream
-                    .message()
-                    .await
-                    .map_err(super::error::tonic_to_fuse_err)?
-                {
+                while let Some(flight_data) = stream.message().await? {
                     let batch = flight_data_to_arrow_batch(&flight_data, schema.clone(), &[])?;
                     blocks.push(DataBlock::try_from_arrow_batch(&batch)?);
                 }

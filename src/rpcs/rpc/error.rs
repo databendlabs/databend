@@ -4,10 +4,42 @@
 
 use crate::error::FuseQueryError;
 
-pub fn fuse_to_tonic_err(e: FuseQueryError) -> tonic::Status {
-    tonic::Status::internal(format!("{:?}", e))
+impl From<serde_json::Error> for FuseQueryError {
+    fn from(err: serde_json::Error) -> Self {
+        FuseQueryError::build_internal_error(err.to_string())
+    }
 }
 
-pub fn tonic_to_fuse_err(e: tonic::Status) -> FuseQueryError {
-    FuseQueryError::build_internal_error(format!("{:?}", e))
+impl From<prost::EncodeError> for FuseQueryError {
+    fn from(err: prost::EncodeError) -> Self {
+        FuseQueryError::build_internal_error(err.to_string())
+    }
+}
+
+impl From<tonic::transport::Error> for FuseQueryError {
+    fn from(err: tonic::transport::Error) -> Self {
+        FuseQueryError::build_internal_error(err.to_string())
+    }
+}
+
+impl From<tonic::Status> for FuseQueryError {
+    fn from(status: tonic::Status) -> Self {
+        FuseQueryError::build_flight_error(status)
+    }
+}
+
+impl From<FuseQueryError> for tonic::Status {
+    fn from(e: FuseQueryError) -> Self {
+        tonic::Status::internal(format!("{:?}", e))
+    }
+}
+
+impl From<tokio::sync::mpsc::error::SendError<Result<arrow_flight::FlightData, tonic::Status>>>
+    for FuseQueryError
+{
+    fn from(
+        err: tokio::sync::mpsc::error::SendError<Result<arrow_flight::FlightData, tonic::Status>>,
+    ) -> Self {
+        FuseQueryError::build_internal_error(err.to_string())
+    }
 }

@@ -131,21 +131,13 @@ impl Flight for FlightService {
 
                 // Create the context.
                 let ctx = session_manager
-                    .try_create_context()
-                    .map_err(super::error::fuse_to_tonic_err)?
-                    .with_cluster(cluster.clone())
-                    .map_err(super::error::fuse_to_tonic_err)?;
-                ctx.set_max_threads(cpus)
-                    .map_err(super::error::fuse_to_tonic_err)?;
+                    .try_create_context()?
+                    .with_cluster(cluster.clone())?;
+                ctx.set_max_threads(cpus)?;
 
                 // Pipeline.
-                let mut pipeline = PipelineBuilder::create(ctx.clone(), plan.clone())
-                    .build()
-                    .map_err(super::error::fuse_to_tonic_err)?;
-                let mut stream = pipeline
-                    .execute()
-                    .await
-                    .map_err(super::error::fuse_to_tonic_err)?;
+                let mut pipeline = PipelineBuilder::create(ctx.clone(), plan.clone()).build()?;
+                let mut stream = pipeline.execute().await?;
 
                 tokio::spawn(async move {
                     let options = arrow::ipc::writer::IpcWriteOptions::default();
