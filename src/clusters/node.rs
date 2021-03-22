@@ -7,4 +7,11 @@ pub struct Node {
     pub name: String,
     pub cpus: usize,
     pub address: String,
+    pub local: bool,
+}
+
+impl Node {
+    pub fn is_local(&self) -> bool {
+        self.local
+    }
 }

@@ -72,7 +72,13 @@ impl FuseQueryContext {
         }
 
         // Try fetching from other nodes if the queue is empty and in cluster mode.
-        if partitions.is_empty() && !self.cluster.lock()?.is_empty()? {}
+        if partitions.is_empty() && !self.cluster.lock()?.is_empty()? {
+            let nodes = self.cluster.lock()?.get_nodes()?;
+            for node in nodes {
+                // Not local node, try to fetch.
+                if !node.is_local() {}
+            }
+        }
 
         Ok(partitions)
     }

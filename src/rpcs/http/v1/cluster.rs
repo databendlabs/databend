@@ -88,6 +88,7 @@ mod handlers {
                 name: req.name,
                 cpus: req.cpus,
                 address: req.address,
+                local: false,
             })
             .unwrap();
         Ok(warp::http::StatusCode::OK)

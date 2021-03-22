@@ -39,6 +39,7 @@ pub async fn try_create_context_with_nodes(nums: usize) -> FuseQueryResult<FuseQ
             name: format!("node{}", i),
             cpus: 4,
             address: addr.clone(),
+            local: false,
         })?;
     }
     Ok(ctx)
