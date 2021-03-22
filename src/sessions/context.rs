@@ -5,12 +5,14 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+use log::info;
 use uuid::Uuid;
 
 use crate::clusters::{Cluster, ClusterRef};
 use crate::datasources::{DataSource, IDataSource, ITable, Partition, Partitions, Statistics};
 use crate::datavalues::DataValue;
 use crate::error::{FuseQueryError, FuseQueryResult};
+use crate::rpcs::rpc::ExecutorClient;
 use crate::sessions::Settings;
 
 #[derive(Clone)]
@@ -73,10 +75,24 @@ impl FuseQueryContext {
 
         // Try fetching from other nodes if the queue is empty and in cluster mode.
         if partitions.is_empty() && !self.cluster.lock()?.is_empty()? {
+            let uuid = self.get_id()?;
             let nodes = self.cluster.lock()?.get_nodes()?;
-            for node in nodes {
+            for node in &nodes {
                 // Not local node, try to fetch.
-                if !node.is_local() {}
+                if !node.is_local() {
+                    let mut parts = async_std::task::block_on(async {
+                        let mut client = ExecutorClient::try_create(node.address.clone()).await?;
+                        client.fetch_partition(1, uuid.clone()).await
+                    })?;
+                    info!(
+                        "Node: {:?} stealing partitions:{:?} from {:?}",
+                        uuid, parts, node
+                    );
+                    if !parts.is_empty() {
+                        partitions.append(parts.as_mut());
+                        break;
+                    }
+                }
             }
         }
 
