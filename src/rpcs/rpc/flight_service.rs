@@ -24,7 +24,7 @@ use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::error::FuseQueryError;
 use crate::processors::PipelineBuilder;
-use crate::protobuf::ExecuteRequest;
+use crate::protobuf::FlightRequest;
 use crate::rpcs::rpc::ExecuteAction;
 use crate::sessions::SessionRef;
 
@@ -94,28 +94,14 @@ impl Flight for FlightService {
         let ticket = request.into_inner();
         let mut buf = Cursor::new(&ticket.ticket);
 
-        // Decode ExecuteRequest from buffer.
-        let request: ExecuteRequest = match ExecuteRequest::decode(&mut buf) {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(tonic::Status::internal(format!(
-                    "ExecuteRequest decode error: {:?}",
-                    e
-                )))
-            }
-        };
+        // Decode FlightRequest from buffer.
+        let request: FlightRequest = FlightRequest::decode(&mut buf)
+            .map_err(|e| FuseQueryError::build_internal_error(e.to_string()))?;
 
         // Decode ExecuteAction from request.
         let json_str = request.action.as_str();
-        let action = match serde_json::from_str::<ExecuteAction>(json_str) {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(tonic::Status::internal(format!(
-                    "ExecuteAction:{} decode error: {:?}",
-                    json_str, e
-                )))
-            }
-        };
+        let action = serde_json::from_str::<ExecuteAction>(json_str)
+            .map_err(|e| FuseQueryError::build_internal_error(e.to_string()))?;
 
         match action {
             ExecuteAction::ExecutePlan(action) => {
@@ -132,17 +118,13 @@ impl Flight for FlightService {
 
                 // Create the context.
                 let ctx = session_manager
-                    .try_create_context()
-                    .map_err(fuse_to_tonic_err)?
-                    .with_cluster(cluster.clone())
-                    .map_err(fuse_to_tonic_err)?;
-                ctx.set_max_threads(cpus).map_err(fuse_to_tonic_err)?;
+                    .try_create_context()?
+                    .with_cluster(cluster.clone())?;
+                ctx.set_max_threads(cpus)?;
 
                 // Pipeline.
-                let mut pipeline = PipelineBuilder::create(ctx.clone(), plan.clone())
-                    .build()
-                    .map_err(fuse_to_tonic_err)?;
-                let mut stream = pipeline.execute().await.map_err(fuse_to_tonic_err)?;
+                let mut pipeline = PipelineBuilder::create(ctx.clone(), plan.clone()).build()?;
+                let mut stream = pipeline.execute().await?;
 
                 tokio::spawn(async move {
                     let options = arrow::ipc::writer::IpcWriteOptions::default();
@@ -237,8 +219,4 @@ async fn send_response(
     tx.send(data)
         .await
         .map_err(|e| Status::internal(format!("{:?}", e)))
-}
-
-fn fuse_to_tonic_err(e: FuseQueryError) -> Status {
-    Status::internal(format!("FuseQuery Error: {:?}", e))
 }

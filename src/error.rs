@@ -39,8 +39,8 @@ pub enum FuseQueryError {
         backtrace: Backtrace,
     },
 
-    #[snafu(display("Grpc Error: {}", status))]
-    GrpcError {
+    #[snafu(display("Flight Error: {}", status))]
+    Flight {
         status: tonic::Status,
         backtrace: Backtrace,
     },
@@ -53,6 +53,10 @@ impl FuseQueryError {
 
     pub fn build_plan_error(message: String) -> FuseQueryError {
         Plan { message }.build()
+    }
+
+    pub fn build_flight_error(status: tonic::Status) -> FuseQueryError {
+        Flight { status }.build()
     }
 }
 
@@ -128,57 +132,10 @@ impl From<tokio::task::JoinError> for FuseQueryError {
     }
 }
 
-impl From<serde_json::Error> for FuseQueryError {
-    fn from(err: serde_json::Error) -> Self {
-        Internal {
-            message: err.to_string(),
-        }
-        .build()
-    }
-}
-
 impl From<std::net::AddrParseError> for FuseQueryError {
     fn from(err: std::net::AddrParseError) -> Self {
         Internal {
             message: err.to_string(),
-        }
-        .build()
-    }
-}
-
-impl From<prost::EncodeError> for FuseQueryError {
-    fn from(err: prost::EncodeError) -> Self {
-        Internal {
-            message: err.to_string(),
-        }
-        .build()
-    }
-}
-
-impl From<tonic::transport::Error> for FuseQueryError {
-    fn from(err: tonic::transport::Error) -> Self {
-        Internal {
-            message: err.to_string(),
-        }
-        .build()
-    }
-}
-
-impl From<tonic::Status> for FuseQueryError {
-    fn from(status: tonic::Status) -> Self {
-        GrpcError { status }.build()
-    }
-}
-
-// Use for flight service.
-impl From<tokio::sync::mpsc::error::SendError<Result<arrow_flight::FlightData, tonic::Status>>>
-    for FuseQueryError
-{
-    fn from(
-        e: tokio::sync::mpsc::error::SendError<Result<arrow_flight::FlightData, tonic::Status>>,
-    ) -> Self {
-        Internal {
-            message: format!("{}", e),
         }
         .build()
     }

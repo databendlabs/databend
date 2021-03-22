@@ -4,10 +4,14 @@
 
 syntax = "proto3";
 
-package fusequery.executor;
+package fuse.executor;
 
 service Executor {
-  rpc Ping(PingRequest) returns (PingResponse) {}
+  // Check server is ok.
+  rpc ping(PingRequest) returns (PingResponse) {}
+
+  // Fetch partition from other nodes.
+  rpc fetch_partition(FetchPartitionRequest) returns (FetchPartitionResponse) {}
 }
 
 message PingRequest {
@@ -18,6 +22,10 @@ message PingResponse {
   string message = 1;
 }
 
-message ExecuteRequest {
-  string action = 1;
+message FetchPartitionRequest {
+  string name = 1;
+}
+
+message FetchPartitionResponse {
+  string message = 1;
 }
