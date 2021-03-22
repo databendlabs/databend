@@ -14,7 +14,7 @@ use prost::Message;
 use crate::datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::protobuf::ExecuteRequest;
+use crate::protobuf::FlightRequest;
 use crate::rpcs::rpc::ExecuteAction;
 
 pub struct FlightClient {
@@ -31,11 +31,11 @@ impl FlightClient {
         &mut self,
         action: &ExecuteAction,
     ) -> FuseQueryResult<SendableDataBlockStream> {
-        let execute_request = ExecuteRequest {
+        let flight_request = FlightRequest {
             action: serde_json::to_string(action)?,
         };
         let mut buf = vec![];
-        execute_request.encode(&mut buf)?;
+        flight_request.encode(&mut buf)?;
         let request = tonic::Request::new(Ticket { ticket: buf });
 
         let mut stream = self.client.do_get(request).await?.into_inner();

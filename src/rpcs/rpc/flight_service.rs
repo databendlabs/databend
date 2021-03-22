@@ -24,7 +24,7 @@ use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::error::FuseQueryError;
 use crate::processors::PipelineBuilder;
-use crate::protobuf::ExecuteRequest;
+use crate::protobuf::FlightRequest;
 use crate::rpcs::rpc::ExecuteAction;
 use crate::sessions::SessionRef;
 
@@ -94,8 +94,8 @@ impl Flight for FlightService {
         let ticket = request.into_inner();
         let mut buf = Cursor::new(&ticket.ticket);
 
-        // Decode ExecuteRequest from buffer.
-        let request: ExecuteRequest = ExecuteRequest::decode(&mut buf)
+        // Decode FlightRequest from buffer.
+        let request: FlightRequest = FlightRequest::decode(&mut buf)
             .map_err(|e| FuseQueryError::build_internal_error(e.to_string()))?;
 
         // Decode ExecuteAction from request.

@@ -1,0 +1,11 @@
+// Copyright 2020-2021 The FuseQuery Authors.
+//
+// Code is licensed under Apache License, Version 2.0.
+
+syntax = "proto3";
+
+package fuse.executor_flight;
+
+message FlightRequest {
+  string action = 1;
+}

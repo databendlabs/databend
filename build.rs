@@ -59,11 +59,13 @@ fn commit_date() -> Option<String> {
 
 fn build_proto() {
     println!("cargo:rerun-if-env-changed=FORCE_REBUILD");
-
-    println!("cargo:rerun-if-changed=proto/executor.proto");
+    println!("cargo:rerun-if-changed=proto/");
 
     tonic_build::configure()
-        .compile(&["proto/executor.proto"], &["proto"])
+        .compile(
+            &["proto/executor.proto", "proto/executor_flight.proto"],
+            &["proto"],
+        )
         .map_err(|e| format!("tonic_build proto compile failed: {}", e))
         .unwrap();
 }
