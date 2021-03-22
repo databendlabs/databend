@@ -63,7 +63,12 @@ fn build_proto() {
 
     tonic_build::configure()
         .compile(
-            &["proto/executor.proto", "proto/executor_flight.proto"],
+            &[
+                "proto/executor.proto",
+                "proto/executor_flight.proto",
+                "proto/fusestore.proto",
+                "proto/fusestore_flight.proto",
+            ],
             &["proto"],
         )
         .map_err(|e| format!("tonic_build proto compile failed: {}", e))
