@@ -14,6 +14,7 @@ fn test_cluster() -> crate::error::FuseQueryResult<()> {
         name: "node1".to_string(),
         cpus: 4,
         address: "127.0.0.1:9001".to_string(),
+        local: false,
     };
     cluster.add_node(&node1)?;
 
@@ -21,6 +22,7 @@ fn test_cluster() -> crate::error::FuseQueryResult<()> {
         name: "node2".to_string(),
         cpus: 8,
         address: "127.0.0.1:9002".to_string(),
+        local: false,
     };
     cluster.add_node(&node2)?;
 

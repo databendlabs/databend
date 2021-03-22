@@ -4,7 +4,7 @@
 
 syntax = "proto3";
 
-package fuse.executor_flight;
+package executor_flight;
 
 message FlightRequest {
   string action = 1;

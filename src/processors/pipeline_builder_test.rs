@@ -30,33 +30,11 @@ async fn test_local_pipeline_build() -> crate::error::FuseQueryResult<()> {
 async fn test_distributed_pipeline_build() -> crate::error::FuseQueryResult<()> {
     use pretty_assertions::assert_eq;
 
-    use crate::clusters::*;
     use crate::processors::*;
     use crate::sql::*;
 
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::try_create_context_with_nodes(3).await?;
     let cpus = ctx.get_max_threads()?;
-
-    // Add node1 to cluster.
-    ctx.try_get_cluster()?.add_node(&Node {
-        name: "node1".to_string(),
-        cpus: 4,
-        address: "127.0.0.1:9001".to_string(),
-    })?;
-
-    // Add node2 to cluster.
-    ctx.try_get_cluster()?.add_node(&Node {
-        name: "node2".to_string(),
-        cpus: 4,
-        address: "127.0.0.1:9002".to_string(),
-    })?;
-
-    // Add node3 to cluster.
-    ctx.try_get_cluster()?.add_node(&Node {
-        name: "node3".to_string(),
-        cpus: 4,
-        address: "127.0.0.1:9003".to_string(),
-    })?;
 
     // For more partitions generation.
     let ctx_more_cpu = crate::tests::try_create_context()?;

@@ -62,36 +62,14 @@ fn test_scheduler_plan_with_more_cpus_1_node() -> crate::error::FuseQueryResult<
     Ok(())
 }
 
-#[test]
-fn test_scheduler_plan_with_3_nodes() -> crate::error::FuseQueryResult<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_scheduler_plan_with_3_nodes() -> crate::error::FuseQueryResult<()> {
     use pretty_assertions::assert_eq;
 
-    use crate::clusters::*;
     use crate::planners::*;
 
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::try_create_context_with_nodes(3).await?;
     let cpus = ctx.get_max_threads()?;
-
-    // Add node1 to cluster.
-    ctx.try_get_cluster()?.add_node(&Node {
-        name: "node1".to_string(),
-        cpus: 4,
-        address: "127.0.0.1:9001".to_string(),
-    })?;
-
-    // Add node2 to cluster.
-    ctx.try_get_cluster()?.add_node(&Node {
-        name: "node2".to_string(),
-        cpus: 4,
-        address: "127.0.0.1:9002".to_string(),
-    })?;
-
-    // Add node3 to cluster.
-    ctx.try_get_cluster()?.add_node(&Node {
-        name: "node3".to_string(),
-        cpus: 4,
-        address: "127.0.0.1:9003".to_string(),
-    })?;
 
     // For more partitions generation.
     let ctx_more_cpu = crate::tests::try_create_context()?;

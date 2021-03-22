@@ -29,7 +29,7 @@ impl RpcService {
         let addr = self.conf.rpc_api_address.parse::<std::net::SocketAddr>()?;
 
         // GRPC service.
-        let grpc_srv = ExecutorRPCService::create();
+        let rpc_srv = ExecutorRPCService::create(self.session_manager.clone());
 
         // Flight service:
         // For distributed execute engine api.
@@ -40,7 +40,7 @@ impl RpcService {
         );
 
         Server::builder()
-            .add_service(grpc_srv.make_server())
+            .add_service(rpc_srv.make_server())
             .add_service(flight_srv.make_server())
             .serve(addr)
             .await

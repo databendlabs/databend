@@ -28,9 +28,9 @@ pub mod transforms;
 // ProtoBuf generated files.
 #[allow(clippy::all)]
 pub mod protobuf {
-    tonic::include_proto!("fuse.executor");
-    tonic::include_proto!("fuse.executor_flight");
+    tonic::include_proto!("executor");
+    tonic::include_proto!("executor_flight");
 
-    tonic::include_proto!("fuse.fusestore");
-    tonic::include_proto!("fuse.fusestore_flight");
+    tonic::include_proto!("fusestore");
+    tonic::include_proto!("fusestore_flight");
 }

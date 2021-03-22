@@ -4,6 +4,5 @@
 
 syntax = "proto3";
 
-package fuse.fusestore;
-
 // gRPC for FuseStore.
+package fusestore;
