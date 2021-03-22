@@ -6,18 +6,22 @@ use tonic::{Request, Response, Status};
 
 use crate::protobuf::executor_server::Executor;
 use crate::protobuf::executor_server::ExecutorServer;
-use crate::protobuf::{FetchPartitionRequest, FetchPartitionResponse, PingRequest, PingResponse};
+use crate::protobuf::{
+    FetchPartitionRequest, FetchPartitionResponse, PartitionProto, PingRequest, PingResponse,
+};
+use crate::sessions::SessionRef;
 
-#[derive(Default)]
-pub struct ExecutorRPCService {}
+pub struct ExecutorRPCService {
+    session_manager: SessionRef,
+}
 
 impl ExecutorRPCService {
-    pub fn create() -> Self {
-        Self {}
+    pub fn create(session_manager: SessionRef) -> Self {
+        Self { session_manager }
     }
 
-    pub fn make_server(&self) -> ExecutorServer<impl Executor> {
-        ExecutorServer::new(ExecutorRPCService::default())
+    pub fn make_server(self) -> ExecutorServer<impl Executor> {
+        ExecutorServer::new(self)
     }
 }
 
@@ -31,7 +35,7 @@ impl Executor for ExecutorRPCService {
         &self,
         request: Request<FetchPartitionRequest>,
     ) -> Result<Response<FetchPartitionResponse>, Status> {
-        fetch(request)
+        fetch_partition(self.session_manager.clone(), request)
     }
 }
 
@@ -44,13 +48,25 @@ pub fn ping(request: Request<PingRequest>) -> Result<Response<PingResponse>, Sta
     Ok(Response::new(reply))
 }
 
-pub fn fetch(
+pub fn fetch_partition(
+    session_manager: SessionRef,
     request: Request<FetchPartitionRequest>,
 ) -> Result<Response<FetchPartitionResponse>, Status> {
     println!("Got a request from {:?}", request.remote_addr());
 
-    let reply = FetchPartitionResponse {
-        message: format!("Hello {}!", request.into_inner().name),
-    };
+    let req = request.into_inner();
+    let uuid = req.uuid;
+    let nums = req.nums;
+    let partitions = session_manager.try_fetch_partitions(uuid, nums as usize)?;
+
+    let mut protos = vec![];
+    for partition in partitions {
+        protos.push(PartitionProto {
+            name: partition.name,
+            version: partition.version,
+        })
+    }
+
+    let reply = FetchPartitionResponse { partitions: protos };
     Ok(Response::new(reply))
 }

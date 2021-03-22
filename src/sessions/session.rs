@@ -7,7 +7,8 @@ use std::sync::{Arc, Mutex};
 
 use metrics::counter;
 
-use crate::error::FuseQueryResult;
+use crate::datasources::Partitions;
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::sessions::{FuseQueryContext, FuseQueryContextRef};
 
 pub struct Session {
@@ -36,5 +37,14 @@ impl Session {
 
         self.sessions.lock()?.remove(&*ctx.get_id()?);
         Ok(())
+    }
+
+    /// Fetch nums partitions from session manager by context id.
+    pub fn try_fetch_partitions(&self, ctx_id: String, nums: usize) -> FuseQueryResult<Partitions> {
+        let session_map = self.sessions.lock()?;
+        let ctx = session_map.get(&*ctx_id).ok_or_else(|| {
+            FuseQueryError::build_internal_error(format!("Unknown context id: '{}'", ctx_id))
+        })?;
+        ctx.try_get_partitions(nums)
     }
 }

@@ -22,10 +22,18 @@ message PingResponse {
   string message = 1;
 }
 
+// Fetch partition request.
 message FetchPartitionRequest {
-  string name = 1;
+  string uuid = 1;
+  uint32 nums = 2;
 }
 
+message PartitionProto {
+  string name = 1;
+  uint64 version = 2;
+}
+
+// Fetch partition response.
 message FetchPartitionResponse {
-  string message = 1;
+  repeated PartitionProto partitions = 1;
 }

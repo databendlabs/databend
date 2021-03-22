@@ -8,4 +8,6 @@ mod service;
 
 pub use context::try_create_context;
 pub use number::NumberTestData;
-pub use service::{try_create_context_with_nodes, try_start_service};
+pub use service::{
+    try_create_context_with_nodes, try_start_service, try_start_service_with_session_mgr,
+};
