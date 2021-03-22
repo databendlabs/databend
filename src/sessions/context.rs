@@ -70,6 +70,10 @@ impl FuseQueryContext {
                 }
             }
         }
+
+        // Try fetching from other nodes if the queue is empty and in cluster mode.
+        if partitions.is_empty() && !self.cluster.lock()?.is_empty()? {}
+
         Ok(partitions)
     }
 

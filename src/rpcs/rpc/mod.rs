@@ -9,12 +9,14 @@ mod flight_service_test;
 mod macros;
 
 mod error;
+mod executor_client;
 mod executor_service;
 mod flight_action;
 mod flight_client;
 mod flight_service;
 mod metrics;
 
+pub use executor_client::ExecutorClient;
 pub use executor_service::ExecutorRPCService;
 pub use flight_action::{ExecuteAction, ExecutePlanAction, FetchPartitionAction};
 pub use flight_client::FlightClient;

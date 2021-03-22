@@ -28,6 +28,10 @@ impl Cluster {
         })
     }
 
+    pub fn is_empty(&self) -> FuseQueryResult<bool> {
+        Ok(self.nodes.lock()?.len() == 0)
+    }
+
     pub fn add_node(&self, node: &Node) -> FuseQueryResult<()> {
         self.nodes.lock()?.insert(node.name.clone(), node.clone());
         Ok(())

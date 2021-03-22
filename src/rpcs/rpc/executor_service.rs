@@ -43,7 +43,7 @@ pub fn ping(request: Request<PingRequest>) -> Result<Response<PingResponse>, Sta
     println!("Got a request from {:?}", request.remote_addr());
 
     let reply = PingResponse {
-        message: format!("Hello {}!", request.into_inner().name),
+        message: format!("Hello {}!", request.into_inner().message),
     };
     Ok(Response::new(reply))
 }

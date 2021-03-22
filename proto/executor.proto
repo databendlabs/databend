@@ -4,7 +4,7 @@
 
 syntax = "proto3";
 
-package fuse.executor;
+package executor;
 
 service Executor {
   // Check server is ok.
@@ -15,7 +15,7 @@ service Executor {
 }
 
 message PingRequest {
-  string name = 1;
+  string message = 1;
 }
 
 message PingResponse {
