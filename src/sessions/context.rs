@@ -12,7 +12,7 @@ use crate::clusters::{Cluster, ClusterRef};
 use crate::datasources::{DataSource, IDataSource, ITable, Partition, Partitions, Statistics};
 use crate::datavalues::DataValue;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::rpcs::rpc::ExecutorClient;
+use crate::rpcs::rpc::GrpcClient;
 use crate::sessions::Settings;
 
 #[derive(Clone)]
@@ -81,7 +81,7 @@ impl FuseQueryContext {
                 // Not local node, try to fetch.
                 if !node.is_local() {
                     let mut parts = async_std::task::block_on(async {
-                        let mut client = ExecutorClient::try_create(node.address.clone()).await?;
+                        let client = GrpcClient::create(node.address.clone());
                         client.fetch_partition(1, uuid.clone()).await
                     })?;
                     info!(

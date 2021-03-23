@@ -7,7 +7,7 @@ use tonic::transport::Server;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::rpcs::rpc::{ExecutorRPCService, FlightService};
+use crate::rpcs::rpc::{FlightService, GrpcService};
 use crate::sessions::SessionRef;
 
 pub struct RpcService {
@@ -29,7 +29,7 @@ impl RpcService {
         let addr = self.conf.rpc_api_address.parse::<std::net::SocketAddr>()?;
 
         // GRPC service.
-        let rpc_srv = ExecutorRPCService::create(self.session_manager.clone());
+        let rpc_srv = GrpcService::create(self.session_manager.clone());
 
         // Flight service:
         // For distributed execute engine api.
