@@ -1,0 +1,12 @@
+[package]
+name = "fuse-store"
+version = "0.1.0"
+description = "A Cloud Distributed MergeTree Storage Engine"
+authors = ["FuseStore Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[[bin]]
+name = "fuse-store"
+path = "src/bin/fuse-store.rs"
