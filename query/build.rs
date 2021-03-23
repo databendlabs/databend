@@ -58,19 +58,19 @@ fn commit_date() -> Option<String> {
 }
 
 fn build_proto() {
-    println!("cargo:rerun-if-env-changed=FORCE_REBUILD");
-    println!("cargo:rerun-if-changed=proto/");
+    let manifest_dir =
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR env variable unset");
 
+    let proto_dir = Path::new(&manifest_dir).join("../proto");
+    let protos = [
+        &Path::new(&proto_dir).join(Path::new("queryrpc.proto")),
+        &Path::new(&proto_dir).join(Path::new("queryflight.proto")),
+    ];
+
+    for proto in protos.iter() {
+        println!("cargo:rerun-if-changed={}", proto.to_str().unwrap());
+    }
     tonic_build::configure()
-        .compile(
-            &[
-                "proto/queryrpc.proto",
-                "proto/queryflight.proto",
-                "proto/storerpc.proto",
-                "proto/storeflight.proto",
-            ],
-            &["proto"],
-        )
-        .map_err(|e| format!("tonic_build proto compile failed: {}", e))
+        .compile(&protos, &[&proto_dir])
         .unwrap();
 }

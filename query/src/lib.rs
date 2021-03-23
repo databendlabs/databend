@@ -30,7 +30,4 @@ pub mod transforms;
 pub mod protobuf {
     tonic::include_proto!("queryrpc");
     tonic::include_proto!("queryflight");
-
-    tonic::include_proto!("storerpc");
-    tonic::include_proto!("storeflight");
 }
