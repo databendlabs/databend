@@ -2,6 +2,8 @@
 
 members = [
     "query",
+    "query/configs",
+    "query/metrics",
     "store",
 ]
 

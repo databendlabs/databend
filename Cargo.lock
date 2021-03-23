@@ -853,12 +853,13 @@ dependencies = [
  "async-trait",
  "criterion",
  "dyn-clone",
+ "fuse-query-configs",
+ "fuse-query-metrics",
  "futures",
  "indexmap",
  "lazy_static",
  "log",
  "metrics",
- "metrics-exporter-prometheus",
  "msql-srv",
  "num 0.4.0",
  "num_cpus",
@@ -871,7 +872,6 @@ dependencies = [
  "simplelog",
  "snafu",
  "sqlparser",
- "structopt",
  "thiserror",
  "threadpool",
  "tokio",
@@ -880,6 +880,24 @@ dependencies = [
  "tonic-build",
  "uuid",
  "warp",
+]
+
+[[package]]
+name = "fuse-query-configs"
+version = "0.1.0"
+dependencies = [
+ "num_cpus",
+ "structopt",
+]
+
+[[package]]
+name = "fuse-query-metrics"
+version = "0.1.0"
+dependencies = [
+ "fuse-query-configs",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "snafu",
 ]
 
 [[package]]

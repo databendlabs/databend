@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use fuse_query_configs::Config;
 use metrics_exporter_prometheus::PrometheusBuilder;
 
-use crate::configs::Config;
-use crate::error::{FuseQueryError, FuseQueryResult};
+use crate::error::{Error, Result};
 
 pub struct MetricService {
     conf: Config,
@@ -16,7 +16,7 @@ impl MetricService {
         MetricService { conf }
     }
 
-    pub fn make_server(&self) -> FuseQueryResult<()> {
+    pub fn make_server(&self) -> Result<()> {
         let addr = self
             .conf
             .metric_api_address
@@ -26,10 +26,7 @@ impl MetricService {
             .listen_address(addr)
             .install()
             .map_err(|e| {
-                FuseQueryError::build_internal_error(format!(
-                    "Metrics prometheus exporter error: {:?}",
-                    e
-                ))
+                Error::build_internal_error(format!("Metrics prometheus exporter error: {:?}", e))
             })
     }
 }

@@ -7,7 +7,6 @@ mod error_test;
 pub mod tests;
 
 pub mod clusters;
-pub mod configs;
 pub mod datablocks;
 pub mod datasources;
 pub mod datastreams;
@@ -15,7 +14,6 @@ pub mod datavalues;
 pub mod error;
 pub mod functions;
 pub mod interpreters;
-pub mod metrics;
 pub mod optimizers;
 pub mod planners;
 pub mod processors;
