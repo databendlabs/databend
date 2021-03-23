@@ -27,7 +27,7 @@ macro_rules! parser_err {
 pub enum EngineType {
     /// Newline-delimited JSON
     JSONEachRaw,
-    /// Apache Parquet columnar storage
+    /// Apache Parquet columnar store
     Parquet,
     /// Comma separated values
     Csv,

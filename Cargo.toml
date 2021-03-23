@@ -2,6 +2,7 @@
 
 members = [
     "query",
+    "store",
 ]
 
 [profile.release]

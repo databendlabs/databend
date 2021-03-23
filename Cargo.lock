@@ -883,6 +883,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuse-store"
+version = "0.1.0"
+
+[[package]]
 name = "futures"
 version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
