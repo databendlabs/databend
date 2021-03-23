@@ -5,6 +5,7 @@
 use std::time::Instant;
 use std::{io, net};
 
+use fuse_query_configs::Config;
 use futures::stream::StreamExt;
 use log::{debug, error};
 use metrics::histogram;
@@ -12,7 +13,6 @@ use msql_srv::*;
 use threadpool::ThreadPool;
 
 use crate::clusters::ClusterRef;
-use crate::configs::Config;
 use crate::datablocks::DataBlock;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::interpreters::InterpreterFactory;

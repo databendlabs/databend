@@ -29,7 +29,7 @@ function update_path_and_profile {
 
 function install_build_essentials {
   PACKAGE_MANAGER=$1
-  #Differently named packages for pkg-config
+  #Differently named packages for pkg-configs
   if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
     install_pkg build-essential "$PACKAGE_MANAGER"
   fi
@@ -92,7 +92,7 @@ function install_pkg {
 
 function install_pkg_config {
   PACKAGE_MANAGER=$1
-  #Differently named packages for pkg-config
+  #Differently named packages for pkg-configs
   if [[ "$PACKAGE_MANAGER" == "apt-get" ]] || [[ "$PACKAGE_MANAGER" == "dnf" ]]; then
     install_pkg pkg-config "$PACKAGE_MANAGER"
   fi

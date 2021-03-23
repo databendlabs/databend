@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use fuse_query_configs::Config;
 use metrics_exporter_prometheus::PrometheusBuilder;
 
-use crate::configs::Config;
 use crate::error::{Error, Result};
 
 pub struct MetricService {

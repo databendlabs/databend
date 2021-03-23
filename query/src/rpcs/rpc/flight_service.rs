@@ -11,6 +11,7 @@ use arrow_flight::{
     Action, ActionType, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo,
     HandshakeRequest, HandshakeResponse, PutResult, SchemaResult, Ticket,
 };
+use fuse_query_configs::Config;
 use futures::{Stream, StreamExt};
 use log::debug;
 use metrics::histogram;
@@ -21,7 +22,6 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 
 use crate::clusters::ClusterRef;
-use crate::configs::Config;
 use crate::error::FuseQueryError;
 use crate::processors::PipelineBuilder;
 use crate::protobuf::FlightRequest;

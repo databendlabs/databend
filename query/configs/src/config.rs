@@ -35,10 +35,10 @@ pub struct Config {
 }
 
 impl Config {
-    /// Default config.
+    /// Default configs.
     pub fn default() -> Self {
         Config {
-            version: include_str!(concat!(env!("OUT_DIR"), "/version-info.txt")).to_string(),
+            version: "TODO".to_string(),
             log_level: "debug".to_string(),
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
@@ -50,13 +50,13 @@ impl Config {
         }
     }
 
-    /// Create config from args.
+    /// Create configs from args.
     pub fn create_from_args() -> Self {
         let mut cfg = Config::from_args();
         if cfg.num_cpus == 0 {
             cfg.num_cpus = num_cpus::get() as u64;
         }
-        cfg.version = include_str!(concat!(env!("OUT_DIR"), "/version-info.txt")).to_string();
+        cfg.version = "TODO".to_string();
         cfg
     }
 }

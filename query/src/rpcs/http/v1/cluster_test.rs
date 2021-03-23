@@ -4,10 +4,10 @@
 
 #[tokio::test]
 async fn test_cluster() -> crate::error::FuseQueryResult<()> {
+    use fuse_query_configs::Config;
     use pretty_assertions::assert_eq;
 
     use crate::clusters::Cluster;
-    use crate::configs::Config;
     use crate::rpcs::http::v1::cluster::*;
 
     let conf = Config::default();

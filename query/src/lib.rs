@@ -7,7 +7,6 @@ mod error_test;
 pub mod tests;
 
 pub mod clusters;
-pub mod configs;
 pub mod datablocks;
 pub mod datasources;
 pub mod datastreams;

@@ -2,8 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use fuse_query_configs::Config;
+
 use crate::clusters::ClusterRef;
-use crate::configs::Config;
 use crate::error::FuseQueryResult;
 use crate::rpcs::http::router::Router;
 

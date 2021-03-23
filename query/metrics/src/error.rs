@@ -23,3 +23,12 @@ impl Error {
         Internal { message }.build()
     }
 }
+
+impl From<std::net::AddrParseError> for Error {
+    fn from(err: std::net::AddrParseError) -> Self {
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
+    }
+}
