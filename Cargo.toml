@@ -2,6 +2,7 @@
 
 members = [
     "query",
+    "query/metrics",
     "store",
 ]
 

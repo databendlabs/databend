@@ -853,12 +853,12 @@ dependencies = [
  "async-trait",
  "criterion",
  "dyn-clone",
+ "fuse-query-metrics",
  "futures",
  "indexmap",
  "lazy_static",
  "log",
  "metrics",
- "metrics-exporter-prometheus",
  "msql-srv",
  "num 0.4.0",
  "num_cpus",
@@ -880,6 +880,15 @@ dependencies = [
  "tonic-build",
  "uuid",
  "warp",
+]
+
+[[package]]
+name = "fuse-query-metrics"
+version = "0.1.0"
+dependencies = [
+ "metrics",
+ "metrics-exporter-prometheus",
+ "snafu",
 ]
 
 [[package]]

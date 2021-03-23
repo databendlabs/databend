@@ -12,6 +12,10 @@ name = "fuse-query"
 path = "src/bin/fuse-query.rs"
 
 [dependencies]
+# Workspace dependencies, in alphabetical order
+fuse-query-metrics = {path = "metrics"}
+
+# Crates.io dependencies, in alphabetical order
 arrow = { git = "https://github.com/apache/arrow", rev="46161d2" }
 arrow-flight = { git = "https://github.com/apache/arrow", rev="46161d2" }
 async-std = "1.9.0"
@@ -22,7 +26,6 @@ indexmap = "1.6.1"
 lazy_static = "1.4.0"
 log = "0.4"
 metrics = "0.14.2"
-metrics-exporter-prometheus = "0.3.0"
 msql-srv = "0.9"
 num = "0.4"
 num_cpus = "1.0"
