@@ -4,9 +4,9 @@
 
 syntax = "proto3";
 
-package executor;
+package queryrpc;
 
-service Executor {
+service QueryRpc {
   // Check server is ok.
   rpc ping(PingRequest) returns (PingResponse) {}
 

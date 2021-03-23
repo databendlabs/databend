@@ -4,29 +4,29 @@
 
 use tonic::{Request, Response, Status};
 
-use crate::protobuf::executor_server::Executor;
-use crate::protobuf::executor_server::ExecutorServer;
+use crate::protobuf::query_rpc_server::QueryRpc;
+use crate::protobuf::query_rpc_server::QueryRpcServer;
 use crate::protobuf::{
     FetchPartitionRequest, FetchPartitionResponse, PartitionProto, PingRequest, PingResponse,
 };
 use crate::sessions::SessionRef;
 
-pub struct ExecutorRPCService {
+pub struct GrpcService {
     session_manager: SessionRef,
 }
 
-impl ExecutorRPCService {
+impl GrpcService {
     pub fn create(session_manager: SessionRef) -> Self {
         Self { session_manager }
     }
 
-    pub fn make_server(self) -> ExecutorServer<impl Executor> {
-        ExecutorServer::new(self)
+    pub fn make_server(self) -> QueryRpcServer<impl QueryRpc> {
+        QueryRpcServer::new(self)
     }
 }
 
 #[tonic::async_trait]
-impl Executor for ExecutorRPCService {
+impl QueryRpc for GrpcService {
     async fn ping(&self, request: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
         ping(request)
     }

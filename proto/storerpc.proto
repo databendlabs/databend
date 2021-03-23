@@ -4,5 +4,5 @@
 
 syntax = "proto3";
 
-// Flight RPC for FuseStore.
-package fusestore_flight;
+// gRPC for FuseStore.
+package storerpc;

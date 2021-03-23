@@ -64,10 +64,10 @@ fn build_proto() {
     tonic_build::configure()
         .compile(
             &[
-                "proto/executor.proto",
-                "proto/executor_flight.proto",
-                "proto/fusestore.proto",
-                "proto/fusestore_flight.proto",
+                "proto/queryrpc.proto",
+                "proto/queryflight.proto",
+                "proto/storerpc.proto",
+                "proto/storeflight.proto",
             ],
             &["proto"],
         )
