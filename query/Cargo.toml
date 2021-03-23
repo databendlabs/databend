@@ -49,3 +49,7 @@ pretty_assertions = "0.7"
 
 [build-dependencies]
 tonic-build = { version = "0.4" }
+
+[[bench]]
+name = "bench_main"
+harness = false
