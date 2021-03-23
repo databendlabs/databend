@@ -862,6 +862,7 @@ dependencies = [
  "metrics",
  "msql-srv",
  "num 0.4.0",
+ "num_cpus",
  "paste",
  "pretty_assertions",
  "prost",
