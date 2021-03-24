@@ -4,11 +4,12 @@
 
 use std::fmt;
 
-use crate::datablocks::DataBlock;
-use crate::datavalues;
-use crate::datavalues::{
-    DataColumnarValue, DataSchema, DataType, DataValue, DataValueArithmeticOperator,
+use fuse_query_datavalues::{
+    self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue,
+    DataValueArithmeticOperator,
 };
+
+use crate::datablocks::DataBlock;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::arithmetics::{
     ArithmeticDivFunction, ArithmeticMinusFunction, ArithmeticModuloFunction,
@@ -62,11 +63,11 @@ impl ArithmeticFunction {
 
 impl IFunction for ArithmeticFunction {
     fn return_type(&self, input_schema: &DataSchema) -> FuseQueryResult<DataType> {
-        datavalues::numerical_arithmetic_coercion(
+        Ok(datavalues::numerical_arithmetic_coercion(
             &self.op,
             &self.left.return_type(input_schema)?,
             &self.right.return_type(input_schema)?,
-        )
+        )?)
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> FuseQueryResult<bool> {
@@ -112,11 +113,11 @@ impl IFunction for ArithmeticFunction {
     }
 
     fn merge_result(&self) -> FuseQueryResult<DataValue> {
-        datavalues::data_value_arithmetic_op(
+        Ok(fuse_query_datavalues::data_value_arithmetic_op(
             self.op.clone(),
             self.left.merge_result()?,
             self.right.merge_result()?,
-        )
+        )?)
     }
 
     fn is_aggregator(&self) -> bool {

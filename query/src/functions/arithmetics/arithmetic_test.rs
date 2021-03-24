@@ -6,10 +6,10 @@
 fn test_arithmetic_function() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
+    use fuse_query_datavalues::*;
     use pretty_assertions::assert_eq;
 
     use crate::datablocks::DataBlock;
-    use crate::datavalues::*;
     use crate::functions::arithmetics::*;
     use crate::functions::*;
 

@@ -14,6 +14,7 @@ path = "src/bin/fuse-query.rs"
 [dependencies]
 # Workspace dependencies, in alphabetical order
 fuse-query-configs = {path = "configs" }
+fuse-query-datavalues = {path = "datavalues"}
 fuse-query-metrics = {path = "metrics"}
 
 # github dependencies, in alphabetical order

@@ -854,6 +854,7 @@ dependencies = [
  "criterion",
  "dyn-clone",
  "fuse-query-configs",
+ "fuse-query-datavalues",
  "fuse-query-metrics",
  "futures",
  "indexmap",

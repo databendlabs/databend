@@ -10,7 +10,6 @@ pub mod clusters;
 pub mod datablocks;
 pub mod datasources;
 pub mod datastreams;
-pub mod datavalues;
 pub mod error;
 pub mod functions;
 pub mod interpreters;
