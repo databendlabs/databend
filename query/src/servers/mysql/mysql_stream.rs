@@ -60,6 +60,12 @@ impl MySQLStream {
                     coltype: ColumnType::MYSQL_TYPE_SHORT,
                     colflags: ColumnFlags::empty(),
                 },
+                DataType::Date64 => Column {
+                    table: "".to_string(),
+                    column: field.name().to_string(),
+                    coltype: ColumnType::MYSQL_TYPE_TIMESTAMP,
+                    colflags: ColumnFlags::empty(),
+                },
                 _ => {
                     return Err(FuseQueryError::build_internal_error(format!(
                         "Unsupported column type:{:?}",
