@@ -223,3 +223,8 @@ FuseStore:|
 S3:       |              blocks...
           |
 ```
+
+A block is either a file on local fs, or an object in S3.
+It is possible a block has copies on both local fs and S3 if:
+- The block has not yet been cleaned from local fs after dumping to S3.
+- The block is pinned on local fs to speed up read.
