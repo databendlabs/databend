@@ -15,22 +15,42 @@ pub struct Config {
     #[structopt(long, env = "FUSE_QUERY_NUM_CPUS", default_value = "0")]
     pub num_cpus: u64,
 
-    #[structopt(long, env = "FUSE_QUERY_MYSQL_HANDLER_HOST", default_value = "127.0.0.1")]
+    #[structopt(
+        long,
+        env = "FUSE_QUERY_MYSQL_HANDLER_HOST",
+        default_value = "127.0.0.1"
+    )]
     pub mysql_handler_host: String,
 
     #[structopt(long, env = "FUSE_QUERY_MYSQL_HANDLER_PORT", default_value = "3307")]
     pub mysql_handler_port: u64,
 
-    #[structopt(long, env = "FUSE_QUERY_MYSQL_HANDLER_THREAD_NUM", default_value = "256")]
+    #[structopt(
+        long,
+        env = "FUSE_QUERY_MYSQL_HANDLER_THREAD_NUM",
+        default_value = "256"
+    )]
     pub mysql_handler_thread_num: u64,
 
-    #[structopt(long, env = "FUSE_QUERY_RPC_API_ADDRESS", default_value = "127.0.0.1:9090")]
+    #[structopt(
+        long,
+        env = "FUSE_QUERY_RPC_API_ADDRESS",
+        default_value = "127.0.0.1:9090"
+    )]
     pub rpc_api_address: String,
 
-    #[structopt(long, env = "FUSE_QUERY_HTTP_API_ADDRESS", default_value = "127.0.0.1:8080")]
+    #[structopt(
+        long,
+        env = "FUSE_QUERY_HTTP_API_ADDRESS",
+        default_value = "127.0.0.1:8080"
+    )]
     pub http_api_address: String,
 
-    #[structopt(long, env = "FUSE_QUERY_METRIC_API_ADDRESS", default_value = "127.0.0.1:7070")]
+    #[structopt(
+        long,
+        env = "FUSE_QUERY_METRIC_API_ADDRESS",
+        default_value = "127.0.0.1:7070"
+    )]
     pub metric_api_address: String,
 }
 
