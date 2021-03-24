@@ -70,7 +70,7 @@ fn read_file(
     let file_reader = SerializedFileReader::new(file_reader)?;
     let mut arrow_reader = ParquetFileArrowReader::new(Arc::new(file_reader));
 
-    // TODO projection, row filters, batch size configurable
+    // TODO projection, row filters, batch size configurable, schema judgement
     let batch_size = 2048;
     let mut batch_reader =
         arrow_reader.get_record_reader_by_columns(projection.to_owned(), batch_size)?;

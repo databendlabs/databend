@@ -13,7 +13,6 @@ create table test_parquet (
     int_col int,
     bigint_col bigint,
     float_col float,
-    float_col float,
     double_col double,
     date_string_col varchar(255),
     string_col varchar(255),
