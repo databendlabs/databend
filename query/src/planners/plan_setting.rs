@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use crate::datavalues::{DataSchema, DataSchemaRef};
+use fuse_query_datavalues::{DataSchema, DataSchemaRef};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct VarValue {

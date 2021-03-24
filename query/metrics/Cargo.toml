@@ -7,10 +7,10 @@ publish = false
 edition = "2018"
 
 [dependencies] # In alphabetical order
-# Workspace dependencies, in alphabetical order
+# Workspace dependencies
 fuse-query-configs = {path = "../configs" }
 
-# Crates.io dependencies, in alphabetical order
+# Crates.io dependencies
 snafu = "0.6.8"
 metrics = "0.14.2"
 metrics-exporter-prometheus = "0.3.0"

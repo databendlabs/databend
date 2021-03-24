@@ -5,7 +5,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::datavalues::DataSchema;
+use fuse_query_datavalues::DataSchema;
+
 use crate::error::FuseQueryResult;
 use crate::optimizers::{IOptimizer, Optimizer};
 use crate::planners::{EmptyPlan, ExpressionPlan, FilterPlan, PlanNode};

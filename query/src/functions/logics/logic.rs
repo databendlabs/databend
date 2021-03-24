@@ -4,11 +4,11 @@
 
 use std::fmt;
 
-use crate::datablocks::DataBlock;
-use crate::datavalues;
-use crate::datavalues::{
-    DataColumnarValue, DataSchema, DataType, DataValue, DataValueLogicOperator,
+use fuse_query_datavalues::{
+    self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue, DataValueLogicOperator,
 };
+
+use crate::datablocks::DataBlock;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::logics::{LogicAndFunction, LogicOrFunction};
 use crate::functions::{FactoryFuncRef, IFunction};

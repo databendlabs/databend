@@ -8,12 +8,12 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::datavalues::{
+use crate::error::{DataValueError, DataValueResult};
+use crate::{
     BooleanArray, DataArrayRef, DataType, Float32Array, Float64Array, Int16Array, Int32Array,
     Int64Array, Int8Array, NullArray, StringArray, UInt16Array, UInt32Array, UInt64Array,
     UInt8Array,
 };
-use crate::error::{FuseQueryError, FuseQueryResult};
 
 /// A specific value of a data type.
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
@@ -106,7 +106,7 @@ impl DataValue {
         }
     }
 
-    pub fn to_array(&self, size: usize) -> FuseQueryResult<DataArrayRef> {
+    pub fn to_array(&self, size: usize) -> DataValueResult<DataArrayRef> {
         Ok(match self {
             DataValue::Null => Arc::new(NullArray::new(size)),
             DataValue::Boolean(Some(v)) => {
@@ -134,7 +134,7 @@ impl DataValue {
             }
             DataValue::String(v) => Arc::new(StringArray::from(vec![v.as_deref(); size])),
             other => {
-                return Err(FuseQueryError::build_internal_error(format!(
+                return Err(DataValueError::build_internal_error(format!(
                     "DataValue to array cannot be NONE {:?}",
                     other
                 )));
@@ -143,7 +143,7 @@ impl DataValue {
     }
 
     /// Converts a value in `array` at `index` into a ScalarValue
-    pub fn try_from_array(array: &DataArrayRef, index: usize) -> FuseQueryResult<Self> {
+    pub fn try_from_array(array: &DataArrayRef, index: usize) -> DataValueResult<Self> {
         Ok(match array.data_type() {
             DataType::Boolean => {
                 typed_cast_from_array_to_data_value!(array, index, BooleanArray, Boolean)
@@ -180,7 +180,7 @@ impl DataValue {
                 typed_cast_from_array_to_data_value!(array, index, StringArray, String)
             }
             other => {
-                return Err(FuseQueryError::build_internal_error(format!(
+                return Err(DataValueError::build_internal_error(format!(
                     "Can't create a scalar of array of type \"{:?}\"",
                     other
                 )));
@@ -188,7 +188,7 @@ impl DataValue {
         })
     }
 
-    pub fn try_from_literal(literal: &str) -> FuseQueryResult<Self> {
+    pub fn try_from_literal(literal: &str) -> DataValueResult<Self> {
         match literal.parse::<i64>() {
             Ok(n) => {
                 if n >= 0 {
@@ -215,9 +215,9 @@ typed_cast_from_data_value_to_std!(Float64, f64);
 typed_cast_from_data_value_to_std!(Boolean, bool);
 
 impl TryFrom<&DataType> for DataValue {
-    type Error = FuseQueryError;
+    type Error = DataValueError;
 
-    fn try_from(data_type: &DataType) -> FuseQueryResult<Self> {
+    fn try_from(data_type: &DataType) -> DataValueResult<Self> {
         Ok(match data_type {
             DataType::Null => DataValue::Null,
             DataType::Boolean => DataValue::Boolean(None),
@@ -232,7 +232,7 @@ impl TryFrom<&DataType> for DataValue {
             DataType::Float32 => DataValue::Float32(None),
             DataType::Float64 => DataValue::Float64(None),
             _ => {
-                return Err(FuseQueryError::build_internal_error(format!(
+                return Err(DataValueError::build_internal_error(format!(
                     "Unsupported try_from() for data type: {:?}",
                     data_type
                 )));

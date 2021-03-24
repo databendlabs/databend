@@ -6,9 +6,9 @@
 fn test_select_wildcard_plan() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
+    use fuse_query_datavalues::*;
     use pretty_assertions::assert_eq;
 
-    use crate::datavalues::*;
     use crate::planners::*;
 
     let ctx = crate::tests::try_create_context()?;

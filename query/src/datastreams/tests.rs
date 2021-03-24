@@ -6,11 +6,11 @@
 async fn test_chunk_stream() {
     use std::sync::Arc;
 
+    use fuse_query_datavalues::*;
     use futures::stream::StreamExt;
 
     use crate::datablocks::*;
     use crate::datastreams::*;
-    use crate::datavalues::*;
 
     let mut s1 = DataBlockStream::create(
         Arc::new(DataSchema::empty()),

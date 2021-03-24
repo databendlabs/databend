@@ -5,8 +5,8 @@
 use std::sync::Arc;
 
 use arrow::array::new_empty_array;
+use fuse_query_datavalues::{DataArrayRef, DataSchema, DataSchemaRef};
 
-use crate::datavalues::{DataArrayRef, DataSchema, DataSchemaRef};
 use crate::error::FuseQueryResult;
 
 #[derive(Debug, Clone)]

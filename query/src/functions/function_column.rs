@@ -4,8 +4,9 @@
 
 use std::fmt;
 
+use fuse_query_datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
+
 use crate::datablocks::DataBlock;
-use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::IFunction;
 

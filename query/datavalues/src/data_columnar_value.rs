@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::datavalues::{DataArrayRef, DataType, DataValue};
-use crate::error::FuseQueryResult;
+use crate::error::DataValueResult;
+use crate::{DataArrayRef, DataType, DataValue};
 
 #[derive(Clone, Debug)]
 pub enum DataColumnarValue {
@@ -22,7 +22,7 @@ impl DataColumnarValue {
         x
     }
 
-    pub fn to_array(&self, size: usize) -> FuseQueryResult<DataArrayRef> {
+    pub fn to_array(&self, size: usize) -> DataValueResult<DataArrayRef> {
         match self {
             DataColumnarValue::Array(array) => Ok(array.clone()),
             DataColumnarValue::Scalar(scalar) => scalar.to_array(size),

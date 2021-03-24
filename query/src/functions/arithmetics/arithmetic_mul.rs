@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::datavalues::DataValueArithmeticOperator;
+use fuse_query_datavalues::DataValueArithmeticOperator;
+
 use crate::error::FuseQueryResult;
 use crate::functions::arithmetics::ArithmeticFunction;
 use crate::functions::IFunction;

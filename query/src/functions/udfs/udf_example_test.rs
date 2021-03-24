@@ -6,10 +6,10 @@
 fn test_udf_function() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
+    use fuse_query_datavalues::*;
     use pretty_assertions::assert_eq;
 
     use crate::datablocks::*;
-    use crate::datavalues::*;
     use crate::functions::udfs::UDFExampleFunction;
     use crate::functions::*;
 

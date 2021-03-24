@@ -6,10 +6,10 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use fuse_query_datavalues::DataSchemaRef;
 
 use crate::datablocks::DataBlock;
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
-use crate::datavalues::DataSchemaRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::IFunction;
 use crate::planners::ExpressionPlan;

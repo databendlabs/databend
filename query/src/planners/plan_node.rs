@@ -4,7 +4,8 @@
 
 use std::sync::Arc;
 
-use crate::datavalues::{DataSchema, DataSchemaRef};
+use fuse_query_datavalues::{DataSchema, DataSchemaRef};
+
 use crate::error::FuseQueryResult;
 use crate::planners::{
     AggregatorFinalPlan, AggregatorPartialPlan, CreatePlan, EmptyPlan, ExplainPlan, FilterPlan,

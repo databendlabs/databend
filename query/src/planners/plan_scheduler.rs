@@ -5,9 +5,9 @@
 use std::sync::Arc;
 
 use arrow::datatypes::Schema;
+use fuse_query_datavalues::DataSchema;
 
 use crate::datasources::Statistics;
-use crate::datavalues::DataSchema;
 use crate::error::FuseQueryResult;
 use crate::planners::{EmptyPlan, PlanNode, ReadDataSourcePlan};
 use crate::sessions::FuseQueryContextRef;

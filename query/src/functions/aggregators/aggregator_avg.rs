@@ -4,11 +4,12 @@
 
 use std::fmt;
 
-use crate::datablocks::DataBlock;
-use crate::datavalues::{
-    self, DataColumnarValue, DataSchema, DataType, DataValue, DataValueAggregateOperator,
-    DataValueArithmeticOperator,
+use fuse_query_datavalues::{
+    self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue,
+    DataValueAggregateOperator, DataValueArithmeticOperator,
 };
+
+use crate::datablocks::DataBlock;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::IFunction;
 use crate::sessions::FuseQueryContextRef;

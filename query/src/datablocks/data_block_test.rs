@@ -6,8 +6,9 @@
 fn test_datablock() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
+    use fuse_query_datavalues::*;
+
     use crate::datablocks::*;
-    use crate::datavalues::*;
 
     let schema = Arc::new(DataSchema::new(vec![DataField::new(
         "a",

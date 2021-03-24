@@ -4,11 +4,12 @@
 
 use std::fmt;
 
-use crate::datablocks::DataBlock;
-use crate::datavalues;
-use crate::datavalues::{
-    DataColumnarValue, DataSchema, DataType, DataValue, DataValueComparisonOperator,
+use fuse_query_datavalues::{
+    self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue,
+    DataValueComparisonOperator,
 };
+
+use crate::datablocks::DataBlock;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::comparisons::{
     ComparisonEqFunction, ComparisonGtEqFunction, ComparisonGtFunction, ComparisonLtEqFunction,
