@@ -5,11 +5,11 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fuse_query_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, StringArray};
 
 use crate::datablocks::DataBlock;
 use crate::datasources::{ITable, Partition, Statistics};
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
+use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, StringArray};
 use crate::error::FuseQueryResult;
 use crate::functions::FunctionFactory;
 use crate::planners::{PlanNode, ReadDataSourcePlan};
