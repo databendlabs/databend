@@ -5,9 +5,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use fuse_query_configs::Config;
-
 use crate::clusters::Node;
+use crate::configs::Config;
 use crate::error::FuseQueryResult;
 
 pub type ClusterRef = Arc<Cluster>;

@@ -21,6 +21,7 @@ pub mod sessions;
 pub mod sql;
 pub mod transforms;
 
+pub use fuse_query_configs as configs;
 pub use fuse_query_datablocks as datablocks;
 pub use fuse_query_datavalues as datavalues;
 

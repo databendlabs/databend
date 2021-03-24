@@ -2,8 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use fuse_query_configs::Config;
 use warp::Filter;
+
+use crate::configs::Config;
 
 pub fn hello_handler(
     cfg: Config,

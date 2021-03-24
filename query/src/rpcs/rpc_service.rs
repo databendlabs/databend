@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use fuse_query_configs::Config;
 use tonic::transport::Server;
 
 use crate::clusters::ClusterRef;
+use crate::configs::Config;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::rpcs::rpc::{FlightService, GrpcService};
 use crate::sessions::SessionRef;
