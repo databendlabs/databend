@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn test_datablock() -> crate::error::FuseQueryResult<()> {
+fn test_datablock() -> Result<(), Box<dyn std::error::Error>> {
     use std::sync::Arc;
 
     use fuse_query_datavalues::*;

@@ -1,0 +1,22 @@
+[package]
+name = "fuse-query-datablocks"
+version = "0.1.0"
+authors = ["FuseQuery Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+fuse-query-datavalues = {path = "../datavalues"}
+
+# Github dependencies
+arrow = { git = "https://github.com/apache/arrow", rev="46161d2" }
+
+# Crates.io dependencies
+paste = "^1.0"
+serde = { version = "1.0", features = ["derive"] }
+snafu = "0.6.8"
+
+[dev-dependencies]
+pretty_assertions = "0.7"

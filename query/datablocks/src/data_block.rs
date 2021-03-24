@@ -4,10 +4,9 @@
 
 use std::sync::Arc;
 
-use arrow::array::new_empty_array;
 use fuse_query_datavalues::{DataArrayRef, DataSchema, DataSchemaRef};
 
-use crate::error::FuseQueryResult;
+use crate::error::DataBlockResult;
 
 #[derive(Debug, Clone)]
 pub struct DataBlock {
@@ -20,7 +19,7 @@ impl DataBlock {
         DataBlock { schema, columns }
     }
 
-    pub fn try_from_arrow_batch(batch: &arrow::record_batch::RecordBatch) -> FuseQueryResult<Self> {
+    pub fn try_from_arrow_batch(batch: &arrow::record_batch::RecordBatch) -> DataBlockResult<Self> {
         Ok(DataBlock::create(
             batch.schema(),
             Vec::from(batch.columns()),
@@ -37,12 +36,12 @@ impl DataBlock {
     pub fn empty_with_schema(schema: DataSchemaRef) -> Self {
         let mut columns = vec![];
         for f in schema.fields().iter() {
-            columns.push(new_empty_array(f.data_type()))
+            columns.push(arrow::array::new_empty_array(f.data_type()))
         }
         DataBlock { schema, columns }
     }
 
-    pub fn to_arrow_batch(&self) -> FuseQueryResult<arrow::record_batch::RecordBatch> {
+    pub fn to_arrow_batch(&self) -> DataBlockResult<arrow::record_batch::RecordBatch> {
         Ok(arrow::record_batch::RecordBatch::try_new(
             self.schema.clone(),
             self.columns.clone(),
@@ -69,7 +68,7 @@ impl DataBlock {
         &self.columns[index]
     }
 
-    pub fn column_by_name(&self, name: &str) -> FuseQueryResult<&DataArrayRef> {
+    pub fn column_by_name(&self, name: &str) -> DataBlockResult<&DataArrayRef> {
         if name == "*" {
             Ok(&self.columns[0])
         } else {
