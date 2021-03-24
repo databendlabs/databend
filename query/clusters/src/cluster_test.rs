@@ -6,7 +6,7 @@
 fn test_cluster() -> crate::error::FuseQueryResult<()> {
     use pretty_assertions::assert_eq;
 
-    use crate::clusters::*;
+    use crate::*;
 
     let cluster = Cluster::empty();
 

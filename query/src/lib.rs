@@ -6,7 +6,6 @@ mod error_test;
 
 pub mod tests;
 
-pub mod clusters;
 pub mod datasources;
 pub mod datastreams;
 pub mod error;
@@ -21,6 +20,7 @@ pub mod sessions;
 pub mod sql;
 pub mod transforms;
 
+pub use fuse_query_clusters as clusters;
 pub use fuse_query_configs as configs;
 pub use fuse_query_datablocks as datablocks;
 pub use fuse_query_datavalues as datavalues;

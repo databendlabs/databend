@@ -919,6 +919,7 @@ dependencies = [
  "criterion",
  "crossbeam 0.8.0",
  "dyn-clone",
+ "fuse-query-clusters",
  "fuse-query-configs",
  "fuse-query-datablocks",
  "fuse-query-datavalues",
@@ -949,6 +950,17 @@ dependencies = [
  "tonic-build",
  "uuid",
  "warp",
+]
+
+[[package]]
+name = "fuse-query-clusters"
+version = "0.1.0"
+dependencies = [
+ "fuse-query-configs",
+ "paste",
+ "pretty_assertions",
+ "serde",
+ "snafu",
 ]
 
 [[package]]

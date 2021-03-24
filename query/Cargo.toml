@@ -13,6 +13,7 @@ path = "src/bin/fuse-query.rs"
 
 [dependencies]
 # Workspace dependencies
+fuse-query-clusters = {path = "clusters" }
 fuse-query-configs = {path = "configs" }
 fuse-query-datablocks = {path = "datablocks"}
 fuse-query-datavalues = {path = "datavalues"}
