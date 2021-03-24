@@ -1,3 +1,5 @@
+HUB ?= datafuselabs
+TAG ?= latest
 # Setup dev toolchain
 setup:
 	bash ./scripts/dev_setup.sh
@@ -25,7 +27,7 @@ lint:
 	cargo clippy -- -D warnings
 
 docker:
-	docker build --network host -f docker/Dockerfile -t datafusedev/fuse-query .
+	docker build --network host -f docker/Dockerfile -t ${HUB}/fuse-query:${TAG} .
 
 coverage:
 	bash ./scripts/dev_codecov.sh
