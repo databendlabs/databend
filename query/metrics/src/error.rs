@@ -6,11 +6,11 @@ use std::fmt::Debug;
 
 use snafu::{Backtrace, Snafu};
 
-pub type Result<T, E = Error> = std::result::Result<T, E>;
+pub type MetricResult<T, E = MetricError> = std::result::Result<T, E>;
 
 #[derive(Debug, Snafu)]
 #[non_exhaustive]
-pub enum Error {
+pub enum MetricError {
     #[snafu(display("Metric Internal Error: {}", message))]
     Internal {
         message: String,
@@ -18,13 +18,13 @@ pub enum Error {
     },
 }
 
-impl Error {
-    pub fn build_internal_error(message: String) -> Error {
+impl MetricError {
+    pub fn build_internal_error(message: String) -> MetricError {
         Internal { message }.build()
     }
 }
 
-impl From<std::net::AddrParseError> for Error {
+impl From<std::net::AddrParseError> for MetricError {
     fn from(err: std::net::AddrParseError) -> Self {
         Internal {
             message: err.to_string(),
