@@ -6,3 +6,4 @@ mod data_block;
 mod error;
 
 pub use data_block::DataBlock;
+pub use error::DataBlockError;

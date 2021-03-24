@@ -54,10 +54,10 @@ impl FilterTransform {
             .ok_or_else(|| {
                 FuseQueryError::build_internal_error("cannot downcast to boolean array".to_string())
             })?;
-        DataBlock::try_from_arrow_batch(&filter_record_batch(
+        Ok(DataBlock::try_from_arrow_batch(&filter_record_batch(
             &block.to_arrow_batch()?,
             filter_result,
-        )?)
+        )?)?)
     }
 }
 

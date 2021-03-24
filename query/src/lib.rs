@@ -7,7 +7,6 @@ mod error_test;
 pub mod tests;
 
 pub mod clusters;
-pub mod datablocks;
 pub mod datasources;
 pub mod datastreams;
 pub mod error;
@@ -21,6 +20,8 @@ pub mod servers;
 pub mod sessions;
 pub mod sql;
 pub mod transforms;
+
+pub use fuse_query_datablocks as datablocks;
 
 // ProtoBuf generated files.
 #[allow(clippy::all)]
