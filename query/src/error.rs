@@ -6,6 +6,7 @@ use std::fmt::Debug;
 use std::result;
 
 use arrow::error::ArrowError;
+use parquet::errors::ParquetError;
 use snafu::{Backtrace, Snafu};
 use snafu::{ErrorCompat, IntoError};
 use sqlparser::parser::ParserError;
@@ -36,6 +37,12 @@ pub enum FuseQueryError {
     #[snafu(display("Arrow Error"))]
     Arrow {
         source: ArrowError,
+        backtrace: Backtrace,
+    },
+
+    #[snafu(display("Parquet Error"))]
+    Parquet {
+        source: ParquetError,
         backtrace: Backtrace,
     },
 
@@ -73,6 +80,12 @@ impl From<fuse_query_datavalues::error::DataValueError> for FuseQueryError {
 impl From<ArrowError> for FuseQueryError {
     fn from(e: ArrowError) -> Self {
         Arrow.into_error(e)
+    }
+}
+
+impl From<ParquetError> for FuseQueryError {
+    fn from(e: ParquetError) -> Self {
+        Parquet.into_error(e)
     }
 }
 
