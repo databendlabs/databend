@@ -11,7 +11,7 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 #[derive(Debug, Snafu)]
 #[non_exhaustive]
 pub enum Error {
-    #[snafu(display("Internal Error: {}", message))]
+    #[snafu(display("Metric Internal Error: {}", message))]
     Internal {
         message: String,
         backtrace: Backtrace,

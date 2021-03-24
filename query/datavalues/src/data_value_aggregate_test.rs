@@ -56,7 +56,7 @@ fn test_data_value_arithmetic() {
                 DataValue::Float64(Some(1.0)),
             ],
             error: vec![
-                "Internal Error: Unsupported data_value_min for data type: left:Utf8, right:Int8",
+                "DataValue Internal Error: Unsupported data_value_min for data type: left:Utf8, right:Int8",
             ],
         },
         ScalarTest {
@@ -97,7 +97,7 @@ fn test_data_value_arithmetic() {
                 DataValue::Float64(Some(2.0)),
             ],
             error: vec![
-                "Internal Error: Unsupported data_value_max for data type: left:Utf8, right:Int8",
+                "DataValue Internal Error: Unsupported data_value_max for data type: left:Utf8, right:Int8",
             ],
         },
         ScalarTest {
@@ -138,8 +138,8 @@ fn test_data_value_arithmetic() {
                 DataValue::Float64(Some(3.0)),
             ],
             error: vec![
-                "Internal Error: Unsupported data_value_sum for data type: left:Utf8, right:Int8",
-                "Internal Error: Unsupported data_value_sum for data type: left:Utf8, right:Utf8",
+                "DataValue Internal Error: Unsupported data_value_sum for data type: left:Utf8, right:Int8",
+                "DataValue Internal Error: Unsupported data_value_sum for data type: left:Utf8, right:Utf8",
             ],
         },
         ScalarTest {
@@ -168,18 +168,18 @@ fn test_data_value_arithmetic() {
             expect: vec![
             ],
             error: vec![
-                "Internal Error: Unsupported data_value_avg for data type: left:Utf8, right:Int8",
-                "Internal Error: Unsupported data_value_avg for data type: left:Utf8, right:Utf8",
-                "Internal Error: Unsupported data_value_avg for data type: left:Int8, right:Int8",
-                "Internal Error: Unsupported data_value_avg for data type: left:Int16, right:Int16",
-                "Internal Error: Unsupported data_value_avg for data type: left:Int32, right:Int32",
-                "Internal Error: Unsupported data_value_avg for data type: left:Int64, right:Int64",
-                "Internal Error: Unsupported data_value_avg for data type: left:UInt8, right:UInt8",
-                "Internal Error: Unsupported data_value_avg for data type: left:UInt16, right:UInt16",
-                "Internal Error: Unsupported data_value_avg for data type: left:UInt32, right:UInt32",
-                "Internal Error: Unsupported data_value_avg for data type: left:UInt64, right:UInt64",
-                "Internal Error: Unsupported data_value_avg for data type: left:Float32, right:Float32",
-                "Internal Error: Unsupported data_value_avg for data type: left:Float64, right:Float64",
+                "DataValue Internal Error: Unsupported data_value_avg for data type: left:Utf8, right:Int8",
+                "DataValue Internal Error: Unsupported data_value_avg for data type: left:Utf8, right:Utf8",
+                "DataValue Internal Error: Unsupported data_value_avg for data type: left:Int8, right:Int8",
+                "DataValue Internal Error: Unsupported data_value_avg for data type: left:Int16, right:Int16",
+                "DataValue Internal Error: Unsupported data_value_avg for data type: left:Int32, right:Int32",
+                "DataValue Internal Error: Unsupported data_value_avg for data type: left:Int64, right:Int64",
+                "DataValue Internal Error: Unsupported data_value_avg for data type: left:UInt8, right:UInt8",
+                "DataValue Internal Error: Unsupported data_value_avg for data type: left:UInt16, right:UInt16",
+                "DataValue Internal Error: Unsupported data_value_avg for data type: left:UInt32, right:UInt32",
+                "DataValue Internal Error: Unsupported data_value_avg for data type: left:UInt64, right:UInt64",
+                "DataValue Internal Error: Unsupported data_value_avg for data type: left:Float32, right:Float32",
+                "DataValue Internal Error: Unsupported data_value_avg for data type: left:Float64, right:Float64",
             ],
         },
     ];

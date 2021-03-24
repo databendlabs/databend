@@ -11,13 +11,13 @@ pub type DataValueResult<T, E = DataValueError> = std::result::Result<T, E>;
 #[derive(Debug, Snafu)]
 #[non_exhaustive]
 pub enum DataValueError {
-    #[snafu(display("Internal Error: {}", message))]
+    #[snafu(display("DataValue Internal Error: {}", message))]
     Internal {
         message: String,
         backtrace: Backtrace,
     },
 
-    #[snafu(display("Arrow Error"))]
+    #[snafu(display("DataValue Arrow Error"))]
     Arrow {
         source: arrow::error::ArrowError,
         backtrace: Backtrace,
