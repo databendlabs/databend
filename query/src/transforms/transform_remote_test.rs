@@ -4,10 +4,10 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_remote_with_local() -> crate::error::FuseQueryResult<()> {
+    use fuse_query_datavalues::*;
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::datavalues::*;
     use crate::planners::*;
     use crate::processors::*;
     use crate::transforms::*;
@@ -36,10 +36,10 @@ async fn test_transform_remote_with_local() -> crate::error::FuseQueryResult<()>
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_remote_with_cluster() -> crate::error::FuseQueryResult<()> {
+    use fuse_query_datavalues::*;
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::datavalues::*;
     use crate::processors::*;
     use crate::sql::*;
 

@@ -897,6 +897,7 @@ version = "0.1.0"
 dependencies = [
  "arrow",
  "paste",
+ "pretty_assertions",
  "serde",
  "snafu",
 ]

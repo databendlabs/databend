@@ -4,11 +4,11 @@
 
 use std::task::{Context, Poll};
 
+use fuse_query_datavalues::DataSchemaRef;
 use futures::stream::{Stream, StreamExt};
 
 use crate::datablocks::DataBlock;
 use crate::datastreams::SendableDataBlockStream;
-use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::functions::IFunction;
 

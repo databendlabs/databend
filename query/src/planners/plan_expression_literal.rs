@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::datavalues::DataValue;
+use fuse_query_datavalues::DataValue;
+
 use crate::planners::ExpressionPlan;
 
 pub trait ILiteral {

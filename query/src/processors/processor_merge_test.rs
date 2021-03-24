@@ -6,10 +6,10 @@
 async fn test_processor_merge() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
+    use fuse_query_datavalues::*;
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::datavalues::*;
     use crate::processors::*;
     use crate::tests;
 

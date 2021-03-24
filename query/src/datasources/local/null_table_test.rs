@@ -5,10 +5,10 @@
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_null_table() -> crate::error::FuseQueryResult<()> {
     use arrow::datatypes::{Field, Schema};
+    use fuse_query_datavalues::DataType;
     use futures::TryStreamExt;
 
     use crate::datasources::local::*;
-    use crate::datavalues::DataType;
     use crate::planners::*;
 
     let ctx = crate::tests::try_create_context()?;
