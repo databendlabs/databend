@@ -25,6 +25,7 @@ mod data_value;
 mod data_value_aggregate;
 mod data_value_arithmetic;
 mod data_value_operator;
+mod error;
 
 pub use data_array::{
     BooleanArray, DataArrayRef, Float32Array, Float64Array, Int16Array, Int32Array, Int64Array,

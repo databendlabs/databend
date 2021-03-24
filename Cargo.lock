@@ -891,6 +891,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuse-query-datavalues"
+version = "0.1.0"
+dependencies = [
+ "arrow",
+ "paste",
+ "serde",
+ "snafu",
+]
+
+[[package]]
 name = "fuse-query-metrics"
 version = "0.1.0"
 dependencies = [

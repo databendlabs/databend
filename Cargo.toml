@@ -3,6 +3,7 @@
 members = [
     "query",
     "query/configs",
+    "query/datavalues",
     "query/metrics",
     "store",
 ]
