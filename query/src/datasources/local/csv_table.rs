@@ -6,12 +6,12 @@ use std::fs::File;
 
 use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
+use fuse_query_datavalues::DataSchemaRef;
 
 use crate::datasources::local::ParquetTable;
 use crate::datasources::table_factory::TableCreatorFactory;
 use crate::datasources::{ITable, Partition, Statistics};
 use crate::datastreams::{CSVStream, SendableDataBlockStream};
-use crate::datavalues::DataSchemaRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{PlanNode, ReadDataSourcePlan, TableOptions};
 use crate::sessions::FuseQueryContextRef;
