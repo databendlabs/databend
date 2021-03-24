@@ -4,10 +4,10 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_explain_interpreter() -> crate::error::FuseQueryResult<()> {
-    use fuse_query_datavalues::DataType;
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
+    use crate::datavalues::DataType;
     use crate::interpreters::*;
     use crate::planners::*;
     use crate::sql::*;

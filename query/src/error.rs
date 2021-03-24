@@ -77,6 +77,24 @@ impl From<fuse_query_datavalues::error::DataValueError> for FuseQueryError {
     }
 }
 
+impl From<crate::datablocks::DataBlockError> for FuseQueryError {
+    fn from(err: crate::datablocks::DataBlockError) -> Self {
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
+    }
+}
+
+impl From<crate::clusters::ClusterError> for FuseQueryError {
+    fn from(err: crate::clusters::ClusterError) -> Self {
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
+    }
+}
+
 impl From<ArrowError> for FuseQueryError {
     fn from(e: ArrowError) -> Self {
         Arrow.into_error(e)

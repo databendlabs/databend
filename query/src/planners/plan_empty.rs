@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use fuse_query_datavalues::DataSchemaRef;
+use crate::datavalues::DataSchemaRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct EmptyPlan {

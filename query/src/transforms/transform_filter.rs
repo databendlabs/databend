@@ -7,10 +7,10 @@ use std::sync::Arc;
 
 use arrow::compute::filter_record_batch;
 use async_trait::async_trait;
-use fuse_query_datavalues::{BooleanArray, DataSchema, DataSchemaRef};
 
 use crate::datablocks::DataBlock;
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
+use crate::datavalues::{BooleanArray, DataSchema, DataSchemaRef};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::IFunction;
 use crate::planners::ExpressionPlan;
@@ -54,10 +54,10 @@ impl FilterTransform {
             .ok_or_else(|| {
                 FuseQueryError::build_internal_error("cannot downcast to boolean array".to_string())
             })?;
-        DataBlock::try_from_arrow_batch(&filter_record_batch(
+        Ok(DataBlock::try_from_arrow_batch(&filter_record_batch(
             &block.to_arrow_batch()?,
             filter_result,
-        )?)
+        )?)?)
     }
 }
 

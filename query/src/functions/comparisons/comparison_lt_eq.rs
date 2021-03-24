@@ -2,8 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use fuse_query_datavalues::DataValueComparisonOperator;
-
+use crate::datavalues::DataValueComparisonOperator;
 use crate::error::FuseQueryResult;
 use crate::functions::comparisons::ComparisonFunction;
 use crate::functions::IFunction;

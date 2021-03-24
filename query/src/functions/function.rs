@@ -5,9 +5,9 @@
 use std::fmt;
 
 use dyn_clone::DynClone;
-use fuse_query_datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 
 use crate::datablocks::DataBlock;
+use crate::datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 use crate::error::FuseQueryResult;
 
 pub trait IFunction: fmt::Display + Sync + Send + DynClone {

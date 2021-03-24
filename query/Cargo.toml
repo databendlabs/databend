@@ -12,17 +12,19 @@ name = "fuse-query"
 path = "src/bin/fuse-query.rs"
 
 [dependencies]
-# Workspace dependencies, in alphabetical order
+# Workspace dependencies
+fuse-query-clusters = {path = "clusters" }
 fuse-query-configs = {path = "configs" }
+fuse-query-datablocks = {path = "datablocks"}
 fuse-query-datavalues = {path = "datavalues"}
 fuse-query-metrics = {path = "metrics"}
 
-# github dependencies, in alphabetical order
+# github dependencies
 arrow = { git = "https://github.com/apache/arrow", rev="46161d2" }
 parquet = { git = "https://github.com/apache/arrow", rev="46161d2" }
 arrow-flight = { git = "https://github.com/apache/arrow", rev="46161d2" }
 
-# Crates.io dependencies, in alphabetical order
+# Crates.io dependencies
 async-std = "1.9.0"
 async-trait = "0.1"
 dyn-clone = "1.0.4"

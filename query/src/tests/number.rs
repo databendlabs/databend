@@ -4,9 +4,8 @@
 
 use std::sync::Arc;
 
-use fuse_query_datavalues::{DataSchema, DataSchemaRef, DataValue};
-
 use crate::datasources::IDataSource;
+use crate::datavalues::{DataSchema, DataSchemaRef, DataValue};
 use crate::error::FuseQueryResult;
 use crate::planners::{ExpressionPlan, PlanNode, ReadDataSourcePlan, ScanPlan};
 use crate::sessions::FuseQueryContextRef;

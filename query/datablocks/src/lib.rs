@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-mod data_block_test;
-
-pub mod data_block;
+mod data_block;
+mod error;
 
 pub use data_block::DataBlock;
+pub use error::DataBlockError;

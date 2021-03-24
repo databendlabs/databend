@@ -4,8 +4,7 @@
 
 use std::collections::HashMap;
 
-use fuse_query_datavalues::DataSchemaRef;
-
+use crate::datavalues::DataSchemaRef;
 use crate::sql::EngineType;
 
 pub type TableOptions = HashMap<String, String>;

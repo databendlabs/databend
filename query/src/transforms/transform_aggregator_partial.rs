@@ -6,13 +6,11 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fuse_query_datavalues::{
-    DataField, DataSchema, DataSchemaRef, DataType, DataValue, StringArray,
-};
 use futures::stream::StreamExt;
 
 use crate::datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
+use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, DataValue, StringArray};
 use crate::error::FuseQueryResult;
 use crate::functions::IFunction;
 use crate::planners::ExpressionPlan;

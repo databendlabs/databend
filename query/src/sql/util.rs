@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use arrow::datatypes::TimeUnit;
-use fuse_query_datavalues::DataType;
 use sqlparser::ast::DataType as SQLDataType;
 
+use crate::datavalues::DataType;
 use crate::error::{FuseQueryError, FuseQueryResult};
 
 /// Maps the SQL type to the corresponding Arrow `DataType`
