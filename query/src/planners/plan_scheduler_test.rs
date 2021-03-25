@@ -85,13 +85,13 @@ async fn test_scheduler_plan_with_3_nodes() -> crate::error::FuseQueryResult<()>
     let plans = PlanScheduler::schedule(ctx, &plan)?;
     let expects = vec!["Projection: number:UInt64
   Filter: (number = 1)
-    ReadDataSource: scan parts [108](Read from system.numbers_mt table, Read Rows:100000, Read Bytes:800000)",
+    ReadDataSource: scan parts [107](Read from system.numbers_mt table, Read Rows:100000, Read Bytes:800000)",
 "Projection: number:UInt64
   Filter: (number = 1)
-    ReadDataSource: scan parts [108](Read from system.numbers_mt table, Read Rows:100000, Read Bytes:800000)",
+    ReadDataSource: scan parts [107](Read from system.numbers_mt table, Read Rows:100000, Read Bytes:800000)",
 "Projection: number:UInt64
   Filter: (number = 1)
-    ReadDataSource: scan parts [104](Read from system.numbers_mt table, Read Rows:100000, Read Bytes:800000)",
+    ReadDataSource: scan parts [106](Read from system.numbers_mt table, Read Rows:100000, Read Bytes:800000)",
     ];
 
     for (i, plan) in plans.iter().enumerate() {

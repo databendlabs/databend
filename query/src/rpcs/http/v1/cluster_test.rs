@@ -21,6 +21,7 @@ async fn test_cluster() -> crate::error::FuseQueryResult<()> {
             .path("/v1/cluster/add")
             .json(&ClusterNodeRequest {
                 name: "9090".to_string(),
+                priority: 200,
                 cpus: 4,
                 address: "127.0.0.1:9090".to_string(),
             })
@@ -33,6 +34,7 @@ async fn test_cluster() -> crate::error::FuseQueryResult<()> {
             .path("/v1/cluster/add")
             .json(&ClusterNodeRequest {
                 name: "9091".to_string(),
+                priority: 100,
                 cpus: 4,
                 address: "127.0.0.1:9091".to_string(),
             })
@@ -48,6 +50,7 @@ async fn test_cluster() -> crate::error::FuseQueryResult<()> {
             .path("/v1/cluster/remove")
             .json(&ClusterNodeRequest {
                 name: "9091".to_string(),
+                priority: 100,
                 cpus: 4,
                 address: "127.0.0.1:9091".to_string(),
             })
@@ -61,7 +64,7 @@ async fn test_cluster() -> crate::error::FuseQueryResult<()> {
             .path("/v1/cluster/list")
             .reply(&filter);
         assert_eq!(
-            "[{\"name\":\"9090\",\"cpus\":4,\"address\":\"127.0.0.1:9090\",\"local\":true}]",
+            "[{\"name\":\"9090\",\"cpus\":4,\"priority\":200,\"address\":\"127.0.0.1:9090\",\"local\":true}]",
             res.await.body()
         );
     }
