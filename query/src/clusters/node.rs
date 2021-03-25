@@ -6,6 +6,7 @@
 pub struct Node {
     pub name: String,
     pub cpus: usize,
+    pub priority: u8,
     pub address: String,
     pub local: bool,
 }

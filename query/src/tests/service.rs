@@ -38,6 +38,7 @@ pub async fn try_create_context_with_nodes(nums: usize) -> FuseQueryResult<FuseQ
         ctx.try_get_cluster()?.add_node(&Node {
             name: format!("node{}", i),
             cpus: 4,
+            priority: 255,
             address: addr.clone(),
             local: false,
         })?;

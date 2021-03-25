@@ -40,6 +40,7 @@ impl Cluster {
         let mut node = Node {
             name: n.name.clone(),
             cpus: n.cpus,
+            priority: n.priority,
             address: n.address.clone(),
             local: false,
         };

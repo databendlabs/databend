@@ -44,18 +44,23 @@ impl PlanScheduler {
         let mut results = vec![];
         let cluster = ctx.try_get_cluster()?;
         let cluster_nodes = cluster.get_nodes()?;
-        let cluster_nums = if cluster_nodes.is_empty() {
+        let priority_sum = if cluster_nodes.is_empty() {
             1
         } else {
-            cluster_nodes.len()
+            cluster_nodes.iter().map(|n| n.priority).sum()
         };
 
-        // Align to the cluster numbers.
-        let remainder = partitions.len() % cluster_nums;
-        let chunk_size = (partitions.len() + remainder) / cluster_nums + 1;
-        for chunks in partitions.chunks(chunk_size) {
+        let total = partitions.len();
+        let num_nodes = cluster_nodes.len();
+        let mut index = 0;
+        let mut num_chunks_so_far = 0;
+        while index < num_nodes {
             let mut new_source_plan = source_plan.clone();
-            new_source_plan.partitions = Vec::from(chunks);
+            let remainder = ((cluster_nodes[index].priority as usize) * total) % (priority_sum as usize);
+            let chunk_size = ((cluster_nodes[index].priority as usize) * total - remainder) / (priority_sum as usize) + 1;
+            new_source_plan.partitions.clone_from_slice(&partitions[num_chunks_so_far..num_chunks_so_far+chunk_size]);
+            num_chunks_so_far += chunk_size;
+            index += 1;
 
             let mut rewritten_node = PlanNode::Empty(EmptyPlan {
                 schema: Arc::new(DataSchema::empty()),
@@ -74,6 +79,7 @@ impl PlanScheduler {
             })?;
             results.push(rewritten_node);
         }
+        assert_eq!(num_chunks_so_far, total);
         Ok(results)
     }
 }
