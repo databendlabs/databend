@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 use crate::datasources::datasource::DatabaseHashMap;
 use crate::datasources::local::NullTable;
+use crate::datasources::local::{CSVTable, ParquetTable};
 use crate::datasources::table_factory::TableCreatorFactory;
 use crate::error::FuseQueryResult;
 
@@ -23,6 +24,8 @@ impl LocalFactory {
 
     pub fn register(map: TableCreatorFactory) -> FuseQueryResult<()> {
         NullTable::register(map.clone())?;
+        CSVTable::register(map.clone())?;
+        ParquetTable::register(map.clone())?;
         Ok(())
     }
 }

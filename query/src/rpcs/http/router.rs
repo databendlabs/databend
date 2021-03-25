@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use fuse_query_configs::Config;
 use warp::Filter;
 
 use crate::clusters::ClusterRef;
+use crate::configs::Config;
 use crate::error::FuseQueryResult;
 
 pub struct Router {

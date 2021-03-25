@@ -5,9 +5,9 @@
 use std::fmt;
 
 use crate::datablocks::DataBlock;
-use crate::datavalues;
 use crate::datavalues::{
-    DataColumnarValue, DataSchema, DataType, DataValue, DataValueComparisonOperator,
+    self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue,
+    DataValueComparisonOperator,
 };
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::comparisons::{

@@ -6,7 +6,8 @@ use std::fmt;
 
 use crate::datablocks::DataBlock;
 use crate::datavalues::{
-    self, DataColumnarValue, DataSchema, DataType, DataValue, DataValueArithmeticOperator,
+    self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue,
+    DataValueArithmeticOperator,
 };
 use crate::error::FuseQueryResult;
 use crate::functions::{IFunction, LiteralFunction};

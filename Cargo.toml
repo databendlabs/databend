@@ -3,6 +3,9 @@
 members = [
     "query",
     "query/configs",
+    "query/clusters",
+    "query/datablocks",
+    "query/datavalues",
     "query/metrics",
     "store",
 ]

@@ -5,9 +5,8 @@
 use std::fmt;
 
 use crate::datablocks::DataBlock;
-use crate::datavalues;
 use crate::datavalues::{
-    DataColumnarValue, DataSchema, DataType, DataValue, DataValueLogicOperator,
+    self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue, DataValueLogicOperator,
 };
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::logics::{LogicAndFunction, LogicOrFunction};

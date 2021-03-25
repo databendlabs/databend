@@ -46,7 +46,7 @@ impl TableFactory {
     ) -> FuseQueryResult<Box<dyn ITable>> {
         let map = FACTORY.as_ref().lock()?;
         let creator = map.get(engine).ok_or_else(|| {
-            FuseQueryError::build_internal_error(format!("Unsupported Engine: {}", name))
+            FuseQueryError::build_internal_error(format!("Unsupported Engine: {}", engine))
         })?;
         (creator)(ctx, db, name, schema, options)
     }

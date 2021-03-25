@@ -6,6 +6,7 @@ use std::fmt::Debug;
 use std::result;
 
 use arrow::error::ArrowError;
+use parquet::errors::ParquetError;
 use snafu::{Backtrace, Snafu};
 use snafu::{ErrorCompat, IntoError};
 use sqlparser::parser::ParserError;
@@ -39,6 +40,12 @@ pub enum FuseQueryError {
         backtrace: Backtrace,
     },
 
+    #[snafu(display("Parquet Error"))]
+    Parquet {
+        source: ParquetError,
+        backtrace: Backtrace,
+    },
+
     #[snafu(display("Flight Error: {}", status))]
     Flight {
         status: tonic::Status,
@@ -60,9 +67,43 @@ impl FuseQueryError {
     }
 }
 
+// Internal convert.
+impl From<fuse_query_datavalues::error::DataValueError> for FuseQueryError {
+    fn from(err: fuse_query_datavalues::error::DataValueError) -> Self {
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
+    }
+}
+
+impl From<crate::datablocks::DataBlockError> for FuseQueryError {
+    fn from(err: crate::datablocks::DataBlockError) -> Self {
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
+    }
+}
+
+impl From<crate::clusters::ClusterError> for FuseQueryError {
+    fn from(err: crate::clusters::ClusterError) -> Self {
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
+    }
+}
+
 impl From<ArrowError> for FuseQueryError {
     fn from(e: ArrowError) -> Self {
         Arrow.into_error(e)
+    }
+}
+
+impl From<ParquetError> for FuseQueryError {
+    fn from(e: ParquetError) -> Self {
+        Parquet.into_error(e)
     }
 }
 
