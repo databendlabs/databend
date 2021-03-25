@@ -56,9 +56,14 @@ impl PlanScheduler {
         let mut num_chunks_so_far = 0;
         while index < num_nodes {
             let mut new_source_plan = source_plan.clone();
-            let remainder = ((cluster_nodes[index].priority as usize) * total) % (priority_sum as usize);
-            let chunk_size = ((cluster_nodes[index].priority as usize) * total - remainder) / (priority_sum as usize) + 1;
-            new_source_plan.partitions.clone_from_slice(&partitions[num_chunks_so_far..num_chunks_so_far+chunk_size]);
+            let remainder =
+                ((cluster_nodes[index].priority as usize) * total) % (priority_sum as usize);
+            let chunk_size = ((cluster_nodes[index].priority as usize) * total - remainder)
+                / (priority_sum as usize)
+                + 1;
+            new_source_plan
+                .partitions
+                .clone_from_slice(&partitions[num_chunks_so_far..num_chunks_so_far + chunk_size]);
             num_chunks_so_far += chunk_size;
             index += 1;
 
