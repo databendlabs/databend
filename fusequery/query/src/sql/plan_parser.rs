@@ -157,7 +157,7 @@ impl PlanParser {
         // Aggregator check.
         let mut has_aggregator = false;
         for expr in &projection_expr {
-            if expr.has_aggregator(self.ctx.clone())? {
+            if expr.has_aggregator()? {
                 has_aggregator = true;
                 break;
             }

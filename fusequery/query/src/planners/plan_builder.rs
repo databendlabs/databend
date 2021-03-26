@@ -53,7 +53,7 @@ impl PlanBuilder {
     ) -> FuseQueryResult<Vec<DataField>> {
         exprs
             .iter()
-            .map(|expr| expr.to_data_field(self.ctx.clone(), input_schema))
+            .map(|expr| expr.to_data_field(input_schema))
             .collect::<FuseQueryResult<_>>()
     }
 

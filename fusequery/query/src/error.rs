@@ -95,6 +95,15 @@ impl From<crate::clusters::ClusterError> for FuseQueryError {
     }
 }
 
+impl From<crate::functions::FunctionError> for FuseQueryError {
+    fn from(err: crate::functions::FunctionError) -> Self {
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
+    }
+}
+
 impl From<ArrowError> for FuseQueryError {
     fn from(e: ArrowError) -> Self {
         Arrow.into_error(e)

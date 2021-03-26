@@ -9,7 +9,6 @@ pub mod tests;
 pub mod datasources;
 pub mod datastreams;
 pub mod error;
-pub mod functions;
 pub mod interpreters;
 pub mod optimizers;
 pub mod planners;
@@ -22,6 +21,7 @@ pub mod transforms;
 
 pub use common_datablocks as datablocks;
 pub use common_datavalues as datavalues;
+pub use common_functions as functions;
 pub use fuse_query_clusters as clusters;
 pub use fuse_query_configs as configs;
 

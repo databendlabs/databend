@@ -37,7 +37,6 @@ async fn test_transform_aggregator() -> crate::error::FuseQueryResult<()> {
     pipeline.add_source(Arc::new(a))?;
     pipeline.add_simple_transform(|| {
         Ok(Box::new(AggregatorPartialTransform::try_create(
-            ctx.clone(),
             aggr_partial.schema(),
             aggr_exprs.clone(),
         )?))
@@ -45,7 +44,6 @@ async fn test_transform_aggregator() -> crate::error::FuseQueryResult<()> {
     pipeline.merge_processor()?;
     pipeline.add_simple_transform(|| {
         Ok(Box::new(AggregatorFinalTransform::try_create(
-            ctx.clone(),
             aggr_final.schema(),
             aggr_exprs.clone(),
         )?))

@@ -56,7 +56,6 @@ impl PipelineBuilder {
             PlanNode::Projection(plan) => {
                 pipeline.add_simple_transform(|| {
                     Ok(Box::new(ProjectionTransform::try_create(
-                        self.ctx.clone(),
                         plan.schema.clone(),
                         plan.expr.clone(),
                     )?))
@@ -66,7 +65,6 @@ impl PipelineBuilder {
             PlanNode::AggregatorPartial(plan) => {
                 pipeline.add_simple_transform(|| {
                     Ok(Box::new(AggregatorPartialTransform::try_create(
-                        self.ctx.clone(),
                         plan.schema(),
                         plan.aggr_expr.clone(),
                     )?))
@@ -77,7 +75,6 @@ impl PipelineBuilder {
                 pipeline.merge_processor()?;
                 pipeline.add_simple_transform(|| {
                     Ok(Box::new(AggregatorFinalTransform::try_create(
-                        self.ctx.clone(),
                         plan.schema(),
                         plan.aggr_expr.clone(),
                     )?))
@@ -87,7 +84,6 @@ impl PipelineBuilder {
             PlanNode::Filter(plan) => {
                 pipeline.add_simple_transform(|| {
                     Ok(Box::new(FilterTransform::try_create(
-                        self.ctx.clone(),
                         plan.predicate.clone(),
                     )?))
                 })?;

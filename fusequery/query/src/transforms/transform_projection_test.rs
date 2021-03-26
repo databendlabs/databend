@@ -27,7 +27,6 @@ async fn test_transform_projection() -> crate::error::FuseQueryResult<()> {
     {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ProjectionTransform::try_create(
-                ctx.clone(),
                 plan.schema.clone(),
                 plan.expr.clone(),
             )?))

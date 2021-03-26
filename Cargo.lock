@@ -958,6 +958,7 @@ dependencies = [
  "async-trait",
  "common-datablocks",
  "common-datavalues",
+ "common-functions",
  "criterion",
  "crossbeam 0.8.0",
  "dyn-clone",

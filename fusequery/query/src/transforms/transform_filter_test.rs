@@ -29,7 +29,6 @@ async fn test_transform_filter() -> crate::error::FuseQueryResult<()> {
     {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
-                ctx.clone(),
                 plan.predicate.clone(),
             )?))
         })?;

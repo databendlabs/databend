@@ -14,7 +14,6 @@ use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::functions::IFunction;
 use crate::planners::ExpressionPlan;
 use crate::processors::{EmptyProcessor, IProcessor};
-use crate::sessions::FuseQueryContextRef;
 
 pub struct ProjectionTransform {
     funcs: Vec<Box<dyn IFunction>>,
@@ -23,14 +22,10 @@ pub struct ProjectionTransform {
 }
 
 impl ProjectionTransform {
-    pub fn try_create(
-        ctx: FuseQueryContextRef,
-        schema: DataSchemaRef,
-        exprs: Vec<ExpressionPlan>,
-    ) -> FuseQueryResult<Self> {
+    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> FuseQueryResult<Self> {
         let mut funcs = Vec::with_capacity(exprs.len());
         for expr in &exprs {
-            let func = expr.to_function(ctx.clone())?;
+            let func = expr.to_function()?;
             if func.is_aggregator() {
                 return Err(FuseQueryError::build_internal_error(format!(
                     "Aggregate function {} is found in ProjectionTransform, should AggregatorTransform",
