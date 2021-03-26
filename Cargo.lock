@@ -563,6 +563,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-planners"
+version = "0.1.0"
+dependencies = [
+ "common-datavalues",
+ "common-functions",
+ "dyn-clone",
+ "futures",
+ "indexmap",
+ "lazy_static",
+ "paste",
+ "pretty_assertions",
+ "serde",
+ "snafu",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -5,6 +5,7 @@ members = [
     "common/datablocks",
     "common/datavalues",
     "common/functions",
+    "common/planners",
 
     # FuseQuery
     "fusequery/configs",
