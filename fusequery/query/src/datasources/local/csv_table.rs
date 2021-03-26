@@ -10,20 +10,20 @@ use async_trait::async_trait;
 use crate::datasources::local::ParquetTable;
 use crate::datasources::table_factory::TableCreatorFactory;
 use crate::datasources::{ITable, Partition, Statistics};
-use crate::datastreams::{CSVStream, SendableDataBlockStream};
+use crate::datastreams::{CsvStream, SendableDataBlockStream};
 use crate::datavalues::DataSchemaRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{PlanNode, ReadDataSourcePlan, TableOptions};
 use crate::sessions::FuseQueryContextRef;
 
-pub struct CSVTable {
+pub struct CsvTable {
     db: String,
     name: String,
     schema: DataSchemaRef,
     file: String,
 }
 
-impl CSVTable {
+impl CsvTable {
     pub fn try_create(
         _ctx: FuseQueryContextRef,
         db: String,
@@ -34,7 +34,7 @@ impl CSVTable {
         let file = options.get("location");
         return match file {
             Some(file) => {
-                let table = CSVTable {
+                let table = CsvTable {
                     db,
                     name,
                     schema,
@@ -50,14 +50,14 @@ impl CSVTable {
 
     pub fn register(map: TableCreatorFactory) -> FuseQueryResult<()> {
         let mut map = map.as_ref().lock()?;
-        map.insert("CSV", CSVTable::try_create);
+        map.insert("CSV", CsvTable::try_create);
         map.insert("Parquet", ParquetTable::try_create);
         Ok(())
     }
 }
 
 #[async_trait]
-impl ITable for CSVTable {
+impl ITable for CsvTable {
     fn name(&self) -> &str {
         &self.name
     }
@@ -90,7 +90,7 @@ impl ITable for CSVTable {
 
     async fn read(&self, _ctx: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
         let reader = File::open(self.file.clone()).unwrap();
-        Ok(Box::pin(CSVStream::try_create(
+        Ok(Box::pin(CsvStream::try_create(
             self.schema.clone(),
             reader,
         )?))

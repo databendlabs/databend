@@ -25,7 +25,7 @@ fn test_stage_plan() -> crate::error::FuseQueryResult<()> {
     .project(vec![col("sumx")])?
     .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
-        typ: DFExplainType::Syntax,
+        typ: DfExplainType::Syntax,
         input: Arc::new(plan),
     });
     let expect = "Projection: sumx:UInt64\

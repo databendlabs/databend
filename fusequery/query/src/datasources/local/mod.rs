@@ -10,7 +10,7 @@ mod null_table_test;
 mod parquet_table;
 mod parquet_table_test;
 
-pub use csv_table::CSVTable;
+pub use csv_table::CsvTable;
 pub use local_factory::LocalFactory;
 pub use null_table::NullTable;
 pub use parquet_table::ParquetTable;

@@ -22,7 +22,7 @@ fn test_explain_plan() -> crate::error::FuseQueryResult<()> {
     .filter(add(col("number"), lit(1)).eq(lit(4)))?
     .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
-        typ: DFExplainType::Syntax,
+        typ: DfExplainType::Syntax,
         input: Arc::new(plan),
     });
     let expect ="Filter: ((number + 1) = 4)\

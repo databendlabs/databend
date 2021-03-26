@@ -12,7 +12,7 @@ use crate::functions::aggregators::AggregatorFunction;
 use crate::functions::arithmetics::ArithmeticFunction;
 use crate::functions::comparisons::ComparisonFunction;
 use crate::functions::logics::LogicFunction;
-use crate::functions::udfs::UDFFunction;
+use crate::functions::udfs::UdfFunction;
 use crate::functions::IFunction;
 use crate::sessions::FuseQueryContextRef;
 
@@ -30,7 +30,7 @@ lazy_static! {
         ArithmeticFunction::register(map.clone()).unwrap();
         ComparisonFunction::register(map.clone()).unwrap();
         LogicFunction::register(map.clone()).unwrap();
-        UDFFunction::register(map.clone()).unwrap();
+        UdfFunction::register(map.clone()).unwrap();
         map
     };
 }

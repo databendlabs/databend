@@ -6,5 +6,5 @@ mod mysql_handler;
 mod mysql_metrics;
 mod mysql_stream;
 
-pub use self::mysql_handler::MySQLHandler;
-pub use self::mysql_stream::MySQLStream;
+pub use self::mysql_handler::MysqlHandler;
+pub use self::mysql_stream::MysqlStream;

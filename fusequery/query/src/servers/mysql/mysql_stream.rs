@@ -9,13 +9,13 @@ use msql_srv::*;
 use crate::datablocks::DataBlock;
 use crate::error::{FuseQueryError, FuseQueryResult};
 
-pub struct MySQLStream {
+pub struct MysqlStream {
     blocks: Vec<DataBlock>,
 }
 
-impl MySQLStream {
+impl MysqlStream {
     pub fn create(blocks: Vec<DataBlock>) -> Self {
-        MySQLStream { blocks }
+        MysqlStream { blocks }
     }
 
     pub fn execute<W: std::io::Write>(&self, writer: QueryResultWriter<W>) -> FuseQueryResult<()> {

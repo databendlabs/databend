@@ -6,4 +6,4 @@
 
 mod mysql;
 
-pub use mysql::MySQLHandler;
+pub use mysql::MysqlHandler;

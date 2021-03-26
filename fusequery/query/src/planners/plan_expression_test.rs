@@ -28,7 +28,7 @@ fn test_expression_plan() -> crate::error::FuseQueryResult<()> {
     )?
     .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
-        typ: DFExplainType::Syntax,
+        typ: DfExplainType::Syntax,
         input: Arc::new(plan),
     });
     let expect ="Filter: (((((((number + 1) = 4) and (number != 4)) and (number < 4)) and (number <= 4)) and (number > 4)) and (number >= 4))\

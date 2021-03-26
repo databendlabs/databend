@@ -12,7 +12,7 @@ mod stream_limit;
 mod stream_parquet;
 
 pub use stream::SendableDataBlockStream;
-pub use stream_csv::CSVStream;
+pub use stream_csv::CsvStream;
 pub use stream_datablock::DataBlockStream;
 pub use stream_expression::ExpressionStream;
 pub use stream_limit::LimitStream;

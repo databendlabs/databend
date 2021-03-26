@@ -43,7 +43,7 @@ pub use plan_aggregator_partial::AggregatorPartialPlan;
 pub use plan_builder::PlanBuilder;
 pub use plan_create::{CreatePlan, TableOptions};
 pub use plan_empty::EmptyPlan;
-pub use plan_explain::{DFExplainType, ExplainPlan};
+pub use plan_explain::{DfExplainType, ExplainPlan};
 pub use plan_expression::ExpressionPlan;
 pub use plan_expression_column::col;
 pub use plan_expression_function::{add, sum};

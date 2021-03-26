@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::datavalues::{DataField, DataSchema, DataSchemaRef};
 use crate::error::FuseQueryResult;
 use crate::planners::{
-    col, AggregatorFinalPlan, AggregatorPartialPlan, DFExplainType, EmptyPlan, ExplainPlan,
+    col, AggregatorFinalPlan, AggregatorPartialPlan, DfExplainType, EmptyPlan, ExplainPlan,
     ExpressionPlan, FilterPlan, LimitPlan, PlanNode, PlanRewriter, ProjectionPlan, ScanPlan,
     SelectPlan, StagePlan, StageState,
 };
@@ -212,7 +212,7 @@ impl PlanBuilder {
         Ok(Self::from(
             self.ctx.clone(),
             &PlanNode::Explain(ExplainPlan {
-                typ: DFExplainType::Syntax,
+                typ: DfExplainType::Syntax,
                 input: Arc::new(self.plan.clone()),
             }),
         ))

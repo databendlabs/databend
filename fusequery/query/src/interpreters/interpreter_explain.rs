@@ -13,7 +13,7 @@ use crate::datavalues::{DataField, DataSchema, DataType, StringArray};
 use crate::error::FuseQueryResult;
 use crate::interpreters::IInterpreter;
 use crate::optimizers::Optimizer;
-use crate::planners::{DFExplainType, ExplainPlan, PlanNode};
+use crate::planners::{DfExplainType, ExplainPlan, PlanNode};
 use crate::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
 
@@ -46,10 +46,10 @@ impl IInterpreter for ExplainInterpreter {
 
         let plan = Optimizer::create(self.ctx.clone()).optimize(&self.explain.input)?;
         let result = match self.explain.typ {
-            DFExplainType::Graph => {
+            DfExplainType::Graph => {
                 format!("{}", plan.display_graphviz())
             }
-            DFExplainType::Pipeline => {
+            DfExplainType::Pipeline => {
                 let pipeline = PipelineBuilder::create(self.ctx.clone(), plan).build()?;
                 format!("{:?}", pipeline)
             }

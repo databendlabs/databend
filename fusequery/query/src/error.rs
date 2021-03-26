@@ -16,8 +16,8 @@ pub type FuseQueryResult<T> = result::Result<T, FuseQueryError>;
 #[derive(Debug, Snafu)]
 #[non_exhaustive]
 pub enum FuseQueryError {
-    #[snafu(display("SQLParser Error"))]
-    SQLParse {
+    #[snafu(display("SqlParser Error"))]
+    SqlParse {
         source: ParserError,
         backtrace: Backtrace,
     },
@@ -109,7 +109,7 @@ impl From<ParquetError> for FuseQueryError {
 
 impl From<ParserError> for FuseQueryError {
     fn from(e: ParserError) -> Self {
-        SQLParse.into_error(e)
+        SqlParse.into_error(e)
     }
 }
 

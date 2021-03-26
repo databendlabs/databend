@@ -10,7 +10,7 @@ fn test_udf_function() -> crate::error::FuseQueryResult<()> {
 
     use crate::datablocks::*;
     use crate::datavalues::*;
-    use crate::functions::udfs::UDFExampleFunction;
+    use crate::functions::udfs::UdfExampleFunction;
     use crate::functions::*;
 
     #[allow(dead_code)]
@@ -38,7 +38,7 @@ fn test_udf_function() -> crate::error::FuseQueryResult<()> {
         name: "udf-example-passed",
         display: "example()",
         nullable: false,
-        func: UDFExampleFunction::try_create(ctx, &[field_a.clone(), field_b.clone()])?,
+        func: UdfExampleFunction::try_create(ctx, &[field_a.clone(), field_b.clone()])?,
         block: DataBlock::create(
             schema.clone(),
             vec![

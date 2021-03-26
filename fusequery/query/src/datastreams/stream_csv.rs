@@ -13,18 +13,18 @@ use crate::datablocks::DataBlock;
 use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 
-pub struct CSVStream {
+pub struct CsvStream {
     reader: csv_crate::Reader<File>,
 }
 
-impl CSVStream {
+impl CsvStream {
     pub fn try_create(schema: DataSchemaRef, r: File) -> FuseQueryResult<Self> {
         let reader = csv::Reader::new(r, schema, false, None, 1024, None, None);
-        Ok(CSVStream { reader })
+        Ok(CsvStream { reader })
     }
 }
 
-impl Stream for CSVStream {
+impl Stream for CsvStream {
     type Item = FuseQueryResult<DataBlock>;
 
     fn poll_next(

@@ -13,7 +13,7 @@ use sqlparser::{
     tokenizer::{Token, Tokenizer},
 };
 
-use crate::planners::DFExplainType;
+use crate::planners::DfExplainType;
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
@@ -26,7 +26,7 @@ macro_rules! parser_err {
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum EngineType {
     /// Newline-delimited JSON
-    JSONEachRaw,
+    JsonEachRaw,
     /// Apache Parquet columnar store
     Parquet,
     /// Comma separated values
@@ -38,7 +38,7 @@ pub enum EngineType {
 impl ToString for EngineType {
     fn to_string(&self) -> String {
         match self {
-            EngineType::JSONEachRaw => "JSON".into(),
+            EngineType::JsonEachRaw => "JSON".into(),
             EngineType::Parquet => "Parquet".into(),
             EngineType::Csv => "CSV".into(),
             EngineType::Null => "Null".into(),
@@ -64,8 +64,8 @@ pub struct FuseShowSettings;
 
 /// DataFusion extension DDL for `EXPLAIN` and `EXPLAIN VERBOSE`
 #[derive(Debug, Clone, PartialEq)]
-pub struct DFExplainPlan {
-    pub typ: DFExplainType,
+pub struct DfExplainPlan {
+    pub typ: DfExplainType,
     /// The statement for which to generate an planning explanation
     pub statement: Box<SQLStatement>,
 }
@@ -74,26 +74,26 @@ pub struct DFExplainPlan {
 ///
 /// Tokens parsed by `DFParser` are converted into these values.
 #[derive(Debug, Clone, PartialEq)]
-pub enum DFStatement {
+pub enum DfStatement {
     /// ANSI SQL AST node
     Statement(SQLStatement),
     /// Extension: `EXPLAIN <SQL>`
-    Explain(DFExplainPlan),
+    Explain(DfExplainPlan),
     Create(FuseCreateTable),
     ShowTables(FuseShowTables),
     ShowSettings(FuseShowSettings),
 }
 
 /// SQL Parser
-pub struct DFParser<'a> {
+pub struct DfParser<'a> {
     parser: Parser<'a>,
 }
 
-impl<'a> DFParser<'a> {
+impl<'a> DfParser<'a> {
     /// Parse the specified tokens
     pub fn new(sql: &str) -> Result<Self, ParserError> {
         let dialect = &GenericDialect {};
-        DFParser::new_with_dialect(sql, dialect)
+        DfParser::new_with_dialect(sql, dialect)
     }
 
     /// Parse the specified tokens with dialect
@@ -101,23 +101,23 @@ impl<'a> DFParser<'a> {
         let mut tokenizer = Tokenizer::new(dialect, sql);
         let tokens = tokenizer.tokenize()?;
 
-        Ok(DFParser {
+        Ok(DfParser {
             parser: Parser::new(tokens, dialect),
         })
     }
 
     /// Parse a SQL statement and produce a set of statements with dialect
-    pub fn parse_sql(sql: &str) -> Result<Vec<DFStatement>, ParserError> {
+    pub fn parse_sql(sql: &str) -> Result<Vec<DfStatement>, ParserError> {
         let dialect = &GenericDialect {};
-        DFParser::parse_sql_with_dialect(sql, dialect)
+        DfParser::parse_sql_with_dialect(sql, dialect)
     }
 
     /// Parse a SQL statement and produce a set of statements
     pub fn parse_sql_with_dialect(
         sql: &str,
         dialect: &dyn Dialect,
-    ) -> Result<Vec<DFStatement>, ParserError> {
-        let mut parser = DFParser::new_with_dialect(sql, dialect)?;
+    ) -> Result<Vec<DfStatement>, ParserError> {
+        let mut parser = DfParser::new_with_dialect(sql, dialect)?;
         let mut stmts = Vec::new();
         let mut expecting_statement_delimiter = false;
         loop {
@@ -146,7 +146,7 @@ impl<'a> DFParser<'a> {
     }
 
     /// Parse a new expression
-    pub fn parse_statement(&mut self) -> Result<DFStatement, ParserError> {
+    pub fn parse_statement(&mut self) -> Result<DfStatement, ParserError> {
         match self.parser.peek_token() {
             Token::Word(w) => {
                 match w.keyword {
@@ -165,48 +165,48 @@ impl<'a> DFParser<'a> {
                         self.parser.next_token();
 
                         if self.consume_token("TABLES") {
-                            Ok(DFStatement::ShowTables(FuseShowTables))
+                            Ok(DfStatement::ShowTables(FuseShowTables))
                         } else if self.consume_token("SETTINGS") {
-                            Ok(DFStatement::ShowSettings(FuseShowSettings))
+                            Ok(DfStatement::ShowSettings(FuseShowSettings))
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
                     }
                     _ => {
                         // use the native parser
-                        Ok(DFStatement::Statement(self.parser.parse_statement()?))
+                        Ok(DfStatement::Statement(self.parser.parse_statement()?))
                     }
                 }
             }
             _ => {
                 // use the native parser
-                Ok(DFStatement::Statement(self.parser.parse_statement()?))
+                Ok(DfStatement::Statement(self.parser.parse_statement()?))
             }
         }
     }
 
     /// Parse an SQL EXPLAIN statement.
-    pub fn parse_explain(&mut self) -> Result<DFStatement, ParserError> {
+    pub fn parse_explain(&mut self) -> Result<DfStatement, ParserError> {
         // Parser is at the token immediately after EXPLAIN
         // Check for EXPLAIN VERBOSE
         let typ = match self.parser.peek_token() {
             Token::Word(w) => match w.value.to_uppercase().as_str() {
                 "PIPELINE" => {
                     self.parser.next_token();
-                    DFExplainType::Pipeline
+                    DfExplainType::Pipeline
                 }
                 "GRAPH" => {
                     self.parser.next_token();
-                    DFExplainType::Graph
+                    DfExplainType::Graph
                 }
-                _ => DFExplainType::Syntax,
+                _ => DfExplainType::Syntax,
             },
-            _ => DFExplainType::Syntax,
+            _ => DfExplainType::Syntax,
         };
 
         let statement = Box::new(self.parser.parse_statement()?);
-        let explain_plan = DFExplainPlan { typ, statement };
-        Ok(DFStatement::Explain(explain_plan))
+        let explain_plan = DfExplainPlan { typ, statement };
+        Ok(DfStatement::Explain(explain_plan))
     }
 
     // This is a copy of the equivalent implementation in sqlparser.
@@ -307,7 +307,7 @@ impl<'a> DFParser<'a> {
         })
     }
 
-    fn parse_create(&mut self) -> Result<DFStatement, ParserError> {
+    fn parse_create(&mut self) -> Result<DfStatement, ParserError> {
         self.parser.expect_keyword(Keyword::TABLE)?;
         let if_not_exists =
             self.parser
@@ -336,7 +336,7 @@ impl<'a> DFParser<'a> {
             table_properties,
         };
 
-        Ok(DFStatement::Create(create))
+        Ok(DfStatement::Create(create))
     }
 
     /// Parses the set of valid formats
@@ -351,7 +351,7 @@ impl<'a> DFParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match &*w.value {
                 "Parquet" => Ok(EngineType::Parquet),
-                "JSONEachRaw" => Ok(EngineType::JSONEachRaw),
+                "JSONEachRaw" => Ok(EngineType::JsonEachRaw),
                 "CSV" => Ok(EngineType::Csv),
                 "Null" => Ok(EngineType::Null),
                 _ => self.expected("one of Parquet, JSONEachRaw, Null or CSV", Token::Word(w)),

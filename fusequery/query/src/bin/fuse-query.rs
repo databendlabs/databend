@@ -4,7 +4,7 @@
 
 use fuse_query::clusters::Cluster;
 use fuse_query::rpcs::{HttpService, RpcService};
-use fuse_query::servers::MySQLHandler;
+use fuse_query::servers::MysqlHandler;
 use fuse_query::sessions::Session;
 use fuse_query_configs::Config;
 use fuse_query_metrics::MetricService;
@@ -37,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // MySQL handler.
     {
-        let handler = MySQLHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
+        let handler = MysqlHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
         tokio::spawn(async move { handler.start() });
 
         info!(

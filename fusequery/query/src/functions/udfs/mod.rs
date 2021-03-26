@@ -13,5 +13,5 @@ mod udf_example;
 
 pub use database::DatabaseFunction;
 pub use to_type_name::ToTypeNameFunction;
-pub use udf::UDFFunction;
-pub use udf_example::UDFExampleFunction;
+pub use udf::UdfFunction;
+pub use udf_example::UdfExampleFunction;

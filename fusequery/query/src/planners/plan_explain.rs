@@ -9,7 +9,7 @@ use crate::error::FuseQueryResult;
 use crate::planners::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
-pub enum DFExplainType {
+pub enum DfExplainType {
     Syntax,
     Graph,
     Pipeline,
@@ -17,7 +17,7 @@ pub enum DFExplainType {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct ExplainPlan {
-    pub typ: DFExplainType,
+    pub typ: DfExplainType,
     pub input: Arc<PlanNode>,
 }
 

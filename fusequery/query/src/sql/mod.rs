@@ -9,5 +9,5 @@ mod sql_parser;
 mod util;
 
 pub use plan_parser::PlanParser;
-pub use sql_parser::{DFExplainPlan, DFParser, DFStatement, EngineType};
+pub use sql_parser::{DfExplainPlan, DfParser, DfStatement, EngineType};
 pub use util::*;

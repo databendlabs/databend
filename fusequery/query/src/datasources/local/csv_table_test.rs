@@ -26,7 +26,7 @@ async fn test_csv_table() -> crate::error::FuseQueryResult<()> {
     .cloned()
     .collect();
 
-    let table = CSVTable::try_create(
+    let table = CsvTable::try_create(
         ctx.clone(),
         "default".into(),
         "test_csv".into(),

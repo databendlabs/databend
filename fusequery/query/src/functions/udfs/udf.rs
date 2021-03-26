@@ -5,16 +5,16 @@
 use crate::error::FuseQueryResult;
 use crate::functions::udfs::DatabaseFunction;
 use crate::functions::udfs::ToTypeNameFunction;
-use crate::functions::udfs::UDFExampleFunction;
+use crate::functions::udfs::UdfExampleFunction;
 use crate::functions::FactoryFuncRef;
 
 #[derive(Clone)]
-pub struct UDFFunction;
+pub struct UdfFunction;
 
-impl UDFFunction {
+impl UdfFunction {
     pub fn register(map: FactoryFuncRef) -> FuseQueryResult<()> {
         let mut map = map.as_ref().lock()?;
-        map.insert("example", UDFExampleFunction::try_create);
+        map.insert("example", UdfExampleFunction::try_create);
         map.insert("totypename", ToTypeNameFunction::try_create);
         map.insert("database", DatabaseFunction::try_create);
         Ok(())

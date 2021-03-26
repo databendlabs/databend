@@ -16,7 +16,7 @@ use crate::configs::Config;
 use crate::datablocks::DataBlock;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::interpreters::InterpreterFactory;
-use crate::servers::mysql::MySQLStream;
+use crate::servers::mysql::MysqlStream;
 use crate::sessions::{FuseQueryContextRef, SessionRef};
 use crate::sql::PlanParser;
 
@@ -83,7 +83,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
                     match result {
                         Ok(blocks) => {
                             let start = Instant::now();
-                            let stream = MySQLStream::create(blocks);
+                            let stream = MysqlStream::create(blocks);
                             stream.execute(writer)?;
                             let duration = start.elapsed();
                             debug!("MySQLHandler send to client cost:{:?}", duration);
@@ -131,13 +131,13 @@ impl<W: io::Write> MysqlShim<W> for Session {
     }
 }
 
-pub struct MySQLHandler {
+pub struct MysqlHandler {
     conf: Config,
     cluster: ClusterRef,
     session_manager: SessionRef,
 }
 
-impl MySQLHandler {
+impl MysqlHandler {
     pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionRef) -> Self {
         Self {
             conf,

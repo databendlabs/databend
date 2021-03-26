@@ -11,18 +11,18 @@ use crate::functions::IFunction;
 use crate::sessions::FuseQueryContextRef;
 
 #[derive(Clone)]
-pub struct UDFExampleFunction;
+pub struct UdfExampleFunction;
 
-impl UDFExampleFunction {
+impl UdfExampleFunction {
     pub fn try_create(
         _ctx: FuseQueryContextRef,
         _args: &[Box<dyn IFunction>],
     ) -> FuseQueryResult<Box<dyn IFunction>> {
-        Ok(Box::new(UDFExampleFunction {}))
+        Ok(Box::new(UdfExampleFunction {}))
     }
 }
 
-impl IFunction for UDFExampleFunction {
+impl IFunction for UdfExampleFunction {
     fn return_type(&self, _input_schema: &DataSchema) -> FuseQueryResult<DataType> {
         Ok(DataType::Boolean)
     }
@@ -62,7 +62,7 @@ impl IFunction for UDFExampleFunction {
     }
 }
 
-impl fmt::Display for UDFExampleFunction {
+impl fmt::Display for UdfExampleFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "example()")
     }

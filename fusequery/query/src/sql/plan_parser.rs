@@ -16,7 +16,7 @@ use crate::planners::{
 };
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::sql_parser::FuseCreateTable;
-use crate::sql::{make_data_type, DFExplainPlan, DFParser, DFStatement};
+use crate::sql::{make_data_type, DfExplainPlan, DfParser, DfStatement};
 
 pub struct PlanParser {
     ctx: FuseQueryContextRef,
@@ -28,7 +28,7 @@ impl PlanParser {
     }
 
     pub fn build_from_sql(&self, query: &str) -> FuseQueryResult<PlanNode> {
-        let statements = DFParser::parse_sql(query)?;
+        let statements = DfParser::parse_sql(query)?;
         if statements.len() != 1 {
             return Err(FuseQueryError::build_internal_error(
                 "Only support single query".to_string(),
@@ -37,21 +37,21 @@ impl PlanParser {
         self.statement_to_plan(&statements[0])
     }
 
-    pub fn statement_to_plan(&self, statement: &DFStatement) -> FuseQueryResult<PlanNode> {
+    pub fn statement_to_plan(&self, statement: &DfStatement) -> FuseQueryResult<PlanNode> {
         match statement {
-            DFStatement::Statement(v) => self.sql_statement_to_plan(&v),
-            DFStatement::Explain(v) => self.sql_explain_to_plan(&v),
-            DFStatement::Create(v) => self.sql_create_to_plan(&v),
+            DfStatement::Statement(v) => self.sql_statement_to_plan(&v),
+            DfStatement::Explain(v) => self.sql_explain_to_plan(&v),
+            DfStatement::Create(v) => self.sql_create_to_plan(&v),
 
             // TODO: support like and other filters in show queries
-            DFStatement::ShowTables(_) => self.build_from_sql(
+            DfStatement::ShowTables(_) => self.build_from_sql(
                 format!(
                     "SELECT name FROM system.tables where database = '{}'",
                     self.ctx.get_default_db()?
                 )
                 .as_str(),
             ),
-            DFStatement::ShowSettings(_) => self.build_from_sql("SELECT name FROM system.settings"),
+            DfStatement::ShowSettings(_) => self.build_from_sql("SELECT name FROM system.settings"),
         }
     }
 
@@ -73,7 +73,7 @@ impl PlanParser {
     }
 
     /// Generate a logic plan from an EXPLAIN
-    pub fn sql_explain_to_plan(&self, explain: &DFExplainPlan) -> FuseQueryResult<PlanNode> {
+    pub fn sql_explain_to_plan(&self, explain: &DfExplainPlan) -> FuseQueryResult<PlanNode> {
         let plan = self.sql_statement_to_plan(&explain.statement)?;
         Ok(PlanNode::Explain(ExplainPlan {
             typ: explain.typ,

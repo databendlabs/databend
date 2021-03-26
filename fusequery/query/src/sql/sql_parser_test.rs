@@ -8,10 +8,10 @@ mod tests {
     use sqlparser::parser::ParserError;
 
     use crate::sql::sql_parser::{FuseCreateTable, FuseShowSettings, FuseShowTables};
-    use crate::sql::{DFParser, DFStatement, EngineType};
+    use crate::sql::{DfParser, DfStatement, EngineType};
 
-    fn expect_parse_ok(sql: &str, expected: DFStatement) -> Result<(), ParserError> {
-        let statements = DFParser::parse_sql(sql)?;
+    fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<(), ParserError> {
+        let statements = DfParser::parse_sql(sql)?;
         assert_eq!(
             statements.len(),
             1,
@@ -23,7 +23,7 @@ mod tests {
 
     /// Parses sql and asserts that the expected error message was found
     fn expect_parse_error(sql: &str, expected_error: &str) -> Result<(), ParserError> {
-        match DFParser::parse_sql(sql) {
+        match DfParser::parse_sql(sql) {
             Ok(statements) => {
                 panic!(
                     "Expected parse error for '{}', but was successful: {:?}",
@@ -59,7 +59,7 @@ mod tests {
     fn create_table() -> Result<(), ParserError> {
         // positive case
         let sql = "CREATE TABLE t(c1 int) ENGINE = CSV location = '/data/33.csv' ";
-        let expected = DFStatement::Create(FuseCreateTable {
+        let expected = DfStatement::Create(FuseCreateTable {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("t")]),
             columns: vec![make_column_def("c1", DataType::Int)],
@@ -73,7 +73,7 @@ mod tests {
 
         // positive case: it is ok for parquet files not to have columns specified
         let sql = "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' ";
-        let expected = DFStatement::Create(FuseCreateTable {
+        let expected = DfStatement::Create(FuseCreateTable {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("t")]),
             columns: vec![
@@ -102,8 +102,8 @@ mod tests {
     #[test]
     fn show_queries() -> Result<(), ParserError> {
         // positive case
-        expect_parse_ok("SHOW TABLES", DFStatement::ShowTables(FuseShowTables))?;
-        expect_parse_ok("SHOW SETTINGS", DFStatement::ShowSettings(FuseShowSettings))?;
+        expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(FuseShowTables))?;
+        expect_parse_ok("SHOW SETTINGS", DfStatement::ShowSettings(FuseShowSettings))?;
 
         Ok(())
     }
