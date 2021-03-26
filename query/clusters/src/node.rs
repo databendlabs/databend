@@ -6,7 +6,7 @@
 pub struct Node {
     pub name: String,
     pub cpus: usize,
-    // Node priority is from 0 to 255
+    // Node priority is in [0,10]
     // larger value means higher priority
     pub priority: u8,
     pub address: String,
