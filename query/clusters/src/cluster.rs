@@ -65,6 +65,7 @@ impl Cluster {
         for (_, node) in self.nodes.lock()?.iter() {
             nodes.push(node.clone());
         }
+        nodes.sort_by(|a, b| b.name.cmp(&a.name));
         Ok(nodes)
     }
 }

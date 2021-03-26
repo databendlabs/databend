@@ -107,7 +107,7 @@ async fn test_scheduler_plan_with_3_nodes_diff_priority() -> crate::error::FuseQ
 
     use crate::planners::*;
 
-    let p = vec![5u8, 3u8, 2u8];
+    let p = vec![2u8, 3u8, 5u8];
     let ctx = crate::tests::try_create_context_with_nodes_and_priority(3, &p).await?;
     let cpus = ctx.get_max_threads()?;
 
