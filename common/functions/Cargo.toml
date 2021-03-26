@@ -16,7 +16,6 @@ arrow = { git = "https://github.com/apache/arrow", rev="46161d2" }
 
 # Crates.io dependencies
 dyn-clone = "1.0.4"
-futures = "0.3"
 indexmap = "1.6.1"
 lazy_static = "1.4.0"
 paste = "^1.0"

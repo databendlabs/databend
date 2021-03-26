@@ -6,10 +6,13 @@ mod error_test;
 
 pub mod tests;
 
+pub mod clusters;
+pub mod configs;
 pub mod datasources;
 pub mod datastreams;
 pub mod error;
 pub mod interpreters;
+pub mod metrics;
 pub mod optimizers;
 pub mod planners;
 pub mod processors;
@@ -23,8 +26,6 @@ pub use common_datablocks;
 pub use common_datavalues;
 pub use common_functions;
 pub use common_planners;
-pub use fuse_query_clusters as clusters;
-pub use fuse_query_configs as configs;
 
 // ProtoBuf generated files.
 #[allow(clippy::all)]

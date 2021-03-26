@@ -104,15 +104,6 @@ impl From<common_planners::PlannerError> for FuseQueryError {
     }
 }
 
-impl From<crate::clusters::ClusterError> for FuseQueryError {
-    fn from(err: crate::clusters::ClusterError) -> Self {
-        Internal {
-            message: err.to_string(),
-        }
-        .build()
-    }
-}
-
 impl From<ArrowError> for FuseQueryError {
     fn from(e: ArrowError) -> Self {
         Arrow.into_error(e)
