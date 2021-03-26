@@ -59,7 +59,7 @@ mysql -h127.0.0.1 -P3307
 ### Avg Demo
 
 ```text
-mysql> SELECT avg(number) FROM system.numbers(10000);
+mysql> SELECT avg(number) FROM system.numbers_mt(10000);
 +-------------+
 | Avg(number) |
 +-------------+
@@ -73,7 +73,7 @@ mysql> SELECT avg(number) FROM system.numbers(10000);
 ### 10 Billion Performance
 
 ```text
-mysql> SELECT avg(number) FROM system.numbers(10000000000);
+mysql> SELECT avg(number) FROM system.numbers_mt(10000000000);
 +-------------------+
 | Avg(number)       |
 +-------------------+
