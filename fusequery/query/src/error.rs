@@ -200,6 +200,15 @@ impl From<std::net::AddrParseError> for FuseQueryError {
     }
 }
 
+impl From<anyhow::Error> for FuseQueryError {
+    fn from(err: anyhow::Error) -> Self {
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
+    }
+}
+
 // a better eprintln function for error
 pub fn report<E: 'static>(err: &E)
 where

@@ -11,6 +11,7 @@ async fn test_null_table() -> crate::error::FuseQueryResult<()> {
 
     use crate::datasources::local::*;
 
+    let ctx = crate::tests::try_create_context()?;
     let table = NullTable::try_create(
         ctx.clone(),
         "default".into(),

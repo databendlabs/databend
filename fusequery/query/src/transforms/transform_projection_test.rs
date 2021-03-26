@@ -20,10 +20,9 @@ async fn test_transform_projection() -> crate::error::FuseQueryResult<()> {
     let a = test_source.number_source_transform_for_test(8)?;
     pipeline.add_source(Arc::new(a))?;
 
-    if let PlanNode::Projection(plan) =
-        PlanBuilder::create(ctx.clone(), test_source.number_schema_for_test()?)
-            .project(vec![col("number"), col("number")])?
-            .build()?
+    if let PlanNode::Projection(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
+        .project(vec![col("number"), col("number")])?
+        .build()?
     {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ProjectionTransform::try_create(

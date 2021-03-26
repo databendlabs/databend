@@ -6,11 +6,11 @@
 async fn test_transform_filter() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
+    use common_datavalues::*;
     use common_planners::*;
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::common_datavalues::*;
     use crate::processors::*;
     use crate::transforms::*;
 
@@ -22,10 +22,9 @@ async fn test_transform_filter() -> crate::error::FuseQueryResult<()> {
     let a = test_source.number_source_transform_for_test(8)?;
     pipeline.add_source(Arc::new(a))?;
 
-    if let PlanNode::Filter(plan) =
-        PlanBuilder::create(ctx.clone(), test_source.number_schema_for_test()?)
-            .filter(col("number").eq(lit(1)))?
-            .build()?
+    if let PlanNode::Filter(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
+        .filter(col("number").eq(lit(1)))?
+        .build()?
     {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(

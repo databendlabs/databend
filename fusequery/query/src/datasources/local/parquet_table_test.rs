@@ -24,6 +24,7 @@ async fn test_parquet_table() -> crate::error::FuseQueryResult<()> {
     .cloned()
     .collect();
 
+    let ctx = crate::tests::try_create_context()?;
     let table = ParquetTable::try_create(
         ctx.clone(),
         "default".into(),

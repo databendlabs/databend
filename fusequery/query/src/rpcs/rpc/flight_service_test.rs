@@ -15,10 +15,9 @@ async fn test_flight_service() -> Result<(), Box<dyn std::error::Error>> {
 
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
-    let plan = PlanBuilder::from(
-        ctx.clone(),
-        &PlanNode::ReadSource(test_source.number_read_source_plan_for_test(111)?),
-    )
+    let plan = PlanBuilder::from(&PlanNode::ReadSource(
+        test_source.number_read_source_plan_for_test(111)?,
+    ))
     .build()?;
 
     let mut client = FlightClient::try_create(addr.to_string()).await?;

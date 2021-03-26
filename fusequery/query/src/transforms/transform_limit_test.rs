@@ -23,7 +23,7 @@ async fn test_transform_limit() -> crate::error::FuseQueryResult<()> {
 
     pipeline.merge_processor()?;
 
-    if let PlanNode::Limit(plan) = PlanBuilder::create(ctx, test_source.number_schema_for_test()?)
+    if let PlanNode::Limit(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
         .limit(2)?
         .build()?
     {

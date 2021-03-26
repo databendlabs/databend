@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use crate::PlanNode;
-use crate::PlannerResult;
+
+pub type PlannerResult<T, E = anyhow::Error> = std::result::Result<T, E>;
 
 #[derive(PartialEq)]
 enum WalkOrder {

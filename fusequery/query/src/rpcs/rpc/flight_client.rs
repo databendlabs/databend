@@ -9,9 +9,9 @@ use arrow::datatypes::Schema;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::utils::flight_data_to_arrow_batch;
 use arrow_flight::Ticket;
+use common_datablocks::DataBlock;
 use prost::Message;
 
-use crate::common_datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::protobuf::FlightRequest;
