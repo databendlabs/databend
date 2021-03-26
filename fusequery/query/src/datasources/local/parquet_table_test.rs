@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test]
-async fn test_csv_table() -> crate::error::FuseQueryResult<()> {
+async fn test_parquet_table() -> crate::error::FuseQueryResult<()> {
     use std::env;
 
     use arrow::datatypes::{Field, Schema};
@@ -18,7 +18,7 @@ async fn test_csv_table() -> crate::error::FuseQueryResult<()> {
     let options: TableOptions = [(
         "location".to_string(),
         env::current_dir()?
-            .join("../tests/data/sample.csv")
+            .join("../../tests/data/alltypes_plain.parquet")
             .display()
             .to_string(),
     )]
@@ -26,11 +26,11 @@ async fn test_csv_table() -> crate::error::FuseQueryResult<()> {
     .cloned()
     .collect();
 
-    let table = CSVTable::try_create(
+    let table = ParquetTable::try_create(
         ctx.clone(),
         "default".into(),
-        "test_csv".into(),
-        Schema::new(vec![Field::new("a", DataType::UInt64, false)]).into(),
+        "test_parquet".into(),
+        Schema::new(vec![Field::new("id", DataType::Int32, false)]).into(),
         options,
     )?;
     table.read_plan(ctx.clone(), PlanBuilder::empty(ctx.clone()).build()?)?;
@@ -39,6 +39,6 @@ async fn test_csv_table() -> crate::error::FuseQueryResult<()> {
     let blocks = stream.try_collect::<Vec<_>>().await?;
     let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
 
-    assert_eq!(rows, 4);
+    assert_eq!(rows, 8);
     Ok(())
 }

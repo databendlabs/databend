@@ -13,11 +13,11 @@ path = "src/bin/fuse-query.rs"
 
 [dependencies]
 # Workspace dependencies
-fuse-query-clusters = {path = "clusters" }
-fuse-query-configs = {path = "configs" }
-fuse-query-datablocks = {path = "datablocks"}
-fuse-query-datavalues = {path = "datavalues"}
-fuse-query-metrics = {path = "metrics"}
+fuse-query-clusters = {path = "../clusters" }
+fuse-query-configs = {path = "../configs" }
+fuse-query-datablocks = {path = "../datablocks"}
+fuse-query-datavalues = {path = "../datavalues"}
+fuse-query-metrics = {path = "../metrics"}
 
 # github dependencies
 arrow = { git = "https://github.com/apache/arrow", rev="46161d2" }
