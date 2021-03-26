@@ -100,6 +100,7 @@ impl Stream for NumbersStream {
 
         Poll::Ready(match current {
             None => None,
+            Some(current) if current.begin == current.end => None,
             Some(current) => {
                 let v = (current.begin..current.end).collect::<Vec<u64>>();
                 let mut me = ManuallyDrop::new(v);
