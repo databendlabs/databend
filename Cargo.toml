@@ -1,12 +1,14 @@
 [workspace]
 
 members = [
+    # Common
+    "common/datablocks",
+    "common/datavalues",
+
     # FuseQuery
     "fusequery/configs",
     "fusequery/query",
     "fusequery/clusters",
-    "fusequery/datablocks",
-    "fusequery/datavalues",
     "fusequery/metrics",
 
     # FuseStore
