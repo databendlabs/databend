@@ -6,7 +6,7 @@ use std::task::{Context, Poll};
 
 use futures::stream::{Stream, StreamExt};
 
-use crate::datablocks::DataBlock;
+use crate::common_datablocks::DataBlock;
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::FuseQueryResult;
 

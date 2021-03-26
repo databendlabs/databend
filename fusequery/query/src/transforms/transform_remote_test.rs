@@ -7,7 +7,7 @@ async fn test_transform_remote_with_local() -> crate::error::FuseQueryResult<()>
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::datavalues::*;
+    use crate::common_datavalues::*;
     use crate::planners::*;
     use crate::processors::*;
     use crate::transforms::*;
@@ -39,7 +39,7 @@ async fn test_transform_remote_with_cluster() -> crate::error::FuseQueryResult<(
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::datavalues::*;
+    use crate::common_datavalues::*;
     use crate::processors::*;
     use crate::sql::*;
 

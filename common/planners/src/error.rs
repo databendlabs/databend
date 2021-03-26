@@ -25,8 +25,8 @@ impl PlannerError {
 }
 
 // Internal convert.
-impl From<crate::functions::FunctionError> for PlannerError {
-    fn from(err: crate::functions::FunctionError) -> Self {
+impl From<crate::common_functions::FunctionError> for PlannerError {
+    fn from(err: crate::common_functions::FunctionError) -> Self {
         Internal {
             message: err.to_string(),
         }

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::datavalues::DataValueLogicOperator;
+use crate::common_datavalues::DataValueLogicOperator;
 use crate::logics::LogicFunction;
 use crate::{FunctionResult, IFunction};
 

@@ -9,8 +9,8 @@ use arrow::csv;
 use csv as csv_crate;
 use futures::stream::Stream;
 
-use crate::datablocks::DataBlock;
-use crate::datavalues::DataSchemaRef;
+use crate::common_datablocks::DataBlock;
+use crate::common_datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 
 pub struct CsvStream {

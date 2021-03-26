@@ -8,8 +8,8 @@ fn test_to_type_name_function() -> crate::error::FunctionResult<()> {
 
     use pretty_assertions::assert_eq;
 
-    use crate::datablocks::*;
-    use crate::datavalues::*;
+    use crate::common_datablocks::*;
+    use crate::common_datavalues::*;
     use crate::udfs::*;
     use crate::*;
 

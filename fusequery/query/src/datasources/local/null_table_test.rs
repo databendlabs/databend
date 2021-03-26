@@ -7,8 +7,8 @@ async fn test_null_table() -> crate::error::FuseQueryResult<()> {
     use arrow::datatypes::{Field, Schema};
     use futures::TryStreamExt;
 
+    use crate::common_datavalues::DataType;
     use crate::datasources::local::*;
-    use crate::datavalues::DataType;
     use crate::planners::*;
 
     let ctx = crate::tests::try_create_context()?;

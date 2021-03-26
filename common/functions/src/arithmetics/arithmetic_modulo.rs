@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use crate::arithmetics::ArithmeticFunction;
-use crate::datavalues::DataValueArithmeticOperator;
+use crate::common_datavalues::DataValueArithmeticOperator;
 use crate::{FunctionResult, IFunction};
 
 pub struct ArithmeticModuloFunction;

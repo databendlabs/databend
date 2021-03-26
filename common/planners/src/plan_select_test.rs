@@ -8,7 +8,7 @@ fn test_select_wildcard_plan() -> crate::error::PlannerResult<()> {
 
     use pretty_assertions::assert_eq;
 
-    use crate::datavalues::*;
+    use crate::common_datavalues::*;
     use crate::*;
 
     let schema = Arc::new(DataSchema::new(vec![DataField::new(

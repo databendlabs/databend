@@ -10,7 +10,7 @@ use futures::stream::StreamExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::datablocks::DataBlock;
+use crate::common_datablocks::DataBlock;
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::IProcessor;

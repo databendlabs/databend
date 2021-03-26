@@ -8,7 +8,7 @@ use std::sync::Arc;
 use arrow::datatypes::{Field, Schema};
 use sqlparser::ast::{FunctionArg, Statement, TableFactor};
 
-use crate::datavalues::{DataSchema, DataValue};
+use crate::common_datavalues::{DataSchema, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::{
     CreatePlan, ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, SelectPlan, SettingPlan,

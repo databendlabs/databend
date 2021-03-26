@@ -7,7 +7,7 @@ async fn test_explain_interpreter() -> crate::error::FuseQueryResult<()> {
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::datavalues::DataType;
+    use crate::common_datavalues::DataType;
     use crate::interpreters::*;
     use crate::planners::*;
     use crate::sql::*;

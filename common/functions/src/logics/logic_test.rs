@@ -8,8 +8,8 @@ fn test_logic_function() -> crate::error::FunctionResult<()> {
 
     use pretty_assertions::assert_eq;
 
-    use crate::datablocks::*;
-    use crate::datavalues::*;
+    use crate::common_datablocks::*;
+    use crate::common_datavalues::*;
     use crate::logics::*;
     use crate::*;
 

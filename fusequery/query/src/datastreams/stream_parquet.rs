@@ -7,7 +7,7 @@ use std::task::{Context, Poll};
 use crossbeam::channel::Receiver;
 use futures::stream::Stream;
 
-use crate::datablocks::DataBlock;
+use crate::common_datablocks::DataBlock;
 use crate::error::FuseQueryResult;
 
 pub struct ParquetStream {

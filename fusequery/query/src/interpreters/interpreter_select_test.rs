@@ -6,7 +6,7 @@
 async fn test_select_interpreter() -> crate::error::FuseQueryResult<()> {
     use futures::stream::StreamExt;
 
-    use crate::datavalues::*;
+    use crate::common_datavalues::*;
     use crate::interpreters::*;
     use crate::planners::*;
     use crate::sql::*;

@@ -8,9 +8,9 @@ fn test_comparison_function() -> crate::error::FunctionResult<()> {
 
     use pretty_assertions::assert_eq;
 
+    use crate::common_datablocks::*;
+    use crate::common_datavalues::*;
     use crate::comparisons::*;
-    use crate::datablocks::*;
-    use crate::datavalues::*;
     use crate::*;
 
     #[allow(dead_code)]

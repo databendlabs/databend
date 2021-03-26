@@ -9,7 +9,7 @@ async fn test_transform_aggregator() -> crate::error::FuseQueryResult<()> {
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::datavalues::*;
+    use crate::common_datavalues::*;
     use crate::planners::{self, *};
     use crate::processors::*;
     use crate::transforms::*;

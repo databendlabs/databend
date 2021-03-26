@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::datablocks::DataBlock;
+use crate::common_datablocks::DataBlock;
 use crate::error::FuseQueryResult;
 
 pub type SendableDataBlockStream = std::pin::Pin<

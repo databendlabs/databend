@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use crate::datavalues::DataSchemaRef;
+use crate::common_datavalues::DataSchemaRef;
 
 /// Types of files to parse as DataFrames
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]

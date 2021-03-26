@@ -11,7 +11,7 @@ use arrow_flight::utils::flight_data_to_arrow_batch;
 use arrow_flight::Ticket;
 use prost::Message;
 
-use crate::datablocks::DataBlock;
+use crate::common_datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::protobuf::FlightRequest;

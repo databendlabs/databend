@@ -6,7 +6,7 @@ use arrow::datatypes::DataType;
 use arrow::util::display::array_value_to_string;
 use msql_srv::*;
 
-use crate::datablocks::DataBlock;
+use crate::common_datablocks::DataBlock;
 use crate::error::{FuseQueryError, FuseQueryResult};
 
 pub struct MysqlStream {

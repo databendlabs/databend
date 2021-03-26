@@ -7,11 +7,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::datablocks::DataBlock;
+use crate::common_datablocks::DataBlock;
+use crate::common_datavalues::DataSchemaRef;
+use crate::common_functions::IFunction;
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
-use crate::datavalues::DataSchemaRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::functions::IFunction;
 use crate::planners::ExpressionPlan;
 use crate::processors::{EmptyProcessor, IProcessor};
 

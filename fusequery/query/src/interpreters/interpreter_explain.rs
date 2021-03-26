@@ -7,9 +7,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use log::debug;
 
-use crate::datablocks::DataBlock;
+use crate::common_datablocks::DataBlock;
+use crate::common_datavalues::{DataField, DataSchema, DataType, StringArray};
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::datavalues::{DataField, DataSchema, DataType, StringArray};
 use crate::error::FuseQueryResult;
 use crate::interpreters::IInterpreter;
 use crate::optimizers::Optimizer;

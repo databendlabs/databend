@@ -4,14 +4,14 @@
 
 use std::fmt;
 
+use crate::common_datablocks::DataBlock;
+use crate::common_datavalues::{
+    self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue,
+    DataValueComparisonOperator,
+};
 use crate::comparisons::{
     ComparisonEqFunction, ComparisonGtEqFunction, ComparisonGtFunction, ComparisonLtEqFunction,
     ComparisonLtFunction, ComparisonNotEqFunction,
-};
-use crate::datablocks::DataBlock;
-use crate::datavalues::{
-    self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue,
-    DataValueComparisonOperator,
 };
 use crate::{FactoryFuncRef, FunctionError, FunctionResult, IFunction};
 

@@ -6,11 +6,11 @@ use std::task::{Context, Poll};
 
 use futures::stream::{Stream, StreamExt};
 
-use crate::datablocks::DataBlock;
+use crate::common_datablocks::DataBlock;
+use crate::common_datavalues::DataSchemaRef;
+use crate::common_functions::IFunction;
 use crate::datastreams::SendableDataBlockStream;
-use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
-use crate::functions::IFunction;
 
 type ExpressionFunc =
     fn(&DataSchemaRef, DataBlock, Vec<Box<dyn IFunction>>) -> FuseQueryResult<DataBlock>;

@@ -40,8 +40,8 @@ mod plan_statistics;
 mod plan_walker;
 mod test;
 
-pub use common_datavalues as datavalues;
-pub use common_functions as functions;
+pub use common_datavalues;
+pub use common_functions;
 
 pub use crate::error::{PlannerError, PlannerResult};
 pub use crate::plan_aggregator_final::AggregatorFinalPlan;

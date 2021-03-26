@@ -19,9 +19,9 @@ pub mod sessions;
 pub mod sql;
 pub mod transforms;
 
-pub use common_datablocks as datablocks;
-pub use common_datavalues as datavalues;
-pub use common_functions as functions;
+pub use common_datablocks;
+pub use common_datavalues;
+pub use common_functions;
 pub use fuse_query_clusters as clusters;
 pub use fuse_query_configs as configs;
 

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::datavalues::DataSchemaRef;
+use crate::common_datavalues::DataSchemaRef;
 use crate::planners::ExpressionPlan;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]

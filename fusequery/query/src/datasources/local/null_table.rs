@@ -5,11 +5,11 @@
 use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
 
-use crate::datablocks::DataBlock;
+use crate::common_datablocks::DataBlock;
+use crate::common_datavalues::DataSchemaRef;
 use crate::datasources::table_factory::TableCreatorFactory;
 use crate::datasources::{ITable, Partition, Statistics};
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::planners::{PlanNode, ReadDataSourcePlan, TableOptions};
 use crate::sessions::FuseQueryContextRef;

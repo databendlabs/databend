@@ -9,8 +9,8 @@ fn test_arithmetic_function() -> crate::error::FunctionResult<()> {
     use pretty_assertions::assert_eq;
 
     use crate::arithmetics::*;
-    use crate::datablocks::DataBlock;
-    use crate::datavalues::*;
+    use crate::common_datablocks::DataBlock;
+    use crate::common_datavalues::*;
     use crate::*;
 
     #[allow(dead_code)]

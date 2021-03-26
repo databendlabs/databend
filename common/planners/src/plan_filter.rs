@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use crate::datavalues::DataSchemaRef;
+use crate::common_datavalues::DataSchemaRef;
 use crate::{ExpressionPlan, PlanNode, PlannerResult};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]

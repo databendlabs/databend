@@ -8,7 +8,7 @@ fn test_projection_plan() -> crate::error::FuseQueryResult<()> {
 
     use pretty_assertions::assert_eq;
 
-    use crate::datavalues::*;
+    use crate::common_datavalues::*;
     use crate::planners::*;
 
     let ctx = crate::tests::try_create_context()?;

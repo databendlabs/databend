@@ -9,8 +9,8 @@ use log::info;
 use uuid::Uuid;
 
 use crate::clusters::{Cluster, ClusterRef};
+use crate::common_datavalues::DataValue;
 use crate::datasources::{DataSource, IDataSource, ITable, Partition, Partitions, Statistics};
-use crate::datavalues::DataValue;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::rpcs::rpc::GrpcClient;
 use crate::sessions::Settings;

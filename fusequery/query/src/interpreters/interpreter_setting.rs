@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+use crate::common_datavalues::{DataField, DataSchema, DataType};
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::datavalues::{DataField, DataSchema, DataType};
 use crate::error::FuseQueryResult;
 use crate::interpreters::IInterpreter;
 use crate::planners::SettingPlan;

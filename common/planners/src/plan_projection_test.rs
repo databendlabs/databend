@@ -8,7 +8,7 @@ fn test_projection_plan() -> crate::error::PlannerResult<()> {
 
     use pretty_assertions::assert_eq;
 
-    use crate::datavalues::*;
+    use crate::common_datavalues::*;
     use crate::*;
 
     let projection = PlanNode::Projection(ProjectionPlan {

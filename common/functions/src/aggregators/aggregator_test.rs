@@ -10,8 +10,8 @@ fn test_aggregator_function() -> crate::error::FunctionResult<()> {
 
     use crate::aggregators::*;
     use crate::arithmetics::*;
-    use crate::datablocks::DataBlock;
-    use crate::datavalues::*;
+    use crate::common_datablocks::DataBlock;
+    use crate::common_datavalues::*;
     use crate::*;
 
     #[allow(dead_code)]

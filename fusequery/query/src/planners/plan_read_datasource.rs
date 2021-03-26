@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use crate::common_datavalues::DataSchemaRef;
 use crate::datasources::{Partitions, Statistics};
-use crate::datavalues::DataSchemaRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct ReadDataSourcePlan {

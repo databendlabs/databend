@@ -14,8 +14,8 @@ mod function_literal;
 mod logics;
 mod udfs;
 
-pub use common_datablocks as datablocks;
-pub use common_datavalues as datavalues;
+pub use common_datablocks;
+pub use common_datavalues;
 
 pub use crate::error::{FunctionError, FunctionResult};
 pub use crate::function::IFunction;

@@ -4,8 +4,8 @@
 
 use async_trait::async_trait;
 
+use crate::common_datavalues::DataSchemaRef;
 use crate::datastreams::SendableDataBlockStream;
-use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 use crate::planners::{PlanNode, ReadDataSourcePlan};
 use crate::sessions::FuseQueryContextRef;

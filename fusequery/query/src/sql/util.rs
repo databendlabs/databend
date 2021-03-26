@@ -5,7 +5,7 @@
 use arrow::datatypes::TimeUnit;
 use sqlparser::ast::DataType as SQLDataType;
 
-use crate::datavalues::DataType;
+use crate::common_datavalues::DataType;
 use crate::error::{FuseQueryError, FuseQueryResult};
 
 /// Maps the SQL type to the corresponding Arrow `DataType`
