@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
@@ -6,10 +6,10 @@
 async fn test_transform_projection() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
+    use common_planners::*;
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::planners::*;
     use crate::processors::*;
     use crate::transforms::*;
 
@@ -20,14 +20,12 @@ async fn test_transform_projection() -> crate::error::FuseQueryResult<()> {
     let a = test_source.number_source_transform_for_test(8)?;
     pipeline.add_source(Arc::new(a))?;
 
-    if let PlanNode::Projection(plan) =
-        PlanBuilder::create(ctx.clone(), test_source.number_schema_for_test()?)
-            .project(vec![col("number"), col("number")])?
-            .build()?
+    if let PlanNode::Projection(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
+        .project(vec![col("number"), col("number")])?
+        .build()?
     {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ProjectionTransform::try_create(
-                ctx.clone(),
                 plan.schema.clone(),
                 plan.expr.clone(),
             )?))

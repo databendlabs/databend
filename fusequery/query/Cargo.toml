@@ -2,7 +2,7 @@
 name = "fuse-query"
 version = "0.1.0"
 description = "A real-time Cloud Distributed Query Engine"
-authors = ["FuseQuery Authors <opensource@datafuselabs.com>"]
+authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2018"
@@ -15,6 +15,8 @@ path = "src/bin/fuse-query.rs"
 # Workspace dependencies
 common-datablocks = {path = "../../common/datablocks"}
 common-datavalues = {path = "../../common/datavalues"}
+common-functions = {path = "../../common/functions"}
+common-planners = {path = "../../common/planners"}
 
 fuse-query-clusters = {path = "../clusters" }
 fuse-query-configs = {path = "../configs" }
@@ -26,6 +28,7 @@ parquet = { git = "https://github.com/apache/arrow", rev="46161d2" }
 arrow-flight = { git = "https://github.com/apache/arrow", rev="46161d2" }
 
 # Crates.io dependencies
+anyhow = "1.0.39"
 async-std = "1.9.0"
 async-trait = "0.1"
 dyn-clone = "1.0.4"
@@ -60,7 +63,3 @@ pretty_assertions = "0.7"
 
 [build-dependencies]
 tonic-build = "0.4"
-
-[[bench]]
-name = "bench_main"
-harness = false

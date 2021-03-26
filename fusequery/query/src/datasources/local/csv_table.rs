@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
@@ -6,14 +6,14 @@ use std::fs::File;
 
 use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
+use common_datavalues::DataSchemaRef;
+use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics, TableOptions};
 
 use crate::datasources::local::ParquetTable;
 use crate::datasources::table_factory::TableCreatorFactory;
-use crate::datasources::{ITable, Partition, Statistics};
+use crate::datasources::ITable;
 use crate::datastreams::{CsvStream, SendableDataBlockStream};
-use crate::datavalues::DataSchemaRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::planners::{PlanNode, ReadDataSourcePlan, TableOptions};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct CsvTable {

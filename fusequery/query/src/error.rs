@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
@@ -68,8 +68,8 @@ impl FuseQueryError {
 }
 
 // Internal convert.
-impl From<crate::datavalues::DataValueError> for FuseQueryError {
-    fn from(err: crate::datavalues::DataValueError) -> Self {
+impl From<common_datavalues::DataValueError> for FuseQueryError {
+    fn from(err: common_datavalues::DataValueError) -> Self {
         Internal {
             message: err.to_string(),
         }
@@ -77,8 +77,26 @@ impl From<crate::datavalues::DataValueError> for FuseQueryError {
     }
 }
 
-impl From<crate::datablocks::DataBlockError> for FuseQueryError {
-    fn from(err: crate::datablocks::DataBlockError) -> Self {
+impl From<common_datablocks::DataBlockError> for FuseQueryError {
+    fn from(err: common_datablocks::DataBlockError) -> Self {
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
+    }
+}
+
+impl From<common_functions::FunctionError> for FuseQueryError {
+    fn from(err: common_functions::FunctionError) -> Self {
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
+    }
+}
+
+impl From<common_planners::PlannerError> for FuseQueryError {
+    fn from(err: common_planners::PlannerError) -> Self {
         Internal {
             message: err.to_string(),
         }
@@ -175,6 +193,15 @@ impl From<tokio::task::JoinError> for FuseQueryError {
 
 impl From<std::net::AddrParseError> for FuseQueryError {
     fn from(err: std::net::AddrParseError) -> Self {
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
+    }
+}
+
+impl From<anyhow::Error> for FuseQueryError {
+    fn from(err: anyhow::Error) -> Self {
         Internal {
             message: err.to_string(),
         }

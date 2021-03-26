@@ -1,13 +1,13 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use common_planners::Partitions;
 use metrics::counter;
 
-use crate::datasources::Partitions;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::sessions::{FuseQueryContext, FuseQueryContextRef};
 

@@ -1,16 +1,17 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+use common_datavalues::DataValue;
+use common_planners::{Partition, Partitions, Statistics};
 use log::info;
 use uuid::Uuid;
 
 use crate::clusters::{Cluster, ClusterRef};
-use crate::datasources::{DataSource, IDataSource, ITable, Partition, Partitions, Statistics};
-use crate::datavalues::DataValue;
+use crate::datasources::{DataSource, IDataSource, ITable};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::rpcs::rpc::GrpcClient;
 use crate::sessions::Settings;

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
@@ -6,11 +6,11 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_datablocks::DataBlock;
 use futures::stream::StreamExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::datablocks::DataBlock;
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::IProcessor;

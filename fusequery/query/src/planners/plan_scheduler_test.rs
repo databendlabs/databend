@@ -1,19 +1,20 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
 fn test_scheduler_plan_with_one_node() -> crate::error::FuseQueryResult<()> {
+    use common_planners::*;
     use pretty_assertions::assert_eq;
 
-    use crate::planners::*;
+    use crate::planners::PlanScheduler;
 
     let ctx = crate::tests::try_create_context()?;
 
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
     let source = test_source.number_read_source_plan_for_test(100000)?;
 
-    let plan = PlanBuilder::from(ctx.clone(), &PlanNode::ReadSource(source))
+    let plan = PlanBuilder::from(&PlanNode::ReadSource(source))
         .filter(col("number").eq(lit(1i64)))?
         .project(vec![col("number")])?
         .build()?;
@@ -32,9 +33,10 @@ fn test_scheduler_plan_with_one_node() -> crate::error::FuseQueryResult<()> {
 
 #[test]
 fn test_scheduler_plan_with_more_cpus_1_node() -> crate::error::FuseQueryResult<()> {
+    use common_planners::*;
     use pretty_assertions::assert_eq;
 
-    use crate::planners::*;
+    use crate::planners::PlanScheduler;
 
     let ctx = crate::tests::try_create_context()?;
     let cpus = ctx.get_max_threads()?;
@@ -45,7 +47,7 @@ fn test_scheduler_plan_with_more_cpus_1_node() -> crate::error::FuseQueryResult<
     let test_source = crate::tests::NumberTestData::create(ctx_more_cpu.clone());
     let source = test_source.number_read_source_plan_for_test(100000)?;
 
-    let plan = PlanBuilder::from(ctx.clone(), &PlanNode::ReadSource(source))
+    let plan = PlanBuilder::from(&PlanNode::ReadSource(source))
         .filter(col("number").eq(lit(1i64)))?
         .project(vec![col("number")])?
         .build()?;
@@ -64,9 +66,10 @@ fn test_scheduler_plan_with_more_cpus_1_node() -> crate::error::FuseQueryResult<
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scheduler_plan_with_3_nodes() -> crate::error::FuseQueryResult<()> {
+    use common_planners::*;
     use pretty_assertions::assert_eq;
 
-    use crate::planners::*;
+    use crate::planners::PlanScheduler;
 
     let ctx = crate::tests::try_create_context_with_nodes(3).await?;
     let cpus = ctx.get_max_threads()?;
@@ -77,7 +80,7 @@ async fn test_scheduler_plan_with_3_nodes() -> crate::error::FuseQueryResult<()>
     let test_source = crate::tests::NumberTestData::create(ctx_more_cpu.clone());
     let source = test_source.number_read_source_plan_for_test(100000)?;
 
-    let plan = PlanBuilder::from(ctx.clone(), &PlanNode::ReadSource(source))
+    let plan = PlanBuilder::from(&PlanNode::ReadSource(source))
         .filter(col("number").eq(lit(1i64)))?
         .project(vec![col("number")])?
         .build()?;

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
@@ -6,10 +6,10 @@
 async fn test_transform_limit() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
+    use common_planners::*;
     use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::planners::*;
     use crate::processors::*;
     use crate::transforms::*;
 
@@ -23,7 +23,7 @@ async fn test_transform_limit() -> crate::error::FuseQueryResult<()> {
 
     pipeline.merge_processor()?;
 
-    if let PlanNode::Limit(plan) = PlanBuilder::create(ctx, test_source.number_schema_for_test()?)
+    if let PlanNode::Limit(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
         .limit(2)?
         .build()?
     {

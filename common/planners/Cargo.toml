@@ -1,0 +1,27 @@
+[package]
+name = "common-planners"
+version = "0.1.0"
+authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+common-datavalues = {path = "../datavalues"}
+common-functions = {path = "../functions"}
+
+# github dependencies
+
+# Crates.io dependencies
+dyn-clone = "1.0.4"
+futures = "0.3"
+indexmap = "1.6.1"
+lazy_static = "1.4.0"
+paste = "^1.0"
+serde = { version = "1.0", features = ["derive"] }
+snafu = "0.6.8"
+anyhow = "1.0.39"
+
+[dev-dependencies]
+pretty_assertions = "0.7"

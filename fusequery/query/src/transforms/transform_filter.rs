@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
@@ -7,15 +7,14 @@ use std::sync::Arc;
 
 use arrow::compute::filter_record_batch;
 use async_trait::async_trait;
+use common_datablocks::DataBlock;
+use common_datavalues::{BooleanArray, DataSchema, DataSchemaRef};
+use common_functions::IFunction;
+use common_planners::ExpressionPlan;
 
-use crate::datablocks::DataBlock;
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
-use crate::datavalues::{BooleanArray, DataSchema, DataSchemaRef};
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::functions::IFunction;
-use crate::planners::ExpressionPlan;
 use crate::processors::{EmptyProcessor, IProcessor};
-use crate::sessions::FuseQueryContextRef;
 
 pub struct FilterTransform {
     func: Box<dyn IFunction>,
@@ -23,11 +22,8 @@ pub struct FilterTransform {
 }
 
 impl FilterTransform {
-    pub fn try_create(
-        ctx: FuseQueryContextRef,
-        predicate: ExpressionPlan,
-    ) -> FuseQueryResult<Self> {
-        let func = predicate.to_function(ctx)?;
+    pub fn try_create(predicate: ExpressionPlan) -> FuseQueryResult<Self> {
+        let func = predicate.to_function()?;
         if func.is_aggregator() {
             return Err(FuseQueryError::build_internal_error(format!(
                 "Aggregate function {:?} is found in WHERE in query",

@@ -1,13 +1,13 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_service() -> Result<(), Box<dyn std::error::Error>> {
+    use common_planners::*;
     use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::planners::*;
     use crate::rpcs::rpc::*;
 
     // Test service starts.
@@ -15,10 +15,9 @@ async fn test_flight_service() -> Result<(), Box<dyn std::error::Error>> {
 
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
-    let plan = PlanBuilder::from(
-        ctx.clone(),
-        &PlanNode::ReadSource(test_source.number_read_source_plan_for_test(111)?),
-    )
+    let plan = PlanBuilder::from(&PlanNode::ReadSource(
+        test_source.number_read_source_plan_for_test(111)?,
+    ))
     .build()?;
 
     let mut client = FlightClient::try_create(addr.to_string()).await?;

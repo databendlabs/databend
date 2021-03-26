@@ -546,6 +546,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-functions"
+version = "0.1.0"
+dependencies = [
+ "arrow",
+ "common-datablocks",
+ "common-datavalues",
+ "dyn-clone",
+ "futures",
+ "indexmap",
+ "lazy_static",
+ "paste",
+ "pretty_assertions",
+ "serde",
+ "snafu",
+]
+
+[[package]]
+name = "common-planners"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common-datavalues",
+ "common-functions",
+ "dyn-clone",
+ "futures",
+ "indexmap",
+ "lazy_static",
+ "paste",
+ "pretty_assertions",
+ "serde",
+ "snafu",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -935,12 +969,15 @@ dependencies = [
 name = "fuse-query"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "arrow",
  "arrow-flight",
  "async-std",
  "async-trait",
  "common-datablocks",
  "common-datavalues",
+ "common-functions",
+ "common-planners",
  "criterion",
  "crossbeam 0.8.0",
  "dyn-clone",

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
@@ -7,12 +7,14 @@ use std::mem::size_of;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, DataValue};
+use common_planners::{
+    ExpressionPlan, Partition, Partitions, PlanNode, ReadDataSourcePlan, ScanPlan, Statistics,
+};
 
-use crate::datasources::{system::NumbersStream, ITable, Partition, Partitions, Statistics};
+use crate::datasources::{system::NumbersStream, ITable};
 use crate::datastreams::SendableDataBlockStream;
-use crate::datavalues::{DataField, DataSchema, DataSchemaRef, DataType, DataValue};
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::planners::{ExpressionPlan, PlanNode, ReadDataSourcePlan, ScanPlan};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct NumbersTable {
@@ -109,7 +111,7 @@ impl ITable for NumbersTable {
 
         let statistics = Statistics {
             read_rows: total as usize,
-            read_bytes: (total) * size_of::<u64>() as u64,
+            read_bytes: ((total) * size_of::<u64>() as u64) as usize,
         };
         ctx.try_set_statistics(&statistics)?;
 

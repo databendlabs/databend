@@ -1,14 +1,14 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_explain_interpreter() -> crate::error::FuseQueryResult<()> {
+    use common_planners::*;
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
     use crate::interpreters::*;
-    use crate::planners::*;
     use crate::sql::*;
 
     let ctx = crate::tests::try_create_context()?;

@@ -1,12 +1,12 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::task::{Context, Poll};
 
+use common_datablocks::DataBlock;
 use futures::stream::{Stream, StreamExt};
 
-use crate::datablocks::DataBlock;
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::FuseQueryResult;
 

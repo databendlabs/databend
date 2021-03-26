@@ -1,15 +1,14 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::sync::Arc;
 
 use arrow::datatypes::Schema;
+use common_datavalues::DataSchema;
+use common_planners::{EmptyPlan, PlanNode, ReadDataSourcePlan, Statistics};
 
-use crate::datasources::Statistics;
-use crate::datavalues::DataSchema;
 use crate::error::FuseQueryResult;
-use crate::planners::{EmptyPlan, PlanNode, ReadDataSourcePlan};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct PlanScheduler {}

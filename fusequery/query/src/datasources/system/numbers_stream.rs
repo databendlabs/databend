@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
@@ -14,10 +14,10 @@ use std::{
 use arrow::array::ArrayData;
 use arrow::buffer::Buffer;
 use arrow::datatypes::DataType;
+use common_datablocks::DataBlock;
+use common_datavalues::{DataSchemaRef, UInt64Array};
 use futures::stream::Stream;
 
-use crate::datablocks::DataBlock;
-use crate::datavalues::{DataSchemaRef, UInt64Array};
 use crate::error::FuseQueryResult;
 use crate::sessions::FuseQueryContextRef;
 

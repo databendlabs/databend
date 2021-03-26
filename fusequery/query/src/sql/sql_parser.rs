@@ -1,10 +1,11 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 //
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See NOTICE.md
 
+use common_planners::{DfExplainType, EngineType};
 use sqlparser::ast::{Ident, ObjectName, SqlOption, Value};
 use sqlparser::{
     ast::{ColumnDef, ColumnOptionDef, Statement as SQLStatement, TableConstraint},
@@ -13,37 +14,11 @@ use sqlparser::{
     tokenizer::{Token, Tokenizer},
 };
 
-use crate::planners::DfExplainType;
-
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
     ($MSG:expr) => {
         Err(ParserError::ParserError($MSG.to_string().into()))
     };
-}
-
-/// Types of files to parse as DataFrames
-#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum EngineType {
-    /// Newline-delimited JSON
-    JsonEachRaw,
-    /// Apache Parquet columnar store
-    Parquet,
-    /// Comma separated values
-    Csv,
-    /// Null ENGINE
-    Null,
-}
-
-impl ToString for EngineType {
-    fn to_string(&self) -> String {
-        match self {
-            EngineType::JsonEachRaw => "JSON".into(),
-            EngineType::Parquet => "Parquet".into(),
-            EngineType::Csv => "CSV".into(),
-            EngineType::Null => "Null".into(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

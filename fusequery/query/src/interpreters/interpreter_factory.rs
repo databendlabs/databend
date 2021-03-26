@@ -1,15 +1,16 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::sync::Arc;
+
+use common_planners::PlanNode;
 
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::interpreters::interpreter_create::CreateInterpreter;
 use crate::interpreters::{
     ExplainInterpreter, IInterpreter, SelectInterpreter, SettingInterpreter,
 };
-use crate::planners::PlanNode;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct InterpreterFactory;

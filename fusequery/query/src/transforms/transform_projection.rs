@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
@@ -6,15 +6,14 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
+use common_functions::IFunction;
+use common_planners::ExpressionPlan;
 
-use crate::datablocks::DataBlock;
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
-use crate::datavalues::DataSchemaRef;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::functions::IFunction;
-use crate::planners::ExpressionPlan;
 use crate::processors::{EmptyProcessor, IProcessor};
-use crate::sessions::FuseQueryContextRef;
 
 pub struct ProjectionTransform {
     funcs: Vec<Box<dyn IFunction>>,
@@ -23,14 +22,10 @@ pub struct ProjectionTransform {
 }
 
 impl ProjectionTransform {
-    pub fn try_create(
-        ctx: FuseQueryContextRef,
-        schema: DataSchemaRef,
-        exprs: Vec<ExpressionPlan>,
-    ) -> FuseQueryResult<Self> {
+    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> FuseQueryResult<Self> {
         let mut funcs = Vec::with_capacity(exprs.len());
         for expr in &exprs {
-            let func = expr.to_function(ctx.clone())?;
+            let func = expr.to_function()?;
             if func.is_aggregator() {
                 return Err(FuseQueryError::build_internal_error(format!(
                     "Aggregate function {} is found in ProjectionTransform, should AggregatorTransform",

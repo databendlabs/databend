@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
@@ -6,11 +6,11 @@ use std::fs::File;
 use std::task::{Context, Poll};
 
 use arrow::csv;
+use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
 use csv as csv_crate;
 use futures::stream::Stream;
 
-use crate::datablocks::DataBlock;
-use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 
 pub struct CsvStream {

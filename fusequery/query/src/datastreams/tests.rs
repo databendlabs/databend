@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
@@ -6,11 +6,11 @@
 async fn test_chunk_stream() {
     use std::sync::Arc;
 
+    use common_datablocks::*;
+    use common_datavalues::*;
     use futures::stream::StreamExt;
 
-    use crate::datablocks::*;
     use crate::datastreams::*;
-    use crate::datavalues::*;
 
     let mut s1 = DataBlockStream::create(
         Arc::new(DataSchema::empty()),

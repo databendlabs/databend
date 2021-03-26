@@ -1,12 +1,13 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashMap;
 
+use common_planners::{ExpressionPlan, PlanNode};
+
 use crate::error::FuseQueryResult;
 use crate::optimizers::FilterPushDownOptimizer;
-use crate::planners::{ExpressionPlan, PlanNode};
 use crate::sessions::FuseQueryContextRef;
 
 pub trait IOptimizer {

@@ -1,10 +1,11 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::time::Instant;
 use std::{io, net};
 
+use common_datablocks::DataBlock;
 use futures::stream::StreamExt;
 use log::{debug, error};
 use metrics::histogram;
@@ -13,7 +14,6 @@ use threadpool::ThreadPool;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datablocks::DataBlock;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::MysqlStream;

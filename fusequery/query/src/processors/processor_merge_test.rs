@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
@@ -6,10 +6,10 @@
 async fn test_processor_merge() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
+    use common_datavalues::*;
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::datavalues::*;
     use crate::processors::*;
     use crate::tests;
 

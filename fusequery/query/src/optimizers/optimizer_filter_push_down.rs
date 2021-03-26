@@ -1,14 +1,15 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::datavalues::DataSchema;
+use common_datavalues::DataSchema;
+use common_planners::{EmptyPlan, ExpressionPlan, FilterPlan, PlanNode};
+
 use crate::error::FuseQueryResult;
 use crate::optimizers::{IOptimizer, Optimizer};
-use crate::planners::{EmptyPlan, ExpressionPlan, FilterPlan, PlanNode};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct FilterPushDownOptimizer {}

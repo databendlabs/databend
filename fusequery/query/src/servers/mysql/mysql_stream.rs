@@ -1,12 +1,12 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 use arrow::datatypes::DataType;
 use arrow::util::display::array_value_to_string;
+use common_datablocks::DataBlock;
 use msql_srv::*;
 
-use crate::datablocks::DataBlock;
 use crate::error::{FuseQueryError, FuseQueryResult};
 
 pub struct MysqlStream {

@@ -1,11 +1,11 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 use arrow::datatypes::TimeUnit;
+use common_datavalues::DataType;
 use sqlparser::ast::DataType as SQLDataType;
 
-use crate::datavalues::DataType;
 use crate::error::{FuseQueryError, FuseQueryResult};
 
 /// Maps the SQL type to the corresponding Arrow `DataType`

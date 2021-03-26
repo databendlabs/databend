@@ -1,17 +1,17 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
+use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
+use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics, TableOptions};
 
-use crate::datablocks::DataBlock;
 use crate::datasources::table_factory::TableCreatorFactory;
-use crate::datasources::{ITable, Partition, Statistics};
+use crate::datasources::ITable;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
-use crate::planners::{PlanNode, ReadDataSourcePlan, TableOptions};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct NullTable {

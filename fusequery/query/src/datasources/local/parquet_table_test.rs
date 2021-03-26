@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
@@ -7,13 +7,11 @@ async fn test_parquet_table() -> crate::error::FuseQueryResult<()> {
     use std::env;
 
     use arrow::datatypes::{Field, Schema};
+    use common_datavalues::DataType;
+    use common_planners::*;
     use futures::TryStreamExt;
 
     use crate::datasources::local::*;
-    use crate::datavalues::DataType;
-    use crate::planners::*;
-
-    let ctx = crate::tests::try_create_context()?;
 
     let options: TableOptions = [(
         "location".to_string(),
@@ -26,6 +24,7 @@ async fn test_parquet_table() -> crate::error::FuseQueryResult<()> {
     .cloned()
     .collect();
 
+    let ctx = crate::tests::try_create_context()?;
     let table = ParquetTable::try_create(
         ctx.clone(),
         "default".into(),
@@ -33,7 +32,7 @@ async fn test_parquet_table() -> crate::error::FuseQueryResult<()> {
         Schema::new(vec![Field::new("id", DataType::Int32, false)]).into(),
         options,
     )?;
-    table.read_plan(ctx.clone(), PlanBuilder::empty(ctx.clone()).build()?)?;
+    table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
 
     let stream = table.read(ctx).await?;
     let blocks = stream.try_collect::<Vec<_>>().await?;

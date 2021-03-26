@@ -1,17 +1,17 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::sync::{Arc, Mutex};
 
 use arrow::datatypes::SchemaRef;
+use common_planners::TableOptions;
 use indexmap::map::IndexMap;
 use lazy_static::lazy_static;
 
 use crate::datasources::local::LocalFactory;
 use crate::datasources::ITable;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::planners::TableOptions;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct TableFactory;

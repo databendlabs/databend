@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
@@ -6,16 +6,15 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_datablocks::DataBlock;
+use common_datavalues::{DataSchemaRef, DataValue};
+use common_functions::IFunction;
+use common_planners::ExpressionPlan;
 use futures::stream::StreamExt;
 
-use crate::datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::datavalues::{DataSchemaRef, DataValue};
 use crate::error::FuseQueryResult;
-use crate::functions::IFunction;
-use crate::planners::ExpressionPlan;
 use crate::processors::{EmptyProcessor, IProcessor};
-use crate::sessions::FuseQueryContextRef;
 
 pub struct AggregatorFinalTransform {
     funcs: Vec<Box<dyn IFunction>>,
@@ -24,14 +23,10 @@ pub struct AggregatorFinalTransform {
 }
 
 impl AggregatorFinalTransform {
-    pub fn try_create(
-        ctx: FuseQueryContextRef,
-        schema: DataSchemaRef,
-        exprs: Vec<ExpressionPlan>,
-    ) -> FuseQueryResult<Self> {
+    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> FuseQueryResult<Self> {
         let mut funcs = Vec::with_capacity(exprs.len());
         for expr in &exprs {
-            funcs.push(expr.to_function(ctx.clone())?);
+            funcs.push(expr.to_function()?);
         }
 
         Ok(AggregatorFinalTransform {

@@ -1,14 +1,15 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 #[cfg(test)]
 mod tests {
+    use common_planners::EngineType;
     use sqlparser::ast::{ColumnDef, DataType, Ident, ObjectName, SqlOption, Value};
     use sqlparser::parser::ParserError;
 
     use crate::sql::sql_parser::{FuseCreateTable, FuseShowSettings, FuseShowTables};
-    use crate::sql::{DfParser, DfStatement, EngineType};
+    use crate::sql::{DfParser, DfStatement};
 
     fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<(), ParserError> {
         let statements = DfParser::parse_sql(sql)?;

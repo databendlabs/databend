@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
@@ -6,29 +6,29 @@
 async fn test_transform_aggregator() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
+    use common_datavalues::*;
+    use common_planners::{self, *};
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::datavalues::*;
-    use crate::planners::{self, *};
     use crate::processors::*;
     use crate::transforms::*;
 
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
-    let aggr_exprs = vec![planners::add(
+    let aggr_exprs = vec![add(
         ExpressionPlan::Function {
             op: "sum".to_string(),
-            args: vec![planners::col("number")],
+            args: vec![col("number")],
         },
-        planners::lit(2u64),
+        lit(2u64),
     )];
 
-    let aggr_partial = PlanBuilder::create(ctx.clone(), test_source.number_schema_for_test()?)
+    let aggr_partial = PlanBuilder::create(test_source.number_schema_for_test()?)
         .aggregate_partial(aggr_exprs.clone(), vec![])?
         .build()?;
-    let aggr_final = PlanBuilder::create(ctx.clone(), test_source.number_schema_for_test()?)
+    let aggr_final = PlanBuilder::create(test_source.number_schema_for_test()?)
         .aggregate_final(aggr_exprs.clone(), vec![])?
         .build()?;
 
@@ -37,7 +37,6 @@ async fn test_transform_aggregator() -> crate::error::FuseQueryResult<()> {
     pipeline.add_source(Arc::new(a))?;
     pipeline.add_simple_transform(|| {
         Ok(Box::new(AggregatorPartialTransform::try_create(
-            ctx.clone(),
             aggr_partial.schema(),
             aggr_exprs.clone(),
         )?))
@@ -45,7 +44,6 @@ async fn test_transform_aggregator() -> crate::error::FuseQueryResult<()> {
     pipeline.merge_processor()?;
     pipeline.add_simple_transform(|| {
         Ok(Box::new(AggregatorFinalTransform::try_create(
-            ctx.clone(),
             aggr_final.schema(),
             aggr_exprs.clone(),
         )?))

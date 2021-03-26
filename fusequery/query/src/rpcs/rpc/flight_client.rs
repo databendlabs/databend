@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
@@ -9,9 +9,9 @@ use arrow::datatypes::Schema;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::utils::flight_data_to_arrow_batch;
 use arrow_flight::Ticket;
+use common_datablocks::DataBlock;
 use prost::Message;
 
-use crate::datablocks::DataBlock;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::protobuf::FlightRequest;

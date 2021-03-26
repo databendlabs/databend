@@ -1,16 +1,16 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_datavalues::{DataField, DataSchema, DataType};
+use common_planners::SettingPlan;
 
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::datavalues::{DataField, DataSchema, DataType};
 use crate::error::FuseQueryResult;
 use crate::interpreters::IInterpreter;
-use crate::planners::SettingPlan;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct SettingInterpreter {

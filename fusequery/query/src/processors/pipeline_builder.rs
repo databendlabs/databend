@@ -1,11 +1,14 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::sync::Arc;
 
+use anyhow::Context;
+use common_planners::PlanNode;
+
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::planners::{PlanNode, PlanScheduler};
+use crate::planners::PlanScheduler;
 use crate::processors::Pipeline;
 use crate::sessions::FuseQueryContextRef;
 use crate::transforms::{
@@ -56,7 +59,6 @@ impl PipelineBuilder {
             PlanNode::Projection(plan) => {
                 pipeline.add_simple_transform(|| {
                     Ok(Box::new(ProjectionTransform::try_create(
-                        self.ctx.clone(),
                         plan.schema.clone(),
                         plan.expr.clone(),
                     )?))
@@ -66,7 +68,6 @@ impl PipelineBuilder {
             PlanNode::AggregatorPartial(plan) => {
                 pipeline.add_simple_transform(|| {
                     Ok(Box::new(AggregatorPartialTransform::try_create(
-                        self.ctx.clone(),
                         plan.schema(),
                         plan.aggr_expr.clone(),
                     )?))
@@ -77,7 +78,6 @@ impl PipelineBuilder {
                 pipeline.merge_processor()?;
                 pipeline.add_simple_transform(|| {
                     Ok(Box::new(AggregatorFinalTransform::try_create(
-                        self.ctx.clone(),
                         plan.schema(),
                         plan.aggr_expr.clone(),
                     )?))
@@ -87,7 +87,6 @@ impl PipelineBuilder {
             PlanNode::Filter(plan) => {
                 pipeline.add_simple_transform(|| {
                     Ok(Box::new(FilterTransform::try_create(
-                        self.ctx.clone(),
                         plan.predicate.clone(),
                     )?))
                 })?;
@@ -128,6 +127,7 @@ impl PipelineBuilder {
                     "Build pipeline from the plan node unsupported:{:?}",
                     other.name()
                 )))
+                .context("Pipeline build error")
             }
         })?;
 

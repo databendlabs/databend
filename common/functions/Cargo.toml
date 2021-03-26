@@ -1,0 +1,27 @@
+[package]
+name = "common-functions"
+version = "0.1.0"
+authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+common-datablocks = {path = "../datablocks"}
+common-datavalues = {path = "../datavalues"}
+
+# github dependencies
+arrow = { git = "https://github.com/apache/arrow", rev="46161d2" }
+
+# Crates.io dependencies
+dyn-clone = "1.0.4"
+futures = "0.3"
+indexmap = "1.6.1"
+lazy_static = "1.4.0"
+paste = "^1.0"
+serde = { version = "1.0", features = ["derive"] }
+snafu = "0.6.8"
+
+[dev-dependencies]
+pretty_assertions = "0.7"

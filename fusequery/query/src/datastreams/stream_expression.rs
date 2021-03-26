@@ -1,16 +1,16 @@
-// Copyright 2020-2021 The FuseQuery Authors.
+// Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::task::{Context, Poll};
 
+use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
+use common_functions::IFunction;
 use futures::stream::{Stream, StreamExt};
 
-use crate::datablocks::DataBlock;
 use crate::datastreams::SendableDataBlockStream;
-use crate::datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
-use crate::functions::IFunction;
 
 type ExpressionFunc =
     fn(&DataSchemaRef, DataBlock, Vec<Box<dyn IFunction>>) -> FuseQueryResult<DataBlock>;
