@@ -57,7 +57,6 @@ uuid = { version = "0.8", features = ["serde", "v4"] }
 crossbeam = "0.8"
 
 [dev-dependencies]
-criterion = "0.3.4"
 pretty_assertions = "0.7"
 
 [build-dependencies]
