@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::datasources::{Partition, Partitions};
+use common_planners::{Partition, Partitions};
+
 use crate::error::FuseQueryResult;
 use crate::protobuf::query_rpc_client::QueryRpcClient;
 use crate::protobuf::{FetchPartitionRequest, PingRequest};

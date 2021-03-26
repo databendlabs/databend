@@ -14,10 +14,10 @@ use std::{
 use arrow::array::ArrayData;
 use arrow::buffer::Buffer;
 use arrow::datatypes::DataType;
+use common_datablocks::DataBlock;
+use common_datavalues::{DataSchemaRef, UInt64Array};
 use futures::stream::Stream;
 
-use crate::common_datablocks::DataBlock;
-use crate::common_datavalues::{DataSchemaRef, UInt64Array};
 use crate::error::FuseQueryResult;
 use crate::sessions::FuseQueryContextRef;
 

@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct EmptyPlan {
-    pub(crate) schema: DataSchemaRef,
+    pub schema: DataSchemaRef,
 }
 
 impl EmptyPlan {

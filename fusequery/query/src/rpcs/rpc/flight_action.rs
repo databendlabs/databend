@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::planners::PlanNode;
+use common_planners::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ExecutePlanAction {

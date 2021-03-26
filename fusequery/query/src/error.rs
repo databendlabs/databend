@@ -68,7 +68,7 @@ impl FuseQueryError {
 }
 
 // Internal convert.
-impl From<crate::common_datavalues::DataValueError> for FuseQueryError {
+impl From<common_datavalues::DataValueError> for FuseQueryError {
     fn from(err: crate::common_datavalues::DataValueError) -> Self {
         Internal {
             message: err.to_string(),
@@ -77,8 +77,26 @@ impl From<crate::common_datavalues::DataValueError> for FuseQueryError {
     }
 }
 
-impl From<crate::common_datablocks::DataBlockError> for FuseQueryError {
+impl From<common_datablocks::DataBlockError> for FuseQueryError {
     fn from(err: crate::common_datablocks::DataBlockError) -> Self {
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
+    }
+}
+
+impl From<common_functions::FunctionError> for FuseQueryError {
+    fn from(err: crate::common_functions::FunctionError) -> Self {
+        Internal {
+            message: err.to_string(),
+        }
+        .build()
+    }
+}
+
+impl From<common_planners::PlannerError> for FuseQueryError {
+    fn from(err: common_planners::PlannerError) -> Self {
         Internal {
             message: err.to_string(),
         }
@@ -88,15 +106,6 @@ impl From<crate::common_datablocks::DataBlockError> for FuseQueryError {
 
 impl From<crate::clusters::ClusterError> for FuseQueryError {
     fn from(err: crate::clusters::ClusterError) -> Self {
-        Internal {
-            message: err.to_string(),
-        }
-        .build()
-    }
-}
-
-impl From<crate::common_functions::FunctionError> for FuseQueryError {
-    fn from(err: crate::common_functions::FunctionError) -> Self {
         Internal {
             message: err.to_string(),
         }

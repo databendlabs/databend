@@ -5,9 +5,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use common_planners::Partitions;
 use metrics::counter;
 
-use crate::datasources::Partitions;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::sessions::{FuseQueryContext, FuseQueryContextRef};
 

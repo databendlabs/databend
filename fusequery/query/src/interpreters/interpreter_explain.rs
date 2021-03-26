@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_planners::{DfExplainType, ExplainPlan, PlanNode};
 use log::debug;
 
 use crate::common_datablocks::DataBlock;
@@ -13,7 +14,6 @@ use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::error::FuseQueryResult;
 use crate::interpreters::IInterpreter;
 use crate::optimizers::Optimizer;
-use crate::planners::{DfExplainType, ExplainPlan, PlanNode};
 use crate::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
 

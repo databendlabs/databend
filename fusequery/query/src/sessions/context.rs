@@ -5,12 +5,13 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+use common_datavalues::DataValue;
+use common_planners::{Partition, Partitions, Statistics};
 use log::info;
 use uuid::Uuid;
 
 use crate::clusters::{Cluster, ClusterRef};
-use crate::common_datavalues::DataValue;
-use crate::datasources::{DataSource, IDataSource, ITable, Partition, Partitions, Statistics};
+use crate::datasources::{DataSource, IDataSource, ITable};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::rpcs::rpc::GrpcClient;
 use crate::sessions::Settings;

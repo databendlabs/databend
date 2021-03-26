@@ -4,8 +4,10 @@
 
 use std::sync::Arc;
 
+use common_planners::PlanNode;
+
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::planners::{PlanNode, PlanScheduler};
+use crate::planners::PlanScheduler;
 use crate::processors::Pipeline;
 use crate::sessions::FuseQueryContextRef;
 use crate::transforms::{

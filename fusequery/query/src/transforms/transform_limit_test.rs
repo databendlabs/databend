@@ -6,10 +6,10 @@
 async fn test_transform_limit() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
+    use common_planners::*;
     use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::planners::*;
     use crate::processors::*;
     use crate::transforms::*;
 

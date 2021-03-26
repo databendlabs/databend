@@ -4,7 +4,8 @@
 
 use std::sync::Arc;
 
-use crate::common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRef;
+
 use crate::PlanNode;
 use crate::PlannerResult;
 

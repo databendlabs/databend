@@ -6,10 +6,10 @@
 async fn test_transform_projection() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
+    use common_planners::*;
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::planners::*;
     use crate::processors::*;
     use crate::transforms::*;
 

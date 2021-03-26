@@ -6,13 +6,13 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_planners::ExpressionPlan;
 
 use crate::common_datablocks::DataBlock;
 use crate::common_datavalues::DataSchemaRef;
 use crate::common_functions::IFunction;
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::planners::ExpressionPlan;
 use crate::processors::{EmptyProcessor, IProcessor};
 
 pub struct ProjectionTransform {

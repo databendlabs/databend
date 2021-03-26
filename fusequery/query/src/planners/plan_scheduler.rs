@@ -5,11 +5,10 @@
 use std::sync::Arc;
 
 use arrow::datatypes::Schema;
+use common_datavalues::DataSchema;
+use common_planners::{EmptyPlan, PlanNode, ReadDataSourcePlan, Statistics};
 
-use crate::common_datavalues::DataSchema;
-use crate::datasources::Statistics;
 use crate::error::FuseQueryResult;
-use crate::planners::{EmptyPlan, PlanNode, ReadDataSourcePlan};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct PlanScheduler {}

@@ -5,14 +5,14 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_datablocks::DataBlock;
+use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, StringArray};
+use common_functions::FunctionFactory;
+use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics};
 
-use crate::common_datablocks::DataBlock;
-use crate::common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, StringArray};
-use crate::common_functions::FunctionFactory;
-use crate::datasources::{ITable, Partition, Statistics};
+use crate::datasources::ITable;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::error::FuseQueryResult;
-use crate::planners::{PlanNode, ReadDataSourcePlan};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct FunctionsTable {

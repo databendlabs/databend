@@ -5,12 +5,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_planners::SettingPlan;
 
 use crate::common_datavalues::{DataField, DataSchema, DataType};
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::error::FuseQueryResult;
 use crate::interpreters::IInterpreter;
-use crate::planners::SettingPlan;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct SettingInterpreter {

@@ -4,9 +4,10 @@
 
 use std::collections::HashMap;
 
+use common_planners::{ExpressionPlan, PlanNode};
+
 use crate::error::FuseQueryResult;
 use crate::optimizers::FilterPushDownOptimizer;
-use crate::planners::{ExpressionPlan, PlanNode};
 use crate::sessions::FuseQueryContextRef;
 
 pub trait IOptimizer {

@@ -4,14 +4,14 @@
 
 use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
+use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
+use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics, TableOptions};
 
-use crate::common_datablocks::DataBlock;
-use crate::common_datavalues::DataSchemaRef;
 use crate::datasources::table_factory::TableCreatorFactory;
-use crate::datasources::{ITable, Partition, Statistics};
+use crate::datasources::ITable;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::error::FuseQueryResult;
-use crate::planners::{PlanNode, ReadDataSourcePlan, TableOptions};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct NullTable {

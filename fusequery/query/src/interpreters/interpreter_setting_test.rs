@@ -4,10 +4,10 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_setting_interpreter() -> crate::error::FuseQueryResult<()> {
+    use common_planners::*;
     use futures::stream::StreamExt;
 
     use crate::interpreters::*;
-    use crate::planners::*;
     use crate::sql::*;
 
     let ctx = crate::tests::try_create_context()?;
@@ -29,8 +29,9 @@ async fn test_setting_interpreter() -> crate::error::FuseQueryResult<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_setting_interpreter_error() -> crate::error::FuseQueryResult<()> {
+    use common_planners::*;
+
     use crate::interpreters::*;
-    use crate::planners::*;
     use crate::sql::*;
 
     let ctx = crate::tests::try_create_context()?;

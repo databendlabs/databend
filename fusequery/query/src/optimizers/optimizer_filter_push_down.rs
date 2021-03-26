@@ -5,10 +5,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::common_datavalues::DataSchema;
+use common_datavalues::DataSchema;
+use common_planners::{EmptyPlan, ExpressionPlan, FilterPlan, PlanNode};
+
 use crate::error::FuseQueryResult;
 use crate::optimizers::{IOptimizer, Optimizer};
-use crate::planners::{EmptyPlan, ExpressionPlan, FilterPlan, PlanNode};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct FilterPushDownOptimizer {}

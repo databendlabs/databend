@@ -4,7 +4,8 @@
 
 use std::sync::Arc;
 
-use crate::common_datavalues::{DataField, DataSchema, DataSchemaRef};
+use common_datavalues::{DataField, DataSchema, DataSchemaRef};
+
 use crate::PlannerResult;
 use crate::{
     col, AggregatorFinalPlan, AggregatorPartialPlan, DfExplainType, EmptyPlan, ExplainPlan,

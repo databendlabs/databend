@@ -6,9 +6,9 @@
 fn test_select_wildcard_plan() -> crate::error::PlannerResult<()> {
     use std::sync::Arc;
 
+    use common_datavalues::*;
     use pretty_assertions::assert_eq;
 
-    use crate::common_datavalues::*;
     use crate::*;
 
     let schema = Arc::new(DataSchema::new(vec![DataField::new(

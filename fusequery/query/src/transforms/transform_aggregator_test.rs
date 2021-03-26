@@ -6,11 +6,11 @@
 async fn test_transform_aggregator() -> crate::error::FuseQueryResult<()> {
     use std::sync::Arc;
 
+    use common_planners::{self, *};
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
     use crate::common_datavalues::*;
-    use crate::planners::{self, *};
     use crate::processors::*;
     use crate::transforms::*;
 

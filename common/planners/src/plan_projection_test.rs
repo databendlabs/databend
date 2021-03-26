@@ -6,9 +6,9 @@
 fn test_projection_plan() -> crate::error::PlannerResult<()> {
     use std::sync::Arc;
 
+    use common_datavalues::*;
     use pretty_assertions::assert_eq;
 
-    use crate::common_datavalues::*;
     use crate::*;
 
     let projection = PlanNode::Projection(ProjectionPlan {

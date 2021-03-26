@@ -4,12 +4,13 @@
 
 use std::sync::Arc;
 
+use common_planners::PlanNode;
+
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::interpreters::interpreter_create::CreateInterpreter;
 use crate::interpreters::{
     ExplainInterpreter, IInterpreter, SelectInterpreter, SettingInterpreter,
 };
-use crate::planners::PlanNode;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct InterpreterFactory;

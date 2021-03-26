@@ -975,6 +975,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-functions",
+ "common-planners",
  "criterion",
  "crossbeam 0.8.0",
  "dyn-clone",

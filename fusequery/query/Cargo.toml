@@ -16,6 +16,7 @@ path = "src/bin/fuse-query.rs"
 common-datablocks = {path = "../../common/datablocks"}
 common-datavalues = {path = "../../common/datavalues"}
 common-functions = {path = "../../common/functions"}
+common-planners = {path = "../../common/planners"}
 
 fuse-query-clusters = {path = "../clusters" }
 fuse-query-configs = {path = "../configs" }

@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use crate::common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRef;
 
 /// Types of files to parse as DataFrames
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -17,6 +17,17 @@ pub enum EngineType {
     Csv,
     /// Null ENGINE
     Null,
+}
+
+impl ToString for EngineType {
+    fn to_string(&self) -> String {
+        match self {
+            EngineType::JsonEachRaw => "JSON".into(),
+            EngineType::Parquet => "Parquet".into(),
+            EngineType::Csv => "CSV".into(),
+            EngineType::Null => "Null".into(),
+        }
+    }
 }
 
 pub type TableOptions = HashMap<String, String>;

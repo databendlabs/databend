@@ -6,14 +6,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow::datatypes::{Field, Schema};
-use sqlparser::ast::{FunctionArg, Statement, TableFactor};
-
-use crate::common_datavalues::{DataSchema, DataValue};
-use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::planners::{
+use common_datavalues::{DataSchema, DataValue};
+use common_planners::{
     CreatePlan, ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, SelectPlan, SettingPlan,
     StageState, VarValue,
 };
+use sqlparser::ast::{FunctionArg, Statement, TableFactor};
+
+use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::sql_parser::FuseCreateTable;
 use crate::sql::{make_data_type, DfExplainPlan, DfParser, DfStatement};
@@ -216,15 +216,7 @@ impl PlanParser {
         let table = self.ctx.get_table(db_name, table_name)?;
         let schema = table.schema()?;
 
-        let scan = PlanBuilder::scan(
-            self.ctx.clone(),
-            db_name,
-            table_name,
-            schema.as_ref(),
-            None,
-            None,
-        )?
-        .build()?;
+        let scan = PlanBuilder::scan(db_name, table_name, schema.as_ref(), None, None)?.build()?;
         let datasource_plan = table.read_plan(self.ctx.clone(), scan)?;
         Ok(PlanNode::ReadSource(datasource_plan))
     }
@@ -260,15 +252,9 @@ impl PlanParser {
                     }
                 }
 
-                let scan = PlanBuilder::scan(
-                    self.ctx.clone(),
-                    &db_name,
-                    &table_name,
-                    schema.as_ref(),
-                    None,
-                    table_args,
-                )?
-                .build()?;
+                let scan =
+                    PlanBuilder::scan(&db_name, &table_name, schema.as_ref(), None, table_args)?
+                        .build()?;
                 let datasource_plan = table.read_plan(self.ctx.clone(), scan)?;
                 Ok(PlanNode::ReadSource(datasource_plan))
             }
@@ -353,18 +339,16 @@ impl PlanParser {
         predicate: &Option<sqlparser::ast::Expr>,
     ) -> FuseQueryResult<PlanNode> {
         match *predicate {
-            Some(ref predicate_expr) => PlanBuilder::from(self.ctx.clone(), &plan)
+            Some(ref predicate_expr) => Ok(PlanBuilder::from(&plan)
                 .filter(self.sql_to_rex(predicate_expr, &plan.schema())?)?
-                .build(),
+                .build()?),
             _ => Ok(plan.clone()),
         }
     }
 
     /// Wrap a plan in a projection
     fn project(&self, input: &PlanNode, expr: Vec<ExpressionPlan>) -> FuseQueryResult<PlanNode> {
-        PlanBuilder::from(self.ctx.clone(), input)
-            .project(expr)?
-            .build()
+        Ok(PlanBuilder::from(input).project(expr)?.build()?)
     }
 
     /// Wrap a plan for an aggregate
@@ -382,11 +366,11 @@ impl PlanParser {
         // S0: Apply a partial aggregator plan.
         // S1: Apply a fragment plan for distributed planners split.
         // S2: Apply a final aggregator plan.
-        PlanBuilder::from(self.ctx.clone(), &input)
+        Ok(PlanBuilder::from(&input)
             .aggregate_partial(aggr_expr.clone(), group_expr.clone())?
-            .stage(StageState::AggregatorMerge)?
+            .stage(self.ctx.get_id()?, StageState::AggregatorMerge)?
             .aggregate_final(aggr_expr, group_expr)?
-            .build()
+            .build()?)
     }
 
     /// Wrap a plan in a limit
@@ -403,9 +387,7 @@ impl PlanParser {
                         "Unexpected expression for LIMIT clause".to_string(),
                     )),
                 }?;
-                PlanBuilder::from(self.ctx.clone(), &input)
-                    .limit(n)?
-                    .build()
+                Ok(PlanBuilder::from(&input).limit(n)?.build()?)
             }
             _ => Ok(input.clone()),
         }
