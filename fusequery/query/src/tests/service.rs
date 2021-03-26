@@ -38,6 +38,29 @@ pub async fn try_create_context_with_nodes(nums: usize) -> FuseQueryResult<FuseQ
         ctx.try_get_cluster()?.add_node(&Node {
             name: format!("node{}", i),
             cpus: 4,
+            priority: 10,
+            address: addr.clone(),
+            local: false,
+        })?;
+    }
+    Ok(ctx)
+}
+
+// Start a cluster and return the context who has the cluster info.
+pub async fn try_create_context_with_nodes_and_priority(
+    nums: usize,
+    p: &[u8],
+) -> FuseQueryResult<FuseQueryContextRef> {
+    // p is the priority array of the nodes.
+    // Its length of it should be nums.
+    assert_eq!(nums, p.len());
+    let addrs = try_start_service(nums).await?;
+    let ctx = crate::tests::try_create_context()?;
+    for (i, addr) in addrs.iter().enumerate() {
+        ctx.try_get_cluster()?.add_node(&Node {
+            name: format!("node{}", i),
+            cpus: 4,
+            priority: p[i],
             address: addr.clone(),
             local: false,
         })?;

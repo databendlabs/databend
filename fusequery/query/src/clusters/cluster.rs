@@ -39,6 +39,11 @@ impl Cluster {
         let mut node = Node {
             name: n.name.clone(),
             cpus: n.cpus,
+            // To set priority when adding node to the cluster
+            // We need to add a key-value in the json input,
+            // such as {... , "priority":10, ...}.
+            // The value of "priority" must be in [0,10].
+            priority: n.priority,
             address: n.address.clone(),
             local: false,
         };
@@ -60,6 +65,7 @@ impl Cluster {
         for (_, node) in self.nodes.lock()?.iter() {
             nodes.push(node.clone());
         }
+        nodes.sort_by(|a, b| b.name.cmp(&a.name));
         Ok(nodes)
     }
 }

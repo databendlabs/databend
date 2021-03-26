@@ -14,6 +14,7 @@ fn test_cluster() -> crate::error::FuseQueryResult<()> {
     let node1 = Node {
         name: "node1".to_string(),
         cpus: 4,
+        priority: 5,
         address: "127.0.0.1:9001".to_string(),
         local: false,
     };
@@ -22,6 +23,7 @@ fn test_cluster() -> crate::error::FuseQueryResult<()> {
     let node2 = Node {
         name: "node2".to_string(),
         cpus: 8,
+        priority: 5,
         address: "127.0.0.1:9002".to_string(),
         local: false,
     };
