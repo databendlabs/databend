@@ -6,10 +6,10 @@
 fn test_comparison_function() -> crate::error::FunctionResult<()> {
     use std::sync::Arc;
 
+    use common_datablocks::*;
+    use common_datavalues::*;
     use pretty_assertions::assert_eq;
 
-    use crate::common_datablocks::*;
-    use crate::common_datavalues::*;
     use crate::comparisons::*;
     use crate::*;
 

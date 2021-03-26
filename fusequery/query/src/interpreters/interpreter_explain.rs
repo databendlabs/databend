@@ -5,11 +5,11 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_datablocks::DataBlock;
+use common_datavalues::{DataField, DataSchema, DataType, StringArray};
 use common_planners::{DfExplainType, ExplainPlan, PlanNode};
 use log::debug;
 
-use crate::common_datablocks::DataBlock;
-use crate::common_datavalues::{DataField, DataSchema, DataType, StringArray};
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::error::FuseQueryResult;
 use crate::interpreters::IInterpreter;

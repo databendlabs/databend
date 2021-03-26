@@ -6,11 +6,11 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_datablocks::DataBlock;
 use futures::stream::StreamExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::common_datablocks::DataBlock;
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::IProcessor;

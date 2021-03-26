@@ -4,9 +4,9 @@
 
 use std::task::{Context, Poll};
 
+use common_datablocks::DataBlock;
 use futures::stream::{Stream, StreamExt};
 
-use crate::common_datablocks::DataBlock;
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::FuseQueryResult;
 

@@ -7,11 +7,11 @@ use std::sync::Arc;
 
 use arrow::compute::filter_record_batch;
 use async_trait::async_trait;
+use common_datablocks::DataBlock;
+use common_datavalues::{BooleanArray, DataSchema, DataSchemaRef};
+use common_functions::IFunction;
 use common_planners::ExpressionPlan;
 
-use crate::common_datablocks::DataBlock;
-use crate::common_datavalues::{BooleanArray, DataSchema, DataSchemaRef};
-use crate::common_functions::IFunction;
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::{EmptyProcessor, IProcessor};

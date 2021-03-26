@@ -4,9 +4,9 @@
 
 use std::sync::Arc;
 
+use common_datavalues::{DataSchema, DataSchemaRef, DataValue};
 use common_planners::{ExpressionPlan, PlanNode, ReadDataSourcePlan, ScanPlan};
 
-use crate::common_datavalues::{DataSchema, DataSchemaRef, DataValue};
 use crate::datasources::IDataSource;
 use crate::error::FuseQueryResult;
 use crate::sessions::FuseQueryContextRef;

@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use async_trait::async_trait;
+use common_datavalues::DataSchemaRef;
 use common_planners::{PlanNode, ReadDataSourcePlan};
 
-use crate::common_datavalues::DataSchemaRef;
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::FuseQueryResult;
 use crate::sessions::FuseQueryContextRef;

@@ -6,11 +6,11 @@ use std::fs::File;
 use std::task::{Context, Poll};
 
 use arrow::csv;
+use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
 use csv as csv_crate;
 use futures::stream::Stream;
 
-use crate::common_datablocks::DataBlock;
-use crate::common_datavalues::DataSchemaRef;
 use crate::error::FuseQueryResult;
 
 pub struct CsvStream {

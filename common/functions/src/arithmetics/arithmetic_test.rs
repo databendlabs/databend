@@ -6,11 +6,11 @@
 fn test_arithmetic_function() -> crate::error::FunctionResult<()> {
     use std::sync::Arc;
 
+    use common_datablocks::DataBlock;
+    use common_datavalues::*;
     use pretty_assertions::assert_eq;
 
     use crate::arithmetics::*;
-    use crate::common_datablocks::DataBlock;
-    use crate::common_datavalues::*;
     use crate::*;
 
     #[allow(dead_code)]

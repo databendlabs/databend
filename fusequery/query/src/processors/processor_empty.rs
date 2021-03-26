@@ -6,8 +6,8 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_datavalues::DataSchema;
 
-use crate::common_datavalues::DataSchema;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::IProcessor;

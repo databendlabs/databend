@@ -69,7 +69,7 @@ impl FuseQueryError {
 
 // Internal convert.
 impl From<common_datavalues::DataValueError> for FuseQueryError {
-    fn from(err: crate::common_datavalues::DataValueError) -> Self {
+    fn from(err: common_datavalues::DataValueError) -> Self {
         Internal {
             message: err.to_string(),
         }
@@ -78,7 +78,7 @@ impl From<common_datavalues::DataValueError> for FuseQueryError {
 }
 
 impl From<common_datablocks::DataBlockError> for FuseQueryError {
-    fn from(err: crate::common_datablocks::DataBlockError) -> Self {
+    fn from(err: common_datablocks::DataBlockError) -> Self {
         Internal {
             message: err.to_string(),
         }
@@ -87,7 +87,7 @@ impl From<common_datablocks::DataBlockError> for FuseQueryError {
 }
 
 impl From<common_functions::FunctionError> for FuseQueryError {
-    fn from(err: crate::common_functions::FunctionError) -> Self {
+    fn from(err: common_functions::FunctionError) -> Self {
         Internal {
             message: err.to_string(),
         }

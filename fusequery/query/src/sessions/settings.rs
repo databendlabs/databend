@@ -5,7 +5,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::common_datavalues::DataValue;
+use common_datavalues::DataValue;
+
 use crate::error::{FuseQueryError, FuseQueryResult};
 
 #[derive(Debug, Clone)]

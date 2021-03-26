@@ -6,10 +6,10 @@
 async fn test_chunk_stream() {
     use std::sync::Arc;
 
+    use common_datablocks::*;
+    use common_datavalues::*;
     use futures::stream::StreamExt;
 
-    use crate::common_datablocks::*;
-    use crate::common_datavalues::*;
     use crate::datastreams::*;
 
     let mut s1 = DataBlockStream::create(

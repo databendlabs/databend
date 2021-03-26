@@ -6,12 +6,12 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_datablocks::DataBlock;
+use common_datavalues::{DataSchemaRef, DataValue};
+use common_functions::IFunction;
 use common_planners::ExpressionPlan;
 use futures::stream::StreamExt;
 
-use crate::common_datablocks::DataBlock;
-use crate::common_datavalues::{DataSchemaRef, DataValue};
-use crate::common_functions::IFunction;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::error::FuseQueryResult;
 use crate::processors::{EmptyProcessor, IProcessor};
