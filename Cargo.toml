@@ -1,13 +1,16 @@
 [workspace]
 
 members = [
-    "query",
-    "query/configs",
-    "query/clusters",
-    "query/datablocks",
-    "query/datavalues",
-    "query/metrics",
-    "store",
+    # FuseQuery
+    "fusequery/configs",
+    "fusequery/query",
+    "fusequery/clusters",
+    "fusequery/datablocks",
+    "fusequery/datavalues",
+    "fusequery/metrics",
+
+    # FuseStore
+    "fusestore/store",
 ]
 
 [profile.release]
