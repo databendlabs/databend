@@ -57,7 +57,6 @@ pub async fn try_create_context_with_nodes_and_priority(
     let addrs = try_start_service(nums).await?;
     let ctx = crate::tests::try_create_context()?;
     for (i, addr) in addrs.iter().enumerate() {
-        println!("i={}, {}", i, p[i] as u8);
         ctx.try_get_cluster()?.add_node(&Node {
             name: format!("node{}", i),
             cpus: 4,
