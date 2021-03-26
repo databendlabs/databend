@@ -10,6 +10,9 @@ use crate::clusters::ClusterRef;
 pub struct ClusterNodeRequest {
     pub name: String,
     pub cpus: usize,
+    // Priority is from 0 to 255
+    // Larger value means higher
+    // priority
     pub priority: u8,
     pub address: String,
 }
