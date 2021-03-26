@@ -8,10 +8,7 @@ members = [
     "common/planners",
 
     # FuseQuery
-    "fusequery/configs",
     "fusequery/query",
-    "fusequery/clusters",
-    "fusequery/metrics",
 
     # FuseStore
     "fusestore/store",
