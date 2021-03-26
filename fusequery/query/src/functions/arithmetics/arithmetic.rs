@@ -112,7 +112,7 @@ impl IFunction for ArithmeticFunction {
     }
 
     fn merge_result(&self) -> FuseQueryResult<DataValue> {
-        Ok(fuse_query_datavalues::data_value_arithmetic_op(
+        Ok(datavalues::data_value_arithmetic_op(
             self.op.clone(),
             self.left.merge_result()?,
             self.right.merge_result()?,

@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use fuse_query_datavalues::{DataArrayRef, DataSchema, DataSchemaRef};
+use common_datavalues::{DataArrayRef, DataSchema, DataSchemaRef};
 
 use crate::error::DataBlockResult;
 

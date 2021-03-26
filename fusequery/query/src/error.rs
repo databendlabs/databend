@@ -68,8 +68,8 @@ impl FuseQueryError {
 }
 
 // Internal convert.
-impl From<fuse_query_datavalues::error::DataValueError> for FuseQueryError {
-    fn from(err: fuse_query_datavalues::error::DataValueError) -> Self {
+impl From<crate::datavalues::DataValueError> for FuseQueryError {
+    fn from(err: crate::datavalues::DataValueError) -> Self {
         Internal {
             message: err.to_string(),
         }
