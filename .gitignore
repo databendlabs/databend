@@ -6,7 +6,6 @@
 
 # Rust
 target/*
-query/Cargo.lock
 
 # cargo
 .cargo/

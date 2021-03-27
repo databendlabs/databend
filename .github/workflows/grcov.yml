@@ -1,0 +1,80 @@
+name: Coverage
+on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  grcov:
+    name: Coverage
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+        toolchain:
+          - nightly
+        cargo_flags:
+          - "--all-features"
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v2
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.toolchain }}
+          override: true
+
+      - name: Install grcov
+        uses: actions-rs/install@v0.1
+        with:
+          crate: grcov
+          version: latest
+          use-tool-cache: true
+
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all --no-fail-fast ${{ matrix.cargo_flags }}
+        env:
+          CARGO_INCREMENTAL: "0"
+          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort -Cdebug-assertions=off'
+          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort -Cdebug-assertions=off'
+
+      - name: Generate coverage data
+        id: grcov
+        # uses: actions-rs/grcov@v0.1
+        run: |
+          grcov target/debug/ \
+              --branch \
+              --llvm \
+              --source-dir . \
+              --output-path lcov.info \
+              --ignore='/**' \
+              --ignore='C:/**' \
+              --ignore='../**' \
+              --ignore-not-existing \
+              --excl-line "#\\[derive\\(" \
+              --excl-br-line "#\\[derive\\(" \
+              --excl-start "#\\[cfg\\(test\\)\\]" \
+              --excl-br-start "#\\[cfg\\(test\\)\\]" \
+              --commit-sha ${{ github.sha }} \
+              --service-job-id ${{ github.job }} \
+              --service-name "GitHub Actions" \
+              --service-number ${{ github.run_id }}
+      - name: Upload coverage as artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: lcov.info
+          # path: ${{ steps.grcov.outputs.report }}
+          path: lcov.info
+
+      - name: Upload coverage to codecov.io
+        uses: codecov/codecov-action@v1
+        with:
+          # file: ${{ steps.grcov.outputs.report }}
+          file: lcov.info
+          fail_ci_if_error: true

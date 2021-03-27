@@ -1,4 +1,4 @@
-name: FuseQuery Release
+name: Release
 
 on:
   push:
