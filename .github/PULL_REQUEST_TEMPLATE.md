@@ -1,7 +1,3 @@
-<!--
-Thank you for sending a PR. Thank you for spending time to help improve the FuseQuery project.
--->
-
 ## Summary
 
 <!--

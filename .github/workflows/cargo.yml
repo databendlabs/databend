@@ -6,7 +6,7 @@ env:
 
 jobs:
   rustfmt_and_clippy:
-    name: Rustfmt && Clippy
+    name: rustfmt && clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
