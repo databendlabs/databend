@@ -6,7 +6,6 @@ env:
 
 jobs:
   grcov:
-    name: Coverage
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -25,6 +24,7 @@ jobs:
         with:
           profile: minimal
           toolchain: ${{ matrix.toolchain }}
+          components: rustfmt
           override: true
 
       - name: Install grcov
