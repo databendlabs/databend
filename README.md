@@ -1,4 +1,4 @@
-# FuseQuery
+# Datafuse
 [![](https://badgen.net/badge/Slack/Join%20Datafuse/0abd59?icon=slack)](https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA)
 [![Unit Tests](https://github.com/datafuselabs/datafuse/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/datafuselabs/datafuse/actions/workflows/unit-tests.yml)
 [![codecov](https://codecov.io/gh/datafuselabs/datafuse/branch/master/graph/badge.svg?token=V3SC44OQDO)](https://codecov.io/gh/datafuselabs/datafuse)
@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 
-FuseQuery is a real-time Cloud Query Engine implemented in Rust.
+Datafuse is a free Cloud-Native Analytics DBMS(Inspired by ClickHouse) implemented in Rust.
 
 Inspired by [ClickHouse](https://github.com/ClickHouse/ClickHouse) and powered by [Arrow](https://github.com/apache/arrow).
 
@@ -82,14 +82,14 @@ Note:
 
 ## Getting Started
 
-### Learn FuseQuery
+### Learn Datafuse
 
 * [Architecture](docs/overview/architecture.md)
 * [Performance](docs/overview/performance.md)
 * [SQL](docs/sqlstatement/)
 * [Functions](docs/functions/)
 
-### Try FuseQuery
+### Try Datafuse
 
 * [How to Run](docs/overview/building-and-running.md)
 
@@ -109,4 +109,4 @@ You can learn more about contributing to the FuseQuery project by reading our [C
 
 ## License
 
-FuseQuery is licensed under [Apache 2.0](LICENSE).
+Datafuse is licensed under [Apache 2.0](LICENSE).
