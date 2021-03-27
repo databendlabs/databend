@@ -5,9 +5,9 @@
 use std::cmp::min;
 use std::sync::Arc;
 
-use arrow::datatypes::Schema;
 use common_datavalues::DataSchema;
-use common_planners::{EmptyPlan, PlanNode, ReadDataSourcePlan, Statistics};
+use common_planners::{EmptyPlan, PlanNode, ReadDataSourcePlan};
+use log::info;
 
 use crate::error::FuseQueryResult;
 use crate::sessions::FuseQueryContextRef;
@@ -16,14 +16,7 @@ pub struct PlanScheduler {}
 
 impl PlanScheduler {
     pub fn schedule(ctx: FuseQueryContextRef, plan: &PlanNode) -> FuseQueryResult<Vec<PlanNode>> {
-        let mut source_plan = ReadDataSourcePlan {
-            db: "".to_string(),
-            table: "".to_string(),
-            schema: Arc::new(Schema::empty()),
-            partitions: vec![],
-            statistics: Statistics::default(),
-            description: "".to_string(),
-        };
+        let mut source_plan = ReadDataSourcePlan::empty();
 
         // Get the source plan node from walk.
         plan.walk_postorder(|plan| match plan {
@@ -55,6 +48,13 @@ impl PlanScheduler {
         let mut num_chunks_so_far = 0;
         let mut chunk_size;
 
+        info!(
+            "Schedule all [{:?}] partitions to [{:?}] nodes, all priority: [{:?}]",
+            total_chunks,
+            cluster_nodes.len(),
+            priority_sum
+        );
+
         while num_chunks_so_far < total_chunks {
             let mut new_source_plan = source_plan.clone();
             // We have at lease one node
@@ -76,6 +76,12 @@ impl PlanScheduler {
                 .extend_from_slice(&partitions[num_chunks_so_far..num_chunks_so_far + chunk_size]);
             num_chunks_so_far += chunk_size;
 
+            let node = &cluster_nodes[index];
+            info!(
+                "Executor[addr: {:?}, cpus:{:?}, priority [{:?}] assigned [{:?}] partitions",
+                node.address, node.cpus, node.priority, chunk_size
+            );
+
             let mut rewritten_node = PlanNode::Empty(EmptyPlan {
                 schema: Arc::new(DataSchema::empty()),
             });
@@ -93,6 +99,8 @@ impl PlanScheduler {
             })?;
             results.push(rewritten_node);
         }
+        info!("Schedule plans to [{:?}] executors", results.len());
+
         Ok(results)
     }
 }

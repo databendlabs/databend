@@ -4,6 +4,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
@@ -11,6 +12,7 @@ use common_datavalues::{DataSchemaRef, DataValue};
 use common_functions::IFunction;
 use common_planners::ExpressionPlan;
 use futures::stream::StreamExt;
+use log::info;
 
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::error::FuseQueryResult;
@@ -59,6 +61,8 @@ impl IProcessor for AggregatorFinalTransform {
     async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
         let mut funcs = self.funcs.clone();
         let mut stream = self.input.execute().await?;
+
+        let start = Instant::now();
         while let Some(block) = stream.next().await {
             let block = block?;
             for (i, func) in funcs.iter_mut().enumerate() {
@@ -71,6 +75,8 @@ impl IProcessor for AggregatorFinalTransform {
                 }
             }
         }
+        let delta = start.elapsed();
+        info!("Aggregator final cost: {:?}", delta);
 
         let mut final_results = Vec::with_capacity(funcs.len());
         for func in &funcs {

@@ -2,7 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_datavalues::DataSchemaRef;
+use std::sync::Arc;
+
+use common_datavalues::{DataSchema, DataSchemaRef};
 
 use crate::{Partitions, Statistics};
 
@@ -17,6 +19,17 @@ pub struct ReadDataSourcePlan {
 }
 
 impl ReadDataSourcePlan {
+    pub fn empty() -> ReadDataSourcePlan {
+        ReadDataSourcePlan {
+            db: "".to_string(),
+            table: "".to_string(),
+            schema: Arc::from(DataSchema::empty()),
+            partitions: vec![],
+            statistics: Statistics::default(),
+            description: "".to_string(),
+        }
+    }
+
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
     }
