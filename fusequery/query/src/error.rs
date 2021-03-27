@@ -191,8 +191,8 @@ impl From<std::net::AddrParseError> for FuseQueryError {
     }
 }
 
-impl From<anyhow::Error> for FuseQueryError {
-    fn from(err: anyhow::Error) -> Self {
+impl From<Box<dyn snafu::Error>> for FuseQueryError {
+    fn from(err: Box<dyn snafu::Error>) -> Self {
         Internal {
             message: err.to_string(),
         }

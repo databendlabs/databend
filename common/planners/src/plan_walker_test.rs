@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn test_plan_walker() -> std::result::Result<(), anyhow::Error> {
+fn test_plan_walker() -> std::result::Result<(), Box<dyn std::error::Error>> {
     use pretty_assertions::assert_eq;
 
     use crate::*;

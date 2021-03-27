@@ -4,7 +4,7 @@
 
 use crate::PlanNode;
 
-pub type PlannerResult<T, E = anyhow::Error> = std::result::Result<T, E>;
+pub type PlannerResult<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
 #[derive(PartialEq)]
 enum WalkOrder {
