@@ -92,6 +92,7 @@ Note:
 ### Try Datafuse
 
 * [How to Run](docs/overview/building-and-running.md)
+* [How to Run Cluster](fusequery/example/cluster.sh)
 
 ## Roadmap
 

@@ -59,12 +59,18 @@ impl PlanScheduler {
             let mut new_source_plan = source_plan.clone();
             // We have at lease one node
             if priority_sum > 0 {
-                let p_usize = cluster_nodes[index].priority as usize;
+                let node = &cluster_nodes[index];
+                let p_usize = node.priority as usize;
                 let remainder = (p_usize * total_chunks) % priority_sum;
                 let left = total_chunks - num_chunks_so_far;
                 chunk_size = min(
                     (p_usize * total_chunks - remainder) / priority_sum + 1,
                     left,
+                );
+
+                info!(
+                    "Executor[addr: {:?}, cpus:{:?}, priority [{:?}] assigned [{:?}] partitions",
+                    node.address, node.cpus, node.priority, chunk_size
                 );
                 index += 1;
             } else {
@@ -75,12 +81,6 @@ impl PlanScheduler {
                 .partitions
                 .extend_from_slice(&partitions[num_chunks_so_far..num_chunks_so_far + chunk_size]);
             num_chunks_so_far += chunk_size;
-
-            let node = &cluster_nodes[index];
-            info!(
-                "Executor[addr: {:?}, cpus:{:?}, priority [{:?}] assigned [{:?}] partitions",
-                node.address, node.cpus, node.priority, chunk_size
-            );
 
             let mut rewritten_node = PlanNode::Empty(EmptyPlan {
                 schema: Arc::new(DataSchema::empty()),
