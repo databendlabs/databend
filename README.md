@@ -1,8 +1,7 @@
 # FuseQuery
 [![](https://badgen.net/badge/Slack/Join%20Datafuse/0abd59?icon=slack)](https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA)
-[![FuseQuery Lint](https://github.com/datafuselabs/fuse-query/actions/workflows/fusequery-lint.yml/badge.svg)](https://github.com/datafuselabs/fuse-query/actions/workflows/fusequery-lint.yml)
-[![FuseQuery Unit Tests](https://github.com/datafuselabs/fuse-query/actions/workflows/fusequery-unit-tests.yml/badge.svg)](https://github.com/datafuselabs/fuse-query/actions/workflows/fusequery-unit-tests.yml)
-[![codecov.io](https://codecov.io/gh/datafuselabs/fuse-query/graphs/badge.svg)](https://codecov.io/gh/datafuselabs/fuse-query/branch/master)
+[![Unit Tests](https://github.com/datafuselabs/datafuse/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/datafuselabs/datafuse/actions/workflows/unit-tests.yml)
+[![codecov](https://codecov.io/gh/datafuselabs/datafuse/branch/master/graph/badge.svg?token=V3SC44OQDO)](https://codecov.io/gh/datafuselabs/datafuse)
 ![Platform](https://img.shields.io/badge/Platform-Linux,%20ARM,%20OS%20X,%20Windows-green.svg?style=flat)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
