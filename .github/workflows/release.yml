@@ -1,4 +1,4 @@
-name: FuseQuery Release
+name: Release
 
 on:
   push:
@@ -54,7 +54,7 @@ jobs:
         with:
           toolchain: stable
           override: true
-          components: rustfmt, clippy # ensure rustfmt and clippy installed
+          components: rustfmt
           target: ${{ matrix.target }}
 
       - name: Cargo build
