@@ -7,13 +7,11 @@ use std::sync::{Arc, Mutex};
 
 use common_datavalues::DataValue;
 use common_planners::{Partition, Partitions, Statistics};
-use log::info;
 use uuid::Uuid;
 
 use crate::clusters::{Cluster, ClusterRef};
 use crate::datasources::{DataSource, IDataSource, ITable};
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::rpcs::rpc::GrpcClient;
 use crate::sessions::Settings;
 
 #[derive(Clone)]

@@ -169,12 +169,6 @@ function install_toolchain {
   fi
 }
 
-function install_grcov {
-  if ! command -v grcov &> /dev/null; then
-    cargo install grcov
-  fi
-}
-
 function usage {
   cat <<EOF
   usage: $0 [options]"
@@ -204,7 +198,6 @@ EOF
 cat <<EOF
 Build tools (since -t or no option was provided):
   * Rust (and the necessary components, e.g. rust-fmt, clippy)
-  * grcov
   * lcov
   * pkg-config
   * libssl-dev
@@ -369,7 +362,6 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
   rustup component add clippy
   rustup component add miri
 
-  install_grcov
   install_pkg lcov "$PACKAGE_MANAGER"
 fi
 
