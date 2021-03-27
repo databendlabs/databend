@@ -12,7 +12,7 @@ use arrow_flight::{
     HandshakeRequest, HandshakeResponse, PutResult, SchemaResult, Ticket,
 };
 use futures::{Stream, StreamExt};
-use log::debug;
+use log::info;
 use metrics::histogram;
 use prost::Message;
 use tokio::sync::mpsc;
@@ -111,9 +111,9 @@ impl Flight for FlightService {
                 let session_manager = self.session_manager.clone();
                 let (sender, receiver): (FlightDataSender, FlightDataReceiver) = mpsc::channel(2);
 
-                debug!(
-                    "flight_service:{} plan:{:?}",
-                    self.conf.rpc_api_address, plan
+                info!(
+                    "Executor[{:?}] received action, job_id: {:?}",
+                    self.conf.rpc_api_address, action.job_id
                 );
 
                 // Create the context.
@@ -124,6 +124,7 @@ impl Flight for FlightService {
 
                 // Pipeline.
                 let mut pipeline = PipelineBuilder::create(ctx.clone(), plan.clone()).build()?;
+
                 let mut stream = pipeline.execute().await?;
 
                 tokio::spawn(async move {
@@ -164,6 +165,8 @@ impl Flight for FlightService {
                     // Cost.
                     let delta = start.elapsed();
                     histogram!(super::metrics::METRIC_FLIGHT_EXECUTE_COST, delta);
+
+                    info!("Executor executed cost: {:?}", delta);
 
                     // Remove the context from the manager.
                     session_manager.try_remove_context(ctx.clone()).ok();

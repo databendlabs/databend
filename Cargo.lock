@@ -555,7 +555,6 @@ dependencies = [
 name = "common-planners"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "common-datavalues",
  "common-functions",
  "dyn-clone",
@@ -921,7 +920,6 @@ dependencies = [
 name = "fuse-query"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "arrow",
  "arrow-flight",
  "async-std",

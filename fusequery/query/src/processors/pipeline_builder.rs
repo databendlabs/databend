@@ -4,7 +4,6 @@
 
 use std::sync::Arc;
 
-use anyhow::Context;
 use common_planners::PlanNode;
 
 use crate::error::{FuseQueryError, FuseQueryResult};
@@ -123,11 +122,10 @@ impl PipelineBuilder {
             }
             PlanNode::Select(_) => Ok(true),
             other => {
-                return Err(FuseQueryError::build_internal_error(format!(
+                return Err(Box::new(FuseQueryError::build_internal_error(format!(
                     "Build pipeline from the plan node unsupported:{:?}",
                     other.name()
-                )))
-                .context("Pipeline build error")
+                ))))
             }
         })?;
 
