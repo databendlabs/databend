@@ -10,6 +10,10 @@ use crate::clusters::ClusterRef;
 pub struct ClusterNodeRequest {
     pub name: String,
     pub cpus: usize,
+    // Priority is in [0, 10]
+    // Larger value means higher
+    // priority
+    pub priority: u8,
     pub address: String,
 }
 
@@ -87,6 +91,7 @@ mod handlers {
             .add_node(&Node {
                 name: req.name,
                 cpus: req.cpus,
+                priority: req.priority,
                 address: req.address,
                 local: false,
             })

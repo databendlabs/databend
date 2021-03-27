@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::cmp::min;
 use std::sync::Arc;
 
 use arrow::datatypes::Schema;
@@ -43,18 +44,37 @@ impl PlanScheduler {
         let mut results = vec![];
         let cluster = ctx.try_get_cluster()?;
         let cluster_nodes = cluster.get_nodes()?;
-        let cluster_nums = if cluster_nodes.is_empty() {
-            1
+        let priority_sum = if cluster_nodes.is_empty() {
+            0
         } else {
-            cluster_nodes.len()
+            cluster_nodes.iter().map(|n| n.priority as usize).sum()
         };
 
-        // Align to the cluster numbers.
-        let remainder = partitions.len() % cluster_nums;
-        let chunk_size = (partitions.len() + remainder) / cluster_nums + 1;
-        for chunks in partitions.chunks(chunk_size) {
+        let total_chunks = partitions.len();
+        let mut index = 0;
+        let mut num_chunks_so_far = 0;
+        let mut chunk_size;
+
+        while num_chunks_so_far < total_chunks {
             let mut new_source_plan = source_plan.clone();
-            new_source_plan.partitions = Vec::from(chunks);
+            // We have at lease one node
+            if priority_sum > 0 {
+                let p_usize = cluster_nodes[index].priority as usize;
+                let remainder = (p_usize * total_chunks) % priority_sum;
+                let left = total_chunks - num_chunks_so_far;
+                chunk_size = min(
+                    (p_usize * total_chunks - remainder) / priority_sum + 1,
+                    left,
+                );
+                index += 1;
+            } else {
+                chunk_size = total_chunks;
+            }
+            new_source_plan.partitions = vec![];
+            new_source_plan
+                .partitions
+                .extend_from_slice(&partitions[num_chunks_so_far..num_chunks_so_far + chunk_size]);
+            num_chunks_so_far += chunk_size;
 
             let mut rewritten_node = PlanNode::Empty(EmptyPlan {
                 schema: Arc::new(DataSchema::empty()),
