@@ -1,4 +1,4 @@
-name: Build
+name: Build Check
 on: [push, pull_request]
 
 env:

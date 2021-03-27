@@ -1,12 +1,11 @@
-name: Unit Tests and Coverage
+name: Unit Tests
 on: [push, pull_request]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  coverage:
-    name: unit tests and code coverage
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
