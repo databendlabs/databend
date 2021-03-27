@@ -6,7 +6,7 @@ env:
 
 jobs:
   coverage:
-    name: Unit tests, code coverage(disabled)
+    name: Unit tests, code coverage
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -25,3 +25,21 @@ jobs:
           command: test
           components: rustfmt
           args: --all-features --no-fail-fast
+        env:
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+
+      - uses: actions-rs/grcov@v0.1.5
+        id: coverage
+
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ${{ steps.coverage.outputs.report }}
+
+      - name: Genhtml
+        run: |
+          genhtml -o ./target/debug/coverage/ --show-details --highlight --ignore-errors source --legend ${{ steps.coverage.outputs.report }}
+
