@@ -15,8 +15,6 @@ use futures::{Stream, StreamExt};
 use log::info;
 use metrics::histogram;
 use prost::Message;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::{Receiver, Sender};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 
@@ -28,8 +26,8 @@ use crate::processors::PipelineBuilder;
 use crate::protobuf::FlightRequest;
 use crate::sessions::SessionRef;
 
-type FlightDataSender = Sender<Result<FlightData, Status>>;
-type FlightDataReceiver = Receiver<Result<FlightData, Status>>;
+type FlightDataSender = tokio::sync::mpsc::Sender<Result<FlightData, Status>>;
+type FlightDataReceiver = tokio::sync::mpsc::Receiver<Result<FlightData, Status>>;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -109,7 +107,8 @@ impl Flight for FlightService {
                 let cpus = self.conf.num_cpus;
                 let cluster = self.cluster.clone();
                 let session_manager = self.session_manager.clone();
-                let (sender, receiver): (FlightDataSender, FlightDataReceiver) = mpsc::channel(2);
+                let (sender, receiver): (FlightDataSender, FlightDataReceiver) =
+                    tokio::sync::mpsc::channel(2);
 
                 info!(
                     "Executor[{:?}] received action, job_id: {:?}",

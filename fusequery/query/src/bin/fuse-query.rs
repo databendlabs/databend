@@ -13,22 +13,11 @@ use log::info;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let conf = Config::create_from_args();
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or(conf.log_level.to_lowercase().as_str()),
+    )
+    .init();
 
-    // Log level.
-    match conf.log_level.to_lowercase().as_str() {
-        "debug" => simplelog::SimpleLogger::init(
-            simplelog::LevelFilter::Debug,
-            simplelog::Config::default(),
-        )?,
-        "info" => simplelog::SimpleLogger::init(
-            simplelog::LevelFilter::Info,
-            simplelog::Config::default(),
-        )?,
-        _ => simplelog::SimpleLogger::init(
-            simplelog::LevelFilter::Error,
-            simplelog::Config::default(),
-        )?,
-    }
     info!("{:?}", conf.clone());
     info!("FuseQuery v-{}", conf.version);
 

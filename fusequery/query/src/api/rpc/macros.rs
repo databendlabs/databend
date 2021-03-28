@@ -9,10 +9,9 @@ macro_rules! match_async_result {
     ($VALUE:expr, $SENDER:ident) => {{
         match ($VALUE) {
             Err(e) => {
-                $SENDER
-                    .send(Err(tonic::Status::internal(format!("{:?}", e))))
-                    .await
-                    .ok();
+                let msg = format!("{:?}", e);
+                log::error!("{}", msg);
+                $SENDER.send(Err(tonic::Status::internal(msg))).await.ok();
                 return;
             }
             Ok(v) => v,
