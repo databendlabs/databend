@@ -77,7 +77,7 @@ impl MysqlStream {
 
         let cols_num = block.num_columns();
         if cols_num > 0 {
-            let mut row_writer = writer.start(&cols).unwrap();
+            let mut row_writer = writer.start(&cols)?;
 
             for block in &self.blocks {
                 let rows_num = block.column(0).len();

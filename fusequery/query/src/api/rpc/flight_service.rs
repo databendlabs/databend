@@ -133,7 +133,7 @@ impl Flight for FlightService {
 
                     // Get the batch from the stream and send to one channel.
                     while let Some(item) = stream.next().await {
-                        let block = item.unwrap();
+                        let block = match_async_result!(item, sender);
                         if !has_send {
                             let schema_flight_data =
                                 arrow_flight::utils::flight_data_from_arrow_schema(
