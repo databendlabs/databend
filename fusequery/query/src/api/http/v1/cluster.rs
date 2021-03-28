@@ -70,8 +70,8 @@ fn json_body() -> impl Filter<Extract = (ClusterNodeRequest,), Error = warp::Rej
 mod handlers {
     use log::info;
 
+    use crate::api::http::v1::cluster::ClusterNodeRequest;
     use crate::clusters::{ClusterRef, Node};
-    use crate::rpcs::http::v1::cluster::ClusterNodeRequest;
 
     pub async fn list_node(
         cluster: ClusterRef,

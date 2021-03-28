@@ -6,7 +6,7 @@
 async fn test_grpc_service_ping() -> Result<(), Box<dyn std::error::Error>> {
     use pretty_assertions::assert_eq;
 
-    use crate::rpcs::rpc::GrpcClient;
+    use crate::api::rpc::GrpcClient;
 
     // Test service starts.
     let addr = crate::tests::try_start_service(1).await?[0].clone();
@@ -23,8 +23,8 @@ async fn test_grpc_service_ping() -> Result<(), Box<dyn std::error::Error>> {
 async fn test_grpc_service_fetch_partition() -> Result<(), Box<dyn std::error::Error>> {
     use pretty_assertions::assert_eq;
 
+    use crate::api::rpc::GrpcClient;
     use crate::processors::PipelineBuilder;
-    use crate::rpcs::rpc::GrpcClient;
     use crate::sql::PlanParser;
 
     // 1. Service starts.

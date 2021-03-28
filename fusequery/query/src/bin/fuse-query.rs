@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use fuse_query::api::{HttpService, RpcService};
 use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
 use fuse_query::metrics::MetricService;
-use fuse_query::rpcs::{HttpService, RpcService};
 use fuse_query::servers::MysqlHandler;
 use fuse_query::sessions::Session;
 use log::info;

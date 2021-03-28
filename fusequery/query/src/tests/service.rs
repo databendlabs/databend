@@ -4,10 +4,10 @@
 
 use rand::Rng;
 
+use crate::api::RpcService;
 use crate::clusters::{Cluster, Node};
 use crate::configs::Config;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::rpcs::RpcService;
 use crate::sessions::{FuseQueryContextRef, Session, SessionRef};
 
 /// Start services and return the random address.

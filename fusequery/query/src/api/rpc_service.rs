@@ -4,10 +4,10 @@
 
 use tonic::transport::Server;
 
+use crate::api::rpc::{FlightService, GrpcService};
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::error::{FuseQueryError, FuseQueryResult};
-use crate::rpcs::rpc::{FlightService, GrpcService};
 use crate::sessions::SessionRef;
 
 pub struct RpcService {

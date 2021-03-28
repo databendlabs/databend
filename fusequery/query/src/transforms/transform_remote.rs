@@ -8,10 +8,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_planners::PlanNode;
 
+use crate::api::rpc::{ExecuteAction, ExecutePlanAction, FlightClient};
 use crate::datastreams::SendableDataBlockStream;
 use crate::error::FuseQueryResult;
 use crate::processors::{EmptyProcessor, IProcessor};
-use crate::rpcs::rpc::{ExecuteAction, ExecutePlanAction, FlightClient};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct RemoteTransform {

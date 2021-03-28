@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use crate::api::http::router::Router;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::error::FuseQueryResult;
-use crate::rpcs::http::router::Router;
 
 pub struct HttpService {
     cfg: Config,

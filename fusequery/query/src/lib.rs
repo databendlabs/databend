@@ -6,6 +6,7 @@ mod error_test;
 
 pub mod tests;
 
+pub mod api;
 pub mod clusters;
 pub mod configs;
 pub mod datasources;
@@ -16,7 +17,6 @@ pub mod metrics;
 pub mod optimizers;
 pub mod planners;
 pub mod processors;
-pub mod rpcs;
 pub mod servers;
 pub mod sessions;
 pub mod sql;

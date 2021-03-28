@@ -8,7 +8,7 @@ async fn test_flight_service() -> Result<(), Box<dyn std::error::Error>> {
     use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::rpcs::rpc::*;
+    use crate::api::rpc::*;
 
     // Test service starts.
     let addr = crate::tests::try_start_service(1).await?[0].clone();
