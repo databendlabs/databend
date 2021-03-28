@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use common_planners::PlanNode;
+use log::info;
 
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::PlanScheduler;
@@ -26,6 +27,8 @@ impl PipelineBuilder {
     }
 
     pub fn build(&self) -> FuseQueryResult<Pipeline> {
+        info!("Received for plan:\n{:?}", self.plan);
+
         let mut pipeline = Pipeline::create();
         self.plan.walk_postorder(|node| match node {
             PlanNode::Stage(plan) => {
@@ -128,6 +131,7 @@ impl PipelineBuilder {
                 ))))
             }
         })?;
+        info!("Pipeline:\n{:?}", pipeline);
 
         Ok(pipeline)
     }
