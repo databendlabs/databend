@@ -12,10 +12,10 @@ use arrow_flight::Ticket;
 use common_datablocks::DataBlock;
 use prost::Message;
 
+use crate::api::rpc::ExecuteAction;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::protobuf::FlightRequest;
-use crate::rpcs::rpc::ExecuteAction;
 
 pub struct FlightClient {
     client: FlightServiceClient<tonic::transport::channel::Channel>,

@@ -6,9 +6,9 @@
 async fn test_cluster() -> crate::error::FuseQueryResult<()> {
     use pretty_assertions::assert_eq;
 
+    use crate::api::http::v1::cluster::*;
     use crate::clusters::Cluster;
     use crate::configs::Config;
-    use crate::rpcs::http::v1::cluster::*;
 
     let conf = Config::default();
     let cluster = Cluster::create(conf.clone());

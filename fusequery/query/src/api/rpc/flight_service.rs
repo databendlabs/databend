@@ -20,12 +20,12 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 
+use crate::api::rpc::ExecuteAction;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::error::FuseQueryError;
 use crate::processors::PipelineBuilder;
 use crate::protobuf::FlightRequest;
-use crate::rpcs::rpc::ExecuteAction;
 use crate::sessions::SessionRef;
 
 type FlightDataSender = Sender<Result<FlightData, Status>>;
