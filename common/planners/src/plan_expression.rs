@@ -4,12 +4,11 @@
 
 use std::fmt;
 
+use anyhow::Result;
 use common_datavalues::{DataField, DataSchemaRef, DataValue};
 use common_functions::{
     AliasFunction, ColumnFunction, FunctionFactory, IFunction, LiteralFunction,
 };
-
-use crate::error::PlannerResult;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub enum ExpressionPlan {
@@ -35,7 +34,7 @@ pub enum ExpressionPlan {
 }
 
 impl ExpressionPlan {
-    fn to_function_with_depth(&self, depth: usize) -> PlannerResult<Box<dyn IFunction>> {
+    fn to_function_with_depth(&self, depth: usize) -> Result<Box<dyn IFunction>> {
         match self {
             ExpressionPlan::Column(ref v) => Ok(ColumnFunction::try_create(v.as_str())?),
             ExpressionPlan::Literal(ref v) => {
@@ -69,11 +68,11 @@ impl ExpressionPlan {
         }
     }
 
-    pub fn to_function(&self) -> PlannerResult<Box<dyn IFunction>> {
+    pub fn to_function(&self) -> Result<Box<dyn IFunction>> {
         self.to_function_with_depth(0)
     }
 
-    pub fn to_data_field(&self, input_schema: &DataSchemaRef) -> PlannerResult<DataField> {
+    pub fn to_data_field(&self, input_schema: &DataSchemaRef) -> Result<DataField> {
         let func = self.to_function()?;
         Ok(DataField::new(
             format!("{}", func).as_str(),
@@ -82,7 +81,7 @@ impl ExpressionPlan {
         ))
     }
 
-    pub fn has_aggregator(&self) -> PlannerResult<bool> {
+    pub fn has_aggregator(&self) -> Result<bool> {
         Ok(self.to_function()?.is_aggregator())
     }
 }

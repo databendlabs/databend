@@ -4,9 +4,9 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use common_datavalues::{DataSchema, DataSchemaRef};
 
-use crate::PlannerResult;
 use crate::{
     AggregatorFinalPlan, AggregatorPartialPlan, CreatePlan, EmptyPlan, ExplainPlan, FilterPlan,
     LimitPlan, ProjectionPlan, ReadDataSourcePlan, ScanPlan, SelectPlan, SettingPlan, StagePlan,
@@ -84,7 +84,7 @@ impl PlanNode {
         }
     }
 
-    pub fn set_input(&mut self, node: &PlanNode) -> PlannerResult<()> {
+    pub fn set_input(&mut self, node: &PlanNode) -> Result<()> {
         match self {
             PlanNode::Stage(v) => v.set_input(node),
             PlanNode::Projection(v) => v.set_input(node),

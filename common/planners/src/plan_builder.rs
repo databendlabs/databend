@@ -4,9 +4,9 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use common_datavalues::{DataField, DataSchema, DataSchemaRef};
 
-use crate::PlannerResult;
 use crate::{
     col, AggregatorFinalPlan, AggregatorPartialPlan, DfExplainType, EmptyPlan, ExplainPlan,
     ExpressionPlan, FilterPlan, LimitPlan, PlanNode, PlanRewriter, ProjectionPlan, ScanPlan,
@@ -43,15 +43,15 @@ impl PlanBuilder {
         &self,
         exprs: &[ExpressionPlan],
         input_schema: &DataSchemaRef,
-    ) -> PlannerResult<Vec<DataField>> {
+    ) -> Result<Vec<DataField>> {
         exprs
             .iter()
             .map(|expr| expr.to_data_field(input_schema))
-            .collect::<PlannerResult<_>>()
+            .collect::<Result<_>>()
     }
 
     /// Apply a stage.
-    pub fn stage(&self, uuid: String, state: StageState) -> PlannerResult<Self> {
+    pub fn stage(&self, uuid: String, state: StageState) -> Result<Self> {
         Ok(Self::from(&PlanNode::Stage(StagePlan {
             uuid,
             id: 0,
@@ -61,7 +61,7 @@ impl PlanBuilder {
     }
 
     /// Apply a projection.
-    pub fn project(&self, exprs: Vec<ExpressionPlan>) -> PlannerResult<Self> {
+    pub fn project(&self, exprs: Vec<ExpressionPlan>) -> Result<Self> {
         let exprs = PlanRewriter::exprs_extract_aliases(exprs)?;
         let input_schema = self.plan.schema();
 
@@ -88,7 +88,7 @@ impl PlanBuilder {
         mode: AggregateMode,
         aggr_expr: Vec<ExpressionPlan>,
         group_expr: Vec<ExpressionPlan>,
-    ) -> PlannerResult<Self> {
+    ) -> Result<Self> {
         let mut all_expr: Vec<ExpressionPlan> = group_expr.clone();
         aggr_expr.iter().for_each(|x| all_expr.push(x.clone()));
 
@@ -117,7 +117,7 @@ impl PlanBuilder {
         &self,
         aggr_expr: Vec<ExpressionPlan>,
         group_expr: Vec<ExpressionPlan>,
-    ) -> PlannerResult<Self> {
+    ) -> Result<Self> {
         self.aggregate(AggregateMode::Partial, aggr_expr, group_expr)
     }
 
@@ -126,7 +126,7 @@ impl PlanBuilder {
         &self,
         aggr_expr: Vec<ExpressionPlan>,
         group_expr: Vec<ExpressionPlan>,
-    ) -> PlannerResult<Self> {
+    ) -> Result<Self> {
         self.aggregate(AggregateMode::Final, aggr_expr, group_expr)
     }
 
@@ -137,7 +137,7 @@ impl PlanBuilder {
         table_schema: &DataSchema,
         projection: Option<Vec<usize>>,
         table_args: Option<ExpressionPlan>,
-    ) -> PlannerResult<Self> {
+    ) -> Result<Self> {
         let table_schema = DataSchemaRef::new(table_schema.clone());
         let projected_schema = projection
             .clone()
@@ -157,7 +157,7 @@ impl PlanBuilder {
     }
 
     /// Apply a filter
-    pub fn filter(&self, expr: ExpressionPlan) -> PlannerResult<Self> {
+    pub fn filter(&self, expr: ExpressionPlan) -> Result<Self> {
         Ok(Self::from(&PlanNode::Filter(FilterPlan {
             predicate: expr,
             input: Arc::new(self.plan.clone()),
@@ -165,20 +165,20 @@ impl PlanBuilder {
     }
 
     /// Apply a limit
-    pub fn limit(&self, n: usize) -> PlannerResult<Self> {
+    pub fn limit(&self, n: usize) -> Result<Self> {
         Ok(Self::from(&PlanNode::Limit(LimitPlan {
             n,
             input: Arc::new(self.plan.clone()),
         })))
     }
 
-    pub fn select(&self) -> PlannerResult<Self> {
+    pub fn select(&self) -> Result<Self> {
         Ok(Self::from(&PlanNode::Select(SelectPlan {
             input: Arc::new(self.plan.clone()),
         })))
     }
 
-    pub fn explain(&self) -> PlannerResult<Self> {
+    pub fn explain(&self) -> Result<Self> {
         Ok(Self::from(&PlanNode::Explain(ExplainPlan {
             typ: DfExplainType::Syntax,
             input: Arc::new(self.plan.clone()),
@@ -186,7 +186,7 @@ impl PlanBuilder {
     }
 
     /// Build the plan
-    pub fn build(&self) -> PlannerResult<PlanNode> {
+    pub fn build(&self) -> Result<PlanNode> {
         Ok(self.plan.clone())
     }
 }

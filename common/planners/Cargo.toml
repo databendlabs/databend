@@ -14,12 +14,12 @@ common-functions = {path = "../functions"}
 # github dependencies
 
 # Crates.io dependencies
+anyhow = "1.0.40"
 dyn-clone = "1.0.4"
 indexmap = "1.6.1"
 lazy_static = "1.4.0"
 paste = "^1.0"
 serde = { version = "1.0", features = ["derive"] }
-snafu = "0.6.8"
 
 [dev-dependencies]
 pretty_assertions = "0.7"

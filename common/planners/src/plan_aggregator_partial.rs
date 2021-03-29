@@ -4,9 +4,9 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use common_datavalues::DataSchemaRef;
 
-use crate::PlannerResult;
 use crate::{ExpressionPlan, PlanNode};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -25,7 +25,7 @@ impl AggregatorPartialPlan {
         self.input.clone()
     }
 
-    pub fn set_input(&mut self, input: &PlanNode) -> PlannerResult<()> {
+    pub fn set_input(&mut self, input: &PlanNode) -> Result<()> {
         self.input = Arc::new(input.clone());
         Ok(())
     }

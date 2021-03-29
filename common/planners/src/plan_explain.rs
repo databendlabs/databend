@@ -4,9 +4,10 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use common_datavalues::DataSchemaRef;
 
-use crate::{PlanNode, PlannerResult};
+use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
 pub enum DfExplainType {
@@ -30,7 +31,7 @@ impl ExplainPlan {
         self.input.clone()
     }
 
-    pub fn set_input(&mut self, input: &PlanNode) -> PlannerResult<()> {
+    pub fn set_input(&mut self, input: &PlanNode) -> Result<()> {
         self.input = Arc::new(input.clone());
         Ok(())
     }

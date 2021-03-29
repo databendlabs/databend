@@ -4,10 +4,11 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use common_datavalues::{DataField, DataSchema, DataType};
 
 use crate::plan_partition::Partition;
-use crate::{Partitions, PlanNode, PlannerResult, ReadDataSourcePlan, Statistics};
+use crate::{Partitions, PlanNode, ReadDataSourcePlan, Statistics};
 
 pub struct Test {}
 
@@ -16,7 +17,7 @@ impl Test {
         Self {}
     }
 
-    pub fn generate_source_plan_for_test(&self, total: usize) -> PlannerResult<PlanNode> {
+    pub fn generate_source_plan_for_test(&self, total: usize) -> Result<PlanNode> {
         let schema = Arc::new(DataSchema::new(vec![DataField::new(
             "number",
             DataType::UInt64,

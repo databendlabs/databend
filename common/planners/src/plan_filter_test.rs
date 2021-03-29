@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn test_filter_plan() -> crate::error::PlannerResult<()> {
+fn test_filter_plan() -> anyhow::Result<()> {
     use pretty_assertions::assert_eq;
 
     use crate::*;

@@ -4,8 +4,9 @@
 
 use std::collections::{HashMap, HashSet};
 
+use anyhow::{bail, Result};
+
 use crate::ExpressionPlan;
-use crate::{PlannerError, PlannerResult};
 
 pub struct PlanRewriter {}
 
@@ -18,7 +19,7 @@ struct QueryAliasData {
 
 impl PlanRewriter {
     /// Recursively extract the aliases in exprs
-    pub fn exprs_extract_aliases(exprs: Vec<ExpressionPlan>) -> PlannerResult<Vec<ExpressionPlan>> {
+    pub fn exprs_extract_aliases(exprs: Vec<ExpressionPlan>) -> Result<Vec<ExpressionPlan>> {
         let mut mp = HashMap::new();
         PlanRewriter::exprs_to_map(&exprs, &mut mp)?;
 
@@ -37,7 +38,7 @@ impl PlanRewriter {
     fn exprs_to_map(
         exprs: &[ExpressionPlan],
         mp: &mut HashMap<String, ExpressionPlan>,
-    ) -> PlannerResult<()> {
+    ) -> Result<()> {
         for expr in exprs.iter() {
             if let ExpressionPlan::Alias(alias, alias_expr) = expr {
                 if let Some(expr_result) = mp.get(alias) {
@@ -45,10 +46,10 @@ impl PlanRewriter {
                     let hash_expr = format!("{:?}", expr);
 
                     if hash_result != hash_expr {
-                        return Err(PlannerError::build_internal_error(format!(
-                            "Different expressions with the same alias {}",
+                        bail!(
+                            "Planner Error: Different expressions with the same alias {}",
                             alias
-                        )));
+                        );
                     }
                 }
                 mp.insert(alias.clone(), *alias_expr.clone());
@@ -60,7 +61,7 @@ impl PlanRewriter {
     fn expr_rewrite_alias(
         expr: &ExpressionPlan,
         data: &mut QueryAliasData,
-    ) -> PlannerResult<ExpressionPlan> {
+    ) -> Result<ExpressionPlan> {
         match expr {
             ExpressionPlan::Column(field) => {
                 // x + 1 --> x
@@ -70,10 +71,7 @@ impl PlanRewriter {
 
                 // x + 1 --> y, y + 1 --> x
                 if data.inside_aliases.contains(field) {
-                    return Err(PlannerError::build_internal_error(format!(
-                        "Cyclic aliases: {}",
-                        field
-                    )));
+                    bail!("Planner Error: Cyclic aliases: {}", field);
                 }
 
                 let tmp = data.aliases.get(field).cloned();
@@ -103,7 +101,7 @@ impl PlanRewriter {
             }
 
             ExpressionPlan::Function { op, args } => {
-                let new_args: PlannerResult<Vec<ExpressionPlan>> = args
+                let new_args: Result<Vec<ExpressionPlan>> = args
                     .iter()
                     .map(|v| PlanRewriter::expr_rewrite_alias(v, data))
                     .collect();
@@ -119,10 +117,7 @@ impl PlanRewriter {
 
             ExpressionPlan::Alias(alias, plan) => {
                 if data.inside_aliases.contains(alias) {
-                    return Err(PlannerError::build_internal_error(format!(
-                        "Cyclic aliases: {}",
-                        alias
-                    )));
+                    bail!("Planner Error: Cyclic aliases: {}", alias);
                 }
 
                 let previous_alias = data.current_alias.clone();
