@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use tonic::transport::Server;
 
 use crate::api::rpc::{FlightService, GrpcService};

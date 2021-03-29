@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use anyhow::Result;
 use arrow::datatypes::SchemaRef;
+use common_infallible::Mutex;
 use common_planners::TableOptions;
 use indexmap::map::IndexMap;
 use lazy_static::lazy_static;
@@ -44,7 +45,7 @@ impl TableFactory {
         schema: SchemaRef,
         options: TableOptions,
     ) -> Result<Box<dyn ITable>> {
-        let map = FACTORY.as_ref().lock()?;
+        let map = FACTORY.as_ref().lock();
         let creator = map.get(engine).ok_or_else(|| {
             return anyhow::Error::msg(format!("Unsupported Engine: {}", engine));
         })?;

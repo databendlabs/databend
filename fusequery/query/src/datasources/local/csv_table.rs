@@ -4,7 +4,7 @@
 
 use std::fs::File;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
 use common_datavalues::DataSchemaRef;
@@ -42,12 +42,12 @@ impl CsvTable {
                 };
                 Ok(Box::new(table))
             }
-            _ => anyhow::Error::msg("CSV Engine must contains file location options"),
+            _ => bail!("CSV Engine must contains file location options"),
         };
     }
 
     pub fn register(map: TableCreatorFactory) -> Result<()> {
-        let mut map = map.as_ref().lock()?;
+        let mut map = map.as_ref().lock();
         map.insert("CSV", CsvTable::try_create);
         map.insert("Parquet", ParquetTable::try_create);
         Ok(())

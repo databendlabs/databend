@@ -43,7 +43,7 @@ impl IInterpreter for CreateInterpreter {
             self.plan.options.clone(),
         )?;
 
-        datasource.lock()?.add_table(&self.plan.db, table.into())?;
+        datasource.lock().add_table(&self.plan.db, table.into())?;
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema.clone(),
             None,

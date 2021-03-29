@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use anyhow::Result;
+use common_infallible::Mutex;
 
 use crate::clusters::node::Node;
 use crate::configs::Config;
@@ -33,9 +34,6 @@ impl Cluster {
     }
 
     pub fn is_empty(&self) -> Result<bool> {
-
-        let nodes = self.nodes.lock();
-        Ok(nodes.len)
         Ok(self.nodes.lock().len() == 0)
     }
 
@@ -54,19 +52,19 @@ impl Cluster {
         if node.address == self.cfg.rpc_api_address {
             node.local = true;
         }
-        self.nodes.lock()?.insert(node.name.clone(), node);
+        self.nodes.lock().insert(node.name.clone(), node);
         Ok(())
     }
 
     pub fn remove_node(&self, id: String) -> Result<()> {
-        self.nodes.lock()?.remove(&*id);
+        self.nodes.lock().remove(&*id);
         Ok(())
     }
 
     pub fn get_nodes(&self) -> Result<Vec<Node>> {
         let mut nodes = vec![];
 
-        for (_, node) in self.nodes.lock()?.iter() {
+        for (_, node) in self.nodes.lock().iter() {
             nodes.push(node.clone());
         }
         nodes.sort_by(|a, b| b.name.cmp(&a.name));

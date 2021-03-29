@@ -81,27 +81,37 @@ impl IDataSource for DataSource {
     }
 
     fn check_database(&mut self, db_name: &str) -> Result<()> {
-        self.databases
-            .get(db_name)
-            .ok_or_else(|| return anyhow::Error::msg(format!("Unknown database: '{}'", db_name)))?;
+        self.databases.get(db_name).ok_or_else(|| {
+            return anyhow::Error::msg(format!("DataSource Error: Unknown database: '{}'", db_name));
+        })?;
         Ok(())
     }
 
     fn add_table(&mut self, db_name: &str, table: Arc<dyn ITable>) -> Result<()> {
         self.databases
             .get_mut(db_name)
-            .ok_or_else(|| return anyhow::Error::msg(format!("Unknown database: '{}'", db_name)))?
+            .ok_or_else(|| {
+                return anyhow::Error::msg(format!(
+                    "DataSource Error: Unknown database: '{}'",
+                    db_name
+                ));
+            })?
             .insert(table.name().to_string(), table);
         Ok(())
     }
 
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
-        let database = self
-            .databases
-            .get(db_name)
-            .ok_or_else(|| return anyhow::Error::msg(format!("Unknown database: '{}'", db_name)))?;
+        let database = self.databases.get(db_name).ok_or_else(|| {
+            return anyhow::Error::msg(format!(
+                "DataSource Error: Unknown database: '{}'",
+                db_name
+            ));
+        })?;
         let table = database.get(table_name).ok_or_else(|| {
-            return anyhow::Error::msg(format!("Unknown table: '{}.{}'", db_name, table_name));
+            return anyhow::Error::msg(format!(
+                "DataSource Error: Unknown table: '{}.{}'",
+                db_name, table_name
+            ));
         })?;
         Ok(table.clone())
     }

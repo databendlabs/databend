@@ -5,7 +5,7 @@
 use std::fs::File;
 use std::sync::Arc;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
@@ -52,7 +52,7 @@ impl ParquetTable {
     }
 
     pub fn register(map: TableCreatorFactory) -> Result<()> {
-        let mut map = map.as_ref().lock().context("")?;
+        let mut map = map.as_ref().lock();
         map.insert("Parquet", ParquetTable::try_create);
         Ok(())
     }

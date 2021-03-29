@@ -317,7 +317,7 @@ impl PlanParser {
 
     /// Wrap a plan in a projection
     fn project(&self, input: &PlanNode, expr: Vec<ExpressionPlan>) -> Result<PlanNode> {
-        Ok(PlanBuilder::from(input).project(expr)?.build()?)
+        PlanBuilder::from(input).project(expr)?.build()
     }
 
     /// Wrap a plan for an aggregate
@@ -335,11 +335,11 @@ impl PlanParser {
         // S0: Apply a partial aggregator plan.
         // S1: Apply a fragment plan for distributed planners split.
         // S2: Apply a final aggregator plan.
-        Ok(PlanBuilder::from(&input)
+        PlanBuilder::from(&input)
             .aggregate_partial(aggr_expr.clone(), group_expr.clone())?
             .stage(self.ctx.get_id()?, StageState::AggregatorMerge)?
             .aggregate_final(aggr_expr, group_expr)?
-            .build()?)
+            .build()
     }
 
     /// Wrap a plan in a limit
@@ -348,7 +348,7 @@ impl PlanParser {
             Some(ref limit_expr) => {
                 let n = match self.sql_to_rex(&limit_expr, &input.schema())? {
                     ExpressionPlan::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
-                    _ => bail!("Unexpected expression for LIMIT clause"),
+                    _ => Err(anyhow::Error::msg("Unexpected expression for LIMIT clause")),
                 }?;
                 Ok(PlanBuilder::from(&input).limit(n)?.build()?)
             }

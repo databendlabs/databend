@@ -47,13 +47,11 @@ impl FilterTransform {
         let filter_result = result
             .as_any()
             .downcast_ref::<BooleanArray>()
-            .ok_or_else(|| {
-                return anyhow::Error::msg("cannot downcast to boolean array");
-            })?;
-        Ok(DataBlock::try_from_arrow_batch(&filter_record_batch(
+            .ok_or_else(|| anyhow::Error::msg("cannot downcast to boolean array"))?;
+        DataBlock::try_from_arrow_batch(&filter_record_batch(
             &block.to_arrow_batch()?,
             filter_result,
-        )?)?)
+        )?)
     }
 }
 

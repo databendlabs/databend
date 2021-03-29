@@ -16,6 +16,7 @@ path = "src/bin/fuse-query.rs"
 common-datablocks = {path = "../../common/datablocks"}
 common-datavalues = {path = "../../common/datavalues"}
 common-functions = {path = "../../common/functions"}
+common-infallible = {path = "../../common/infallible"}
 common-planners = {path = "../../common/planners"}
 
 

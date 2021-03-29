@@ -940,6 +940,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-functions",
+ "common-infallible",
  "common-planners",
  "crossbeam 0.8.0",
  "dyn-clone",

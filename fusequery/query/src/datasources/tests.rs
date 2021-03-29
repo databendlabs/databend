@@ -4,20 +4,21 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_datasource() -> anyhow::Result<()> {
+    use pretty_assertions::assert_eq;
+
     use crate::datasources::*;
 
     let mut datasource = DataSource::try_create()?;
 
     // Database check.
     let actual = format!("{:?}", datasource.check_database("xx"));
-    let expect =
-        "Err(Internal { message: \"Unknown database: \\\'xx\\\'\", backtrace: Backtrace(()) })";
+    let expect = "Err(DataSource Error: Unknown database: \'xx\')";
     assert_eq!(expect, actual);
 
     // Table check.
     datasource.get_table("system", "numbers_mt")?;
     if let Err(e) = datasource.get_table("system", "numbersxx") {
-        let expect = "Internal { message: \"Unknown table: \\\'system.numbersxx\\\'\", backtrace: Backtrace(()) }";
+        let expect = "DataSource Error: Unknown table: \'system.numbersxx\'";
         let actual = format!("{:?}", e);
         assert_eq!(expect, actual);
     }
