@@ -47,7 +47,7 @@ impl CsvTable {
     }
 
     pub fn register(map: TableCreatorFactory) -> Result<()> {
-        let mut map = map.as_ref().lock();
+        let mut map = map.as_ref().write();
         map.insert("CSV", CsvTable::try_create);
         map.insert("Parquet", ParquetTable::try_create);
         Ok(())
