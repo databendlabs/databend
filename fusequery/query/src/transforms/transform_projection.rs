@@ -5,6 +5,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -12,7 +13,6 @@ use common_functions::IFunction;
 use common_planners::ExpressionPlan;
 
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
-use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::{EmptyProcessor, IProcessor};
 
 pub struct ProjectionTransform {
@@ -22,15 +22,15 @@ pub struct ProjectionTransform {
 }
 
 impl ProjectionTransform {
-    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> FuseQueryResult<Self> {
+    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> Result<Self> {
         let mut funcs = Vec::with_capacity(exprs.len());
         for expr in &exprs {
             let func = expr.to_function()?;
             if func.is_aggregator() {
-                return Err(FuseQueryError::build_internal_error(format!(
+                bail!(
                     "Aggregate function {} is found in ProjectionTransform, should AggregatorTransform",
                     func
-                )));
+                );
             }
             funcs.push(func);
         }
@@ -46,7 +46,7 @@ impl ProjectionTransform {
         projected_schema: &DataSchemaRef,
         block: DataBlock,
         funcs: Vec<Box<dyn IFunction>>,
-    ) -> FuseQueryResult<DataBlock> {
+    ) -> Result<DataBlock> {
         let mut column_values = Vec::with_capacity(funcs.len());
         for func in funcs {
             column_values.push(func.eval(&block)?.to_array(block.num_rows())?);
@@ -61,7 +61,7 @@ impl IProcessor for ProjectionTransform {
         "ProjectionTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
+    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
@@ -74,7 +74,7 @@ impl IProcessor for ProjectionTransform {
         self
     }
 
-    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(ExpressionStream::try_create(
             self.input.execute().await?,
             self.schema.clone(),

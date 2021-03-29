@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn test_cluster() -> crate::error::FuseQueryResult<()> {
+fn test_cluster() -> anyhow::Result<()> {
     use pretty_assertions::assert_eq;
 
     use crate::clusters::cluster::Cluster;

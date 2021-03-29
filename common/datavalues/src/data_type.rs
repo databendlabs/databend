@@ -58,7 +58,7 @@ pub fn numeric_byte_size(dt: &DataType) -> Result<usize> {
         DataType::Int16 | DataType::UInt16 | DataType::Float16 => Ok(2),
         DataType::Int32 | DataType::UInt32 | DataType::Float32 => Ok(4),
         DataType::Int64 | DataType::UInt64 | DataType::Float64 => Ok(8),
-        _ => bail!("Function number_byte_size argument must be numeric types".to_string(),),
+        _ => bail!("Function number_byte_size argument must be numeric types"),
     }
 }
 
@@ -90,10 +90,12 @@ pub fn construct_numeric_type(
         (true, false, d) if d > 8 => Ok(DataType::UInt64),
         (_, true, d) if d > 8 => Ok(DataType::Float64),
 
-        _ => bail!(format!(
+        _ => bail!(
             "Can't construct type from is_signed: {}, is_floating: {}, byte_size: {}",
-            is_signed, is_floating, byte_size
-        )),
+            is_signed,
+            is_floating,
+            byte_size
+        ),
     }
 }
 
@@ -122,10 +124,7 @@ pub fn dictionary_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<D
         (_, DataType::Dictionary(_index_type, value_type)) => {
             dictionary_value_coercion(lhs_type, value_type)
         }
-        _ => bail!(format!(
-            "Can't construct type from {} and {}",
-            lhs_type, rhs_type
-        )),
+        _ => bail!("Can't construct type from {} and {}", lhs_type, rhs_type),
     }
 }
 
@@ -138,10 +137,7 @@ pub fn string_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataT
         (LargeUtf8, Utf8) => Ok(LargeUtf8),
         (Utf8, LargeUtf8) => Ok(LargeUtf8),
         (LargeUtf8, LargeUtf8) => Ok(LargeUtf8),
-        _ => bail!(format!(
-            "Can't construct type from {} and {}",
-            lhs_type, rhs_type
-        )),
+        _ => bail!("Can't construct type from {} and {}", lhs_type, rhs_type),
     }
 }
 

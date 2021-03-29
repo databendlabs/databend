@@ -4,11 +4,11 @@
 
 use std::task::{Context, Poll};
 
+use anyhow::Result;
 use common_datablocks::DataBlock;
 use futures::stream::{Stream, StreamExt};
 
 use crate::datastreams::SendableDataBlockStream;
-use crate::error::FuseQueryResult;
 
 pub struct LimitStream {
     input: SendableDataBlockStream,
@@ -17,7 +17,7 @@ pub struct LimitStream {
 }
 
 impl LimitStream {
-    pub fn try_create(input: SendableDataBlockStream, limit: usize) -> FuseQueryResult<Self> {
+    pub fn try_create(input: SendableDataBlockStream, limit: usize) -> Result<Self> {
         Ok(LimitStream {
             input,
             limit,
@@ -25,7 +25,7 @@ impl LimitStream {
         })
     }
 
-    pub fn limit(&mut self, block: &DataBlock) -> FuseQueryResult<Option<DataBlock>> {
+    pub fn limit(&mut self, block: &DataBlock) -> Result<Option<DataBlock>> {
         let rows = block.num_rows();
         if self.current == self.limit {
             Ok(None)
@@ -49,7 +49,7 @@ impl LimitStream {
 }
 
 impl Stream for LimitStream {
-    type Item = FuseQueryResult<DataBlock>;
+    type Item = Result<DataBlock>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,

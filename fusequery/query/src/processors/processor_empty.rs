@@ -5,11 +5,11 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use common_datavalues::DataSchema;
 
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::IProcessor;
 
 pub struct EmptyProcessor {}
@@ -26,10 +26,8 @@ impl IProcessor for EmptyProcessor {
         "EmptyProcessor"
     }
 
-    fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
-        Err(FuseQueryError::build_internal_error(
-            "Cannot call EmptyProcessor connect_to".to_owned(),
-        ))
+    fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> Result<()> {
+        bail!("Cannot call EmptyProcessor connect_to");
     }
 
     fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
@@ -40,7 +38,7 @@ impl IProcessor for EmptyProcessor {
         self
     }
 
-    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(DataBlockStream::create(
             Arc::new(DataSchema::empty()),
             None,

@@ -5,12 +5,12 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use common_planners::PlanNode;
 
 use crate::api::rpc::{ExecuteAction, ExecutePlanAction, FlightClient};
 use crate::datastreams::SendableDataBlockStream;
-use crate::error::FuseQueryResult;
 use crate::processors::{EmptyProcessor, IProcessor};
 use crate::sessions::FuseQueryContextRef;
 
@@ -28,7 +28,7 @@ impl RemoteTransform {
         job_id: String,
         remote_addr: String,
         plan: PlanNode,
-    ) -> FuseQueryResult<Self> {
+    ) -> Result<Self> {
         Ok(Self {
             job_id,
             remote_addr,
@@ -45,7 +45,7 @@ impl IProcessor for RemoteTransform {
         "RemoteTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
+    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
@@ -58,7 +58,7 @@ impl IProcessor for RemoteTransform {
         self
     }
 
-    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let mut client = FlightClient::try_create(self.remote_addr.clone()).await?;
         let action = ExecuteAction::ExecutePlan(ExecutePlanAction::create(
             self.job_id.clone(),

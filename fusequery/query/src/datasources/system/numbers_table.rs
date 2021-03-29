@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::mem::size_of;
 use std::sync::Arc;
 
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, DataValue};
 use common_planners::{
@@ -14,7 +15,6 @@ use common_planners::{
 
 use crate::datasources::{system::NumbersStream, ITable};
 use crate::datastreams::SendableDataBlockStream;
-use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct NumbersTable {
@@ -80,7 +80,7 @@ impl ITable for NumbersTable {
         }
     }
 
-    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
+    fn schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
     }
 
@@ -88,7 +88,7 @@ impl ITable for NumbersTable {
         &self,
         ctx: FuseQueryContextRef,
         push_down_plan: PlanNode,
-    ) -> FuseQueryResult<ReadDataSourcePlan> {
+    ) -> Result<ReadDataSourcePlan> {
         let mut total = ctx.get_max_block_size()? as u64;
 
         if let PlanNode::Scan(plan) = push_down_plan {
@@ -102,10 +102,7 @@ impl ITable for NumbersTable {
                     total = v as u64;
                 }
             } else {
-                return Err(FuseQueryError::build_internal_error(format!(
-                    "Must have one argument for table: system.{}",
-                    self.name()
-                )));
+                bail!("Must have one argument for table: system.{}", self.name());
             }
         }
 
@@ -128,7 +125,7 @@ impl ITable for NumbersTable {
         })
     }
 
-    async fn read(&self, ctx: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(NumbersStream::create(ctx, self.schema.clone())))
     }
 }

@@ -5,10 +5,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use anyhow::Result;
 use async_trait::async_trait;
 
 use crate::datastreams::SendableDataBlockStream;
-use crate::error::FuseQueryResult;
 
 /// Formatter settings for PlanStep debug.
 pub struct FormatterSettings {
@@ -26,7 +26,7 @@ pub trait IProcessor: Sync + Send {
     fn name(&self) -> &str;
 
     /// Connect to the input processor, add an edge on the DAG.
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()>;
+    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()>;
 
     /// Inputs.
     fn inputs(&self) -> Vec<Arc<dyn IProcessor>>;
@@ -35,5 +35,5 @@ pub trait IProcessor: Sync + Send {
     fn as_any(&self) -> &dyn Any;
 
     /// Execute the processor.
-    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream>;
+    async fn execute(&self) -> Result<SendableDataBlockStream>;
 }

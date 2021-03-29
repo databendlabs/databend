@@ -4,12 +4,12 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use common_datavalues::{DataField, DataSchema, DataType};
 use common_planners::SettingPlan;
 
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::error::FuseQueryResult;
 use crate::interpreters::IInterpreter;
 use crate::sessions::FuseQueryContextRef;
 
@@ -19,10 +19,7 @@ pub struct SettingInterpreter {
 }
 
 impl SettingInterpreter {
-    pub fn try_create(
-        ctx: FuseQueryContextRef,
-        set: SettingPlan,
-    ) -> FuseQueryResult<Arc<dyn IInterpreter>> {
+    pub fn try_create(ctx: FuseQueryContextRef, set: SettingPlan) -> Result<Arc<dyn IInterpreter>> {
         Ok(Arc::new(SettingInterpreter { ctx, set }))
     }
 }
@@ -33,7 +30,7 @@ impl IInterpreter for SettingInterpreter {
         "SettingInterpreter"
     }
 
-    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = self.set.clone();
         for var in plan.vars {
             match var.variable.to_lowercase().as_str() {

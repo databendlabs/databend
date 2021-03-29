@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_explain_interpreter() -> crate::error::FuseQueryResult<()> {
+async fn test_explain_interpreter() -> anyhow::Result<()> {
     use common_planners::*;
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;

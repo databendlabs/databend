@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_processor_merge() -> crate::error::FuseQueryResult<()> {
+async fn test_processor_merge() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_datavalues::*;

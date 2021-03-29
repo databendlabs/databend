@@ -2,12 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use anyhow::{bail, Result};
 use arrow::datatypes::DataType;
 use arrow::util::display::array_value_to_string;
 use common_datablocks::DataBlock;
 use msql_srv::*;
-
-use crate::error::{FuseQueryError, FuseQueryResult};
 
 pub struct MysqlStream {
     blocks: Vec<DataBlock>,
@@ -18,7 +17,7 @@ impl MysqlStream {
         MysqlStream { blocks }
     }
 
-    pub fn execute<W: std::io::Write>(&self, writer: QueryResultWriter<W>) -> FuseQueryResult<()> {
+    pub fn execute<W: std::io::Write>(&self, writer: QueryResultWriter<W>) -> Result<()> {
         if self.blocks.is_empty() {
             writer.completed(0, 0)?;
             return Ok(());
@@ -66,12 +65,7 @@ impl MysqlStream {
                     coltype: ColumnType::MYSQL_TYPE_TIMESTAMP,
                     colflags: ColumnFlags::empty(),
                 },
-                _ => {
-                    return Err(FuseQueryError::build_internal_error(format!(
-                        "Unsupported column type:{:?}",
-                        field.data_type()
-                    )))
-                }
+                _ => bail!("Unsupported column type:{:?}", field.data_type()),
             });
         }
 

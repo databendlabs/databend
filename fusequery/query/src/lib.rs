@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-mod error_test;
-
 pub mod tests;
 
 pub mod api;
@@ -11,7 +9,6 @@ pub mod clusters;
 pub mod configs;
 pub mod datasources;
 pub mod datastreams;
-pub mod error;
 pub mod interpreters;
 pub mod metrics;
 pub mod optimizers;

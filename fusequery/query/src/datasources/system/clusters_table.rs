@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, StringArray, UInt32Array};
@@ -11,7 +12,6 @@ use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics};
 
 use crate::datasources::ITable;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::error::FuseQueryResult;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ClustersTable {
@@ -40,7 +40,7 @@ impl ITable for ClustersTable {
         "SystemClusters"
     }
 
-    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
+    fn schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
     }
 
@@ -48,7 +48,7 @@ impl ITable for ClustersTable {
         &self,
         _ctx: FuseQueryContextRef,
         _push_down_plan: PlanNode,
-    ) -> FuseQueryResult<ReadDataSourcePlan> {
+    ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
@@ -62,7 +62,7 @@ impl ITable for ClustersTable {
         })
     }
 
-    async fn read(&self, ctx: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
         let nodes = ctx.try_get_cluster()?.get_nodes()?;
         let names: Vec<&str> = nodes.iter().map(|x| x.name.as_str()).collect();
         let addresses: Vec<&str> = nodes.iter().map(|x| x.address.as_str()).collect();

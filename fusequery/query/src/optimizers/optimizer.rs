@@ -4,15 +4,15 @@
 
 use std::collections::HashMap;
 
+use anyhow::Result;
 use common_planners::{ExpressionPlan, PlanNode};
 
-use crate::error::FuseQueryResult;
 use crate::optimizers::FilterPushDownOptimizer;
 use crate::sessions::FuseQueryContextRef;
 
 pub trait IOptimizer {
     fn name(&self) -> &str;
-    fn optimize(&mut self, plan: &PlanNode) -> FuseQueryResult<PlanNode>;
+    fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode>;
 }
 
 pub struct Optimizer {
@@ -26,7 +26,7 @@ impl Optimizer {
         Optimizer { optimizers }
     }
 
-    pub fn optimize(&mut self, plan: &PlanNode) -> FuseQueryResult<PlanNode> {
+    pub fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         let mut plan = plan.clone();
         for optimizer in self.optimizers.iter_mut() {
             plan = optimizer.optimize(&plan)?;
@@ -37,7 +37,7 @@ impl Optimizer {
     fn projections_to_map(
         plan: &PlanNode,
         map: &mut HashMap<String, ExpressionPlan>,
-    ) -> FuseQueryResult<()> {
+    ) -> Result<()> {
         match plan {
             PlanNode::Projection(v) => {
                 v.schema.fields().iter().enumerate().for_each(|(i, field)| {
@@ -59,13 +59,13 @@ impl Optimizer {
         Ok(())
     }
 
-    pub fn projection_to_map(plan: &PlanNode) -> FuseQueryResult<HashMap<String, ExpressionPlan>> {
+    pub fn projection_to_map(plan: &PlanNode) -> Result<HashMap<String, ExpressionPlan>> {
         let mut map = HashMap::new();
         Self::projections_to_map(plan, &mut map)?;
         Ok(map)
     }
 
-    pub fn expression_plan_children(expr: &ExpressionPlan) -> FuseQueryResult<Vec<ExpressionPlan>> {
+    pub fn expression_plan_children(expr: &ExpressionPlan) -> Result<Vec<ExpressionPlan>> {
         Ok(match expr {
             ExpressionPlan::Alias(_, expr) => vec![expr.as_ref().clone()],
             ExpressionPlan::Column(_) => vec![],

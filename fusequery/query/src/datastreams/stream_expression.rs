@@ -4,16 +4,15 @@
 
 use std::task::{Context, Poll};
 
+use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_functions::IFunction;
 use futures::stream::{Stream, StreamExt};
 
 use crate::datastreams::SendableDataBlockStream;
-use crate::error::FuseQueryResult;
 
-type ExpressionFunc =
-    fn(&DataSchemaRef, DataBlock, Vec<Box<dyn IFunction>>) -> FuseQueryResult<DataBlock>;
+type ExpressionFunc = fn(&DataSchemaRef, DataBlock, Vec<Box<dyn IFunction>>) -> Result<DataBlock>;
 
 pub struct ExpressionStream {
     input: SendableDataBlockStream,
@@ -28,7 +27,7 @@ impl ExpressionStream {
         schema: DataSchemaRef,
         exprs: Vec<Box<dyn IFunction>>,
         func: ExpressionFunc,
-    ) -> FuseQueryResult<Self> {
+    ) -> Result<Self> {
         Ok(ExpressionStream {
             input,
             schema,
@@ -39,7 +38,7 @@ impl ExpressionStream {
 }
 
 impl Stream for ExpressionStream {
-    type Item = FuseQueryResult<DataBlock>;
+    type Item = Result<DataBlock>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,

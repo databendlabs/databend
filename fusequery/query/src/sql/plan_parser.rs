@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use anyhow::{bail, Result};
 use arrow::datatypes::{Field, Schema};
 use common_datavalues::{DataSchema, DataValue};
 use common_planners::{
@@ -13,7 +14,6 @@ use common_planners::{
 };
 use sqlparser::ast::{FunctionArg, Statement, TableFactor};
 
-use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::sql_parser::FuseCreateTable;
 use crate::sql::{make_data_type, DfExplainPlan, DfParser, DfStatement};
@@ -27,17 +27,15 @@ impl PlanParser {
         Self { ctx }
     }
 
-    pub fn build_from_sql(&self, query: &str) -> FuseQueryResult<PlanNode> {
+    pub fn build_from_sql(&self, query: &str) -> Result<PlanNode> {
         let statements = DfParser::parse_sql(query)?;
         if statements.len() != 1 {
-            return Err(FuseQueryError::build_internal_error(
-                "Only support single query".to_string(),
-            ));
+            bail!("Only support single query");
         }
         self.statement_to_plan(&statements[0])
     }
 
-    pub fn statement_to_plan(&self, statement: &DfStatement) -> FuseQueryResult<PlanNode> {
+    pub fn statement_to_plan(&self, statement: &DfStatement) -> Result<PlanNode> {
         match statement {
             DfStatement::Statement(v) => self.sql_statement_to_plan(&v),
             DfStatement::Explain(v) => self.sql_explain_to_plan(&v),
@@ -56,24 +54,18 @@ impl PlanParser {
     }
 
     /// Builds plan from AST statement.
-    pub fn sql_statement_to_plan(
-        &self,
-        statement: &sqlparser::ast::Statement,
-    ) -> FuseQueryResult<PlanNode> {
+    pub fn sql_statement_to_plan(&self, statement: &sqlparser::ast::Statement) -> Result<PlanNode> {
         match statement {
             Statement::Query(query) => self.query_to_plan(query),
             Statement::SetVariable {
                 variable, value, ..
             } => self.set_variable_to_plan(variable, value),
-            _ => Err(FuseQueryError::build_internal_error(format!(
-                "Unsupported statement {:?}",
-                statement
-            ))),
+            _ => bail!("Unsupported statement {:?}", statement),
         }
     }
 
     /// Generate a logic plan from an EXPLAIN
-    pub fn sql_explain_to_plan(&self, explain: &DfExplainPlan) -> FuseQueryResult<PlanNode> {
+    pub fn sql_explain_to_plan(&self, explain: &DfExplainPlan) -> Result<PlanNode> {
         let plan = self.sql_statement_to_plan(&explain.statement)?;
         Ok(PlanNode::Explain(ExplainPlan {
             typ: explain.typ,
@@ -81,12 +73,10 @@ impl PlanParser {
         }))
     }
 
-    pub fn sql_create_to_plan(&self, create: &FuseCreateTable) -> FuseQueryResult<PlanNode> {
+    pub fn sql_create_to_plan(&self, create: &FuseCreateTable) -> Result<PlanNode> {
         let mut db = self.ctx.get_default_db()?;
         if create.name.0.is_empty() {
-            return Err(FuseQueryError::build_internal_error(
-                "Create table name is empty".into(),
-            ));
+            bail!("Create table name is empty");
         }
         let mut table = create.name.0[0].value.clone();
         if create.name.0.len() > 1 {
@@ -119,13 +109,10 @@ impl PlanParser {
     }
 
     /// Generate a logic plan from an SQL query
-    pub fn query_to_plan(&self, query: &sqlparser::ast::Query) -> FuseQueryResult<PlanNode> {
+    pub fn query_to_plan(&self, query: &sqlparser::ast::Query) -> Result<PlanNode> {
         match &query.body {
             sqlparser::ast::SetExpr::Select(s) => self.select_to_plan(s.as_ref(), &query.limit),
-            _ => Err(FuseQueryError::build_internal_error(format!(
-                "Query {} not implemented yet",
-                query.body
-            ))),
+            _ => bail!("Query {} not implemented yet", query.body),
         }
     }
 
@@ -134,11 +121,9 @@ impl PlanParser {
         &self,
         select: &sqlparser::ast::Select,
         limit: &Option<sqlparser::ast::Expr>,
-    ) -> FuseQueryResult<PlanNode> {
+    ) -> Result<PlanNode> {
         if select.having.is_some() {
-            return Err(FuseQueryError::build_internal_error(
-                "HAVING is not implemented yet".to_string(),
-            ));
+            bail!("HAVING is not implemented yet");
         }
 
         // from.
@@ -152,7 +137,7 @@ impl PlanParser {
             .projection
             .iter()
             .map(|e| self.sql_select_to_rex(&e, &plan.schema()))
-            .collect::<FuseQueryResult<Vec<ExpressionPlan>>>()?;
+            .collect::<Result<Vec<ExpressionPlan>>>()?;
 
         // Aggregator check.
         let mut has_aggregator = false;
@@ -182,7 +167,7 @@ impl PlanParser {
         &self,
         sql: &sqlparser::ast::SelectItem,
         schema: &DataSchema,
-    ) -> FuseQueryResult<ExpressionPlan> {
+    ) -> Result<ExpressionPlan> {
         match sql {
             sqlparser::ast::SelectItem::UnnamedExpr(expr) => self.sql_to_rex(expr, schema),
             sqlparser::ast::SelectItem::ExprWithAlias { expr, alias } => Ok(ExpressionPlan::Alias(
@@ -190,27 +175,19 @@ impl PlanParser {
                 Box::new(self.sql_to_rex(&expr, schema)?),
             )),
             sqlparser::ast::SelectItem::Wildcard => Ok(ExpressionPlan::Wildcard),
-            _ => Err(FuseQueryError::build_internal_error(format!(
-                "SelectItem: {:?} are not supported",
-                sql
-            ))),
+            _ => bail!("SelectItem: {:?} are not supported", sql),
         }
     }
 
-    fn plan_tables_with_joins(
-        &self,
-        from: &[sqlparser::ast::TableWithJoins],
-    ) -> FuseQueryResult<PlanNode> {
+    fn plan_tables_with_joins(&self, from: &[sqlparser::ast::TableWithJoins]) -> Result<PlanNode> {
         match from.len() {
             0 => self.plan_with_dummy_source(),
             1 => self.plan_table_with_joins(&from[0]),
-            _ => Err(FuseQueryError::build_internal_error(
-                "Cannot support JOIN clause".to_string(),
-            )),
+            _ => bail!("Cannot support JOIN clause"),
         }
     }
 
-    fn plan_with_dummy_source(&self) -> FuseQueryResult<PlanNode> {
+    fn plan_with_dummy_source(&self) -> Result<PlanNode> {
         let db_name = "system";
         let table_name = "one";
         let table = self.ctx.get_table(db_name, table_name)?;
@@ -221,14 +198,11 @@ impl PlanParser {
         Ok(PlanNode::ReadSource(datasource_plan))
     }
 
-    fn plan_table_with_joins(
-        &self,
-        t: &sqlparser::ast::TableWithJoins,
-    ) -> FuseQueryResult<PlanNode> {
+    fn plan_table_with_joins(&self, t: &sqlparser::ast::TableWithJoins) -> Result<PlanNode> {
         self.create_relation(&t.relation)
     }
 
-    fn create_relation(&self, relation: &sqlparser::ast::TableFactor) -> FuseQueryResult<PlanNode> {
+    fn create_relation(&self, relation: &sqlparser::ast::TableFactor) -> Result<PlanNode> {
         match relation {
             sqlparser::ast::TableFactor::Table { name, args, .. } => {
                 let mut db_name = self.ctx.get_default_db()?;
@@ -262,9 +236,7 @@ impl PlanParser {
             sqlparser::ast::TableFactor::NestedJoin(table_with_joins) => {
                 self.plan_table_with_joins(table_with_joins)
             }
-            TableFactor::TableFunction { .. } => Err(FuseQueryError::build_internal_error(
-                "Unsupported table function".to_string(),
-            )),
+            TableFactor::TableFunction { .. } => bail!("Unsupported table function"),
         }
     }
 
@@ -273,7 +245,7 @@ impl PlanParser {
         &self,
         sql: &sqlparser::ast::Expr,
         schema: &DataSchema,
-    ) -> FuseQueryResult<ExpressionPlan> {
+    ) -> Result<ExpressionPlan> {
         match sql {
             sqlparser::ast::Expr::Identifier(ref v) => Ok(ExpressionPlan::Column(v.clone().value)),
             sqlparser::ast::Expr::Value(sqlparser::ast::Value::Number(n, _)) => {
@@ -308,10 +280,7 @@ impl PlanParser {
                 })
             }
             sqlparser::ast::Expr::Wildcard => Ok(ExpressionPlan::Wildcard),
-            _ => Err(FuseQueryError::build_plan_error(format!(
-                "Unsupported ExpressionPlan: {}",
-                sql
-            ))),
+            _ => bail!("Unsupported ExpressionPlan: {}", sql),
         }
     }
 
@@ -319,7 +288,7 @@ impl PlanParser {
         &self,
         variable: &sqlparser::ast::Ident,
         values: &[sqlparser::ast::SetVariableValue],
-    ) -> FuseQueryResult<PlanNode> {
+    ) -> Result<PlanNode> {
         let mut vars = vec![];
         for value in values {
             let variable = variable.value.clone();
@@ -337,7 +306,7 @@ impl PlanParser {
         &self,
         plan: &PlanNode,
         predicate: &Option<sqlparser::ast::Expr>,
-    ) -> FuseQueryResult<PlanNode> {
+    ) -> Result<PlanNode> {
         match *predicate {
             Some(ref predicate_expr) => Ok(PlanBuilder::from(&plan)
                 .filter(self.sql_to_rex(predicate_expr, &plan.schema())?)?
@@ -347,7 +316,7 @@ impl PlanParser {
     }
 
     /// Wrap a plan in a projection
-    fn project(&self, input: &PlanNode, expr: Vec<ExpressionPlan>) -> FuseQueryResult<PlanNode> {
+    fn project(&self, input: &PlanNode, expr: Vec<ExpressionPlan>) -> Result<PlanNode> {
         Ok(PlanBuilder::from(input).project(expr)?.build()?)
     }
 
@@ -357,11 +326,11 @@ impl PlanParser {
         input: &PlanNode,
         aggr_expr: Vec<ExpressionPlan>,
         group_by: &[sqlparser::ast::Expr],
-    ) -> FuseQueryResult<PlanNode> {
+    ) -> Result<PlanNode> {
         let group_expr: Vec<ExpressionPlan> = group_by
             .iter()
             .map(|e| self.sql_to_rex(&e, &input.schema()))
-            .collect::<FuseQueryResult<Vec<ExpressionPlan>>>()?;
+            .collect::<Result<Vec<ExpressionPlan>>>()?;
 
         // S0: Apply a partial aggregator plan.
         // S1: Apply a fragment plan for distributed planners split.
@@ -374,18 +343,12 @@ impl PlanParser {
     }
 
     /// Wrap a plan in a limit
-    fn limit(
-        &self,
-        input: &PlanNode,
-        limit: &Option<sqlparser::ast::Expr>,
-    ) -> FuseQueryResult<PlanNode> {
+    fn limit(&self, input: &PlanNode, limit: &Option<sqlparser::ast::Expr>) -> Result<PlanNode> {
         match *limit {
             Some(ref limit_expr) => {
                 let n = match self.sql_to_rex(&limit_expr, &input.schema())? {
                     ExpressionPlan::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
-                    _ => Err(FuseQueryError::build_plan_error(
-                        "Unexpected expression for LIMIT clause".to_string(),
-                    )),
+                    _ => bail!("Unexpected expression for LIMIT clause"),
                 }?;
                 Ok(PlanBuilder::from(&input).limit(n)?.build()?)
             }

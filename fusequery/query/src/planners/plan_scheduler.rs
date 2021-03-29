@@ -5,17 +5,17 @@
 use std::cmp::min;
 use std::sync::Arc;
 
+use anyhow::Result;
 use common_datavalues::DataSchema;
 use common_planners::{EmptyPlan, PlanNode, ReadDataSourcePlan};
 use log::info;
 
-use crate::error::FuseQueryResult;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct PlanScheduler {}
 
 impl PlanScheduler {
-    pub fn schedule(ctx: FuseQueryContextRef, plan: &PlanNode) -> FuseQueryResult<Vec<PlanNode>> {
+    pub fn schedule(ctx: FuseQueryContextRef, plan: &PlanNode) -> Result<Vec<PlanNode>> {
         let mut source_plan = ReadDataSourcePlan::empty();
 
         // Get the source plan node from walk.

@@ -4,6 +4,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use anyhow::Result;
 use arrow::datatypes::SchemaRef;
 use common_planners::TableOptions;
 use indexmap::map::IndexMap;
@@ -11,7 +12,6 @@ use lazy_static::lazy_static;
 
 use crate::datasources::local::LocalFactory;
 use crate::datasources::ITable;
-use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct TableFactory;
@@ -22,7 +22,7 @@ pub type TableCreator = fn(
     name: String,
     schema: SchemaRef,
     options: TableOptions,
-) -> FuseQueryResult<Box<dyn ITable>>;
+) -> Result<Box<dyn ITable>>;
 
 pub type TableCreatorFactory = Arc<Mutex<IndexMap<&'static str, TableCreator>>>;
 
@@ -43,10 +43,10 @@ impl TableFactory {
         name: String,
         schema: SchemaRef,
         options: TableOptions,
-    ) -> FuseQueryResult<Box<dyn ITable>> {
+    ) -> Result<Box<dyn ITable>> {
         let map = FACTORY.as_ref().lock()?;
         let creator = map.get(engine).ok_or_else(|| {
-            FuseQueryError::build_internal_error(format!("Unsupported Engine: {}", engine))
+            return anyhow::Error::msg(format!("Unsupported Engine: {}", engine));
         })?;
         (creator)(ctx, db, name, schema, options)
     }

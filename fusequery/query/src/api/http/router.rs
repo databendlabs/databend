@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use anyhow::Result;
 use warp::Filter;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::error::FuseQueryResult;
 
 pub struct Router {
     cfg: Config,
@@ -20,8 +20,7 @@ impl Router {
 
     pub fn router(
         &self,
-    ) -> FuseQueryResult<impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone>
-    {
+    ) -> Result<impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone> {
         let v1 = super::v1::hello::hello_handler(self.cfg.clone())
             .or(super::v1::config::config_handler(self.cfg.clone()))
             .or(super::v1::cluster::cluster_handler(self.cluster.clone()));

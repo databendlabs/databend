@@ -4,12 +4,12 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use common_planners::CreatePlan;
 
 use crate::datasources::TableFactory;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::error::FuseQueryResult;
 use crate::interpreters::IInterpreter;
 use crate::sessions::FuseQueryContextRef;
 
@@ -19,10 +19,7 @@ pub struct CreateInterpreter {
 }
 
 impl CreateInterpreter {
-    pub fn try_create(
-        ctx: FuseQueryContextRef,
-        plan: CreatePlan,
-    ) -> FuseQueryResult<Arc<dyn IInterpreter>> {
+    pub fn try_create(ctx: FuseQueryContextRef, plan: CreatePlan) -> Result<Arc<dyn IInterpreter>> {
         Ok(Arc::new(CreateInterpreter { ctx, plan }))
     }
 }
@@ -33,7 +30,7 @@ impl IInterpreter for CreateInterpreter {
         "CreateInterpreter"
     }
 
-    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let engine = self.plan.engine.to_string();
 
         let datasource = self.ctx.get_datasource();

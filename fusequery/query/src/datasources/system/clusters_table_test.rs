@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_clusters_table() -> crate::error::FuseQueryResult<()> {
+async fn test_clusters_table() -> anyhow::Result<()> {
     use common_planners::*;
     use futures::TryStreamExt;
 

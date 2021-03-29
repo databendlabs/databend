@@ -4,8 +4,9 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
+
 use crate::datastreams::SendableDataBlockStream;
-use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::{IProcessor, MergeProcessor, Pipe};
 
 pub struct Pipeline {
@@ -39,13 +40,13 @@ impl Pipeline {
     }
 
     /// Last pipe of the pipeline.
-    pub fn last_pipe(&self) -> Result<&Pipe, FuseQueryError> {
+    pub fn last_pipe(&self) -> Result<&Pipe> {
         self.pipes.last().ok_or_else(|| {
-            FuseQueryError::build_internal_error("Pipeline last pipe can not be none".to_string())
+            return anyhow::Error::msg("Pipeline last pipe can not be none");
         })
     }
 
-    pub fn add_source(&mut self, source: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
+    pub fn add_source(&mut self, source: Arc<dyn IProcessor>) -> Result<()> {
         if self.pipes.first().is_none() {
             let mut first = Pipe::create();
             first.add(source);
@@ -66,8 +67,8 @@ impl Pipeline {
     ///
     pub fn add_simple_transform(
         &mut self,
-        f: impl Fn() -> FuseQueryResult<Box<dyn IProcessor>>,
-    ) -> FuseQueryResult<()> {
+        f: impl Fn() -> Result<Box<dyn IProcessor>>,
+    ) -> Result<()> {
         let last_pipe = self.last_pipe()?;
         let mut new_pipe = Pipe::create();
         for x in last_pipe.processors() {
@@ -87,7 +88,7 @@ impl Pipeline {
     ///               /
     /// processor3 --
     ///
-    pub fn merge_processor(&mut self) -> FuseQueryResult<()> {
+    pub fn merge_processor(&mut self) -> Result<()> {
         let last_pipe = self.last_pipe()?;
         if last_pipe.nums() > 1 {
             let mut merge = MergeProcessor::create();
@@ -101,7 +102,7 @@ impl Pipeline {
         Ok(())
     }
 
-    pub async fn execute(&mut self) -> FuseQueryResult<SendableDataBlockStream> {
+    pub async fn execute(&mut self) -> Result<SendableDataBlockStream> {
         if self.last_pipe()?.nums() > 1 {
             self.merge_processor()?;
         }

@@ -4,8 +4,9 @@
 
 use std::collections::HashMap;
 
+use anyhow::Result;
+
 use crate::datasources::datasource::DatabaseHashMap;
-use crate::error::FuseQueryResult;
 
 pub struct RemoteFactory;
 
@@ -14,7 +15,7 @@ impl RemoteFactory {
         Self
     }
 
-    pub fn get_tables(&self) -> FuseQueryResult<DatabaseHashMap> {
+    pub fn get_tables(&self) -> Result<DatabaseHashMap> {
         let hashmap: DatabaseHashMap = HashMap::default();
         Ok(hashmap)
     }

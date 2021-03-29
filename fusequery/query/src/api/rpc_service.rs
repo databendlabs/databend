@@ -2,12 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use anyhow::{bail, Result};
 use tonic::transport::Server;
 
 use crate::api::rpc::{FlightService, GrpcService};
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::sessions::SessionRef;
 
 pub struct RpcService {
@@ -25,7 +25,7 @@ impl RpcService {
         }
     }
 
-    pub async fn make_server(&self) -> FuseQueryResult<()> {
+    pub async fn make_server(&self) -> Result<()> {
         let addr = self.conf.rpc_api_address.parse::<std::net::SocketAddr>()?;
 
         // GRPC service.
@@ -44,11 +44,6 @@ impl RpcService {
             .add_service(flight_srv.make_server())
             .serve(addr)
             .await
-            .map_err(|e| {
-                FuseQueryError::build_internal_error(format!(
-                    "Metrics prometheus exporter error: {:?}",
-                    e
-                ))
-            })
+            .map_err(|e| anyhow::Error::msg(format!("Metrics prometheus exporter error: {:?}", e)))
     }
 }

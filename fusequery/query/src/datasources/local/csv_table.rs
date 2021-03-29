@@ -4,6 +4,7 @@
 
 use std::fs::File;
 
+use anyhow::Result;
 use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
 use common_datavalues::DataSchemaRef;
@@ -13,7 +14,6 @@ use crate::datasources::local::ParquetTable;
 use crate::datasources::table_factory::TableCreatorFactory;
 use crate::datasources::ITable;
 use crate::datastreams::{CsvStream, SendableDataBlockStream};
-use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct CsvTable {
@@ -30,7 +30,7 @@ impl CsvTable {
         name: String,
         schema: SchemaRef,
         options: TableOptions,
-    ) -> FuseQueryResult<Box<dyn ITable>> {
+    ) -> Result<Box<dyn ITable>> {
         let file = options.get("location");
         return match file {
             Some(file) => {
@@ -42,13 +42,11 @@ impl CsvTable {
                 };
                 Ok(Box::new(table))
             }
-            _ => Err(FuseQueryError::build_internal_error(
-                "CSV Engine must contains file location options".to_string(),
-            )),
+            _ => anyhow::Error::msg("CSV Engine must contains file location options"),
         };
     }
 
-    pub fn register(map: TableCreatorFactory) -> FuseQueryResult<()> {
+    pub fn register(map: TableCreatorFactory) -> Result<()> {
         let mut map = map.as_ref().lock()?;
         map.insert("CSV", CsvTable::try_create);
         map.insert("Parquet", ParquetTable::try_create);
@@ -66,7 +64,7 @@ impl ITable for CsvTable {
         "CSV"
     }
 
-    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
+    fn schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
     }
 
@@ -74,7 +72,7 @@ impl ITable for CsvTable {
         &self,
         _ctx: FuseQueryContextRef,
         _push_down_plan: PlanNode,
-    ) -> FuseQueryResult<ReadDataSourcePlan> {
+    ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
             table: self.name().to_string(),
@@ -88,7 +86,7 @@ impl ITable for CsvTable {
         })
     }
 
-    async fn read(&self, _ctx: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
         let reader = File::open(self.file.clone())?;
         Ok(Box::pin(CsvStream::try_create(
             self.schema.clone(),

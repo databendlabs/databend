@@ -5,10 +5,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use anyhow::Result;
 use async_trait::async_trait;
 
 use crate::datastreams::{LimitStream, SendableDataBlockStream};
-use crate::error::FuseQueryResult;
 use crate::processors::{EmptyProcessor, IProcessor};
 
 pub struct LimitTransform {
@@ -17,7 +17,7 @@ pub struct LimitTransform {
 }
 
 impl LimitTransform {
-    pub fn try_create(limit: usize) -> FuseQueryResult<Self> {
+    pub fn try_create(limit: usize) -> Result<Self> {
         Ok(LimitTransform {
             limit,
             input: Arc::new(EmptyProcessor::create()),
@@ -31,7 +31,7 @@ impl IProcessor for LimitTransform {
         "LimitTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
+    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
@@ -44,7 +44,7 @@ impl IProcessor for LimitTransform {
         self
     }
 
-    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(LimitStream::try_create(
             self.input.execute().await?,
             self.limit,

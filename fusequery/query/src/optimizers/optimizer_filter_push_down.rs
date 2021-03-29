@@ -5,10 +5,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use anyhow::Result;
 use common_datavalues::DataSchema;
 use common_planners::{EmptyPlan, ExpressionPlan, FilterPlan, PlanNode};
 
-use crate::error::FuseQueryResult;
 use crate::optimizers::{IOptimizer, Optimizer};
 use crate::sessions::FuseQueryContextRef;
 
@@ -24,13 +24,13 @@ impl FilterPushDownOptimizer {
 fn rewrite_alias_expr(
     expr: &ExpressionPlan,
     projection: &HashMap<String, ExpressionPlan>,
-) -> FuseQueryResult<ExpressionPlan> {
+) -> Result<ExpressionPlan> {
     let expressions = Optimizer::expression_plan_children(expr)?;
 
     let expressions = expressions
         .iter()
         .map(|e| rewrite_alias_expr(e, &projection))
-        .collect::<FuseQueryResult<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>()?;
 
     if let ExpressionPlan::Column(name) = expr {
         if let Some(expr) = projection.get(name) {
@@ -45,7 +45,7 @@ impl IOptimizer for FilterPushDownOptimizer {
         "FilterPushDown"
     }
 
-    fn optimize(&mut self, plan: &PlanNode) -> FuseQueryResult<PlanNode> {
+    fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         let mut rewritten_node = PlanNode::Empty(EmptyPlan {
             schema: Arc::new(DataSchema::empty()),
         });

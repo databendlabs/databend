@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_transform_remote_with_local() -> crate::error::FuseQueryResult<()> {
+async fn test_transform_remote_with_local() -> anyhow::Result<()> {
     use common_datavalues::*;
     use common_planners::*;
     use futures::stream::StreamExt;
@@ -34,7 +34,7 @@ async fn test_transform_remote_with_local() -> crate::error::FuseQueryResult<()>
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_transform_remote_with_cluster() -> crate::error::FuseQueryResult<()> {
+async fn test_transform_remote_with_cluster() -> anyhow::Result<()> {
     use common_datavalues::*;
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;

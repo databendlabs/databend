@@ -5,6 +5,7 @@
 use std::time::Instant;
 use std::{io, net};
 
+use anyhow::Result;
 use common_datablocks::DataBlock;
 use futures::stream::StreamExt;
 use log::{debug, error};
@@ -14,7 +15,6 @@ use threadpool::ThreadPool;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::MysqlStream;
 use crate::sessions::{FuseQueryContextRef, SessionRef};
@@ -31,18 +31,13 @@ impl Session {
 }
 
 impl<W: io::Write> MysqlShim<W> for Session {
-    type Error = FuseQueryError;
+    type Error = anyhow::Error;
 
-    fn on_prepare(&mut self, _: &str, _: StatementMetaWriter<W>) -> FuseQueryResult<()> {
+    fn on_prepare(&mut self, _: &str, _: StatementMetaWriter<W>) -> Result<()> {
         unimplemented!()
     }
 
-    fn on_execute(
-        &mut self,
-        _: u32,
-        _: ParamParser,
-        _: QueryResultWriter<W>,
-    ) -> FuseQueryResult<()> {
+    fn on_execute(&mut self, _: u32, _: ParamParser, _: QueryResultWriter<W>) -> Result<()> {
         unimplemented!()
     }
 
@@ -50,7 +45,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
         unimplemented!()
     }
 
-    fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> FuseQueryResult<()> {
+    fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> Result<()> {
         debug!("{}", query);
         self.ctx.reset()?;
 
@@ -59,7 +54,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
         match plan {
             Ok(v) => match InterpreterFactory::get(self.ctx.clone(), v) {
                 Ok(executor) => {
-                    let result: FuseQueryResult<Vec<DataBlock>> =
+                    let result: Result<Vec<DataBlock>> =
                         tokio::runtime::Builder::new_multi_thread()
                             .enable_io()
                             .worker_threads(self.ctx.get_max_threads()? as usize)
@@ -89,19 +84,19 @@ impl<W: io::Write> MysqlShim<W> for Session {
                             debug!("MySQLHandler send to client cost:{:?}", duration);
                         }
                         Err(e) => {
-                            error!("FuseQueryResultError {:?}", e);
+                            error!("ResultError {:?}", e);
                             writer
                                 .error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?
                         }
                     }
                 }
                 Err(e) => {
-                    error!("FuseQueryResultError {:?}", e);
+                    error!("ResultError {:?}", e);
                     writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?
                 }
             },
             Err(e) => {
-                error!("FuseQueryResultError {:?}", e);
+                error!("ResultError {:?}", e);
                 writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?;
             }
         }
@@ -113,7 +108,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
         Ok(())
     }
 
-    fn on_init(&mut self, db: &str, writer: InitWriter<W>) -> FuseQueryResult<()> {
+    fn on_init(&mut self, db: &str, writer: InitWriter<W>) -> Result<()> {
         debug!("MySQL use db:{}", db);
         match self.ctx.set_default_db(db.to_string()) {
             Ok(..) => {
@@ -146,7 +141,7 @@ impl MysqlHandler {
         }
     }
 
-    pub fn start(&self) -> FuseQueryResult<()> {
+    pub fn start(&self) -> Result<()> {
         let listener = net::TcpListener::bind(format!(
             "{}:{}",
             self.conf.mysql_handler_host, self.conf.mysql_handler_port
@@ -170,7 +165,7 @@ impl MysqlHandler {
         Ok(())
     }
 
-    pub fn stop(&self) -> FuseQueryResult<()> {
+    pub fn stop(&self) -> Result<()> {
         Ok(())
     }
 }

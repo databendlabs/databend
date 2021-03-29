@@ -5,6 +5,7 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
 
+use anyhow::{bail, Result};
 use arrow::datatypes::Schema;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::utils::flight_data_to_arrow_batch;
@@ -14,7 +15,6 @@ use prost::Message;
 
 use crate::api::rpc::ExecuteAction;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::protobuf::FlightRequest;
 
 pub struct FlightClient {
@@ -22,15 +22,12 @@ pub struct FlightClient {
 }
 
 impl FlightClient {
-    pub async fn try_create(addr: String) -> FuseQueryResult<Self> {
+    pub async fn try_create(addr: String) -> Result<Self> {
         let client = FlightServiceClient::connect(format!("http://{}", addr)).await?;
         Ok(Self { client })
     }
 
-    pub async fn execute(
-        &mut self,
-        action: &ExecuteAction,
-    ) -> FuseQueryResult<SendableDataBlockStream> {
+    pub async fn execute(&mut self, action: &ExecuteAction) -> Result<SendableDataBlockStream> {
         let flight_request = FlightRequest {
             action: serde_json::to_string(action)?,
         };
@@ -49,10 +46,10 @@ impl FlightClient {
                 }
                 Ok(Box::pin(DataBlockStream::create(schema, None, blocks)))
             }
-            None => Err(FuseQueryError::build_internal_error(format!(
+            None => bail!(
                 "Can not receive data from flight server, action:{:?}",
                 action
-            ))),
+            ),
         }
     }
 }

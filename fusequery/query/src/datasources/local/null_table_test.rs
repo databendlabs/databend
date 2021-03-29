@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_null_table() -> crate::error::FuseQueryResult<()> {
+async fn test_null_table() -> anyhow::Result<()> {
     use arrow::datatypes::{Field, Schema};
     use common_datavalues::DataType;
     use common_planners::*;

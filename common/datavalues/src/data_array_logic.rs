@@ -22,11 +22,11 @@ pub fn data_array_logic_op(
                 array_boolean_op!(left_array, right_array, or, BooleanArray)
             }
         },
-        _ => bail!(format!(
+        _ => bail!(
             "DataValue Error: Cannot do data_array {}, left:{:?}, right:{:?}",
             op,
             left.data_type(),
             right.data_type()
-        )),
+        ),
     }
 }

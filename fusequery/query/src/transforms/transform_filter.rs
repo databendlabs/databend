@@ -5,6 +5,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use anyhow::{bail, Result};
 use arrow::compute::filter_record_batch;
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
@@ -13,7 +14,6 @@ use common_functions::IFunction;
 use common_planners::ExpressionPlan;
 
 use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
-use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::{EmptyProcessor, IProcessor};
 
 pub struct FilterTransform {
@@ -22,13 +22,13 @@ pub struct FilterTransform {
 }
 
 impl FilterTransform {
-    pub fn try_create(predicate: ExpressionPlan) -> FuseQueryResult<Self> {
+    pub fn try_create(predicate: ExpressionPlan) -> Result<Self> {
         let func = predicate.to_function()?;
         if func.is_aggregator() {
-            return Err(FuseQueryError::build_internal_error(format!(
+            bail!(
                 "Aggregate function {:?} is found in WHERE in query",
                 predicate
-            )));
+            );
         }
 
         Ok(FilterTransform {
@@ -41,14 +41,14 @@ impl FilterTransform {
         _schema: &DataSchemaRef,
         block: DataBlock,
         funcs: Vec<Box<dyn IFunction>>,
-    ) -> FuseQueryResult<DataBlock> {
+    ) -> Result<DataBlock> {
         let func = funcs[0].clone();
         let result = func.eval(&block)?.to_array(block.num_rows())?;
         let filter_result = result
             .as_any()
             .downcast_ref::<BooleanArray>()
             .ok_or_else(|| {
-                FuseQueryError::build_internal_error("cannot downcast to boolean array".to_string())
+                return anyhow::Error::msg("cannot downcast to boolean array");
             })?;
         Ok(DataBlock::try_from_arrow_batch(&filter_record_batch(
             &block.to_arrow_batch()?,
@@ -63,7 +63,7 @@ impl IProcessor for FilterTransform {
         "FilterTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
+    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
@@ -76,7 +76,7 @@ impl IProcessor for FilterTransform {
         self
     }
 
-    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(ExpressionStream::try_create(
             self.input.execute().await?,
             Arc::new(DataSchema::empty()),

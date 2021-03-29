@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, DataValue, StringArray};
@@ -11,7 +12,6 @@ use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics};
 
 use crate::datasources::ITable;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::error::FuseQueryResult;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct SettingsTable {
@@ -41,7 +41,7 @@ impl ITable for SettingsTable {
         "SystemSettings"
     }
 
-    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
+    fn schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
     }
 
@@ -49,7 +49,7 @@ impl ITable for SettingsTable {
         &self,
         _ctx: FuseQueryContextRef,
         _push_down_plan: PlanNode,
-    ) -> FuseQueryResult<ReadDataSourcePlan> {
+    ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
@@ -63,7 +63,7 @@ impl ITable for SettingsTable {
         })
     }
 
-    async fn read(&self, ctx: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
         let settings = ctx.get_settings()?;
 
         let mut names: Vec<String> = vec![];

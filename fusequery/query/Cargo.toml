@@ -19,12 +19,13 @@ common-functions = {path = "../../common/functions"}
 common-planners = {path = "../../common/planners"}
 
 
-# github dependencies
+# Github dependencies
 arrow = { git = "https://github.com/apache/arrow", rev="46161d2" }
 parquet = { git = "https://github.com/apache/arrow", rev="46161d2" }
 arrow-flight = { git = "https://github.com/apache/arrow", rev="46161d2" }
 
 # Crates.io dependencies
+anyhow = "1.0.40"
 async-std = "1.9.0"
 async-trait = "0.1"
 dyn-clone = "1.0.4"
@@ -43,7 +44,6 @@ prost = "0.7"
 rand = "0.8.3"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-snafu = "0.6.8"
 sqlparser = "0.8"
 structopt = "0.3"
 thiserror = "1.0"

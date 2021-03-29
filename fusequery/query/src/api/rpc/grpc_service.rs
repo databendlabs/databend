@@ -57,7 +57,9 @@ pub fn fetch_partition(
     let req = request.into_inner();
     let uuid = req.uuid;
     let nums = req.nums;
-    let partitions = session_manager.try_fetch_partitions(uuid, nums as usize)?;
+    let partitions = session_manager
+        .try_fetch_partitions(uuid, nums as usize)
+        .map_err(|e| Status::internal(e.to_string()))?;
 
     let mut protos = vec![];
     for partition in partitions {

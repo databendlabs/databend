@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_datasource() -> crate::error::FuseQueryResult<()> {
+async fn test_datasource() -> anyhow::Result<()> {
     use crate::datasources::*;
 
     let mut datasource = DataSource::try_create()?;

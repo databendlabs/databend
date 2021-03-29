@@ -21,7 +21,6 @@ use tonic::{Request, Response, Status, Streaming};
 use crate::api::rpc::ExecuteAction;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::error::FuseQueryError;
 use crate::processors::PipelineBuilder;
 use crate::protobuf::FlightRequest;
 use crate::sessions::SessionRef;
@@ -93,13 +92,13 @@ impl Flight for FlightService {
         let mut buf = Cursor::new(&ticket.ticket);
 
         // Decode FlightRequest from buffer.
-        let request: FlightRequest = FlightRequest::decode(&mut buf)
-            .map_err(|e| FuseQueryError::build_internal_error(e.to_string()))?;
+        let request: FlightRequest =
+            FlightRequest::decode(&mut buf).map_err(|e| Status::internal(e.to_string()))?;
 
         // Decode ExecuteAction from request.
         let json_str = request.action.as_str();
         let action = serde_json::from_str::<ExecuteAction>(json_str)
-            .map_err(|e| FuseQueryError::build_internal_error(e.to_string()))?;
+            .map_err(|e| Status::internal(e.to_string()))?;
 
         match action {
             ExecuteAction::ExecutePlan(action) => {
@@ -117,14 +116,22 @@ impl Flight for FlightService {
 
                 // Create the context.
                 let ctx = session_manager
-                    .try_create_context()?
-                    .with_cluster(cluster.clone())?;
-                ctx.set_max_threads(cpus)?;
+                    .try_create_context()
+                    .map_err(|e| Status::internal(e.to_string()))?
+                    .with_cluster(cluster.clone())
+                    .map_err(|e| Status::internal(e.to_string()))?;
+                ctx.set_max_threads(cpus)
+                    .map_err(|e| Status::internal(e.to_string()))?;
 
                 // Pipeline.
-                let mut pipeline = PipelineBuilder::create(ctx.clone(), plan.clone()).build()?;
+                let mut pipeline = PipelineBuilder::create(ctx.clone(), plan.clone())
+                    .build()
+                    .map_err(|e| Status::internal(e.to_string()))?;
 
-                let mut stream = pipeline.execute().await?;
+                let mut stream = pipeline
+                    .execute()
+                    .await
+                    .map_err(|e| Status::internal(e.to_string()))?;
 
                 tokio::spawn(async move {
                     let options = arrow::ipc::writer::IpcWriteOptions::default();

@@ -5,9 +5,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use anyhow::{bail, Result};
 use common_datavalues::DataValue;
-
-use crate::error::{FuseQueryError, FuseQueryResult};
 
 #[derive(Debug, Clone)]
 pub struct Settings {
@@ -23,7 +22,7 @@ impl Settings {
     }
 
     // TODO, to use macro generate this codes
-    pub fn try_set_u64(&self, key: &'static str, val: u64, desc: String) -> FuseQueryResult<()> {
+    pub fn try_set_u64(&self, key: &'static str, val: u64, desc: String) -> Result<()> {
         let mut settings = self.settings.lock()?;
         let setting_val = DataValue::Struct(vec![
             DataValue::UInt64(Some(val)),
@@ -34,10 +33,10 @@ impl Settings {
         Ok(())
     }
 
-    pub fn try_update_u64(&self, key: &'static str, val: u64) -> FuseQueryResult<()> {
+    pub fn try_update_u64(&self, key: &'static str, val: u64) -> Result<()> {
         let mut settings = self.settings.lock()?;
         let setting_val = settings.get(key).ok_or_else(|| {
-            FuseQueryError::build_internal_error(format!("Unknown variable: {:?}", key))
+            return anyhow::Error::msg(format!("Unknown variable: {:?}", key));
         })?;
 
         if let DataValue::Struct(values) = setting_val {
@@ -51,10 +50,10 @@ impl Settings {
         Ok(())
     }
 
-    pub fn try_get_u64(&self, key: &str) -> FuseQueryResult<u64> {
+    pub fn try_get_u64(&self, key: &str) -> Result<u64> {
         let settings = self.settings.lock()?;
         let setting_val = settings.get(key).ok_or_else(|| {
-            FuseQueryError::build_internal_error(format!("Unknown variable: {:?}", key))
+            return anyhow::Error::msg(format!("Unknown variable: {:?}", key));
         })?;
 
         if let DataValue::Struct(values) = setting_val {
@@ -63,13 +62,10 @@ impl Settings {
             }
         }
 
-        Err(FuseQueryError::build_internal_error(format!(
-            "Unknown variable: {:?}",
-            key
-        )))
+        bail!("Unknown variable: {:?}", key);
     }
 
-    pub fn try_set_i64(&self, key: &'static str, val: i64, desc: String) -> FuseQueryResult<()> {
+    pub fn try_set_i64(&self, key: &'static str, val: i64, desc: String) -> Result<()> {
         let mut settings = self.settings.lock()?;
         let setting_val = DataValue::Struct(vec![
             DataValue::Int64(Some(val)),
@@ -80,11 +76,11 @@ impl Settings {
         Ok(())
     }
 
-    pub fn try_update_i64(&self, key: &'static str, val: i64) -> FuseQueryResult<()> {
+    pub fn try_update_i64(&self, key: &'static str, val: i64) -> Result<()> {
         let mut settings = self.settings.lock()?;
-        let setting_val = settings.get(key).ok_or_else(|| {
-            FuseQueryError::build_internal_error(format!("Unknown variable: {:?}", key))
-        })?;
+        let setting_val = settings
+            .get(key)
+            .ok_or_else(|| return anyhow::Error::msg(format!("Unknown variable: {:?}", key)))?;
 
         if let DataValue::Struct(values) = setting_val {
             let v = DataValue::Struct(vec![
@@ -97,11 +93,11 @@ impl Settings {
         Ok(())
     }
 
-    pub fn try_get_i64(&self, key: &str) -> FuseQueryResult<i64> {
+    pub fn try_get_i64(&self, key: &str) -> Result<i64> {
         let settings = self.settings.lock()?;
-        let setting_val = settings.get(key).ok_or_else(|| {
-            FuseQueryError::build_internal_error(format!("Unknown variable: {:?}", key))
-        })?;
+        let setting_val = settings
+            .get(key)
+            .ok_or_else(|| anyhow::Error::msg(format!("Unknown variable: {:?}", key)))?;
 
         if let DataValue::Struct(values) = setting_val {
             if let DataValue::Int64(Some(result)) = values[0].clone() {
@@ -109,13 +105,10 @@ impl Settings {
             }
         }
 
-        Err(FuseQueryError::build_internal_error(format!(
-            "Unknown variable: {:?}",
-            key
-        )))
+        bail!("Unknown variable: {:?}", key);
     }
 
-    pub fn try_set_f64(&self, key: &'static str, val: f64, desc: String) -> FuseQueryResult<()> {
+    pub fn try_set_f64(&self, key: &'static str, val: f64, desc: String) -> Result<()> {
         let mut settings = self.settings.lock()?;
         let setting_val = DataValue::Struct(vec![
             DataValue::Float64(Some(val)),
@@ -126,11 +119,11 @@ impl Settings {
         Ok(())
     }
 
-    pub fn try_update_f64(&self, key: &'static str, val: f64) -> FuseQueryResult<()> {
+    pub fn try_update_f64(&self, key: &'static str, val: f64) -> Result<()> {
         let mut settings = self.settings.lock()?;
-        let setting_val = settings.get(key).ok_or_else(|| {
-            FuseQueryError::build_internal_error(format!("Unknown variable: {:?}", key))
-        })?;
+        let setting_val = settings
+            .get(key)
+            .ok_or_else(|| return anyhow::Error::msg(format!("Unknown variable: {:?}", key)))?;
 
         if let DataValue::Struct(values) = setting_val {
             let v = DataValue::Struct(vec![
@@ -143,11 +136,11 @@ impl Settings {
         Ok(())
     }
 
-    pub fn try_get_f64(&self, key: &str) -> FuseQueryResult<f64> {
+    pub fn try_get_f64(&self, key: &str) -> Result<f64> {
         let settings = self.settings.lock()?;
-        let setting_val = settings.get(key).ok_or_else(|| {
-            FuseQueryError::build_internal_error(format!("Unknown variable: {:?}", key))
-        })?;
+        let setting_val = settings
+            .get(key)
+            .ok_or_else(|| return anyhow::Error::msg(format!("Unknown variable: {:?}", key)))?;
 
         if let DataValue::Struct(values) = setting_val {
             if let DataValue::Float64(Some(result)) = values[0].clone() {
@@ -155,18 +148,10 @@ impl Settings {
             }
         }
 
-        Err(FuseQueryError::build_internal_error(format!(
-            "Unknown variable: {:?}",
-            key
-        )))
+        bail!("Unknown variable: {:?}", key);
     }
 
-    pub fn try_set_string(
-        &self,
-        key: &'static str,
-        val: String,
-        desc: String,
-    ) -> FuseQueryResult<()> {
+    pub fn try_set_string(&self, key: &'static str, val: String, desc: String) -> Result<()> {
         let mut settings = self.settings.lock()?;
         let default_value = val.clone();
         let setting_val = DataValue::Struct(vec![
@@ -178,11 +163,11 @@ impl Settings {
         Ok(())
     }
 
-    pub fn try_update_string(&self, key: &'static str, val: String) -> FuseQueryResult<()> {
+    pub fn try_update_string(&self, key: &'static str, val: String) -> Result<()> {
         let mut settings = self.settings.lock()?;
-        let setting_val = settings.get(key).ok_or_else(|| {
-            FuseQueryError::build_internal_error(format!("Unknown variable: {:?}", key))
-        })?;
+        let setting_val = settings
+            .get(key)
+            .ok_or_else(|| anyhow::Error::msg(format!("Unknown variable: {:?}", key)))?;
 
         if let DataValue::Struct(values) = setting_val {
             let v = DataValue::Struct(vec![
@@ -195,11 +180,11 @@ impl Settings {
         Ok(())
     }
 
-    pub fn try_get_string(&self, key: &str) -> FuseQueryResult<String> {
+    pub fn try_get_string(&self, key: &str) -> Result<String> {
         let settings = self.settings.lock()?;
-        let setting_val = settings.get(key).ok_or_else(|| {
-            FuseQueryError::build_internal_error(format!("Unknown variable: {:?}", key))
-        })?;
+        let setting_val = settings
+            .get(key)
+            .ok_or_else(|| anyhow::Error::msg(format!("Unknown variable: {:?}", key)))?;
 
         if let DataValue::Struct(values) = setting_val {
             if let DataValue::String(Some(result)) = values[0].clone() {
@@ -207,13 +192,10 @@ impl Settings {
             }
         }
 
-        Err(FuseQueryError::build_internal_error(format!(
-            "Unknown variable: {:?}",
-            key
-        )))
+        bail!("Unknown variable: {:?}", key);
     }
 
-    pub fn get_settings(&self) -> FuseQueryResult<Vec<DataValue>> {
+    pub fn get_settings(&self) -> Result<Vec<DataValue>> {
         let settings = self.settings.lock()?;
 
         let mut result = vec![];

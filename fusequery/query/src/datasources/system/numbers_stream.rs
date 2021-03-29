@@ -11,6 +11,7 @@ use std::{
     usize,
 };
 
+use anyhow::Result;
 use arrow::array::ArrayData;
 use arrow::buffer::Buffer;
 use arrow::datatypes::DataType;
@@ -18,7 +19,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::{DataSchemaRef, UInt64Array};
 use futures::stream::Stream;
 
-use crate::error::FuseQueryResult;
 use crate::sessions::FuseQueryContextRef;
 
 #[derive(Debug, Clone)]
@@ -44,7 +44,7 @@ impl NumbersStream {
         }
     }
 
-    fn try_get_one_block(&mut self) -> FuseQueryResult<Option<BlockRange>> {
+    fn try_get_one_block(&mut self) -> Result<Option<BlockRange>> {
         if (self.block_index as usize) == self.blocks.len() {
             let partitions = self.ctx.try_get_partitions(1)?;
             if partitions.is_empty() {
@@ -90,7 +90,7 @@ impl NumbersStream {
 }
 
 impl Stream for NumbersStream {
-    type Item = FuseQueryResult<DataBlock>;
+    type Item = Result<DataBlock>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,

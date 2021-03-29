@@ -5,9 +5,10 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use anyhow::Result;
+
 use crate::clusters::node::Node;
 use crate::configs::Config;
-use crate::error::FuseQueryResult;
 
 pub type ClusterRef = Arc<Cluster>;
 
@@ -31,11 +32,14 @@ impl Cluster {
         })
     }
 
-    pub fn is_empty(&self) -> FuseQueryResult<bool> {
-        Ok(self.nodes.lock()?.len() == 0)
+    pub fn is_empty(&self) -> Result<bool> {
+
+        let nodes = self.nodes.lock();
+        Ok(nodes.len)
+        Ok(self.nodes.lock().len() == 0)
     }
 
-    pub fn add_node(&self, n: &Node) -> FuseQueryResult<()> {
+    pub fn add_node(&self, n: &Node) -> Result<()> {
         let mut node = Node {
             name: n.name.clone(),
             cpus: n.cpus,
@@ -54,12 +58,12 @@ impl Cluster {
         Ok(())
     }
 
-    pub fn remove_node(&self, id: String) -> FuseQueryResult<()> {
+    pub fn remove_node(&self, id: String) -> Result<()> {
         self.nodes.lock()?.remove(&*id);
         Ok(())
     }
 
-    pub fn get_nodes(&self) -> FuseQueryResult<Vec<Node>> {
+    pub fn get_nodes(&self) -> Result<Vec<Node>> {
         let mut nodes = vec![];
 
         for (_, node) in self.nodes.lock()?.iter() {
