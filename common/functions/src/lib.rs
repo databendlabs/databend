@@ -5,7 +5,6 @@
 mod aggregators;
 mod arithmetics;
 mod comparisons;
-mod error;
 mod function;
 mod function_alias;
 mod function_column;
@@ -17,7 +16,6 @@ mod udfs;
 pub use common_datablocks;
 pub use common_datavalues;
 
-pub use crate::error::{FunctionError, FunctionResult};
 pub use crate::function::IFunction;
 pub use crate::function_alias::AliasFunction;
 pub use crate::function_column::ColumnFunction;

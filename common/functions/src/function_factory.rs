@@ -4,6 +4,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use anyhow::Result;
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
 
@@ -12,10 +13,10 @@ use crate::arithmetics::ArithmeticFunction;
 use crate::comparisons::ComparisonFunction;
 use crate::logics::LogicFunction;
 use crate::udfs::UdfFunction;
-use crate::{FunctionError, FunctionResult, IFunction};
+use crate::IFunction;
 
 pub struct FunctionFactory;
-pub type FactoryFunc = fn(args: &[Box<dyn IFunction>]) -> FunctionResult<Box<dyn IFunction>>;
+pub type FactoryFunc = fn(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>>;
 pub type FactoryFuncRef = Arc<Mutex<IndexMap<&'static str, FactoryFunc>>>;
 
 lazy_static! {
@@ -31,10 +32,13 @@ lazy_static! {
 }
 
 impl FunctionFactory {
-    pub fn get(name: &str, args: &[Box<dyn IFunction>]) -> FunctionResult<Box<dyn IFunction>> {
-        let map = FACTORY.as_ref().lock()?;
+    pub fn get(name: &str, args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
+        let map = FACTORY
+            .as_ref()
+            .lock()
+            .map_err(|e| anyhow::Error::msg(e.to_string()))?;
         let creator = map.get(&*name.to_lowercase()).ok_or_else(|| {
-            FunctionError::build_internal_error(format!("Unsupported Function: {}", name))
+            return anyhow::Error::msg(format!("Unsupported Function: {}", name));
         })?;
         (creator)(args)
     }

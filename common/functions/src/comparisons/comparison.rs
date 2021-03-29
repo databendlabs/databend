@@ -4,6 +4,7 @@
 
 use std::fmt;
 
+use anyhow::{bail, ensure, Result};
 use common_datablocks::DataBlock;
 use common_datavalues::{
     self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue,
@@ -14,7 +15,7 @@ use crate::comparisons::{
     ComparisonEqFunction, ComparisonGtEqFunction, ComparisonGtFunction, ComparisonLtEqFunction,
     ComparisonLtFunction, ComparisonNotEqFunction,
 };
-use crate::{FactoryFuncRef, FunctionError, FunctionResult, IFunction};
+use crate::{FactoryFuncRef, IFunction};
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
@@ -26,8 +27,11 @@ pub struct ComparisonFunction {
 }
 
 impl ComparisonFunction {
-    pub fn register(map: FactoryFuncRef) -> FunctionResult<()> {
-        let mut map = map.as_ref().lock()?;
+    pub fn register(map: FactoryFuncRef) -> Result<()> {
+        let mut map = map
+            .as_ref()
+            .lock()
+            .map_err(|e| anyhow::Error::msg(e.to_string()))?;
         map.insert("=", ComparisonEqFunction::try_create_func);
         map.insert("<", ComparisonLtFunction::try_create_func);
         map.insert(">", ComparisonGtFunction::try_create_func);
@@ -41,13 +45,12 @@ impl ComparisonFunction {
     pub fn try_create_func(
         op: DataValueComparisonOperator,
         args: &[Box<dyn IFunction>],
-    ) -> FunctionResult<Box<dyn IFunction>> {
-        if args.len() != 2 {
-            return Err(FunctionError::build_internal_error(format!(
-                "Comparison function {} args length must be 2",
-                op
-            )));
-        }
+    ) -> Result<Box<dyn IFunction>> {
+        ensure!(
+            args.len() == 2,
+            "Function Error: Comparison function {} args length must be 2",
+            op
+        );
 
         Ok(Box::new(ComparisonFunction {
             depth: 0,
@@ -60,15 +63,15 @@ impl ComparisonFunction {
 }
 
 impl IFunction for ComparisonFunction {
-    fn return_type(&self, _input_schema: &DataSchema) -> FunctionResult<DataType> {
+    fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
         Ok(DataType::Boolean)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> FunctionResult<bool> {
+    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn eval(&self, block: &DataBlock) -> FunctionResult<DataColumnarValue> {
+    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         Ok(DataColumnarValue::Array(
             datavalues::data_array_comparison_op(
                 self.op.clone(),
@@ -82,30 +85,27 @@ impl IFunction for ComparisonFunction {
         self.depth = depth;
     }
 
-    fn accumulate(&mut self, block: &DataBlock) -> FunctionResult<()> {
+    fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
         self.left.accumulate(block)?;
         self.right.accumulate(block)
     }
 
-    fn accumulate_result(&self) -> FunctionResult<Vec<DataValue>> {
-        Err(FunctionError::build_internal_error(format!(
+    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
+        bail!(
             "Unsupported accumulate_result operation for function {}",
             self.op
-        )))
+        );
     }
 
-    fn merge(&mut self, _states: &[DataValue]) -> FunctionResult<()> {
-        Err(FunctionError::build_internal_error(format!(
-            "Unsupported merge operation for function {}",
-            self.op
-        )))
+    fn merge(&mut self, _states: &[DataValue]) -> Result<()> {
+        bail!("Unsupported merge operation for function {}", self.op);
     }
 
-    fn merge_result(&self) -> FunctionResult<DataValue> {
-        Err(FunctionError::build_internal_error(format!(
+    fn merge_result(&self) -> Result<DataValue> {
+        bail!(
             "Unsupported merge_result operation for function {}",
             self.op
-        )))
+        );
     }
 }
 

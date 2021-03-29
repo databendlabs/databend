@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn test_udf_function() -> crate::error::FunctionResult<()> {
+fn test_udf_function() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_datablocks::*;

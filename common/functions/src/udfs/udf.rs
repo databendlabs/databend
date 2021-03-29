@@ -2,15 +2,20 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use anyhow::Result;
+
 use crate::udfs::{ToTypeNameFunction, UdfExampleFunction};
-use crate::{FactoryFuncRef, FunctionResult};
+use crate::FactoryFuncRef;
 
 #[derive(Clone)]
 pub struct UdfFunction;
 
 impl UdfFunction {
-    pub fn register(map: FactoryFuncRef) -> FunctionResult<()> {
-        let mut map = map.as_ref().lock()?;
+    pub fn register(map: FactoryFuncRef) -> Result<()> {
+        let mut map = map
+            .as_ref()
+            .lock()
+            .map_err(|e| anyhow::Error::msg(e.to_string()))?;
         map.insert("example", UdfExampleFunction::try_create);
         map.insert("totypename", ToTypeNameFunction::try_create);
         Ok(())

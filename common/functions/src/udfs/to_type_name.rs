@@ -4,10 +4,11 @@
 
 use std::fmt;
 
+use anyhow::{bail, ensure, Result};
 use common_datablocks::DataBlock;
 use common_datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 
-use crate::{FunctionError, FunctionResult, IFunction};
+use crate::IFunction;
 
 #[derive(Clone)]
 pub struct ToTypeNameFunction {
@@ -15,12 +16,11 @@ pub struct ToTypeNameFunction {
 }
 
 impl ToTypeNameFunction {
-    pub fn try_create(args: &[Box<dyn IFunction>]) -> FunctionResult<Box<dyn IFunction>> {
-        if args.len() != 1 {
-            return Err(FunctionError::build_internal_error(
-                "The argument size of function database must be one".to_string(),
-            ));
-        }
+    pub fn try_create(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
+        ensure!(
+            args.len() == 1,
+            "The argument size of function database must be one",
+        );
 
         Ok(Box::new(ToTypeNameFunction {
             arg: args[0].clone(),
@@ -29,15 +29,15 @@ impl ToTypeNameFunction {
 }
 
 impl IFunction for ToTypeNameFunction {
-    fn return_type(&self, _input_schema: &DataSchema) -> FunctionResult<DataType> {
+    fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
         Ok(DataType::Utf8)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> FunctionResult<bool> {
+    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn eval(&self, block: &DataBlock) -> FunctionResult<DataColumnarValue> {
+    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         let type_name = format!("{}", self.arg.return_type(block.schema())?);
         Ok(DataColumnarValue::Scalar(DataValue::String(Some(
             type_name,
@@ -46,28 +46,20 @@ impl IFunction for ToTypeNameFunction {
 
     fn set_depth(&mut self, _depth: usize) {}
 
-    fn accumulate(&mut self, _block: &DataBlock) -> FunctionResult<()> {
-        Err(FunctionError::build_internal_error(
-            "Unsupported accumulate for toTypeName Function".to_string(),
-        ))
+    fn accumulate(&mut self, _block: &DataBlock) -> Result<()> {
+        bail!("Unsupported accumulate for toTypeName Function");
     }
 
-    fn accumulate_result(&self) -> FunctionResult<Vec<DataValue>> {
-        Err(FunctionError::build_internal_error(
-            "Unsupported accumulate_result for toTypeName Function".to_string(),
-        ))
+    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
+        bail!("Unsupported accumulate_result for toTypeName Function");
     }
 
-    fn merge(&mut self, _states: &[DataValue]) -> FunctionResult<()> {
-        Err(FunctionError::build_internal_error(
-            "Unsupported merge for toTypeName Function".to_string(),
-        ))
+    fn merge(&mut self, _states: &[DataValue]) -> Result<()> {
+        bail!("Unsupported merge for toTypeName Function");
     }
 
-    fn merge_result(&self) -> FunctionResult<DataValue> {
-        Err(FunctionError::build_internal_error(
-            "Unsupported merge_result for toTypeName Function".to_string(),
-        ))
+    fn merge_result(&self) -> Result<DataValue> {
+        bail!("Unsupported merge_result for toTypeName Function");
     }
 }
 

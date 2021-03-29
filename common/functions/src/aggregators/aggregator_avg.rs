@@ -4,13 +4,14 @@
 
 use std::fmt;
 
+use anyhow::{bail, Result};
 use common_datablocks::DataBlock;
 use common_datavalues::{
     self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue,
     DataValueAggregateOperator, DataValueArithmeticOperator,
 };
 
-use crate::{FunctionError, FunctionResult, IFunction};
+use crate::IFunction;
 
 #[derive(Clone)]
 pub struct AggregatorAvgFunction {
@@ -20,11 +21,11 @@ pub struct AggregatorAvgFunction {
 }
 
 impl AggregatorAvgFunction {
-    pub fn try_create(args: &[Box<dyn IFunction>]) -> FunctionResult<Box<dyn IFunction>> {
+    pub fn try_create(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
         if args.len() != 1 {
-            return Err(FunctionError::build_internal_error(
-                "Aggregator function Avg args require single argument".to_string(),
-            ));
+            bail!(
+                "Function Error: Aggregator function Avg args require single argument".to_string(),
+            );
         }
 
         Ok(Box::new(AggregatorAvgFunction {
@@ -36,15 +37,15 @@ impl AggregatorAvgFunction {
 }
 
 impl IFunction for AggregatorAvgFunction {
-    fn return_type(&self, input_schema: &DataSchema) -> FunctionResult<DataType> {
+    fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
         self.arg.return_type(input_schema)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> FunctionResult<bool> {
+    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn eval(&self, block: &DataBlock) -> FunctionResult<DataColumnarValue> {
+    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         self.arg.eval(block)
     }
 
@@ -52,7 +53,7 @@ impl IFunction for AggregatorAvgFunction {
         self.depth = depth;
     }
 
-    fn accumulate(&mut self, block: &DataBlock) -> FunctionResult<()> {
+    fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
         let rows = block.num_rows();
         let val = self.arg.eval(&block)?;
 
@@ -76,11 +77,11 @@ impl IFunction for AggregatorAvgFunction {
         Ok(())
     }
 
-    fn accumulate_result(&self) -> FunctionResult<Vec<DataValue>> {
+    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
         Ok(vec![self.state.clone()])
     }
 
-    fn merge(&mut self, states: &[DataValue]) -> FunctionResult<()> {
+    fn merge(&mut self, states: &[DataValue]) -> Result<()> {
         let val = states[self.depth].clone();
         if let (DataValue::Struct(new_states), DataValue::Struct(old_states)) =
             (val, self.state.clone())
@@ -100,7 +101,7 @@ impl IFunction for AggregatorAvgFunction {
         Ok(())
     }
 
-    fn merge_result(&self) -> FunctionResult<DataValue> {
+    fn merge_result(&self) -> Result<DataValue> {
         Ok(if let DataValue::Struct(states) = self.state.clone() {
             datavalues::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Div,

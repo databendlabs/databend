@@ -4,6 +4,7 @@
 
 use std::fmt;
 
+use anyhow::{ensure, Result};
 use common_datablocks::DataBlock;
 use common_datavalues::{
     self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue,
@@ -14,7 +15,7 @@ use crate::arithmetics::{
     ArithmeticDivFunction, ArithmeticMinusFunction, ArithmeticModuloFunction,
     ArithmeticMulFunction, ArithmeticPlusFunction,
 };
-use crate::{FactoryFuncRef, FunctionError, FunctionResult, IFunction};
+use crate::{FactoryFuncRef, IFunction};
 
 #[derive(Clone)]
 pub struct ArithmeticFunction {
@@ -25,8 +26,11 @@ pub struct ArithmeticFunction {
 }
 
 impl ArithmeticFunction {
-    pub fn register(map: FactoryFuncRef) -> FunctionResult<()> {
-        let mut map = map.as_ref().lock()?;
+    pub fn register(map: FactoryFuncRef) -> Result<()> {
+        let mut map = map
+            .as_ref()
+            .lock()
+            .map_err(|e| anyhow::Error::msg(e.to_string()))?;
         map.insert("+", ArithmeticPlusFunction::try_create_func);
         map.insert("plus", ArithmeticPlusFunction::try_create_func);
         map.insert("-", ArithmeticMinusFunction::try_create_func);
@@ -43,13 +47,12 @@ impl ArithmeticFunction {
     pub fn try_create_func(
         op: DataValueArithmeticOperator,
         args: &[Box<dyn IFunction>],
-    ) -> FunctionResult<Box<dyn IFunction>> {
-        if args.len() != 2 {
-            return Err(FunctionError::build_internal_error(format!(
-                "Arithmetic function {} args length must be 2",
-                op
-            )));
-        }
+    ) -> Result<Box<dyn IFunction>> {
+        ensure!(
+            args.len() == 2,
+            "Function Error: Arithmetic function {} args length must be 2",
+            op
+        );
 
         Ok(Box::new(ArithmeticFunction {
             depth: 0,
@@ -61,19 +64,19 @@ impl ArithmeticFunction {
 }
 
 impl IFunction for ArithmeticFunction {
-    fn return_type(&self, input_schema: &DataSchema) -> FunctionResult<DataType> {
-        Ok(datavalues::numerical_arithmetic_coercion(
+    fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
+        datavalues::numerical_arithmetic_coercion(
             &self.op,
             &self.left.return_type(input_schema)?,
             &self.right.return_type(input_schema)?,
-        )?)
+        )
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> FunctionResult<bool> {
+    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn eval(&self, block: &DataBlock) -> FunctionResult<DataColumnarValue> {
+    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         let left = &self.left.eval(block)?;
         let right = &self.right.eval(block)?;
         let result = datavalues::data_array_arithmetic_op(self.op.clone(), left, right)?;
@@ -93,12 +96,12 @@ impl IFunction for ArithmeticFunction {
         self.depth = depth;
     }
 
-    fn accumulate(&mut self, block: &DataBlock) -> FunctionResult<()> {
+    fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
         self.left.accumulate(&block)?;
         self.right.accumulate(&block)
     }
 
-    fn accumulate_result(&self) -> FunctionResult<Vec<DataValue>> {
+    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
         Ok([
             &self.left.accumulate_result()?[..],
             &self.right.accumulate_result()?[..],
@@ -106,17 +109,17 @@ impl IFunction for ArithmeticFunction {
         .concat())
     }
 
-    fn merge(&mut self, states: &[DataValue]) -> FunctionResult<()> {
+    fn merge(&mut self, states: &[DataValue]) -> Result<()> {
         self.left.merge(states)?;
         self.right.merge(states)
     }
 
-    fn merge_result(&self) -> FunctionResult<DataValue> {
-        Ok(datavalues::data_value_arithmetic_op(
+    fn merge_result(&self) -> Result<DataValue> {
+        datavalues::data_value_arithmetic_op(
             self.op.clone(),
             self.left.merge_result()?,
             self.right.merge_result()?,
-        )?)
+        )
     }
 
     fn is_aggregator(&self) -> bool {
