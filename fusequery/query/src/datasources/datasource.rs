@@ -82,7 +82,10 @@ impl IDataSource for DataSource {
 
     fn check_database(&mut self, db_name: &str) -> Result<()> {
         self.databases.get(db_name).ok_or_else(|| {
-            return anyhow::Error::msg(format!("DataSource Error: Unknown database: '{}'", db_name));
+            return anyhow::Error::msg(format!(
+                "DataSource Error: Unknown database: '{}'",
+                db_name
+            ));
         })?;
         Ok(())
     }
