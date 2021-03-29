@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use anyhow::Result;
 use common_planners::{Partition, Partitions};
 
-use crate::error::FuseQueryResult;
 use crate::protobuf::query_rpc_client::QueryRpcClient;
 use crate::protobuf::{FetchPartitionRequest, PingRequest};
 
@@ -19,13 +19,13 @@ impl GrpcClient {
         }
     }
 
-    pub async fn ping(&self, msg: String) -> FuseQueryResult<String> {
+    pub async fn ping(&self, msg: String) -> Result<String> {
         let request = tonic::Request::new(PingRequest { message: msg });
         let mut client = QueryRpcClient::connect(self.addr.clone()).await?;
         Ok(client.ping(request).await?.into_inner().message)
     }
 
-    pub async fn fetch_partition(&self, nums: u32, uuid: String) -> FuseQueryResult<Partitions> {
+    pub async fn fetch_partition(&self, nums: u32, uuid: String) -> Result<Partitions> {
         let request = tonic::Request::new(FetchPartitionRequest { uuid, nums });
         let mut client = QueryRpcClient::connect(self.addr.clone()).await?;
 

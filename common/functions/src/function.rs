@@ -4,21 +4,20 @@
 
 use std::fmt;
 
+use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 use dyn_clone::DynClone;
 
-use crate::FunctionResult;
-
 pub trait IFunction: fmt::Display + Sync + Send + DynClone {
-    fn return_type(&self, input_schema: &DataSchema) -> FunctionResult<DataType>;
-    fn nullable(&self, input_schema: &DataSchema) -> FunctionResult<bool>;
-    fn eval(&self, block: &DataBlock) -> FunctionResult<DataColumnarValue>;
+    fn return_type(&self, input_schema: &DataSchema) -> Result<DataType>;
+    fn nullable(&self, input_schema: &DataSchema) -> Result<bool>;
+    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue>;
     fn set_depth(&mut self, depth: usize);
-    fn accumulate(&mut self, block: &DataBlock) -> FunctionResult<()>;
-    fn accumulate_result(&self) -> FunctionResult<Vec<DataValue>>;
-    fn merge(&mut self, states: &[DataValue]) -> FunctionResult<()>;
-    fn merge_result(&self) -> FunctionResult<DataValue>;
+    fn accumulate(&mut self, block: &DataBlock) -> Result<()>;
+    fn accumulate_result(&self) -> Result<Vec<DataValue>>;
+    fn merge(&mut self, states: &[DataValue]) -> Result<()>;
+    fn merge_result(&self) -> Result<DataValue>;
     fn is_aggregator(&self) -> bool {
         false
     }

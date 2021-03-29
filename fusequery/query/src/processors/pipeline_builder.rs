@@ -4,10 +4,10 @@
 
 use std::sync::Arc;
 
+use anyhow::{bail, Result};
 use common_planners::PlanNode;
 use log::info;
 
-use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::planners::PlanScheduler;
 use crate::processors::Pipeline;
 use crate::sessions::FuseQueryContextRef;
@@ -26,7 +26,7 @@ impl PipelineBuilder {
         PipelineBuilder { ctx, plan }
     }
 
-    pub fn build(&self) -> FuseQueryResult<Pipeline> {
+    pub fn build(&self) -> Result<Pipeline> {
         info!("Received for plan:\n{:?}", self.plan);
 
         let mut pipeline = Pipeline::create();
@@ -125,10 +125,10 @@ impl PipelineBuilder {
             }
             PlanNode::Select(_) => Ok(true),
             other => {
-                return Err(Box::new(FuseQueryError::build_internal_error(format!(
+                bail!(
                     "Build pipeline from the plan node unsupported:{:?}",
                     other.name()
-                ))))
+                );
             }
         })?;
         info!("Pipeline:\n{:?}", pipeline);

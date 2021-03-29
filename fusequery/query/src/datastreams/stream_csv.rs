@@ -5,27 +5,26 @@
 use std::fs::File;
 use std::task::{Context, Poll};
 
+use anyhow::Result;
 use arrow::csv;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use csv as csv_crate;
 use futures::stream::Stream;
 
-use crate::error::FuseQueryResult;
-
 pub struct CsvStream {
     reader: csv_crate::Reader<File>,
 }
 
 impl CsvStream {
-    pub fn try_create(schema: DataSchemaRef, r: File) -> FuseQueryResult<Self> {
+    pub fn try_create(schema: DataSchemaRef, r: File) -> Result<Self> {
         let reader = csv::Reader::new(r, schema, false, None, 1024, None, None);
         Ok(CsvStream { reader })
     }
 }
 
 impl Stream for CsvStream {
-    type Item = FuseQueryResult<DataBlock>;
+    type Item = Result<DataBlock>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,

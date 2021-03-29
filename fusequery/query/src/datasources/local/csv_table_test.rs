@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test]
-async fn test_csv_table() -> crate::error::FuseQueryResult<()> {
+async fn test_csv_table() -> anyhow::Result<()> {
     use std::env;
 
     use arrow::datatypes::{Field, Schema};

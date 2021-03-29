@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, StringArray};
@@ -12,7 +13,6 @@ use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics};
 
 use crate::datasources::ITable;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::error::FuseQueryResult;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct FunctionsTable {
@@ -41,7 +41,7 @@ impl ITable for FunctionsTable {
         "SystemFunctions"
     }
 
-    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
+    fn schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
     }
 
@@ -49,7 +49,7 @@ impl ITable for FunctionsTable {
         &self,
         _ctx: FuseQueryContextRef,
         _push_down_plan: PlanNode,
-    ) -> FuseQueryResult<ReadDataSourcePlan> {
+    ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
@@ -63,7 +63,7 @@ impl ITable for FunctionsTable {
         })
     }
 
-    async fn read(&self, _ctx: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
         let func_names = FunctionFactory::registered_names();
         let names: Vec<&str> = func_names.iter().map(|x| x.as_ref()).collect();
         let block = DataBlock::create(

@@ -4,13 +4,14 @@
 
 use std::fmt;
 
+use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::{
     self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue,
     DataValueArithmeticOperator,
 };
 
-use crate::{FunctionResult, IFunction, LiteralFunction};
+use crate::{IFunction, LiteralFunction};
 
 #[derive(Clone)]
 pub struct AggregatorCountFunction {
@@ -20,7 +21,7 @@ pub struct AggregatorCountFunction {
 }
 
 impl AggregatorCountFunction {
-    pub fn try_create(args: &[Box<dyn IFunction>]) -> FunctionResult<Box<dyn IFunction>> {
+    pub fn try_create(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
         let arg = if args.is_empty() {
             LiteralFunction::try_create(DataValue::UInt64(Some(1)))?
         } else {
@@ -35,15 +36,15 @@ impl AggregatorCountFunction {
 }
 
 impl IFunction for AggregatorCountFunction {
-    fn return_type(&self, input_schema: &DataSchema) -> FunctionResult<DataType> {
+    fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
         self.arg.return_type(input_schema)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> FunctionResult<bool> {
+    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn eval(&self, block: &DataBlock) -> FunctionResult<DataColumnarValue> {
+    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         self.arg.eval(block)
     }
 
@@ -51,7 +52,7 @@ impl IFunction for AggregatorCountFunction {
         self.depth = depth;
     }
 
-    fn accumulate(&mut self, block: &DataBlock) -> FunctionResult<()> {
+    fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
         let rows = block.num_rows();
         self.state = datavalues::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
@@ -61,11 +62,11 @@ impl IFunction for AggregatorCountFunction {
         Ok(())
     }
 
-    fn accumulate_result(&self) -> FunctionResult<Vec<DataValue>> {
+    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
         Ok(vec![self.state.clone()])
     }
 
-    fn merge(&mut self, states: &[DataValue]) -> FunctionResult<()> {
+    fn merge(&mut self, states: &[DataValue]) -> Result<()> {
         let val = states[self.depth].clone();
         self.state = datavalues::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
@@ -75,7 +76,7 @@ impl IFunction for AggregatorCountFunction {
         Ok(())
     }
 
-    fn merge_result(&self) -> FunctionResult<DataValue> {
+    fn merge_result(&self) -> Result<DataValue> {
         Ok(self.state.clone())
     }
 

@@ -12,7 +12,6 @@ mod plan_select_test;
 mod plan_stage_test;
 mod plan_walker_test;
 
-mod error;
 mod plan_aggregator_final;
 mod plan_aggregator_partial;
 mod plan_builder;
@@ -43,7 +42,6 @@ mod test;
 pub use common_datavalues;
 pub use common_functions;
 
-pub use crate::error::{PlannerError, PlannerResult};
 pub use crate::plan_aggregator_final::AggregatorFinalPlan;
 pub use crate::plan_aggregator_partial::AggregatorPartialPlan;
 pub use crate::plan_builder::PlanBuilder;

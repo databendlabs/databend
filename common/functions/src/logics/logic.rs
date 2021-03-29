@@ -4,13 +4,14 @@
 
 use std::fmt;
 
+use anyhow::{bail, ensure, Result};
 use common_datablocks::DataBlock;
 use common_datavalues::{
     self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue, DataValueLogicOperator,
 };
 
 use crate::logics::{LogicAndFunction, LogicOrFunction};
-use crate::{FactoryFuncRef, FunctionError, FunctionResult, IFunction};
+use crate::{FactoryFuncRef, IFunction};
 
 #[derive(Clone)]
 pub struct LogicFunction {
@@ -22,8 +23,8 @@ pub struct LogicFunction {
 }
 
 impl LogicFunction {
-    pub fn register(map: FactoryFuncRef) -> FunctionResult<()> {
-        let mut map = map.as_ref().lock()?;
+    pub fn register(map: FactoryFuncRef) -> Result<()> {
+        let mut map = map.as_ref().lock();
         map.insert("and", LogicAndFunction::try_create_func);
         map.insert("or", LogicOrFunction::try_create_func);
         Ok(())
@@ -32,13 +33,12 @@ impl LogicFunction {
     pub fn try_create_func(
         op: DataValueLogicOperator,
         args: &[Box<dyn IFunction>],
-    ) -> FunctionResult<Box<dyn IFunction>> {
-        if args.len() != 2 {
-            return Err(FunctionError::build_internal_error(format!(
-                "Logic function {} args length must be 2",
-                op
-            )));
-        }
+    ) -> Result<Box<dyn IFunction>> {
+        ensure!(
+            args.len() == 2,
+            "Function Error: Logic function {} args length must be 2",
+            op
+        );
 
         Ok(Box::new(LogicFunction {
             depth: 0,
@@ -51,15 +51,15 @@ impl LogicFunction {
 }
 
 impl IFunction for LogicFunction {
-    fn return_type(&self, _input_schema: &DataSchema) -> FunctionResult<DataType> {
+    fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
         Ok(DataType::Boolean)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> FunctionResult<bool> {
+    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn eval(&self, block: &DataBlock) -> FunctionResult<DataColumnarValue> {
+    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         Ok(DataColumnarValue::Array(datavalues::data_array_logic_op(
             self.op.clone(),
             &self.left.eval(block)?,
@@ -71,30 +71,27 @@ impl IFunction for LogicFunction {
         self.depth = depth;
     }
 
-    fn accumulate(&mut self, block: &DataBlock) -> FunctionResult<()> {
+    fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
         self.left.accumulate(block)?;
         self.right.accumulate(block)
     }
 
-    fn accumulate_result(&self) -> FunctionResult<Vec<DataValue>> {
-        Err(FunctionError::build_internal_error(format!(
+    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
+        bail!(
             "Unsupported accumulate_result operation for function {}",
             self.op
-        )))
+        );
     }
 
-    fn merge(&mut self, _states: &[DataValue]) -> FunctionResult<()> {
-        Err(FunctionError::build_internal_error(format!(
-            "Unsupported merge operation for function {}",
-            self.op
-        )))
+    fn merge(&mut self, _states: &[DataValue]) -> Result<()> {
+        bail!("Unsupported merge operation for function {}", self.op);
     }
 
-    fn merge_result(&self) -> FunctionResult<DataValue> {
-        Err(FunctionError::build_internal_error(format!(
+    fn merge_result(&self) -> Result<DataValue> {
+        bail!(
             "Unsupported merge_result operation for function {}",
             self.op
-        )))
+        );
     }
 
     fn is_aggregator(&self) -> bool {

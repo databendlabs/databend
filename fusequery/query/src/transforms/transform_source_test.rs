@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn transform_source_test() -> crate::error::FuseQueryResult<()> {
+async fn transform_source_test() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use futures::TryStreamExt;

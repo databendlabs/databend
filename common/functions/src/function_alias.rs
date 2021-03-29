@@ -4,10 +4,11 @@
 
 use std::fmt;
 
+use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 
-use crate::{FunctionResult, IFunction};
+use crate::IFunction;
 
 #[derive(Clone)]
 pub struct AliasFunction {
@@ -17,10 +18,7 @@ pub struct AliasFunction {
 }
 
 impl AliasFunction {
-    pub fn try_create(
-        alias: String,
-        func: Box<dyn IFunction>,
-    ) -> FunctionResult<Box<dyn IFunction>> {
+    pub fn try_create(alias: String, func: Box<dyn IFunction>) -> Result<Box<dyn IFunction>> {
         Ok(Box::new(AliasFunction {
             depth: 0,
             alias,
@@ -30,15 +28,15 @@ impl AliasFunction {
 }
 
 impl IFunction for AliasFunction {
-    fn return_type(&self, input_schema: &DataSchema) -> FunctionResult<DataType> {
+    fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
         self.func.return_type(input_schema)
     }
 
-    fn nullable(&self, input_schema: &DataSchema) -> FunctionResult<bool> {
+    fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
         self.func.nullable(input_schema)
     }
 
-    fn eval(&self, block: &DataBlock) -> FunctionResult<DataColumnarValue> {
+    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         self.func.eval(block)
     }
 
@@ -46,19 +44,19 @@ impl IFunction for AliasFunction {
         self.depth = depth;
     }
 
-    fn accumulate(&mut self, block: &DataBlock) -> FunctionResult<()> {
+    fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
         self.func.accumulate(block)
     }
 
-    fn accumulate_result(&self) -> FunctionResult<Vec<DataValue>> {
+    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
         self.func.accumulate_result()
     }
 
-    fn merge(&mut self, states: &[DataValue]) -> FunctionResult<()> {
+    fn merge(&mut self, states: &[DataValue]) -> Result<()> {
         self.func.merge(states)
     }
 
-    fn merge_result(&self) -> FunctionResult<DataValue> {
+    fn merge_result(&self) -> Result<DataValue> {
         self.func.merge_result()
     }
 

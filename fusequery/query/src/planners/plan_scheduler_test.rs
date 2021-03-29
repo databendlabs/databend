@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn test_scheduler_plan_with_one_node() -> crate::error::FuseQueryResult<()> {
+fn test_scheduler_plan_with_one_node() -> anyhow::Result<()> {
     use common_planners::*;
     use pretty_assertions::assert_eq;
 
@@ -32,7 +32,7 @@ fn test_scheduler_plan_with_one_node() -> crate::error::FuseQueryResult<()> {
 }
 
 #[test]
-fn test_scheduler_plan_with_more_cpus_1_node() -> crate::error::FuseQueryResult<()> {
+fn test_scheduler_plan_with_more_cpus_1_node() -> anyhow::Result<()> {
     use common_planners::*;
     use pretty_assertions::assert_eq;
 
@@ -65,7 +65,7 @@ fn test_scheduler_plan_with_more_cpus_1_node() -> crate::error::FuseQueryResult<
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_scheduler_plan_with_3_nodes() -> crate::error::FuseQueryResult<()> {
+async fn test_scheduler_plan_with_3_nodes() -> anyhow::Result<()> {
     use common_planners::*;
     use pretty_assertions::assert_eq;
 
@@ -105,7 +105,7 @@ async fn test_scheduler_plan_with_3_nodes() -> crate::error::FuseQueryResult<()>
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_scheduler_plan_with_3_nodes_diff_priority() -> crate::error::FuseQueryResult<()> {
+async fn test_scheduler_plan_with_3_nodes_diff_priority() -> anyhow::Result<()> {
     use common_planners::*;
     use pretty_assertions::assert_eq;
 

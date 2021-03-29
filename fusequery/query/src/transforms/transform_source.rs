@@ -5,10 +5,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 
 use crate::datastreams::SendableDataBlockStream;
-use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::{EmptyProcessor, IProcessor};
 use crate::sessions::FuseQueryContextRef;
 
@@ -19,7 +19,7 @@ pub struct SourceTransform {
 }
 
 impl SourceTransform {
-    pub fn try_create(ctx: FuseQueryContextRef, db: &str, table: &str) -> FuseQueryResult<Self> {
+    pub fn try_create(ctx: FuseQueryContextRef, db: &str, table: &str) -> Result<Self> {
         Ok(SourceTransform {
             ctx,
             db: db.to_string(),
@@ -34,10 +34,8 @@ impl IProcessor for SourceTransform {
         "SourceTransform"
     }
 
-    fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
-        Err(FuseQueryError::build_internal_error(
-            "Cannot call SourceTransform connect_to".to_string(),
-        ))
+    fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> Result<()> {
+        bail!("Cannot call SourceTransform connect_to");
     }
 
     fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
@@ -48,7 +46,7 @@ impl IProcessor for SourceTransform {
         self
     }
 
-    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let table = self.ctx.get_table(self.db.as_str(), self.table.as_str())?;
         table.read(self.ctx.clone()).await
     }

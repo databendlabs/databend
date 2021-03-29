@@ -5,6 +5,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use futures::stream::StreamExt;
@@ -12,7 +13,6 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::datastreams::SendableDataBlockStream;
-use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::processors::IProcessor;
 
 pub struct MergeProcessor {
@@ -31,7 +31,7 @@ impl IProcessor for MergeProcessor {
         "MergeProcessor"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
+    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
         self.inputs.push(input);
         Ok(())
     }
@@ -44,15 +44,13 @@ impl IProcessor for MergeProcessor {
         self
     }
 
-    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let inputs = self.inputs.len();
         match inputs {
-            0 => Err(FuseQueryError::build_internal_error(
-                "Merge processor inputs cannot be zero".to_string(),
-            )),
+            0 => bail!("Merge processor inputs cannot be zero"),
             1 => self.inputs[0].execute().await,
             _ => {
-                let (sender, receiver) = mpsc::channel::<FuseQueryResult<DataBlock>>(inputs);
+                let (sender, receiver) = mpsc::channel::<Result<DataBlock>>(inputs);
                 for i in 0..inputs {
                     let input = self.inputs[i].clone();
                     let sender = sender.clone();

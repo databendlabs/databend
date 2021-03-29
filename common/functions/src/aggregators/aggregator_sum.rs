@@ -4,6 +4,7 @@
 
 use std::fmt;
 
+use anyhow::{bail, Result};
 use common_datablocks::DataBlock;
 use common_datavalues::{
     self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue,
@@ -11,7 +12,6 @@ use common_datavalues::{
 };
 
 use crate::IFunction;
-use crate::{FunctionError, FunctionResult};
 
 #[derive(Clone)]
 pub struct AggregatorSumFunction {
@@ -21,11 +21,9 @@ pub struct AggregatorSumFunction {
 }
 
 impl AggregatorSumFunction {
-    pub fn try_create(args: &[Box<dyn IFunction>]) -> FunctionResult<Box<dyn IFunction>> {
+    pub fn try_create(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
         if args.len() != 1 {
-            return Err(FunctionError::build_internal_error(
-                "Aggregator function Sum args require single argument".to_string(),
-            ));
+            bail!("Function Error: Aggregator function Sum args require single argument");
         }
         Ok(Box::new(AggregatorSumFunction {
             depth: 0,
@@ -36,15 +34,15 @@ impl AggregatorSumFunction {
 }
 
 impl IFunction for AggregatorSumFunction {
-    fn return_type(&self, input_schema: &DataSchema) -> FunctionResult<DataType> {
+    fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
         self.arg.return_type(input_schema)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> FunctionResult<bool> {
+    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn eval(&self, block: &DataBlock) -> FunctionResult<DataColumnarValue> {
+    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         self.arg.eval(block)
     }
 
@@ -52,7 +50,7 @@ impl IFunction for AggregatorSumFunction {
         self.depth = depth;
     }
 
-    fn accumulate(&mut self, block: &DataBlock) -> FunctionResult<()> {
+    fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
         let rows = block.num_rows();
         let val = self.arg.eval(&block)?;
 
@@ -68,11 +66,11 @@ impl IFunction for AggregatorSumFunction {
         Ok(())
     }
 
-    fn accumulate_result(&self) -> FunctionResult<Vec<DataValue>> {
+    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
         Ok(vec![self.state.clone()])
     }
 
-    fn merge(&mut self, states: &[DataValue]) -> FunctionResult<()> {
+    fn merge(&mut self, states: &[DataValue]) -> Result<()> {
         let val = states[self.depth].clone();
         self.state = datavalues::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
@@ -82,7 +80,7 @@ impl IFunction for AggregatorSumFunction {
         Ok(())
     }
 
-    fn merge_result(&self) -> FunctionResult<DataValue> {
+    fn merge_result(&self) -> Result<DataValue> {
         Ok(self.state.clone())
     }
 

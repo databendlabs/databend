@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn test_expression_plan() -> crate::error::PlannerResult<()> {
+fn test_expression_plan() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use pretty_assertions::assert_eq;

@@ -2,16 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use anyhow::Result;
 use rand::Rng;
 
 use crate::api::RpcService;
 use crate::clusters::{Cluster, Node};
 use crate::configs::Config;
-use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::sessions::{FuseQueryContextRef, Session, SessionRef};
 
 /// Start services and return the random address.
-pub async fn try_start_service(nums: usize) -> FuseQueryResult<Vec<String>> {
+pub async fn try_start_service(nums: usize) -> Result<Vec<String>> {
     let mut results = vec![];
 
     for _ in 0..nums {
@@ -24,14 +24,14 @@ pub async fn try_start_service(nums: usize) -> FuseQueryResult<Vec<String>> {
 }
 
 // Start service and return the session manager for create his own contexts.
-pub async fn try_start_service_with_session_mgr() -> FuseQueryResult<(String, SessionRef)> {
+pub async fn try_start_service_with_session_mgr() -> Result<(String, SessionRef)> {
     let (addr, mgr) = start_one_service().await?;
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
     Ok((addr, mgr))
 }
 
 // Start a cluster and return the context who has the cluster info.
-pub async fn try_create_context_with_nodes(nums: usize) -> FuseQueryResult<FuseQueryContextRef> {
+pub async fn try_create_context_with_nodes(nums: usize) -> Result<FuseQueryContextRef> {
     let addrs = try_start_service(nums).await?;
     let ctx = crate::tests::try_create_context()?;
     for (i, addr) in addrs.iter().enumerate() {
@@ -50,7 +50,7 @@ pub async fn try_create_context_with_nodes(nums: usize) -> FuseQueryResult<FuseQ
 pub async fn try_create_context_with_nodes_and_priority(
     nums: usize,
     p: &[u8],
-) -> FuseQueryResult<FuseQueryContextRef> {
+) -> Result<FuseQueryContextRef> {
     // p is the priority array of the nodes.
     // Its length of it should be nums.
     assert_eq!(nums, p.len());
@@ -69,7 +69,7 @@ pub async fn try_create_context_with_nodes_and_priority(
 }
 
 // Start one random service and get the session manager.
-async fn start_one_service() -> FuseQueryResult<(String, SessionRef)> {
+async fn start_one_service() -> Result<(String, SessionRef)> {
     let mut rng = rand::thread_rng();
     let port: u32 = rng.gen_range(10000..11000);
     let addr = format!("127.0.0.1:{}", port);
@@ -82,7 +82,7 @@ async fn start_one_service() -> FuseQueryResult<(String, SessionRef)> {
     let srv = RpcService::create(conf, cluster, session_manager.clone());
     tokio::spawn(async move {
         srv.make_server().await?;
-        Ok::<(), FuseQueryError>(())
+        Ok::<(), anyhow::Error>(())
     });
     Ok((addr, session_manager))
 }

@@ -4,11 +4,11 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use common_datavalues::{DataSchema, DataSchemaRef, DataValue};
 use common_planners::{ExpressionPlan, PlanNode, ReadDataSourcePlan, ScanPlan};
 
 use crate::datasources::IDataSource;
-use crate::error::FuseQueryResult;
 use crate::sessions::FuseQueryContextRef;
 use crate::transforms::SourceTransform;
 
@@ -27,16 +27,13 @@ impl NumberTestData {
         }
     }
 
-    pub fn number_schema_for_test(&self) -> FuseQueryResult<DataSchemaRef> {
+    pub fn number_schema_for_test(&self) -> Result<DataSchemaRef> {
         let datasource = crate::datasources::DataSource::try_create()?;
         let table = datasource.get_table(self.db, self.table)?;
         table.schema()
     }
 
-    pub fn number_read_source_plan_for_test(
-        &self,
-        numbers: i64,
-    ) -> FuseQueryResult<ReadDataSourcePlan> {
+    pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
         let datasource = crate::datasources::DataSource::try_create()?;
         let table = datasource.get_table(self.db, self.table)?;
         table.read_plan(
@@ -51,10 +48,7 @@ impl NumberTestData {
         )
     }
 
-    pub fn number_source_transform_for_test(
-        &self,
-        numbers: i64,
-    ) -> FuseQueryResult<SourceTransform> {
+    pub fn number_source_transform_for_test(&self, numbers: i64) -> Result<SourceTransform> {
         let plan = self.number_read_source_plan_for_test(numbers)?;
         self.ctx.try_set_partitions(plan.partitions)?;
         SourceTransform::try_create(self.ctx.clone(), self.db, self.table)

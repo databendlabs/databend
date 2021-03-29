@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_setting_interpreter() -> crate::error::FuseQueryResult<()> {
+async fn test_setting_interpreter() -> anyhow::Result<()> {
     use common_planners::*;
     use futures::stream::StreamExt;
+    use pretty_assertions::assert_eq;
 
     use crate::interpreters::*;
     use crate::sql::*;
@@ -28,8 +29,9 @@ async fn test_setting_interpreter() -> crate::error::FuseQueryResult<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_setting_interpreter_error() -> crate::error::FuseQueryResult<()> {
+async fn test_setting_interpreter_error() -> anyhow::Result<()> {
     use common_planners::*;
+    use pretty_assertions::assert_eq;
 
     use crate::interpreters::*;
     use crate::sql::*;
@@ -41,8 +43,7 @@ async fn test_setting_interpreter_error() -> crate::error::FuseQueryResult<()> {
     {
         let executor = SettingInterpreter::try_create(ctx, plan)?;
         if let Err(e) = executor.execute().await {
-            let expect =
-                "Internal { message: \"Unknown variable: \\\"xx\\\"\", backtrace: Backtrace(()) }";
+            let expect = "Unknown variable: \"xx\"";
             let actual = format!("{:?}", e);
             assert_eq!(expect, actual);
         } else {

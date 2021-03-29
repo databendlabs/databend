@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, StringArray};
@@ -11,7 +12,6 @@ use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics};
 
 use crate::datasources::ITable;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::error::FuseQueryResult;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct TablesTable {
@@ -40,7 +40,7 @@ impl ITable for TablesTable {
         "SystemTables"
     }
 
-    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
+    fn schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
     }
 
@@ -48,7 +48,7 @@ impl ITable for TablesTable {
         &self,
         _ctx: FuseQueryContextRef,
         _push_down_plan: PlanNode,
-    ) -> FuseQueryResult<ReadDataSourcePlan> {
+    ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
@@ -62,8 +62,8 @@ impl ITable for TablesTable {
         })
     }
 
-    async fn read(&self, ctx: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
-        let database_tables = ctx.get_datasource().lock()?.list_database_tables();
+    async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
+        let database_tables = ctx.get_datasource().lock().list_database_tables();
 
         let databases: Vec<&str> = database_tables.iter().map(|(d, _)| d.as_str()).collect();
         let names: Vec<&str> = database_tables.iter().map(|(_, v)| v.name()).collect();

@@ -4,11 +4,11 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use common_planners::SelectPlan;
 
 use crate::datastreams::SendableDataBlockStream;
-use crate::error::FuseQueryResult;
 use crate::interpreters::IInterpreter;
 use crate::optimizers::Optimizer;
 use crate::processors::PipelineBuilder;
@@ -23,7 +23,7 @@ impl SelectInterpreter {
     pub fn try_create(
         ctx: FuseQueryContextRef,
         select: SelectPlan,
-    ) -> FuseQueryResult<Arc<dyn IInterpreter>> {
+    ) -> Result<Arc<dyn IInterpreter>> {
         Ok(Arc::new(SelectInterpreter { ctx, select }))
     }
 }
@@ -34,7 +34,7 @@ impl IInterpreter for SelectInterpreter {
         "SelectInterpreter"
     }
 
-    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = Optimizer::create(self.ctx.clone()).optimize(&self.select.input)?;
         PipelineBuilder::create(self.ctx.clone(), plan)
             .build()?

@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::error::FuseQueryResult;
+use anyhow::Result;
+
 use crate::sessions::{FuseQueryContext, FuseQueryContextRef};
 
-pub fn try_create_context() -> FuseQueryResult<FuseQueryContextRef> {
+pub fn try_create_context() -> Result<FuseQueryContextRef> {
     let ctx = FuseQueryContext::try_create()?;
 
     ctx.set_max_threads(8)?;

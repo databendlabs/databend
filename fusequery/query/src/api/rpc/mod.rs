@@ -8,7 +8,6 @@ mod grpc_service_test;
 #[macro_use]
 mod macros;
 
-mod error;
 mod flight_action;
 mod flight_client;
 mod flight_service;

@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataField, DataSchema, DataType, StringArray};
@@ -11,7 +12,6 @@ use common_planners::{DfExplainType, ExplainPlan, PlanNode};
 use log::debug;
 
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::error::FuseQueryResult;
 use crate::interpreters::IInterpreter;
 use crate::optimizers::Optimizer;
 use crate::processors::PipelineBuilder;
@@ -26,7 +26,7 @@ impl ExplainInterpreter {
     pub fn try_create(
         ctx: FuseQueryContextRef,
         explain: ExplainPlan,
-    ) -> FuseQueryResult<Arc<dyn IInterpreter>> {
+    ) -> Result<Arc<dyn IInterpreter>> {
         Ok(Arc::new(ExplainInterpreter { ctx, explain }))
     }
 }
@@ -37,7 +37,7 @@ impl IInterpreter for ExplainInterpreter {
         "ExplainInterpreter"
     }
 
-    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let schema = Arc::new(DataSchema::new(vec![DataField::new(
             "explain",
             DataType::Utf8,

@@ -5,7 +5,6 @@
 use std::fmt;
 use std::fmt::Display;
 
-use crate::error::FuseQueryError;
 use crate::processors::{Pipeline, PipelineBuilder};
 use crate::transforms::RemoteTransform;
 
@@ -69,10 +68,10 @@ impl Pipeline {
                                     .as_any()
                                     .downcast_ref::<RemoteTransform>()
                                     .ok_or_else(|| {
-                                    FuseQueryError::build_internal_error(format!(
+                                    return anyhow::Error::msg(format!(
                                         "Display pipeline downcast {} error",
                                         name
-                                    ))
+                                    ));
                                 })?;
                                 let local_pipeline = PipelineBuilder::create(
                                     remote.ctx.clone(),

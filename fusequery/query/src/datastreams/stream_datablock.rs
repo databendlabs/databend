@@ -4,11 +4,10 @@
 
 use std::task::{Context, Poll};
 
+use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use futures::stream::Stream;
-
-use crate::error::FuseQueryResult;
 
 pub struct DataBlockStream {
     current: usize,
@@ -33,7 +32,7 @@ impl DataBlockStream {
 }
 
 impl Stream for DataBlockStream {
-    type Item = FuseQueryResult<DataBlock>;
+    type Item = Result<DataBlock>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,

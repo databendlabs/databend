@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use anyhow::Result;
 use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
@@ -11,7 +12,6 @@ use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics, Table
 use crate::datasources::table_factory::TableCreatorFactory;
 use crate::datasources::ITable;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::error::FuseQueryResult;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct NullTable {
@@ -27,13 +27,13 @@ impl NullTable {
         name: String,
         schema: SchemaRef,
         _options: TableOptions,
-    ) -> FuseQueryResult<Box<dyn ITable>> {
+    ) -> Result<Box<dyn ITable>> {
         let table = Self { db, name, schema };
         Ok(Box::new(table))
     }
 
-    pub fn register(map: TableCreatorFactory) -> FuseQueryResult<()> {
-        let mut map = map.as_ref().lock()?;
+    pub fn register(map: TableCreatorFactory) -> Result<()> {
+        let mut map = map.as_ref().lock();
         map.insert("Null", NullTable::try_create);
         Ok(())
     }
@@ -49,7 +49,7 @@ impl ITable for NullTable {
         "Null"
     }
 
-    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
+    fn schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
     }
 
@@ -57,7 +57,7 @@ impl ITable for NullTable {
         &self,
         _ctx: FuseQueryContextRef,
         _push_down_plan: PlanNode,
-    ) -> FuseQueryResult<ReadDataSourcePlan> {
+    ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
             table: self.name().to_string(),
@@ -71,7 +71,7 @@ impl ITable for NullTable {
         })
     }
 
-    async fn read(&self, _ctx: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
         let block = DataBlock::empty_with_schema(self.schema.clone());
 
         Ok(Box::pin(DataBlockStream::create(

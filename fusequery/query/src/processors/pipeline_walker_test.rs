@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_pipeline_walker() -> crate::error::FuseQueryResult<()> {
+async fn test_pipeline_walker() -> anyhow::Result<()> {
     use pretty_assertions::assert_eq;
 
     use crate::processors::*;

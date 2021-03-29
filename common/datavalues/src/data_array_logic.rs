@@ -4,14 +4,15 @@
 
 use std::sync::Arc;
 
-use crate::error::{DataValueError, DataValueResult};
+use anyhow::{bail, Result};
+
 use crate::{BooleanArray, DataArrayRef, DataColumnarValue, DataValueLogicOperator};
 
 pub fn data_array_logic_op(
     op: DataValueLogicOperator,
     left: &DataColumnarValue,
     right: &DataColumnarValue,
-) -> DataValueResult<DataArrayRef> {
+) -> Result<DataArrayRef> {
     match (left, right) {
         (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => match op {
             DataValueLogicOperator::And => {
@@ -21,11 +22,11 @@ pub fn data_array_logic_op(
                 array_boolean_op!(left_array, right_array, or, BooleanArray)
             }
         },
-        _ => Err(DataValueError::build_internal_error(format!(
-            "Cannot do data_array {}, left:{:?}, right:{:?}",
+        _ => bail!(
+            "DataValue Error: Cannot do data_array {}, left:{:?}, right:{:?}",
             op,
             left.data_type(),
             right.data_type()
-        ))),
+        ),
     }
 }

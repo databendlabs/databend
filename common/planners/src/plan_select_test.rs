@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn test_select_wildcard_plan() -> crate::error::PlannerResult<()> {
+fn test_select_wildcard_plan() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_datavalues::*;

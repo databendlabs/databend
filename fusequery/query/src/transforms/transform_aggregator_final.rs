@@ -6,6 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataSchemaRef, DataValue};
@@ -15,7 +16,6 @@ use futures::stream::StreamExt;
 use log::info;
 
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::error::FuseQueryResult;
 use crate::processors::{EmptyProcessor, IProcessor};
 
 pub struct AggregatorFinalTransform {
@@ -25,7 +25,7 @@ pub struct AggregatorFinalTransform {
 }
 
 impl AggregatorFinalTransform {
-    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> FuseQueryResult<Self> {
+    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> Result<Self> {
         let mut funcs = Vec::with_capacity(exprs.len());
         for expr in &exprs {
             funcs.push(expr.to_function()?);
@@ -45,7 +45,7 @@ impl IProcessor for AggregatorFinalTransform {
         "AggregatorFinalTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> FuseQueryResult<()> {
+    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
@@ -58,7 +58,7 @@ impl IProcessor for AggregatorFinalTransform {
         self
     }
 
-    async fn execute(&self) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let mut funcs = self.funcs.clone();
         let mut stream = self.input.execute().await?;
 

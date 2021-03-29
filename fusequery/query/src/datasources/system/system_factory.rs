@@ -5,9 +5,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use anyhow::Result;
+
 use crate::datasources::datasource::DatabaseHashMap;
 use crate::datasources::{system, ITable};
-use crate::error::FuseQueryResult;
 
 pub struct SystemFactory;
 
@@ -16,7 +17,7 @@ impl SystemFactory {
         Self
     }
 
-    pub fn get_tables(&self) -> FuseQueryResult<DatabaseHashMap> {
+    pub fn get_tables(&self) -> Result<DatabaseHashMap> {
         let tables: Vec<Arc<dyn ITable>> = vec![
             Arc::new(system::OneTable::create()),
             Arc::new(system::FunctionsTable::create()),

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test]
-async fn test_cluster() -> crate::error::FuseQueryResult<()> {
+async fn test_cluster() -> anyhow::Result<()> {
     use pretty_assertions::assert_eq;
 
     use crate::api::http::v1::cluster::*;

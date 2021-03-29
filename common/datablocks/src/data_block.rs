@@ -4,9 +4,8 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use common_datavalues::{DataArrayRef, DataSchema, DataSchemaRef};
-
-use crate::error::DataBlockResult;
 
 #[derive(Debug, Clone)]
 pub struct DataBlock {
@@ -19,7 +18,7 @@ impl DataBlock {
         DataBlock { schema, columns }
     }
 
-    pub fn try_from_arrow_batch(batch: &arrow::record_batch::RecordBatch) -> DataBlockResult<Self> {
+    pub fn try_from_arrow_batch(batch: &arrow::record_batch::RecordBatch) -> Result<Self> {
         Ok(DataBlock::create(
             batch.schema(),
             Vec::from(batch.columns()),
@@ -41,7 +40,7 @@ impl DataBlock {
         DataBlock { schema, columns }
     }
 
-    pub fn to_arrow_batch(&self) -> DataBlockResult<arrow::record_batch::RecordBatch> {
+    pub fn to_arrow_batch(&self) -> Result<arrow::record_batch::RecordBatch> {
         Ok(arrow::record_batch::RecordBatch::try_new(
             self.schema.clone(),
             self.columns.clone(),
@@ -68,7 +67,7 @@ impl DataBlock {
         &self.columns[index]
     }
 
-    pub fn column_by_name(&self, name: &str) -> DataBlockResult<&DataArrayRef> {
+    pub fn column_by_name(&self, name: &str) -> Result<&DataArrayRef> {
         if name == "*" {
             Ok(&self.columns[0])
         } else {

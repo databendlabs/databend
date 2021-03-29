@@ -4,10 +4,11 @@
 
 use std::fmt;
 
+use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 
-use crate::{FunctionResult, IFunction};
+use crate::IFunction;
 
 #[derive(Clone, Debug)]
 pub struct LiteralFunction {
@@ -15,39 +16,39 @@ pub struct LiteralFunction {
 }
 
 impl LiteralFunction {
-    pub fn try_create(value: DataValue) -> FunctionResult<Box<dyn IFunction>> {
+    pub fn try_create(value: DataValue) -> Result<Box<dyn IFunction>> {
         Ok(Box::new(LiteralFunction { value }))
     }
 }
 
 impl IFunction for LiteralFunction {
-    fn return_type(&self, _input_schema: &DataSchema) -> FunctionResult<DataType> {
+    fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
         Ok(self.value.data_type())
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> FunctionResult<bool> {
+    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(self.value.is_null())
     }
 
-    fn eval(&self, _block: &DataBlock) -> FunctionResult<DataColumnarValue> {
+    fn eval(&self, _block: &DataBlock) -> Result<DataColumnarValue> {
         Ok(DataColumnarValue::Scalar(self.value.clone()))
     }
 
     fn set_depth(&mut self, _depth: usize) {}
 
-    fn accumulate(&mut self, _block: &DataBlock) -> FunctionResult<()> {
+    fn accumulate(&mut self, _block: &DataBlock) -> Result<()> {
         Ok(())
     }
 
-    fn accumulate_result(&self) -> FunctionResult<Vec<DataValue>> {
+    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
         Ok(vec![self.value.clone()])
     }
 
-    fn merge(&mut self, _states: &[DataValue]) -> FunctionResult<()> {
+    fn merge(&mut self, _states: &[DataValue]) -> Result<()> {
         Ok(())
     }
 
-    fn merge_result(&self) -> FunctionResult<DataValue> {
+    fn merge_result(&self) -> Result<DataValue> {
         Ok(self.value.clone())
     }
 }

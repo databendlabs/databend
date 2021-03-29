@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn test_filter_push_down_optimizer() -> crate::error::FuseQueryResult<()> {
+fn test_filter_push_down_optimizer() -> anyhow::Result<()> {
     use pretty_assertions::assert_eq;
 
     use crate::optimizers::*;

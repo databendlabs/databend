@@ -5,8 +5,8 @@
 use std::fs::File;
 use std::sync::Arc;
 
+use anyhow::{bail, Result};
 use arrow::datatypes::SchemaRef;
-use arrow::error::ArrowError;
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -19,7 +19,6 @@ use tokio::task;
 use crate::datasources::table_factory::TableCreatorFactory;
 use crate::datasources::ITable;
 use crate::datastreams::{ParquetStream, SendableDataBlockStream};
-use crate::error::{FuseQueryError, FuseQueryResult};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ParquetTable {
@@ -36,7 +35,7 @@ impl ParquetTable {
         name: String,
         schema: SchemaRef,
         options: TableOptions,
-    ) -> FuseQueryResult<Box<dyn ITable>> {
+    ) -> Result<Box<dyn ITable>> {
         let file = options.get("location");
         return match file {
             Some(file) => {
@@ -48,14 +47,12 @@ impl ParquetTable {
                 };
                 Ok(Box::new(table))
             }
-            _ => Err(FuseQueryError::build_internal_error(
-                "Parquet Engine must contains file location options".to_string(),
-            )),
+            _ => bail!("Parquet Engine must contains file location options"),
         };
     }
 
-    pub fn register(map: TableCreatorFactory) -> FuseQueryResult<()> {
-        let mut map = map.as_ref().lock()?;
+    pub fn register(map: TableCreatorFactory) -> Result<()> {
+        let mut map = map.as_ref().lock();
         map.insert("Parquet", ParquetTable::try_create);
         Ok(())
     }
@@ -63,9 +60,9 @@ impl ParquetTable {
 
 fn read_file(
     file: &str,
-    tx: Sender<Option<FuseQueryResult<DataBlock>>>,
+    tx: Sender<Option<Result<DataBlock>>>,
     projection: &[usize],
-) -> FuseQueryResult<()> {
+) -> Result<()> {
     let file_reader = File::open(file)?;
     let file_reader = SerializedFileReader::new(file_reader)?;
     let mut arrow_reader = ParquetFileArrowReader::new(Arc::new(file_reader));
@@ -79,7 +76,7 @@ fn read_file(
         match batch_reader.next() {
             Some(Ok(batch)) => {
                 tx.send(Some(Ok(DataBlock::try_from_arrow_batch(&batch)?)))
-                    .map_err(|e| FuseQueryError::build_internal_error(e.to_string()))?;
+                    .map_err(|e| anyhow::Error::msg(e.to_string()))?;
             }
             None => {
                 break;
@@ -87,11 +84,9 @@ fn read_file(
             Some(Err(e)) => {
                 let err_msg = format!("Error reading batch from {:?}: {}", file, e.to_string());
 
-                tx.send(Some(Err(FuseQueryError::from(ArrowError::ParquetError(
-                    err_msg.clone(),
-                )))))
-                .map_err(|e| FuseQueryError::build_internal_error(e.to_string()))?;
-                return Err(FuseQueryError::build_internal_error(err_msg));
+                tx.send(Some(Err(anyhow::Error::msg(err_msg.clone()))))
+                    .map_err(|e| anyhow::Error::msg(e.to_string()))?;
+                bail!(err_msg);
             }
         }
     }
@@ -108,7 +103,7 @@ impl ITable for ParquetTable {
         "Parquet"
     }
 
-    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
+    fn schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
     }
 
@@ -116,7 +111,7 @@ impl ITable for ParquetTable {
         &self,
         _ctx: FuseQueryContextRef,
         _push_down_plan: PlanNode,
-    ) -> FuseQueryResult<ReadDataSourcePlan> {
+    ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
             table: self.name().to_string(),
@@ -133,9 +128,9 @@ impl ITable for ParquetTable {
         })
     }
 
-    async fn read(&self, _ctx: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
-        type BlockSender = Sender<Option<FuseQueryResult<DataBlock>>>;
-        type BlockReceiver = Receiver<Option<FuseQueryResult<DataBlock>>>;
+    async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
+        type BlockSender = Sender<Option<Result<DataBlock>>>;
+        type BlockReceiver = Receiver<Option<Result<DataBlock>>>;
 
         let (response_tx, response_rx): (BlockSender, BlockReceiver) = bounded(2);
 

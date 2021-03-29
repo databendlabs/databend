@@ -4,26 +4,23 @@
 
 use std::task::{Context, Poll};
 
+use anyhow::Result;
 use common_datablocks::DataBlock;
 use crossbeam::channel::Receiver;
 use futures::stream::Stream;
 
-use crate::error::FuseQueryResult;
-
 pub struct ParquetStream {
-    response_rx: Receiver<Option<FuseQueryResult<DataBlock>>>,
+    response_rx: Receiver<Option<Result<DataBlock>>>,
 }
 
 impl ParquetStream {
-    pub fn try_create(
-        response_rx: Receiver<Option<FuseQueryResult<DataBlock>>>,
-    ) -> FuseQueryResult<Self> {
+    pub fn try_create(response_rx: Receiver<Option<Result<DataBlock>>>) -> Result<Self> {
         Ok(ParquetStream { response_rx })
     }
 }
 
 impl Stream for ParquetStream {
-    type Item = FuseQueryResult<DataBlock>;
+    type Item = Result<DataBlock>;
 
     fn poll_next(self: std::pin::Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match self.response_rx.recv() {

@@ -4,9 +4,9 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use common_datavalues::DataSchemaRef;
 
-use crate::PlannerResult;
 use crate::{ExpressionPlan, PlanNode};
 
 /// Evaluates an arbitrary list of expressions (essentially a
@@ -30,7 +30,7 @@ impl ProjectionPlan {
         self.input.clone()
     }
 
-    pub fn set_input(&mut self, input: &PlanNode) -> PlannerResult<()> {
+    pub fn set_input(&mut self, input: &PlanNode) -> Result<()> {
         self.input = Arc::new(input.clone());
         Ok(())
     }

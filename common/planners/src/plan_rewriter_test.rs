@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn test_rewriter_plan() -> crate::error::PlannerResult<()> {
+fn test_rewriter_plan() -> anyhow::Result<()> {
     use pretty_assertions::assert_eq;
 
     use crate::*;
@@ -43,7 +43,7 @@ fn test_rewriter_plan() -> crate::error::PlannerResult<()> {
                     }).alias("z"),
             ],
             expect_str: "",
-            error_msg : "Planner Internal Error: Cyclic aliases: x",
+            error_msg : "Planner Error: Cyclic aliases: x",
         },
 
         RewriteTest{
@@ -65,7 +65,7 @@ fn test_rewriter_plan() -> crate::error::PlannerResult<()> {
                     }).alias("x"),
             ],
             expect_str: "",
-            error_msg : "Planner Internal Error: Different expressions with the same alias x",
+            error_msg : "Planner Error: Different expressions with the same alias x",
         },
 
         RewriteTest{

@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, UInt8Array};
@@ -11,7 +12,6 @@ use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics};
 
 use crate::datasources::ITable;
 use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
-use crate::error::FuseQueryResult;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct OneTable {
@@ -40,7 +40,7 @@ impl ITable for OneTable {
         "SystemOne"
     }
 
-    fn schema(&self) -> FuseQueryResult<DataSchemaRef> {
+    fn schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
     }
 
@@ -48,7 +48,7 @@ impl ITable for OneTable {
         &self,
         _ctx: FuseQueryContextRef,
         _push_down_plan: PlanNode,
-    ) -> FuseQueryResult<ReadDataSourcePlan> {
+    ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
@@ -62,7 +62,7 @@ impl ITable for OneTable {
         })
     }
 
-    async fn read(&self, _: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
+    async fn read(&self, _: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
         let block = DataBlock::create(
             self.schema.clone(),
             vec![Arc::new(UInt8Array::from(vec![1u8]))],
