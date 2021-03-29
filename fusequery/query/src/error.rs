@@ -68,33 +68,6 @@ impl FuseQueryError {
 }
 
 // Internal convert.
-impl From<common_datavalues::DataValueError> for FuseQueryError {
-    fn from(err: common_datavalues::DataValueError) -> Self {
-        Internal {
-            message: err.to_string(),
-        }
-        .build()
-    }
-}
-
-impl From<common_datablocks::DataBlockError> for FuseQueryError {
-    fn from(err: common_datablocks::DataBlockError) -> Self {
-        Internal {
-            message: err.to_string(),
-        }
-        .build()
-    }
-}
-
-impl From<common_functions::FunctionError> for FuseQueryError {
-    fn from(err: common_functions::FunctionError) -> Self {
-        Internal {
-            message: err.to_string(),
-        }
-        .build()
-    }
-}
-
 impl From<common_planners::PlannerError> for FuseQueryError {
     fn from(err: common_planners::PlannerError) -> Self {
         Internal {

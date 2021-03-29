@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn test_datablock() -> Result<(), Box<dyn std::error::Error>> {
+fn test_datablock() -> anyhow::Result<()> {
     use std::sync::Arc;
 
-    use fuse_query_datavalues::*;
+    use common_datavalues::*;
 
-    use crate::datablocks::*;
+    use crate::DataBlock;
 
     let schema = Arc::new(DataSchema::new(vec![DataField::new(
         "a",
