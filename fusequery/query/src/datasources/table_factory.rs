@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use arrow::datatypes::SchemaRef;
-use common_infallible::Mutex;
+use common_infallible::RwLock;
 use common_planners::TableOptions;
 use indexmap::map::IndexMap;
 use lazy_static::lazy_static;
@@ -25,11 +25,11 @@ pub type TableCreator = fn(
     options: TableOptions,
 ) -> Result<Box<dyn ITable>>;
 
-pub type TableCreatorFactory = Arc<Mutex<IndexMap<&'static str, TableCreator>>>;
+pub type TableCreatorFactory = Arc<RwLock<IndexMap<&'static str, TableCreator>>>;
 
 lazy_static! {
     static ref FACTORY: TableCreatorFactory = {
-        let map: TableCreatorFactory = Arc::new(Mutex::new(IndexMap::new()));
+        let map: TableCreatorFactory = Arc::new(RwLock::new(IndexMap::new()));
         LocalFactory::register(map.clone()).unwrap();
 
         map
@@ -45,7 +45,7 @@ impl TableFactory {
         schema: SchemaRef,
         options: TableOptions,
     ) -> Result<Box<dyn ITable>> {
-        let map = FACTORY.as_ref().lock();
+        let map = FACTORY.read();
         let creator = map.get(engine).ok_or_else(|| {
             return anyhow::Error::msg(format!("Unsupported Engine: {}", engine));
         })?;

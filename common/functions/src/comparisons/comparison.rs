@@ -28,7 +28,8 @@ pub struct ComparisonFunction {
 
 impl ComparisonFunction {
     pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.as_ref().lock();
+        let mut map = map.write();
+
         map.insert("=", ComparisonEqFunction::try_create_func);
         map.insert("<", ComparisonLtFunction::try_create_func);
         map.insert(">", ComparisonGtFunction::try_create_func);

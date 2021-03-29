@@ -12,7 +12,7 @@ pub struct UdfFunction;
 
 impl UdfFunction {
     pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.as_ref().lock();
+        let mut map = map.write();
         map.insert("example", UdfExampleFunction::try_create);
         map.insert("totypename", ToTypeNameFunction::try_create);
         Ok(())

@@ -14,7 +14,7 @@ pub struct AggregatorFunction;
 
 impl AggregatorFunction {
     pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.as_ref().lock();
+        let mut map = map.write();
         map.insert("count", AggregatorCountFunction::try_create);
         map.insert("min", AggregatorMinFunction::try_create);
         map.insert("max", AggregatorMaxFunction::try_create);
