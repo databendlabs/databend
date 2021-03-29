@@ -2,9 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use anyhow::Result;
+use common_infallible::Mutex;
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
 
@@ -33,10 +34,7 @@ lazy_static! {
 
 impl FunctionFactory {
     pub fn get(name: &str, args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
-        let map = FACTORY
-            .as_ref()
-            .lock()
-            .map_err(|e| anyhow::Error::msg(e.to_string()))?;
+        let map = FACTORY.as_ref().lock();
         let creator = map.get(&*name.to_lowercase()).ok_or_else(|| {
             return anyhow::Error::msg(format!("Unsupported Function: {}", name));
         })?;
@@ -44,7 +42,7 @@ impl FunctionFactory {
     }
 
     pub fn registered_names() -> Vec<String> {
-        let map = FACTORY.as_ref().lock().unwrap();
+        let map = FACTORY.as_ref().lock();
         map.keys().into_iter().map(|x| x.to_string()).collect()
     }
 }

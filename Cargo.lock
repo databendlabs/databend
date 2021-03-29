@@ -543,6 +543,7 @@ dependencies = [
  "arrow",
  "common-datablocks",
  "common-datavalues",
+ "common-infallible",
  "dyn-clone",
  "indexmap",
  "lazy_static",

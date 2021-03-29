@@ -10,6 +10,7 @@ edition = "2018"
 # Workspace dependencies
 common-datablocks = {path = "../datablocks"}
 common-datavalues = {path = "../datavalues"}
+common-infallible = {path = "../infallible"}
 
 # github dependencies
 arrow = { git = "https://github.com/apache/arrow", rev="46161d2" }
