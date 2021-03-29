@@ -552,6 +552,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-infallible"
+version = "0.1.0"
+
+[[package]]
 name = "common-planners"
 version = "0.1.0"
 dependencies = [
