@@ -1,4 +1,4 @@
-# fuse-query includes some code from [arrow/datafusion](https://github.com/apache/arrow/tree/master/rust/datafusion)
+# Datafuse includes some code from [arrow/datafusion](https://github.com/apache/arrow/tree/master/rust/datafusion)
 
 We include the text of the original license below:
 
