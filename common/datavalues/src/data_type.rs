@@ -246,10 +246,7 @@ pub fn numerical_arithmetic_coercion(
 
     let has_signed = is_signed_numeric(lhs_type) || is_signed_numeric(rhs_type);
     let has_float = is_floating(lhs_type) || is_floating(rhs_type);
-    let max_size = cmp::max(
-        numeric_byte_size(lhs_type).unwrap(),
-        numeric_byte_size(rhs_type).unwrap(),
-    );
+    let max_size = cmp::max(numeric_byte_size(lhs_type)?, numeric_byte_size(rhs_type)?);
 
     match op {
         DataValueArithmeticOperator::Plus | DataValueArithmeticOperator::Mul => {

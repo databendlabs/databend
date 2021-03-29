@@ -89,7 +89,7 @@ impl ITable for CsvTable {
     }
 
     async fn read(&self, _ctx: FuseQueryContextRef) -> FuseQueryResult<SendableDataBlockStream> {
-        let reader = File::open(self.file.clone()).unwrap();
+        let reader = File::open(self.file.clone())?;
         Ok(Box::pin(CsvStream::try_create(
             self.schema.clone(),
             reader,
