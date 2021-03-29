@@ -27,7 +27,6 @@ arrow-flight = { git = "https://github.com/apache/arrow", rev="46161d2" }
 
 # Crates.io dependencies
 anyhow = "1.0.40"
-async-std = "1.9.0"
 async-trait = "0.1"
 dyn-clone = "1.0.4"
 env_logger = "0.8"
