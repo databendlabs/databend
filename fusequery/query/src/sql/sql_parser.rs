@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 //
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
-// See NOTICE.md
+// See notice.md
 
 use common_planners::{DfExplainType, EngineType};
 use sqlparser::ast::{Ident, ObjectName, SqlOption, Value};
