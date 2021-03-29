@@ -24,7 +24,7 @@ pub struct LogicFunction {
 
 impl LogicFunction {
     pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.as_ref().lock();
+        let mut map = map.write();
         map.insert("and", LogicAndFunction::try_create_func);
         map.insert("or", LogicOrFunction::try_create_func);
         Ok(())

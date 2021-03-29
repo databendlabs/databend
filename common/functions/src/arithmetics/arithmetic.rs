@@ -27,7 +27,7 @@ pub struct ArithmeticFunction {
 
 impl ArithmeticFunction {
     pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.as_ref().lock();
+        let mut map = map.write();
         map.insert("+", ArithmeticPlusFunction::try_create_func);
         map.insert("plus", ArithmeticPlusFunction::try_create_func);
         map.insert("-", ArithmeticMinusFunction::try_create_func);
