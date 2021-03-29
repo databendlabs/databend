@@ -4,7 +4,8 @@
 
 use std::sync::Arc;
 
-use crate::error::DataValueResult;
+use anyhow::Result;
+
 use crate::{DataArrayRef, DataColumnarValue, DataType, DataValueComparisonOperator};
 use crate::{
     Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, Int8Array, StringArray,
@@ -15,7 +16,7 @@ pub fn data_array_comparison_op(
     op: DataValueComparisonOperator,
     left: &DataColumnarValue,
     right: &DataColumnarValue,
-) -> DataValueResult<DataArrayRef> {
+) -> Result<DataArrayRef> {
     match (left, right) {
         (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
             let coercion_type = super::data_type::equal_coercion(

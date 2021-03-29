@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::error::{DataValueError, DataValueResult};
+use anyhow::{bail, Result};
+
 use crate::{DataValue, DataValueArithmeticOperator};
 
 macro_rules! typed_data_value_operator {
@@ -31,7 +32,7 @@ pub fn data_value_arithmetic_op(
     op: DataValueArithmeticOperator,
     left: DataValue,
     right: DataValue,
-) -> DataValueResult<DataValue> {
+) -> Result<DataValue> {
     Ok(match (&left, &right) {
         (DataValue::Null, _) => right,
         (_, DataValue::Null) => left,
@@ -357,12 +358,12 @@ pub fn data_value_arithmetic_op(
             }
 
             (lhs, rhs) => {
-                return Err(DataValueError::build_internal_error(format!(
-                    "Unsupported data value operator: {:?} {} {:?}",
+                bail!(format!(
+                    "DataValue Error: Unsupported data value operator: {:?} {} {:?}",
                     lhs.data_type(),
                     op,
                     rhs.data_type(),
-                )));
+                ));
             }
         },
     })

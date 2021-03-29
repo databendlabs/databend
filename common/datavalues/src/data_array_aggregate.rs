@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::error::{DataValueError, DataValueResult};
+use anyhow::{bail, Result};
+
 use crate::{DataArrayRef, DataType, DataValue, DataValueAggregateOperator, StringArray};
 use crate::{
     Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, Int8Array, UInt16Array,
@@ -12,7 +13,7 @@ use crate::{
 pub fn data_array_aggregate_op(
     op: DataValueAggregateOperator,
     value: DataArrayRef,
-) -> DataValueResult<DataValue> {
+) -> Result<DataValue> {
     Ok(match value.data_type() {
         DataType::Int8 => match op {
             DataValueAggregateOperator::Min => {
@@ -26,11 +27,11 @@ pub fn data_array_aggregate_op(
             }
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
             DataValueAggregateOperator::Avg => {
-                return Err(DataValueError::build_internal_error(format!(
-                    "Unsupported data_array_{} for data type: {:?}",
+                bail!(format!(
+                    "DataValue Error: Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
-                )))
+                ));
             }
         },
         DataType::Int16 => match op {
@@ -45,11 +46,11 @@ pub fn data_array_aggregate_op(
             }
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
             DataValueAggregateOperator::Avg => {
-                return Err(DataValueError::build_internal_error(format!(
-                    "Unsupported data_array_{} for data type: {:?}",
+                bail!(format!(
+                    "DataValue Error: Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
-                )))
+                ));
             }
         },
         DataType::Int32 => match op {
@@ -65,11 +66,11 @@ pub fn data_array_aggregate_op(
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
 
             DataValueAggregateOperator::Avg => {
-                return Err(DataValueError::build_internal_error(format!(
-                    "Unsupported data_array_{} for data type: {:?}",
+                bail!(format!(
+                    "DataValue Error: Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
-                )))
+                ));
             }
         },
         DataType::Int64 => match op {
@@ -85,11 +86,11 @@ pub fn data_array_aggregate_op(
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
 
             DataValueAggregateOperator::Avg => {
-                return Err(DataValueError::build_internal_error(format!(
-                    "Unsupported data_array_{} for data type: {:?}",
+                bail!(format!(
+                    "DataValue Error: Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
-                )))
+                ));
             }
         },
         DataType::UInt8 => match op {
@@ -105,11 +106,11 @@ pub fn data_array_aggregate_op(
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
 
             DataValueAggregateOperator::Avg => {
-                return Err(DataValueError::build_internal_error(format!(
-                    "Unsupported data_array_{} for data type: {:?}",
+                bail!(format!(
+                    "DataValue Error: Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
-                )))
+                ));
             }
         },
         DataType::UInt16 => match op {
@@ -125,11 +126,11 @@ pub fn data_array_aggregate_op(
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
 
             DataValueAggregateOperator::Avg => {
-                return Err(DataValueError::build_internal_error(format!(
-                    "Unsupported data_array_{} for data type: {:?}",
+                bail!(format!(
+                    "DataValue Error: Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
-                )))
+                ));
             }
         },
         DataType::UInt32 => match op {
@@ -145,11 +146,11 @@ pub fn data_array_aggregate_op(
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
 
             DataValueAggregateOperator::Avg => {
-                return Err(DataValueError::build_internal_error(format!(
-                    "Unsupported data_array_{} for data type: {:?}",
+                bail!(format!(
+                    "DataValue Error: Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
-                )))
+                ));
             }
         },
         DataType::UInt64 => match op {
@@ -164,11 +165,11 @@ pub fn data_array_aggregate_op(
             }
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
             DataValueAggregateOperator::Avg => {
-                return Err(DataValueError::build_internal_error(format!(
-                    "Unsupported data_array_{} for data type: {:?}",
+                bail!(format!(
+                    "DataValue Error: Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
-                )))
+                ));
             }
         },
         DataType::Float32 => match op {
@@ -183,11 +184,11 @@ pub fn data_array_aggregate_op(
             }
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
             DataValueAggregateOperator::Avg => {
-                return Err(DataValueError::build_internal_error(format!(
-                    "Unsupported data_array_{} for data type: {:?}",
+                bail!(format!(
+                    "DataValue Error: Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
-                )))
+                ));
             }
         },
         DataType::Float64 => match op {
@@ -202,11 +203,11 @@ pub fn data_array_aggregate_op(
             }
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
             DataValueAggregateOperator::Avg => {
-                return Err(DataValueError::build_internal_error(format!(
-                    "Unsupported data_array_{} for data type: {:?}",
+                bail!(format!(
+                    "DataValue Error: Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
-                )))
+                ));
             }
         },
         DataType::Utf8 => match op {
@@ -218,19 +219,19 @@ pub fn data_array_aggregate_op(
             }
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
             _ => {
-                return Err(DataValueError::build_internal_error(format!(
-                    "Unsupported data_array_{} for data type: {:?}",
+                bail!(format!(
+                    "DataValue Error: Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
-                )))
+                ));
             }
         },
         _ => {
-            return Err(DataValueError::build_internal_error(format!(
-                "Unsupported data_array_{} for data type: {:?}",
+            bail!(format!(
+                "DataValue Error: Unsupported data_array_{} for data type: {:?}",
                 op,
                 value.data_type()
-            )))
+            ));
         }
     })
 }

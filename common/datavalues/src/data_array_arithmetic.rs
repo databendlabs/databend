@@ -4,7 +4,8 @@
 
 use std::sync::Arc;
 
-use crate::error::DataValueResult;
+use anyhow::Result;
+
 use crate::{DataArrayRef, DataColumnarValue, DataType, DataValueArithmeticOperator};
 use crate::{
     Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, Int8Array, UInt16Array,
@@ -15,7 +16,7 @@ pub fn data_array_arithmetic_op(
     op: DataValueArithmeticOperator,
     left: &DataColumnarValue,
     right: &DataColumnarValue,
-) -> DataValueResult<DataArrayRef> {
+) -> Result<DataArrayRef> {
     let (left_array, right_array) = match (left, right) {
         (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
             (left_array.clone(), right_array.clone())

@@ -7,8 +7,8 @@ macro_rules! downcast_array {
         if let Some(v) = $ARRAY.as_any().downcast_ref::<$TYPE>() {
             Ok(v)
         } else {
-            Err(crate::error::DataValueError::build_internal_error(format!(
-                "Cannot downcast_array from datatype:{:?} item to:{}",
+            Err(anyhow::Error::msg(format!(
+                "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
                 ($ARRAY).data_type(),
                 stringify!($TYPE)
             )))
@@ -61,11 +61,11 @@ macro_rules! arrow_primitive_array_op {
             DataType::UInt64 => compute_op!($LEFT, $RIGHT, $OP, UInt64Array),
             DataType::Float32 => compute_op!($LEFT, $RIGHT, $OP, Float32Array),
             DataType::Float64 => compute_op!($LEFT, $RIGHT, $OP, Float64Array),
-            _ => Err(crate::error::DataValueError::build_internal_error(format!(
+            _ => anyhow::bail!(format!(
                 "Unsupported arithmetic_compute::{} for data type: {:?}",
                 stringify!($OP),
                 ($LEFT).data_type(),
-            ))),
+            )),
         }
     };
 }
@@ -86,10 +86,10 @@ macro_rules! arrow_primitive_array_self_defined_op {
             DataType::UInt64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt64Array),
             DataType::Float32 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Float32Array),
             DataType::Float64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Float64Array),
-            _ => Err(crate::error::DataValueError::build_internal_error(format!(
+            _ => anyhow::bail!(format!(
                 "Unsupported arithmetic_compute::math_op for data type: {:?}",
                 ($LEFT).data_type(),
-            ))),
+            )),
         }
     };
 }
@@ -110,11 +110,11 @@ macro_rules! arrow_array_op {
             DataType::Float32 => compute_op!($LEFT, $RIGHT, $OP, Float32Array),
             DataType::Float64 => compute_op!($LEFT, $RIGHT, $OP, Float64Array),
             DataType::Utf8 => compute_utf8_op!($LEFT, $RIGHT, $OP, StringArray),
-            _ => Err(crate::error::DataValueError::build_internal_error(format!(
+            _ => anyhow::bail!(format!(
                 "Unsupported arithmetic_compute::{} for data type: {:?}",
                 stringify!($OP),
                 ($LEFT).data_type(),
-            ))),
+            )),
         }
     };
 }
@@ -123,6 +123,7 @@ macro_rules! arrow_array_op {
 macro_rules! compute_op_scalar {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
         use std::convert::TryInto;
+
         let ll = downcast_array!($LEFT, $DT)?;
         Ok(Arc::new(paste::expr! {arrow::compute::[<$OP _scalar>]}(
             &ll,
@@ -140,10 +141,10 @@ macro_rules! compute_utf8_op_scalar {
                 paste::expr! {arrow::compute::[<$OP _utf8_scalar>]}(&ll, &string_value)?,
             ))
         } else {
-            Err(crate::error::DataValueError::build_internal_error(format!(
+            anyhow::bail!(format!(
                 "compute_utf8_op_scalar failed to cast literal value {}",
                 $RIGHT
-            )))
+            ));
         }
     }};
 }
@@ -164,8 +165,8 @@ macro_rules! arrow_array_op_scalar {
             DataType::Float32 => compute_op_scalar!($LEFT, $RIGHT, $OP, Float32Array),
             DataType::Float64 => compute_op_scalar!($LEFT, $RIGHT, $OP, Float64Array),
             DataType::Utf8 => compute_utf8_op_scalar!($LEFT, $RIGHT, $OP, StringArray),
-            other => Err(crate::error::DataValueError::build_internal_error(format!(
-                "Unsupported data type {:?}",
+            other => Err(anyhow::Error::msg(format!(
+                "DataValue Error: Unsupported data type {:?}",
                 other
             ))),
         };
@@ -312,16 +313,16 @@ macro_rules! typed_cast_from_array_to_data_value {
 macro_rules! typed_cast_from_data_value_to_std {
     ($SCALAR:ident, $NATIVE:ident) => {
         impl TryFrom<DataValue> for $NATIVE {
-            type Error = crate::error::DataValueError;
+            type Error = anyhow::Error;
 
-            fn try_from(value: DataValue) -> crate::error::DataValueResult<Self> {
+            fn try_from(value: DataValue) -> anyhow::Result<Self> {
                 match value {
                     DataValue::$SCALAR(Some(inner_value)) => Ok(inner_value),
-                    _ => Err(crate::error::DataValueError::build_internal_error(format!(
-                        "Cannot convert {:?} to {}",
+                    _ => anyhow::bail!(format!(
+                        "DataValue Error:  Cannot convert {:?} to {}",
                         value,
                         std::any::type_name::<Self>()
-                    ))),
+                    )),
                 }
             }
         }
