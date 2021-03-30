@@ -15,5 +15,3 @@ common-datavalues = {path = "../datavalues"}
 
 # Crates.io dependencies
 anyhow = "1.0.40"
-paste = "^1.0"
-serde = { version = "1.0", features = ["derive"] }

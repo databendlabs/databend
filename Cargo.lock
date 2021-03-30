@@ -391,8 +391,6 @@ dependencies = [
  "anyhow",
  "common-arrow",
  "common-datavalues",
- "paste",
- "serde",
 ]
 
 [[package]]
@@ -417,9 +415,7 @@ dependencies = [
  "dyn-clone",
  "indexmap",
  "lazy_static",
- "paste",
  "pretty_assertions",
- "serde",
 ]
 
 [[package]]
@@ -433,10 +429,6 @@ dependencies = [
  "anyhow",
  "common-datavalues",
  "common-functions",
- "dyn-clone",
- "indexmap",
- "lazy_static",
- "paste",
  "pretty_assertions",
  "serde",
 ]
@@ -451,9 +443,7 @@ dependencies = [
  "common-datavalues",
  "common-functions",
  "crossbeam 0.8.0",
- "dyn-clone",
  "futures",
- "paste",
  "pretty_assertions",
  "tokio",
 ]
@@ -805,7 +795,6 @@ dependencies = [
  "common-planners",
  "common-streams",
  "crossbeam 0.8.0",
- "dyn-clone",
  "env_logger",
  "futures",
  "indexmap",
@@ -824,7 +813,6 @@ dependencies = [
  "serde_json",
  "sqlparser",
  "structopt",
- "thiserror",
  "threadpool",
  "tokio",
  "tokio-stream",
