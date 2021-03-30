@@ -7,8 +7,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use common_planners::SelectPlan;
+use common_streams::SendableDataBlockStream;
 
-use crate::datastreams::SendableDataBlockStream;
 use crate::interpreters::IInterpreter;
 use crate::optimizers::Optimizer;
 use crate::processors::PipelineBuilder;

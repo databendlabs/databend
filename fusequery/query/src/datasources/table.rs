@@ -6,8 +6,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use common_datavalues::DataSchemaRef;
 use common_planners::{PlanNode, ReadDataSourcePlan};
+use common_streams::SendableDataBlockStream;
 
-use crate::datastreams::SendableDataBlockStream;
 use crate::sessions::FuseQueryContextRef;
 
 #[async_trait]

@@ -434,6 +434,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-streams"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arrow",
+ "common-datablocks",
+ "common-datavalues",
+ "common-functions",
+ "crossbeam 0.8.0",
+ "dyn-clone",
+ "futures",
+ "paste",
+ "pretty_assertions",
+ "tokio",
+]
+
+[[package]]
 name = "const_fn"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -779,6 +796,7 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-planners",
+ "common-streams",
  "crossbeam 0.8.0",
  "dyn-clone",
  "env_logger",

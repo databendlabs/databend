@@ -8,9 +8,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use common_planners::PlanNode;
+use common_streams::SendableDataBlockStream;
 
 use crate::api::rpc::{ExecuteAction, ExecutePlanAction, FlightClient};
-use crate::datastreams::SendableDataBlockStream;
 use crate::processors::{EmptyProcessor, IProcessor};
 use crate::sessions::FuseQueryContextRef;
 

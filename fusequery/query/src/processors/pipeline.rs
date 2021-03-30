@@ -5,8 +5,8 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use common_streams::SendableDataBlockStream;
 
-use crate::datastreams::SendableDataBlockStream;
 use crate::processors::{IProcessor, MergeProcessor, Pipe};
 
 pub struct Pipeline {

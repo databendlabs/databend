@@ -10,7 +10,7 @@ use common_datavalues::DataSchemaRef;
 use common_functions::IFunction;
 use futures::stream::{Stream, StreamExt};
 
-use crate::datastreams::SendableDataBlockStream;
+use crate::SendableDataBlockStream;
 
 type ExpressionFunc = fn(&DataSchemaRef, DataBlock, Vec<Box<dyn IFunction>>) -> Result<DataBlock>;
 

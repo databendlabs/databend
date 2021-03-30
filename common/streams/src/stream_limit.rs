@@ -8,7 +8,7 @@ use anyhow::Result;
 use common_datablocks::DataBlock;
 use futures::stream::{Stream, StreamExt};
 
-use crate::datastreams::SendableDataBlockStream;
+use crate::SendableDataBlockStream;
 
 pub struct LimitStream {
     input: SendableDataBlockStream,

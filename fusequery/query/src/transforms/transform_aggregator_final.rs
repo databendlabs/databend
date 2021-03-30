@@ -12,10 +12,10 @@ use common_datablocks::DataBlock;
 use common_datavalues::{DataSchemaRef, DataValue};
 use common_functions::IFunction;
 use common_planners::ExpressionPlan;
+use common_streams::{DataBlockStream, SendableDataBlockStream};
 use futures::stream::StreamExt;
 use log::info;
 
-use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::processors::{EmptyProcessor, IProcessor};
 
 pub struct AggregatorFinalTransform {

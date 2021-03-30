@@ -9,9 +9,9 @@ use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataField, DataSchema, DataType, StringArray};
 use common_planners::{DfExplainType, ExplainPlan, PlanNode};
+use common_streams::{DataBlockStream, SendableDataBlockStream};
 use log::debug;
 
-use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::interpreters::IInterpreter;
 use crate::optimizers::Optimizer;
 use crate::processors::PipelineBuilder;

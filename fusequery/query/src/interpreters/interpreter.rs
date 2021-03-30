@@ -4,8 +4,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-
-use crate::datastreams::SendableDataBlockStream;
+use common_streams::SendableDataBlockStream;
 
 #[async_trait]
 pub trait IInterpreter: Sync + Send {

@@ -12,8 +12,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::{BooleanArray, DataSchema, DataSchemaRef};
 use common_functions::IFunction;
 use common_planners::ExpressionPlan;
+use common_streams::{ExpressionStream, SendableDataBlockStream};
 
-use crate::datastreams::{ExpressionStream, SendableDataBlockStream};
 use crate::processors::{EmptyProcessor, IProcessor};
 
 pub struct FilterTransform {

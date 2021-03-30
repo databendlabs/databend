@@ -8,8 +8,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use common_datavalues::{DataField, DataSchema, DataType};
 use common_planners::SettingPlan;
+use common_streams::{DataBlockStream, SendableDataBlockStream};
 
-use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::interpreters::IInterpreter;
 use crate::sessions::FuseQueryContextRef;
 

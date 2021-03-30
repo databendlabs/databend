@@ -12,9 +12,9 @@ use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, DataValu
 use common_planners::{
     ExpressionPlan, Partition, Partitions, PlanNode, ReadDataSourcePlan, ScanPlan, Statistics,
 };
+use common_streams::SendableDataBlockStream;
 
 use crate::datasources::{system::NumbersStream, ITable};
-use crate::datastreams::SendableDataBlockStream;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct NumbersTable {

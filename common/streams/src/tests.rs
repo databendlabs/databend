@@ -10,7 +10,7 @@ async fn test_chunk_stream() {
     use common_datavalues::*;
     use futures::stream::StreamExt;
 
-    use crate::datastreams::*;
+    use crate::*;
 
     let mut s1 = DataBlockStream::create(
         Arc::new(DataSchema::empty()),

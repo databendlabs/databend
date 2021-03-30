@@ -11,10 +11,10 @@ use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::utils::flight_data_to_arrow_batch;
 use arrow_flight::Ticket;
 use common_datablocks::DataBlock;
+use common_streams::{DataBlockStream, SendableDataBlockStream};
 use prost::Message;
 
 use crate::api::rpc::ExecuteAction;
-use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::protobuf::FlightRequest;
 
 pub struct FlightClient {

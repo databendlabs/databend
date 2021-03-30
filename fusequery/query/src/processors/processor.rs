@@ -7,8 +7,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-
-use crate::datastreams::SendableDataBlockStream;
+use common_streams::SendableDataBlockStream;
 
 /// Formatter settings for PlanStep debug.
 pub struct FormatterSettings {

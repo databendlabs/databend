@@ -8,11 +8,11 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
+use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::datastreams::SendableDataBlockStream;
 use crate::processors::IProcessor;
 
 pub struct MergeProcessor {
