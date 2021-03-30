@@ -53,7 +53,6 @@ tokio-stream = "0.1"
 tonic = "0.4"
 warp = "0.3.0"
 uuid = { version = "0.8", features = ["serde", "v4"] }
-crossbeam = "0.8"
 
 [dev-dependencies]
 pretty_assertions = "0.7"

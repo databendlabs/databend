@@ -1,5 +1,5 @@
 [package]
-name = "common-planners"
+name = "common-streams"
 version = "0.1.0"
 authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
@@ -8,18 +8,20 @@ edition = "2018"
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
+common-datablocks = {path = "../datablocks"}
 common-datavalues = {path = "../datavalues"}
 common-functions = {path = "../functions"}
 
 # Github dependencies
+arrow = { git = "https://github.com/apache/arrow", rev="46161d2" }
 
 # Crates.io dependencies
 anyhow = "1.0.40"
+crossbeam = "0.8"
 dyn-clone = "1.0.4"
-indexmap = "1.6.1"
-lazy_static = "1.4.0"
+futures = "0.3"
 paste = "^1.0"
-serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.0", features = ["macros", "rt","rt-multi-thread", "sync"] }
 
 [dev-dependencies]
 pretty_assertions = "0.7"
