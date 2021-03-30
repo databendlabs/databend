@@ -5,7 +5,8 @@
 use std::cmp;
 
 use anyhow::{bail, Result};
-use arrow::datatypes;
+use common_arrow::arrow::datatypes;
+use common_arrow::arrow::datatypes::DataType::*;
 
 use crate::DataValueArithmeticOperator;
 
@@ -131,7 +132,6 @@ pub fn dictionary_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<D
 /// Coercion rules for Strings: the type that both lhs and rhs can be
 /// casted to for the purpose of a string computation
 pub fn string_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
-    use arrow::datatypes::DataType::*;
     match (lhs_type, rhs_type) {
         (Utf8, Utf8) => Ok(Utf8),
         (LargeUtf8, Utf8) => Ok(LargeUtf8),
@@ -226,7 +226,6 @@ pub fn numerical_arithmetic_coercion(
     lhs_type: &DataType,
     rhs_type: &DataType,
 ) -> Result<DataType> {
-    use arrow::datatypes::DataType::*;
     // error on any non-numeric type
     if !is_numeric(lhs_type) || !is_numeric(rhs_type) {
         bail!(format!(

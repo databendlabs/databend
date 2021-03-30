@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use common_arrow::arrow;
 use common_datavalues::{DataArrayRef, DataSchema, DataSchemaRef};
 
 #[derive(Debug, Clone)]

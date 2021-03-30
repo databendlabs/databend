@@ -12,8 +12,7 @@ common-datablocks = {path = "../datablocks"}
 common-datavalues = {path = "../datavalues"}
 common-infallible = {path = "../infallible"}
 
-# github dependencies
-arrow = { git = "https://github.com/apache/arrow", rev="46161d2" }
+# Github dependencies
 
 # Crates.io dependencies
 anyhow = "1.0.40"

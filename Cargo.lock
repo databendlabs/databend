@@ -376,11 +376,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-arrow"
+version = "0.1.0"
+dependencies = [
+ "arrow",
+ "arrow-flight",
+ "parquet",
+]
+
+[[package]]
 name = "common-datablocks"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow",
+ "common-arrow",
  "common-datavalues",
  "paste",
  "serde",
@@ -391,7 +400,7 @@ name = "common-datavalues"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow",
+ "common-arrow",
  "paste",
  "pretty_assertions",
  "serde",
@@ -402,7 +411,6 @@ name = "common-functions"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow",
  "common-datablocks",
  "common-datavalues",
  "common-infallible",
@@ -438,7 +446,7 @@ name = "common-streams"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow",
+ "common-arrow",
  "common-datablocks",
  "common-datavalues",
  "common-functions",
@@ -788,9 +796,8 @@ name = "fuse-query"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow",
- "arrow-flight",
  "async-trait",
+ "common-arrow",
  "common-datablocks",
  "common-datavalues",
  "common-functions",
@@ -809,7 +816,6 @@ dependencies = [
  "msql-srv",
  "num 0.4.0",
  "num_cpus",
- "parquet",
  "paste",
  "pretty_assertions",
  "prost",

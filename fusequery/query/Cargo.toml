@@ -13,6 +13,7 @@ path = "src/bin/fuse-query.rs"
 
 [dependencies]
 # Workspace dependencies
+common-arrow = {path = "../../common/arrow"}
 common-datablocks = {path = "../../common/datablocks"}
 common-datavalues = {path = "../../common/datavalues"}
 common-functions = {path = "../../common/functions"}
@@ -22,9 +23,6 @@ common-streams = {path = "../../common/streams"}
 
 
 # Github dependencies
-arrow = { git = "https://github.com/apache/arrow", rev="46161d2" }
-parquet = { git = "https://github.com/apache/arrow", rev="46161d2" }
-arrow-flight = { git = "https://github.com/apache/arrow", rev="46161d2" }
 
 # Crates.io dependencies
 anyhow = "1.0.40"

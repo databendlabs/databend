@@ -1,5 +1,5 @@
 [package]
-name = "common-datablocks"
+name = "common-arrow"
 version = "0.1.0"
 authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
@@ -8,12 +8,10 @@ edition = "2018"
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-arrow = {path = "../arrow"}
-common-datavalues = {path = "../datavalues"}
 
 # Github dependencies
+arrow = { git = "https://github.com/apache/arrow", rev="46161d2" }
+arrow-flight = { git = "https://github.com/apache/arrow", rev="46161d2" }
+parquet = { git = "https://github.com/apache/arrow", rev="46161d2" }
 
 # Crates.io dependencies
-anyhow = "1.0.40"
-paste = "^1.0"
-serde = { version = "1.0", features = ["derive"] }

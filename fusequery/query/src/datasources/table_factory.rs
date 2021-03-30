@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use arrow::datatypes::SchemaRef;
+use common_datavalues::DataSchemaRef;
 use common_infallible::RwLock;
 use common_planners::TableOptions;
 use indexmap::map::IndexMap;
@@ -21,7 +21,7 @@ pub type TableCreator = fn(
     ctx: FuseQueryContextRef,
     db: String,
     name: String,
-    schema: SchemaRef,
+    schema: DataSchemaRef,
     options: TableOptions,
 ) -> Result<Box<dyn ITable>>;
 
@@ -42,7 +42,7 @@ impl TableFactory {
         ctx: FuseQueryContextRef,
         db: String,
         name: String,
-        schema: SchemaRef,
+        schema: DataSchemaRef,
         options: TableOptions,
     ) -> Result<Box<dyn ITable>> {
         let map = FACTORY.read();

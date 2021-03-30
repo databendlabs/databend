@@ -2,8 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use arrow::datatypes::Schema;
-use arrow::datatypes::SchemaRef;
+use common_arrow::arrow;
 
-pub type DataSchema = Schema;
-pub type DataSchemaRef = SchemaRef;
+pub type DataSchema = arrow::datatypes::Schema;
+pub type DataSchemaRef = arrow::datatypes::SchemaRef;

@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use common_arrow::arrow;
 
 use crate::{DataArrayRef, DataColumnarValue, DataType, DataValueArithmeticOperator};
 use crate::{

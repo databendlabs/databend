@@ -6,8 +6,7 @@
 async fn test_parquet_table() -> anyhow::Result<()> {
     use std::env;
 
-    use arrow::datatypes::{Field, Schema};
-    use common_datavalues::DataType;
+    use common_datavalues::*;
     use common_planners::*;
     use futures::TryStreamExt;
 
@@ -29,7 +28,7 @@ async fn test_parquet_table() -> anyhow::Result<()> {
         ctx.clone(),
         "default".into(),
         "test_parquet".into(),
-        Schema::new(vec![Field::new("id", DataType::Int32, false)]).into(),
+        DataSchema::new(vec![DataField::new("id", DataType::Int32, false)]).into(),
         options,
     )?;
     table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;

@@ -21,7 +21,7 @@ macro_rules! compute_op {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
         let ll = downcast_array!($LEFT, $DT)?;
         let rr = downcast_array!($RIGHT, $DT)?;
-        Ok(Arc::new(arrow::compute::$OP(&ll, &rr)?))
+        Ok(Arc::new(common_arrow::arrow::compute::$OP(&ll, &rr)?))
     }};
 }
 
@@ -30,9 +30,9 @@ macro_rules! compute_utf8_op {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
         let ll = downcast_array!($LEFT, $DT)?;
         let rr = downcast_array!($RIGHT, $DT)?;
-        Ok(Arc::new(paste::expr! {arrow::compute::[<$OP _utf8>]}(
-            &ll, &rr,
-        )?))
+        Ok(Arc::new(
+            paste::expr! {common_arrow::arrow::compute::[<$OP _utf8>]}(&ll, &rr)?,
+        ))
     }};
 }
 
@@ -41,7 +41,9 @@ macro_rules! compute_self_defined_op {
     ($LEFT:expr, $RIGHT:expr, $OP:tt, $DT:ident) => {{
         let ll = downcast_array!($LEFT, $DT)?;
         let rr = downcast_array!($RIGHT, $DT)?;
-        Ok(Arc::new(arrow::compute::math_op(&ll, &rr, $OP)?))
+        Ok(Arc::new(common_arrow::arrow::compute::math_op(
+            &ll, &rr, $OP,
+        )?))
     }};
 }
 
@@ -125,10 +127,9 @@ macro_rules! compute_op_scalar {
         use std::convert::TryInto;
 
         let ll = downcast_array!($LEFT, $DT)?;
-        Ok(Arc::new(paste::expr! {arrow::compute::[<$OP _scalar>]}(
-            &ll,
-            $RIGHT.try_into()?,
-        )?))
+        Ok(Arc::new(
+            paste::expr! {common_arrow::arrow::compute::[<$OP _scalar>]}(&ll, $RIGHT.try_into()?)?,
+        ))
     }};
 }
 
@@ -138,7 +139,10 @@ macro_rules! compute_utf8_op_scalar {
         let ll = downcast_array!($LEFT, $DT)?;
         if let crate::DataValue::String(Some(string_value)) = $RIGHT {
             Ok(Arc::new(
-                paste::expr! {arrow::compute::[<$OP _utf8_scalar>]}(&ll, &string_value)?,
+                paste::expr! {common_arrow::arrow::compute::[<$OP _utf8_scalar>]}(
+                    &ll,
+                    &string_value,
+                )?,
             ))
         } else {
             anyhow::bail!(format!(
@@ -177,7 +181,7 @@ macro_rules! arrow_array_op_scalar {
 macro_rules! typed_array_sum_to_data_value {
     ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident) => {{
         let array = downcast_array!($VALUES, $ARRAYTYPE)?;
-        let delta = arrow::compute::sum(array);
+        let delta = common_arrow::arrow::compute::sum(array);
         DataValue::$SCALAR(delta)
     }};
 }
@@ -185,7 +189,7 @@ macro_rules! typed_array_sum_to_data_value {
 macro_rules! typed_array_min_max_to_data_value {
     ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:ident) => {{
         let array = downcast_array!($VALUES, $ARRAYTYPE)?;
-        let value = arrow::compute::$OP(array);
+        let value = common_arrow::arrow::compute::$OP(array);
         DataValue::$SCALAR(value)
     }};
 }
@@ -193,7 +197,7 @@ macro_rules! typed_array_min_max_to_data_value {
 macro_rules! typed_array_min_max_string_to_data_value {
     ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:ident) => {{
         let array = downcast_array!($VALUES, $ARRAYTYPE)?;
-        let value = arrow::compute::$OP(array);
+        let value = common_arrow::arrow::compute::$OP(array);
         let value = value.and_then(|e| Some(e.to_string()));
         DataValue::$SCALAR(value)
     }};
@@ -295,13 +299,13 @@ macro_rules! array_boolean_op {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
         let ll = downcast_array!($LEFT, $DT)?;
         let rr = downcast_array!($RIGHT, $DT)?;
-        Ok(Arc::new(arrow::compute::$OP(&ll, &rr)?))
+        Ok(Arc::new(common_arrow::arrow::compute::$OP(&ll, &rr)?))
     }};
 }
 
 macro_rules! typed_cast_from_array_to_data_value {
     ($array:expr, $index:expr, $ARRAYTYPE:ident, $SCALAR:ident) => {{
-        use arrow::array::*;
+        use common_arrow::arrow::array::*;
         let array = downcast_array!($array, $ARRAYTYPE)?;
         DataValue::$SCALAR(match array.is_null($index) {
             true => None,
