@@ -6,7 +6,7 @@
 async fn test_pipeline_display() -> anyhow::Result<()> {
     use pretty_assertions::assert_eq;
 
-    use crate::processors::*;
+    use crate::pipelines::processors::*;
     use crate::sql::*;
 
     let ctx = crate::tests::try_create_context()?;

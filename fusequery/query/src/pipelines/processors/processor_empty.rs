@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use common_datavalues::DataSchema;
 use common_streams::{DataBlockStream, SendableDataBlockStream};
 
-use crate::processors::IProcessor;
+use crate::pipelines::processors::IProcessor;
 
 pub struct EmptyProcessor {}
 

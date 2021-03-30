@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use crate::processors::IProcessor;
+use crate::pipelines::processors::IProcessor;
 
 #[derive(Clone)]
 pub struct Pipe {

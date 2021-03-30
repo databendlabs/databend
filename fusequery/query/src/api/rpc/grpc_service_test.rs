@@ -24,7 +24,7 @@ async fn test_grpc_service_fetch_partition() -> Result<(), Box<dyn std::error::E
     use pretty_assertions::assert_eq;
 
     use crate::api::rpc::GrpcClient;
-    use crate::processors::PipelineBuilder;
+    use crate::pipelines::processors::PipelineBuilder;
     use crate::sql::PlanParser;
 
     // 1. Service starts.

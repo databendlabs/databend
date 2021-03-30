@@ -6,7 +6,9 @@ use std::io::Cursor;
 use std::pin::Pin;
 use std::time::Instant;
 
-use arrow_flight::{
+use common_arrow::arrow;
+use common_arrow::arrow_flight::{
+    self,
     flight_service_server::{FlightService as Flight, FlightServiceServer as FlightServer},
     Action, ActionType, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo,
     HandshakeRequest, HandshakeResponse, PutResult, SchemaResult, Ticket,
@@ -21,7 +23,7 @@ use tonic::{Request, Response, Status, Streaming};
 use crate::api::rpc::ExecuteAction;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::processors::PipelineBuilder;
+use crate::pipelines::processors::PipelineBuilder;
 use crate::protobuf::FlightRequest;
 use crate::sessions::SessionRef;
 

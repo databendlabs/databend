@@ -12,9 +12,9 @@ use std::{
 };
 
 use anyhow::Result;
-use arrow::array::ArrayData;
-use arrow::buffer::Buffer;
-use arrow::datatypes::DataType;
+use common_arrow::arrow::array::ArrayData;
+use common_arrow::arrow::buffer::Buffer;
+use common_arrow::arrow::datatypes::DataType;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataSchemaRef, UInt64Array};
 use futures::stream::Stream;

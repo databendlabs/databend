@@ -5,8 +5,8 @@
 use std::fmt;
 use std::fmt::Display;
 
-use crate::processors::{Pipeline, PipelineBuilder};
-use crate::transforms::RemoteTransform;
+use crate::pipelines::processors::{Pipeline, PipelineBuilder};
+use crate::pipelines::transforms::RemoteTransform;
 
 impl Pipeline {
     pub fn display_indent(&self) -> impl fmt::Display + '_ {

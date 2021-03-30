@@ -6,15 +6,15 @@ use std::any::Any;
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
-use arrow::compute::filter_record_batch;
 use async_trait::async_trait;
+use common_arrow::arrow;
 use common_datablocks::DataBlock;
 use common_datavalues::{BooleanArray, DataSchema, DataSchemaRef};
 use common_functions::IFunction;
 use common_planners::ExpressionPlan;
 use common_streams::{ExpressionStream, SendableDataBlockStream};
 
-use crate::processors::{EmptyProcessor, IProcessor};
+use crate::pipelines::processors::{EmptyProcessor, IProcessor};
 
 pub struct FilterTransform {
     func: Box<dyn IFunction>,
@@ -48,7 +48,7 @@ impl FilterTransform {
             .as_any()
             .downcast_ref::<BooleanArray>()
             .ok_or_else(|| anyhow::Error::msg("cannot downcast to boolean array"))?;
-        DataBlock::try_from_arrow_batch(&filter_record_batch(
+        DataBlock::try_from_arrow_batch(&arrow::compute::filter_record_batch(
             &block.to_arrow_batch()?,
             filter_result,
         )?)

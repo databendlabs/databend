@@ -5,6 +5,7 @@
 use std::task::{Context, Poll};
 
 use anyhow::Result;
+use common_arrow::arrow;
 use common_datablocks::DataBlock;
 use futures::stream::{Stream, StreamExt};
 

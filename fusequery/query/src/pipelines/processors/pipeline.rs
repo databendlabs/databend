@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use common_streams::SendableDataBlockStream;
 
-use crate::processors::{IProcessor, MergeProcessor, Pipe};
+use crate::pipelines::processors::{IProcessor, MergeProcessor, Pipe};
 
 pub struct Pipeline {
     pipes: Vec<Pipe>,

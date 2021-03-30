@@ -376,14 +376,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-arrow"
+version = "0.1.0"
+dependencies = [
+ "arrow",
+ "arrow-flight",
+ "parquet",
+]
+
+[[package]]
 name = "common-datablocks"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow",
+ "common-arrow",
  "common-datavalues",
- "paste",
- "serde",
 ]
 
 [[package]]
@@ -391,7 +398,7 @@ name = "common-datavalues"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow",
+ "common-arrow",
  "paste",
  "pretty_assertions",
  "serde",
@@ -402,16 +409,13 @@ name = "common-functions"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow",
  "common-datablocks",
  "common-datavalues",
  "common-infallible",
  "dyn-clone",
  "indexmap",
  "lazy_static",
- "paste",
  "pretty_assertions",
- "serde",
 ]
 
 [[package]]
@@ -425,10 +429,6 @@ dependencies = [
  "anyhow",
  "common-datavalues",
  "common-functions",
- "dyn-clone",
- "indexmap",
- "lazy_static",
- "paste",
  "pretty_assertions",
  "serde",
 ]
@@ -438,14 +438,12 @@ name = "common-streams"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow",
+ "common-arrow",
  "common-datablocks",
  "common-datavalues",
  "common-functions",
  "crossbeam 0.8.0",
- "dyn-clone",
  "futures",
- "paste",
  "pretty_assertions",
  "tokio",
 ]
@@ -788,9 +786,8 @@ name = "fuse-query"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow",
- "arrow-flight",
  "async-trait",
+ "common-arrow",
  "common-datablocks",
  "common-datavalues",
  "common-functions",
@@ -798,7 +795,6 @@ dependencies = [
  "common-planners",
  "common-streams",
  "crossbeam 0.8.0",
- "dyn-clone",
  "env_logger",
  "futures",
  "indexmap",
@@ -809,7 +805,6 @@ dependencies = [
  "msql-srv",
  "num 0.4.0",
  "num_cpus",
- "parquet",
  "paste",
  "pretty_assertions",
  "prost",
@@ -818,7 +813,6 @@ dependencies = [
  "serde_json",
  "sqlparser",
  "structopt",
- "thiserror",
  "threadpool",
  "tokio",
  "tokio-stream",

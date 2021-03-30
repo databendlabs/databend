@@ -13,7 +13,7 @@ use futures::stream::StreamExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::processors::IProcessor;
+use crate::pipelines::processors::IProcessor;
 
 pub struct MergeProcessor {
     inputs: Vec<Arc<dyn IProcessor>>,

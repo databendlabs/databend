@@ -4,8 +4,7 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_null_table() -> anyhow::Result<()> {
-    use arrow::datatypes::{Field, Schema};
-    use common_datavalues::DataType;
+    use common_datavalues::*;
     use common_planners::*;
     use futures::TryStreamExt;
 
@@ -16,7 +15,7 @@ async fn test_null_table() -> anyhow::Result<()> {
         ctx.clone(),
         "default".into(),
         "a".into(),
-        Schema::new(vec![Field::new("a", DataType::UInt64, false)]).into(),
+        DataSchema::new(vec![DataField::new("a", DataType::UInt64, false)]).into(),
         TableOptions::default(),
     )?;
     table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;

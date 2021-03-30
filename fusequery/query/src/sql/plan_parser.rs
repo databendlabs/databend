@@ -6,8 +6,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
-use arrow::datatypes::{Field, Schema};
-use common_datavalues::{DataSchema, DataValue};
+use common_arrow::arrow;
+use common_datavalues::{DataField, DataSchema, DataValue};
 use common_planners::{
     CreatePlan, ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, SelectPlan, SettingPlan,
     StageState, VarValue,
@@ -86,7 +86,7 @@ impl PlanParser {
 
         let mut fields = vec![];
         for col in create.columns.iter() {
-            fields.push(Field::new(
+            fields.push(DataField::new(
                 &col.name.value,
                 make_data_type(&col.data_type)?,
                 false,
@@ -102,7 +102,7 @@ impl PlanParser {
             if_not_exists: create.if_not_exists,
             db,
             table,
-            schema: Arc::new(Schema::new(fields)),
+            schema: Arc::new(arrow::datatypes::Schema::new(fields)),
             engine: create.engine,
             options,
         }))

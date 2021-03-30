@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 
-use crate::processors::{Pipe, Pipeline};
+use crate::pipelines::processors::{Pipe, Pipeline};
 
 #[derive(PartialEq)]
 enum WalkOrder {

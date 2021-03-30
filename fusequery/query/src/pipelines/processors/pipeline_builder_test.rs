@@ -6,7 +6,7 @@
 async fn test_local_pipeline_build() -> anyhow::Result<()> {
     use pretty_assertions::assert_eq;
 
-    use crate::processors::*;
+    use crate::pipelines::processors::*;
     use crate::sql::*;
 
     let ctx = crate::tests::try_create_context()?;
@@ -30,7 +30,7 @@ async fn test_local_pipeline_build() -> anyhow::Result<()> {
 async fn test_distributed_pipeline_build() -> anyhow::Result<()> {
     use pretty_assertions::assert_eq;
 
-    use crate::processors::*;
+    use crate::pipelines::processors::*;
     use crate::sql::*;
 
     let ctx = crate::tests::try_create_context_with_nodes(3).await?;

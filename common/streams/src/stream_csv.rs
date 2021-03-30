@@ -6,7 +6,7 @@ use std::fs::File;
 use std::task::{Context, Poll};
 
 use anyhow::Result;
-use arrow::csv;
+use common_arrow::arrow::csv;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use csv as csv_crate;

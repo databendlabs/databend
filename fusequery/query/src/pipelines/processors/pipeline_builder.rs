@@ -8,13 +8,13 @@ use anyhow::{bail, Result};
 use common_planners::PlanNode;
 use log::info;
 
-use crate::planners::PlanScheduler;
-use crate::processors::Pipeline;
-use crate::sessions::FuseQueryContextRef;
-use crate::transforms::{
+use crate::pipelines::processors::Pipeline;
+use crate::pipelines::transforms::{
     AggregatorFinalTransform, AggregatorPartialTransform, FilterTransform, LimitTransform,
     ProjectionTransform, RemoteTransform, SourceTransform,
 };
+use crate::planners::PlanScheduler;
+use crate::sessions::FuseQueryContextRef;
 
 pub struct PipelineBuilder {
     ctx: FuseQueryContextRef,

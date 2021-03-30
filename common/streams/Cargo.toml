@@ -8,19 +8,17 @@ edition = "2018"
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
+common-arrow = {path = "../arrow"}
 common-datablocks = {path = "../datablocks"}
 common-datavalues = {path = "../datavalues"}
 common-functions = {path = "../functions"}
 
 # Github dependencies
-arrow = { git = "https://github.com/apache/arrow", rev="46161d2" }
 
 # Crates.io dependencies
 anyhow = "1.0.40"
 crossbeam = "0.8"
-dyn-clone = "1.0.4"
 futures = "0.3"
-paste = "^1.0"
 tokio = { version = "1.0", features = ["macros", "rt","rt-multi-thread", "sync"] }
 
 [dev-dependencies]

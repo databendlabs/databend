@@ -6,11 +6,11 @@ use std::convert::TryFrom;
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
-use arrow::datatypes::Schema;
-use arrow_flight::flight_service_client::FlightServiceClient;
-use arrow_flight::utils::flight_data_to_arrow_batch;
-use arrow_flight::Ticket;
+use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
+use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
+use common_arrow::arrow_flight::Ticket;
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchema;
 use common_streams::{DataBlockStream, SendableDataBlockStream};
 use prost::Message;
 
@@ -38,7 +38,7 @@ impl FlightClient {
         let mut stream = self.client.do_get(request).await?.into_inner();
         match stream.message().await? {
             Some(flight_data) => {
-                let schema = Arc::new(Schema::try_from(&flight_data)?);
+                let schema = Arc::new(DataSchema::try_from(&flight_data)?);
                 let mut blocks = vec![];
                 while let Some(flight_data) = stream.message().await? {
                     let batch = flight_data_to_arrow_batch(&flight_data, schema.clone(), &[])?;

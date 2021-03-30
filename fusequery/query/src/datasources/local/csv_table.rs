@@ -5,7 +5,6 @@
 use std::fs::File;
 
 use anyhow::{bail, Result};
-use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
 use common_datavalues::DataSchemaRef;
 use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics, TableOptions};
@@ -28,7 +27,7 @@ impl CsvTable {
         _ctx: FuseQueryContextRef,
         db: String,
         name: String,
-        schema: SchemaRef,
+        schema: DataSchemaRef,
         options: TableOptions,
     ) -> Result<Box<dyn ITable>> {
         let file = options.get("location");

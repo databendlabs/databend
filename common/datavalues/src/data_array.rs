@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_arrow::arrow;
+
 pub type DataArrayRef = arrow::array::ArrayRef;
 
 pub type NullArray = arrow::array::NullArray;

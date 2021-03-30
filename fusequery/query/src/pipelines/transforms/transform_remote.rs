@@ -11,7 +11,7 @@ use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 
 use crate::api::rpc::{ExecuteAction, ExecutePlanAction, FlightClient};
-use crate::processors::{EmptyProcessor, IProcessor};
+use crate::pipelines::processors::{EmptyProcessor, IProcessor};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct RemoteTransform {

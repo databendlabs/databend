@@ -2,6 +2,7 @@
 
 members = [
     # Common
+    "common/arrow",
     "common/datablocks",
     "common/datavalues",
     "common/functions",

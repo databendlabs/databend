@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use anyhow::Result;
-use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -25,7 +24,7 @@ impl NullTable {
         _ctx: FuseQueryContextRef,
         db: String,
         name: String,
-        schema: SchemaRef,
+        schema: DataSchemaRef,
         _options: TableOptions,
     ) -> Result<Box<dyn ITable>> {
         let table = Self { db, name, schema };

@@ -6,7 +6,7 @@
 async fn test_processor_empty() -> anyhow::Result<()> {
     use pretty_assertions::assert_eq;
 
-    use crate::processors::*;
+    use crate::pipelines::processors::*;
 
     let empty = EmptyProcessor::create();
 

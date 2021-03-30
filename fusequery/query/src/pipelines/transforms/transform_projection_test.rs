@@ -10,8 +10,8 @@ async fn test_transform_projection() -> anyhow::Result<()> {
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::processors::*;
-    use crate::transforms::*;
+    use crate::pipelines::processors::*;
+    use crate::pipelines::transforms::*;
 
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
