@@ -9,7 +9,7 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use common_streams::SendableDataBlockStream;
 
-use crate::processors::{EmptyProcessor, IProcessor};
+use crate::pipelines::processors::{EmptyProcessor, IProcessor};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct SourceTransform {

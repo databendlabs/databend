@@ -16,7 +16,7 @@ use common_streams::{DataBlockStream, SendableDataBlockStream};
 use futures::stream::StreamExt;
 use log::info;
 
-use crate::processors::{EmptyProcessor, IProcessor};
+use crate::pipelines::processors::{EmptyProcessor, IProcessor};
 
 pub struct AggregatorPartialTransform {
     funcs: Vec<Box<dyn IFunction>>,

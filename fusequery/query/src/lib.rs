@@ -11,12 +11,11 @@ pub mod datasources;
 pub mod interpreters;
 pub mod metrics;
 pub mod optimizers;
+pub mod pipelines;
 pub mod planners;
-pub mod processors;
 pub mod servers;
 pub mod sessions;
 pub mod sql;
-pub mod transforms;
 
 pub use common_datablocks;
 pub use common_datavalues;

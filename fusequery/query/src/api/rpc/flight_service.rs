@@ -23,7 +23,7 @@ use tonic::{Request, Response, Status, Streaming};
 use crate::api::rpc::ExecuteAction;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::processors::PipelineBuilder;
+use crate::pipelines::processors::PipelineBuilder;
 use crate::protobuf::FlightRequest;
 use crate::sessions::SessionRef;
 

@@ -9,8 +9,8 @@ use common_datavalues::{DataSchema, DataSchemaRef, DataValue};
 use common_planners::{ExpressionPlan, PlanNode, ReadDataSourcePlan, ScanPlan};
 
 use crate::datasources::IDataSource;
+use crate::pipelines::transforms::SourceTransform;
 use crate::sessions::FuseQueryContextRef;
-use crate::transforms::SourceTransform;
 
 pub struct NumberTestData {
     ctx: FuseQueryContextRef,

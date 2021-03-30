@@ -14,7 +14,7 @@ use common_functions::IFunction;
 use common_planners::ExpressionPlan;
 use common_streams::{ExpressionStream, SendableDataBlockStream};
 
-use crate::processors::{EmptyProcessor, IProcessor};
+use crate::pipelines::processors::{EmptyProcessor, IProcessor};
 
 pub struct FilterTransform {
     func: Box<dyn IFunction>,

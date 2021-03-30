@@ -11,7 +11,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::IInterpreter;
 use crate::optimizers::Optimizer;
-use crate::processors::PipelineBuilder;
+use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct SelectInterpreter {

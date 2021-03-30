@@ -9,8 +9,8 @@ async fn test_transform_remote_with_local() -> anyhow::Result<()> {
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::processors::*;
-    use crate::transforms::*;
+    use crate::pipelines::processors::*;
+    use crate::pipelines::transforms::*;
 
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
@@ -39,7 +39,7 @@ async fn test_transform_remote_with_cluster() -> anyhow::Result<()> {
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::processors::*;
+    use crate::pipelines::processors::*;
     use crate::sql::*;
 
     let ctx_more_cpu_for_partitions_generate = crate::tests::try_create_context()?;

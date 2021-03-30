@@ -8,7 +8,7 @@ async fn test_pipe() -> anyhow::Result<()> {
 
     use pretty_assertions::assert_eq;
 
-    use crate::processors::*;
+    use crate::pipelines::processors::*;
 
     let mut pipe = Pipe::create();
     let empty = Arc::new(EmptyProcessor::create());

@@ -10,7 +10,7 @@ async fn test_processor_merge() -> anyhow::Result<()> {
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::processors::*;
+    use crate::pipelines::processors::*;
     use crate::tests;
 
     let ctx = crate::tests::try_create_context()?;
