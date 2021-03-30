@@ -7,9 +7,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use common_planners::CreatePlan;
+use common_streams::{DataBlockStream, SendableDataBlockStream};
 
 use crate::datasources::TableFactory;
-use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::interpreters::IInterpreter;
 use crate::sessions::FuseQueryContextRef;
 

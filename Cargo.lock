@@ -796,6 +796,8 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-planners",
+ "common-streams",
+ "crossbeam 0.8.0",
  "dyn-clone",
  "env_logger",
  "futures",

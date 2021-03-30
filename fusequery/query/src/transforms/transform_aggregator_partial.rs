@@ -12,10 +12,10 @@ use common_datablocks::DataBlock;
 use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, DataValue, StringArray};
 use common_functions::IFunction;
 use common_planners::ExpressionPlan;
+use common_streams::{DataBlockStream, SendableDataBlockStream};
 use futures::stream::StreamExt;
 use log::info;
 
-use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::processors::{EmptyProcessor, IProcessor};
 
 pub struct AggregatorPartialTransform {

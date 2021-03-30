@@ -8,10 +8,10 @@ use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics, TableOptions};
+use common_streams::{DataBlockStream, SendableDataBlockStream};
 
 use crate::datasources::table_factory::TableCreatorFactory;
 use crate::datasources::ITable;
-use crate::datastreams::{DataBlockStream, SendableDataBlockStream};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct NullTable {

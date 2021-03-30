@@ -18,6 +18,7 @@ common-datavalues = {path = "../../common/datavalues"}
 common-functions = {path = "../../common/functions"}
 common-infallible = {path = "../../common/infallible"}
 common-planners = {path = "../../common/planners"}
+common-streams = {path = "../../common/streams"}
 
 
 # Github dependencies
@@ -29,6 +30,7 @@ arrow-flight = { git = "https://github.com/apache/arrow", rev="46161d2" }
 anyhow = "1.0.40"
 async-trait = "0.1"
 dyn-clone = "1.0.4"
+crossbeam = "0.8"
 env_logger = "0.8"
 futures = "0.3"
 indexmap = "1.6.1"

@@ -8,7 +8,6 @@ pub mod api;
 pub mod clusters;
 pub mod configs;
 pub mod datasources;
-pub mod datastreams;
 pub mod interpreters;
 pub mod metrics;
 pub mod optimizers;
@@ -23,6 +22,7 @@ pub use common_datablocks;
 pub use common_datavalues;
 pub use common_functions;
 pub use common_planners;
+pub use common_streams;
 
 // ProtoBuf generated files.
 #[allow(clippy::all)]

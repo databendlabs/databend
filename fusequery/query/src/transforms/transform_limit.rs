@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use common_streams::{LimitStream, SendableDataBlockStream};
 
-use crate::datastreams::{LimitStream, SendableDataBlockStream};
 use crate::processors::{EmptyProcessor, IProcessor};
 
 pub struct LimitTransform {

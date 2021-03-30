@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
+use common_streams::SendableDataBlockStream;
 
-use crate::datastreams::SendableDataBlockStream;
 use crate::processors::{EmptyProcessor, IProcessor};
 use crate::sessions::FuseQueryContextRef;
 

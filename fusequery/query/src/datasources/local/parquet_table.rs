@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics, TableOptions};
+use common_streams::{ParquetStream, SendableDataBlockStream};
 use crossbeam::channel::{bounded, Receiver, Sender};
 use parquet::arrow::{ArrowReader, ParquetFileArrowReader};
 use parquet::file::reader::SerializedFileReader;
@@ -18,7 +19,6 @@ use tokio::task;
 
 use crate::datasources::table_factory::TableCreatorFactory;
 use crate::datasources::ITable;
-use crate::datastreams::{ParquetStream, SendableDataBlockStream};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ParquetTable {

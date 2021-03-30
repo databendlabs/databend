@@ -9,11 +9,11 @@ use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
 use common_datavalues::DataSchemaRef;
 use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics, TableOptions};
+use common_streams::{CsvStream, SendableDataBlockStream};
 
 use crate::datasources::local::ParquetTable;
 use crate::datasources::table_factory::TableCreatorFactory;
 use crate::datasources::ITable;
-use crate::datastreams::{CsvStream, SendableDataBlockStream};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct CsvTable {
