@@ -193,7 +193,8 @@ impl PlanParser {
         let table = self.ctx.get_table(db_name, table_name)?;
         let schema = table.schema()?;
 
-        let scan = PlanBuilder::scan(db_name, table_name, schema.as_ref(), None, None)?.build()?;
+        let scan =
+            PlanBuilder::scan(db_name, table_name, schema.as_ref(), None, None, None)?.build()?;
         let datasource_plan = table.read_plan(self.ctx.clone(), scan)?;
         Ok(PlanNode::ReadSource(datasource_plan))
     }
@@ -226,9 +227,15 @@ impl PlanParser {
                     }
                 }
 
-                let scan =
-                    PlanBuilder::scan(&db_name, &table_name, schema.as_ref(), None, table_args)?
-                        .build()?;
+                let scan = PlanBuilder::scan(
+                    &db_name,
+                    &table_name,
+                    schema.as_ref(),
+                    None,
+                    table_args,
+                    None,
+                )?
+                .build()?;
                 let datasource_plan = table.read_plan(self.ctx.clone(), scan)?;
                 Ok(PlanNode::ReadSource(datasource_plan))
             }
