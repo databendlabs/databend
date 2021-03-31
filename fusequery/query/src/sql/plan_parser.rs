@@ -14,6 +14,7 @@ use common_planners::{
 };
 use sqlparser::ast::{FunctionArg, Statement, TableFactor};
 
+use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::sql_parser::FuseCreateTable;
 use crate::sql::{make_data_type, DfExplainPlan, DfParser, DfStatement};
@@ -211,21 +212,33 @@ impl PlanParser {
                     db_name = name.0[0].to_string();
                     table_name = name.0[1].to_string();
                 }
-                let table = self.ctx.get_table(&db_name, table_name.as_str())?;
-                let schema = table.schema()?;
-
                 let mut table_args = None;
+                let table: Arc<dyn ITable>;
+
+                // only table functions has table args
                 if !args.is_empty() {
+                    if name.0.len() >= 2 {
+                        bail!("Currently table can't have arguments")
+                    }
+
+                    let empty_schema = Arc::new(DataSchema::empty());
                     match &args[0] {
                         FunctionArg::Named { arg, .. } => {
-                            table_args = Some(self.sql_to_rex(&arg, &schema)?);
+                            table_args = Some(self.sql_to_rex(&arg, empty_schema.as_ref())?);
                         }
                         FunctionArg::Unnamed(arg) => {
-                            table_args = Some(self.sql_to_rex(&arg, &schema)?);
+                            table_args = Some(self.sql_to_rex(&arg, empty_schema.as_ref())?);
                         }
                     }
+                    let table_function = self.ctx.get_table_function(&table_name)?;
+                    table_name = table_function.name().to_string();
+                    db_name = table_function.db().to_string();
+                    table = table_function.as_table();
+                } else {
+                    table = self.ctx.get_table(&db_name, table_name.as_str())?;
                 }
 
+                let schema = table.schema()?;
                 let scan =
                     PlanBuilder::scan(&db_name, &table_name, schema.as_ref(), None, table_args)?
                         .build()?;

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use crate::datasources::datasource::DatabaseHashMap;
-use crate::datasources::{system, ITable};
+use crate::datasources::{system, ITable, ITableFunction};
 
 pub struct SystemFactory;
 
@@ -31,5 +31,13 @@ impl SystemFactory {
         let mut hashmap: DatabaseHashMap = HashMap::default();
         hashmap.insert("system", tables);
         Ok(hashmap)
+    }
+
+    pub fn get_table_functions(&self) -> Result<Vec<Arc<dyn ITableFunction>>> {
+        let tables: Vec<Arc<dyn ITableFunction>> = vec![
+            Arc::new(system::NumbersTable::create("numbers")),
+            Arc::new(system::NumbersTable::create("numbers_mt")),
+        ];
+        Ok(tables)
     }
 }

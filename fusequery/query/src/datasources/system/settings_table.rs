@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -39,6 +40,10 @@ impl ITable for SettingsTable {
 
     fn engine(&self) -> &str {
         "SystemSettings"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     fn schema(&self) -> Result<DataSchemaRef> {

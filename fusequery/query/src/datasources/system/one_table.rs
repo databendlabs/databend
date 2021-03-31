@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -38,6 +39,10 @@ impl ITable for OneTable {
 
     fn engine(&self) -> &str {
         "SystemOne"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     fn schema(&self) -> Result<DataSchemaRef> {

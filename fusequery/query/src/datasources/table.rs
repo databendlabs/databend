@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::any::Any;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use common_datavalues::DataSchemaRef;
@@ -14,6 +16,8 @@ use crate::sessions::FuseQueryContextRef;
 pub trait ITable: Sync + Send {
     fn name(&self) -> &str;
     fn engine(&self) -> &str;
+
+    fn as_any(&self) -> &dyn Any;
 
     fn schema(&self) -> Result<DataSchemaRef>;
 
