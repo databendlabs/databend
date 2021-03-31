@@ -11,8 +11,9 @@ use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
 use common_arrow::arrow_flight::Ticket;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
-use common_streams::{DataBlockStream, SendableDataBlockStream};
+use common_streams::SendableDataBlockStream;
 use prost::Message;
+use tokio_stream::StreamExt;
 
 use crate::api::rpc::ExecuteAction;
 use crate::protobuf::FlightRequest;
@@ -39,12 +40,11 @@ impl FlightClient {
         match stream.message().await? {
             Some(flight_data) => {
                 let schema = Arc::new(DataSchema::try_from(&flight_data)?);
-                let mut blocks = vec![];
-                while let Some(flight_data) = stream.message().await? {
-                    let batch = flight_data_to_arrow_batch(&flight_data, schema.clone(), &[])?;
-                    blocks.push(DataBlock::try_from_arrow_batch(&batch)?);
-                }
-                Ok(Box::pin(DataBlockStream::create(schema, None, blocks)))
+                let block_stream = stream.map(move |flight_data| {
+                    let batch = flight_data_to_arrow_batch(&flight_data?, schema.clone(), &[])?;
+                    DataBlock::try_from_arrow_batch(&batch)
+                });
+                Ok(Box::pin(block_stream))
             }
             None => bail!(
                 "Can not receive data from flight server, action:{:?}",
