@@ -15,7 +15,7 @@ async fn test_select_interpreter() -> anyhow::Result<()> {
         crate::tests::try_create_context()?.with_id("cf6db5fe-7595-4d85-97ee-71f051b21cbe")?;
 
     if let PlanNode::Select(plan) = PlanParser::create(ctx.clone())
-        .build_from_sql("select number from system.numbers_mt(10) where (number+2)<2")?
+        .build_from_sql("select number from numbers_mt(10) where (number+2)<2")?
     {
         let executor = SelectInterpreter::try_create(ctx.clone(), plan)?;
         assert_eq!(executor.name(), "SelectInterpreter");

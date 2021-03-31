@@ -33,7 +33,7 @@ async fn test_grpc_service_fetch_partition() -> Result<(), Box<dyn std::error::E
 
     // 2. Make some partitions for the current context.
     let plan =
-        PlanParser::create(ctx.clone()).build_from_sql("select * from system.numbers_mt(80000)")?;
+        PlanParser::create(ctx.clone()).build_from_sql("select * from numbers_mt(80000)")?;
     let _pipeline = PipelineBuilder::create(ctx.clone(), plan).build()?;
 
     // 3. Fetch the partitions from the context by ID via the gRPC.

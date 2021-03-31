@@ -1,6 +1,6 @@
-select toTypeName(number) from system.numbers(100) limit 1;
+select toTypeName(number) from numbers(100) limit 1;
 select toTypeName(number + 1), toTypeName(number - 1),
-       toTypeName(number / 1), toTypeName(number * 1) from system.numbers(100) limit 1;
+       toTypeName(number / 1), toTypeName(number * 1) from numbers(100) limit 1;
 select toTypeName('33'), toTypeName('44');
 
 

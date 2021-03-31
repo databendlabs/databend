@@ -11,7 +11,7 @@ Arithmetic Operators work for any pair of types from UInt8, UInt16, UInt32, UInt
 Calculates the sum of the numbers.
 
 ```text
-mysql> SELECT number+1, plus(number, 1) FROM system.numbers(3);
+mysql> SELECT number+1, plus(number, 1) FROM numbers(3);
 +-----------------+-----------------+
 | plus(number, 1) | plus(number, 1) |
 +-----------------+-----------------+
@@ -25,7 +25,7 @@ mysql> SELECT number+1, plus(number, 1) FROM system.numbers(3);
 ## a - b operator, `minus` function
 
 ```text
-mysql> SELECT number-1, minus(number, 1) FROM system.numbers(3) WHERE number > 0;
+mysql> SELECT number-1, minus(number, 1) FROM numbers(3) WHERE number > 0;
 +------------------+------------------+
 | minus(number, 1) | minus(number, 1) |
 +------------------+------------------+
@@ -40,7 +40,7 @@ mysql> SELECT number-1, minus(number, 1) FROM system.numbers(3) WHERE number > 0
 Calculates the product of the numbers.
 
 ```text
-mysql> SELECT number * 3, multiply(number, 3) FROM system.numbers(3);
+mysql> SELECT number * 3, multiply(number, 3) FROM numbers(3);
 +---------------------+---------------------+
 | multiply(number, 3) | multiply(number, 3) |
 +---------------------+---------------------+
@@ -56,7 +56,7 @@ mysql> SELECT number * 3, multiply(number, 3) FROM system.numbers(3);
 Calculates the product of the numbers.
 
 ```text
-mysql> SELECT number / 3, divide(number, 3) FROM system.numbers(3);
+mysql> SELECT number / 3, divide(number, 3) FROM numbers(3);
 +--------------------+--------------------+
 | divide(number, 3)  | divide(number, 3)  |
 +--------------------+--------------------+
@@ -72,7 +72,7 @@ mysql> SELECT number / 3, divide(number, 3) FROM system.numbers(3);
 Calculates the quotient of the numbers.
 
 ```text
-mysql> SELECT number %  3, modulo(number, 3) FROM system.numbers(4);
+mysql> SELECT number %  3, modulo(number, 3) FROM numbers(4);
 +-------------------+-------------------+
 | modulo(number, 3) | modulo(number, 3) |
 +-------------------+-------------------+

@@ -7,7 +7,7 @@ title: AGGREGATE
 ## Count
 
 ```text
-mysql> SELECT count(number) FROM system.numbers(3);
+mysql> SELECT count(number) FROM numbers(3);
 
 +---------------+
 | count(number) |
@@ -21,7 +21,7 @@ mysql> SELECT count(number) FROM system.numbers(3);
 ## Min
 
 ```text
-mysql> SELECT min(number) FROM system.numbers(3);
+mysql> SELECT min(number) FROM numbers(3);
 
 +-------------+
 | min(number) |
@@ -35,7 +35,7 @@ mysql> SELECT min(number) FROM system.numbers(3);
 ## Max
 
 ```text
-SELECT max(number) FROM system.numbers(3);
+SELECT max(number) FROM numbers(3);
 
 +-------------+
 | max(number) |
@@ -48,7 +48,7 @@ SELECT max(number) FROM system.numbers(3);
 ## Avg
 
 ```text
-mysql> SELECT avg(number) FROM system.numbers(3);
+mysql> SELECT avg(number) FROM numbers(3);
 
 +-------------+
 | avg(number) |
@@ -61,7 +61,7 @@ mysql> SELECT avg(number) FROM system.numbers(3);
 ## Sum
 
 ```text
-mysql> SELECT sum(number) FROM system.numbers(3);
+mysql> SELECT sum(number) FROM numbers(3);
 
 +-------------+
 | sum(number) |
@@ -76,7 +76,7 @@ mysql> SELECT sum(number) FROM system.numbers(3);
 Aggregation also supports arithmetic operation.
 
 ```text
-mysql> SELECT sum(number+3)/count(number) FROM system.numbers(3);
+mysql> SELECT sum(number+3)/count(number) FROM numbers(3);
 
 +-------------------------------------+
 | (sum((number + 3)) / count(number)) |
