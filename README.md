@@ -26,7 +26,7 @@ Inspired by [ClickHouse](https://github.com/ClickHouse/ClickHouse) and powered b
 
 ## Architecture
 
-![DataFuse Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/datafuse.svg)
+![Datafuse Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/datafuse-v1.svg)
 
 ## Performance
 
