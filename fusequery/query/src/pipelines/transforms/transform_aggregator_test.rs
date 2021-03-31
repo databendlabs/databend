@@ -17,13 +17,7 @@ async fn test_transform_aggregator() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
-    let aggr_exprs = vec![add(
-        ExpressionPlan::Function {
-            op: "sum".to_string(),
-            args: vec![col("number")],
-        },
-        lit(2u64),
-    )];
+    let aggr_exprs = vec![add(sum(col("number")), lit(2u64))];
 
     let aggr_partial = PlanBuilder::create(test_source.number_schema_for_test()?)
         .aggregate_partial(aggr_exprs.clone(), vec![])?

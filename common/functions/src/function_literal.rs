@@ -34,8 +34,7 @@ impl IFunction for LiteralFunction {
         Ok(DataColumnarValue::Scalar(self.value.clone()))
     }
 
-    fn set_depth(&mut self, _depth: usize) {}
-
+    // For aggregate wrapper: sum(a+2) + 1
     fn accumulate(&mut self, _block: &DataBlock) -> Result<()> {
         Ok(())
     }

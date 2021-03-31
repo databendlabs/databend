@@ -87,6 +87,6 @@ impl IFunction for AggregatorCountFunction {
 
 impl fmt::Display for AggregatorCountFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Count({})", self.arg)
+        write!(f, "count({})", self.arg)
     }
 }
