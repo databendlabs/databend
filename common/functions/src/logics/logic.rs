@@ -4,10 +4,10 @@
 
 use std::fmt;
 
-use anyhow::{bail, ensure, Result};
+use anyhow::{ensure, Result};
 use common_datablocks::DataBlock;
 use common_datavalues::{
-    self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue, DataValueLogicOperator,
+    self as datavalues, DataColumnarValue, DataSchema, DataType, DataValueLogicOperator,
 };
 
 use crate::logics::{LogicAndFunction, LogicOrFunction};
@@ -69,29 +69,6 @@ impl IFunction for LogicFunction {
 
     fn set_depth(&mut self, depth: usize) {
         self.depth = depth;
-    }
-
-    fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
-        self.left.accumulate(block)?;
-        self.right.accumulate(block)
-    }
-
-    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
-        bail!(
-            "Unsupported accumulate_result operation for function {}",
-            self.op
-        );
-    }
-
-    fn merge(&mut self, _states: &[DataValue]) -> Result<()> {
-        bail!("Unsupported merge operation for function {}", self.op);
-    }
-
-    fn merge_result(&self) -> Result<DataValue> {
-        bail!(
-            "Unsupported merge_result operation for function {}",
-            self.op
-        );
     }
 
     fn is_aggregator(&self) -> bool {

@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 
@@ -30,24 +30,6 @@ impl IFunction for UdfExampleFunction {
 
     fn eval(&self, _block: &DataBlock) -> Result<DataColumnarValue> {
         Ok(DataColumnarValue::Scalar(DataValue::Boolean(Some(true))))
-    }
-
-    fn set_depth(&mut self, _depth: usize) {}
-
-    fn accumulate(&mut self, _block: &DataBlock) -> Result<()> {
-        bail!("Unsupported accumulate for example UDF");
-    }
-
-    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
-        bail!("Unsupported accumulate_result for example UDF");
-    }
-
-    fn merge(&mut self, _states: &[DataValue]) -> Result<()> {
-        bail!("Unsupported merge for example UDF");
-    }
-
-    fn merge_result(&self) -> Result<DataValue> {
-        bail!("Unsupported merge_result for example UDF");
     }
 }
 
