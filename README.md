@@ -28,8 +28,7 @@ Inspired by [ClickHouse](https://github.com/ClickHouse/ClickHouse) and powered b
 
 ![DataFuse Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/datafuse.svg)
 
-<details>
-<summary> ## Performance </summary>
+## Performance
 
 * **Memory SIMD-Vector processing performance only**
 * Dataset: 100,000,000,000 (100 Billion)
