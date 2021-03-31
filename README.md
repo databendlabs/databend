@@ -6,11 +6,14 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 
-Datafuse is a free Cloud-Native Analytics DBMS(Inspired by ClickHouse) implemented in Rust.
+Datafuse is a Cloud-Native Distributed Data Processing & Analysis DBMS implemented in Rust.
 
 Inspired by [ClickHouse](https://github.com/ClickHouse/ClickHouse) and powered by [Arrow](https://github.com/apache/arrow).
 
-## Features
+## Principles
+
+* **Fearless**
+  - No data races, No unsafe, Minimize unhandled errors
 
 * **High Performance** 
   - Everything is Parallelism
@@ -25,7 +28,8 @@ Inspired by [ClickHouse](https://github.com/ClickHouse/ClickHouse) and powered b
 
 ![DataFuse Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/datafuse.svg)
 
-## Performance
+<details>
+<summary> ## Performance </summary>
 
 * **Memory SIMD-Vector processing performance only**
 * Dataset: 100,000,000,000 (100 Billion)
