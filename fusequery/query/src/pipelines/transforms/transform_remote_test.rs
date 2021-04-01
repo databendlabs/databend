@@ -53,7 +53,7 @@ async fn test_transform_remote_with_cluster() -> anyhow::Result<()> {
     let expect = "AggregatorFinal: groupBy=[[]], aggr=[[(sum([(number + 1)]) + 2) as sumx]]\
     \n  RedistributeStage[state: AggregatorMerge, id: 0]\
     \n    AggregatorPartial: groupBy=[[]], aggr=[[(sum([(number + 1)]) + 2) as sumx]]\
-    \n      ReadDataSource: scan parts [40](Read from system.numbers_mt table, Read Rows:1000000, Read Bytes:8000000)";
+    \n      ReadDataSource: scan partitions: [40], scan schema: [number:UInt64], statistics: [read_rows: 1000000, read_bytes: 8000000]";
     let actual = format!("{:?}", plan);
     assert_eq!(expect, actual);
 
