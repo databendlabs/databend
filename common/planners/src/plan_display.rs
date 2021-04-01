@@ -5,6 +5,8 @@
 use std::fmt;
 use std::fmt::Display;
 
+use common_datavalues::DataSchema;
+
 use crate::PlanNode;
 
 impl PlanNode {
@@ -78,9 +80,11 @@ impl PlanNode {
                             PlanNode::ReadSource(plan) => {
                                 write!(
                                     f,
-                                    "ReadDataSource: scan parts [{}]{}",
+                                    "ReadDataSource: scan partitions: [{}], scan schema: {}, statistics: [read_rows: {:?}, read_bytes: {:?}]",
                                     plan.partitions.len(),
-                                    plan.description
+                                    PlanNode::display_schema(plan.schema.as_ref()),
+                                    plan.statistics.read_rows,
+                                    plan.statistics.read_bytes,
                                 )?;
                                 Ok(false)
                             }
@@ -118,6 +122,31 @@ impl PlanNode {
             }
         }
         Wrapper(self)
+    }
+
+    pub fn display_schema(schema: &DataSchema) -> impl fmt::Display + '_ {
+        struct Wrapper<'a>(&'a DataSchema);
+
+        impl<'a> fmt::Display for Wrapper<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "[")?;
+                for (idx, field) in self.0.fields().iter().enumerate() {
+                    if idx > 0 {
+                        write!(f, ", ")?;
+                    }
+                    let nullable_str = if field.is_nullable() { ";N" } else { "" };
+                    write!(
+                        f,
+                        "{}:{:?}{}",
+                        field.name(),
+                        field.data_type(),
+                        nullable_str
+                    )?;
+                }
+                write!(f, "]")
+            }
+        }
+        Wrapper(schema)
     }
 }
 

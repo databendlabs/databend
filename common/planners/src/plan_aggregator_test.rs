@@ -23,7 +23,7 @@ fn test_aggregator_plan() -> anyhow::Result<()> {
     let expect = "Projection: sumx:UInt64\
     \n  AggregatorFinal: groupBy=[[]], aggr=[[sum([number]) as sumx]]\
     \n    AggregatorPartial: groupBy=[[]], aggr=[[sum([number]) as sumx]]\
-    \n      ReadDataSource: scan parts [8](Read from system.numbers_mt table, Read Rows:10000, Read Bytes:80000)";
+    \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
     let actual = format!("{:?}", explain);
     assert_eq!(expect, actual);
     Ok(())
