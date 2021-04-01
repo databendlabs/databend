@@ -44,7 +44,7 @@ impl IOptimizer for LimitPushDownOptimizer {
 
         plan.walk_postorder(|node| {
             if let PlanNode::Limit(LimitPlan { n, input: _ }) = node {
-                let mut new_filter_node = limit_push_down(Some(*n), node).unwrap();
+                let mut new_filter_node = limit_push_down(Some(*n), node)?;
                 new_filter_node.set_input(&rewritten_node)?;
                 rewritten_node = new_filter_node;
             } else {
