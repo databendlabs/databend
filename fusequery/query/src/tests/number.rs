@@ -44,6 +44,7 @@ impl NumberTestData {
                 table_args: Some(ExpressionPlan::Literal(DataValue::Int64(Some(numbers)))),
                 projection: None,
                 projected_schema: Arc::new(DataSchema::empty()),
+                limit: None,
             }),
         )
     }

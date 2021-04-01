@@ -137,6 +137,7 @@ impl PlanBuilder {
         table_schema: &DataSchema,
         projection: Option<Vec<usize>>,
         table_args: Option<ExpressionPlan>,
+        limit: Option<usize>,
     ) -> Result<Self> {
         let table_schema = DataSchemaRef::new(table_schema.clone());
         let projected_schema = projection
@@ -153,6 +154,7 @@ impl PlanBuilder {
             projected_schema,
             projection,
             table_args,
+            limit,
         })))
     }
 

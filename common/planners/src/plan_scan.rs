@@ -21,6 +21,9 @@ pub struct ScanPlan {
 
     /// The schema description of the output
     pub projected_schema: DataSchemaRef,
+
+    /// Optional limit to skip read
+    pub limit: Option<usize>,
 }
 
 impl ScanPlan {
