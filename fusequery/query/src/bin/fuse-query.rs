@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let handler =
             ClickHouseHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
-        tokio::spawn(async move { handler.start() });
+        tokio::spawn(async move { handler.start().expect("ClickHouse handler error")  });
 
         info!(
             "ClickHouse handler listening on {}:{}, Usage: clickhouse-client --host {} --port {}",
