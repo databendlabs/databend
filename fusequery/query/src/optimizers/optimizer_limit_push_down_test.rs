@@ -12,7 +12,7 @@ fn test_limit_push_down_optimizer() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let plan = PlanParser::create(ctx.clone()).build_from_sql(
-        "select (number+1) as c1, number as c2 from system.numbers_mt(10000) where (c1+c2+1)=1 limit 10",
+        "select (number+1) as c1, number as c2 from numbers_mt(10000) where (c1+c2+1)=1 limit 10",
     )?;
 
     let mut limit_push_down = FilterPushDownOptimizer::create(ctx);
