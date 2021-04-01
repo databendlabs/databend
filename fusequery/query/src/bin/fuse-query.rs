@@ -6,7 +6,7 @@ use fuse_query::api::{HttpService, RpcService};
 use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
 use fuse_query::metrics::MetricService;
-use fuse_query::servers::MysqlHandler;
+use fuse_query::servers::{ClickHouseHandler, MysqlHandler};
 use fuse_query::sessions::Session;
 use log::info;
 
@@ -35,6 +35,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             conf.mysql_handler_port,
             conf.mysql_handler_host,
             conf.mysql_handler_port
+        );
+    }
+
+    // MySQL handler.
+    {
+        let handler =
+            ClickHouseHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
+        tokio::spawn(async move { handler.start() });
+
+        info!(
+            "ClickHouse handler listening on {}:{}, Usage: clickhouse-client --host {} --port {}",
+            conf.clickhouse_handler_host,
+            conf.clickhouse_handler_port,
+            conf.clickhouse_handler_host,
+            conf.clickhouse_handler_port
         );
     }
 

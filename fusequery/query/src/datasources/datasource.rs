@@ -128,10 +128,10 @@ impl IDataSource for DataSource {
 
     fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>> {
         let table = self.table_functions.get(name).ok_or_else(|| {
-            return anyhow::Error::msg(format!(
+            anyhow::Error::msg(format!(
                 "DataSource Error: Unknown table function: '{}'",
                 name
-            ));
+            ))
         })?;
 
         Ok(table.clone())

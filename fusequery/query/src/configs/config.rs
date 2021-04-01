@@ -34,6 +34,27 @@ pub struct Config {
 
     #[structopt(
         long,
+        env = "FUSE_QUERY_CLICKHOUSE_HANDLER_HOST",
+        default_value = "127.0.0.1"
+    )]
+    pub clickhouse_handler_host: String,
+
+    #[structopt(
+        long,
+        env = "FUSE_QUERY_CLICKHOUSE_HANDLER_PORT",
+        default_value = "9000"
+    )]
+    pub clickhouse_handler_port: u64,
+
+    #[structopt(
+        long,
+        env = "FUSE_QUERY_CLICKHOUSE_HANDLER_THREAD_NUM",
+        default_value = "256"
+    )]
+    pub clickhouse_handler_thread_num: u64,
+
+    #[structopt(
+        long,
         env = "FUSE_QUERY_RPC_API_ADDRESS",
         default_value = "127.0.0.1:9090"
     )]
@@ -63,7 +84,10 @@ impl Config {
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
-            mysql_handler_thread_num: 1024,
+            mysql_handler_thread_num: 256,
+            clickhouse_handler_host: "127.0.0.1".to_string(),
+            clickhouse_handler_port: 9000,
+            clickhouse_handler_thread_num: 256,
             rpc_api_address: "127.0.0.1:9090".to_string(),
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
