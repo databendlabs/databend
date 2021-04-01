@@ -16,7 +16,7 @@ SELECT expr_list
 ## SELECT
 
 ```text
-mysql> SELECT * FROM system.numbers(3)
+mysql> SELECT * FROM numbers(3)
 
 +--------+
 | number |
@@ -31,7 +31,7 @@ mysql> SELECT * FROM system.numbers(3)
 ## SELECT Expression
 
 ```text
-SELECT (2*number+2)/(number+1) FROM system.numbers(3);
+SELECT (2*number+2)/(number+1) FROM numbers(3);
 
 +-------------------------------------+
 | (((2 * number) + 2) / (number + 1)) |
@@ -62,7 +62,7 @@ mysql> SELECT * FROM system.settings;
 ## FROM Table Function
 
 ```text
-SELECT * FROM system.numbers(1);
+SELECT * FROM numbers(1);
 
 +--------+
 | number |
@@ -77,7 +77,7 @@ SELECT * FROM system.numbers(1);
 WHERE clause allows to filter the data that is coming from FROM clause of SELECT.
 
 ```text
-mysql> SELECT * FROM system.numbers(10) WHERE (number+5)<10;
+mysql> SELECT * FROM numbers(10) WHERE (number+5)<10;
 
 +--------+
 | number |
@@ -97,7 +97,7 @@ mysql> SELECT * FROM system.numbers(10) WHERE (number+5)<10;
 LIMIT m allows to select the first m rows from the result.
 
 ```text
-mysql> SELECT * FROM system.numbers(10) LIMIT 2;
+mysql> SELECT * FROM numbers(10) LIMIT 2;
 
 +--------+
 | number |

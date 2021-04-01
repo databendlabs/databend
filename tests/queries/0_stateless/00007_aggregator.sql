@@ -1,1 +1,1 @@
-select 1, sum(number) from system.numbers_mt(1000000);
+select 1, sum(number) from numbers_mt(1000000);

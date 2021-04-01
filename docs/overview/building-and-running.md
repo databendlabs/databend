@@ -16,7 +16,7 @@ docker run --init --rm -p 3307:3307 datafusedev/fuse-query
 05:12:36 [ INFO] Usage: mysql -h127.0.0.1 -P3307
 ```
 
-Or 
+Or
 
 ## 2. Download the release binary
 
@@ -59,7 +59,7 @@ mysql -h127.0.0.1 -P3307
 ### Avg Demo
 
 ```text
-mysql> SELECT avg(number) FROM system.numbers_mt(10000);
+mysql> SELECT avg(number) FROM numbers_mt(10000);
 +-------------+
 | Avg(number) |
 +-------------+
@@ -73,7 +73,7 @@ mysql> SELECT avg(number) FROM system.numbers_mt(10000);
 ### 10 Billion Performance
 
 ```text
-mysql> SELECT avg(number) FROM system.numbers_mt(10000000000);
+mysql> SELECT avg(number) FROM numbers_mt(10000000000);
 +-------------------+
 | Avg(number)       |
 +-------------------+
@@ -85,7 +85,7 @@ mysql> SELECT avg(number) FROM system.numbers_mt(10000000000);
 ### Explain  Plan
 
 ```text
-mysql> explain select (number+1) as c1, number/2 as c2 from system.numbers_mt(10000000) where (c1+c2+1) < 100 limit 3;
+mysql> explain select (number+1) as c1, number/2 as c2 from numbers_mt(10000000) where (c1+c2+1) < 100 limit 3;
 +----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | explain                                                                                                                                                                                                                          |
 +----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -99,11 +99,11 @@ mysql> explain select (number+1) as c1, number/2 as c2 from system.numbers_mt(10
 
 ### Explain Pipeline
 ```text
-mysql> explain pipeline select (number+1) as c1, number/2 as c2 from system.numbers_mt(10000000) where (c1+c2+1) < 100 limit 3;
+mysql> explain pipeline select (number+1) as c1, number/2 as c2 from numbers_mt(10000000) where (c1+c2+1) < 100 limit 3;
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | explain                                                                                                                                                                                                                                                                                                               |
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| 
+|
   └─ LimitTransform × 1 processor
     └─ Merge (LimitTransform × 8 processors) to (MergeProcessor × 1)
       └─ LimitTransform × 8 processors
@@ -117,7 +117,7 @@ mysql> explain pipeline select (number+1) as c1, number/2 as c2 from system.numb
 ### Select
 
 ```shell
-mysql> select (number+1) as c1, number/2 as c2 from system.numbers_mt(10000000) where (c1+c2+1) < 100 limit 3;
+mysql> select (number+1) as c1, number/2 as c2 from numbers_mt(10000000) where (c1+c2+1) < 100 limit 3;
 +------+------+
 | c1   | c2   |
 +------+------+

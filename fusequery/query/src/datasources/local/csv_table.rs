@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::any::Any;
 use std::fs::File;
 
 use anyhow::{bail, Result};
@@ -61,6 +62,10 @@ impl ITable for CsvTable {
 
     fn engine(&self) -> &str {
         "CSV"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     fn schema(&self) -> Result<DataSchemaRef> {

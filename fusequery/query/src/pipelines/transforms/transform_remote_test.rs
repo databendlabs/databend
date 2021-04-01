@@ -47,7 +47,7 @@ async fn test_transform_remote_with_cluster() -> anyhow::Result<()> {
 
     let ctx = crate::tests::try_create_context_with_nodes(3).await?;
     let plan = PlanParser::create(ctx_more_cpu_for_partitions_generate.clone())
-        .build_from_sql("select sum(number+1)+2 as sumx from system.numbers_mt(1000000)")?;
+        .build_from_sql("select sum(number+1)+2 as sumx from numbers_mt(1000000)")?;
 
     // Check the distributed plan.
     let expect = "AggregatorFinal: groupBy=[[]], aggr=[[(sum([(number + 1)]) + 2) as sumx]]\

@@ -12,7 +12,7 @@ use common_planners::{Partition, Partitions, Statistics};
 use uuid::Uuid;
 
 use crate::clusters::{Cluster, ClusterRef};
-use crate::datasources::{DataSource, IDataSource, ITable};
+use crate::datasources::{DataSource, IDataSource, ITable, ITableFunction};
 use crate::sessions::Settings;
 
 #[derive(Clone)]
@@ -107,6 +107,10 @@ impl FuseQueryContext {
 
     pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
         self.datasource.read().get_table(db_name, table_name)
+    }
+
+    pub fn get_table_function(&self, function_name: &str) -> Result<Arc<dyn ITableFunction>> {
+        self.datasource.read().get_table_function(function_name)
     }
 
     pub fn get_settings(&self) -> Result<Vec<DataValue>> {
