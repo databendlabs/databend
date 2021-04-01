@@ -85,7 +85,9 @@ impl ClickHouseStream {
                     _ => bail!("Unsupported column type:{:?}", column.data_type()),
                 }
             }
-            if let Err(e) = writer.write_block(result) { bail!("Write error {}", e.to_string()) }
+            if let Err(e) = writer.write_block(result) {
+                bail!("Write error {}", e.to_string())
+            }
         }
         Ok(())
     }
