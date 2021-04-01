@@ -47,7 +47,7 @@ fn test_aggregator_function() -> anyhow::Result<()> {
             name: "count-passed",
             eval_nums: 1,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "Count(a)",
+            display: "count(a)",
             nullable: false,
             func: AggregatorCountFunction::try_create(&[ColumnFunction::try_create("a")?])?,
             block: block.clone(),
@@ -58,7 +58,7 @@ fn test_aggregator_function() -> anyhow::Result<()> {
             name: "max-passed",
             eval_nums: 2,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "Max(a)",
+            display: "max(a)",
             nullable: false,
             func: AggregatorMaxFunction::try_create(&[ColumnFunction::try_create("a")?])?,
             block: block.clone(),
@@ -69,7 +69,7 @@ fn test_aggregator_function() -> anyhow::Result<()> {
             name: "min-passed",
             eval_nums: 2,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "Min(a)",
+            display: "min(a)",
             nullable: false,
             func: AggregatorMinFunction::try_create(&[ColumnFunction::try_create("a")?])?,
             block: block.clone(),
@@ -80,7 +80,7 @@ fn test_aggregator_function() -> anyhow::Result<()> {
             name: "avg-passed",
             eval_nums: 1,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "Avg(a)",
+            display: "avg(a)",
             nullable: false,
             func: AggregatorAvgFunction::try_create(&[ColumnFunction::try_create("a")?])?,
             block: block.clone(),
@@ -91,7 +91,7 @@ fn test_aggregator_function() -> anyhow::Result<()> {
             name: "sum-passed",
             eval_nums: 1,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "Sum(a)",
+            display: "sum(a)",
             nullable: false,
             func: AggregatorSumFunction::try_create(&[ColumnFunction::try_create("a")?])?,
             block: block.clone(),
@@ -99,24 +99,27 @@ fn test_aggregator_function() -> anyhow::Result<()> {
             error: "",
         },
         Test {
-            name: "sum(a)+1-merge-passed",
+            name: "1+1+sum(a)-merge-passed",
             eval_nums: 4,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "Sum(a) + 1",
+            display: "plus(1, plus(1, sum(a)))",
             nullable: false,
             func: ArithmeticPlusFunction::try_create_func(&[
-                AggregatorSumFunction::try_create(&[ColumnFunction::try_create("a")?])?,
                 LiteralFunction::try_create(DataValue::Int64(Some(1)))?,
+                ArithmeticPlusFunction::try_create_func(&[
+                    LiteralFunction::try_create(DataValue::Int64(Some(1)))?,
+                    AggregatorSumFunction::try_create(&[ColumnFunction::try_create("a")?])?,
+                ])?,
             ])?,
             block: block.clone(),
-            expect: DataValue::Int64(Some(71)),
+            expect: DataValue::Int64(Some(72)),
             error: "",
         },
         Test {
             name: "sum(a)/count(a)-merge-passed",
             eval_nums: 4,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "Sum(a)/Count(a)",
+            display: "divide(sum(a), count(a))",
             nullable: false,
             func: ArithmeticDivFunction::try_create_func(&[
                 AggregatorSumFunction::try_create(&[ColumnFunction::try_create("a")?])?,
@@ -130,7 +133,7 @@ fn test_aggregator_function() -> anyhow::Result<()> {
             name: "(sum(a+1)+2)-merge-passed",
             eval_nums: 4,
             args: vec![field_a.clone(), field_b.clone()],
-            display: "Sum(a+1)+2",
+            display: "plus(sum(plus(a, 1)), 2)",
             nullable: false,
             func: ArithmeticPlusFunction::try_create_func(&[
                 AggregatorSumFunction::try_create(&[ArithmeticPlusFunction::try_create_func(&[
@@ -166,6 +169,7 @@ fn test_aggregator_function() -> anyhow::Result<()> {
         let result = final_func.merge_result()?;
 
         assert_eq!(&t.expect, &result);
+        assert_eq!(t.display, format!("{:}", final_func));
     }
     Ok(())
 }

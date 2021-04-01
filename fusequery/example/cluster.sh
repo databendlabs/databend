@@ -51,8 +51,8 @@ mysql -h127.0.0.1 -P3307 -e"select * from system.clusters"
 #+----------+--------------+------+
 #
 
-echo "mysql -h127.0.0.1 -P3307 -e\"select sum(*) from system.numbers_mt(10000000000)\""
-mysql -h127.0.0.1 -P3307 -e"select sum(*) from system.numbers_mt(10000000000)"
+echo "mysql -h127.0.0.1 -P3307 -e\"select sum(*) from numbers_mt(10000000000)\""
+mysql -h127.0.0.1 -P3307 -e"select sum(*) from numbers_mt(10000000000)"
 
 #
 #+----------------------+

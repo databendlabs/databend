@@ -91,6 +91,6 @@ impl IFunction for AggregatorSumFunction {
 
 impl fmt::Display for AggregatorSumFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Sum({})", self.arg)
+        write!(f, "sum({})", self.arg)
     }
 }

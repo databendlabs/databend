@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::any::Any;
 use std::fs::File;
 use std::sync::Arc;
 
@@ -100,6 +101,10 @@ impl ITable for ParquetTable {
 
     fn engine(&self) -> &str {
         "Parquet"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     fn schema(&self) -> Result<DataSchemaRef> {

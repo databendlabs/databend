@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use anyhow::{bail, ensure, Result};
+use anyhow::{ensure, Result};
 use common_datablocks::DataBlock;
 use common_datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
 
@@ -42,24 +42,6 @@ impl IFunction for ToTypeNameFunction {
         Ok(DataColumnarValue::Scalar(DataValue::String(Some(
             type_name,
         ))))
-    }
-
-    fn set_depth(&mut self, _depth: usize) {}
-
-    fn accumulate(&mut self, _block: &DataBlock) -> Result<()> {
-        bail!("Unsupported accumulate for toTypeName Function");
-    }
-
-    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
-        bail!("Unsupported accumulate_result for toTypeName Function");
-    }
-
-    fn merge(&mut self, _states: &[DataValue]) -> Result<()> {
-        bail!("Unsupported merge for toTypeName Function");
-    }
-
-    fn merge_result(&self) -> Result<DataValue> {
-        bail!("Unsupported merge_result for toTypeName Function");
     }
 }
 

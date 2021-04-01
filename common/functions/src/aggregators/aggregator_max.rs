@@ -90,6 +90,6 @@ impl IFunction for AggregatorMaxFunction {
 
 impl fmt::Display for AggregatorMaxFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Max({})", self.arg)
+        write!(f, "max({})", self.arg)
     }
 }

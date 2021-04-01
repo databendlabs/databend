@@ -4,9 +4,9 @@
 
 use std::fmt;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use common_datablocks::DataBlock;
-use common_datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
+use common_datavalues::{DataColumnarValue, DataSchema, DataType};
 
 use crate::IFunction;
 
@@ -49,27 +49,6 @@ impl IFunction for ColumnFunction {
         Ok(DataColumnarValue::Array(
             block.column_by_name(self.value.as_str())?.clone(),
         ))
-    }
-
-    fn set_depth(&mut self, _depth: usize) {}
-
-    fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
-        self.saved = Some(DataColumnarValue::Array(
-            block.column_by_name(self.value.as_str())?.clone(),
-        ));
-        Ok(())
-    }
-
-    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
-        bail!("Unsupported accumulate_result for function field");
-    }
-
-    fn merge(&mut self, _states: &[DataValue]) -> Result<()> {
-        bail!("Unsupported merge for function field");
-    }
-
-    fn merge_result(&self) -> Result<DataValue> {
-        bail!("Unsupported merge_result for function field");
     }
 }
 

@@ -126,11 +126,11 @@ fn test_comparison_function() -> anyhow::Result<()> {
     ];
 
     for t in tests {
-        let mut func = t.func;
+        let func = t.func;
         if let Err(e) = func.eval(&t.block) {
             assert_eq!(t.error, e.to_string());
         }
-        func.accumulate(&t.block)?;
+        func.eval(&t.block)?;
 
         // Display check.
         let expect_display = t.display.to_string();

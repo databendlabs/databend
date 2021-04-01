@@ -120,6 +120,6 @@ impl IFunction for AggregatorAvgFunction {
 
 impl fmt::Display for AggregatorAvgFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Avg({})", self.arg)
+        write!(f, "avg({})", self.arg)
     }
 }

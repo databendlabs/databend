@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::mem::size_of;
 use std::sync::Arc;
@@ -14,7 +15,7 @@ use common_planners::{
 };
 use common_streams::SendableDataBlockStream;
 
-use crate::datasources::{system::NumbersStream, ITable};
+use crate::datasources::{system::NumbersStream, ITable, ITableFunction};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct NumbersTable {
@@ -80,6 +81,10 @@ impl ITable for NumbersTable {
         }
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
     }
@@ -127,5 +132,22 @@ impl ITable for NumbersTable {
 
     async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(NumbersStream::create(ctx, self.schema.clone())))
+    }
+}
+
+impl ITableFunction for NumbersTable {
+    fn function_name(&self) -> &str {
+        self.table
+    }
+
+    fn db(&self) -> &str {
+        "system"
+    }
+
+    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn ITable + 'a>
+    where
+        Self: 'a,
+    {
+        self
     }
 }

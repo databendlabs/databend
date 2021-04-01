@@ -90,6 +90,6 @@ impl IFunction for AggregatorMinFunction {
 
 impl fmt::Display for AggregatorMinFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Min({})", self.arg)
+        write!(f, "min({})", self.arg)
     }
 }

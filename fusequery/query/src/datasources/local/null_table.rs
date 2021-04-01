@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::any::Any;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
@@ -46,6 +48,10 @@ impl ITable for NullTable {
 
     fn engine(&self) -> &str {
         "Null"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     fn schema(&self) -> Result<DataSchemaRef> {
