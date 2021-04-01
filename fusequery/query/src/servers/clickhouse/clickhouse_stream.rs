@@ -2,12 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
 use anyhow::{bail, Result};
-use clickhouse_srv::types::{Block as ClickHouseBlock, ResultWriter};
+use clickhouse_srv::types::Block as ClickHouseBlock;
 use common_arrow::arrow::array::{as_boolean_array, as_primitive_array, as_string_array, Array};
 use common_arrow::arrow::datatypes::*;
+use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
 use common_streams::SendableDataBlockStream;
+use futures::stream::Stream;
 use futures::StreamExt;
 
 pub struct ClickHouseStream {
@@ -19,77 +24,85 @@ impl ClickHouseStream {
         ClickHouseStream { input }
     }
 
-    pub async fn execute(&mut self, writer: &mut ResultWriter<'_>) -> Result<()> {
-        while let Some(block) = self.input.next().await {
-            let block = block?;
-            if block.is_empty() {
-                return Ok(());
-            }
-            let mut result = ClickHouseBlock::new();
-            for i in 0..block.num_columns() {
-                let column = block.column(i);
-                let name = block.schema().field(i).name();
+    pub fn convert_block(&self, block: DataBlock) -> Result<ClickHouseBlock> {
+        let mut result = ClickHouseBlock::new();
+        if block.is_empty() {
+            return Ok(result);
+        }
 
-                match column.data_type() {
-                    DataType::Int8 => {
-                        let data = build_primitive_column::<Int8Type>(column)?;
-                        result = result.column(name, data);
-                    }
-                    DataType::Int16 => {
-                        let data = build_primitive_column::<Int16Type>(column)?;
-                        result = result.column(name, data);
-                    }
-                    DataType::Int32 => {
-                        let data = build_primitive_column::<Int32Type>(column)?;
-                        result = result.column(name, data);
-                    }
-                    DataType::Int64 => {
-                        let data = build_primitive_column::<Int64Type>(column)?;
-                        result = result.column(name, data);
-                    }
-                    DataType::UInt8 => {
-                        let data = build_primitive_column::<UInt8Type>(column)?;
-                        result = result.column(name, data);
-                    }
-                    DataType::UInt16 => {
-                        let data = build_primitive_column::<UInt16Type>(column)?;
-                        result = result.column(name, data);
-                    }
-                    DataType::UInt32 => {
-                        let data = build_primitive_column::<UInt32Type>(column)?;
-                        result = result.column(name, data);
-                    }
-                    DataType::UInt64 => {
-                        let data = build_primitive_column::<UInt64Type>(column)?;
-                        result = result.column(name, data);
-                    }
+        for i in 0..block.num_columns() {
+            let column = block.column(i);
+            let name = block.schema().field(i).name();
 
-                    DataType::Float32 => {
-                        let data = build_primitive_column::<Float32Type>(column)?;
-                        result = result.column(name, data);
-                    }
-                    DataType::Float64 => {
-                        let data = build_primitive_column::<Float64Type>(column)?;
-                        result = result.column(name, data);
-                    }
-
-                    DataType::Boolean => {
-                        let data = build_boolean_column(column)?;
-                        result = result.column(name, data);
-                    }
-
-                    DataType::Utf8 => {
-                        let data = build_string_column(column)?;
-                        result = result.column(name, data);
-                    }
-                    _ => bail!("Unsupported column type:{:?}", column.data_type()),
+            match column.data_type() {
+                DataType::Int8 => {
+                    let data = build_primitive_column::<Int8Type>(column)?;
+                    result = result.column(name, data);
                 }
-            }
-            if let Err(e) = writer.write_block(result) {
-                bail!("Write error {}", e.to_string())
+                DataType::Int16 => {
+                    let data = build_primitive_column::<Int16Type>(column)?;
+                    result = result.column(name, data);
+                }
+                DataType::Int32 => {
+                    let data = build_primitive_column::<Int32Type>(column)?;
+                    result = result.column(name, data);
+                }
+                DataType::Int64 => {
+                    let data = build_primitive_column::<Int64Type>(column)?;
+                    result = result.column(name, data);
+                }
+                DataType::UInt8 => {
+                    let data = build_primitive_column::<UInt8Type>(column)?;
+                    result = result.column(name, data);
+                }
+                DataType::UInt16 => {
+                    let data = build_primitive_column::<UInt16Type>(column)?;
+                    result = result.column(name, data);
+                }
+                DataType::UInt32 => {
+                    let data = build_primitive_column::<UInt32Type>(column)?;
+                    result = result.column(name, data);
+                }
+                DataType::UInt64 => {
+                    let data = build_primitive_column::<UInt64Type>(column)?;
+                    result = result.column(name, data);
+                }
+
+                DataType::Float32 => {
+                    let data = build_primitive_column::<Float32Type>(column)?;
+                    result = result.column(name, data);
+                }
+                DataType::Float64 => {
+                    let data = build_primitive_column::<Float64Type>(column)?;
+                    result = result.column(name, data);
+                }
+
+                DataType::Boolean => {
+                    let data = build_boolean_column(column)?;
+                    result = result.column(name, data);
+                }
+
+                DataType::Utf8 => {
+                    let data = build_string_column(column)?;
+                    result = result.column(name, data);
+                }
+
+                _ => bail!("Unsupported column type:{:?}", column.data_type()),
             }
         }
-        Ok(())
+        Ok(result)
+    }
+}
+
+impl Stream for ClickHouseStream {
+    type Item = Result<ClickHouseBlock>;
+
+    fn poll_next(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.input.poll_next_unpin(ctx).map(|x| match x {
+            Some(Ok(v)) => Some(self.convert_block(v)),
+            Some(Err(e)) => Some(Err(e)),
+            _other => None,
+        })
     }
 }
 

@@ -13,6 +13,7 @@ use clickhouse_srv::*;
 use log::{debug, error};
 use metrics::histogram;
 use threadpool::ThreadPool;
+use tokio_stream::StreamExt;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
@@ -44,7 +45,7 @@ impl Session {
                 Ok(executor) => {
                     let start = Instant::now();
 
-                    let _result: Result<()> = tokio::runtime::Builder::new_multi_thread()
+                    let result: Result<()> = tokio::runtime::Builder::new_multi_thread()
                         .enable_io()
                         .worker_threads(self.ctx.get_max_threads()? as usize)
                         .build()?
@@ -52,7 +53,9 @@ impl Session {
                             let start = Instant::now();
                             let stream = executor.execute().await?;
                             let mut clickhouse_stream = ClickHouseStream::create(stream);
-                            clickhouse_stream.execute(writer).await?;
+                            while let Some(block) = clickhouse_stream.next().await {
+                                writer.write_block(block?)?;
+                            }
                             let duration = start.elapsed();
                             debug!(
                                 "ClickHouseHandler executor cost:{:?}, statistics:{:?}",
@@ -62,17 +65,22 @@ impl Session {
                             Ok(())
                         });
 
+                    if let Err(e) = result {
+                        error!("Execute error: {:?}", e);
+                        bail!("Execute error: {:?}", e)
+                    }
+
                     let duration = start.elapsed();
                     debug!("ClickHouseHandler send to client cost:{:?}", duration);
                 }
                 Err(e) => {
-                    error!("ResultError {:?}", e);
-                    bail!("ResultError {:?}", e)
+                    error!("Execute error: {:?}", e);
+                    bail!("Execute error: {:?}", e)
                 }
             },
             Err(e) => {
-                error!("ResultError {:?}", e);
-                bail!("ResultError {:?}", e)
+                error!("Execute error: {:?}", e);
+                bail!("Execute error: {:?}", e)
             }
         }
         histogram!(

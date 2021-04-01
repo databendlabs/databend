@@ -23,7 +23,7 @@ common-streams = {path = "../../common/streams"}
 
 
 # Github dependencies
-clickhouse-srv = { git = "https://github.com/sundy-li/clickhouse-svr", rev = "f887930"}
+clickhouse-srv = { git = "https://github.com/sundy-li/clickhouse-svr", rev = "29765fc"}
 
 # Crates.io dependencies
 anyhow = "1.0.40"
