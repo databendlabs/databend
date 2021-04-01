@@ -60,13 +60,13 @@ Note:
 - [x] Query Planner
 - [x] Query Optimizer
 - [x] Predicate Push Down
+- [x] Limit Push Down
 - [ ] Projection Push Down (TODO)
-- [ ] Limit Push Down (TODO)
 - [x] Type coercion
 - [x] Parallel Query Execution
 - [x] Distributed Query Execution
 - [ ] Sorting (WIP)
-- [ ] GroupBy (TODO)
+- [ ] GroupBy (WIP)
 - [ ] Joins (TODO)
 
 #### SQL Support
