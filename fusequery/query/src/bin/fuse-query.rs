@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    // MySQL handler.
+    // ClickHouse handler.
     {
         let handler =
             ClickHouseHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
