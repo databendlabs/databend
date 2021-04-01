@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // MySQL handler.
     {
         let handler = MysqlHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
-        tokio::spawn(async move { handler.start() });
+        tokio::spawn(async move { handler.start().expect("MySQL handler error") });
 
         info!(
             "MySQL handler listening on {}:{}, Usage: mysql -h{} -P{}",
@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let srv = MetricService::create(conf.clone());
         tokio::spawn(async move {
-            srv.make_server().unwrap();
+            srv.make_server().expect("Metrics service error");
         });
         info!("Metric API server listening on {}", conf.metric_api_address);
     }
@@ -51,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let srv = HttpService::create(conf.clone(), cluster.clone());
         tokio::spawn(async move {
-            srv.make_server().await.unwrap();
+            srv.make_server().await.expect("HTTP service error");
         });
         info!("HTTP API server listening on {}", conf.metric_api_address);
     }
@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let srv = RpcService::create(conf.clone(), cluster.clone(), session_manager.clone());
         info!("RPC API server listening on {}", conf.rpc_api_address);
-        srv.make_server().await.unwrap();
+        srv.make_server().await.expect("RPC service error");
     }
 
     Ok(())
