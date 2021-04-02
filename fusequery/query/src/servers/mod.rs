@@ -4,6 +4,8 @@
 
 // The servers module used for external communication with user, such as MySQL wired protocol, etc.
 
+mod clickhouse;
 mod mysql;
 
+pub use clickhouse::ClickHouseHandler;
 pub use mysql::MysqlHandler;
