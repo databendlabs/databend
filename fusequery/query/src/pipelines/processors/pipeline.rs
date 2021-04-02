@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::processors::{IProcessor, MergeProcessor, Pipe};
@@ -43,7 +43,7 @@ impl Pipeline {
     pub fn last_pipe(&self) -> Result<&Pipe> {
         self.pipes
             .last()
-            .ok_or_else(|| anyhow::Error::msg("Pipeline last pipe can not be none"))
+            .ok_or_else(|| anyhow!("Pipeline last pipe can not be none"))
     }
 
     pub fn add_source(&mut self, source: Arc<dyn IProcessor>) -> Result<()> {

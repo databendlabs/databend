@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use metrics_exporter_prometheus::PrometheusBuilder;
 
 use crate::configs::Config;
@@ -25,6 +25,6 @@ impl MetricService {
         PrometheusBuilder::new()
             .listen_address(addr)
             .install()
-            .map_err(|e| anyhow::Error::msg(format!("Metrics prometheus exporter error: {:?}", e)))
+            .map_err(|e| anyhow!(format!("Metrics prometheus exporter error: {:?}", e)))
     }
 }

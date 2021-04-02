@@ -5,11 +5,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use common_arrow::arrow;
 use common_datavalues::{DataField, DataSchema, DataValue};
 use common_planners::{
-    CreatePlan, ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, SelectPlan, SettingPlan,
+    CreateTablePlan, ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, SelectPlan, SettingPlan,
     StageState, VarValue,
 };
 use sqlparser::ast::{FunctionArg, Statement, TableFactor};
@@ -99,7 +99,7 @@ impl PlanParser {
             options.insert(p.name.value.to_lowercase(), p.value.to_string());
         }
 
-        Ok(PlanNode::Create(CreatePlan {
+        Ok(PlanNode::Create(CreateTablePlan {
             if_not_exists: create.if_not_exists,
             db,
             table,
@@ -368,7 +368,7 @@ impl PlanParser {
             Some(ref limit_expr) => {
                 let n = match self.sql_to_rex(&limit_expr, &input.schema())? {
                     ExpressionPlan::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
-                    _ => Err(anyhow::Error::msg("Unexpected expression for LIMIT clause")),
+                    _ => Err(anyhow!("Unexpected expression for LIMIT clause")),
                 }?;
                 Ok(PlanBuilder::from(&input).limit(n)?.build()?)
             }

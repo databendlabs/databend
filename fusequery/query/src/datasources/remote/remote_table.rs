@@ -4,23 +4,24 @@
 
 use std::any::Any;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use async_trait::async_trait;
-use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics, TableOptions};
-use common_streams::{DataBlockStream, SendableDataBlockStream};
+use common_planners::{PlanNode, ReadDataSourcePlan, TableOptions};
+use common_streams::SendableDataBlockStream;
 
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
-pub struct NullTable {
+#[allow(dead_code)]
+pub struct RemoteTable {
     db: String,
     name: String,
     schema: DataSchemaRef,
 }
 
-impl NullTable {
+impl RemoteTable {
+    #[allow(dead_code)]
     pub fn try_create(
         db: String,
         name: String,
@@ -33,13 +34,13 @@ impl NullTable {
 }
 
 #[async_trait]
-impl ITable for NullTable {
+impl ITable for RemoteTable {
     fn name(&self) -> &str {
         &self.name
     }
 
     fn engine(&self) -> &str {
-        "Null"
+        "remote"
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -55,26 +56,10 @@ impl ITable for NullTable {
         _ctx: FuseQueryContextRef,
         _push_down_plan: PlanNode,
     ) -> Result<ReadDataSourcePlan> {
-        Ok(ReadDataSourcePlan {
-            db: self.db.clone(),
-            table: self.name().to_string(),
-            schema: self.schema.clone(),
-            partitions: vec![Partition {
-                name: "".to_string(),
-                version: 0,
-            }],
-            statistics: Statistics::default(),
-            description: format!("(Read from Null Engine table  {}.{})", self.db, self.name),
-        })
+        bail!("RemoteTable read_plan not yet implemented")
     }
 
     async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
-        let block = DataBlock::empty_with_schema(self.schema.clone());
-
-        Ok(Box::pin(DataBlockStream::create(
-            self.schema.clone(),
-            None,
-            vec![block],
-        )))
+        bail!("RemoteTable read not yet implemented")
     }
 }

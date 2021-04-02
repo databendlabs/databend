@@ -2,14 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::datasources::datasource::DatabaseHashMap;
-use crate::datasources::local::NullTable;
-use crate::datasources::local::{CsvTable, ParquetTable};
-use crate::datasources::table_factory::TableCreatorFactory;
+use crate::datasources::local::LocalDatabase;
+use crate::datasources::IDatabase;
 
 pub struct LocalFactory;
 
@@ -18,15 +16,8 @@ impl LocalFactory {
         Self
     }
 
-    pub fn get_tables(&self) -> Result<DatabaseHashMap> {
-        let hashmap: DatabaseHashMap = HashMap::default();
-        Ok(hashmap)
-    }
-
-    pub fn register(map: TableCreatorFactory) -> Result<()> {
-        NullTable::register(map.clone())?;
-        CsvTable::register(map.clone())?;
-        ParquetTable::register(map.clone())?;
-        Ok(())
+    pub fn load_databases(&self) -> Result<Vec<Arc<dyn IDatabase>>> {
+        let databases: Vec<Arc<dyn IDatabase>> = vec![Arc::new(LocalDatabase::create())];
+        Ok(databases)
     }
 }

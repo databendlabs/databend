@@ -4,7 +4,7 @@
 
 #[cfg(test)]
 mod tests {
-    use common_planners::EngineType;
+    use common_planners::TableEngineType;
     use sqlparser::ast::{ColumnDef, DataType, Ident, ObjectName, SqlOption, Value};
     use sqlparser::parser::ParserError;
 
@@ -64,7 +64,7 @@ mod tests {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("t")]),
             columns: vec![make_column_def("c1", DataType::Int)],
-            engine: EngineType::Csv,
+            engine: TableEngineType::Csv,
             table_properties: vec![SqlOption {
                 name: Ident::new("LOCATION".to_string()),
                 value: Value::SingleQuotedString("/data/33.csv".into()),
@@ -82,7 +82,7 @@ mod tests {
                 make_column_def("c2", DataType::BigInt),
                 make_column_def("c3", DataType::Varchar(Some(255))),
             ],
-            engine: EngineType::Parquet,
+            engine: TableEngineType::Parquet,
             table_properties: vec![SqlOption {
                 name: Ident::new("LOCATION".to_string()),
                 value: Value::SingleQuotedString("foo.parquet".into()),

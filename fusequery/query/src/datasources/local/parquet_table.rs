@@ -6,7 +6,7 @@ use std::any::Any;
 use std::fs::File;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use common_arrow::parquet::arrow::{ArrowReader, ParquetFileArrowReader};
 use common_arrow::parquet::file::reader::SerializedFileReader;
@@ -17,7 +17,6 @@ use common_streams::{ParquetStream, SendableDataBlockStream};
 use crossbeam::channel::{bounded, Receiver, Sender};
 use tokio::task;
 
-use crate::datasources::table_factory::TableCreatorFactory;
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
@@ -30,7 +29,6 @@ pub struct ParquetTable {
 
 impl ParquetTable {
     pub fn try_create(
-        _ctx: FuseQueryContextRef,
         db: String,
         name: String,
         schema: DataSchemaRef,
@@ -49,12 +47,6 @@ impl ParquetTable {
             }
             _ => bail!("Parquet Engine must contains file location options"),
         };
-    }
-
-    pub fn register(map: TableCreatorFactory) -> Result<()> {
-        let mut map = map.as_ref().write();
-        map.insert("Parquet", ParquetTable::try_create);
-        Ok(())
     }
 }
 
@@ -76,7 +68,7 @@ fn read_file(
         match batch_reader.next() {
             Some(Ok(batch)) => {
                 tx.send(Some(Ok(DataBlock::try_from_arrow_batch(&batch)?)))
-                    .map_err(|e| anyhow::Error::msg(e.to_string()))?;
+                    .map_err(|e| anyhow!(e.to_string()))?;
             }
             None => {
                 break;
@@ -84,8 +76,8 @@ fn read_file(
             Some(Err(e)) => {
                 let err_msg = format!("Error reading batch from {:?}: {}", file, e.to_string());
 
-                tx.send(Some(Err(anyhow::Error::msg(err_msg.clone()))))
-                    .map_err(|e| anyhow::Error::msg(e.to_string()))?;
+                tx.send(Some(Err(anyhow!(err_msg.clone()))))
+                    .map_err(|e| anyhow!(e.to_string()))?;
                 bail!(err_msg);
             }
         }

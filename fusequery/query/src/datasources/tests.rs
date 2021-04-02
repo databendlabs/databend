@@ -8,17 +8,12 @@ async fn test_datasource() -> anyhow::Result<()> {
 
     use crate::datasources::*;
 
-    let mut datasource = DataSource::try_create()?;
-
-    // Database check.
-    let actual = format!("{:?}", datasource.check_database("xx"));
-    let expect = "Err(DataSource Error: Unknown database: \'xx\')";
-    assert_eq!(expect, actual);
+    let datasource = DataSource::try_create()?;
 
     // Table check.
     datasource.get_table("system", "numbers_mt")?;
     if let Err(e) = datasource.get_table("system", "numbersxx") {
-        let expect = "DataSource Error: Unknown table: \'system.numbersxx\'";
+        let expect = "DataSource Error: Unknown table: \'numbersxx\'";
         let actual = format!("{:?}", e);
         assert_eq!(expect, actual);
     }

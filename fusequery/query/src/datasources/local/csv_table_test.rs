@@ -25,7 +25,6 @@ async fn test_csv_table() -> anyhow::Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
     let table = CsvTable::try_create(
-        ctx.clone(),
         "default".into(),
         "test_csv".into(),
         DataSchema::new(vec![DataField::new("a", DataType::UInt64, false)]).into(),
