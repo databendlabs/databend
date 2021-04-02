@@ -86,7 +86,6 @@ impl DataSource {
         Ok(database.clone())
     }
 
-
     pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
         let database = self
             .databases
