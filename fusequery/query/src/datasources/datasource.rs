@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
+use crate::configs::Config;
 use crate::datasources::local::{LocalDatabase, LocalFactory};
 use crate::datasources::remote::RemoteFactory;
 use crate::datasources::system::SystemFactory;
@@ -14,6 +15,7 @@ use crate::datasources::{IDatabase, ITable, ITableFunction};
 
 // Maintain all the databases of user.
 pub struct DataSource {
+    conf: Config,
     databases: HashMap<String, Arc<dyn IDatabase>>,
     table_functions: HashMap<String, Arc<dyn ITableFunction>>,
 }
@@ -21,6 +23,7 @@ pub struct DataSource {
 impl DataSource {
     pub fn try_create() -> Result<Self> {
         let mut datasource = DataSource {
+            conf: Config::default(),
             databases: Default::default(),
             table_functions: Default::default(),
         };
@@ -30,6 +33,12 @@ impl DataSource {
         datasource.register_default_database()?;
         datasource.register_remote_database()?;
         Ok(datasource)
+    }
+
+    pub fn try_create_with_config(conf: Config) -> Result<Self> {
+        let mut ds = Self::try_create()?;
+        ds.conf = conf;
+        Ok(ds)
     }
 
     fn insert_databases(&mut self, databases: Vec<Arc<dyn IDatabase>>) -> Result<()> {
@@ -64,7 +73,7 @@ impl DataSource {
     }
 
     fn register_remote_database(&mut self) -> Result<()> {
-        let factory = RemoteFactory::create();
+        let factory = RemoteFactory::create(self.conf.clone());
         let databases = factory.load_databases()?;
         self.insert_databases(databases)
     }
