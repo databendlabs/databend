@@ -5,7 +5,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
-use common_planners::{DfExplainType, EngineType};
+use common_planners::{DfExplainType, TableEngineType};
 use sqlparser::ast::{Ident, ObjectName, SqlOption, Value};
 use sqlparser::{
     ast::{ColumnDef, ColumnOptionDef, Statement as SQLStatement, TableConstraint},
@@ -28,7 +28,7 @@ pub struct FuseCreateTable {
     pub name: ObjectName,
     /// Optional schema
     pub columns: Vec<ColumnDef>,
-    pub engine: EngineType,
+    pub engine: TableEngineType,
     pub table_properties: Vec<SqlOption>,
 }
 
@@ -315,20 +315,20 @@ impl<'a> DfParser<'a> {
     }
 
     /// Parses the set of valid formats
-    fn parse_engine(&mut self) -> Result<EngineType, ParserError> {
+    fn parse_engine(&mut self) -> Result<TableEngineType, ParserError> {
         // TODO make ENGINE as a keyword
         if !self.consume_token("ENGINE") {
-            return Ok(EngineType::Null);
+            return Ok(TableEngineType::Null);
         }
 
         self.parser.expect_token(&Token::Eq)?;
 
         match self.parser.next_token() {
             Token::Word(w) => match &*w.value {
-                "Parquet" => Ok(EngineType::Parquet),
-                "JSONEachRaw" => Ok(EngineType::JsonEachRaw),
-                "CSV" => Ok(EngineType::Csv),
-                "Null" => Ok(EngineType::Null),
+                "Parquet" => Ok(TableEngineType::Parquet),
+                "JSONEachRaw" => Ok(TableEngineType::JsonEachRaw),
+                "CSV" => Ok(TableEngineType::Csv),
+                "Null" => Ok(TableEngineType::Null),
                 _ => self.expected("one of Parquet, JSONEachRaw, Null or CSV", Token::Word(w)),
             },
             unexpected => self.expected("one of Parquet, JSONEachRaw, Null or CSV", unexpected),

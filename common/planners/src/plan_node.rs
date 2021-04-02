@@ -8,8 +8,9 @@ use anyhow::Result;
 use common_datavalues::{DataSchema, DataSchemaRef};
 
 use crate::{
-    AggregatorFinalPlan, AggregatorPartialPlan, CreatePlan, EmptyPlan, ExplainPlan, FilterPlan,
-    LimitPlan, ProjectionPlan, ReadDataSourcePlan, ScanPlan, SelectPlan, SettingPlan, StagePlan,
+    AggregatorFinalPlan, AggregatorPartialPlan, CreateTablePlan, EmptyPlan, ExplainPlan,
+    FilterPlan, LimitPlan, ProjectionPlan, ReadDataSourcePlan, ScanPlan, SelectPlan, SettingPlan,
+    StagePlan,
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -25,7 +26,7 @@ pub enum PlanNode {
     ReadSource(ReadDataSourcePlan),
     Explain(ExplainPlan),
     Select(SelectPlan),
-    Create(CreatePlan),
+    Create(CreateTablePlan),
     SetVariable(SettingPlan),
 }
 

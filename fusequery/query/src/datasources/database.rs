@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use common_planners::CreatePlan;
+use common_planners::CreateTablePlan;
 
 use crate::datasources::{ITable, ITableFunction};
 
@@ -26,5 +26,5 @@ pub trait IDatabase: Sync + Send {
     fn get_table_functions(&self) -> Result<Vec<Arc<dyn ITableFunction>>>;
 
     // DDL
-    fn create_table(&self, plan: CreatePlan) -> Result<()>;
+    fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
 }

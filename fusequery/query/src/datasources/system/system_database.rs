@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
-use common_planners::CreatePlan;
+use common_planners::CreateTablePlan;
 
 use crate::datasources::{system, IDatabase, ITable, ITableFunction};
 
@@ -66,22 +66,14 @@ impl IDatabase for SystemDatabase {
     }
 
     fn get_tables(&self) -> Result<Vec<Arc<dyn ITable>>> {
-        let mut result = vec![];
-        for table in self.tables.values() {
-            result.push(table.clone());
-        }
-        Ok(result)
+        Ok(self.tables.values().cloned().collect())
     }
 
     fn get_table_functions(&self) -> Result<Vec<Arc<dyn ITableFunction>>> {
-        let mut result = vec![];
-        for (_, v) in self.table_functions.iter() {
-            result.push(v.clone());
-        }
-        Ok(result)
+        Ok(self.table_functions.values().cloned().collect())
     }
 
-    fn create_table(&self, _plan: CreatePlan) -> Result<()> {
+    fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
         bail!("DataSource Error: cannot create table for system database")
     }
 }

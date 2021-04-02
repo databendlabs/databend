@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common_planners::CreatePlan;
+use common_planners::CreateTablePlan;
 use common_streams::{DataBlockStream, SendableDataBlockStream};
 
 use crate::interpreters::IInterpreter;
@@ -14,11 +14,14 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct CreateInterpreter {
     ctx: FuseQueryContextRef,
-    plan: CreatePlan,
+    plan: CreateTablePlan,
 }
 
 impl CreateInterpreter {
-    pub fn try_create(ctx: FuseQueryContextRef, plan: CreatePlan) -> Result<Arc<dyn IInterpreter>> {
+    pub fn try_create(
+        ctx: FuseQueryContextRef,
+        plan: CreateTablePlan,
+    ) -> Result<Arc<dyn IInterpreter>> {
         Ok(Arc::new(CreateInterpreter { ctx, plan }))
     }
 }

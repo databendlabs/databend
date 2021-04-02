@@ -9,7 +9,7 @@ use anyhow::{bail, Result};
 use common_arrow::arrow;
 use common_datavalues::{DataField, DataSchema, DataValue};
 use common_planners::{
-    CreatePlan, ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, SelectPlan, SettingPlan,
+    CreateTablePlan, ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, SelectPlan, SettingPlan,
     StageState, VarValue,
 };
 use sqlparser::ast::{FunctionArg, Statement, TableFactor};
@@ -99,7 +99,7 @@ impl PlanParser {
             options.insert(p.name.value.to_lowercase(), p.value.to_string());
         }
 
-        Ok(PlanNode::Create(CreatePlan {
+        Ok(PlanNode::Create(CreateTablePlan {
             if_not_exists: create.if_not_exists,
             db,
             table,

@@ -12,6 +12,7 @@ use crate::datasources::remote::RemoteFactory;
 use crate::datasources::system::SystemFactory;
 use crate::datasources::{IDatabase, ITable, ITableFunction};
 
+// Maintain all the databases of user.
 pub struct DataSource {
     databases: HashMap<String, Arc<dyn IDatabase>>,
     table_functions: HashMap<String, Arc<dyn ITableFunction>>,
@@ -83,6 +84,17 @@ impl DataSource {
         Ok(table.clone())
     }
 
+    pub fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>> {
+        let mut results = vec![];
+        for (k, v) in self.databases.iter() {
+            let tables = v.get_tables()?;
+            for table in tables {
+                results.push((k.clone(), table.clone()));
+            }
+        }
+        Ok(results)
+    }
+
     pub fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>> {
         let table = self.table_functions.get(name).ok_or_else(|| {
             return anyhow::Error::msg(format!(
@@ -92,16 +104,5 @@ impl DataSource {
         })?;
 
         Ok(table.clone())
-    }
-
-    pub fn list_database_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>> {
-        let mut results = vec![];
-        for (k, v) in self.databases.iter() {
-            let tables = v.get_tables()?;
-            for table in tables {
-                results.push((k.clone(), table.clone()));
-            }
-        }
-        Ok(results)
     }
 }

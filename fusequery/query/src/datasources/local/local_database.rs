@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use anyhow::{bail, Result};
 use common_infallible::RwLock;
-use common_planners::{CreatePlan, EngineType};
+use common_planners::{CreateTablePlan, TableEngineType};
 
 use crate::datasources::local::{CsvTable, NullTable, ParquetTable};
 use crate::datasources::{IDatabase, ITable, ITableFunction};
@@ -42,28 +42,24 @@ impl IDatabase for LocalDatabase {
     }
 
     fn get_tables(&self) -> Result<Vec<Arc<dyn ITable>>> {
-        let mut result = vec![];
-        for table in self.tables.read().values() {
-            result.push(table.clone());
-        }
-        Ok(result)
+        Ok(self.tables.read().values().cloned().collect())
     }
 
     fn get_table_functions(&self) -> Result<Vec<Arc<dyn ITableFunction>>> {
         Ok(vec![])
     }
 
-    fn create_table(&self, plan: CreatePlan) -> Result<()> {
+    fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
         let table_name = plan.table.clone();
 
         let table = match &plan.engine {
-            EngineType::Parquet => {
+            TableEngineType::Parquet => {
                 ParquetTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
             }
-            EngineType::Csv => {
+            TableEngineType::Csv => {
                 CsvTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
             }
-            EngineType::Null => {
+            TableEngineType::Null => {
                 NullTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
             }
             _ => bail!("Unsupported engine: {:?}", plan.engine),
