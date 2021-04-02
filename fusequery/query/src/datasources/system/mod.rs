@@ -13,6 +13,7 @@ mod numbers_stream;
 mod numbers_table;
 mod one_table;
 mod settings_table;
+mod system_database;
 mod system_factory;
 mod tables_table;
 
@@ -22,5 +23,6 @@ pub use numbers_stream::NumbersStream;
 pub use numbers_table::NumbersTable;
 pub use one_table::OneTable;
 pub use settings_table::SettingsTable;
+pub use system_database::SystemDatabase;
 pub use system_factory::SystemFactory;
 pub use tables_table::TablesTable;

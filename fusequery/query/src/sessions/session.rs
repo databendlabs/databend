@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use common_infallible::RwLock;
 use common_planners::Partitions;
 use metrics::counter;
@@ -43,9 +43,9 @@ impl Session {
     /// Fetch nums partitions from session manager by context id.
     pub fn try_fetch_partitions(&self, ctx_id: String, nums: usize) -> Result<Partitions> {
         let session_map = self.sessions.read();
-        let ctx = session_map.get(&*ctx_id).ok_or_else(|| {
-            return anyhow::Error::msg(format!("Unsupported context id: {}", ctx_id));
-        })?;
+        let ctx = session_map
+            .get(&*ctx_id)
+            .ok_or_else(|| anyhow!("Unsupported context id: {}", ctx_id))?;
         ctx.try_get_partitions(nums)
     }
 }

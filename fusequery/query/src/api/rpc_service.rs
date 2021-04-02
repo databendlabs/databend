@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use tonic::transport::Server;
 
 use crate::api::rpc::{FlightService, GrpcService};
@@ -44,6 +44,6 @@ impl RpcService {
             .add_service(flight_srv.make_server())
             .serve(addr)
             .await
-            .map_err(|e| anyhow::Error::msg(format!("Metrics prometheus exporter error: {:?}", e)))
+            .map_err(|e| anyhow!("Metrics prometheus exporter error: {:?}", e))
     }
 }

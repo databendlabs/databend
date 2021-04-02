@@ -16,16 +16,16 @@ use crate::sessions::FuseQueryContextRef;
 pub trait ITable: Sync + Send {
     fn name(&self) -> &str;
     fn engine(&self) -> &str;
-
     fn as_any(&self) -> &dyn Any;
-
     fn schema(&self) -> Result<DataSchemaRef>;
 
+    // Get the read source plan.
     fn read_plan(
         &self,
         ctx: FuseQueryContextRef,
         push_down_plan: PlanNode,
     ) -> Result<ReadDataSourcePlan>;
 
+    // Read block datas from the underfling.
     async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream>;
 }
