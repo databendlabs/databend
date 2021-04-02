@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::datasources::datasource::DatabaseHashMap;
+use crate::datasources::IDatabase;
 
 pub struct RemoteFactory;
 
@@ -15,8 +15,7 @@ impl RemoteFactory {
         Self
     }
 
-    pub fn get_tables(&self) -> Result<DatabaseHashMap> {
-        let hashmap: DatabaseHashMap = HashMap::default();
-        Ok(hashmap)
+    pub fn load_databases(&self) -> Result<Vec<Arc<dyn IDatabase>>> {
+        Ok(vec![])
     }
 }

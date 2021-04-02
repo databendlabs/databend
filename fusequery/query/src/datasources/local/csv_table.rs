@@ -11,8 +11,6 @@ use common_datavalues::DataSchemaRef;
 use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics, TableOptions};
 use common_streams::{CsvStream, SendableDataBlockStream};
 
-use crate::datasources::local::ParquetTable;
-use crate::datasources::table_factory::TableCreatorFactory;
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
@@ -25,7 +23,6 @@ pub struct CsvTable {
 
 impl CsvTable {
     pub fn try_create(
-        _ctx: FuseQueryContextRef,
         db: String,
         name: String,
         schema: DataSchemaRef,
@@ -44,13 +41,6 @@ impl CsvTable {
             }
             _ => bail!("CSV Engine must contains file location options"),
         };
-    }
-
-    pub fn register(map: TableCreatorFactory) -> Result<()> {
-        let mut map = map.as_ref().write();
-        map.insert("CSV", CsvTable::try_create);
-        map.insert("Parquet", ParquetTable::try_create);
-        Ok(())
     }
 }
 

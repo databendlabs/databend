@@ -11,7 +11,6 @@ use common_datavalues::DataSchemaRef;
 use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics, TableOptions};
 use common_streams::{DataBlockStream, SendableDataBlockStream};
 
-use crate::datasources::table_factory::TableCreatorFactory;
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
@@ -23,7 +22,6 @@ pub struct NullTable {
 
 impl NullTable {
     pub fn try_create(
-        _ctx: FuseQueryContextRef,
         db: String,
         name: String,
         schema: DataSchemaRef,
@@ -31,12 +29,6 @@ impl NullTable {
     ) -> Result<Box<dyn ITable>> {
         let table = Self { db, name, schema };
         Ok(Box::new(table))
-    }
-
-    pub fn register(map: TableCreatorFactory) -> Result<()> {
-        let mut map = map.as_ref().write();
-        map.insert("Null", NullTable::try_create);
-        Ok(())
     }
 }
 

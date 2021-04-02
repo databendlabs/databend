@@ -17,7 +17,6 @@ use common_streams::{ParquetStream, SendableDataBlockStream};
 use crossbeam::channel::{bounded, Receiver, Sender};
 use tokio::task;
 
-use crate::datasources::table_factory::TableCreatorFactory;
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
@@ -30,7 +29,6 @@ pub struct ParquetTable {
 
 impl ParquetTable {
     pub fn try_create(
-        _ctx: FuseQueryContextRef,
         db: String,
         name: String,
         schema: DataSchemaRef,
@@ -49,12 +47,6 @@ impl ParquetTable {
             }
             _ => bail!("Parquet Engine must contains file location options"),
         };
-    }
-
-    pub fn register(map: TableCreatorFactory) -> Result<()> {
-        let mut map = map.as_ref().write();
-        map.insert("Parquet", ParquetTable::try_create);
-        Ok(())
     }
 }
 

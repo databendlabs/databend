@@ -12,7 +12,6 @@ async fn test_null_table() -> anyhow::Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
     let table = NullTable::try_create(
-        ctx.clone(),
         "default".into(),
         "a".into(),
         DataSchema::new(vec![DataField::new("a", DataType::UInt64, false)]).into(),

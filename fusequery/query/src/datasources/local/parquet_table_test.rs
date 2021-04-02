@@ -25,7 +25,6 @@ async fn test_parquet_table() -> anyhow::Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
     let table = ParquetTable::try_create(
-        ctx.clone(),
         "default".into(),
         "test_parquet".into(),
         DataSchema::new(vec![DataField::new("id", DataType::Int32, false)]).into(),
