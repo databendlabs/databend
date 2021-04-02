@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use crate::configs::Config;
 use crate::datasources::local::{LocalDatabase, LocalFactory};
@@ -79,16 +79,18 @@ impl DataSource {
     }
 
     pub fn get_database(&self, db_name: &str) -> Result<Arc<dyn IDatabase>> {
-        let database = self.databases.get(db_name).ok_or_else(|| {
-            anyhow::Error::msg(format!("DataSource Error: Unknown database: '{}'", db_name))
-        })?;
+        let database = self
+            .databases
+            .get(db_name)
+            .ok_or_else(|| anyhow!("DataSource Error: Unknown database: '{}'", db_name))?;
         Ok(database.clone())
     }
 
     pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
-        let database = self.databases.get(db_name).ok_or_else(|| {
-            anyhow::Error::msg(format!("DataSource Error: Unknown database: '{}'", db_name))
-        })?;
+        let database = self
+            .databases
+            .get(db_name)
+            .ok_or_else(|| anyhow!("DataSource Error: Unknown database: '{}'", db_name))?;
         let table = database.get_table(table_name)?;
         Ok(table.clone())
     }
@@ -105,12 +107,10 @@ impl DataSource {
     }
 
     pub fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>> {
-        let table = self.table_functions.get(name).ok_or_else(|| {
-            return anyhow::Error::msg(format!(
-                "DataSource Error: Unknown table function: '{}'",
-                name
-            ));
-        })?;
+        let table = self
+            .table_functions
+            .get(name)
+            .ok_or_else(|| anyhow!("DataSource Error: Unknown table function: '{}'", name))?;
 
         Ok(table.clone())
     }

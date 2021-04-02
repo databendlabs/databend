@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use common_infallible::RwLock;
 use common_planners::{CreateTablePlan, TableEngineType};
 
@@ -35,9 +35,9 @@ impl IDatabase for LocalDatabase {
 
     fn get_table(&self, table_name: &str) -> Result<Arc<dyn ITable>> {
         let table_lock = self.tables.read();
-        let table = table_lock.get(table_name).ok_or_else(|| {
-            anyhow::Error::msg(format!("DataSource Error: Unknown table: '{}'", table_name))
-        })?;
+        let table = table_lock
+            .get(table_name)
+            .ok_or_else(|| anyhow!("DataSource Error: Unknown table: '{}'", table_name))?;
         Ok(table.clone())
     }
 

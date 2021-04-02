@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use common_arrow::arrow;
 use common_datavalues::{DataField, DataSchema, DataValue};
 use common_planners::{
@@ -368,7 +368,7 @@ impl PlanParser {
             Some(ref limit_expr) => {
                 let n = match self.sql_to_rex(&limit_expr, &input.schema())? {
                     ExpressionPlan::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
-                    _ => Err(anyhow::Error::msg("Unexpected expression for LIMIT clause")),
+                    _ => Err(anyhow!("Unexpected expression for LIMIT clause")),
                 }?;
                 Ok(PlanBuilder::from(&input).limit(n)?.build()?)
             }

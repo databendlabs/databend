@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use common_planners::CreateTablePlan;
 
 use crate::datasources::{system, IDatabase, ITable, ITableFunction};
@@ -59,9 +59,10 @@ impl IDatabase for SystemDatabase {
     }
 
     fn get_table(&self, table_name: &str) -> Result<Arc<dyn ITable>> {
-        let table = self.tables.get(table_name).ok_or_else(|| {
-            anyhow::Error::msg(format!("DataSource Error: Unknown table: '{}'", table_name))
-        })?;
+        let table = self
+            .tables
+            .get(table_name)
+            .ok_or_else(|| anyhow!("DataSource Error: Unknown table: '{}'", table_name))?;
         Ok(table.clone())
     }
 
