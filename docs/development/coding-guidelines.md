@@ -3,7 +3,7 @@ id: development-codingguidelines
 title: Coding Guidelines
 ---
 
-This document describes the coding guidelines for the FuseQuery Rust codebase.
+This document describes the coding guidelines for the Datafuse Rust codebase.
 
 ## Code formatting
 
