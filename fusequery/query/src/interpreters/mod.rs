@@ -2,9 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#[cfg(test)]
 mod interpreter_create_test;
+#[cfg(test)]
 mod interpreter_explain_test;
+#[cfg(test)]
 mod interpreter_select_test;
+#[cfg(test)]
 mod interpreter_setting_test;
 
 mod interpreter;

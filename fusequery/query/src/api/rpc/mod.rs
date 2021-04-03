@@ -2,7 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#[cfg(test)]
 mod flight_service_test;
+#[cfg(test)]
 mod grpc_service_test;
 
 #[macro_use]

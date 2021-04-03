@@ -2,7 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#[cfg(test)]
 mod mutex_test;
+#[cfg(test)]
 mod rwlock_test;
 
 mod mutex;
