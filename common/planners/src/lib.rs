@@ -2,14 +2,25 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#[cfg(test)]
 mod plan_aggregator_test;
+#[cfg(test)]
+mod plan_display_test;
+#[cfg(test)]
 mod plan_expression_test;
+#[cfg(test)]
 mod plan_filter_test;
+#[cfg(test)]
 mod plan_limit_test;
+#[cfg(test)]
 mod plan_projection_test;
+#[cfg(test)]
 mod plan_rewriter_test;
+#[cfg(test)]
 mod plan_select_test;
+#[cfg(test)]
 mod plan_stage_test;
+#[cfg(test)]
 mod plan_walker_test;
 
 mod plan_aggregator_final;
