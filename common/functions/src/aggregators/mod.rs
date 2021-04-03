@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#[cfg(test)]
 mod aggregator_test;
 
 mod aggregator;

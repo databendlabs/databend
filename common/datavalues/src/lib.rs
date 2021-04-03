@@ -2,11 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#[cfg(test)]
 mod data_array_aggregate_test;
+#[cfg(test)]
 mod data_array_arithmetic_test;
+#[cfg(test)]
 mod data_array_comparison_test;
+#[cfg(test)]
 mod data_array_logic_test;
+#[cfg(test)]
 mod data_value_aggregate_test;
+#[cfg(test)]
 mod data_value_arithmetic_test;
 
 #[macro_use]

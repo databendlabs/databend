@@ -2,9 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#[cfg(test)]
 mod clusters_table_test;
+#[cfg(test)]
 mod functions_table_test;
+#[cfg(test)]
 mod settings_table_test;
+#[cfg(test)]
 mod tables_table_test;
 
 mod clusters_table;

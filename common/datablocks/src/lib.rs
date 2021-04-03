@@ -2,7 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-mod data_block;
+#[cfg(test)]
 mod data_block_test;
+
+mod data_block;
 
 pub use crate::data_block::DataBlock;

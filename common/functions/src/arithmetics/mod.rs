@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#[cfg(test)]
 mod arithmetic_test;
 
 mod arithmetic;

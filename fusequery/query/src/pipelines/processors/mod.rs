@@ -2,11 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#[cfg(test)]
 mod pipe_test;
+#[cfg(test)]
 mod pipeline_builder_test;
+#[cfg(test)]
 mod pipeline_display_test;
+#[cfg(test)]
 mod pipeline_walker_test;
+#[cfg(test)]
 mod processor_empty_test;
+#[cfg(test)]
 mod processor_merge_test;
 
 mod pipe;
