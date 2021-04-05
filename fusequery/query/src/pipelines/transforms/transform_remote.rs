@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 
-use crate::api::rpc::{ExecuteGetAction, ExecutePlanAction, FlightClient};
+use crate::api::rpc::FlightClient;
 use crate::pipelines::processors::{EmptyProcessor, IProcessor};
 use crate::sessions::FuseQueryContextRef;
 
@@ -60,10 +60,10 @@ impl IProcessor for RemoteTransform {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let mut client = FlightClient::try_create(self.remote_addr.clone()).await?;
-        let action = ExecuteGetAction::ExecutePlan(ExecutePlanAction {
-            job_id: self.job_id.clone(),
-            plan: self.plan.clone(),
-        });
-        Ok(Box::pin(client.execute(&action).await?))
+        Ok(Box::pin(
+            client
+                .execute_remote_plan(self.job_id.clone(), &self.plan)
+                .await?,
+        ))
     }
 }

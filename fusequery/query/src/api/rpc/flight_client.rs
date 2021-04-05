@@ -11,12 +11,12 @@ use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
 use common_arrow::arrow_flight::{Action, Ticket};
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
-use common_planners::Partitions;
+use common_planners::{Partitions, PlanNode};
 use common_streams::SendableDataBlockStream;
 use prost::Message;
 use tokio_stream::StreamExt;
 
-use crate::api::rpc::{ExecuteGetAction, FetchPartitionAction};
+use crate::api::rpc::{ExecuteGetAction, ExecutePlanAction, FetchPartitionAction};
 use crate::protobuf::{FlightActionRequest, FlightGetRequest};
 
 pub struct FlightClient {
@@ -29,7 +29,8 @@ impl FlightClient {
         Ok(Self { client })
     }
 
-    pub async fn execute(&mut self, action: &ExecuteGetAction) -> Result<SendableDataBlockStream> {
+    // Execute do_get by action.
+    async fn do_get(&mut self, action: &ExecuteGetAction) -> Result<SendableDataBlockStream> {
         let flight_request = FlightGetRequest {
             body: serde_json::to_string(action)?,
         };
@@ -54,6 +55,20 @@ impl FlightClient {
         }
     }
 
+    /// Execute the plan in the remote and get the stream.
+    pub async fn execute_remote_plan(
+        &mut self,
+        job_id: String,
+        plan: &PlanNode,
+    ) -> Result<SendableDataBlockStream> {
+        let action = ExecuteGetAction::ExecutePlan(ExecutePlanAction {
+            job_id: job_id.clone(),
+            plan: plan.clone(),
+        });
+        self.do_get(&action).await
+    }
+
+    /// Fetch partition from another query.
     pub async fn fetch_partition_action(&mut self, uuid: String, nums: u32) -> Result<Partitions> {
         // Request.
         let action_request = FlightActionRequest {
