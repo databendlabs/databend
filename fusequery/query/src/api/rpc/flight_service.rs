@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::io::Cursor;
+use std::convert::TryInto;
 use std::pin::Pin;
 use std::time::Instant;
 
@@ -16,7 +16,6 @@ use common_arrow::arrow_flight::{
 use futures::{Stream, StreamExt};
 use log::info;
 use metrics::histogram;
-use prost::Message;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 
@@ -24,7 +23,6 @@ use crate::api::rpc::{DoActionAction, DoGetAction};
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::pipelines::processors::PipelineBuilder;
-use crate::protobuf::FlightRequest;
 use crate::sessions::SessionRef;
 
 type FlightDataSender = tokio::sync::mpsc::Sender<Result<FlightData, Status>>;
@@ -90,19 +88,7 @@ impl Flight for FlightService {
         &self,
         request: Request<Ticket>,
     ) -> Result<Response<Self::DoGetStream>, Status> {
-        let ticket = request.into_inner();
-        let mut buf = Cursor::new(&ticket.ticket);
-
-        // Decode FlightRequest from buffer.
-        let request: FlightRequest =
-            FlightRequest::decode(&mut buf).map_err(|e| Status::internal(e.to_string()))?;
-
-        // Decode DoGetAction from request body.
-        let json_str = request.body.as_str();
-        let action = serde_json::from_str::<DoGetAction>(json_str)
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        // Dispatch.
+        let action: DoGetAction = request.try_into()?;
         match action {
             DoGetAction::ExecutePlan(action) => {
                 let plan = action.plan;
@@ -209,18 +195,7 @@ impl Flight for FlightService {
         &self,
         request: Request<Action>,
     ) -> Result<Response<Self::DoActionStream>, Status> {
-        let action = request.into_inner();
-        let mut buf = Cursor::new(&action.body);
-
-        // Decode FlightRequest from buffer.
-        let request: FlightRequest =
-            FlightRequest::decode(&mut buf).map_err(|e| Status::internal(e.to_string()))?;
-
-        // Decode DoActionAction from flight request body.
-        let json_str = request.body.as_str();
-        let action = serde_json::from_str::<DoActionAction>(json_str)
-            .map_err(|e| Status::internal(e.to_string()))?;
-
+        let action: DoActionAction = request.try_into()?;
         match action {
             DoActionAction::FetchPartition(v) => {
                 let (uuid, nums) = (v.uuid, v.nums);
