@@ -15,8 +15,7 @@ use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 use tonic::Request;
 
-use crate::api::rpc::flight_action::DoActionAction;
-use crate::api::rpc::{DoGetAction, ExecutePlanAction, FetchPartitionAction};
+use crate::api::rpc::{DoActionAction, DoGetAction, ExecutePlanAction, FetchPartitionAction};
 
 pub struct FlightClient {
     client: FlightServiceClient<tonic::transport::channel::Channel>,
@@ -69,6 +68,7 @@ impl FlightClient {
         }
     }
 
+    // Execute do_action.
     async fn do_action(&mut self, action: &DoActionAction) -> Result<Vec<u8>> {
         let request: Request<Action> = action.try_into()?;
         let mut stream = self.client.do_action(request).await?.into_inner();

@@ -5,3 +5,5 @@
 // The api module only used for internal communication, such as GRPC between cluster and the managed HTTP REST API.
 
 // Flight Client for FuseStore.
+
+mod store_client;
