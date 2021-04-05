@@ -21,7 +21,10 @@ async fn test_flight_execute() -> anyhow::Result<()> {
     .build()?;
 
     let mut client = FlightClient::try_create(addr.to_string()).await?;
-    let action = ExecuteAction::ExecutePlan(ExecutePlanAction::create("xx".to_string(), plan));
+    let action = ExecuteGetAction::ExecutePlan(ExecutePlanAction {
+        job_id: "xx".to_string(),
+        plan,
+    });
     let stream = client.execute(&action).await?;
     let blocks = stream.try_collect::<Vec<_>>().await?;
     let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();

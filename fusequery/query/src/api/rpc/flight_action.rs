@@ -6,23 +6,19 @@ use common_planners::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ExecutePlanAction {
-    pub(crate) job_id: String,
-    pub(crate) plan: PlanNode,
+    pub job_id: String,
+    pub plan: PlanNode,
 }
 
+// Action wrapper for do_get.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct FetchPartitionAction {
-    pub(crate) job_id: String,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub enum ExecuteAction {
+pub enum ExecuteGetAction {
     ExecutePlan(ExecutePlanAction),
-    FetchPartition(FetchPartitionAction),
 }
 
-impl ExecutePlanAction {
-    pub fn create(job_id: String, plan: PlanNode) -> Self {
-        Self { job_id, plan }
-    }
+// Action wrapper for do_action.
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct FetchPartitionAction {
+    pub uuid: String,
+    pub nums: u32,
 }

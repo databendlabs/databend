@@ -16,8 +16,8 @@ use common_streams::SendableDataBlockStream;
 use prost::Message;
 use tokio_stream::StreamExt;
 
-use crate::api::rpc::{ExecuteAction, FetchPartitionRequest};
-use crate::protobuf::{FlightActionRequest, FlightRequest};
+use crate::api::rpc::{ExecuteGetAction, FetchPartitionAction};
+use crate::protobuf::{FlightActionRequest, FlightGetRequest};
 
 pub struct FlightClient {
     client: FlightServiceClient<tonic::transport::channel::Channel>,
@@ -29,9 +29,9 @@ impl FlightClient {
         Ok(Self { client })
     }
 
-    pub async fn execute(&mut self, action: &ExecuteAction) -> Result<SendableDataBlockStream> {
-        let flight_request = FlightRequest {
-            action: serde_json::to_string(action)?,
+    pub async fn execute(&mut self, action: &ExecuteGetAction) -> Result<SendableDataBlockStream> {
+        let flight_request = FlightGetRequest {
+            body: serde_json::to_string(action)?,
         };
         let mut buf = vec![];
         flight_request.encode(&mut buf)?;
@@ -57,7 +57,7 @@ impl FlightClient {
     pub async fn fetch_partition_action(&mut self, uuid: String, nums: u32) -> Result<Partitions> {
         // Request.
         let action_request = FlightActionRequest {
-            body: serde_json::to_string(&FetchPartitionRequest { uuid, nums })?,
+            body: serde_json::to_string(&FetchPartitionAction { uuid, nums })?,
         };
         let mut buf = vec![];
         action_request.encode(&mut buf)?;

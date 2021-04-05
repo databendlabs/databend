@@ -20,11 +20,11 @@ use prost::Message;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 
-use crate::api::rpc::{ExecuteAction, FetchPartitionRequest};
+use crate::api::rpc::{ExecuteGetAction, FetchPartitionAction};
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::pipelines::processors::PipelineBuilder;
-use crate::protobuf::{FlightActionRequest, FlightRequest};
+use crate::protobuf::{FlightActionRequest, FlightGetRequest};
 use crate::sessions::SessionRef;
 
 type FlightDataSender = tokio::sync::mpsc::Sender<Result<FlightData, Status>>;
@@ -94,16 +94,16 @@ impl Flight for FlightService {
         let mut buf = Cursor::new(&ticket.ticket);
 
         // Decode FlightRequest from buffer.
-        let request: FlightRequest =
-            FlightRequest::decode(&mut buf).map_err(|e| Status::internal(e.to_string()))?;
+        let request: FlightGetRequest =
+            FlightGetRequest::decode(&mut buf).map_err(|e| Status::internal(e.to_string()))?;
 
         // Decode ExecuteAction from request.
-        let json_str = request.action.as_str();
-        let action = serde_json::from_str::<ExecuteAction>(json_str)
+        let json_str = request.body.as_str();
+        let action = serde_json::from_str::<ExecuteGetAction>(json_str)
             .map_err(|e| Status::internal(e.to_string()))?;
 
         match action {
-            ExecuteAction::ExecutePlan(action) => {
+            ExecuteGetAction::ExecutePlan(action) => {
                 let plan = action.plan;
                 let cpus = self.conf.num_cpus;
                 let cluster = self.cluster.clone();
@@ -184,9 +184,6 @@ impl Flight for FlightService {
                     Box::pin(ReceiverStream::new(receiver)) as Self::DoGetStream
                 ))
             }
-            ExecuteAction::FetchPartition(_) => {
-                unimplemented!()
-            }
         }
     }
 
@@ -222,7 +219,7 @@ impl Flight for FlightService {
             "fetch_partition_action" => {
                 // Fetch partition request.
                 let (uuid, nums) = {
-                    let req: FetchPartitionRequest = serde_json::from_str(&request.body)
+                    let req: FetchPartitionAction = serde_json::from_str(&request.body)
                         .map_err(|e| Status::internal(e.to_string()))?;
                     (req.uuid, req.nums)
                 };
