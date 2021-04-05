@@ -5,7 +5,7 @@
 use anyhow::{anyhow, Result};
 use tonic::transport::Server;
 
-use crate::api::rpc::{FlightService, GrpcService};
+use crate::api::rpc::FlightService;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::sessions::SessionRef;
@@ -28,11 +28,7 @@ impl RpcService {
     pub async fn make_server(&self) -> Result<()> {
         let addr = self.conf.rpc_api_address.parse::<std::net::SocketAddr>()?;
 
-        // GRPC service.
-        let rpc_srv = GrpcService::create(self.session_manager.clone());
-
         // Flight service:
-        // For distributed execute engine api.
         let flight_srv = FlightService::create(
             self.conf.clone(),
             self.cluster.clone(),
@@ -40,7 +36,6 @@ impl RpcService {
         );
 
         Server::builder()
-            .add_service(rpc_srv.make_server())
             .add_service(flight_srv.make_server())
             .serve(addr)
             .await

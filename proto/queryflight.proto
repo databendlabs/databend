@@ -9,3 +9,14 @@ package queryflight;
 message FlightRequest {
   string action = 1;
 }
+
+// do_action request.
+message FlightActionRequest {
+  string body = 1;
+}
+
+// Fetch partition request.
+message FetchPartitionRequest {
+  string uuid = 1;
+  uint32 nums = 2;
+}

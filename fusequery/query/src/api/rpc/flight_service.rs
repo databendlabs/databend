@@ -20,11 +20,11 @@ use prost::Message;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 
-use crate::api::rpc::ExecuteAction;
+use crate::api::rpc::{ExecuteAction, FetchPartitionRequest};
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::pipelines::processors::PipelineBuilder;
-use crate::protobuf::FlightRequest;
+use crate::protobuf::{FlightActionRequest, FlightRequest};
 use crate::sessions::SessionRef;
 
 type FlightDataSender = tokio::sync::mpsc::Sender<Result<FlightData, Status>>;
@@ -209,9 +209,47 @@ impl Flight for FlightService {
     type DoActionStream = FlightStream<arrow_flight::Result>;
     async fn do_action(
         &self,
-        _request: Request<Action>,
+        request: Request<Action>,
     ) -> Result<Response<Self::DoActionStream>, Status> {
-        unimplemented!()
+        // Get the FlightActionRequest.
+        let action = request.into_inner();
+        let mut buf = Cursor::new(&action.body);
+        let request: FlightActionRequest =
+            FlightActionRequest::decode(&mut buf).map_err(|e| Status::internal(e.to_string()))?;
+
+        // Check action.
+        match action.r#type.as_str() {
+            "fetch_partition_action" => {
+                // Fetch partition request.
+                let (uuid, nums) = {
+                    let req: FetchPartitionRequest = serde_json::from_str(&request.body)
+                        .map_err(|e| Status::internal(e.to_string()))?;
+                    (req.uuid, req.nums)
+                };
+
+                // Get partitions.
+                let parts = self
+                    .session_manager
+                    .try_fetch_partitions(uuid, nums as usize)
+                    .map_err(|e| Status::internal(e.to_string()))?;
+
+                // Response stream.
+                let stream = {
+                    let result = arrow_flight::Result {
+                        body: serde_json::to_vec(&parts)
+                            .map_err(|e| Status::internal(e.to_string()))?,
+                    };
+
+                    let flights: Vec<Result<arrow_flight::Result, Status>> = vec![Ok(result)];
+                    futures::stream::iter(flights)
+                };
+                Ok(Response::new(Box::pin(stream) as Self::DoActionStream))
+            }
+            _ => Err(Status::internal(format!(
+                "do_action unsupported {:?} method",
+                action.r#type
+            ))),
+        }
     }
 
     type ListActionsStream = FlightStream<ActionType>;

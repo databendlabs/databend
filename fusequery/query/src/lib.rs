@@ -27,6 +27,5 @@ pub use common_streams;
 // ProtoBuf generated files.
 #[allow(clippy::all)]
 pub mod protobuf {
-    tonic::include_proto!("queryrpc");
     tonic::include_proto!("queryflight");
 }
