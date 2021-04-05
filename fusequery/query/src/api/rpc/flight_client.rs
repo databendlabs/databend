@@ -9,7 +9,6 @@ use anyhow::{bail, Result};
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
 use common_arrow::arrow_flight::{Action, Ticket};
-use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_planners::{Partitions, PlanNode};
 use common_streams::SendableDataBlockStream;
@@ -59,7 +58,7 @@ impl FlightClient {
                 let schema = Arc::new(DataSchema::try_from(&flight_data)?);
                 let block_stream = stream.map(move |flight_data| {
                     let batch = flight_data_to_arrow_batch(&flight_data?, schema.clone(), &[])?;
-                    DataBlock::try_from_arrow_batch(&batch)
+                    batch.try_into()
                 });
                 Ok(Box::pin(block_stream))
             }

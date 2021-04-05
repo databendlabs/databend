@@ -2,10 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::convert::TryInto;
 use std::sync::Arc;
 
 use anyhow::Result;
 use common_arrow::arrow;
+use common_arrow::arrow::record_batch::RecordBatch;
 use common_datavalues::{DataArrayRef, DataSchema, DataSchemaRef};
 
 #[derive(Debug, Clone)]
@@ -17,13 +19,6 @@ pub struct DataBlock {
 impl DataBlock {
     pub fn create(schema: DataSchemaRef, columns: Vec<DataArrayRef>) -> Self {
         DataBlock { schema, columns }
-    }
-
-    pub fn try_from_arrow_batch(batch: &arrow::record_batch::RecordBatch) -> Result<Self> {
-        Ok(DataBlock::create(
-            batch.schema(),
-            Vec::from(batch.columns()),
-        ))
     }
 
     pub fn empty() -> Self {
@@ -39,13 +34,6 @@ impl DataBlock {
             columns.push(arrow::array::new_empty_array(f.data_type()))
         }
         DataBlock { schema, columns }
-    }
-
-    pub fn to_arrow_batch(&self) -> Result<arrow::record_batch::RecordBatch> {
-        Ok(arrow::record_batch::RecordBatch::try_new(
-            self.schema.clone(),
-            self.columns.clone(),
-        )?)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -75,5 +63,24 @@ impl DataBlock {
             let idx = self.schema.index_of(name)?;
             Ok(&self.columns[idx])
         }
+    }
+}
+
+impl TryInto<arrow::record_batch::RecordBatch> for DataBlock {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<RecordBatch, Self::Error> {
+        Ok(arrow::record_batch::RecordBatch::try_new(
+            self.schema.clone(),
+            self.columns.clone(),
+        )?)
+    }
+}
+
+impl TryInto<DataBlock> for arrow::record_batch::RecordBatch {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<DataBlock, Self::Error> {
+        Ok(DataBlock::create(self.schema(), Vec::from(self.columns())))
     }
 }

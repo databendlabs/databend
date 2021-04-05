@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
+use std::convert::TryInto;
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Result};
@@ -48,10 +49,8 @@ impl FilterTransform {
             .as_any()
             .downcast_ref::<BooleanArray>()
             .ok_or_else(|| anyhow!("cannot downcast to boolean array"))?;
-        DataBlock::try_from_arrow_batch(&arrow::compute::filter_record_batch(
-            &block.to_arrow_batch()?,
-            filter_result,
-        )?)
+        let batch = arrow::compute::filter_record_batch(&block.try_into()?, filter_result)?;
+        batch.try_into()
     }
 }
 

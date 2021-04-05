@@ -143,7 +143,7 @@ impl Flight for FlightService {
                         // Check block is empty.
                         if !block.is_empty() {
                             // Convert batch to flight data.
-                            let batch = match_async_result!(block.to_arrow_batch(), sender);
+                            let batch = match_async_result!(block.try_into(), sender);
                             let (flight_dicts, flight_batch) =
                                 arrow_flight::utils::flight_data_from_arrow_batch(&batch, &options);
                             let batch_flight_data = flight_dicts
