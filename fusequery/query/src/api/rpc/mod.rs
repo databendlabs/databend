@@ -13,6 +13,6 @@ mod flight_client;
 mod flight_service;
 mod metrics;
 
-pub use flight_action::{ExecuteGetAction, ExecutePlanAction, FetchPartitionAction};
+pub use flight_action::{DoActionAction, DoGetAction, ExecutePlanAction, FetchPartitionAction};
 pub use flight_client::FlightClient;
 pub use flight_service::{FlightService, FlightStream};

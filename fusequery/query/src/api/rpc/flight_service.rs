@@ -20,11 +20,11 @@ use prost::Message;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 
-use crate::api::rpc::{ExecuteGetAction, FetchPartitionAction};
+use crate::api::rpc::{DoActionAction, DoGetAction};
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::pipelines::processors::PipelineBuilder;
-use crate::protobuf::{FlightActionRequest, FlightGetRequest};
+use crate::protobuf::FlightRequest;
 use crate::sessions::SessionRef;
 
 type FlightDataSender = tokio::sync::mpsc::Sender<Result<FlightData, Status>>;
@@ -94,16 +94,17 @@ impl Flight for FlightService {
         let mut buf = Cursor::new(&ticket.ticket);
 
         // Decode FlightRequest from buffer.
-        let request: FlightGetRequest =
-            FlightGetRequest::decode(&mut buf).map_err(|e| Status::internal(e.to_string()))?;
+        let request: FlightRequest =
+            FlightRequest::decode(&mut buf).map_err(|e| Status::internal(e.to_string()))?;
 
-        // Decode ExecuteAction from request.
+        // Decode DoGetAction from request body.
         let json_str = request.body.as_str();
-        let action = serde_json::from_str::<ExecuteGetAction>(json_str)
+        let action = serde_json::from_str::<DoGetAction>(json_str)
             .map_err(|e| Status::internal(e.to_string()))?;
 
+        // Dispatch.
         match action {
-            ExecuteGetAction::ExecutePlan(action) => {
+            DoGetAction::ExecutePlan(action) => {
                 let plan = action.plan;
                 let cpus = self.conf.num_cpus;
                 let cluster = self.cluster.clone();
@@ -208,21 +209,21 @@ impl Flight for FlightService {
         &self,
         request: Request<Action>,
     ) -> Result<Response<Self::DoActionStream>, Status> {
-        // Get the FlightActionRequest.
         let action = request.into_inner();
         let mut buf = Cursor::new(&action.body);
-        let request: FlightActionRequest =
-            FlightActionRequest::decode(&mut buf).map_err(|e| Status::internal(e.to_string()))?;
 
-        // Check action.
-        match action.r#type.as_str() {
-            "fetch_partition_action" => {
-                // Fetch partition request.
-                let (uuid, nums) = {
-                    let req: FetchPartitionAction = serde_json::from_str(&request.body)
-                        .map_err(|e| Status::internal(e.to_string()))?;
-                    (req.uuid, req.nums)
-                };
+        // Decode FlightRequest from buffer.
+        let request: FlightRequest =
+            FlightRequest::decode(&mut buf).map_err(|e| Status::internal(e.to_string()))?;
+
+        // Decode DoActionAction from flight request body.
+        let json_str = request.body.as_str();
+        let action = serde_json::from_str::<DoActionAction>(json_str)
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        match action {
+            DoActionAction::FetchPartition(v) => {
+                let (uuid, nums) = (v.uuid, v.nums);
 
                 // Get partitions.
                 let parts = self
@@ -242,10 +243,6 @@ impl Flight for FlightService {
                 };
                 Ok(Response::new(Box::pin(stream) as Self::DoActionStream))
             }
-            _ => Err(Status::internal(format!(
-                "do_action unsupported {:?} method",
-                action.r#type
-            ))),
         }
     }
 

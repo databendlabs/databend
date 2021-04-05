@@ -62,7 +62,7 @@ impl IProcessor for RemoteTransform {
         let mut client = FlightClient::try_create(self.remote_addr.clone()).await?;
         Ok(Box::pin(
             client
-                .execute_remote_plan(self.job_id.clone(), &self.plan)
+                .execute_remote_plan_action(self.job_id.clone(), &self.plan)
                 .await?,
         ))
     }
