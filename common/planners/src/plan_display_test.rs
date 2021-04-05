@@ -27,7 +27,7 @@ fn test_plan_display_indent() -> anyhow::Result<()> {
     let mut options = HashMap::new();
     options.insert("opt_foo".to_string(), "opt_bar".to_string());
 
-    let plan_create = PlanNode::Create(CreateTablePlan {
+    let plan_create = PlanNode::CreateTable(CreateTablePlan {
         if_not_exists: true,
         db: "foo".into(),
         table: "bar".into(),

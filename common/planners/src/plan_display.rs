@@ -96,7 +96,7 @@ impl PlanNode {
                                 write!(f, "{:?}", plan.input())?;
                                 Ok(false)
                             }
-                            PlanNode::Create(plan) => {
+                            PlanNode::CreateTable(plan) => {
                                 write!(f, "Create table {:}.{:}", plan.db, plan.table)?;
                                 write!(f, " {:},", plan.schema)?;
                                 // need engine to impl Display

@@ -26,7 +26,7 @@ pub enum PlanNode {
     ReadSource(ReadDataSourcePlan),
     Explain(ExplainPlan),
     Select(SelectPlan),
-    Create(CreateTablePlan),
+    CreateTable(CreateTablePlan),
     SetVariable(SettingPlan),
 }
 
@@ -46,7 +46,7 @@ impl PlanNode {
             PlanNode::Select(v) => v.schema(),
             PlanNode::Explain(v) => v.schema(),
             PlanNode::SetVariable(v) => v.schema(),
-            PlanNode::Create(v) => v.schema(),
+            PlanNode::CreateTable(v) => v.schema(),
         }
     }
 
@@ -64,7 +64,7 @@ impl PlanNode {
             PlanNode::Select(_) => "SelectPlan",
             PlanNode::Explain(_) => "ExplainPlan",
             PlanNode::SetVariable(_) => "SetVariablePlan",
-            PlanNode::Create(_) => "CreatePlan",
+            PlanNode::CreateTable(_) => "CreateTablePlan",
         }
     }
 
