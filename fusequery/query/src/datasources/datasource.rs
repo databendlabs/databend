@@ -60,29 +60,33 @@ impl DataSource {
         Ok(())
     }
 
+    // Register local database with System engine.
     fn register_system_database(&mut self) -> Result<()> {
         let factory = SystemFactory::create();
         let databases = factory.load_databases()?;
         self.insert_databases(databases)
     }
 
+    // Register local database with Local engine.
     fn register_local_database(&mut self) -> Result<()> {
         let factory = LocalFactory::create();
         let databases = factory.load_databases()?;
         self.insert_databases(databases)
     }
 
+    // Register remote database with Remote engine.
+    fn register_remote_database(&mut self) -> Result<()> {
+        let factory = RemoteFactory::create(self.conf.clone());
+        let databases = factory.load_databases()?;
+        self.insert_databases(databases)
+    }
+
+    // Register default database with Local engine.
     fn register_default_database(&mut self) -> Result<()> {
         let default_db = LocalDatabase::create();
         self.databases
             .insert("default".to_string(), Arc::new(default_db));
         Ok(())
-    }
-
-    fn register_remote_database(&mut self) -> Result<()> {
-        let factory = RemoteFactory::create(self.conf.clone());
-        let databases = factory.load_databases()?;
-        self.insert_databases(databases)
     }
 }
 
