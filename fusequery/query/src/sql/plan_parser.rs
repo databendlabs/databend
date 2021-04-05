@@ -99,7 +99,7 @@ impl PlanParser {
             options.insert(p.name.value.to_lowercase(), p.value.to_string());
         }
 
-        Ok(PlanNode::Create(CreateTablePlan {
+        Ok(PlanNode::CreateTable(CreateTablePlan {
             if_not_exists: create.if_not_exists,
             db,
             table,

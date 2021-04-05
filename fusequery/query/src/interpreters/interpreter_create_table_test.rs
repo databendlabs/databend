@@ -14,10 +14,10 @@ async fn test_explain_interpreter() -> anyhow::Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
 
-    if let PlanNode::Create(plan) = PlanParser::create(ctx.clone())
+    if let PlanNode::CreateTable(plan) = PlanParser::create(ctx.clone())
         .build_from_sql("create table default.a(a bigint, b int, c varchar(255), d smallint, e Date ) Engine = Null")?
     {
-        let executor = CreateInterpreter::try_create(ctx, plan.clone())?;
+        let executor = CreateTableInterpreter::try_create(ctx, plan.clone())?;
         assert_eq!(executor.name(), "CreateInterpreter");
 
         assert_eq!(plan.schema().field_with_name("a")?.data_type(), &DataType::Int64);

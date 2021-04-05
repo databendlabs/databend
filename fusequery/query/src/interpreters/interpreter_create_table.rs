@@ -12,22 +12,22 @@ use common_streams::{DataBlockStream, SendableDataBlockStream};
 use crate::interpreters::IInterpreter;
 use crate::sessions::FuseQueryContextRef;
 
-pub struct CreateInterpreter {
+pub struct CreateTableInterpreter {
     ctx: FuseQueryContextRef,
     plan: CreateTablePlan,
 }
 
-impl CreateInterpreter {
+impl CreateTableInterpreter {
     pub fn try_create(
         ctx: FuseQueryContextRef,
         plan: CreateTablePlan,
     ) -> Result<Arc<dyn IInterpreter>> {
-        Ok(Arc::new(CreateInterpreter { ctx, plan }))
+        Ok(Arc::new(CreateTableInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait]
-impl IInterpreter for CreateInterpreter {
+impl IInterpreter for CreateTableInterpreter {
     fn name(&self) -> &str {
         "CreateInterpreter"
     }
