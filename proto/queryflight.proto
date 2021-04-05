@@ -6,6 +6,7 @@ syntax = "proto3";
 
 package queryflight;
 
+// Request for flight do_get and do_action.
 message FlightRequest {
-  string action = 1;
+  string body = 1;
 }

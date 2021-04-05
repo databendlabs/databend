@@ -13,6 +13,13 @@ use crate::datasources::remote::RemoteFactory;
 use crate::datasources::system::SystemFactory;
 use crate::datasources::{IDatabase, ITable, ITableFunction};
 
+pub trait IDataSource: Sync + Send {
+    fn get_database(&self, db_name: &str) -> Result<Arc<dyn IDatabase>>;
+    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>>;
+    fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>>;
+    fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>>;
+}
+
 // Maintain all the databases of user.
 pub struct DataSource {
     conf: Config,
@@ -53,32 +60,38 @@ impl DataSource {
         Ok(())
     }
 
+    // Register local database with System engine.
     fn register_system_database(&mut self) -> Result<()> {
         let factory = SystemFactory::create();
         let databases = factory.load_databases()?;
         self.insert_databases(databases)
     }
 
+    // Register local database with Local engine.
     fn register_local_database(&mut self) -> Result<()> {
         let factory = LocalFactory::create();
         let databases = factory.load_databases()?;
         self.insert_databases(databases)
     }
 
-    fn register_default_database(&mut self) -> Result<()> {
-        let default_db = LocalDatabase::create();
-        self.databases
-            .insert("default".to_string(), Arc::new(default_db));
-        Ok(())
-    }
-
+    // Register remote database with Remote engine.
     fn register_remote_database(&mut self) -> Result<()> {
         let factory = RemoteFactory::create(self.conf.clone());
         let databases = factory.load_databases()?;
         self.insert_databases(databases)
     }
 
-    pub fn get_database(&self, db_name: &str) -> Result<Arc<dyn IDatabase>> {
+    // Register default database with Local engine.
+    fn register_default_database(&mut self) -> Result<()> {
+        let default_db = LocalDatabase::create();
+        self.databases
+            .insert("default".to_string(), Arc::new(default_db));
+        Ok(())
+    }
+}
+
+impl IDataSource for DataSource {
+    fn get_database(&self, db_name: &str) -> Result<Arc<dyn IDatabase>> {
         let database = self
             .databases
             .get(db_name)
@@ -86,7 +99,7 @@ impl DataSource {
         Ok(database.clone())
     }
 
-    pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
+    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
         let database = self
             .databases
             .get(db_name)
@@ -95,7 +108,7 @@ impl DataSource {
         Ok(table.clone())
     }
 
-    pub fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>> {
+    fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>> {
         let mut results = vec![];
         for (k, v) in self.databases.iter() {
             let tables = v.get_tables()?;
@@ -106,7 +119,7 @@ impl DataSource {
         Ok(results)
     }
 
-    pub fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>> {
+    fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>> {
         let table = self
             .table_functions
             .get(name)

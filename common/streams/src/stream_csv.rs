@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::convert::TryInto;
 use std::fs::File;
 use std::task::{Context, Poll};
 
@@ -33,7 +34,7 @@ impl Stream for CsvStream {
         let batch = self.reader.next();
         match batch {
             Some(Ok(batch)) => {
-                let block = DataBlock::try_from_arrow_batch(&batch);
+                let block = batch.try_into();
                 match block {
                     Ok(block) => Poll::Ready(Some(Ok(block))),
                     _ => Poll::Ready(None),

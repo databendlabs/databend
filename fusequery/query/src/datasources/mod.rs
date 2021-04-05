@@ -13,6 +13,6 @@ mod table;
 mod table_function;
 
 pub use database::IDatabase;
-pub use datasource::DataSource;
+pub use datasource::{DataSource, IDataSource};
 pub use table::ITable;
 pub use table_function::ITableFunction;

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
+use std::convert::TryInto;
 use std::fs::File;
 use std::sync::Arc;
 
@@ -67,7 +68,7 @@ fn read_file(
     loop {
         match batch_reader.next() {
             Some(Ok(batch)) => {
-                tx.send(Some(Ok(DataBlock::try_from_arrow_batch(&batch)?)))
+                tx.send(Some(Ok(batch.try_into()?)))
                     .map_err(|e| anyhow!(e.to_string()))?;
             }
             None => {

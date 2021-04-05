@@ -12,7 +12,7 @@ use common_planners::{Partition, Partitions, Statistics};
 use uuid::Uuid;
 
 use crate::clusters::{Cluster, ClusterRef};
-use crate::datasources::{DataSource, ITable, ITableFunction};
+use crate::datasources::{DataSource, IDataSource, ITable, ITableFunction};
 use crate::sessions::Settings;
 
 #[derive(Clone)]
@@ -20,7 +20,7 @@ pub struct FuseQueryContext {
     uuid: Arc<RwLock<String>>,
     settings: Settings,
     cluster: Arc<RwLock<ClusterRef>>,
-    datasource: Arc<RwLock<DataSource>>,
+    datasource: Arc<RwLock<Box<dyn IDataSource>>>,
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Partition>>>,
 }
@@ -34,7 +34,7 @@ impl FuseQueryContext {
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings,
             cluster: Arc::new(RwLock::new(Cluster::empty())),
-            datasource: Arc::new(RwLock::new(DataSource::try_create()?)),
+            datasource: Arc::new(RwLock::new(Box::new(DataSource::try_create()?))),
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
         };
@@ -101,7 +101,7 @@ impl FuseQueryContext {
         Ok(cluster.clone())
     }
 
-    pub fn get_datasource(&self) -> Arc<RwLock<DataSource>> {
+    pub fn get_datasource(&self) -> Arc<RwLock<Box<dyn IDataSource>>> {
         self.datasource.clone()
     }
 
