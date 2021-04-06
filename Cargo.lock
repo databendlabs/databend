@@ -458,6 +458,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-flights"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common-arrow",
+ "common-planners",
+ "pretty_assertions",
+ "prost",
+ "serde",
+ "serde_json",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
 name = "common-functions"
 version = "0.1.0"
 dependencies = [
@@ -844,6 +859,7 @@ dependencies = [
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
+ "common-flights",
  "common-functions",
  "common-infallible",
  "common-planners",
@@ -871,7 +887,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic",
- "tonic-build",
  "uuid",
  "warp",
 ]
@@ -879,6 +894,44 @@ dependencies = [
 [[package]]
 name = "fuse-store"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "clickhouse-srv",
+ "common-arrow",
+ "common-datablocks",
+ "common-datavalues",
+ "common-flights",
+ "common-functions",
+ "common-infallible",
+ "common-planners",
+ "common-streams",
+ "crossbeam 0.8.0",
+ "env_logger",
+ "futures",
+ "indexmap",
+ "lazy_static",
+ "log",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "msql-srv",
+ "num 0.4.0",
+ "num_cpus",
+ "paste",
+ "pretty_assertions",
+ "prost",
+ "rand 0.8.3",
+ "serde",
+ "serde_json",
+ "sqlparser",
+ "structopt",
+ "threadpool",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "uuid",
+ "warp",
+]
 
 [[package]]
 name = "futures"

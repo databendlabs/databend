@@ -16,7 +16,7 @@ fn test_explain_plan() -> anyhow::Result<()> {
         .filter(add(col("number"), lit(1)).eq(lit(4)))?
         .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
-        typ: DfExplainType::Syntax,
+        typ: ExplainType::Syntax,
         input: Arc::new(plan),
     });
     let expect ="Filter: ((number + 1) = 4)\

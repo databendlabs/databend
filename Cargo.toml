@@ -5,6 +5,7 @@ members = [
     "common/arrow",
     "common/datablocks",
     "common/datavalues",
+    "common/flights",
     "common/functions",
     "common/infallible",
     "common/planners",

@@ -6,3 +6,8 @@ syntax = "proto3";
 
 // Flight RPC for FuseStore.
 package storeflight;
+
+// Request for flight do_get and do_action.
+message FlightStoreRequest {
+  string body = 1;
+}

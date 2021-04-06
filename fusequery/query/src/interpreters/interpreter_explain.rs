@@ -8,7 +8,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataField, DataSchema, DataType, StringArray};
-use common_planners::{DfExplainType, ExplainPlan, PlanNode};
+use common_planners::{ExplainPlan, ExplainType, PlanNode};
 use common_streams::{DataBlockStream, SendableDataBlockStream};
 use log::debug;
 
@@ -46,10 +46,10 @@ impl IInterpreter for ExplainInterpreter {
 
         let plan = Optimizer::create(self.ctx.clone()).optimize(&self.explain.input)?;
         let result = match self.explain.typ {
-            DfExplainType::Graph => {
+            ExplainType::Graph => {
                 format!("{}", plan.display_graphviz())
             }
-            DfExplainType::Pipeline => {
+            ExplainType::Pipeline => {
                 let pipeline = PipelineBuilder::create(self.ctx.clone(), plan).build()?;
                 format!("{:?}", pipeline)
             }

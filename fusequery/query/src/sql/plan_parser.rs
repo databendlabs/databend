@@ -9,15 +9,15 @@ use anyhow::{anyhow, bail, Result};
 use common_arrow::arrow;
 use common_datavalues::{DataField, DataSchema, DataValue};
 use common_planners::{
-    CreateTablePlan, ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode, SelectPlan, SettingPlan,
-    StageState, VarValue,
+    CreateDatabasePlan, CreateTablePlan, ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode,
+    SelectPlan, SettingPlan, StageState, VarValue,
 };
 use sqlparser::ast::{FunctionArg, Statement, TableFactor};
 
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
-use crate::sql::sql_parser::FuseCreateTable;
-use crate::sql::{make_data_type, DfExplainPlan, DfParser, DfStatement};
+use crate::sql::sql_statement::DfCreateTable;
+use crate::sql::{make_data_type, DfCreateDatabase, DfExplain, DfParser, DfStatement};
 
 pub struct PlanParser {
     ctx: FuseQueryContextRef,
@@ -40,7 +40,8 @@ impl PlanParser {
         match statement {
             DfStatement::Statement(v) => self.sql_statement_to_plan(&v),
             DfStatement::Explain(v) => self.sql_explain_to_plan(&v),
-            DfStatement::Create(v) => self.sql_create_to_plan(&v),
+            DfStatement::CreateDatabase(v) => self.sql_create_database_to_plan(&v),
+            DfStatement::CreateTable(v) => self.sql_create_table_to_plan(&v),
 
             // TODO: support like and other filters in show queries
             DfStatement::ShowTables(_) => self.build_from_sql(
@@ -66,7 +67,7 @@ impl PlanParser {
     }
 
     /// Generate a logic plan from an EXPLAIN
-    pub fn sql_explain_to_plan(&self, explain: &DfExplainPlan) -> Result<PlanNode> {
+    pub fn sql_explain_to_plan(&self, explain: &DfExplain) -> Result<PlanNode> {
         let plan = self.sql_statement_to_plan(&explain.statement)?;
         Ok(PlanNode::Explain(ExplainPlan {
             typ: explain.typ,
@@ -74,7 +75,27 @@ impl PlanParser {
         }))
     }
 
-    pub fn sql_create_to_plan(&self, create: &FuseCreateTable) -> Result<PlanNode> {
+    pub fn sql_create_database_to_plan(&self, create: &DfCreateDatabase) -> Result<PlanNode> {
+        if create.name.0.is_empty() {
+            bail!("Create database name is empty");
+        }
+        let db = create.name.0[0].value.clone();
+
+        let mut options = HashMap::new();
+        for p in create.options.iter() {
+            options.insert(p.name.value.to_lowercase(), p.value.to_string());
+        }
+
+        Ok(PlanNode::CreateDatabase(CreateDatabasePlan {
+            if_not_exists: create.if_not_exists,
+            db,
+            schema: Arc::new(arrow::datatypes::Schema::empty()),
+            engine: create.engine,
+            options,
+        }))
+    }
+
+    pub fn sql_create_table_to_plan(&self, create: &DfCreateTable) -> Result<PlanNode> {
         let mut db = self.ctx.get_default_db()?;
         if create.name.0.is_empty() {
             bail!("Create table name is empty");
@@ -95,7 +116,7 @@ impl PlanParser {
         }
 
         let mut options = HashMap::new();
-        for p in create.table_properties.iter() {
+        for p in create.options.iter() {
             options.insert(p.name.value.to_lowercase(), p.value.to_string());
         }
 

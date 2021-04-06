@@ -17,7 +17,7 @@ fn test_aggregator_plan() -> anyhow::Result<()> {
         .project(vec![col("sumx")])?
         .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
-        typ: DfExplainType::Syntax,
+        typ: ExplainType::Syntax,
         input: Arc::new(plan),
     });
     let expect = "Projection: sumx:UInt64\

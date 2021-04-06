@@ -8,7 +8,7 @@ use anyhow::Result;
 use common_datavalues::{DataField, DataSchema, DataSchemaRef};
 
 use crate::{
-    col, AggregatorFinalPlan, AggregatorPartialPlan, DfExplainType, EmptyPlan, ExplainPlan,
+    col, AggregatorFinalPlan, AggregatorPartialPlan, EmptyPlan, ExplainPlan, ExplainType,
     ExpressionPlan, FilterPlan, LimitPlan, PlanNode, PlanRewriter, ProjectionPlan, ScanPlan,
     SelectPlan, StagePlan, StageState,
 };
@@ -182,7 +182,7 @@ impl PlanBuilder {
 
     pub fn explain(&self) -> Result<Self> {
         Ok(Self::from(&PlanNode::Explain(ExplainPlan {
-            typ: DfExplainType::Syntax,
+            typ: ExplainType::Syntax,
             input: Arc::new(self.plan.clone()),
         })))
     }

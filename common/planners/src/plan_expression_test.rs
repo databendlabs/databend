@@ -23,7 +23,7 @@ fn test_expression_plan() -> anyhow::Result<()> {
         )?
         .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
-        typ: DfExplainType::Syntax,
+        typ: ExplainType::Syntax,
         input: Arc::new(plan),
     });
     let expect ="Filter: (((((((number + 1) = 4) and (number != 4)) and (number < 4)) and (number <= 4)) and (number > 4)) and (number >= 4))\

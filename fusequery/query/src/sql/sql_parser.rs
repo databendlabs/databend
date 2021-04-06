@@ -5,13 +5,17 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
-use common_planners::{DfExplainType, TableEngineType};
-use sqlparser::ast::{Ident, ObjectName, SqlOption, Value};
+use common_planners::{DatabaseEngineType, ExplainType, TableEngineType};
+use sqlparser::ast::{Ident, SqlOption, Value};
 use sqlparser::{
-    ast::{ColumnDef, ColumnOptionDef, Statement as SQLStatement, TableConstraint},
+    ast::{ColumnDef, ColumnOptionDef, TableConstraint},
     dialect::{keywords::Keyword, Dialect, GenericDialect},
     parser::{Parser, ParserError},
     tokenizer::{Token, Tokenizer},
+};
+
+use crate::sql::{
+    DfCreateDatabase, DfCreateTable, DfExplain, DfShowSettings, DfShowTables, DfStatement,
 };
 
 // Use `Parser::expected` instead, if possible
@@ -19,44 +23,6 @@ macro_rules! parser_err {
     ($MSG:expr) => {
         Err(ParserError::ParserError($MSG.to_string().into()))
     };
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct FuseCreateTable {
-    pub if_not_exists: bool,
-    /// Table name
-    pub name: ObjectName,
-    /// Optional schema
-    pub columns: Vec<ColumnDef>,
-    pub engine: TableEngineType,
-    pub table_properties: Vec<SqlOption>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct FuseShowTables;
-#[derive(Debug, Clone, PartialEq)]
-pub struct FuseShowSettings;
-
-/// DataFusion extension DDL for `EXPLAIN` and `EXPLAIN VERBOSE`
-#[derive(Debug, Clone, PartialEq)]
-pub struct DfExplainPlan {
-    pub typ: DfExplainType,
-    /// The statement for which to generate an planning explanation
-    pub statement: Box<SQLStatement>,
-}
-
-/// DataFusion Statement representations.
-///
-/// Tokens parsed by `DFParser` are converted into these values.
-#[derive(Debug, Clone, PartialEq)]
-pub enum DfStatement {
-    /// ANSI SQL AST node
-    Statement(SQLStatement),
-    /// Extension: `EXPLAIN <SQL>`
-    Explain(DfExplainPlan),
-    Create(FuseCreateTable),
-    ShowTables(FuseShowTables),
-    ShowSettings(FuseShowSettings),
 }
 
 /// SQL Parser
@@ -140,9 +106,9 @@ impl<'a> DfParser<'a> {
                         self.parser.next_token();
 
                         if self.consume_token("TABLES") {
-                            Ok(DfStatement::ShowTables(FuseShowTables))
+                            Ok(DfStatement::ShowTables(DfShowTables))
                         } else if self.consume_token("SETTINGS") {
-                            Ok(DfStatement::ShowSettings(FuseShowSettings))
+                            Ok(DfStatement::ShowSettings(DfShowSettings))
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
@@ -168,19 +134,19 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => match w.value.to_uppercase().as_str() {
                 "PIPELINE" => {
                     self.parser.next_token();
-                    DfExplainType::Pipeline
+                    ExplainType::Pipeline
                 }
                 "GRAPH" => {
                     self.parser.next_token();
-                    DfExplainType::Graph
+                    ExplainType::Graph
                 }
-                _ => DfExplainType::Syntax,
+                _ => ExplainType::Syntax,
             },
-            _ => DfExplainType::Syntax,
+            _ => ExplainType::Syntax,
         };
 
         let statement = Box::new(self.parser.parse_statement()?);
-        let explain_plan = DfExplainPlan { typ, statement };
+        let explain_plan = DfExplain { typ, statement };
         Ok(DfStatement::Explain(explain_plan))
     }
 
@@ -283,13 +249,58 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_create(&mut self) -> Result<DfStatement, ParserError> {
-        self.parser.expect_keyword(Keyword::TABLE)?;
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::TABLE => self.parse_create_table(),
+                Keyword::DATABASE => self.parse_create_database(),
+                _ => self.expected("create statement", Token::Word(w)),
+            },
+            unexpected => self.expected("create statement", unexpected),
+        }
+    }
+
+    fn parse_create_database(&mut self) -> Result<DfStatement, ParserError> {
+        let if_not_exists =
+            self.parser
+                .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let db_name = self.parser.parse_object_name()?;
+        let engine = self.parse_database_engine()?;
+
+        let create = DfCreateDatabase {
+            if_not_exists,
+            name: db_name,
+            engine,
+            options: vec![],
+        };
+
+        Ok(DfStatement::CreateDatabase(create))
+    }
+
+    fn parse_database_engine(&mut self) -> Result<DatabaseEngineType, ParserError> {
+        // TODO make ENGINE as a keyword
+        if !self.consume_token("ENGINE") {
+            return Ok(DatabaseEngineType::Remote);
+        }
+
+        self.parser.expect_token(&Token::Eq)?;
+
+        match self.parser.next_token() {
+            Token::Word(w) => match &*w.value {
+                "Local" => Ok(DatabaseEngineType::Local),
+                "Remote" => Ok(DatabaseEngineType::Remote),
+                _ => self.expected("Engine must one of Local, Remote", Token::Word(w)),
+            },
+            unexpected => self.expected("Engine must one of Local, Remote", unexpected),
+        }
+    }
+
+    fn parse_create_table(&mut self) -> Result<DfStatement, ParserError> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parser.parse_object_name()?;
         let (columns, _) = self.parse_columns()?;
-        let engine = self.parse_engine()?;
+        let engine = self.parse_table_engine()?;
 
         let mut table_properties = vec![];
 
@@ -303,19 +314,19 @@ impl<'a> DfParser<'a> {
             })
         }
 
-        let create = FuseCreateTable {
+        let create = DfCreateTable {
             if_not_exists,
             name: table_name,
             columns,
             engine,
-            table_properties,
+            options: table_properties,
         };
 
-        Ok(DfStatement::Create(create))
+        Ok(DfStatement::CreateTable(create))
     }
 
     /// Parses the set of valid formats
-    fn parse_engine(&mut self) -> Result<TableEngineType, ParserError> {
+    fn parse_table_engine(&mut self) -> Result<TableEngineType, ParserError> {
         // TODO make ENGINE as a keyword
         if !self.consume_token("ENGINE") {
             return Ok(TableEngineType::Null);
@@ -329,9 +340,15 @@ impl<'a> DfParser<'a> {
                 "JSONEachRaw" => Ok(TableEngineType::JsonEachRaw),
                 "CSV" => Ok(TableEngineType::Csv),
                 "Null" => Ok(TableEngineType::Null),
-                _ => self.expected("one of Parquet, JSONEachRaw, Null or CSV", Token::Word(w)),
+                _ => self.expected(
+                    "Engine must one of Parquet, JSONEachRaw, Null or CSV",
+                    Token::Word(w),
+                ),
             },
-            unexpected => self.expected("one of Parquet, JSONEachRaw, Null or CSV", unexpected),
+            unexpected => self.expected(
+                "Engine must one of Parquet, JSONEachRaw, Null or CSV",
+                unexpected,
+            ),
         }
     }
 
