@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
+use common_planners::{CreateDatabasePlan, DatabaseEngineType};
 
 use crate::configs::Config;
 use crate::datasources::local::{LocalDatabase, LocalFactory};
@@ -18,6 +19,7 @@ pub trait IDataSource: Sync + Send {
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>>;
     fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>>;
     fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>>;
+    fn create_database(&mut self, plan: CreateDatabasePlan) -> Result<()>;
 }
 
 // Maintain all the databases of user.
@@ -126,5 +128,16 @@ impl IDataSource for DataSource {
             .ok_or_else(|| anyhow!("DataSource Error: Unknown table function: '{}'", name))?;
 
         Ok(table.clone())
+    }
+
+    fn create_database(&mut self, plan: CreateDatabasePlan) -> Result<()> {
+        match plan.engine {
+            DatabaseEngineType::Local => {
+                let database = LocalDatabase::create();
+                self.databases.insert(plan.db, Arc::new(database));
+            }
+            DatabaseEngineType::Remote => {}
+        }
+        Ok(())
     }
 }

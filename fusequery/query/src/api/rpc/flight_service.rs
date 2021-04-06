@@ -13,13 +13,14 @@ use common_arrow::arrow_flight::{
     Action, ActionType, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo,
     HandshakeRequest, HandshakeResponse, PutResult, SchemaResult, Ticket,
 };
+use common_flights::query_do_action::DoActionAction;
+use common_flights::query_do_get::DoGetAction;
 use futures::{Stream, StreamExt};
 use log::info;
 use metrics::histogram;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 
-use crate::api::rpc::{DoActionAction, DoGetAction};
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::pipelines::processors::PipelineBuilder;

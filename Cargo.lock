@@ -458,6 +458,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-flights"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common-arrow",
+ "common-planners",
+ "pretty_assertions",
+ "prost",
+ "serde",
+ "serde_json",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
 name = "common-functions"
 version = "0.1.0"
 dependencies = [
@@ -844,6 +859,7 @@ dependencies = [
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
+ "common-flights",
  "common-functions",
  "common-infallible",
  "common-planners",
@@ -871,7 +887,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic",
- "tonic-build",
  "uuid",
  "warp",
 ]

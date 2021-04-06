@@ -10,12 +10,12 @@ use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
 use common_arrow::arrow_flight::{Action, Ticket};
 use common_datavalues::DataSchema;
+use common_flights::query_do_action::{DoActionAction, FetchPartitionAction};
+use common_flights::query_do_get::{DoGetAction, ExecutePlanAction};
 use common_planners::{Partitions, PlanNode};
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 use tonic::Request;
-
-use crate::api::rpc::{DoActionAction, DoGetAction, ExecutePlanAction, FetchPartitionAction};
 
 pub struct FlightClient {
     client: FlightServiceClient<tonic::transport::channel::Channel>,

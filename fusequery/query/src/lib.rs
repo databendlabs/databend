@@ -21,12 +21,7 @@ pub mod sql;
 
 pub use common_datablocks;
 pub use common_datavalues;
+pub use common_flights;
 pub use common_functions;
 pub use common_planners;
 pub use common_streams;
-
-// ProtoBuf generated files.
-#[allow(clippy::all)]
-pub mod protobuf {
-    tonic::include_proto!("queryflight");
-}
