@@ -4,7 +4,7 @@
 
 #[cfg(test)]
 mod tests {
-    use common_planners::TableEngineType;
+    use common_planners::{DatabaseEngineType, TableEngineType};
     use sqlparser::ast::*;
     use sqlparser::parser::*;
 
@@ -56,6 +56,33 @@ mod tests {
     }
 
     #[test]
+    fn create_database() -> Result<(), ParserError> {
+        let sql = "CREATE DATABASE db1";
+        let expected = DfStatement::CreateDatabase(DfCreateDatabase {
+            if_not_exists: false,
+            name: ObjectName(vec![Ident::new("db1")]),
+            engine: DatabaseEngineType::Remote,
+            options: vec![],
+        });
+        expect_parse_ok(sql, expected)?;
+
+        let sql = "CREATE DATABASE db1 ENGINE=Local";
+        let expected = DfStatement::CreateDatabase(DfCreateDatabase {
+            if_not_exists: false,
+            name: ObjectName(vec![Ident::new("db1")]),
+            engine: DatabaseEngineType::Local,
+            options: vec![],
+        });
+        expect_parse_ok(sql, expected)?;
+
+        // Error cases: Invalid type
+        let sql = "CREATE DATABASE db1 ENGINE=XX";
+        expect_parse_error(sql, "Expected Engine must one of Local, Remote, found: XX")?;
+
+        Ok(())
+    }
+
+    #[test]
     fn create_table() -> Result<(), ParserError> {
         // positive case
         let sql = "CREATE TABLE t(c1 int) ENGINE = CSV location = '/data/33.csv' ";
@@ -64,7 +91,7 @@ mod tests {
             name: ObjectName(vec![Ident::new("t")]),
             columns: vec![make_column_def("c1", DataType::Int)],
             engine: TableEngineType::Csv,
-            table_properties: vec![SqlOption {
+            options: vec![SqlOption {
                 name: Ident::new("LOCATION".to_string()),
                 value: Value::SingleQuotedString("/data/33.csv".into()),
             }],
@@ -82,7 +109,7 @@ mod tests {
                 make_column_def("c3", DataType::Varchar(Some(255))),
             ],
             engine: TableEngineType::Parquet,
-            table_properties: vec![SqlOption {
+            options: vec![SqlOption {
                 name: Ident::new("LOCATION".to_string()),
                 value: Value::SingleQuotedString("foo.parquet".into()),
             }],
@@ -93,7 +120,7 @@ mod tests {
         let sql = "CREATE TABLE t(c1 int) ENGINE = XX location = 'foo.parquet' ";
         expect_parse_error(
             sql,
-            "Expected one of Parquet, JSONEachRaw, Null or CSV, found: XX",
+            "Expected Engine must one of Parquet, JSONEachRaw, Null or CSV, found: XX",
         )?;
 
         Ok(())

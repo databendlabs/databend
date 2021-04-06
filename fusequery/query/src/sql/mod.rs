@@ -12,5 +12,7 @@ mod util;
 
 pub use plan_parser::PlanParser;
 pub use sql_parser::DfParser;
-pub use sql_statement::{DfCreateTable, DfExplain, DfShowSettings, DfShowTables, DfStatement};
+pub use sql_statement::{
+    DfCreateDatabase, DfCreateTable, DfExplain, DfShowSettings, DfShowTables, DfStatement,
+};
 pub use util::*;

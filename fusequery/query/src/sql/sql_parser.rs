@@ -5,7 +5,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
-use common_planners::{ExplainType, TableEngineType};
+use common_planners::{DatabaseEngineType, ExplainType, TableEngineType};
 use sqlparser::ast::{Ident, SqlOption, Value};
 use sqlparser::{
     ast::{ColumnDef, ColumnOptionDef, TableConstraint},
@@ -14,7 +14,9 @@ use sqlparser::{
     tokenizer::{Token, Tokenizer},
 };
 
-use crate::sql::{DfCreateTable, DfExplain, DfShowSettings, DfShowTables, DfStatement};
+use crate::sql::{
+    DfCreateDatabase, DfCreateTable, DfExplain, DfShowSettings, DfShowTables, DfStatement,
+};
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
@@ -247,13 +249,58 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_create(&mut self) -> Result<DfStatement, ParserError> {
-        self.parser.expect_keyword(Keyword::TABLE)?;
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::TABLE => self.parse_create_table(),
+                Keyword::DATABASE => self.parse_create_database(),
+                _ => self.expected("create statement", Token::Word(w)),
+            },
+            unexpected => self.expected("create statement", unexpected),
+        }
+    }
+
+    fn parse_create_database(&mut self) -> Result<DfStatement, ParserError> {
+        let if_not_exists =
+            self.parser
+                .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let db_name = self.parser.parse_object_name()?;
+        let engine = self.parse_database_engine()?;
+
+        let create = DfCreateDatabase {
+            if_not_exists,
+            name: db_name,
+            engine,
+            options: vec![],
+        };
+
+        Ok(DfStatement::CreateDatabase(create))
+    }
+
+    fn parse_database_engine(&mut self) -> Result<DatabaseEngineType, ParserError> {
+        // TODO make ENGINE as a keyword
+        if !self.consume_token("ENGINE") {
+            return Ok(DatabaseEngineType::Remote);
+        }
+
+        self.parser.expect_token(&Token::Eq)?;
+
+        match self.parser.next_token() {
+            Token::Word(w) => match &*w.value {
+                "Local" => Ok(DatabaseEngineType::Local),
+                "Remote" => Ok(DatabaseEngineType::Remote),
+                _ => self.expected("Engine must one of Local, Remote", Token::Word(w)),
+            },
+            unexpected => self.expected("Engine must one of Local, Remote", unexpected),
+        }
+    }
+
+    fn parse_create_table(&mut self) -> Result<DfStatement, ParserError> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parser.parse_object_name()?;
         let (columns, _) = self.parse_columns()?;
-        let engine = self.parse_engine()?;
+        let engine = self.parse_table_engine()?;
 
         let mut table_properties = vec![];
 
@@ -272,14 +319,14 @@ impl<'a> DfParser<'a> {
             name: table_name,
             columns,
             engine,
-            table_properties,
+            options: table_properties,
         };
 
         Ok(DfStatement::CreateTable(create))
     }
 
     /// Parses the set of valid formats
-    fn parse_engine(&mut self) -> Result<TableEngineType, ParserError> {
+    fn parse_table_engine(&mut self) -> Result<TableEngineType, ParserError> {
         // TODO make ENGINE as a keyword
         if !self.consume_token("ENGINE") {
             return Ok(TableEngineType::Null);
@@ -293,9 +340,15 @@ impl<'a> DfParser<'a> {
                 "JSONEachRaw" => Ok(TableEngineType::JsonEachRaw),
                 "CSV" => Ok(TableEngineType::Csv),
                 "Null" => Ok(TableEngineType::Null),
-                _ => self.expected("one of Parquet, JSONEachRaw, Null or CSV", Token::Word(w)),
+                _ => self.expected(
+                    "Engine must one of Parquet, JSONEachRaw, Null or CSV",
+                    Token::Word(w),
+                ),
             },
-            unexpected => self.expected("one of Parquet, JSONEachRaw, Null or CSV", unexpected),
+            unexpected => self.expected(
+                "Engine must one of Parquet, JSONEachRaw, Null or CSV",
+                unexpected,
+            ),
         }
     }
 

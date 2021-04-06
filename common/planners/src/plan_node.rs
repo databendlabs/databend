@@ -8,9 +8,9 @@ use anyhow::Result;
 use common_datavalues::{DataSchema, DataSchemaRef};
 
 use crate::{
-    AggregatorFinalPlan, AggregatorPartialPlan, CreateTablePlan, EmptyPlan, ExplainPlan,
-    FilterPlan, LimitPlan, ProjectionPlan, ReadDataSourcePlan, ScanPlan, SelectPlan, SettingPlan,
-    StagePlan,
+    AggregatorFinalPlan, AggregatorPartialPlan, CreateDatabasePlan, CreateTablePlan, EmptyPlan,
+    ExplainPlan, FilterPlan, LimitPlan, ProjectionPlan, ReadDataSourcePlan, ScanPlan, SelectPlan,
+    SettingPlan, StagePlan,
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -24,9 +24,10 @@ pub enum PlanNode {
     Limit(LimitPlan),
     Scan(ScanPlan),
     ReadSource(ReadDataSourcePlan),
-    Explain(ExplainPlan),
     Select(SelectPlan),
+    Explain(ExplainPlan),
     CreateTable(CreateTablePlan),
+    CreateDatabase(CreateDatabasePlan),
     SetVariable(SettingPlan),
 }
 
@@ -45,8 +46,9 @@ impl PlanNode {
             PlanNode::ReadSource(v) => v.schema(),
             PlanNode::Select(v) => v.schema(),
             PlanNode::Explain(v) => v.schema(),
-            PlanNode::SetVariable(v) => v.schema(),
+            PlanNode::CreateDatabase(v) => v.schema(),
             PlanNode::CreateTable(v) => v.schema(),
+            PlanNode::SetVariable(v) => v.schema(),
         }
     }
 
@@ -63,8 +65,9 @@ impl PlanNode {
             PlanNode::ReadSource(_) => "ReadSourcePlan",
             PlanNode::Select(_) => "SelectPlan",
             PlanNode::Explain(_) => "ExplainPlan",
-            PlanNode::SetVariable(_) => "SetVariablePlan",
             PlanNode::CreateTable(_) => "CreateTablePlan",
+            PlanNode::CreateDatabase(_) => "CreateDatabasePlan",
+            PlanNode::SetVariable(_) => "SetVariablePlan",
         }
     }
 
