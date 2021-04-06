@@ -10,3 +10,49 @@ edition = "2018"
 [[bin]]
 name = "fuse-store"
 path = "src/bin/fuse-store.rs"
+
+[dependencies]
+# Workspace dependencies
+common-arrow = {path = "../../common/arrow"}
+common-datablocks = {path = "../../common/datablocks"}
+common-datavalues = {path = "../../common/datavalues"}
+common-flights = {path = "../../common/flights"}
+common-functions = {path = "../../common/functions"}
+common-infallible = {path = "../../common/infallible"}
+common-planners = {path = "../../common/planners"}
+common-streams = {path = "../../common/streams"}
+
+
+# Github dependencies
+clickhouse-srv = { git = "https://github.com/sundy-li/clickhouse-svr", rev = "29765fc"}
+
+# Crates.io dependencies
+anyhow = "1.0.40"
+async-trait = "0.1"
+crossbeam = "0.8"
+env_logger = "0.8"
+futures = "0.3"
+indexmap = "1.6.1"
+lazy_static = "1.4.0"
+log = "0.4"
+metrics = "0.14.2"
+metrics-exporter-prometheus = "0.3.0"
+msql-srv = "0.9"
+num = "0.4"
+num_cpus = "1.0"
+paste = "^1.0"
+prost = "0.7"
+rand = "0.8.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sqlparser = "0.9"
+structopt = "0.3"
+threadpool = "1.8.1"
+tokio = { version = "1.0", features = ["macros", "rt","rt-multi-thread", "sync"] }
+tokio-stream = "0.1"
+tonic = "0.4"
+warp = "0.3.1"
+uuid = { version = "0.8", features = ["serde", "v4"] }
+
+[dev-dependencies]
+pretty_assertions = "0.7"
