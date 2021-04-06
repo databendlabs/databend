@@ -60,7 +60,7 @@ pub use crate::plan_builder::PlanBuilder;
 pub use crate::plan_create_database::{CreateDatabasePlan, DatabaseEngineType, DatabaseOptions};
 pub use crate::plan_create_table::{CreateTablePlan, TableEngineType, TableOptions};
 pub use crate::plan_empty::EmptyPlan;
-pub use crate::plan_explain::{DfExplainType, ExplainPlan};
+pub use crate::plan_explain::{ExplainPlan, ExplainType};
 pub use crate::plan_expression::ExpressionPlan;
 pub use crate::plan_expression_column::col;
 pub use crate::plan_expression_function::{add, sum};

@@ -10,7 +10,7 @@ use common_datavalues::DataSchemaRef;
 use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
-pub enum DfExplainType {
+pub enum ExplainType {
     Syntax,
     Graph,
     Pipeline,
@@ -18,7 +18,7 @@ pub enum DfExplainType {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct ExplainPlan {
-    pub typ: DfExplainType,
+    pub typ: ExplainType,
     pub input: Arc<PlanNode>,
 }
 

@@ -5,58 +5,22 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
-use common_planners::{DfExplainType, TableEngineType};
-use sqlparser::ast::{Ident, ObjectName, SqlOption, Value};
+use common_planners::{ExplainType, TableEngineType};
+use sqlparser::ast::{Ident, SqlOption, Value};
 use sqlparser::{
-    ast::{ColumnDef, ColumnOptionDef, Statement as SQLStatement, TableConstraint},
+    ast::{ColumnDef, ColumnOptionDef, TableConstraint},
     dialect::{keywords::Keyword, Dialect, GenericDialect},
     parser::{Parser, ParserError},
     tokenizer::{Token, Tokenizer},
 };
+
+use crate::sql::{DfCreateTable, DfExplain, DfShowSettings, DfShowTables, DfStatement};
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
     ($MSG:expr) => {
         Err(ParserError::ParserError($MSG.to_string().into()))
     };
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct FuseCreateTable {
-    pub if_not_exists: bool,
-    /// Table name
-    pub name: ObjectName,
-    /// Optional schema
-    pub columns: Vec<ColumnDef>,
-    pub engine: TableEngineType,
-    pub table_properties: Vec<SqlOption>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct FuseShowTables;
-#[derive(Debug, Clone, PartialEq)]
-pub struct FuseShowSettings;
-
-/// DataFusion extension DDL for `EXPLAIN` and `EXPLAIN VERBOSE`
-#[derive(Debug, Clone, PartialEq)]
-pub struct DfExplainPlan {
-    pub typ: DfExplainType,
-    /// The statement for which to generate an planning explanation
-    pub statement: Box<SQLStatement>,
-}
-
-/// DataFusion Statement representations.
-///
-/// Tokens parsed by `DFParser` are converted into these values.
-#[derive(Debug, Clone, PartialEq)]
-pub enum DfStatement {
-    /// ANSI SQL AST node
-    Statement(SQLStatement),
-    /// Extension: `EXPLAIN <SQL>`
-    Explain(DfExplainPlan),
-    Create(FuseCreateTable),
-    ShowTables(FuseShowTables),
-    ShowSettings(FuseShowSettings),
 }
 
 /// SQL Parser
@@ -140,9 +104,9 @@ impl<'a> DfParser<'a> {
                         self.parser.next_token();
 
                         if self.consume_token("TABLES") {
-                            Ok(DfStatement::ShowTables(FuseShowTables))
+                            Ok(DfStatement::ShowTables(DfShowTables))
                         } else if self.consume_token("SETTINGS") {
-                            Ok(DfStatement::ShowSettings(FuseShowSettings))
+                            Ok(DfStatement::ShowSettings(DfShowSettings))
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
@@ -168,19 +132,19 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => match w.value.to_uppercase().as_str() {
                 "PIPELINE" => {
                     self.parser.next_token();
-                    DfExplainType::Pipeline
+                    ExplainType::Pipeline
                 }
                 "GRAPH" => {
                     self.parser.next_token();
-                    DfExplainType::Graph
+                    ExplainType::Graph
                 }
-                _ => DfExplainType::Syntax,
+                _ => ExplainType::Syntax,
             },
-            _ => DfExplainType::Syntax,
+            _ => ExplainType::Syntax,
         };
 
         let statement = Box::new(self.parser.parse_statement()?);
-        let explain_plan = DfExplainPlan { typ, statement };
+        let explain_plan = DfExplain { typ, statement };
         Ok(DfStatement::Explain(explain_plan))
     }
 
@@ -303,7 +267,7 @@ impl<'a> DfParser<'a> {
             })
         }
 
-        let create = FuseCreateTable {
+        let create = DfCreateTable {
             if_not_exists,
             name: table_name,
             columns,
@@ -311,7 +275,7 @@ impl<'a> DfParser<'a> {
             table_properties,
         };
 
-        Ok(DfStatement::Create(create))
+        Ok(DfStatement::CreateTable(create))
     }
 
     /// Parses the set of valid formats
