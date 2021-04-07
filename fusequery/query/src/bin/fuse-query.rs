@@ -68,7 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             srv.make_server().await.expect("HTTP service error");
         });
-        info!("HTTP API server listening on {}", conf.metric_api_address);
+        info!("HTTP API server listening on {}", conf.http_api_address);
     }
 
     // RPC API service.
