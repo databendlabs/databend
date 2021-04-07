@@ -8,13 +8,14 @@ use std::pin::Pin;
 use common_arrow::arrow_flight::{
     self,
     flight_service_server::{FlightService as Flight, FlightServiceServer as FlightServer},
-    Action, ActionType, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo,
+    Action, ActionType, BasicAuth, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo,
     HandshakeRequest, HandshakeResponse, PutResult, SchemaResult, Ticket,
 };
 use common_flights::store_do_action::StoreDoAction;
 use common_flights::store_do_get::StoreDoGet;
-use futures::Stream;
+use futures::{SinkExt, Stream, StreamExt};
 use log::info;
+use prost::Message;
 use tonic::{Request, Response, Status, Streaming};
 
 use crate::configs::Config;
@@ -34,14 +35,48 @@ impl FlightService {
     }
 }
 
-#[tonic::async_trait]
+#[async_trait::async_trait]
 impl Flight for FlightService {
     type HandshakeStream = FlightStream<HandshakeResponse>;
     async fn handshake(
         &self,
-        _request: Request<Streaming<HandshakeRequest>>,
+        request: Request<Streaming<HandshakeRequest>>,
     ) -> Result<Response<Self::HandshakeStream>, Status> {
-        unimplemented!()
+        let (tx, rx) = futures::channel::mpsc::channel(10);
+
+        tokio::spawn({
+            async move {
+                let requests = request.into_inner();
+                requests
+                    .for_each(move |req| {
+                        let mut tx = tx.clone();
+                        let req = req.expect("Error reading handshake request");
+                        let HandshakeRequest { payload, .. } = req;
+                        let auth =
+                            BasicAuth::decode(&*payload).expect("Error parsing handshake request");
+
+                        let resp = if auth.username == "root" {
+                            Ok(HandshakeResponse {
+                                payload: auth.username.as_bytes().to_vec(),
+                                ..HandshakeResponse::default()
+                            })
+                        } else {
+                            Err(Status::unauthenticated(format!(
+                                "Don't know user {}",
+                                auth.username
+                            )))
+                        };
+                        async move {
+                            tx.send(resp)
+                                .await
+                                .expect("Error sending handshake response");
+                        }
+                    })
+                    .await;
+            }
+        });
+
+        Ok(Response::new(Box::pin(rx)))
     }
 
     type ListFlightsStream = FlightStream<FlightInfo>;

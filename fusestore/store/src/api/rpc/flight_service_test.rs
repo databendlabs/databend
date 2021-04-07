@@ -3,8 +3,28 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_handshake() -> anyhow::Result<()> {
+    use pretty_assertions::assert_eq;
+
+    use crate::api::rpc::FlightClient;
+
+    // 1. Service starts.
+    let addr = crate::tests::start_one_service().await?;
+
+    let mut client = FlightClient::try_create(addr.to_string()).await?;
+    let resp = client
+        .handshake("root".to_string(), "pwd".to_string())
+        .await?;
+    assert_eq!("[114, 111, 111, 116]", format!("{:?}", resp));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_create_database() -> anyhow::Result<()> {
     use common_planners::{CreateDatabasePlan, DatabaseEngineType};
+
+    use crate::api::rpc::FlightClient;
 
     // 1. Service starts.
     let addr = crate::tests::start_one_service().await?;
@@ -16,7 +36,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
         engine: DatabaseEngineType::Local,
         options: Default::default(),
     };
-    let mut client = crate::tests::FlightClient::try_create(addr.to_string()).await?;
+    let mut client = FlightClient::try_create(addr.to_string()).await?;
     let res = client.create_database(plan.clone()).await;
     assert!(res.is_err());
 
@@ -30,6 +50,8 @@ async fn test_flight_create_table() -> anyhow::Result<()> {
     use common_arrow::arrow::datatypes::DataType;
     use common_datavalues::{DataField, DataSchema};
     use common_planners::{CreateTablePlan, TableEngineType};
+
+    use crate::api::rpc::FlightClient;
 
     // 1. Service starts.
     let addr = crate::tests::start_one_service().await?;
@@ -53,7 +75,7 @@ async fn test_flight_create_table() -> anyhow::Result<()> {
         options: Default::default(),
     };
 
-    let mut client = crate::tests::FlightClient::try_create(addr.to_string()).await?;
+    let mut client = FlightClient::try_create(addr.to_string()).await?;
     let res = client.create_table(plan.clone()).await;
     assert!(res.is_err());
 

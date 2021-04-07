@@ -76,6 +76,12 @@ pub struct Config {
 
     #[structopt(long, env = "STORE_API_ADDRESS", default_value = "127.0.0.1:9191")]
     pub store_api_address: String,
+
+    #[structopt(long, env = "STORE_API_USERNAME", default_value = "root")]
+    pub store_api_username: String,
+
+    #[structopt(long, env = "STORE_API_PASSWORD", default_value = "root")]
+    pub store_api_password: String,
 }
 
 impl Config {
@@ -95,6 +101,8 @@ impl Config {
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
             store_api_address: "127.0.0.1:9191".to_string(),
+            store_api_username: "root".to_string(),
+            store_api_password: "root".to_string(),
         }
     }
 

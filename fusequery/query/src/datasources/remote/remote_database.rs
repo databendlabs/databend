@@ -18,6 +18,7 @@ pub struct RemoteDatabase {
     name: String,
     conf: Config,
     tables: RwLock<HashMap<String, Arc<dyn ITable>>>,
+    store_client: RwLock<Option<StoreClient>>,
 }
 
 impl RemoteDatabase {
@@ -26,7 +27,19 @@ impl RemoteDatabase {
             name,
             conf,
             tables: RwLock::new(HashMap::default()),
+            store_client: RwLock::new(None),
         }
+    }
+
+    async fn try_get_client(&self) -> Result<StoreClient> {
+        if self.store_client.read().is_none() {
+            let store_addr = self.conf.store_api_address.clone();
+            let username = self.conf.store_api_username.clone();
+            let password = self.conf.store_api_password.clone();
+            let client = StoreClient::try_create(store_addr, username, password).await?;
+            *self.store_client.write() = Some(client);
+        }
+        Ok(self.store_client.read().as_ref().unwrap().clone())
     }
 }
 
@@ -54,7 +67,7 @@ impl IDatabase for RemoteDatabase {
 
     async fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
         // Call remote create.
-        let mut client = StoreClient::try_create(self.conf.store_api_address.clone()).await?;
+        let mut client = self.try_get_client().await?;
         client.create_table(plan.clone()).await?;
 
         // Update cache.
