@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[cfg(test)]
+mod interpreter_create_database_test;
+#[cfg(test)]
 mod interpreter_create_table_test;
 #[cfg(test)]
 mod interpreter_explain_test;
@@ -12,6 +14,7 @@ mod interpreter_select_test;
 mod interpreter_setting_test;
 
 mod interpreter;
+mod interpreter_create_database;
 mod interpreter_create_table;
 mod interpreter_explain;
 mod interpreter_factory;
@@ -19,6 +22,7 @@ mod interpreter_select;
 mod interpreter_setting;
 
 pub use interpreter::IInterpreter;
+pub use interpreter_create_database::CreateDatabaseInterpreter;
 pub use interpreter_create_table::CreateTableInterpreter;
 pub use interpreter_explain::ExplainInterpreter;
 pub use interpreter_factory::InterpreterFactory;

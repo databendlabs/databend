@@ -14,6 +14,7 @@ use common_arrow::arrow_flight::{
 use common_flights::store_do_action::StoreDoAction;
 use common_flights::store_do_get::StoreDoGet;
 use futures::Stream;
+use log::info;
 use tonic::{Request, Response, Status, Streaming};
 
 use crate::configs::Config;
@@ -100,10 +101,10 @@ impl Flight for FlightService {
         request: Request<Action>,
     ) -> Result<Response<Self::DoActionStream>, Status> {
         let action: StoreDoAction = request.try_into()?;
+        info!("Receive do_action: {:?}", action);
+
         match action {
-            StoreDoAction::CreateDatabase(_) => {
-                todo!()
-            }
+            StoreDoAction::CreateDatabase(_) => Err(Status::internal("create database unimpl")),
         }
     }
 

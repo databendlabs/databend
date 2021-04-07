@@ -13,6 +13,12 @@ bench:
 run:
 	RUST_BACKTRACE=full RUSTFLAGS="-C target-cpu=native" cargo run --bin=fuse-query --release
 
+runquery:
+	RUST_BACKTRACE=full RUSTFLAGS="-C target-cpu=native" cargo run --bin=fuse-query --release
+
+runstore:
+	RUST_BACKTRACE=full RUSTFLAGS="-C target-cpu=native" cargo run --bin=fuse-store --release
+
 build:
 	RUSTFLAGS="-C target-cpu=native" cargo build --release
 
@@ -35,4 +41,4 @@ coverage:
 clean:
 	cargo clean
 
-.PHONY: setup test bench run build fmt lint docker coverage clean
+.PHONY: setup test bench run runquery runstore build fmt lint docker coverage clean

@@ -13,13 +13,13 @@ use tonic::Request;
 
 use crate::protobuf::FlightStoreRequest;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CreateDatabaseAction {
     pub plan: CreateDatabasePlan,
 }
 
 // Action wrapper for do_action.
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum StoreDoAction {
     CreateDatabase(CreateDatabaseAction),
 }

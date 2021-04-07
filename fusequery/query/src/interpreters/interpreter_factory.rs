@@ -9,7 +9,8 @@ use common_planners::PlanNode;
 
 use crate::interpreters::interpreter_create_table::CreateTableInterpreter;
 use crate::interpreters::{
-    ExplainInterpreter, IInterpreter, SelectInterpreter, SettingInterpreter,
+    CreateDatabaseInterpreter, ExplainInterpreter, IInterpreter, SelectInterpreter,
+    SettingInterpreter,
 };
 use crate::sessions::FuseQueryContextRef;
 
@@ -19,8 +20,9 @@ impl InterpreterFactory {
     pub fn get(ctx: FuseQueryContextRef, plan: PlanNode) -> Result<Arc<dyn IInterpreter>> {
         match plan {
             PlanNode::Select(v) => SelectInterpreter::try_create(ctx, v),
-            PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx, v),
             PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx, v),
+            PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx, v),
+            PlanNode::CreateDatabase(v) => CreateDatabaseInterpreter::try_create(ctx, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx, v),
             _ => bail!("Can't get the interpreter by plan:{}", plan.name()),
         }

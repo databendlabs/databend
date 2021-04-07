@@ -18,9 +18,9 @@ pub struct RemoteDatabase {
 }
 
 impl RemoteDatabase {
-    pub fn create(_conf: Config, name: &str) -> Self {
+    pub fn create(_conf: Config, name: String) -> Self {
         RemoteDatabase {
-            name: name.to_string(),
+            name,
             tables: RwLock::new(HashMap::default()),
         }
     }
@@ -32,7 +32,7 @@ impl IDatabase for RemoteDatabase {
     }
 
     fn engine(&self) -> &str {
-        "local"
+        "remote"
     }
 
     fn get_table(&self, _table_name: &str) -> Result<Arc<dyn ITable>> {

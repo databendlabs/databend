@@ -6,4 +6,4 @@
 
 // Flight Client for FuseStore.
 
-mod store;
+pub mod store;

@@ -23,7 +23,7 @@ impl RemoteFactory {
         // Load databases from remote.
         let databases: Vec<Arc<dyn IDatabase>> = vec![Arc::new(RemoteDatabase::create(
             self.conf.clone(),
-            "for_test",
+            "for_test".to_string(),
         ))];
         Ok(databases)
     }
