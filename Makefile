@@ -35,7 +35,7 @@ lint:
 docker:
 	docker build --network host -f docker/Dockerfile -t ${HUB}/fuse-query:${TAG} .
 
-helm:
+helm: docker
 	helm upgrade --install --debug datafuse ./charts/datafuse
 
 coverage:
