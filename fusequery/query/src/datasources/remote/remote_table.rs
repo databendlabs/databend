@@ -5,7 +5,6 @@
 use std::any::Any;
 
 use anyhow::{bail, Result};
-use async_trait::async_trait;
 use common_datavalues::DataSchemaRef;
 use common_planners::{PlanNode, ReadDataSourcePlan, TableOptions};
 use common_streams::SendableDataBlockStream;
@@ -15,7 +14,7 @@ use crate::sessions::FuseQueryContextRef;
 
 #[allow(dead_code)]
 pub struct RemoteTable {
-    db: String,
+    pub(crate) db: String,
     name: String,
     schema: DataSchemaRef,
 }
@@ -33,7 +32,7 @@ impl RemoteTable {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl ITable for RemoteTable {
     fn name(&self) -> &str {
         &self.name

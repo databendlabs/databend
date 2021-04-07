@@ -105,7 +105,10 @@ impl Flight for FlightService {
 
         match action {
             StoreDoAction::CreateDatabase(_) => {
-                Err(Status::internal("Store create database unimpl"))
+                Err(Status::internal("Store create database unimplemented"))
+            }
+            StoreDoAction::CreateTable(_) => {
+                Err(Status::internal("Store create table unimplemented"))
             }
         }
     }

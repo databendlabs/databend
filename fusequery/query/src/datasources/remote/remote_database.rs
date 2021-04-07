@@ -10,22 +10,27 @@ use common_infallible::RwLock;
 use common_planners::CreateTablePlan;
 
 use crate::configs::Config;
+use crate::datasources::remote::remote_table::RemoteTable;
 use crate::datasources::{IDatabase, ITable, ITableFunction};
+use crate::rpcs::store::StoreClient;
 
 pub struct RemoteDatabase {
     name: String,
+    conf: Config,
     tables: RwLock<HashMap<String, Arc<dyn ITable>>>,
 }
 
 impl RemoteDatabase {
-    pub fn create(_conf: Config, name: String) -> Self {
+    pub fn create(conf: Config, name: String) -> Self {
         RemoteDatabase {
             name,
+            conf,
             tables: RwLock::new(HashMap::default()),
         }
     }
 }
 
+#[async_trait::async_trait]
 impl IDatabase for RemoteDatabase {
     fn name(&self) -> &str {
         self.name.as_str()
@@ -47,7 +52,15 @@ impl IDatabase for RemoteDatabase {
         Ok(vec![])
     }
 
-    fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
-        bail!("RemoteDatabase create_table not yet implemented")
+    async fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
+        // Call remote create.
+        let mut client = StoreClient::try_create(self.conf.store_api_address.clone()).await?;
+        client.create_table(plan.clone()).await?;
+
+        // Update cache.
+        let table = RemoteTable::try_create(plan.db, plan.table, plan.schema, plan.options)?;
+        let mut tables = self.tables.write();
+        tables.insert(table.name().to_string(), Arc::from(table));
+        Ok(())
     }
 }

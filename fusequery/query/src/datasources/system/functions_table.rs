@@ -6,7 +6,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, StringArray};
 use common_functions::FunctionFactory;
@@ -32,7 +31,7 @@ impl FunctionsTable {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl ITable for FunctionsTable {
     fn name(&self) -> &str {
         "functions"

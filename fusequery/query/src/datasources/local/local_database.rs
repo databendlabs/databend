@@ -24,6 +24,7 @@ impl LocalDatabase {
     }
 }
 
+#[async_trait::async_trait]
 impl IDatabase for LocalDatabase {
     fn name(&self) -> &str {
         "local"
@@ -49,7 +50,7 @@ impl IDatabase for LocalDatabase {
         Ok(vec![])
     }
 
-    fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
+    async fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
         let table_name = plan.table.clone();
 
         let table = match &plan.engine {

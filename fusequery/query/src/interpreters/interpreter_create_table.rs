@@ -5,7 +5,6 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use common_planners::CreateTablePlan;
 use common_streams::{DataBlockStream, SendableDataBlockStream};
 
@@ -26,7 +25,7 @@ impl CreateTableInterpreter {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl IInterpreter for CreateTableInterpreter {
     fn name(&self) -> &str {
         "CreateTableInterpreter"
@@ -35,7 +34,7 @@ impl IInterpreter for CreateTableInterpreter {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let datasource = self.ctx.get_datasource();
         let database = datasource.get_database(self.plan.db.as_str())?;
-        database.create_table(self.plan.clone())?;
+        database.create_table(self.plan.clone()).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema.clone(),
