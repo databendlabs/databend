@@ -21,15 +21,15 @@ pub struct ExecutePlanAction {
 
 // Action wrapper for do_get.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub enum DoGetAction {
+pub enum QueryDoGet {
     ExecutePlan(ExecutePlanAction),
 }
 
 /// Try convert tonic::Request<Ticket> to DoGetAction.
-impl TryInto<DoGetAction> for tonic::Request<Ticket> {
+impl TryInto<QueryDoGet> for tonic::Request<Ticket> {
     type Error = tonic::Status;
 
-    fn try_into(self) -> Result<DoGetAction, Self::Error> {
+    fn try_into(self) -> Result<QueryDoGet, Self::Error> {
         let ticket = self.into_inner();
         let mut buf = Cursor::new(&ticket.ticket);
 
@@ -39,14 +39,14 @@ impl TryInto<DoGetAction> for tonic::Request<Ticket> {
 
         // Decode DoGetAction from request body.
         let json_str = request.body.as_str();
-        let action = serde_json::from_str::<DoGetAction>(json_str)
+        let action = serde_json::from_str::<QueryDoGet>(json_str)
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
         Ok(action)
     }
 }
 
 /// Try convert DoGetAction to tonic::Request<Ticket>.
-impl TryInto<Request<Ticket>> for &DoGetAction {
+impl TryInto<Request<Ticket>> for &QueryDoGet {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<Request<Ticket>, Self::Error> {

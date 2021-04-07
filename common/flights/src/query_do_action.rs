@@ -20,15 +20,15 @@ pub struct FetchPartitionAction {
 
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub enum DoActionAction {
+pub enum QueryDoAction {
     FetchPartition(FetchPartitionAction),
 }
 
 /// Try convert tonic::Request<Action> to DoActionAction.
-impl TryInto<DoActionAction> for Request<Action> {
+impl TryInto<QueryDoAction> for Request<Action> {
     type Error = tonic::Status;
 
-    fn try_into(self) -> Result<DoActionAction, Self::Error> {
+    fn try_into(self) -> Result<QueryDoAction, Self::Error> {
         let action = self.into_inner();
         let mut buf = Cursor::new(&action.body);
 
@@ -38,14 +38,14 @@ impl TryInto<DoActionAction> for Request<Action> {
 
         // Decode DoActionAction from flight request body.
         let json_str = request.body.as_str();
-        let action = serde_json::from_str::<DoActionAction>(json_str)
+        let action = serde_json::from_str::<QueryDoAction>(json_str)
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
         Ok(action)
     }
 }
 
 /// Try convert DoActionAction to tonic::Request<Action>.
-impl TryInto<Request<Action>> for &DoActionAction {
+impl TryInto<Request<Action>> for &QueryDoAction {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<Request<Action>, Self::Error> {

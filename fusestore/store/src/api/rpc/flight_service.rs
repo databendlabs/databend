@@ -11,8 +11,8 @@ use common_arrow::arrow_flight::{
     Action, ActionType, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo,
     HandshakeRequest, HandshakeResponse, PutResult, SchemaResult, Ticket,
 };
-use common_flights::store_do_action::DoActionAction;
-use common_flights::store_do_get::DoGetAction;
+use common_flights::store_do_action::StoreDoAction;
+use common_flights::store_do_get::StoreDoGet;
 use futures::Stream;
 use tonic::{Request, Response, Status, Streaming};
 
@@ -70,9 +70,9 @@ impl Flight for FlightService {
         &self,
         request: Request<Ticket>,
     ) -> Result<Response<Self::DoGetStream>, Status> {
-        let action: DoGetAction = request.try_into()?;
+        let action: StoreDoGet = request.try_into()?;
         match action {
-            DoGetAction::Read(_) => {
+            StoreDoGet::Read(_) => {
                 todo!()
             }
         }
@@ -99,9 +99,9 @@ impl Flight for FlightService {
         &self,
         request: Request<Action>,
     ) -> Result<Response<Self::DoActionStream>, Status> {
-        let action: DoActionAction = request.try_into()?;
+        let action: StoreDoAction = request.try_into()?;
         match action {
-            DoActionAction::CreateDatabase(_) => {
+            StoreDoAction::CreateDatabase(_) => {
                 todo!()
             }
         }

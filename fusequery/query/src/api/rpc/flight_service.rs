@@ -13,8 +13,8 @@ use common_arrow::arrow_flight::{
     Action, ActionType, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo,
     HandshakeRequest, HandshakeResponse, PutResult, SchemaResult, Ticket,
 };
-use common_flights::query_do_action::DoActionAction;
-use common_flights::query_do_get::DoGetAction;
+use common_flights::query_do_action::QueryDoAction;
+use common_flights::query_do_get::QueryDoGet;
 use futures::{Stream, StreamExt};
 use log::info;
 use metrics::histogram;
@@ -89,9 +89,9 @@ impl Flight for FlightService {
         &self,
         request: Request<Ticket>,
     ) -> Result<Response<Self::DoGetStream>, Status> {
-        let action: DoGetAction = request.try_into()?;
+        let action: QueryDoGet = request.try_into()?;
         match action {
-            DoGetAction::ExecutePlan(action) => {
+            QueryDoGet::ExecutePlan(action) => {
                 let plan = action.plan;
                 let cpus = self.conf.num_cpus;
                 let cluster = self.cluster.clone();
@@ -196,9 +196,9 @@ impl Flight for FlightService {
         &self,
         request: Request<Action>,
     ) -> Result<Response<Self::DoActionStream>, Status> {
-        let action: DoActionAction = request.try_into()?;
+        let action: QueryDoAction = request.try_into()?;
         match action {
-            DoActionAction::FetchPartition(v) => {
+            QueryDoAction::FetchPartition(v) => {
                 let (uuid, nums) = (v.uuid, v.nums);
 
                 // Get partitions.
