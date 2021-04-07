@@ -7,7 +7,7 @@ use std::convert::TryInto;
 use std::io::Cursor;
 
 use common_arrow::arrow_flight::Ticket;
-use common_planners::PlanNode;
+use common_planners::{Partitions, PlanNode};
 use prost::Message;
 use tonic::Request;
 
@@ -15,20 +15,21 @@ use crate::protobuf::FlightStoreRequest;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct ReadAction {
-    pub plan: PlanNode,
+    pub partition: Partitions,
+    pub push_down: PlanNode,
 }
 
 // Action wrapper for do_get.
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub enum DoGetAction {
+pub enum StoreDoGet {
     Read(ReadAction),
 }
 
 /// Try convert tonic::Request<Ticket> to DoGetAction.
-impl TryInto<DoGetAction> for tonic::Request<Ticket> {
+impl TryInto<StoreDoGet> for tonic::Request<Ticket> {
     type Error = tonic::Status;
 
-    fn try_into(self) -> Result<DoGetAction, Self::Error> {
+    fn try_into(self) -> Result<StoreDoGet, Self::Error> {
         let ticket = self.into_inner();
         let mut buf = Cursor::new(&ticket.ticket);
 
@@ -38,14 +39,14 @@ impl TryInto<DoGetAction> for tonic::Request<Ticket> {
 
         // Decode DoGetAction from request body.
         let json_str = request.body.as_str();
-        let action = serde_json::from_str::<DoGetAction>(json_str)
+        let action = serde_json::from_str::<StoreDoGet>(json_str)
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
         Ok(action)
     }
 }
 
 /// Try convert DoGetAction to tonic::Request<Ticket>.
-impl TryInto<Request<Ticket>> for &DoGetAction {
+impl TryInto<Request<Ticket>> for &StoreDoGet {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<Request<Ticket>, Self::Error> {
