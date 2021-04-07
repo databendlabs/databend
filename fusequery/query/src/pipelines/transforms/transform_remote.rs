@@ -6,7 +6,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 
@@ -39,7 +38,7 @@ impl RemoteTransform {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl IProcessor for RemoteTransform {
     fn name(&self) -> &str {
         "RemoteTransform"

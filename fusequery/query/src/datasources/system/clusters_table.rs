@@ -6,7 +6,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, StringArray, UInt32Array};
 use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics};
@@ -31,7 +30,7 @@ impl ClustersTable {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl ITable for ClustersTable {
     fn name(&self) -> &str {
         "clusters"

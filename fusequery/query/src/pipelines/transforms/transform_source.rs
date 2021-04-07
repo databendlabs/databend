@@ -6,7 +6,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
-use async_trait::async_trait;
 use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::processors::{EmptyProcessor, IProcessor};
@@ -28,7 +27,7 @@ impl SourceTransform {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl IProcessor for SourceTransform {
     fn name(&self) -> &str {
         "SourceTransform"

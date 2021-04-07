@@ -6,7 +6,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use common_streams::{LimitStream, SendableDataBlockStream};
 
 use crate::pipelines::processors::{EmptyProcessor, IProcessor};
@@ -25,7 +24,7 @@ impl LimitTransform {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl IProcessor for LimitTransform {
     fn name(&self) -> &str {
         "LimitTransform"

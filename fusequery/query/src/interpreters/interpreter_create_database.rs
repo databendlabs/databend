@@ -5,7 +5,6 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use common_planners::CreateDatabasePlan;
 use common_streams::{DataBlockStream, SendableDataBlockStream};
 
@@ -26,7 +25,7 @@ impl CreateDatabaseInterpreter {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl IInterpreter for CreateDatabaseInterpreter {
     fn name(&self) -> &str {
         "CreateDatabaseInterpreter"

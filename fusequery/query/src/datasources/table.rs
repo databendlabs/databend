@@ -5,14 +5,13 @@
 use std::any::Any;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use common_datavalues::DataSchemaRef;
 use common_planners::{PlanNode, ReadDataSourcePlan};
 use common_streams::SendableDataBlockStream;
 
 use crate::sessions::FuseQueryContextRef;
 
-#[async_trait]
+#[async_trait::async_trait]
 pub trait ITable: Sync + Send {
     fn name(&self) -> &str;
     fn engine(&self) -> &str;

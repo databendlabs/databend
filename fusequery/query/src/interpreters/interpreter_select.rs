@@ -5,7 +5,6 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
 
@@ -28,7 +27,7 @@ impl SelectInterpreter {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl IInterpreter for SelectInterpreter {
     fn name(&self) -> &str {
         "SelectInterpreter"

@@ -6,7 +6,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
-use async_trait::async_trait;
 use common_datavalues::DataSchema;
 use common_streams::{DataBlockStream, SendableDataBlockStream};
 
@@ -20,7 +19,7 @@ impl EmptyProcessor {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl IProcessor for EmptyProcessor {
     fn name(&self) -> &str {
         "EmptyProcessor"

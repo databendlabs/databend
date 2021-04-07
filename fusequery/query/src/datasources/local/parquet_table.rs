@@ -8,7 +8,6 @@ use std::fs::File;
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Result};
-use async_trait::async_trait;
 use common_arrow::parquet::arrow::{ArrowReader, ParquetFileArrowReader};
 use common_arrow::parquet::file::reader::SerializedFileReader;
 use common_datablocks::DataBlock;
@@ -86,7 +85,7 @@ fn read_file(
     Ok(())
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl ITable for ParquetTable {
     fn name(&self) -> &str {
         &self.name

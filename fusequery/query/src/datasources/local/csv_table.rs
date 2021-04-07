@@ -6,7 +6,6 @@ use std::any::Any;
 use std::fs::File;
 
 use anyhow::{bail, Result};
-use async_trait::async_trait;
 use common_datavalues::DataSchemaRef;
 use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics, TableOptions};
 use common_streams::{CsvStream, SendableDataBlockStream};
@@ -44,7 +43,7 @@ impl CsvTable {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl ITable for CsvTable {
     fn name(&self) -> &str {
         &self.name
