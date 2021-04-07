@@ -89,7 +89,6 @@ impl PlanParser {
         Ok(PlanNode::CreateDatabase(CreateDatabasePlan {
             if_not_exists: create.if_not_exists,
             db,
-            schema: Arc::new(arrow::datatypes::Schema::empty()),
             engine: create.engine,
             options,
         }))
