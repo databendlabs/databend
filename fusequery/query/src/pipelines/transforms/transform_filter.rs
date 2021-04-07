@@ -7,7 +7,6 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Result};
-use async_trait::async_trait;
 use common_arrow::arrow;
 use common_datablocks::DataBlock;
 use common_datavalues::{BooleanArray, DataSchema, DataSchemaRef};
@@ -54,7 +53,7 @@ impl FilterTransform {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl IProcessor for FilterTransform {
     fn name(&self) -> &str {
         "FilterTransform"

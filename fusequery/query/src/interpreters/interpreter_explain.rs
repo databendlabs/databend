@@ -5,7 +5,6 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataField, DataSchema, DataType, StringArray};
 use common_planners::{ExplainPlan, ExplainType, PlanNode};
@@ -31,7 +30,7 @@ impl ExplainInterpreter {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl IInterpreter for ExplainInterpreter {
     fn name(&self) -> &str {
         "ExplainInterpreter"

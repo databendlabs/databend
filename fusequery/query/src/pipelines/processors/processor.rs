@@ -6,7 +6,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use common_streams::SendableDataBlockStream;
 
 /// Formatter settings for PlanStep debug.
@@ -19,7 +18,7 @@ pub struct FormatterSettings {
     pub prev_name: String,
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 pub trait IProcessor: Sync + Send {
     /// Processor name.
     fn name(&self) -> &str;

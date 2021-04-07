@@ -5,7 +5,6 @@
 use std::any::Any;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics, TableOptions};
@@ -32,7 +31,7 @@ impl NullTable {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl ITable for NullTable {
     fn name(&self) -> &str {
         &self.name

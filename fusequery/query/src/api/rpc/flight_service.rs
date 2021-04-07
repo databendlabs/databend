@@ -52,7 +52,7 @@ impl FlightService {
     }
 }
 
-#[tonic::async_trait]
+#[async_trait::async_trait]
 impl Flight for FlightService {
     type HandshakeStream = FlightStream<HandshakeResponse>;
     async fn handshake(

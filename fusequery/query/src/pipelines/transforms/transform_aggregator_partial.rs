@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, DataValue, StringArray};
 use common_functions::IFunction;
@@ -39,7 +38,7 @@ impl AggregatorPartialTransform {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl IProcessor for AggregatorPartialTransform {
     fn name(&self) -> &str {
         "AggregatorPartialTransform"

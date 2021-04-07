@@ -49,6 +49,7 @@ impl SystemDatabase {
     }
 }
 
+#[async_trait::async_trait]
 impl IDatabase for SystemDatabase {
     fn name(&self) -> &str {
         "system"
@@ -74,7 +75,7 @@ impl IDatabase for SystemDatabase {
         Ok(self.table_functions.values().cloned().collect())
     }
 
-    fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
+    async fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
         bail!("DataSource Error: cannot create table for system database")
     }
 }

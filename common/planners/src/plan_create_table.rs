@@ -32,7 +32,7 @@ impl ToString for TableEngineType {
 
 pub type TableOptions = HashMap<String, String>;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CreateTablePlan {
     pub if_not_exists: bool,
     pub db: String,

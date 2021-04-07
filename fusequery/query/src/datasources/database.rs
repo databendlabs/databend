@@ -9,6 +9,7 @@ use common_planners::CreateTablePlan;
 
 use crate::datasources::{ITable, ITableFunction};
 
+#[async_trait::async_trait]
 pub trait IDatabase: Sync + Send {
     // Database name.
     fn name(&self) -> &str;
@@ -26,5 +27,5 @@ pub trait IDatabase: Sync + Send {
     fn get_table_functions(&self) -> Result<Vec<Arc<dyn ITableFunction>>>;
 
     // DDL
-    fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
+    async fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
 }

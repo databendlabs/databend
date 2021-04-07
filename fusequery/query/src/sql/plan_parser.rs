@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Result};
-use common_arrow::arrow;
 use common_datavalues::{DataField, DataSchema, DataValue};
 use common_planners::{
     CreateDatabasePlan, CreateTablePlan, ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode,
@@ -119,11 +118,19 @@ impl PlanParser {
             options.insert(p.name.value.to_lowercase(), p.value.to_string());
         }
 
+        // Schema with metadata(due to serde must set metadata).
+        let schema = Arc::new(DataSchema::new_with_metadata(
+            fields,
+            [("Key".to_string(), "Value".to_string())]
+                .iter()
+                .cloned()
+                .collect(),
+        ));
         Ok(PlanNode::CreateTable(CreateTablePlan {
             if_not_exists: create.if_not_exists,
             db,
             table,
-            schema: Arc::new(arrow::datatypes::Schema::new(fields)),
+            schema,
             engine: create.engine,
             options,
         }))

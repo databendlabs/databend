@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use async_trait::async_trait;
 use common_infallible::RwLock;
 use common_planners::{CreateDatabasePlan, DatabaseEngineType};
 
@@ -17,7 +16,7 @@ use crate::datasources::system::SystemFactory;
 use crate::datasources::{IDatabase, ITable, ITableFunction};
 use crate::rpcs::store::StoreClient;
 
-#[async_trait]
+#[async_trait::async_trait]
 pub trait IDataSource: Sync + Send {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn IDatabase>>;
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>>;
@@ -98,7 +97,7 @@ impl DataSource {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl IDataSource for DataSource {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn IDatabase>> {
         let db_lock = self.databases.read();

@@ -7,7 +7,7 @@ use std::convert::TryInto;
 use std::io::Cursor;
 
 use common_arrow::arrow_flight::Action;
-use common_planners::CreateDatabasePlan;
+use common_planners::{CreateDatabasePlan, CreateTablePlan};
 use prost::Message;
 use tonic::Request;
 
@@ -18,10 +18,16 @@ pub struct CreateDatabaseAction {
     pub plan: CreateDatabasePlan,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct CreateTableAction {
+    pub plan: CreateTablePlan,
+}
+
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum StoreDoAction {
     CreateDatabase(CreateDatabaseAction),
+    CreateTable(CreateTableAction),
 }
 
 /// Try convert tonic::Request<Action> to DoActionAction.

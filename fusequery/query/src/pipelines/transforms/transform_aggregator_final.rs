@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataSchemaRef, DataValue};
 use common_functions::IFunction;
@@ -39,7 +38,7 @@ impl AggregatorFinalTransform {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl IProcessor for AggregatorFinalTransform {
     fn name(&self) -> &str {
         "AggregatorFinalTransform"

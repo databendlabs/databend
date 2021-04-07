@@ -6,7 +6,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, StringArray};
 use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics};
@@ -31,7 +30,7 @@ impl TablesTable {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl ITable for TablesTable {
     fn name(&self) -> &str {
         "tables"

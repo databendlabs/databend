@@ -5,7 +5,6 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use common_datavalues::{DataField, DataSchema, DataType};
 use common_planners::SettingPlan;
 use common_streams::{DataBlockStream, SendableDataBlockStream};
@@ -24,7 +23,7 @@ impl SettingInterpreter {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl IInterpreter for SettingInterpreter {
     fn name(&self) -> &str {
         "SettingInterpreter"

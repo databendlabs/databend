@@ -8,7 +8,6 @@ use std::mem::size_of;
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
-use async_trait::async_trait;
 use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, DataValue};
 use common_planners::{
     ExpressionPlan, Partition, Partitions, PlanNode, ReadDataSourcePlan, ScanPlan, Statistics,
@@ -67,7 +66,7 @@ impl NumbersTable {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl ITable for NumbersTable {
     fn name(&self) -> &str {
         self.table
