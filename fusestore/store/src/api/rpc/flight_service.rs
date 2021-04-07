@@ -104,7 +104,9 @@ impl Flight for FlightService {
         info!("Receive do_action: {:?}", action);
 
         match action {
-            StoreDoAction::CreateDatabase(_) => Err(Status::internal("create database unimpl")),
+            StoreDoAction::CreateDatabase(_) => {
+                Err(Status::internal("Store create database unimpl"))
+            }
         }
     }
 

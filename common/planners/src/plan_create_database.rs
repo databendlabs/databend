@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
+use common_datavalues::{DataSchema, DataSchemaRef};
 
 /// Database engine type.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -28,13 +29,12 @@ pub type DatabaseOptions = HashMap<String, String>;
 pub struct CreateDatabasePlan {
     pub if_not_exists: bool,
     pub db: String,
-    pub schema: DataSchemaRef,
     pub engine: DatabaseEngineType,
     pub options: DatabaseOptions,
 }
 
 impl CreateDatabasePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
+        Arc::new(DataSchema::empty())
     }
 }

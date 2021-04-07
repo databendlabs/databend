@@ -37,7 +37,7 @@ impl IInterpreter for CreateDatabaseInterpreter {
         datasource.create_database(self.plan.clone()).await?;
 
         Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema.clone(),
+            self.plan.schema(),
             None,
             vec![],
         )))
