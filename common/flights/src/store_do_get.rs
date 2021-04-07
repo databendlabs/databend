@@ -13,14 +13,14 @@ use tonic::Request;
 
 use crate::protobuf::FlightStoreRequest;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ReadAction {
     pub partition: Partitions,
     pub push_down: PlanNode,
 }
 
 // Action wrapper for do_get.
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum StoreDoGet {
     Read(ReadAction),
 }

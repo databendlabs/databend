@@ -7,3 +7,5 @@
 // Flight Client for FuseStore.
 
 mod store_client;
+
+pub use store_client::StoreClient;

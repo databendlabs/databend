@@ -74,8 +74,8 @@ pub struct Config {
     )]
     pub metric_api_address: String,
 
-    #[structopt(long, env = "STORAGE_API_ADDRESS", default_value = "127.0.0.1:6060")]
-    pub storage_api_address: String,
+    #[structopt(long, env = "STORE_API_ADDRESS", default_value = "127.0.0.1:9191")]
+    pub store_api_address: String,
 }
 
 impl Config {
@@ -94,7 +94,7 @@ impl Config {
             rpc_api_address: "127.0.0.1:9090".to_string(),
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
-            storage_api_address: "127.0.0.1:6060".to_string(),
+            store_api_address: "127.0.0.1:9191".to_string(),
         }
     }
 

@@ -6,36 +6,35 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common_planners::CreateTablePlan;
+use common_planners::CreateDatabasePlan;
 use common_streams::{DataBlockStream, SendableDataBlockStream};
 
 use crate::interpreters::IInterpreter;
 use crate::sessions::FuseQueryContextRef;
 
-pub struct CreateTableInterpreter {
+pub struct CreateDatabaseInterpreter {
     ctx: FuseQueryContextRef,
-    plan: CreateTablePlan,
+    plan: CreateDatabasePlan,
 }
 
-impl CreateTableInterpreter {
+impl CreateDatabaseInterpreter {
     pub fn try_create(
         ctx: FuseQueryContextRef,
-        plan: CreateTablePlan,
+        plan: CreateDatabasePlan,
     ) -> Result<Arc<dyn IInterpreter>> {
-        Ok(Arc::new(CreateTableInterpreter { ctx, plan }))
+        Ok(Arc::new(CreateDatabaseInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait]
-impl IInterpreter for CreateTableInterpreter {
+impl IInterpreter for CreateDatabaseInterpreter {
     fn name(&self) -> &str {
-        "CreateTableInterpreter"
+        "CreateDatabaseInterpreter"
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let datasource = self.ctx.get_datasource();
-        let database = datasource.get_database(self.plan.db.as_str())?;
-        database.create_table(self.plan.clone())?;
+        datasource.create_database(self.plan.clone()).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema.clone(),

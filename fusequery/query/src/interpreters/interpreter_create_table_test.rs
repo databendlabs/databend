@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_explain_interpreter() -> anyhow::Result<()> {
+async fn test_create_table_interpreter() -> anyhow::Result<()> {
     use common_datavalues::DataType;
     use common_planners::*;
     use futures::stream::StreamExt;
@@ -18,7 +18,7 @@ async fn test_explain_interpreter() -> anyhow::Result<()> {
         .build_from_sql("create table default.a(a bigint, b int, c varchar(255), d smallint, e Date ) Engine = Null")?
     {
         let executor = CreateTableInterpreter::try_create(ctx, plan.clone())?;
-        assert_eq!(executor.name(), "CreateInterpreter");
+        assert_eq!(executor.name(), "CreateTableInterpreter");
 
         assert_eq!(plan.schema().field_with_name("a")?.data_type(), &DataType::Int64);
         assert_eq!(plan.schema().field_with_name("b")?.data_type(), &DataType::Int32);
