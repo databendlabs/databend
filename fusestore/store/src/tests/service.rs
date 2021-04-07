@@ -22,5 +22,7 @@ pub async fn start_one_service() -> Result<String> {
         srv.make_server().await?;
         Ok::<(), anyhow::Error>(())
     });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
     Ok(addr)
 }

@@ -6,9 +6,11 @@ use std::convert::TryInto;
 
 use anyhow::{bail, Result};
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
-use common_arrow::arrow_flight::Action;
+use common_arrow::arrow_flight::{Action, BasicAuth, HandshakeRequest};
 use common_flights::store_do_action::{CreateDatabaseAction, CreateTableAction, StoreDoAction};
 use common_planners::{CreateDatabasePlan, CreateTablePlan};
+use futures::{stream, StreamExt};
+use prost::Message;
 use tonic::Request;
 
 pub struct FlightClient {
@@ -31,6 +33,25 @@ impl FlightClient {
         let action = StoreDoAction::CreateTable(CreateTableAction { plan });
         let _body = self.do_action(&action).await?;
         Ok(())
+    }
+
+    /// Handshake.
+    pub async fn handshake(&mut self, username: String, password: String) -> Result<Vec<u8>> {
+        let auth = BasicAuth { username, password };
+        let mut payload = vec![];
+        auth.encode(&mut payload)?;
+
+        let req = stream::once(async {
+            HandshakeRequest {
+                payload,
+                ..HandshakeRequest::default()
+            }
+        });
+        let rx = self.client.handshake(Request::new(req)).await?;
+        let mut rx = rx.into_inner();
+
+        let resp = rx.next().await.expect("Must respond from handshake")?;
+        Ok(resp.payload)
     }
 
     // Execute do_action.

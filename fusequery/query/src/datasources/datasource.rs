@@ -30,6 +30,7 @@ pub struct DataSource {
     conf: Config,
     databases: RwLock<HashMap<String, Arc<dyn IDatabase>>>,
     table_functions: RwLock<HashMap<String, Arc<dyn ITableFunction>>>,
+    store_client: RwLock<Option<StoreClient>>,
 }
 
 impl DataSource {
@@ -38,6 +39,7 @@ impl DataSource {
             conf: Config::default(),
             databases: Default::default(),
             table_functions: Default::default(),
+            store_client: RwLock::new(None),
         };
 
         datasource.register_system_database()?;
@@ -51,6 +53,17 @@ impl DataSource {
         let mut ds = Self::try_create()?;
         ds.conf = conf;
         Ok(ds)
+    }
+
+    async fn try_get_client(&self) -> Result<StoreClient> {
+        if self.store_client.read().is_none() {
+            let store_addr = self.conf.store_api_address.clone();
+            let username = self.conf.store_api_username.clone();
+            let password = self.conf.store_api_password.clone();
+            let client = StoreClient::try_create(store_addr, username, password).await?;
+            *self.store_client.write() = Some(client);
+        }
+        Ok(self.store_client.read().as_ref().unwrap().clone())
     }
 
     fn insert_databases(&mut self, databases: Vec<Arc<dyn IDatabase>>) -> Result<()> {
@@ -143,10 +156,10 @@ impl IDataSource for DataSource {
                 self.databases.write().insert(plan.db, Arc::new(database));
             }
             DatabaseEngineType::Remote => {
-                let mut client =
-                    StoreClient::try_create(self.conf.store_api_address.clone()).await?;
+                let mut client = self.try_get_client().await?;
                 client.create_database(plan.clone()).await?;
 
+                // Add local cache.
                 let database = RemoteDatabase::create(self.conf.clone(), plan.db.clone());
                 self.databases
                     .write()
