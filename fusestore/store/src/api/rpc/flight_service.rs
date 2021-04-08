@@ -45,7 +45,7 @@ impl FlightService {
             .get_bin("auth-token-bin")
             .and_then(|v| v.to_bytes().ok())
             .and_then(|b| String::from_utf8(b.to_vec()).ok())
-            .unwrap();
+            .ok_or_else(|| Status::internal("Error auth-token-bin is empty"))?;
 
         let claim = self
             .token
@@ -62,20 +62,19 @@ impl Flight for FlightService {
         &self,
         request: Request<Streaming<HandshakeRequest>>,
     ) -> Result<Response<Self::HandshakeStream>, Status> {
-        let mut requests = request.into_inner();
-        let req = match requests.next().await {
-            None => Err(Status::internal("Error request next is None")),
-            Some(v) => v,
-        };
+        let req = request
+            .into_inner()
+            .next()
+            .await
+            .ok_or_else(|| Status::internal("Error request next is None"))??;
 
-        let HandshakeRequest { payload, .. } = req?;
+        let HandshakeRequest { payload, .. } = req;
         let auth = BasicAuth::decode(&*payload).map_err(|e| Status::internal(e.to_string()))?;
 
         // Check auth and create token.
         let user = "root";
         if auth.username == user {
             let claim = FlightClaim {
-                user_is_admin: false,
                 username: user.to_string(),
             };
             let token = self

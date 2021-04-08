@@ -7,8 +7,7 @@ use jwt_simple::prelude::*;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct FlightClaim {
-    pub(crate) user_is_admin: bool,
-    pub(crate) username: String,
+    pub username: String,
 }
 
 #[derive(Clone)]
