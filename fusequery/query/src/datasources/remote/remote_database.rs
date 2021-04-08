@@ -6,13 +6,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
+use common_flights::StoreClient;
 use common_infallible::RwLock;
 use common_planners::CreateTablePlan;
 
 use crate::configs::Config;
 use crate::datasources::remote::remote_table::RemoteTable;
 use crate::datasources::{IDatabase, ITable, ITableFunction};
-use crate::rpcs::store::StoreClient;
 
 pub struct RemoteDatabase {
     name: String,

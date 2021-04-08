@@ -464,6 +464,7 @@ dependencies = [
  "anyhow",
  "common-arrow",
  "common-planners",
+ "futures",
  "pretty_assertions",
  "prost",
  "serde",

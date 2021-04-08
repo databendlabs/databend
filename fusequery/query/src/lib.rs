@@ -14,7 +14,6 @@ pub mod metrics;
 pub mod optimizers;
 pub mod pipelines;
 pub mod planners;
-mod rpcs;
 pub mod servers;
 pub mod sessions;
 pub mod sql;

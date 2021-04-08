@@ -7,11 +7,12 @@ use std::convert::TryInto;
 use anyhow::{bail, Result};
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::{Action, BasicAuth, HandshakeRequest};
-use common_flights::store_do_action::{CreateDatabaseAction, CreateTableAction, StoreDoAction};
 use common_planners::{CreateDatabasePlan, CreateTablePlan};
 use futures::{stream, StreamExt};
 use prost::Message;
 use tonic::{metadata::MetadataValue, Request};
+
+use crate::store_do_action::{CreateDatabaseAction, CreateTableAction, StoreDoAction};
 
 #[derive(Clone)]
 pub struct StoreClient {

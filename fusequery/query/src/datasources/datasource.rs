@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
+use common_flights::StoreClient;
 use common_infallible::RwLock;
 use common_planners::{CreateDatabasePlan, DatabaseEngineType};
 
@@ -14,7 +15,6 @@ use crate::datasources::local::{LocalDatabase, LocalFactory};
 use crate::datasources::remote::{RemoteDatabase, RemoteFactory};
 use crate::datasources::system::SystemFactory;
 use crate::datasources::{IDatabase, ITable, ITableFunction};
-use crate::rpcs::store::StoreClient;
 
 #[async_trait::async_trait]
 pub trait IDataSource: Sync + Send {
