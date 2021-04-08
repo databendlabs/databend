@@ -21,7 +21,7 @@ pub struct StoreClient {
 }
 
 impl StoreClient {
-    pub async fn try_create(addr: String, username: String, password: String) -> Result<Self> {
+    pub async fn try_create(addr: &str, username: &str, password: &str) -> Result<Self> {
         let client = FlightServiceClient::connect(format!("http://{}", addr)).await?;
         let mut rx = Self {
             token: vec![],
@@ -46,8 +46,11 @@ impl StoreClient {
     }
 
     /// Handshake.
-    async fn handshake(&mut self, username: String, password: String) -> Result<()> {
-        let auth = BasicAuth { username, password };
+    async fn handshake(&mut self, username: &str, password: &str) -> Result<()> {
+        let auth = BasicAuth {
+            username: username.to_string(),
+            password: password.to_string(),
+        };
         let mut payload = vec![];
         auth.encode(&mut payload)?;
 

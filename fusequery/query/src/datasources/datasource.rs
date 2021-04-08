@@ -60,7 +60,7 @@ impl DataSource {
             let store_addr = self.conf.store_api_address.clone();
             let username = self.conf.store_api_username.clone();
             let password = self.conf.store_api_password.clone();
-            let client = StoreClient::try_create(store_addr, username, password).await?;
+            let client = StoreClient::try_create(&store_addr, &username, &password).await?;
             *self.store_client.write() = Some(client);
         }
         Ok(self.store_client.read().as_ref().unwrap().clone())
