@@ -109,7 +109,7 @@ Note:
 
 ## Contributing
 
-You can learn more about contributing to the FuseQuery project by reading our [Contribution Guide](docs/development/contributing.md) and by viewing our [Code of Conduct](docs/policies/code-of-conduct.md).
+You can learn more about contributing to the Datafuse project by reading our [Contribution Guide](docs/development/contributing.md) and by viewing our [Code of Conduct](docs/policies/code-of-conduct.md).
 
 ## License
 
