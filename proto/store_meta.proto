@@ -1,0 +1,24 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
+syntax = "proto3";
+
+// meta data types for FuseStore
+package store_meta;
+
+message Db {
+  int64 DbId = 1;
+  map<string, int64> TableNameToId = 2;
+  map<int64, Table> Tables = 3;
+}
+
+message Table {
+  int64    TableId = 1;
+  bytes    Schema = 5;
+  // a func(string, Vec<ReplicationGroupId>) mapping PartitionBy expr to replication group.
+  // A FuseQuery process should consider this to determine where to send the
+  // read or write operations.
+  bytes    PlacementPolicy = 10;
+  // repeated ReplicationGroupId ReplicationGroupIds
+}
