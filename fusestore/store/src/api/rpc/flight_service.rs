@@ -13,13 +13,13 @@ use common_arrow::arrow_flight::{
 };
 use common_flights::store_do_action::StoreDoAction;
 use common_flights::store_do_get::StoreDoGet;
+use common_flights::{FlightClaim, FlightToken};
 use futures::{Stream, StreamExt};
 use log::info;
 use prost::Message;
 use tonic::metadata::MetadataMap;
 use tonic::{Request, Response, Status, Streaming};
 
-use crate::api::rpc::{FlightClaim, FlightToken};
 use crate::configs::Config;
 
 pub type FlightStream<T> =
