@@ -6,6 +6,8 @@
 mod flight_service_test;
 
 mod flight_service;
+mod flight_token;
 mod metrics;
 
 pub use flight_service::{FlightService, FlightStream};
+pub use flight_token::{FlightClaim, FlightToken};
