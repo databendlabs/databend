@@ -13,7 +13,7 @@ use common_arrow::arrow_flight::{
 };
 use common_flights::store_do_action::StoreDoAction;
 use common_flights::store_do_get::StoreDoGet;
-use futures::{SinkExt, Stream, StreamExt};
+use futures::{Stream, StreamExt};
 use log::info;
 use prost::Message;
 use tonic::metadata::MetadataMap;
@@ -62,51 +62,38 @@ impl Flight for FlightService {
         &self,
         request: Request<Streaming<HandshakeRequest>>,
     ) -> Result<Response<Self::HandshakeStream>, Status> {
-        let (tx, rx) = futures::channel::mpsc::channel(10);
+        let mut requests = request.into_inner();
+        let req = match requests.next().await {
+            None => Err(Status::internal("Error request next is None")),
+            Some(v) => v,
+        };
 
-        let token = self.token.clone();
-        tokio::spawn({
-            async move {
-                let requests = request.into_inner();
-                requests
-                    .for_each(move |req| {
-                        let mut tx = tx.clone();
-                        let req = req.expect("Error reading handshake request");
-                        let HandshakeRequest { payload, .. } = req;
-                        let auth =
-                            BasicAuth::decode(&*payload).expect("Error parsing handshake request");
+        let HandshakeRequest { payload, .. } = req?;
+        let auth = BasicAuth::decode(&*payload).expect("Error parsing handshake request");
 
-                        // Token.
-                        let user = "root";
-                        let resp = if auth.username == user {
-                            let token = token
-                                .try_create_token(FlightClaim {
-                                    user_is_admin: false,
-                                    username: user.to_string(),
-                                })
-                                .expect("Error create token");
+        // Check auth and create token.
+        let user = "root";
+        if auth.username == user {
+            let token = self
+                .token
+                .try_create_token(FlightClaim {
+                    user_is_admin: false,
+                    username: user.to_string(),
+                })
+                .expect("Error create token");
 
-                            Ok(HandshakeResponse {
-                                payload: token.into_bytes(),
-                                ..HandshakeResponse::default()
-                            })
-                        } else {
-                            Err(Status::unauthenticated(format!(
-                                "Don't know user {}",
-                                auth.username
-                            )))
-                        };
-                        async move {
-                            tx.send(resp)
-                                .await
-                                .expect("Error sending handshake response");
-                        }
-                    })
-                    .await;
-            }
-        });
-
-        Ok(Response::new(Box::pin(rx)))
+            let resp = HandshakeResponse {
+                payload: token.into_bytes(),
+                ..HandshakeResponse::default()
+            };
+            let output = futures::stream::once(async { Ok(resp) });
+            Ok(Response::new(Box::pin(output)))
+        } else {
+            Err(Status::unauthenticated(format!(
+                "Don't know user {}",
+                auth.username
+            )))
+        }
     }
 
     type ListFlightsStream = FlightStream<FlightInfo>;
