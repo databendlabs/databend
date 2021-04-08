@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
+use common_flights::StoreClient;
 use common_infallible::RwLock;
 use common_planners::{CreateDatabasePlan, DatabaseEngineType};
 
@@ -14,7 +15,6 @@ use crate::datasources::local::{LocalDatabase, LocalFactory};
 use crate::datasources::remote::{RemoteDatabase, RemoteFactory};
 use crate::datasources::system::SystemFactory;
 use crate::datasources::{IDatabase, ITable, ITableFunction};
-use crate::rpcs::store::StoreClient;
 
 #[async_trait::async_trait]
 pub trait IDataSource: Sync + Send {
@@ -60,7 +60,7 @@ impl DataSource {
             let store_addr = self.conf.store_api_address.clone();
             let username = self.conf.store_api_username.clone();
             let password = self.conf.store_api_password.clone();
-            let client = StoreClient::try_create(store_addr, username, password).await?;
+            let client = StoreClient::try_create(&store_addr, &username, &password).await?;
             *self.store_client.write() = Some(client);
         }
         Ok(self.store_client.read().as_ref().unwrap().clone())

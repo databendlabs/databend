@@ -13,25 +13,45 @@ use common_arrow::arrow_flight::{
 };
 use common_flights::store_do_action::StoreDoAction;
 use common_flights::store_do_get::StoreDoGet;
-use futures::{SinkExt, Stream, StreamExt};
+use futures::{Stream, StreamExt};
 use log::info;
 use prost::Message;
+use tonic::metadata::MetadataMap;
 use tonic::{Request, Response, Status, Streaming};
 
+use crate::api::rpc::{FlightClaim, FlightToken};
 use crate::configs::Config;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
-pub struct FlightService {}
+pub struct FlightService {
+    token: FlightToken,
+}
 
 impl FlightService {
     pub fn create(_conf: Config) -> Self {
-        Self {}
+        Self {
+            token: FlightToken::create(),
+        }
     }
 
     pub fn make_server(self) -> FlightServer<impl Flight> {
         FlightServer::new(self)
+    }
+
+    fn check_token(&self, metadata: &MetadataMap) -> Result<FlightClaim, Status> {
+        let token = metadata
+            .get_bin("auth-token-bin")
+            .and_then(|v| v.to_bytes().ok())
+            .and_then(|b| String::from_utf8(b.to_vec()).ok())
+            .unwrap();
+
+        let claim = self
+            .token
+            .try_verify_token(token)
+            .map_err(|e| Status::internal(e.to_string()))?;
+        Ok(claim)
     }
 }
 
@@ -42,41 +62,39 @@ impl Flight for FlightService {
         &self,
         request: Request<Streaming<HandshakeRequest>>,
     ) -> Result<Response<Self::HandshakeStream>, Status> {
-        let (tx, rx) = futures::channel::mpsc::channel(10);
+        let mut requests = request.into_inner();
+        let req = match requests.next().await {
+            None => Err(Status::internal("Error request next is None")),
+            Some(v) => v,
+        };
 
-        tokio::spawn({
-            async move {
-                let requests = request.into_inner();
-                requests
-                    .for_each(move |req| {
-                        let mut tx = tx.clone();
-                        let req = req.expect("Error reading handshake request");
-                        let HandshakeRequest { payload, .. } = req;
-                        let auth =
-                            BasicAuth::decode(&*payload).expect("Error parsing handshake request");
+        let HandshakeRequest { payload, .. } = req?;
+        let auth = BasicAuth::decode(&*payload).map_err(|e| Status::internal(e.to_string()))?;
 
-                        let resp = if auth.username == "root" {
-                            Ok(HandshakeResponse {
-                                payload: auth.username.as_bytes().to_vec(),
-                                ..HandshakeResponse::default()
-                            })
-                        } else {
-                            Err(Status::unauthenticated(format!(
-                                "Don't know user {}",
-                                auth.username
-                            )))
-                        };
-                        async move {
-                            tx.send(resp)
-                                .await
-                                .expect("Error sending handshake response");
-                        }
-                    })
-                    .await;
-            }
-        });
+        // Check auth and create token.
+        let user = "root";
+        if auth.username == user {
+            let claim = FlightClaim {
+                user_is_admin: false,
+                username: user.to_string(),
+            };
+            let token = self
+                .token
+                .try_create_token(claim)
+                .map_err(|e| Status::internal(e.to_string()))?;
 
-        Ok(Response::new(Box::pin(rx)))
+            let resp = HandshakeResponse {
+                payload: token.into_bytes(),
+                ..HandshakeResponse::default()
+            };
+            let output = futures::stream::once(async { Ok(resp) });
+            Ok(Response::new(Box::pin(output)))
+        } else {
+            Err(Status::unauthenticated(format!(
+                "Don't know user {}",
+                auth.username
+            )))
+        }
     }
 
     type ListFlightsStream = FlightStream<FlightInfo>;
@@ -106,6 +124,10 @@ impl Flight for FlightService {
         &self,
         request: Request<Ticket>,
     ) -> Result<Response<Self::DoGetStream>, Status> {
+        // Check token.
+        let _claim = self.check_token(&request.metadata())?;
+
+        // Action.
         let action: StoreDoGet = request.try_into()?;
         match action {
             StoreDoGet::Read(_) => {
@@ -135,6 +157,10 @@ impl Flight for FlightService {
         &self,
         request: Request<Action>,
     ) -> Result<Response<Self::DoActionStream>, Status> {
+        // Check token.
+        let _claim = self.check_token(&request.metadata())?;
+
+        // Action.
         let action: StoreDoAction = request.try_into()?;
         info!("Receive do_action: {:?}", action);
 
