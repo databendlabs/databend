@@ -2,9 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 
-use crate::{DataValue, DataValueArithmeticOperator};
+use crate::DataValue;
+use crate::DataValueArithmeticOperator;
 
 macro_rules! typed_data_value_operator {
     ($OP: expr, $LHS:expr, $RHS:expr, $SCALAR:ident, $TYPE:ident) => {{

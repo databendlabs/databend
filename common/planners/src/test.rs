@@ -5,10 +5,15 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use common_datavalues::{DataField, DataSchema, DataType};
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
+use common_datavalues::DataType;
 
 use crate::plan_partition::Partition;
-use crate::{Partitions, PlanNode, ReadDataSourcePlan, Statistics};
+use crate::Partitions;
+use crate::PlanNode;
+use crate::ReadDataSourcePlan;
+use crate::Statistics;
 
 pub struct Test {}
 

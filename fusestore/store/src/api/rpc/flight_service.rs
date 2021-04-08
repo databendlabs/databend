@@ -23,7 +23,8 @@ use common_arrow::arrow_flight::SchemaResult;
 use common_arrow::arrow_flight::Ticket;
 use common_flights::store_do_action::StoreDoAction;
 use common_flights::store_do_get::StoreDoGet;
-use common_flights::{FlightClaim, FlightToken};
+use common_flights::FlightClaim;
+use common_flights::FlightToken;
 use futures::Stream;
 use futures::StreamExt;
 #[allow(unused_imports)]

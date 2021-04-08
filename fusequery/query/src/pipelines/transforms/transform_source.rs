@@ -5,10 +5,12 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 use common_streams::SendableDataBlockStream;
 
-use crate::pipelines::processors::{EmptyProcessor, IProcessor};
+use crate::pipelines::processors::EmptyProcessor;
+use crate::pipelines::processors::IProcessor;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct SourceTransform {

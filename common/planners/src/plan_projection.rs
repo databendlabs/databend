@@ -7,7 +7,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use common_datavalues::DataSchemaRef;
 
-use crate::{ExpressionPlan, PlanNode};
+use crate::ExpressionPlan;
+use crate::PlanNode;
 
 /// Evaluates an arbitrary list of expressions (essentially a
 /// SELECT with an expression list) on its input.

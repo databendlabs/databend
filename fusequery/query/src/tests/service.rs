@@ -6,9 +6,12 @@ use anyhow::Result;
 use rand::Rng;
 
 use crate::api::RpcService;
-use crate::clusters::{Cluster, Node};
+use crate::clusters::Cluster;
+use crate::clusters::Node;
 use crate::configs::Config;
-use crate::sessions::{FuseQueryContextRef, Session, SessionRef};
+use crate::sessions::FuseQueryContextRef;
+use crate::sessions::Session;
+use crate::sessions::SessionRef;
 
 /// Start services and return the random address.
 pub async fn try_start_service(nums: usize) -> Result<Vec<String>> {

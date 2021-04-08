@@ -8,4 +8,5 @@ mod flight_service_test;
 mod flight_service;
 mod metrics;
 
-pub use flight_service::{FlightServiceImpl, FlightStream};
+pub use flight_service::FlightServiceImpl;
+pub use flight_service::FlightStream;

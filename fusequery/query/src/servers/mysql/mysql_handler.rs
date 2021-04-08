@@ -2,13 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::io;
+use std::net;
 use std::time::Instant;
-use std::{io, net};
 
 use anyhow::Result;
 use common_datablocks::DataBlock;
 use futures::stream::StreamExt;
-use log::{debug, error};
+use log::debug;
+use log::error;
 use metrics::histogram;
 use msql_srv::*;
 use threadpool::ThreadPool;
@@ -17,7 +19,8 @@ use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::MysqlStream;
-use crate::sessions::{FuseQueryContextRef, SessionRef};
+use crate::sessions::FuseQueryContextRef;
+use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 
 struct Session {

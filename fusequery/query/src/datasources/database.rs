@@ -7,7 +7,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use common_planners::CreateTablePlan;
 
-use crate::datasources::{ITable, ITableFunction};
+use crate::datasources::ITable;
+use crate::datasources::ITableFunction;
 
 #[async_trait::async_trait]
 pub trait IDatabase: Sync + Send {

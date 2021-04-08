@@ -7,8 +7,13 @@ use std::any::Any;
 use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics, TableOptions};
-use common_streams::{DataBlockStream, SendableDataBlockStream};
+use common_planners::Partition;
+use common_planners::PlanNode;
+use common_planners::ReadDataSourcePlan;
+use common_planners::Statistics;
+use common_planners::TableOptions;
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
 
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;

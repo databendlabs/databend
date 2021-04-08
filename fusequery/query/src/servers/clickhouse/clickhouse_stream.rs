@@ -3,11 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::Context;
+use std::task::Poll;
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 use clickhouse_srv::types::Block as ClickHouseBlock;
-use common_arrow::arrow::array::{as_boolean_array, as_primitive_array, as_string_array, Array};
+use common_arrow::arrow::array::as_boolean_array;
+use common_arrow::arrow::array::as_primitive_array;
+use common_arrow::arrow::array::as_string_array;
+use common_arrow::arrow::array::Array;
 use common_arrow::arrow::datatypes::*;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;

@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 use common_arrow::arrow::datatypes::DataType;
 use common_arrow::arrow::util::display::array_value_to_string;
 use common_datablocks::DataBlock;

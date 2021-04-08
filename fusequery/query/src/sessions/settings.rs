@@ -5,7 +5,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::anyhow;
+use anyhow::bail;
+use anyhow::Result;
 use common_datavalues::DataValue;
 use common_infallible::RwLock;
 

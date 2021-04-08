@@ -27,6 +27,7 @@ mod processor_merge;
 pub use pipe::Pipe;
 pub use pipeline::Pipeline;
 pub use pipeline_builder::PipelineBuilder;
-pub use processor::{FormatterSettings, IProcessor};
+pub use processor::FormatterSettings;
+pub use processor::IProcessor;
 pub use processor_empty::EmptyProcessor;
 pub use processor_merge::MergeProcessor;

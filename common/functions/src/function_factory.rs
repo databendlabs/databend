@@ -4,7 +4,8 @@
 
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
+use anyhow::Result;
 use common_infallible::RwLock;
 use indexmap::IndexMap;
 use lazy_static::lazy_static;

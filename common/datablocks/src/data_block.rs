@@ -8,7 +8,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use common_arrow::arrow;
 use common_arrow::arrow::record_batch::RecordBatch;
-use common_datavalues::{DataArrayRef, DataSchema, DataSchemaRef};
+use common_datavalues::DataArrayRef;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 
 #[derive(Debug, Clone)]
 pub struct DataBlock {

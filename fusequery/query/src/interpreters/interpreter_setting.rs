@@ -5,9 +5,12 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use common_datavalues::{DataField, DataSchema, DataType};
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
+use common_datavalues::DataType;
 use common_planners::SettingPlan;
-use common_streams::{DataBlockStream, SendableDataBlockStream};
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::IInterpreter;
 use crate::sessions::FuseQueryContextRef;

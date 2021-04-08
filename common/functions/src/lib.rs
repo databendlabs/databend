@@ -19,5 +19,6 @@ pub use common_datavalues;
 pub use crate::function::IFunction;
 pub use crate::function_alias::AliasFunction;
 pub use crate::function_column::ColumnFunction;
-pub use crate::function_factory::{FactoryFuncRef, FunctionFactory};
+pub use crate::function_factory::FactoryFuncRef;
+pub use crate::function_factory::FunctionFactory;
 pub use crate::function_literal::LiteralFunction;

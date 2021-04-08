@@ -2,17 +2,23 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
-use common_arrow::arrow_flight::{Action, Ticket};
+use common_arrow::arrow_flight::Action;
+use common_arrow::arrow_flight::Ticket;
 use common_datavalues::DataSchema;
-use common_flights::query_do_action::{FetchPartitionAction, QueryDoAction};
-use common_flights::query_do_get::{ExecutePlanAction, QueryDoGet};
-use common_planners::{Partitions, PlanNode};
+use common_flights::query_do_action::FetchPartitionAction;
+use common_flights::query_do_action::QueryDoAction;
+use common_flights::query_do_get::ExecutePlanAction;
+use common_flights::query_do_get::QueryDoGet;
+use common_planners::Partitions;
+use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 use tonic::Request;

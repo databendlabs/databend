@@ -5,7 +5,8 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use common_planners::{ExpressionPlan, PlanNode};
+use common_planners::ExpressionPlan;
+use common_planners::PlanNode;
 
 use crate::optimizers::FilterPushDownOptimizer;
 use crate::sessions::FuseQueryContextRef;

@@ -5,7 +5,8 @@
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_create_database() -> anyhow::Result<()> {
     use common_flights::StoreClient;
-    use common_planners::{CreateDatabasePlan, DatabaseEngineType};
+    use common_planners::CreateDatabasePlan;
+    use common_planners::DatabaseEngineType;
 
     // 1. Service starts.
     let addr = crate::tests::start_one_service().await?;
@@ -29,9 +30,11 @@ async fn test_flight_create_table() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_arrow::arrow::datatypes::DataType;
-    use common_datavalues::{DataField, DataSchema};
+    use common_datavalues::DataField;
+    use common_datavalues::DataSchema;
     use common_flights::StoreClient;
-    use common_planners::{CreateTablePlan, TableEngineType};
+    use common_planners::CreateTablePlan;
+    use common_planners::TableEngineType;
 
     // 1. Service starts.
     let addr = crate::tests::start_one_service().await?;

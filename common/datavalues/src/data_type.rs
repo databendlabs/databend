@@ -4,7 +4,8 @@
 
 use std::cmp;
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 use common_arrow::arrow::datatypes;
 use common_arrow::arrow::datatypes::DataType::*;
 

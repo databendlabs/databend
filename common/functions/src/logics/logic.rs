@@ -4,14 +4,19 @@
 
 use std::fmt;
 
-use anyhow::{ensure, Result};
+use anyhow::ensure;
+use anyhow::Result;
 use common_datablocks::DataBlock;
-use common_datavalues::{
-    self as datavalues, DataColumnarValue, DataSchema, DataType, DataValueLogicOperator,
-};
+use common_datavalues::DataColumnarValue;
+use common_datavalues::DataSchema;
+use common_datavalues::DataType;
+use common_datavalues::DataValueLogicOperator;
+use common_datavalues::{self as datavalues};
 
-use crate::logics::{LogicAndFunction, LogicOrFunction};
-use crate::{FactoryFuncRef, IFunction};
+use crate::logics::LogicAndFunction;
+use crate::logics::LogicOrFunction;
+use crate::FactoryFuncRef;
+use crate::IFunction;
 
 #[derive(Clone)]
 pub struct LogicFunction {

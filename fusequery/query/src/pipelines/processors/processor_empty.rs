@@ -5,9 +5,11 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 use common_datavalues::DataSchema;
-use common_streams::{DataBlockStream, SendableDataBlockStream};
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::processors::IProcessor;
 

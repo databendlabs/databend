@@ -5,7 +5,8 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;

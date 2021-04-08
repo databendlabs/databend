@@ -10,6 +10,8 @@ mod metrics;
 mod session;
 mod settings;
 
-pub use context::{FuseQueryContext, FuseQueryContextRef};
-pub use session::{Session, SessionRef};
+pub use context::FuseQueryContext;
+pub use context::FuseQueryContextRef;
+pub use session::Session;
+pub use session::SessionRef;
 pub use settings::Settings;

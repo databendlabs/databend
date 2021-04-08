@@ -9,6 +9,7 @@ mod optimizer;
 mod optimizer_filter_push_down;
 mod optimizer_limit_push_down;
 
-pub use optimizer::{IOptimizer, Optimizer};
+pub use optimizer::IOptimizer;
+pub use optimizer::Optimizer;
 pub use optimizer_filter_push_down::FilterPushDownOptimizer;
 pub use optimizer_limit_push_down::LimitPushDownOptimizer;

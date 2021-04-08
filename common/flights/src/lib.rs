@@ -9,7 +9,8 @@ pub mod store_client;
 pub mod store_do_action;
 pub mod store_do_get;
 
-pub use flight_token::{FlightClaim, FlightToken};
+pub use flight_token::FlightClaim;
+pub use flight_token::FlightToken;
 pub use store_client::StoreClient;
 
 // ProtoBuf generated files.

@@ -7,7 +7,8 @@ use std::convert::TryInto;
 use std::io::Cursor;
 
 use common_arrow::arrow_flight::Ticket;
-use common_planners::{Partitions, PlanNode};
+use common_planners::Partitions;
+use common_planners::PlanNode;
 use prost::Message;
 use tonic::Request;
 

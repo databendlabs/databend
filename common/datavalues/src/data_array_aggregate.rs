@@ -2,13 +2,24 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 
-use crate::{DataArrayRef, DataType, DataValue, DataValueAggregateOperator, StringArray};
-use crate::{
-    Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, Int8Array, UInt16Array,
-    UInt32Array, UInt64Array, UInt8Array,
-};
+use crate::DataArrayRef;
+use crate::DataType;
+use crate::DataValue;
+use crate::DataValueAggregateOperator;
+use crate::Float32Array;
+use crate::Float64Array;
+use crate::Int16Array;
+use crate::Int32Array;
+use crate::Int64Array;
+use crate::Int8Array;
+use crate::StringArray;
+use crate::UInt16Array;
+use crate::UInt32Array;
+use crate::UInt64Array;
+use crate::UInt8Array;
 
 pub fn data_array_aggregate_op(
     op: DataValueAggregateOperator,

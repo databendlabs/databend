@@ -4,7 +4,8 @@
 
 use anyhow::Result;
 
-use crate::sessions::{FuseQueryContext, FuseQueryContextRef};
+use crate::sessions::FuseQueryContext;
+use crate::sessions::FuseQueryContextRef;
 
 pub fn try_create_context() -> Result<FuseQueryContextRef> {
     let ctx = FuseQueryContext::try_create()?;

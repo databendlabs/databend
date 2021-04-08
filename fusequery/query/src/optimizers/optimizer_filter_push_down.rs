@@ -7,9 +7,13 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use common_datavalues::DataSchema;
-use common_planners::{EmptyPlan, ExpressionPlan, FilterPlan, PlanNode};
+use common_planners::EmptyPlan;
+use common_planners::ExpressionPlan;
+use common_planners::FilterPlan;
+use common_planners::PlanNode;
 
-use crate::optimizers::{IOptimizer, Optimizer};
+use crate::optimizers::IOptimizer;
+use crate::optimizers::Optimizer;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct FilterPushDownOptimizer {}

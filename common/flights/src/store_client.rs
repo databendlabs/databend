@@ -4,15 +4,23 @@
 
 use std::convert::TryInto;
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
-use common_arrow::arrow_flight::{Action, BasicAuth, HandshakeRequest};
-use common_planners::{CreateDatabasePlan, CreateTablePlan};
-use futures::{stream, StreamExt};
+use common_arrow::arrow_flight::Action;
+use common_arrow::arrow_flight::BasicAuth;
+use common_arrow::arrow_flight::HandshakeRequest;
+use common_planners::CreateDatabasePlan;
+use common_planners::CreateTablePlan;
+use futures::stream;
+use futures::StreamExt;
 use prost::Message;
-use tonic::{metadata::MetadataValue, Request};
+use tonic::metadata::MetadataValue;
+use tonic::Request;
 
-use crate::store_do_action::{CreateDatabaseAction, CreateTableAction, StoreDoAction};
+use crate::store_do_action::CreateDatabaseAction;
+use crate::store_do_action::CreateTableAction;
+use crate::store_do_action::StoreDoAction;
 
 #[derive(Clone)]
 pub struct StoreClient {

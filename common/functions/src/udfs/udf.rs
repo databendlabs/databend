@@ -4,7 +4,8 @@
 
 use anyhow::Result;
 
-use crate::udfs::{ToTypeNameFunction, UdfExampleFunction};
+use crate::udfs::ToTypeNameFunction;
+use crate::udfs::UdfExampleFunction;
 use crate::FactoryFuncRef;
 
 #[derive(Clone)]

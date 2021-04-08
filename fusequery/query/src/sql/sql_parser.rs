@@ -5,18 +5,29 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
-use common_planners::{DatabaseEngineType, ExplainType, TableEngineType};
-use sqlparser::ast::{Ident, SqlOption, Value};
-use sqlparser::{
-    ast::{ColumnDef, ColumnOptionDef, TableConstraint},
-    dialect::{keywords::Keyword, Dialect, GenericDialect},
-    parser::{Parser, ParserError},
-    tokenizer::{Token, Tokenizer},
-};
+use common_planners::DatabaseEngineType;
+use common_planners::ExplainType;
+use common_planners::TableEngineType;
+use sqlparser::ast::ColumnDef;
+use sqlparser::ast::ColumnOptionDef;
+use sqlparser::ast::Ident;
+use sqlparser::ast::SqlOption;
+use sqlparser::ast::TableConstraint;
+use sqlparser::ast::Value;
+use sqlparser::dialect::keywords::Keyword;
+use sqlparser::dialect::Dialect;
+use sqlparser::dialect::GenericDialect;
+use sqlparser::parser::Parser;
+use sqlparser::parser::ParserError;
+use sqlparser::tokenizer::Token;
+use sqlparser::tokenizer::Tokenizer;
 
-use crate::sql::{
-    DfCreateDatabase, DfCreateTable, DfExplain, DfShowSettings, DfShowTables, DfStatement,
-};
+use crate::sql::DfCreateDatabase;
+use crate::sql::DfCreateTable;
+use crate::sql::DfExplain;
+use crate::sql::DfShowSettings;
+use crate::sql::DfShowTables;
+use crate::sql::DfStatement;
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {

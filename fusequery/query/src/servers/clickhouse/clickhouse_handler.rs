@@ -10,7 +10,8 @@ use anyhow::bail;
 use anyhow::Result;
 use clickhouse_srv::types::ResultWriter;
 use clickhouse_srv::*;
-use log::{debug, error};
+use log::debug;
+use log::error;
 use metrics::histogram;
 use threadpool::ThreadPool;
 use tokio_stream::StreamExt;
@@ -19,7 +20,8 @@ use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::clickhouse::ClickHouseStream;
-use crate::sessions::{FuseQueryContextRef, SessionRef};
+use crate::sessions::FuseQueryContextRef;
+use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 
 struct Session {

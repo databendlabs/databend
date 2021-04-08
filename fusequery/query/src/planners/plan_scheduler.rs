@@ -7,7 +7,9 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use common_datavalues::DataSchema;
-use common_planners::{EmptyPlan, PlanNode, ReadDataSourcePlan};
+use common_planners::EmptyPlan;
+use common_planners::PlanNode;
+use common_planners::ReadDataSourcePlan;
 use log::info;
 
 use crate::sessions::FuseQueryContextRef;

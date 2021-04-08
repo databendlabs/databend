@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::task::{Context, Poll};
+use std::task::Context;
+use std::task::Poll;
 
 use anyhow::Result;
 use common_datablocks::DataBlock;

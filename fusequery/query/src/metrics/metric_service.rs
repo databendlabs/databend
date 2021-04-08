@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
+use anyhow::Result;
 use metrics_exporter_prometheus::PrometheusBuilder;
 
 use crate::configs::Config;
