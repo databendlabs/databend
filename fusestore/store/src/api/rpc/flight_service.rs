@@ -69,18 +69,19 @@ impl Flight for FlightService {
         };
 
         let HandshakeRequest { payload, .. } = req?;
-        let auth = BasicAuth::decode(&*payload).expect("Error parsing handshake request");
+        let auth = BasicAuth::decode(&*payload).map_err(|e| Status::internal(e.to_string()))?;
 
         // Check auth and create token.
         let user = "root";
         if auth.username == user {
+            let claim = FlightClaim {
+                user_is_admin: false,
+                username: user.to_string(),
+            };
             let token = self
                 .token
-                .try_create_token(FlightClaim {
-                    user_is_admin: false,
-                    username: user.to_string(),
-                })
-                .expect("Error create token");
+                .try_create_token(claim)
+                .map_err(|e| Status::internal(e.to_string()))?;
 
             let resp = HandshakeResponse {
                 payload: token.into_bytes(),
