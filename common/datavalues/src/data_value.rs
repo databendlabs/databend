@@ -6,14 +6,27 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::sync::Arc;
 
-use anyhow::{bail, Error, Result};
-use serde::{Deserialize, Serialize};
+use anyhow::bail;
+use anyhow::Error;
+use anyhow::Result;
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::{
-    BooleanArray, DataArrayRef, DataType, Float32Array, Float64Array, Int16Array, Int32Array,
-    Int64Array, Int8Array, NullArray, StringArray, UInt16Array, UInt32Array, UInt64Array,
-    UInt8Array,
-};
+use crate::BooleanArray;
+use crate::DataArrayRef;
+use crate::DataType;
+use crate::Float32Array;
+use crate::Float64Array;
+use crate::Int16Array;
+use crate::Int32Array;
+use crate::Int64Array;
+use crate::Int8Array;
+use crate::NullArray;
+use crate::StringArray;
+use crate::UInt16Array;
+use crate::UInt32Array;
+use crate::UInt64Array;
+use crate::UInt8Array;
 
 /// A specific value of a data type.
 #[derive(Serialize, Deserialize, Clone, PartialEq)]

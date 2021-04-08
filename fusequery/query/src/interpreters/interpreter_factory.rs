@@ -4,14 +4,16 @@
 
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 use common_planners::PlanNode;
 
 use crate::interpreters::interpreter_create_table::CreateTableInterpreter;
-use crate::interpreters::{
-    CreateDatabaseInterpreter, ExplainInterpreter, IInterpreter, SelectInterpreter,
-    SettingInterpreter,
-};
+use crate::interpreters::CreateDatabaseInterpreter;
+use crate::interpreters::ExplainInterpreter;
+use crate::interpreters::IInterpreter;
+use crate::interpreters::SelectInterpreter;
+use crate::interpreters::SettingInterpreter;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct InterpreterFactory;

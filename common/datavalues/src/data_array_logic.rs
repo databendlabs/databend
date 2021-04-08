@@ -4,9 +4,13 @@
 
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 
-use crate::{BooleanArray, DataArrayRef, DataColumnarValue, DataValueLogicOperator};
+use crate::BooleanArray;
+use crate::DataArrayRef;
+use crate::DataColumnarValue;
+use crate::DataValueLogicOperator;
 
 pub fn data_array_logic_op(
     op: DataValueLogicOperator,

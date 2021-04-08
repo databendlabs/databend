@@ -5,18 +5,34 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, Result};
-use common_datavalues::{DataField, DataSchema, DataValue};
-use common_planners::{
-    CreateDatabasePlan, CreateTablePlan, ExplainPlan, ExpressionPlan, PlanBuilder, PlanNode,
-    SelectPlan, SettingPlan, StageState, VarValue,
-};
-use sqlparser::ast::{FunctionArg, Statement, TableFactor};
+use anyhow::anyhow;
+use anyhow::bail;
+use anyhow::Result;
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
+use common_datavalues::DataValue;
+use common_planners::CreateDatabasePlan;
+use common_planners::CreateTablePlan;
+use common_planners::ExplainPlan;
+use common_planners::ExpressionPlan;
+use common_planners::PlanBuilder;
+use common_planners::PlanNode;
+use common_planners::SelectPlan;
+use common_planners::SettingPlan;
+use common_planners::StageState;
+use common_planners::VarValue;
+use sqlparser::ast::FunctionArg;
+use sqlparser::ast::Statement;
+use sqlparser::ast::TableFactor;
 
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
+use crate::sql::make_data_type;
 use crate::sql::sql_statement::DfCreateTable;
-use crate::sql::{make_data_type, DfCreateDatabase, DfExplain, DfParser, DfStatement};
+use crate::sql::DfCreateDatabase;
+use crate::sql::DfExplain;
+use crate::sql::DfParser;
+use crate::sql::DfStatement;
 
 pub struct PlanParser {
     ctx: FuseQueryContextRef,

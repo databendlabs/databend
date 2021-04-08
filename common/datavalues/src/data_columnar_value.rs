@@ -4,7 +4,9 @@
 
 use anyhow::Result;
 
-use crate::{DataArrayRef, DataType, DataValue};
+use crate::DataArrayRef;
+use crate::DataType;
+use crate::DataValue;
 
 #[derive(Clone, Debug)]
 pub enum DataColumnarValue {

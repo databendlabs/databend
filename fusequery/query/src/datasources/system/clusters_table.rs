@@ -7,9 +7,18 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use common_datablocks::DataBlock;
-use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, StringArray, UInt32Array};
-use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics};
-use common_streams::{DataBlockStream, SendableDataBlockStream};
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
+use common_datavalues::StringArray;
+use common_datavalues::UInt32Array;
+use common_planners::Partition;
+use common_planners::PlanNode;
+use common_planners::ReadDataSourcePlan;
+use common_planners::Statistics;
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
 
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;

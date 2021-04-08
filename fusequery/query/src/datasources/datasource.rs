@@ -5,16 +5,22 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
+use anyhow::Result;
 use common_flights::StoreClient;
 use common_infallible::RwLock;
-use common_planners::{CreateDatabasePlan, DatabaseEngineType};
+use common_planners::CreateDatabasePlan;
+use common_planners::DatabaseEngineType;
 
 use crate::configs::Config;
-use crate::datasources::local::{LocalDatabase, LocalFactory};
-use crate::datasources::remote::{RemoteDatabase, RemoteFactory};
+use crate::datasources::local::LocalDatabase;
+use crate::datasources::local::LocalFactory;
+use crate::datasources::remote::RemoteDatabase;
+use crate::datasources::remote::RemoteFactory;
 use crate::datasources::system::SystemFactory;
-use crate::datasources::{IDatabase, ITable, ITableFunction};
+use crate::datasources::IDatabase;
+use crate::datasources::ITable;
+use crate::datasources::ITableFunction;
 
 #[async_trait::async_trait]
 pub trait IDataSource: Sync + Send {

@@ -4,15 +4,19 @@
 
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 use common_planners::PlanNode;
 use log::info;
 
 use crate::pipelines::processors::Pipeline;
-use crate::pipelines::transforms::{
-    AggregatorFinalTransform, AggregatorPartialTransform, FilterTransform, LimitTransform,
-    ProjectionTransform, RemoteTransform, SourceTransform,
-};
+use crate::pipelines::transforms::AggregatorFinalTransform;
+use crate::pipelines::transforms::AggregatorPartialTransform;
+use crate::pipelines::transforms::FilterTransform;
+use crate::pipelines::transforms::LimitTransform;
+use crate::pipelines::transforms::ProjectionTransform;
+use crate::pipelines::transforms::RemoteTransform;
+use crate::pipelines::transforms::SourceTransform;
 use crate::planners::PlanScheduler;
 use crate::sessions::FuseQueryContextRef;
 

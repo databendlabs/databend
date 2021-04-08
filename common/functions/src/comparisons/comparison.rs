@@ -4,17 +4,23 @@
 
 use std::fmt;
 
-use anyhow::{ensure, Result};
+use anyhow::ensure;
+use anyhow::Result;
 use common_datablocks::DataBlock;
-use common_datavalues::{
-    self as datavalues, DataColumnarValue, DataSchema, DataType, DataValueComparisonOperator,
-};
+use common_datavalues::DataColumnarValue;
+use common_datavalues::DataSchema;
+use common_datavalues::DataType;
+use common_datavalues::DataValueComparisonOperator;
+use common_datavalues::{self as datavalues};
 
-use crate::comparisons::{
-    ComparisonEqFunction, ComparisonGtEqFunction, ComparisonGtFunction, ComparisonLtEqFunction,
-    ComparisonLtFunction, ComparisonNotEqFunction,
-};
-use crate::{FactoryFuncRef, IFunction};
+use crate::comparisons::ComparisonEqFunction;
+use crate::comparisons::ComparisonGtEqFunction;
+use crate::comparisons::ComparisonGtFunction;
+use crate::comparisons::ComparisonLtEqFunction;
+use crate::comparisons::ComparisonLtFunction;
+use crate::comparisons::ComparisonNotEqFunction;
+use crate::FactoryFuncRef;
+use crate::IFunction;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {

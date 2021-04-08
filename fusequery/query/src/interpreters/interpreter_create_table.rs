@@ -6,7 +6,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use common_planners::CreateTablePlan;
-use common_streams::{DataBlockStream, SendableDataBlockStream};
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::IInterpreter;
 use crate::sessions::FuseQueryContextRef;

@@ -5,10 +5,15 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::anyhow;
+use anyhow::bail;
+use anyhow::Result;
 use common_planners::CreateTablePlan;
 
-use crate::datasources::{system, IDatabase, ITable, ITableFunction};
+use crate::datasources::system;
+use crate::datasources::IDatabase;
+use crate::datasources::ITable;
+use crate::datasources::ITableFunction;
 
 pub struct SystemDatabase {
     tables: HashMap<String, Arc<dyn ITable>>,

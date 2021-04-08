@@ -4,10 +4,13 @@
 
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
+use anyhow::Result;
 use common_streams::SendableDataBlockStream;
 
-use crate::pipelines::processors::{IProcessor, MergeProcessor, Pipe};
+use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::MergeProcessor;
+use crate::pipelines::processors::Pipe;
 
 pub struct Pipeline {
     pipes: Vec<Pipe>,

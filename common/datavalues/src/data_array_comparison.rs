@@ -7,11 +7,21 @@ use std::sync::Arc;
 use anyhow::Result;
 use common_arrow::arrow;
 
-use crate::{DataArrayRef, DataColumnarValue, DataType, DataValueComparisonOperator};
-use crate::{
-    Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, Int8Array, StringArray,
-    UInt16Array, UInt32Array, UInt64Array, UInt8Array,
-};
+use crate::DataArrayRef;
+use crate::DataColumnarValue;
+use crate::DataType;
+use crate::DataValueComparisonOperator;
+use crate::Float32Array;
+use crate::Float64Array;
+use crate::Int16Array;
+use crate::Int32Array;
+use crate::Int64Array;
+use crate::Int8Array;
+use crate::StringArray;
+use crate::UInt16Array;
+use crate::UInt32Array;
+use crate::UInt64Array;
+use crate::UInt8Array;
 
 pub fn data_array_comparison_op(
     op: DataValueComparisonOperator,

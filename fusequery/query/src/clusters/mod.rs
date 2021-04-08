@@ -8,5 +8,6 @@ mod cluster_test;
 mod cluster;
 mod node;
 
-pub use cluster::{Cluster, ClusterRef};
+pub use cluster::Cluster;
+pub use cluster::ClusterRef;
 pub use node::Node;

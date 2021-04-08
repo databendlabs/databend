@@ -6,7 +6,9 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use common_datavalues::DataSchema;
-use common_planners::{EmptyPlan, LimitPlan, PlanNode};
+use common_planners::EmptyPlan;
+use common_planners::LimitPlan;
+use common_planners::PlanNode;
 
 use crate::optimizers::IOptimizer;
 use crate::sessions::FuseQueryContextRef;

@@ -7,7 +7,8 @@ use std::convert::TryInto;
 use std::io::Cursor;
 
 use common_arrow::arrow_flight::Action;
-use common_planners::{CreateDatabasePlan, CreateTablePlan};
+use common_planners::CreateDatabasePlan;
+use common_planners::CreateTablePlan;
 use prost::Message;
 use tonic::Request;
 

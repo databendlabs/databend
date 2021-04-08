@@ -5,10 +5,16 @@
 use std::any::Any;
 use std::fs::File;
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 use common_datavalues::DataSchemaRef;
-use common_planners::{Partition, PlanNode, ReadDataSourcePlan, Statistics, TableOptions};
-use common_streams::{CsvStream, SendableDataBlockStream};
+use common_planners::Partition;
+use common_planners::PlanNode;
+use common_planners::ReadDataSourcePlan;
+use common_planners::Statistics;
+use common_planners::TableOptions;
+use common_streams::CsvStream;
+use common_streams::SendableDataBlockStream;
 
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;

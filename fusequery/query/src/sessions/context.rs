@@ -8,11 +8,17 @@ use std::sync::Arc;
 use anyhow::Result;
 use common_datavalues::DataValue;
 use common_infallible::RwLock;
-use common_planners::{Partition, Partitions, Statistics};
+use common_planners::Partition;
+use common_planners::Partitions;
+use common_planners::Statistics;
 use uuid::Uuid;
 
-use crate::clusters::{Cluster, ClusterRef};
-use crate::datasources::{DataSource, IDataSource, ITable, ITableFunction};
+use crate::clusters::Cluster;
+use crate::clusters::ClusterRef;
+use crate::datasources::DataSource;
+use crate::datasources::IDataSource;
+use crate::datasources::ITable;
+use crate::datasources::ITableFunction;
 use crate::sessions::Settings;
 
 #[derive(Clone)]

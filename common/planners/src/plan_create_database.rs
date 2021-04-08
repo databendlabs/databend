@@ -5,7 +5,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::{DataSchema, DataSchemaRef};
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 
 /// Database engine type.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]

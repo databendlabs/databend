@@ -6,9 +6,15 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use common_datablocks::DataBlock;
-use common_datavalues::{DataField, DataSchema, DataType, StringArray};
-use common_planners::{ExplainPlan, ExplainType, PlanNode};
-use common_streams::{DataBlockStream, SendableDataBlockStream};
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
+use common_datavalues::DataType;
+use common_datavalues::StringArray;
+use common_planners::ExplainPlan;
+use common_planners::ExplainType;
+use common_planners::PlanNode;
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
 use log::debug;
 
 use crate::interpreters::IInterpreter;

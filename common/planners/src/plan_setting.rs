@@ -4,7 +4,8 @@
 
 use std::sync::Arc;
 
-use common_datavalues::{DataSchema, DataSchemaRef};
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct VarValue {

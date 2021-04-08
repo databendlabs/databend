@@ -2,12 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::task::{Context, Poll};
+use std::task::Context;
+use std::task::Poll;
 
 use anyhow::Result;
 use common_arrow::arrow;
 use common_datablocks::DataBlock;
-use futures::stream::{Stream, StreamExt};
+use futures::stream::Stream;
+use futures::stream::StreamExt;
 
 use crate::SendableDataBlockStream;
 

@@ -8,14 +8,17 @@ use std::time::Instant;
 
 use anyhow::Result;
 use common_datablocks::DataBlock;
-use common_datavalues::{DataSchemaRef, DataValue};
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataValue;
 use common_functions::IFunction;
 use common_planners::ExpressionPlan;
-use common_streams::{DataBlockStream, SendableDataBlockStream};
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
 use log::info;
 
-use crate::pipelines::processors::{EmptyProcessor, IProcessor};
+use crate::pipelines::processors::EmptyProcessor;
+use crate::pipelines::processors::IProcessor;
 
 pub struct AggregatorFinalTransform {
     funcs: Vec<Box<dyn IFunction>>,

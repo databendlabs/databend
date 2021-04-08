@@ -4,9 +4,13 @@
 
 use std::fmt;
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 use common_datablocks::DataBlock;
-use common_datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
+use common_datavalues::DataColumnarValue;
+use common_datavalues::DataSchema;
+use common_datavalues::DataType;
+use common_datavalues::DataValue;
 use dyn_clone::DynClone;
 
 pub trait IFunction: fmt::Display + Sync + Send + DynClone {

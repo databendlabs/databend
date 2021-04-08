@@ -7,7 +7,8 @@ async fn test_transform_aggregator() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_datavalues::*;
-    use common_planners::{self, *};
+    use common_planners::*;
+    use common_planners::{self};
     use futures::stream::StreamExt;
     use pretty_assertions::assert_eq;
 

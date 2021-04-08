@@ -13,4 +13,5 @@ mod flight_service;
 mod metrics;
 
 pub use flight_client::FlightClient;
-pub use flight_service::{FlightService, FlightStream};
+pub use flight_service::FlightService;
+pub use flight_service::FlightStream;

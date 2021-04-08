@@ -2,9 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 
 use crate::ExpressionPlan;
 

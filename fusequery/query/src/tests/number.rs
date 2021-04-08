@@ -5,8 +5,13 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use common_datavalues::{DataSchema, DataSchemaRef, DataValue};
-use common_planners::{ExpressionPlan, PlanNode, ReadDataSourcePlan, ScanPlan};
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataValue;
+use common_planners::ExpressionPlan;
+use common_planners::PlanNode;
+use common_planners::ReadDataSourcePlan;
+use common_planners::ScanPlan;
 
 use crate::datasources::IDataSource;
 use crate::pipelines::transforms::SourceTransform;

@@ -2,9 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 
-use crate::{DataValue, DataValueAggregateOperator};
+use crate::DataValue;
+use crate::DataValueAggregateOperator;
 
 pub fn data_value_aggregate_op(
     op: DataValueAggregateOperator,

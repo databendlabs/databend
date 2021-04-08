@@ -7,7 +7,8 @@ use std::fmt::Display;
 
 use anyhow::anyhow;
 
-use crate::pipelines::processors::{Pipeline, PipelineBuilder};
+use crate::pipelines::processors::Pipeline;
+use crate::pipelines::processors::PipelineBuilder;
 use crate::pipelines::transforms::RemoteTransform;
 
 impl Pipeline {

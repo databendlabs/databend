@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_datavalues::DataType;
 use sqlparser::ast::DataType as SQLDataType;

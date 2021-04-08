@@ -2,8 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_planners::{DatabaseEngineType, ExplainType, TableEngineType};
-use sqlparser::ast::{ColumnDef, ObjectName, SqlOption, Statement as SQLStatement};
+use common_planners::DatabaseEngineType;
+use common_planners::ExplainType;
+use common_planners::TableEngineType;
+use sqlparser::ast::ColumnDef;
+use sqlparser::ast::ObjectName;
+use sqlparser::ast::SqlOption;
+use sqlparser::ast::Statement as SQLStatement;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfShowTables;

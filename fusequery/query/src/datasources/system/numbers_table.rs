@@ -7,14 +7,25 @@ use std::collections::HashMap;
 use std::mem::size_of;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
-use common_datavalues::{DataField, DataSchema, DataSchemaRef, DataType, DataValue};
-use common_planners::{
-    ExpressionPlan, Partition, Partitions, PlanNode, ReadDataSourcePlan, ScanPlan, Statistics,
-};
+use anyhow::bail;
+use anyhow::Result;
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
+use common_datavalues::DataValue;
+use common_planners::ExpressionPlan;
+use common_planners::Partition;
+use common_planners::Partitions;
+use common_planners::PlanNode;
+use common_planners::ReadDataSourcePlan;
+use common_planners::ScanPlan;
+use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
 
-use crate::datasources::{system::NumbersStream, ITable, ITableFunction};
+use crate::datasources::system::NumbersStream;
+use crate::datasources::ITable;
+use crate::datasources::ITableFunction;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct NumbersTable {

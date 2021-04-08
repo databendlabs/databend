@@ -6,12 +6,15 @@ use std::fmt;
 
 use anyhow::Result;
 use common_datablocks::DataBlock;
-use common_datavalues::{
-    self as datavalues, DataColumnarValue, DataSchema, DataType, DataValue,
-    DataValueArithmeticOperator,
-};
+use common_datavalues::DataColumnarValue;
+use common_datavalues::DataSchema;
+use common_datavalues::DataType;
+use common_datavalues::DataValue;
+use common_datavalues::DataValueArithmeticOperator;
+use common_datavalues::{self as datavalues};
 
-use crate::{IFunction, LiteralFunction};
+use crate::IFunction;
+use crate::LiteralFunction;
 
 #[derive(Clone)]
 pub struct AggregatorCountFunction {

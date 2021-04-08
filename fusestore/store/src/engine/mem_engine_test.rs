@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use common_planners::{CreateDatabasePlan, DatabaseEngineType};
+use common_planners::CreateDatabasePlan;
+use common_planners::DatabaseEngineType;
 
 use crate::engine::mem_engine::MemEngine;
 use crate::protobuf::Db;

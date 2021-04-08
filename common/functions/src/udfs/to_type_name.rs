@@ -4,9 +4,13 @@
 
 use std::fmt;
 
-use anyhow::{ensure, Result};
+use anyhow::ensure;
+use anyhow::Result;
 use common_datablocks::DataBlock;
-use common_datavalues::{DataColumnarValue, DataSchema, DataType, DataValue};
+use common_datavalues::DataColumnarValue;
+use common_datavalues::DataSchema;
+use common_datavalues::DataType;
+use common_datavalues::DataValue;
 
 use crate::IFunction;
 

@@ -6,15 +6,21 @@ use std::any::Any;
 use std::convert::TryInto;
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::anyhow;
+use anyhow::bail;
+use anyhow::Result;
 use common_arrow::arrow;
 use common_datablocks::DataBlock;
-use common_datavalues::{BooleanArray, DataSchema, DataSchemaRef};
+use common_datavalues::BooleanArray;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 use common_functions::IFunction;
 use common_planners::ExpressionPlan;
-use common_streams::{ExpressionStream, SendableDataBlockStream};
+use common_streams::ExpressionStream;
+use common_streams::SendableDataBlockStream;
 
-use crate::pipelines::processors::{EmptyProcessor, IProcessor};
+use crate::pipelines::processors::EmptyProcessor;
+use crate::pipelines::processors::IProcessor;
 
 pub struct FilterTransform {
     func: Box<dyn IFunction>,

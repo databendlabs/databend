@@ -5,12 +5,19 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::anyhow;
+use anyhow::bail;
+use anyhow::Result;
 use common_infallible::RwLock;
-use common_planners::{CreateTablePlan, TableEngineType};
+use common_planners::CreateTablePlan;
+use common_planners::TableEngineType;
 
-use crate::datasources::local::{CsvTable, NullTable, ParquetTable};
-use crate::datasources::{IDatabase, ITable, ITableFunction};
+use crate::datasources::local::CsvTable;
+use crate::datasources::local::NullTable;
+use crate::datasources::local::ParquetTable;
+use crate::datasources::IDatabase;
+use crate::datasources::ITable;
+use crate::datasources::ITableFunction;
 
 pub struct LocalDatabase {
     tables: RwLock<HashMap<String, Arc<dyn ITable>>>,

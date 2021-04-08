@@ -5,14 +5,17 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 use common_flights::StoreClient;
 use common_infallible::RwLock;
 use common_planners::CreateTablePlan;
 
 use crate::configs::Config;
 use crate::datasources::remote::remote_table::RemoteTable;
-use crate::datasources::{IDatabase, ITable, ITableFunction};
+use crate::datasources::IDatabase;
+use crate::datasources::ITable;
+use crate::datasources::ITableFunction;
 
 pub struct RemoteDatabase {
     name: String,

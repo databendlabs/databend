@@ -7,7 +7,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use common_datavalues::DataSchemaRef;
 
-use crate::{ExpressionPlan, PlanNode};
+use crate::ExpressionPlan;
+use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct AggregatorPartialPlan {

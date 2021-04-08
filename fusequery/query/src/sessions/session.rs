@@ -5,12 +5,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
+use anyhow::Result;
 use common_infallible::RwLock;
 use common_planners::Partitions;
 use metrics::counter;
 
-use crate::sessions::{FuseQueryContext, FuseQueryContextRef};
+use crate::sessions::FuseQueryContext;
+use crate::sessions::FuseQueryContextRef;
 
 pub struct Session {
     sessions: RwLock<HashMap<String, FuseQueryContextRef>>,

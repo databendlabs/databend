@@ -4,9 +4,12 @@
 
 use std::any::Any;
 
-use anyhow::{bail, Result};
+use anyhow::bail;
+use anyhow::Result;
 use common_datavalues::DataSchemaRef;
-use common_planners::{PlanNode, ReadDataSourcePlan, TableOptions};
+use common_planners::PlanNode;
+use common_planners::ReadDataSourcePlan;
+use common_planners::TableOptions;
 use common_streams::SendableDataBlockStream;
 
 use crate::datasources::ITable;

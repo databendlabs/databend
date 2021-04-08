@@ -4,10 +4,11 @@
 
 use anyhow::Result;
 
-use crate::aggregators::{
-    AggregatorAvgFunction, AggregatorCountFunction, AggregatorMaxFunction, AggregatorMinFunction,
-    AggregatorSumFunction,
-};
+use crate::aggregators::AggregatorAvgFunction;
+use crate::aggregators::AggregatorCountFunction;
+use crate::aggregators::AggregatorMaxFunction;
+use crate::aggregators::AggregatorMinFunction;
+use crate::aggregators::AggregatorSumFunction;
 use crate::FactoryFuncRef;
 
 pub struct AggregatorFunction;

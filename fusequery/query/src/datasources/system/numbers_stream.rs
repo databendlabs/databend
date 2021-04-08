@@ -2,21 +2,21 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::mem;
+use std::mem::ManuallyDrop;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use std::{
-    mem,
-    mem::ManuallyDrop,
-    task::{Context, Poll},
-    usize,
-};
+use std::task::Context;
+use std::task::Poll;
+use std::usize;
 
 use anyhow::Result;
 use common_arrow::arrow::array::ArrayData;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::datatypes::DataType;
 use common_datablocks::DataBlock;
-use common_datavalues::{DataSchemaRef, UInt64Array};
+use common_datavalues::DataSchemaRef;
+use common_datavalues::UInt64Array;
 use futures::stream::Stream;
 
 use crate::sessions::FuseQueryContextRef;

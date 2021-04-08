@@ -7,19 +7,32 @@ use std::pin::Pin;
 use std::time::Instant;
 
 use common_arrow::arrow;
-use common_arrow::arrow_flight::{
-    self,
-    flight_service_server::{FlightService as Flight, FlightServiceServer as FlightServer},
-    Action, ActionType, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo,
-    HandshakeRequest, HandshakeResponse, PutResult, SchemaResult, Ticket,
-};
+use common_arrow::arrow_flight::flight_service_server::FlightService as Flight;
+use common_arrow::arrow_flight::flight_service_server::FlightServiceServer as FlightServer;
+use common_arrow::arrow_flight::Action;
+use common_arrow::arrow_flight::ActionType;
+use common_arrow::arrow_flight::Criteria;
+use common_arrow::arrow_flight::Empty;
+use common_arrow::arrow_flight::FlightData;
+use common_arrow::arrow_flight::FlightDescriptor;
+use common_arrow::arrow_flight::FlightInfo;
+use common_arrow::arrow_flight::HandshakeRequest;
+use common_arrow::arrow_flight::HandshakeResponse;
+use common_arrow::arrow_flight::PutResult;
+use common_arrow::arrow_flight::SchemaResult;
+use common_arrow::arrow_flight::Ticket;
+use common_arrow::arrow_flight::{self};
 use common_flights::query_do_action::QueryDoAction;
 use common_flights::query_do_get::QueryDoGet;
-use futures::{Stream, StreamExt};
+use futures::Stream;
+use futures::StreamExt;
 use log::info;
 use metrics::histogram;
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::{Request, Response, Status, Streaming};
+use tonic::Request;
+use tonic::Response;
+use tonic::Status;
+use tonic::Streaming;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;

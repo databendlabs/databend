@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::sync::RwLock as StdRwLock;
-use std::sync::{RwLockReadGuard, RwLockWriteGuard};
+use std::sync::RwLockReadGuard;
+use std::sync::RwLockWriteGuard;
 
 /// A simple wrapper around the lock() function of a std::sync::RwLock
 /// The only difference is that you don't need to call unwrap() on it.
