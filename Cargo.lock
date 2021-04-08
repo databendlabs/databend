@@ -898,7 +898,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "clickhouse-srv",
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
@@ -906,8 +905,6 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-planners",
- "common-streams",
- "crossbeam 0.8.0",
  "env_logger",
  "futures",
  "indexmap",
@@ -915,7 +912,6 @@ dependencies = [
  "log",
  "metrics",
  "metrics-exporter-prometheus",
- "msql-srv",
  "num 0.4.0",
  "num_cpus",
  "paste",
@@ -924,14 +920,11 @@ dependencies = [
  "rand 0.8.3",
  "serde",
  "serde_json",
- "sqlparser",
  "structopt",
  "threadpool",
  "tokio",
  "tokio-stream",
  "tonic",
- "uuid",
- "warp",
 ]
 
 [[package]]
