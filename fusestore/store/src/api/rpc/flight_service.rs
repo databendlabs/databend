@@ -5,39 +5,56 @@
 use std::convert::TryInto;
 use std::pin::Pin;
 
-use common_arrow::arrow_flight::{
-    self,
-    flight_service_server::{FlightService as Flight, FlightServiceServer as FlightServer},
-    Action, ActionType, BasicAuth, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo,
-    HandshakeRequest, HandshakeResponse, PutResult, SchemaResult, Ticket,
-};
+use common_arrow::arrow_flight;
+use common_arrow::arrow_flight::flight_service_server::FlightService;
+use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
+use common_arrow::arrow_flight::Action;
+use common_arrow::arrow_flight::ActionType;
+use common_arrow::arrow_flight::BasicAuth;
+use common_arrow::arrow_flight::Criteria;
+use common_arrow::arrow_flight::Empty;
+use common_arrow::arrow_flight::FlightData;
+use common_arrow::arrow_flight::FlightDescriptor;
+use common_arrow::arrow_flight::FlightInfo;
+use common_arrow::arrow_flight::HandshakeRequest;
+use common_arrow::arrow_flight::HandshakeResponse;
+use common_arrow::arrow_flight::PutResult;
+use common_arrow::arrow_flight::SchemaResult;
+use common_arrow::arrow_flight::Ticket;
 use common_flights::store_do_action::StoreDoAction;
 use common_flights::store_do_get::StoreDoGet;
 use common_flights::{FlightClaim, FlightToken};
-use futures::{Stream, StreamExt};
+use futures::Stream;
+use futures::StreamExt;
+#[allow(unused_imports)]
+use log::error;
+#[allow(unused_imports)]
 use log::info;
 use prost::Message;
 use tonic::metadata::MetadataMap;
-use tonic::{Request, Response, Status, Streaming};
+use tonic::Request;
+use tonic::Response;
+use tonic::Status;
+use tonic::Streaming;
 
 use crate::configs::Config;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
-pub struct FlightService {
+pub struct FlightServiceImpl {
     token: FlightToken,
 }
 
-impl FlightService {
+impl FlightServiceImpl {
     pub fn create(_conf: Config) -> Self {
         Self {
             token: FlightToken::create(),
         }
     }
 
-    pub fn make_server(self) -> FlightServer<impl Flight> {
-        FlightServer::new(self)
+    pub fn make_server(self) -> FlightServiceServer<impl FlightService> {
+        FlightServiceServer::new(self)
     }
 
     fn check_token(&self, metadata: &MetadataMap) -> Result<FlightClaim, Status> {
@@ -56,7 +73,7 @@ impl FlightService {
 }
 
 #[async_trait::async_trait]
-impl Flight for FlightService {
+impl FlightService for FlightServiceImpl {
     type HandshakeStream = FlightStream<HandshakeResponse>;
     async fn handshake(
         &self,

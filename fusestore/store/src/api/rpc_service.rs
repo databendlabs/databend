@@ -5,7 +5,7 @@
 use anyhow::{anyhow, Result};
 use tonic::transport::Server;
 
-use crate::api::rpc::FlightService;
+use crate::api::rpc::FlightServiceImpl;
 use crate::configs::Config;
 
 pub struct RpcService {
@@ -21,7 +21,7 @@ impl RpcService {
         let addr = self.conf.rpc_api_address.parse::<std::net::SocketAddr>()?;
 
         // Flight service:
-        let flight_srv = FlightService::create(self.conf.clone());
+        let flight_srv = FlightServiceImpl::create(self.conf.clone());
 
         Server::builder()
             .add_service(flight_srv.make_server())

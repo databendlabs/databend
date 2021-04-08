@@ -49,3 +49,6 @@ tonic = "0.4"
 
 [dev-dependencies]
 pretty_assertions = "0.7"
+
+[build-dependencies]
+tonic-build = "0.4"
