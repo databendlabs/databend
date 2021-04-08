@@ -2,12 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+pub mod flight_token;
 pub mod query_do_action;
 pub mod query_do_get;
-mod store_client;
+pub mod store_client;
 pub mod store_do_action;
 pub mod store_do_get;
 
+pub use flight_token::{FlightClaim, FlightToken};
 pub use store_client::StoreClient;
 
 // ProtoBuf generated files.
