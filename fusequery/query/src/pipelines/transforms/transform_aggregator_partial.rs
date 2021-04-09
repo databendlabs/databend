@@ -8,6 +8,7 @@ use std::time::Instant;
 
 use anyhow::Result;
 use common_datablocks::DataBlock;
+use common_datavalues::DataArrayRef;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -79,26 +80,22 @@ impl IProcessor for AggregatorPartialTransform {
         let delta = start.elapsed();
         info!("Aggregator partial cost: {:?}", delta);
 
-        let mut acc_results = Vec::with_capacity(funcs.len());
+        let mut fields = Vec::with_capacity(funcs.len());
+        let mut columns: Vec<DataArrayRef> = Vec::with_capacity(funcs.len());
         for func in &funcs {
+            // Field.
+            let field = DataField::new(format!("{}", func).as_str(), DataType::Utf8, false);
+            fields.push(field);
+
+            // Column.
             let states = DataValue::Struct(func.accumulate_result()?);
-            let serialized = serde_json::to_string(&states)?;
-            acc_results.push(serialized);
+            let ser = serde_json::to_string(&states)?;
+            let col = Arc::new(StringArray::from(vec![ser.as_str()]));
+            columns.push(col);
         }
 
-        let partial_schema = Arc::new(DataSchema::new(vec![DataField::new(
-            "partial_result",
-            DataType::Utf8,
-            false,
-        )]));
-        let partial_results = acc_results
-            .iter()
-            .map(|x| x.as_str())
-            .collect::<Vec<&str>>();
-        let block = DataBlock::create(
-            partial_schema,
-            vec![Arc::new(StringArray::from(partial_results))],
-        );
+        let schema = Arc::new(DataSchema::new(fields));
+        let block = DataBlock::create(schema, columns);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
