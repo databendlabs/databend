@@ -28,5 +28,5 @@ mysql -h127.0.0.1 -P$FUSE_MYSQL_PORT
 export FUSE_HTTP_PORT=$(kubectl get --namespace default -o jsonpath="{.spec.ports[2].nodePort}" services datafuse)
 curl http://127.0.0.1:$FUSE_HTTP_PORT/v1/configs
 ```
-following the note you should be able to connect to `fusequery` through NodePort
 
+More to see [building-and-running.md](../docs/overview/building-and-running.md)
