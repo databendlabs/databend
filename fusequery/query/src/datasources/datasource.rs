@@ -163,7 +163,8 @@ impl IDataSource for DataSource {
             }
             DatabaseEngineType::Remote => {
                 let mut client = self.try_get_client().await?;
-                client.create_database(plan.clone()).await?;
+                let _action_rst = client.create_database(plan.clone()).await?;
+                // TODO add db id to cache
 
                 // Add local cache.
                 let database = RemoteDatabase::create(self.conf.clone(), plan.db.clone());

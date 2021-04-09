@@ -8,10 +8,20 @@ pub mod query_do_get;
 pub mod store_client;
 pub mod store_do_action;
 pub mod store_do_get;
+pub mod util;
 
 pub use flight_token::FlightClaim;
 pub use flight_token::FlightToken;
 pub use store_client::StoreClient;
+pub use store_do_action::CreateDatabaseAction;
+pub use store_do_action::CreateDatabaseActionResult;
+pub use store_do_action::CreateTableAction;
+pub use store_do_action::CreateTableActionResult;
+pub use store_do_action::ReadPlanAction;
+pub use store_do_action::ReadPlanActionResult;
+pub use store_do_action::StoreDoAction;
+pub use store_do_action::StoreDoActionResult;
+pub use util::flight_result_to_str;
 
 // ProtoBuf generated files.
 #[allow(clippy::all)]
