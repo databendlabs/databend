@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "datafuse.fullname" . }}
+  labels:
+    {{- include "datafuse.labels" . | nindent 4 }}
+data:
+  FUSE_QUERY_HTTP_API_ADDRESS: 0.0.0.0:8080
+  FUSE_QUERY_MYSQL_HANDLER_HOST: 0.0.0.0
+  FUSE_QUERY_METRIC_API_ADDRESS: 0.0.0.0:7070
+  FUSE_QUERY_RPC_API_ADDRESS: 0.0.0.0:9090
+  FUSE_QUERY_CLICKHOUSE_HANDLER_HOST: 0.0.0.0
