@@ -147,9 +147,7 @@ impl FlightService for FlightServiceImpl {
         // Action.
         let action: StoreDoGet = request.try_into()?;
         match action {
-            StoreDoGet::Read(_) => {
-                todo!()
-            }
+            StoreDoGet::Read(_) => Err(Status::internal("Store read unimplemented")),
         }
     }
 
@@ -182,6 +180,7 @@ impl FlightService for FlightServiceImpl {
         info!("Receive do_action: {:?}", action);
 
         match action {
+            StoreDoAction::ReadPlan(_) => Err(Status::internal("Store read plan unimplemented")),
             StoreDoAction::CreateDatabase(_) => {
                 Err(Status::internal("Store create database unimplemented"))
             }

@@ -9,10 +9,16 @@ use std::io::Cursor;
 use common_arrow::arrow_flight::Action;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
+use common_planners::PlanNode;
 use prost::Message;
 use tonic::Request;
 
 use crate::protobuf::FlightStoreRequest;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct ReadPlanAction {
+    pub push_down_plan: PlanNode,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CreateDatabaseAction {
@@ -27,6 +33,7 @@ pub struct CreateTableAction {
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum StoreDoAction {
+    ReadPlan(ReadPlanAction),
     CreateDatabase(CreateDatabaseAction),
     CreateTable(CreateTableAction),
 }
