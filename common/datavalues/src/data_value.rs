@@ -91,26 +91,26 @@ impl DataValue {
     pub fn to_field_value(&self) -> Self {
         match *self {
             DataValue::Int64(Some(i)) => {
-                if i < i8::max_value() as i64 {
+                if i < i8::MAX as i64 {
                     return DataValue::Int8(Some(i as i8));
                 }
-                if i < i16::max_value() as i64 {
+                if i < i16::MAX as i64 {
                     return DataValue::Int16(Some(i as i16));
                 }
-                if i < i32::max_value() as i64 {
+                if i < i32::MAX as i64 {
                     return DataValue::Int32(Some(i as i32));
                 }
                 self.clone()
             }
 
             DataValue::UInt64(Some(i)) => {
-                if i < u8::max_value() as u64 {
+                if i < u8::MAX as u64 {
                     return DataValue::UInt8(Some(i as u8));
                 }
-                if i < u16::max_value() as u64 {
+                if i < u16::MAX as u64 {
                     return DataValue::UInt16(Some(i as u16));
                 }
-                if i < u32::max_value() as u64 {
+                if i < u32::MAX as u64 {
                     return DataValue::UInt32(Some(i as u32));
                 }
                 self.clone()
