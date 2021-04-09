@@ -7,8 +7,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::Result;
-use common_arrow::arrow::array::ArrayRef;
 use common_datablocks::DataBlock;
+use common_datavalues::DataArrayRef;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -81,7 +81,7 @@ impl IProcessor for AggregatorPartialTransform {
         info!("Aggregator partial cost: {:?}", delta);
 
         let mut fields = Vec::with_capacity(funcs.len());
-        let mut columns: Vec<ArrayRef> = Vec::with_capacity(funcs.len());
+        let mut columns: Vec<DataArrayRef> = Vec::with_capacity(funcs.len());
         for func in &funcs {
             // Field.
             let field = DataField::new(format!("{}", func).as_str(), DataType::Utf8, false);
