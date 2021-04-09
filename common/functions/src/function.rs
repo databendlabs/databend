@@ -17,7 +17,6 @@ pub trait IFunction: fmt::Display + Sync + Send + DynClone {
     fn return_type(&self, input_schema: &DataSchema) -> Result<DataType>;
     fn nullable(&self, input_schema: &DataSchema) -> Result<bool>;
     fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue>;
-
     fn set_depth(&mut self, _depth: usize) {}
 
     fn accumulate(&mut self, _block: &DataBlock) -> Result<()> {
