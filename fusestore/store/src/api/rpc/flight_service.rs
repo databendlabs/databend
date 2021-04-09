@@ -4,6 +4,8 @@
 
 use std::convert::TryInto;
 use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use common_arrow::arrow_flight;
 use common_arrow::arrow_flight::flight_service_server::FlightService;
@@ -21,7 +23,10 @@ use common_arrow::arrow_flight::HandshakeResponse;
 use common_arrow::arrow_flight::PutResult;
 use common_arrow::arrow_flight::SchemaResult;
 use common_arrow::arrow_flight::Ticket;
+use common_flights::flight_result_to_str;
+use common_flights::store_do_action::CreateDatabaseActionResult;
 use common_flights::store_do_action::StoreDoAction;
+use common_flights::store_do_action::StoreDoActionResult;
 use common_flights::store_do_get::StoreDoGet;
 use common_flights::FlightClaim;
 use common_flights::FlightToken;
@@ -39,18 +44,21 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::configs::Config;
+use crate::engine::MemEngine;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct FlightServiceImpl {
     token: FlightToken,
+    meta: Arc<Mutex<MemEngine>>,
 }
 
 impl FlightServiceImpl {
     pub fn create(_conf: Config) -> Self {
         Self {
             token: FlightToken::create(),
+            meta: MemEngine::create(),
         }
     }
 
@@ -181,8 +189,20 @@ impl FlightService for FlightServiceImpl {
 
         match action {
             StoreDoAction::ReadPlan(_) => Err(Status::internal("Store read plan unimplemented")),
-            StoreDoAction::CreateDatabase(_) => {
-                Err(Status::internal("Store create database unimplemented"))
+            StoreDoAction::CreateDatabase(a) => {
+                let plan = a.plan;
+                let mut meta = self.meta.lock().unwrap();
+                let database_id = meta
+                    .create_database(plan)
+                    .map_err(|e| Status::internal(e.to_string()))?;
+
+                let action_rst =
+                    StoreDoActionResult::CreateDatabase(CreateDatabaseActionResult { database_id });
+                let rst = arrow_flight::Result::from(action_rst);
+                info!("single Result stream: {:}", flight_result_to_str(&rst));
+                let output = futures::stream::once(async { Ok(rst) });
+
+                Ok(Response::new(Box::pin(output)))
             }
             StoreDoAction::CreateTable(_) => {
                 Err(Status::internal("Store create table unimplemented"))

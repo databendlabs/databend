@@ -6,6 +6,7 @@ use std::convert::TryInto;
 
 use anyhow::bail;
 use anyhow::Result;
+use common_arrow::arrow_flight;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::BasicAuth;
@@ -14,13 +15,16 @@ use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use futures::stream;
 use futures::StreamExt;
+use log::info;
 use prost::Message;
 use tonic::metadata::MetadataValue;
 use tonic::Request;
 
+use crate::flight_result_to_str;
 use crate::store_do_action::CreateDatabaseAction;
 use crate::store_do_action::CreateTableAction;
 use crate::store_do_action::StoreDoAction;
+use crate::store_do_action::StoreDoActionResult;
 
 #[derive(Clone)]
 pub struct StoreClient {
@@ -40,10 +44,14 @@ impl StoreClient {
     }
 
     /// Create database call.
-    pub async fn create_database(&mut self, plan: CreateDatabasePlan) -> Result<()> {
+    pub async fn create_database(
+        &mut self,
+        plan: CreateDatabasePlan,
+    ) -> Result<StoreDoActionResult> {
         let action = StoreDoAction::CreateDatabase(CreateDatabaseAction { plan });
-        let _body = self.do_action(&action).await?;
-        Ok(())
+        let rst = self.do_action(&action).await?;
+        let action_rst: StoreDoActionResult = rst.try_into()?;
+        Ok(action_rst)
     }
 
     /// Create table call.
@@ -78,7 +86,7 @@ impl StoreClient {
     }
 
     /// Execute do_action.
-    async fn do_action(&mut self, action: &StoreDoAction) -> Result<Vec<u8>> {
+    async fn do_action(&mut self, action: &StoreDoAction) -> Result<arrow_flight::Result> {
         let mut request: Request<Action> = action.try_into()?;
         let metadata = request.metadata_mut();
         metadata.insert_bin(
@@ -94,7 +102,10 @@ impl StoreClient {
                     action
                 )
             }
-            Some(resp) => Ok(resp.body),
+            Some(resp) => {
+                info!("do_action: resp: {:}", flight_result_to_str(&resp));
+                Ok(resp)
+            }
         }
     }
 }

@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-/// Actions for store do_action.
+use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::io::Cursor;
 
+use common_arrow::arrow_flight;
 use common_arrow::arrow_flight::Action;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -36,6 +37,24 @@ pub enum StoreDoAction {
     ReadPlan(ReadPlanAction),
     CreateDatabase(CreateDatabaseAction),
     CreateTable(CreateTableAction),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct ReadPlanActionResult {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct CreateDatabaseActionResult {
+    pub database_id: i64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct CreateTableActionResult {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub enum StoreDoActionResult {
+    ReadPlan(ReadPlanActionResult),
+    CreateDatabase(CreateDatabaseActionResult),
+    CreateTable(CreateTableActionResult),
 }
 
 /// Try convert tonic::Request<Action> to DoActionAction.
@@ -73,5 +92,22 @@ impl TryInto<Request<Action>> for &StoreDoAction {
             body: buf,
         });
         Ok(request)
+    }
+}
+
+impl TryFrom<arrow_flight::Result> for StoreDoActionResult {
+    type Error = anyhow::Error;
+    fn try_from(rst: arrow_flight::Result) -> Result<Self, Self::Error> {
+        let action_rst = serde_json::from_slice::<StoreDoActionResult>(&rst.body)?;
+
+        Ok(action_rst)
+    }
+}
+
+impl From<StoreDoActionResult> for arrow_flight::Result {
+    fn from(action_rst: StoreDoActionResult) -> Self {
+        let body = serde_json::to_vec(&action_rst).unwrap();
+
+        arrow_flight::Result { body }
     }
 }
