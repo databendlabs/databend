@@ -58,13 +58,17 @@ git clone https://github.com/datafuselabs/datafuse.git
 ```
 
 2. Make sure you have [Kubernetes](https://kubernetes.io/) cluster running
-### 4.3 Build Image
+
+### 4.2 Build Image
+
 `make docker` to build image `datafuselabs/fuse-query`
 
-### 4.2 Run Helm 
+### 4.3 Run Helm 
+
 `make runhelm` in project root directory,
 
 when successful install you will get a note like this,
+
 ```
 NOTES:
 1. connect to fuse-query mysql port:
