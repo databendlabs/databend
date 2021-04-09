@@ -7,6 +7,8 @@ mod clusters_table_test;
 #[cfg(test)]
 mod functions_table_test;
 #[cfg(test)]
+mod numbers_table_test;
+#[cfg(test)]
 mod settings_table_test;
 #[cfg(test)]
 mod tables_table_test;
