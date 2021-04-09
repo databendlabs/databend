@@ -19,13 +19,16 @@ jobs:
           override: true
 
       - name: Install grcov
+        if: >
+          github.ref == 'refs/heads/master'
         uses: actions-rs/install@v0.1
         with:
           crate: grcov
           version: latest
           use-tool-cache: true
 
-      - uses: actions-rs/cargo@v1
+      - name: Run test
+        uses: actions-rs/cargo@v1
         with:
           command: test
           components: rustfmt
@@ -35,10 +38,15 @@ jobs:
           RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
           RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
 
-      - uses: actions-rs/grcov@v0.1.5
+      - name: Run test
+        if: >
+          github.ref == 'refs/heads/master'
+        uses: actions-rs/grcov@v0.1.5
         id: coverage
 
       - name: Upload to codecov.io
+        if: >
+          github.ref == 'refs/heads/master'
         uses: codecov/codecov-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
