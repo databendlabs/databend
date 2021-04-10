@@ -17,6 +17,7 @@ mod transform_source_test;
 
 mod transform_aggregator_final;
 mod transform_aggregator_partial;
+mod transform_expression;
 mod transform_filter;
 mod transform_limit;
 mod transform_projection;
@@ -25,6 +26,7 @@ mod transform_source;
 
 pub use transform_aggregator_final::AggregatorFinalTransform;
 pub use transform_aggregator_partial::AggregatorPartialTransform;
+pub use transform_expression::ExpressionTransform;
 pub use transform_filter::FilterTransform;
 pub use transform_limit::LimitTransform;
 pub use transform_projection::ProjectionTransform;
