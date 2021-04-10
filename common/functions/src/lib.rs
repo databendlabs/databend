@@ -13,9 +13,6 @@ mod function_literal;
 mod logics;
 mod udfs;
 
-pub use common_datablocks;
-pub use common_datavalues;
-
 pub use crate::function::IFunction;
 pub use crate::function_alias::AliasFunction;
 pub use crate::function_column::ColumnFunction;

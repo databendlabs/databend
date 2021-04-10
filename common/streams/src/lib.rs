@@ -12,10 +12,6 @@ mod stream_expression;
 mod stream_limit;
 mod stream_parquet;
 
-pub use common_datablocks;
-pub use common_datavalues;
-pub use common_functions;
-
 pub use crate::stream::SendableDataBlockStream;
 pub use crate::stream_csv::CsvStream;
 pub use crate::stream_datablock::DataBlockStream;

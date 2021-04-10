@@ -17,10 +17,3 @@ pub mod planners;
 pub mod servers;
 pub mod sessions;
 pub mod sql;
-
-pub use common_datablocks;
-pub use common_datavalues;
-pub use common_flights;
-pub use common_functions;
-pub use common_planners;
-pub use common_streams;
