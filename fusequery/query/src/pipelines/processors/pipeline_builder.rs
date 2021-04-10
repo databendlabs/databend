@@ -12,7 +12,6 @@ use log::info;
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::transforms::AggregatorFinalTransform;
 use crate::pipelines::transforms::AggregatorPartialTransform;
-use crate::pipelines::transforms::ExpressionTransform;
 use crate::pipelines::transforms::FilterTransform;
 use crate::pipelines::transforms::LimitTransform;
 use crate::pipelines::transforms::ProjectionTransform;
@@ -64,18 +63,10 @@ impl PipelineBuilder {
                 Ok(true)
             }
             PlanNode::Projection(plan) => {
-                // Add expression transform for executing over the blocks.
-                pipeline.add_simple_transform(|| {
-                    Ok(Box::new(ExpressionTransform::try_create(
-                        plan.schema.clone(),
-                        plan.expr.clone(),
-                    )?))
-                })?;
-
-                // Get the projection from the schema.
                 pipeline.add_simple_transform(|| {
                     Ok(Box::new(ProjectionTransform::try_create(
                         plan.schema.clone(),
+                        plan.expr.clone(),
                     )?))
                 })?;
                 Ok(true)
