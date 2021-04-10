@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[cfg(test)]
-mod transform_aggregator_test;
+mod transform_aggregator_final_test;
+#[cfg(test)]
+mod transform_aggregator_partial_test;
 #[cfg(test)]
 mod transform_expression_test;
 #[cfg(test)]
