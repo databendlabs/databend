@@ -13,7 +13,7 @@ fn binary_expr(l: ExpressionPlan, op: &str, r: ExpressionPlan) -> ExpressionPlan
     }
 }
 
-// Add.
+/// Add binary function.
 pub fn add(left: ExpressionPlan, right: ExpressionPlan) -> ExpressionPlan {
     binary_expr(left, "+", right)
 }
@@ -22,6 +22,14 @@ pub fn add(left: ExpressionPlan, right: ExpressionPlan) -> ExpressionPlan {
 pub fn sum(other: ExpressionPlan) -> ExpressionPlan {
     ExpressionPlan::Function {
         op: "sum".to_string(),
+        args: vec![other],
+    }
+}
+
+/// avg() aggregate function.
+pub fn avg(other: ExpressionPlan) -> ExpressionPlan {
+    ExpressionPlan::Function {
+        op: "avg".to_string(),
         args: vec![other],
     }
 }
