@@ -3,13 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_transform_aggregator() -> anyhow::Result<()> {
+async fn test_transform_final_aggregator() -> anyhow::Result<()> {
     use std::sync::Arc;
 
-    use common_datavalues::*;
     use common_planners::*;
     use common_planners::{self};
-    use futures::stream::StreamExt;
+    use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
 
     use crate::pipelines::processors::*;
@@ -18,8 +17,8 @@ async fn test_transform_aggregator() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
-    let aggr_exprs = vec![add(sum(col("number")), lit(2u64))];
-
+    // sum(number)+1, avg(number)
+    let aggr_exprs = vec![add(sum(col("number")), lit(2u64)), avg(col("number"))];
     let aggr_partial = PlanBuilder::create(test_source.number_schema_for_test()?)
         .aggregate_partial(aggr_exprs.clone(), vec![])?
         .build()?;
@@ -27,9 +26,10 @@ async fn test_transform_aggregator() -> anyhow::Result<()> {
         .aggregate_final(aggr_exprs.clone(), vec![])?
         .build()?;
 
+    // Pipeline.
+    let source = test_source.number_source_transform_for_test(200000)?;
     let mut pipeline = Pipeline::create();
-    let a = test_source.number_source_transform_for_test(16)?;
-    pipeline.add_source(Arc::new(a))?;
+    pipeline.add_source(Arc::new(source))?;
     pipeline.add_simple_transform(|| {
         Ok(Box::new(AggregatorPartialTransform::try_create(
             aggr_partial.schema(),
@@ -44,14 +44,20 @@ async fn test_transform_aggregator() -> anyhow::Result<()> {
         )?))
     })?;
 
-    let mut stream = pipeline.execute().await?;
-    while let Some(v) = stream.next().await {
-        let v = v?;
-        if v.num_rows() > 0 {
-            let actual = v.column(0).as_any().downcast_ref::<UInt64Array>().unwrap();
-            let expect = &UInt64Array::from(vec![122]);
-            assert_eq!(expect.clone(), actual.clone());
-        }
-    }
+    // Result.
+    let stream = pipeline.execute().await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 2);
+
+    let expected = vec![
+        "+----------------------+-------------+",
+        "| plus(sum(number), 2) | avg(number) |",
+        "+----------------------+-------------+",
+        "| 19999900002          | 99999.5     |",
+        "+----------------------+-------------+",
+    ];
+    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+
     Ok(())
 }

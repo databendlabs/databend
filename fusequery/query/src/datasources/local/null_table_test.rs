@@ -21,9 +21,9 @@ async fn test_null_table() -> anyhow::Result<()> {
     assert_eq!(table.engine(), "Null");
 
     let stream = table.read(ctx).await?;
-    let blocks = stream.try_collect::<Vec<_>>().await?;
-    let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 1);
 
-    assert_eq!(rows, 0);
     Ok(())
 }

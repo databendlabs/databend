@@ -20,6 +20,8 @@ use crate::pipelines::processors::IProcessor;
 // Executes certain expressions over the block.
 // The expression consists of column identifiers from the block, constants, common functions.
 // For example: hits * 2 + 3.
+// ExpressionTransform normally used for transform internal, such as ProjectionTransform.
+// Aims to transform a block to another format, such as add one column.
 pub struct ExpressionTransform {
     funcs: Vec<Box<dyn IFunction>>,
     schema: DataSchemaRef,

@@ -4,9 +4,8 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_remote_with_local() -> anyhow::Result<()> {
-    use common_datavalues::*;
     use common_planners::*;
-    use futures::stream::StreamExt;
+    use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
 
     use crate::pipelines::processors::*;
@@ -23,20 +22,26 @@ async fn test_transform_remote_with_local() -> anyhow::Result<()> {
     .build()?;
 
     let remote = RemoteTransform::try_create(ctx.clone(), ctx.get_id()?, remote_addr, plan)?;
-    let mut stream = remote.execute().await?;
-    while let Some(v) = stream.next().await {
-        let v = v?;
-        let actual = v.column(0).as_any().downcast_ref::<UInt64Array>().unwrap();
-        let expect = &UInt64Array::from(vec![99]);
-        assert_eq!(expect.clone(), actual.clone());
-    }
+    let stream = remote.execute().await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 1);
+
+    let expected = vec![
+        "+--------+",
+        "| number |",
+        "+--------+",
+        "| 99     |",
+        "+--------+",
+    ];
+    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_remote_with_cluster() -> anyhow::Result<()> {
-    use common_datavalues::*;
-    use futures::stream::StreamExt;
+    use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
 
     use crate::pipelines::processors::*;
@@ -66,12 +71,19 @@ async fn test_transform_remote_with_cluster() -> anyhow::Result<()> {
     \n    RemoteTransform × 3 processor(s): AggregatorPartialTransform × 8 processors -> SourceTransform × 8 processors";
     assert_eq!(expect, actual);
 
-    let mut stream = pipeline.execute().await?;
-    while let Some(v) = stream.next().await {
-        let v = v?;
-        let expect = &UInt64Array::from(vec![500000500002]);
-        let actual = v.column(0).as_any().downcast_ref::<UInt64Array>().unwrap();
-        assert_eq!(expect.clone(), actual.clone());
-    }
+    let stream = pipeline.execute().await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 1);
+
+    let expected = vec![
+        "+--------------+",
+        "| sumx         |",
+        "+--------------+",
+        "| 500000500002 |",
+        "+--------------+",
+    ];
+    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+
     Ok(())
 }

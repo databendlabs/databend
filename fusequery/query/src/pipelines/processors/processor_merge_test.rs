@@ -6,8 +6,7 @@
 async fn test_processor_merge() -> anyhow::Result<()> {
     use std::sync::Arc;
 
-    use common_datavalues::*;
-    use futures::stream::StreamExt;
+    use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
 
     use crate::pipelines::processors::*;
@@ -18,15 +17,24 @@ async fn test_processor_merge() -> anyhow::Result<()> {
 
     let mut pipeline = Pipeline::create();
 
-    let a = test_source.number_source_transform_for_test(2)?;
-    pipeline.add_source(Arc::new(a))?;
-
+    let source = test_source.number_source_transform_for_test(2)?;
+    pipeline.add_source(Arc::new(source))?;
     pipeline.merge_processor()?;
 
-    let mut stream = pipeline.execute().await?;
-    let v = stream.next().await.unwrap().unwrap();
-    let actual = v.column(0).as_any().downcast_ref::<UInt64Array>().unwrap();
-    let expect = &UInt64Array::from(vec![0, 1]);
-    assert_eq!(expect.clone().values(), actual.clone().values());
+    let stream = pipeline.execute().await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 1);
+
+    let expected = vec![
+        "+--------+",
+        "| number |",
+        "+--------+",
+        "| 0      |",
+        "| 1      |",
+        "+--------+",
+    ];
+    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+
     Ok(())
 }

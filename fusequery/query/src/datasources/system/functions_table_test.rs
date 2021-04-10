@@ -13,9 +13,45 @@ async fn test_functions_table() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let table = FunctionsTable::create();
     table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
+
     let stream = table.read(ctx).await?;
-    let blocks = stream.try_collect::<Vec<_>>().await?;
-    let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
-    assert!(rows > 18);
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 1);
+
+    let expected = vec![
+        "+------------+",
+        "| name       |",
+        "+------------+",
+        "| count      |",
+        "| min        |",
+        "| max        |",
+        "| sum        |",
+        "| avg        |",
+        "| +          |",
+        "| plus       |",
+        "| -          |",
+        "| minus      |",
+        "| *          |",
+        "| multiply   |",
+        "| /          |",
+        "| divide     |",
+        "| %          |",
+        "| modulo     |",
+        "| =          |",
+        "| <          |",
+        "| >          |",
+        "| <=         |",
+        "| >=         |",
+        "| !=         |",
+        "| <>         |",
+        "| and        |",
+        "| or         |",
+        "| example    |",
+        "| totypename |",
+        "+------------+",
+    ];
+    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+
     Ok(())
 }
