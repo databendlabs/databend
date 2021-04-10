@@ -16,17 +16,28 @@ async fn transform_source_test() -> anyhow::Result<()> {
 
     let mut pipeline = Pipeline::create();
 
-    let a = test_source.number_source_transform_for_test(8)?;
+    let a = test_source.number_source_transform_for_test(1)?;
     pipeline.add_source(Arc::new(a))?;
 
-    let b = test_source.number_source_transform_for_test(8)?;
+    let b = test_source.number_source_transform_for_test(1)?;
 
     pipeline.add_source(Arc::new(b))?;
     pipeline.merge_processor()?;
 
     let stream = pipeline.execute().await?;
-    let blocks = stream.try_collect::<Vec<_>>().await?;
-    let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
-    assert_eq!(16, rows);
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 1);
+
+    let expected = vec![
+        "+--------+",
+        "| number |",
+        "+--------+",
+        "| 0      |",
+        "| 0      |",
+        "+--------+",
+    ];
+    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+
     Ok(())
 }

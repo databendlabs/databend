@@ -12,11 +12,15 @@ async fn test_settings_table() -> anyhow::Result<()> {
     use crate::datasources::*;
 
     let ctx = crate::tests::try_create_context()?;
+    ctx.set_max_threads(2)?;
+
     let table = SettingsTable::create();
     table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
+
     let stream = table.read(ctx).await?;
-    let blocks = stream.try_collect::<Vec<_>>().await?;
-    let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
-    assert_eq!(3, rows);
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 4);
+
     Ok(())
 }

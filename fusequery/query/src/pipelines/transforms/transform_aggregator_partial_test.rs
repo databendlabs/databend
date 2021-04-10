@@ -48,7 +48,7 @@ async fn test_transform_partial_aggregator() -> anyhow::Result<()> {
         "| {\"Struct\":[{\"UInt64\":19999900000},{\"UInt8\":2}]} | {\"Struct\":[{\"Struct\":[{\"UInt64\":19999900000},{\"UInt64\":200000}]}]} |",
         "+-------------------------------------------------+--------------------------------------------------------------------+",
     ];
-    crate::assert_blocks_eq!(expected, result.as_slice());
+    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
 
     Ok(())
 }

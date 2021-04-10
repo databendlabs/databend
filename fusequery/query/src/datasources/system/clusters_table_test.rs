@@ -13,9 +13,11 @@ async fn test_clusters_table() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let table = ClustersTable::create();
     table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
+
     let stream = table.read(ctx).await?;
-    let blocks = stream.try_collect::<Vec<_>>().await?;
-    let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
-    assert!(rows == 0);
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 3);
+
     Ok(())
 }
