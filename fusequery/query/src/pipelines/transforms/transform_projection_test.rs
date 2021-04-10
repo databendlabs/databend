@@ -17,8 +17,8 @@ async fn test_transform_projection() -> anyhow::Result<()> {
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
     let mut pipeline = Pipeline::create();
-    let a = test_source.number_source_transform_for_test(8)?;
-    pipeline.add_source(Arc::new(a))?;
+    let source = test_source.number_source_transform_for_test(8)?;
+    pipeline.add_source(Arc::new(source))?;
 
     if let PlanNode::Projection(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
         .project(vec![col("number"), col("number")])?

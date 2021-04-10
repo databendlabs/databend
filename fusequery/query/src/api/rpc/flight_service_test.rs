@@ -16,17 +16,31 @@ async fn test_flight_execute() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
     let plan = PlanBuilder::from(&PlanNode::ReadSource(
-        test_source.number_read_source_plan_for_test(111)?,
+        test_source.number_read_source_plan_for_test(5)?,
     ))
     .build()?;
 
     let mut client = FlightClient::try_create(addr.to_string()).await?;
+
     let stream = client
         .execute_remote_plan_action("xx".to_string(), &plan)
         .await?;
-    let blocks = stream.try_collect::<Vec<_>>().await?;
-    let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
-    assert_eq!(111, rows);
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 1);
+
+    let expected = vec![
+        "+--------+",
+        "| number |",
+        "+--------+",
+        "| 0      |",
+        "| 1      |",
+        "| 2      |",
+        "| 3      |",
+        "| 4      |",
+        "+--------+",
+    ];
+    crate::assert_blocks_eq!(expected, result.as_slice());
 
     Ok(())
 }

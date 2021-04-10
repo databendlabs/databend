@@ -31,8 +31,19 @@ async fn test_transform_limit() -> anyhow::Result<()> {
     }
 
     let stream = pipeline.execute().await?;
-    let blocks = stream.try_collect::<Vec<_>>().await?;
-    let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
-    assert_eq!(2, rows);
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 1);
+
+    let expected = vec![
+        "+--------+",
+        "| number |",
+        "+--------+",
+        "| 7      |",
+        "| 6      |",
+        "+--------+",
+    ];
+    crate::assert_blocks_eq!(expected, result.as_slice());
+
     Ok(())
 }

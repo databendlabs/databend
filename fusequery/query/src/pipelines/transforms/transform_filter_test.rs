@@ -6,9 +6,8 @@
 async fn test_transform_filter() -> anyhow::Result<()> {
     use std::sync::Arc;
 
-    use common_datavalues::*;
     use common_planners::*;
-    use futures::stream::StreamExt;
+    use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
 
     use crate::pipelines::processors::*;
@@ -19,11 +18,11 @@ async fn test_transform_filter() -> anyhow::Result<()> {
 
     let mut pipeline = Pipeline::create();
 
-    let a = test_source.number_source_transform_for_test(8)?;
-    pipeline.add_source(Arc::new(a))?;
+    let source = test_source.number_source_transform_for_test(10000)?;
+    pipeline.add_source(Arc::new(source))?;
 
     if let PlanNode::Filter(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
-        .filter(col("number").eq(lit(1)))?
+        .filter(col("number").eq(lit(2021)))?
         .build()?
     {
         pipeline.add_simple_transform(|| {
@@ -34,14 +33,19 @@ async fn test_transform_filter() -> anyhow::Result<()> {
     }
     pipeline.merge_processor()?;
 
-    let mut stream = pipeline.execute().await?;
-    while let Some(v) = stream.next().await {
-        let v = v?;
-        if v.num_rows() > 0 {
-            let actual = v.column(0).as_any().downcast_ref::<UInt64Array>().unwrap();
-            let expect = &UInt64Array::from(vec![1]);
-            assert_eq!(expect.clone(), actual.clone());
-        }
-    }
+    let stream = pipeline.execute().await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 1);
+
+    let expected = vec![
+        "+--------+",
+        "| number |",
+        "+--------+",
+        "| 2021   |",
+        "+--------+",
+    ];
+    crate::assert_blocks_eq!(expected, result.as_slice());
+
     Ok(())
 }
