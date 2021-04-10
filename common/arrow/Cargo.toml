@@ -10,7 +10,7 @@ edition = "2018"
 # Workspace dependencies
 
 # Github dependencies
-arrow = { git = "https://github.com/apache/arrow", rev="46161d2" }
+arrow = { git = "https://github.com/apache/arrow", rev="46161d2", features = ["prettyprint"] }
 arrow-flight = { git = "https://github.com/apache/arrow", rev="46161d2" }
 parquet = { git = "https://github.com/apache/arrow", rev="46161d2" }
 

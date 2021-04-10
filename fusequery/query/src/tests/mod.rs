@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#[macro_use]
+mod macros;
+
 mod context;
 mod number;
 mod service;

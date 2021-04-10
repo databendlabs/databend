@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_transform_projection() -> anyhow::Result<()> {
+async fn test_transform_expression() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_planners::*;
@@ -21,12 +21,17 @@ async fn test_transform_projection() -> anyhow::Result<()> {
     pipeline.add_source(Arc::new(a))?;
 
     if let PlanNode::Projection(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
-        .project(vec![col("number"), col("number")])?
+        .project(vec![
+            col("number"),
+            col("number"),
+            add(col("number"), lit(1u8)),
+        ])?
         .build()?
     {
         pipeline.add_simple_transform(|| {
-            Ok(Box::new(ProjectionTransform::try_create(
+            Ok(Box::new(ExpressionTransform::try_create(
                 plan.schema.clone(),
+                plan.expr.clone(),
             )?))
         })?;
     }
@@ -34,21 +39,21 @@ async fn test_transform_projection() -> anyhow::Result<()> {
     let stream = pipeline.execute().await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 2);
+    assert_eq!(block.num_columns(), 3);
 
     let expected = vec![
-        "+--------+--------+",
-        "| number | number |",
-        "+--------+--------+",
-        "| 7      | 7      |",
-        "| 6      | 6      |",
-        "| 5      | 5      |",
-        "| 4      | 4      |",
-        "| 3      | 3      |",
-        "| 2      | 2      |",
-        "| 1      | 1      |",
-        "| 0      | 0      |",
-        "+--------+--------+",
+        "+--------+--------+-----------------+",
+        "| number | number | plus(number, 1) |",
+        "+--------+--------+-----------------+",
+        "| 7      | 7      | 8               |",
+        "| 6      | 6      | 7               |",
+        "| 5      | 5      | 6               |",
+        "| 4      | 4      | 5               |",
+        "| 3      | 3      | 4               |",
+        "| 2      | 2      | 3               |",
+        "| 1      | 1      | 2               |",
+        "| 0      | 0      | 1               |",
+        "+--------+--------+-----------------+",
     ];
     crate::assert_blocks_eq!(expected, result.as_slice());
 
