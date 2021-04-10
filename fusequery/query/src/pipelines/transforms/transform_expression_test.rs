@@ -55,7 +55,7 @@ async fn test_transform_expression() -> anyhow::Result<()> {
         "| 0      | 0      | 1               |",
         "+--------+--------+-----------------+",
     ];
-    crate::assert_blocks_eq!(expected, result.as_slice());
+    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
 
     Ok(())
 }

@@ -57,7 +57,7 @@ async fn test_transform_final_aggregator() -> anyhow::Result<()> {
         "| 19999900002          | 99999.5     |",
         "+----------------------+-------------+",
     ];
-    crate::assert_blocks_eq!(expected, result.as_slice());
+    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
 
     Ok(())
 }

@@ -51,7 +51,7 @@ async fn test_transform_projection() -> anyhow::Result<()> {
         "| 0      | 0      |",
         "+--------+--------+",
     ];
-    crate::assert_blocks_eq!(expected, result.as_slice());
+    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
 
     Ok(())
 }

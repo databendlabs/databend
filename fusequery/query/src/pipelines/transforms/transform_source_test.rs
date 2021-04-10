@@ -37,7 +37,7 @@ async fn transform_source_test() -> anyhow::Result<()> {
         "| 0      |",
         "+--------+",
     ];
-    crate::assert_blocks_eq!(expected, result.as_slice());
+    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
 
     Ok(())
 }

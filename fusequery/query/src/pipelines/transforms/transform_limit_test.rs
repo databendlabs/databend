@@ -43,7 +43,7 @@ async fn test_transform_limit() -> anyhow::Result<()> {
         "| 6      |",
         "+--------+",
     ];
-    crate::assert_blocks_eq!(expected, result.as_slice());
+    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
 
     Ok(())
 }
