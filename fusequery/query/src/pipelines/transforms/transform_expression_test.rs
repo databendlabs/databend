@@ -7,7 +7,7 @@ async fn test_transform_expression() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_planners::*;
-    use futures::stream::StreamExt;
+    use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
 
     use crate::pipelines::processors::*;
@@ -21,7 +21,11 @@ async fn test_transform_expression() -> anyhow::Result<()> {
     pipeline.add_source(Arc::new(a))?;
 
     if let PlanNode::Projection(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
-        .project(vec![col("number"), col("number")])?
+        .project(vec![
+            col("number"),
+            col("number"),
+            add(col("number"), lit(1u8)),
+        ])?
         .build()?
     {
         pipeline.add_simple_transform(|| {
@@ -32,10 +36,26 @@ async fn test_transform_expression() -> anyhow::Result<()> {
         })?;
     }
 
-    let mut stream = pipeline.execute().await?;
-    let v = stream.next().await.unwrap().unwrap();
-    let actual = v.num_columns();
-    let expect = 2;
-    assert_eq!(expect, actual);
+    let stream = pipeline.execute().await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 3);
+
+    let expected = vec![
+        "+--------+--------+-----------------+",
+        "| number | number | plus(number, 1) |",
+        "+--------+--------+-----------------+",
+        "| 7      | 7      | 8               |",
+        "| 6      | 6      | 7               |",
+        "| 5      | 5      | 6               |",
+        "| 4      | 4      | 5               |",
+        "| 3      | 3      | 4               |",
+        "| 2      | 2      | 3               |",
+        "| 1      | 1      | 2               |",
+        "| 0      | 0      | 1               |",
+        "+--------+--------+-----------------+",
+    ];
+    crate::assert_blocks_eq!(expected, result.as_slice());
+
     Ok(())
 }

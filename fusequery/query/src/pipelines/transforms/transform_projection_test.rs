@@ -7,7 +7,7 @@ async fn test_transform_projection() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_planners::*;
-    use futures::stream::StreamExt;
+    use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
 
     use crate::pipelines::processors::*;
@@ -31,10 +31,26 @@ async fn test_transform_projection() -> anyhow::Result<()> {
         })?;
     }
 
-    let mut stream = pipeline.execute().await?;
-    let v = stream.next().await.unwrap().unwrap();
-    let actual = v.num_columns();
-    let expect = 2;
-    assert_eq!(expect, actual);
+    let stream = pipeline.execute().await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 2);
+
+    let expected = vec![
+        "+--------+--------+",
+        "| number | number |",
+        "+--------+--------+",
+        "| 7      | 7      |",
+        "| 6      | 6      |",
+        "| 5      | 5      |",
+        "| 4      | 4      |",
+        "| 3      | 3      |",
+        "| 2      | 2      |",
+        "| 1      | 1      |",
+        "| 0      | 0      |",
+        "+--------+--------+",
+    ];
+    crate::assert_blocks_eq!(expected, result.as_slice());
+
     Ok(())
 }
