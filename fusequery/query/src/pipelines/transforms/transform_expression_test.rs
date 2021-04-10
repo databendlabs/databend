@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_transform_projection() -> anyhow::Result<()> {
+async fn test_transform_expression() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_planners::*;
@@ -25,8 +25,9 @@ async fn test_transform_projection() -> anyhow::Result<()> {
         .build()?
     {
         pipeline.add_simple_transform(|| {
-            Ok(Box::new(ProjectionTransform::try_create(
+            Ok(Box::new(ExpressionTransform::try_create(
                 plan.schema.clone(),
+                plan.expr.clone(),
             )?))
         })?;
     }

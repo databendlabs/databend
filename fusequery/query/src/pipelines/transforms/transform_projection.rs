@@ -5,12 +5,11 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use anyhow::bail;
 use anyhow::Result;
 use common_datablocks::DataBlock;
+use common_datavalues::DataArrayRef;
 use common_datavalues::DataSchemaRef;
 use common_functions::IFunction;
-use common_planners::ExpressionPlan;
 use common_streams::ExpressionStream;
 use common_streams::SendableDataBlockStream;
 
@@ -18,42 +17,30 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
 
 pub struct ProjectionTransform {
-    funcs: Vec<Box<dyn IFunction>>,
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>,
 }
 
 impl ProjectionTransform {
-    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> Result<Self> {
-        let mut funcs = Vec::with_capacity(exprs.len());
-        for expr in &exprs {
-            let func = expr.to_function()?;
-            if func.is_aggregator() {
-                bail!(
-                    "Aggregate function {} is found in ProjectionTransform, should AggregatorTransform",
-                    func
-                );
-            }
-            funcs.push(func);
-        }
-
+    pub fn try_create(schema: DataSchemaRef) -> Result<Self> {
         Ok(ProjectionTransform {
-            funcs,
             schema,
             input: Arc::new(EmptyProcessor::create()),
         })
     }
 
-    pub fn expression_executor(
+    pub fn projection_executor(
         projected_schema: &DataSchemaRef,
         block: DataBlock,
-        funcs: Vec<Box<dyn IFunction>>,
+        _funcs: Vec<Box<dyn IFunction>>,
     ) -> Result<DataBlock> {
-        let mut column_values = Vec::with_capacity(funcs.len());
-        for func in funcs {
-            column_values.push(func.eval(&block)?.to_array(block.num_rows())?);
+        let mut columns: Vec<DataArrayRef> = Vec::with_capacity(projected_schema.fields().len());
+
+        for field in projected_schema.fields() {
+            let column = block.column_by_name(field.name())?;
+            columns.push(column.clone());
         }
-        Ok(DataBlock::create(projected_schema.clone(), column_values))
+        Ok(DataBlock::create(projected_schema.clone(), columns))
     }
 }
 
@@ -80,8 +67,8 @@ impl IProcessor for ProjectionTransform {
         Ok(Box::pin(ExpressionStream::try_create(
             self.input.execute().await?,
             self.schema.clone(),
-            self.funcs.clone(),
-            ProjectionTransform::expression_executor,
+            vec![],
+            ProjectionTransform::projection_executor,
         )?))
     }
 }

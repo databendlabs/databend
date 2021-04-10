@@ -5,6 +5,8 @@
 #[cfg(test)]
 mod transform_aggregator_test;
 #[cfg(test)]
+mod transform_expression_test;
+#[cfg(test)]
 mod transform_filter_test;
 #[cfg(test)]
 mod transform_limit_test;
