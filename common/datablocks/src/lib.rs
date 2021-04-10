@@ -5,6 +5,9 @@
 #[cfg(test)]
 mod data_block_test;
 
+#[macro_use]
+mod macros;
+
 mod data_block;
 
 pub use crate::data_block::DataBlock;
