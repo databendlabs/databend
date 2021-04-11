@@ -1,14 +1,36 @@
-# Datafuse
-[![](https://badgen.net/badge/Slack/Join%20Datafuse/0abd59?icon=slack)](https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA)
-[![Unit Tests](https://github.com/datafuselabs/datafuse/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/datafuselabs/datafuse/actions/workflows/unit-tests.yml)
-[![codecov](https://codecov.io/gh/datafuselabs/datafuse/branch/master/graph/badge.svg?token=V3SC44OQDO)](https://codecov.io/gh/datafuselabs/datafuse)
-![Platform](https://img.shields.io/badge/Platform-Linux,%20ARM,%20OS%20X,%20Windows-green.svg?style=flat)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+<div align="center">
+<h1>Datafuse</h1>
+<strong>
+Modern Cloud-Native Data Processing & Analysis DBMS for big data
+</strong>
 
+<br>
+<br>
 
-Datafuse is a Cloud-Native Distributed Data Processing & Analysis DBMS implemented in Rust.
+<div>
+<a href="https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA">
+<img src="https://badgen.net/badge/Slack/Join%20Datafuse/0abd59?icon=slack" alt="slack" />
+</a>
 
-Inspired by [ClickHouse](https://github.com/ClickHouse/ClickHouse) and powered by [Arrow](https://github.com/apache/arrow).
+<a href="https://github.com/datafuselabs/datafuse/actions">
+<img src="https://github.com/datafuselabs/datafuse/actions/workflows/unit-tests.yml/badge.svg" alt="CI Status" />
+</a>
+
+<a href="https://codecov.io/gh/datafuselabs/datafuse">
+<img src="https://codecov.io/gh/datafuselabs/datafuse/branch/master/graph/badge.svg" alt="codecov" />
+</a>
+
+<img src="https://img.shields.io/badge/Platform-Linux,%20ARM,%20OS%20X,%20Windows-green.svg?style=flat" alt="patform" />
+
+<a href="https://opensource.org/licenses/Apache-2.0">
+<img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="license" />
+</a>
+
+</div>
+</div>
+
+Datafuse is a Modern Cloud-Native Analytics DBMS written
+in Rust, inspired by [ClickHouse](https://github.com/ClickHouse/ClickHouse) and powered by [Arrow](https://github.com/apache/arrow), built to make it easy to power the Data Cloud.
 
 ## Principles
 
@@ -61,7 +83,7 @@ Note:
 - [x] Query Optimizer
 - [x] Predicate Push Down
 - [x] Limit Push Down
-- [ ] Projection Push Down (TODO)
+- [ ] Projection Push Down (WIP)
 - [x] Type coercion
 - [x] Parallel Query Execution
 - [x] Distributed Query Execution
