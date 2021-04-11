@@ -148,7 +148,7 @@ impl DataValue {
             DataValue::String(v) => Arc::new(StringArray::from(vec![v.as_deref(); size])),
             other => {
                 bail!(format!(
-                    "DataValue Error: DataValue to array cannot be NONE {:?}",
+                    "DataValue Error: DataValue to array cannot be {:?}",
                     other
                 ));
             }
