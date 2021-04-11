@@ -82,13 +82,22 @@ impl IProcessor for AggregatorFinalTransform {
 
         let mut final_result = Vec::with_capacity(funcs.len());
         for func in &funcs {
-            final_result.push(func.merge_result()?.to_array(1)?);
+            let merge_result = func.merge_result()?;
+            // Check merge result null.
+            if merge_result.is_null() {
+                break;
+            }
+            final_result.push(merge_result.to_array(1)?);
         }
-        let block = DataBlock::create(self.schema.clone(), final_result);
+
+        let mut blocks = vec![];
+        if !final_result.is_empty() {
+            blocks.push(DataBlock::create(self.schema.clone(), final_result));
+        }
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block],
+            blocks,
         )))
     }
 }
