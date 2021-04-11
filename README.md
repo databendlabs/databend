@@ -1,7 +1,7 @@
 <div align="center">
 <h1>Datafuse</h1>
 <strong>
-Modern Cloud-Native Data Processing & Analysis Platform
+Modern Cloud-Native Data Processing & Analytics Platform
 </strong>
 
 <br>
@@ -29,7 +29,7 @@ Modern Cloud-Native Data Processing & Analysis Platform
 </div>
 </div>
 
-Datafuse is a Modern Cloud-Native Data Processing & Analysis Platform written
+Datafuse is a Modern Cloud-Native Data Processing & Analytics Platform written
 in Rust, inspired by [ClickHouse](https://github.com/ClickHouse/ClickHouse) and powered by [Arrow](https://github.com/apache/arrow), built to make it easy to power the Data Cloud.
 
 ## Principles
