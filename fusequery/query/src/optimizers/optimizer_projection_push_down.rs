@@ -35,7 +35,6 @@ fn optimize_plan(
             // projection:
             // * remove any expression that is not required
             // * construct the new set of required columns
-
             let mut new_expr = Vec::new();                  
             let mut new_fields = Vec::new();                  
             // Gather all columns needed for expressions in this projection                    
@@ -48,7 +47,7 @@ fn optimize_plan(
                         new_expr.push(expr[i].clone());
                         new_fields.push(field.clone());
                         // gather the new set of required columns
-                        utils.expr_to_columns_name(&exprs[i], &mut new_required_columns)
+                        utils.expr_to_column_names(&exprs[i], &mut new_required_columns)
                     } else {
                         Ok(())
                     }
