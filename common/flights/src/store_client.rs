@@ -4,8 +4,6 @@
 
 use std::convert::TryInto;
 
-use anyhow::bail;
-use anyhow::Result;
 use common_arrow::arrow_flight;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::Action;
@@ -21,6 +19,7 @@ use tonic::metadata::MetadataValue;
 use tonic::Request;
 
 use crate::flight_result_to_str;
+use crate::status_err;
 use crate::store_do_action::CreateDatabaseAction;
 use crate::store_do_action::CreateTableAction;
 use crate::store_do_action::StoreDoAction;
@@ -33,7 +32,7 @@ pub struct StoreClient {
 }
 
 impl StoreClient {
-    pub async fn try_create(addr: &str, username: &str, password: &str) -> Result<Self> {
+    pub async fn try_create(addr: &str, username: &str, password: &str) -> anyhow::Result<Self> {
         let client = FlightServiceClient::connect(format!("http://{}", addr)).await?;
         let mut rx = Self {
             token: vec![],
@@ -47,7 +46,7 @@ impl StoreClient {
     pub async fn create_database(
         &mut self,
         plan: CreateDatabasePlan,
-    ) -> Result<StoreDoActionResult> {
+    ) -> anyhow::Result<StoreDoActionResult> {
         let action = StoreDoAction::CreateDatabase(CreateDatabaseAction { plan });
         let rst = self.do_action(&action).await?;
         let action_rst: StoreDoActionResult = rst.try_into()?;
@@ -55,14 +54,18 @@ impl StoreClient {
     }
 
     /// Create table call.
-    pub async fn create_table(&mut self, plan: CreateTablePlan) -> Result<()> {
+    pub async fn create_table(
+        &mut self,
+        plan: CreateTablePlan,
+    ) -> anyhow::Result<StoreDoActionResult> {
         let action = StoreDoAction::CreateTable(CreateTableAction { plan });
-        let _body = self.do_action(&action).await?;
-        Ok(())
+        let rst = self.do_action(&action).await?;
+        let action_rst: StoreDoActionResult = rst.try_into()?;
+        Ok(action_rst)
     }
 
     /// Handshake.
-    async fn handshake(&mut self, username: &str, password: &str) -> Result<()> {
+    async fn handshake(&mut self, username: &str, password: &str) -> anyhow::Result<()> {
         let auth = BasicAuth {
             username: username.to_string(),
             password: password.to_string(),
@@ -86,22 +89,26 @@ impl StoreClient {
     }
 
     /// Execute do_action.
-    async fn do_action(&mut self, action: &StoreDoAction) -> Result<arrow_flight::Result> {
-        let mut request: Request<Action> = action.try_into()?;
+    async fn do_action(&mut self, action: &StoreDoAction) -> anyhow::Result<arrow_flight::Result> {
+        // TODO: an action can always be able to serialize, or it is a bug.
+        let mut request: Request<Action> = action.try_into().unwrap();
         let metadata = request.metadata_mut();
         metadata.insert_bin(
             "auth-token-bin",
             MetadataValue::from_bytes(&self.token.clone()),
         );
 
-        let mut stream = self.client.do_action(request).await?.into_inner();
+        let mut stream = self
+            .client
+            .do_action(request)
+            .await
+            .map_err(status_err)?
+            .into_inner();
         match stream.message().await? {
-            None => {
-                bail!(
-                    "Can not receive data from store flight server, action: {:?}",
-                    action
-                )
-            }
+            None => anyhow::bail!(
+                "Can not receive data from store flight server, action: {:?}",
+                action
+            ),
             Some(resp) => {
                 info!("do_action: resp: {:}", flight_result_to_str(&resp));
                 Ok(resp)
