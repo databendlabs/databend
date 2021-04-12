@@ -14,6 +14,15 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+configs:
+  httpAPIPort: 8080
+  metricAPIPort: 7070
+  rpcAPIPort: 9090
+  mysqlPort: 3307
+  clickhousePort: 9000
+
+extraEnv: {}
+
 serviceAccount:
   # Specifies whether a service account should be created
   create: true
