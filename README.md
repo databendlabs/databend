@@ -123,11 +123,11 @@ Note:
 
 - [x] 0.1 Support aggregation select (2021.02)
 - [x] 0.2 Support distributed query (2021.03)
-- [ ] 0.3 Support order by
-- [ ] 0.5 Support group by
-- [ ] 0.6 Support sub queries
-- [ ] 0.7 Support join
-- [ ] 0.8 Support TPC-H benchmark
+- [ ] 0.3 Support group by (WIP)
+- [ ] 0.4 Support order by
+- [ ] 0.5 Support sub queries
+- [ ] 0.6 Support join
+- [ ] 1.0 Support TPC-H benchmark
 
 ## Contributing
 
