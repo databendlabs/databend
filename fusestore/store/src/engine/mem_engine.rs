@@ -1,17 +1,20 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 use common_planners::CreateDatabasePlan;
+use tonic::Status;
 
+use crate::protobuf::CmdCreateTable;
 use crate::protobuf::Db;
-//use crate::protobuf::Table;
 
 // MemEngine is a prototype storage that is primarily used for testing purposes.
-// TODO add table APIs
 pub struct MemEngine {
-    dbs: HashMap<String, Db>,
-    next_id: i64,
+    pub dbs: HashMap<String, Db>,
+    pub next_id: i64,
 }
 
 impl MemEngine {
@@ -52,5 +55,43 @@ impl MemEngine {
             .get(&db)
             .ok_or_else(|| anyhow::anyhow!("database not found"))?;
         Ok(x.clone())
+    }
+
+    // Create a table. It generates a table id and fill it.
+    #[allow(dead_code)]
+    pub fn create_table(
+        &mut self,
+        cmd: CmdCreateTable,
+        if_not_exists: bool,
+    ) -> Result<i64, Status> {
+        // TODO: support plan.engine plan.options
+
+        let db = self.dbs.get_mut(&cmd.db_name);
+        let db = match db {
+            Some(x) => x,
+            None => {
+                return Err(Status::invalid_argument("database not found"));
+            }
+        };
+
+        let table_id = db.table_name_to_id.get(&cmd.table_name);
+
+        if table_id.is_some() && if_not_exists {
+            return Err(Status::already_exists("table exists"));
+        }
+
+        let table_id = self.next_id;
+        self.next_id += 1;
+
+        let mut table = cmd
+            .table
+            .ok_or_else(|| Status::invalid_argument("require field: CmdCreateTable::table"))?;
+
+        table.table_id = table_id;
+
+        db.table_name_to_id.insert(cmd.table_name, table_id);
+        db.tables.insert(table_id, table);
+
+        Ok(table_id)
     }
 }

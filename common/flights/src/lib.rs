@@ -22,6 +22,7 @@ pub use store_do_action::ReadPlanActionResult;
 pub use store_do_action::StoreDoAction;
 pub use store_do_action::StoreDoActionResult;
 pub use util::flight_result_to_str;
+pub use util::status_err;
 
 // ProtoBuf generated files.
 #[allow(clippy::all)]

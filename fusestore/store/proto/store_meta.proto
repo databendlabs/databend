@@ -8,17 +8,25 @@ syntax = "proto3";
 package store_meta;
 
 message Db {
-  int64 DbId = 1;
-  map<string, int64> TableNameToId = 2;
-  map<int64, Table> Tables = 3;
+  int64 db_id = 1;
+  map<string, int64> table_name_to_id = 2;
+  map<int64, Table> tables = 3;
 }
 
 message Table {
-  int64    TableId = 1;
-  bytes    Schema = 5;
+  int64    table_id = 1;
+  bytes    schema = 5;
   // a func(string, Vec<ReplicationGroupId>) mapping PartitionBy expr to replication group.
   // A FuseQuery process should consider this to determine where to send the
   // read or write operations.
-  bytes    PlacementPolicy = 10;
+  bytes    placement_policy = 10;
   // repeated ReplicationGroupId ReplicationGroupIds
+}
+
+// A command to create a table.
+message CmdCreateTable {
+  int64 db_id = 10;
+  string db_name = 20;
+  string table_name = 30;
+  Table table = 40;
 }

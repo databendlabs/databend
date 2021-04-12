@@ -48,7 +48,9 @@ pub struct CreateDatabaseActionResult {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct CreateTableActionResult {}
+pub struct CreateTableActionResult {
+    pub table_id: i64,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum StoreDoActionResult {
