@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use common_datablocks::DataBlock;
+use common_datavalues::create_key_for_col;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_planners::ExpressionPlan;
@@ -81,8 +82,17 @@ impl IProcessor for GroupByPartialTransform {
             for func in &group_funcs {
                 group_columns.push(func.eval(&block)?.to_array(block.num_rows())?);
             }
-            let block = DataBlock::create(group_schema.clone(), group_columns);
-            blocks.push(block);
+
+            // Make group.
+            for row in 0..block.num_rows() {
+                let mut group_key = vec![];
+                for col in &group_columns {
+                    create_key_for_col(col, row, &mut group_key)?;
+                }
+            }
+
+            let group_block = DataBlock::create(group_schema.clone(), group_columns);
+            blocks.push(group_block);
         }
 
         Ok(Box::pin(DataBlockStream::create(
