@@ -14,6 +14,17 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+configs:
+  httpAPIPort: 8080
+  metricAPIPort: 7070
+  rpcAPIPort: 9090
+  mysqlPort: &MYSQL_PORT 3307
+  clickhousePort: &CLICKHOUSE_PORT 9000
+
+extraEnv:
+  FUSE_QUERY_MYSQL_HANDLER_PORT: *MYSQL_PORT
+  FUSE_QUERY_CLICKHOUSE_HANDLER_PORT: *CLICKHOUSE_PORT
+
 serviceAccount:
   # Specifies whether a service account should be created
   create: true

@@ -7,25 +7,25 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: 3307
-      targetPort: 3307
+    - name: mysql
+      port: {{ .Values.configs.mysqlPort }}
+      targetPort: {{ .Values.configs.mysqlPort }}
       protocol: TCP
-      name: mysql
-    - port: 7070
-      targetPort: 7070
+    - name: clickhouse
+      port: {{ .Values.configs.clickhousePort }}
+      targetPort: {{ .Values.configs.clickhousePort }}
       protocol: TCP
-      name: metrics
-    - port: 8080
-      targetPort: 8080
+    - name: http
+      port: {{ .Values.configs.httpAPIPort }}
+      targetPort: {{ .Values.configs.httpAPIPort }}
       protocol: TCP
-      name: http
-    - port: 9000
-      targetPort: 9000
+    - name: metric
+      port: {{ .Values.configs.metricAPIPort }}
+      targetPort: {{ .Values.configs.metricAPIPort }}
       protocol: TCP
-      name: clickhouse
-    - port: 9090
-      targetPort: 9090
+    - name: rpc
+      port: {{ .Values.configs.rpcAPIPort }}
+      targetPort: {{ .Values.configs.rpcAPIPort }}
       protocol: TCP
-      name: rpc
   selector:
     {{- include "datafuse.selectorLabels" . | nindent 4 }}

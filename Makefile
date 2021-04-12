@@ -36,7 +36,8 @@ docker:
 	docker build --network host -f docker/Dockerfile -t ${HUB}/fuse-query:${TAG} .
 
 runhelm:
-	helm upgrade --install datafuse ./charts/datafuse
+	helm upgrade --install --debug datafuse ./charts/datafuse \
+		--set image.repository=${HUB}/fuse-query --set image.tag=${TAG}
 
 coverage:
 	bash ./scripts/dev_codecov.sh
@@ -44,4 +45,4 @@ coverage:
 clean:
 	cargo clean
 
-.PHONY: setup test bench run runquery runstore build fmt lint docker coverage clean
+.PHONY: setup test bench run runquery runstore runhelm build fmt lint docker coverage clean
