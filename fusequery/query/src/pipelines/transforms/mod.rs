@@ -11,6 +11,8 @@ mod transform_expression_test;
 #[cfg(test)]
 mod transform_filter_test;
 #[cfg(test)]
+mod transform_groupby_partial_test;
+#[cfg(test)]
 mod transform_limit_test;
 #[cfg(test)]
 mod transform_projection_test;
