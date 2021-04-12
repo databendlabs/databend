@@ -4,7 +4,6 @@
 
 use std::convert::TryInto;
 
-use common_arrow::arrow_flight;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::BasicAuth;
@@ -49,8 +48,7 @@ impl StoreClient {
     ) -> anyhow::Result<StoreDoActionResult> {
         let action = StoreDoAction::CreateDatabase(CreateDatabaseAction { plan });
         let rst = self.do_action(&action).await?;
-        let action_rst: StoreDoActionResult = rst.try_into()?;
-        Ok(action_rst)
+        Ok(rst)
     }
 
     /// Create table call.
@@ -60,8 +58,7 @@ impl StoreClient {
     ) -> anyhow::Result<StoreDoActionResult> {
         let action = StoreDoAction::CreateTable(CreateTableAction { plan });
         let rst = self.do_action(&action).await?;
-        let action_rst: StoreDoActionResult = rst.try_into()?;
-        Ok(action_rst)
+        Ok(rst)
     }
 
     /// Handshake.
@@ -89,7 +86,7 @@ impl StoreClient {
     }
 
     /// Execute do_action.
-    async fn do_action(&mut self, action: &StoreDoAction) -> anyhow::Result<arrow_flight::Result> {
+    async fn do_action(&mut self, action: &StoreDoAction) -> anyhow::Result<StoreDoActionResult> {
         // TODO: an action can always be able to serialize, or it is a bug.
         let mut request: Request<Action> = action.try_into().unwrap();
         let metadata = request.metadata_mut();
@@ -104,6 +101,7 @@ impl StoreClient {
             .await
             .map_err(status_err)?
             .into_inner();
+
         match stream.message().await? {
             None => anyhow::bail!(
                 "Can not receive data from store flight server, action: {:?}",
@@ -111,7 +109,9 @@ impl StoreClient {
             ),
             Some(resp) => {
                 info!("do_action: resp: {:}", flight_result_to_str(&resp));
-                Ok(resp)
+
+                let action_rst: StoreDoActionResult = resp.try_into()?;
+                Ok(action_rst)
             }
         }
     }

@@ -5,9 +5,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use common_planners::CreateDatabasePlan;
 use tonic::Status;
 
+use crate::protobuf::CmdCreateDatabase;
 use crate::protobuf::CmdCreateTable;
 use crate::protobuf::Db;
 
@@ -28,22 +28,25 @@ impl MemEngine {
     }
 
     #[allow(dead_code)]
-    pub fn create_database(&mut self, plan: CreateDatabasePlan) -> anyhow::Result<i64> {
+    pub fn create_database(
+        &mut self,
+        cmd: CmdCreateDatabase,
+        if_not_exists: bool,
+    ) -> anyhow::Result<i64> {
         // TODO: support plan.engine plan.options
-        let curr = self.dbs.get(&plan.db);
-        if curr.is_some() && plan.if_not_exists {
+        let curr = self.dbs.get(&cmd.db_name);
+        if curr.is_some() && if_not_exists {
             return Err(anyhow::anyhow!("database exists"));
         }
-        let db_id = self.next_id;
-        self.next_id += 1;
-        self.dbs.insert(
-            plan.db,
-            Db {
-                db_id,
-                table_name_to_id: HashMap::new(),
-                tables: HashMap::new(),
-            },
-        );
+
+        let mut db = cmd
+            .db
+            .ok_or_else(|| Status::invalid_argument("require field: CmdCreateDatabase::db"))?;
+
+        let db_id = self.create_id();
+        db.db_id = db_id;
+
+        self.dbs.insert(cmd.db_name, db);
 
         Ok(db_id)
     }
@@ -66,32 +69,35 @@ impl MemEngine {
     ) -> Result<i64, Status> {
         // TODO: support plan.engine plan.options
 
-        let db = self.dbs.get_mut(&cmd.db_name);
-        let db = match db {
-            Some(x) => x,
-            None => {
-                return Err(Status::invalid_argument("database not found"));
-            }
-        };
-
-        let table_id = db.table_name_to_id.get(&cmd.table_name);
+        let table_id = self
+            .dbs
+            .get(&cmd.db_name)
+            .ok_or_else(|| Status::invalid_argument("database not found"))?
+            .table_name_to_id
+            .get(&cmd.table_name);
 
         if table_id.is_some() && if_not_exists {
             return Err(Status::already_exists("table exists"));
         }
 
-        let table_id = self.next_id;
-        self.next_id += 1;
-
         let mut table = cmd
             .table
             .ok_or_else(|| Status::invalid_argument("require field: CmdCreateTable::table"))?;
 
+        let table_id = self.create_id();
         table.table_id = table_id;
+
+        let db = self.dbs.get_mut(&cmd.db_name).unwrap();
 
         db.table_name_to_id.insert(cmd.table_name, table_id);
         db.tables.insert(table_id, table);
 
         Ok(table_id)
+    }
+
+    pub fn create_id(&mut self) -> i64 {
+        let id = self.next_id;
+        self.next_id += 1;
+        id
     }
 }
