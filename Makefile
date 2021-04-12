@@ -36,8 +36,8 @@ docker:
 	docker build --network host -f docker/Dockerfile -t ${HUB}/fuse-query:${TAG} .
 
 runhelm:
-	helm upgrade --install --debug datafuse ./charts/datafuse \
-		--set image.repository=${HUB}/fuse-query --set image.tag=${TAG}
+	helm upgrade --install datafuse ./charts/datafuse \
+		--set image.repository=${HUB}/fuse-query --set image.tag=${TAG} --set configs.mysqlPort=3308
 
 coverage:
 	bash ./scripts/dev_codecov.sh
