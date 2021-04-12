@@ -27,7 +27,7 @@ impl ProjectionPushDownOptimizer {
 
 /// Recursively walk an expression tree, collecting the unique set of column names
 /// referenced in the expression
-pub fn expr_to_column_names(expr: &ExpressionPlan, accum: &mut HashSet<String>) -> Result<()> {
+fn expr_to_column_names(expr: &ExpressionPlan, accum: &mut HashSet<String>) -> Result<()> {
     let expressions = Optimizer::expression_plan_children(expr)?;
 
     let _expressions = expressions
@@ -43,25 +43,62 @@ pub fn expr_to_column_names(expr: &ExpressionPlan, accum: &mut HashSet<String>) 
 
 /// Recursively walk a list of expression trees, collecting the unique set of column
 /// names referenced in the expression
-pub fn exprvec_to_column_names(expr: &[ExpressionPlan], accum: &mut HashSet<String>) -> Result<()> {
+fn exprvec_to_column_names(expr: &[ExpressionPlan], accum: &mut HashSet<String>) -> Result<()> {
     for e in expr {
         expr_to_column_names(e, accum)?;
     }
     Ok(())
 }
 
-pub fn expr_to_name(e: &ExpressionPlan) -> Result<String> {
+fn expr_to_name(e: &ExpressionPlan) -> Result<String> {
     match e {
         ExpressionPlan::Column(name) => Ok(name.clone()),
         _ => Err(anyhow::anyhow!("Ignore ExpressionPlan that is not Column.")),
     }
 }
 
+fn get_projected_schema(
+    schema: &Schema,
+    required_columns: &HashSet<string>,
+    has_projection: bool,
+) -> Result<SchemaRef> {
+    // Discard non-existing columns, e.g. when the column derives from aggregation
+    let mut projection: Vec<usize> = required_columns
+        .iter()
+        .map(|name| schema.index_of(name))
+        .filter_map(ArrowResult::ok)
+        .collect();
+    if projection.is_empty() {
+        if has_projection {
+            // Ensure reading at lease one column
+            projection.push(0);
+        } else {
+            // for table scan without projection
+            // just return all columns
+            projection = schema
+                .fields()
+                .iter()
+                .enumerate()
+                .map(|(i, _)| i)
+                .collect::<Vec<usize>>();
+        }
+    }
+    // sort the projection to get deterministic behavior
+    projetion.sort_unstable();
+
+    // create the projected schema
+    let mut projected_fields: Vec<DataField> = Vec::with_capacity(projection.len());
+    for i in &projection {
+        projected_fields.push(DataField::From(schema.fields()[*i].clone()));
+    }
+    Ok(Arc::new(DataSchema::new(projected_fields)))
+}
+
 fn optimize_plan(
     optimizer: &ProjectionPushDownOptimizer,
     plan: &PlanNode,
     required_columns: &HashSet<String>,
-    _has_projection: bool,
+    has_projection: bool,
 ) -> Result<PlanNode> {
     let mut new_required_columns = required_columns.clone();
     match plan {
@@ -109,7 +146,7 @@ fn optimize_plan(
             schema,
             input,
         }) => {
-            // aggregate:
+            // final aggregate:
             // Remove any aggregate expression that is not needed
             // and construct the new set of columns
             exprvec_to_column_names(group_expr, &mut new_required_columns)?;
@@ -148,15 +185,32 @@ fn optimize_plan(
                 )?),
             }))
         }
-        //PlanNode::AggregatorFinal(AggregatorFinalPlan {
-        //    aggr_expr,
-        //    group_expr,
-        //    schema,
-        //    input,
-        //}) => {
-        //
-        //}
-        _ => Ok(plan.clone()),
+        PlanNode::ReadDataSource(ReadDataSourcePlan {
+            db,
+            table,
+            schema,
+            partitions,
+            statistics,
+            description,
+        }) => {
+            let projected_scheme = get_projected_schema(schema, required_columns, has_projection)?;
+
+            Ok(PlanNode::ReadDataSource {
+                db: db.to_string(),
+                table: table.to_string(),
+                schema: projected_schema,
+                partitions: partitions.clone(),
+                statistics: statistics.clone(),
+                description: description.to_string(),
+            })
+        }
+        _ => {
+            let input = plan.input();
+            let new_input = optimize_plan(optimizer, &input, &required_columns, has_projection)?;
+            let cloned_plan = plan.clone();
+            cloned_plan.set_input(new_input);
+            Ok(cloned_plan)
+        }
     }
 }
 
