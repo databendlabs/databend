@@ -11,6 +11,8 @@ mod data_array_comparison_test;
 #[cfg(test)]
 mod data_array_logic_test;
 #[cfg(test)]
+mod data_kernel_test;
+#[cfg(test)]
 mod data_value_aggregate_test;
 #[cfg(test)]
 mod data_value_arithmetic_test;
@@ -53,7 +55,7 @@ pub use crate::data_array_comparison::data_array_comparison_op;
 pub use crate::data_array_logic::data_array_logic_op;
 pub use crate::data_columnar_value::DataColumnarValue;
 pub use crate::data_field::DataField;
-pub use crate::data_kernel::create_key_for_col;
+pub use crate::data_kernel::concat_row_to_one_key;
 pub use crate::data_schema::DataSchema;
 pub use crate::data_schema::DataSchemaRef;
 pub use crate::data_type::numerical_arithmetic_coercion;

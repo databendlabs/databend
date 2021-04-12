@@ -37,13 +37,16 @@ use common_arrow::arrow::datatypes::UInt32Type;
 use common_arrow::arrow::datatypes::UInt64Type;
 use common_arrow::arrow::datatypes::UInt8Type;
 
-// Borrow from apache/arrow/rust/datafusion/
-// See notice.md
-
 /// Appends a sequence of [u8] bytes for the value in `col[row]` to
 /// `vec` to be used as a key into the hash map
-/// Used for group key generated.
-pub fn create_key_for_col(col: &ArrayRef, row: usize, vec: &mut Vec<u8>) -> Result<()> {
+/// Used for group key generated, for example:
+/// A, B
+/// 1, a
+/// 2, b
+///
+/// key-0: u8[1, 'a']
+/// key-1: u8[2, 'b']
+pub fn concat_row_to_one_key(col: &ArrayRef, row: usize, vec: &mut Vec<u8>) -> Result<()> {
     match col.data_type() {
         DataType::Boolean => {
             let array = col.as_any().downcast_ref::<BooleanArray>().unwrap();
@@ -178,5 +181,5 @@ fn dictionary_create_key_for_col<K: ArrowDictionaryKeyType>(
         )
     })?;
 
-    create_key_for_col(&dict_col.values(), values_index, vec)
+    concat_row_to_one_key(&dict_col.values(), values_index, vec)
 }
