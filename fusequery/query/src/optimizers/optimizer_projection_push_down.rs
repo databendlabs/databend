@@ -7,11 +7,11 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use common_datavalues::DataSchema;
+use common_planners::AggregatorFinalPlan;
 use common_planners::EmptyPlan;
 use common_planners::ExpressionPlan;
 use common_planners::PlanNode;
 use common_planners::ProjectionPlan;
-use common_planners::AggregatorFinalPlan;
 
 use crate::optimizers::IOptimizer;
 use crate::optimizers::Optimizer;
@@ -53,7 +53,7 @@ pub fn exprvec_to_column_names(expr: &[ExpressionPlan], accum: &mut HashSet<Stri
 pub fn expr_to_name(e: &ExpressionPlan) -> Result<String> {
     match e {
         ExpressionPlan::Column(name) => Ok(name.clone()),
-        _ => Err(anyhow::anyhow!("Ignore ExpressionPlan that is not Column.")),   
+        _ => Err(anyhow::anyhow!("Ignore ExpressionPlan that is not Column.")),
     }
 }
 
