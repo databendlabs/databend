@@ -6,8 +6,10 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use anyhow::Result;
+use common_arrow::arrow::error::Result as ArrowResult;
 use common_datavalues::DataSchema;
 use common_planners::AggregatorFinalPlan;
+use common_planners::AggregatorPartialPlan;
 use common_planners::EmptyPlan;
 use common_planners::ExpressionPlan;
 use common_planners::PlanNode;
@@ -185,6 +187,42 @@ fn optimize_plan(
                 )?),
             }))
         }
+        PlanNode::AggregatorPartial(AggregatorPartialPlan {
+            aggr_expr,
+            group_expr,
+            input,
+        }) => {
+            // Partial aggregate:
+            // Remove any aggregate expression that is not needed
+            // and construct the new set of columns
+            exprvec_to_column_names(group_expr, &mut new_required_columns)?;
+
+            // Gather all columns needed
+            let mut new_aggr_expr = Vec::new();
+            aggr_expr.iter().try_for_each(|expr| {
+                let name = expr_to_name(&expr)?;
+
+                if required_columns.contains(&name) {
+                    new_aggr_expr.push(expr.clone());
+                    new_required_columns.insert(name.clone());
+                    expr_to_column_names(expr, &mut new_required_columns)
+                } else {
+                    Ok(())
+                }
+            })?;
+
+            Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan {
+                aggr_expr: new_aggr_expr,
+                group_expr: group_expr.clone(),
+                input: Arc::new(optimize_plan(
+                    optimizer,
+                    &input,
+                    &new_required_columns,
+                    has_projection,
+                )?),
+            }))
+        }
+
         PlanNode::ReadDataSource(ReadDataSourcePlan {
             db,
             table,
