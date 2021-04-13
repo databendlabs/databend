@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 // use std::collections::HashMap;
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -47,7 +48,9 @@ use tonic::Streaming;
 
 use crate::configs::Config;
 use crate::engine::MemEngine;
+use crate::protobuf::CmdCreateDatabase;
 use crate::protobuf::CmdCreateTable;
+use crate::protobuf::Db;
 use crate::protobuf::Table;
 
 pub type FlightStream<T> =
@@ -196,18 +199,26 @@ impl FlightService for FlightServiceImpl {
             StoreDoAction::CreateDatabase(a) => {
                 let plan = a.plan;
                 let mut meta = self.meta.lock().unwrap();
+
+                let cmd = CmdCreateDatabase {
+                    db_name: plan.db,
+                    db: Some(Db {
+                        // meta fills it
+                        db_id: -1,
+                        table_name_to_id: HashMap::new(),
+                        tables: HashMap::new(),
+                    }),
+                };
+
                 let database_id = meta
-                    .create_database(plan)
+                    .create_database(cmd, plan.if_not_exists)
                     .map_err(|e| Status::internal(e.to_string()))?;
 
-                let action_rst =
-                    StoreDoActionResult::CreateDatabase(CreateDatabaseActionResult { database_id });
-                let rst = arrow_flight::Result::from(action_rst);
-                info!("single Result stream: {:}", flight_result_to_str(&rst));
-                let output = futures::stream::once(async { Ok(rst) });
-
-                Ok(Response::new(Box::pin(output)))
+                self.once_stream_resp(StoreDoActionResult::CreateDatabase(
+                    CreateDatabaseActionResult { database_id },
+                ))
             }
+
             StoreDoAction::CreateTable(a) => {
                 let plan = a.plan;
                 let db_name = plan.db;
@@ -230,8 +241,6 @@ impl FlightService for FlightServiceImpl {
                 };
 
                 let cmd = CmdCreateTable {
-                    // TODO not used
-                    db_id: -1,
                     db_name,
                     table_name,
                     table: Some(table),
@@ -239,15 +248,9 @@ impl FlightService for FlightServiceImpl {
 
                 let table_id = meta.create_table(cmd, plan.if_not_exists)?;
 
-                let action_rst =
-                    StoreDoActionResult::CreateTable(CreateTableActionResult { table_id });
-                let rst = arrow_flight::Result::from(action_rst);
-
-                info!("single Result stream: {:}", flight_result_to_str(&rst));
-
-                let output = futures::stream::once(async { Ok(rst) });
-
-                Ok(Response::new(Box::pin(output)))
+                self.once_stream_resp(StoreDoActionResult::CreateTable(CreateTableActionResult {
+                    table_id,
+                }))
             }
         }
     }
@@ -258,5 +261,19 @@ impl FlightService for FlightServiceImpl {
         _request: Request<Empty>,
     ) -> Result<Response<Self::ListActionsStream>, Status> {
         unimplemented!()
+    }
+}
+impl FlightServiceImpl {
+    fn once_stream_resp(
+        &self,
+        action_rst: StoreDoActionResult,
+    ) -> Result<Response<FlightStream<arrow_flight::Result>>, Status> {
+        let rst = arrow_flight::Result::from(action_rst);
+
+        info!("oneshot Result stream: {:}", flight_result_to_str(&rst));
+
+        let output = futures::stream::once(async { Ok(rst) });
+
+        Ok(Response::new(Box::pin(output)))
     }
 }

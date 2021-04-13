@@ -23,9 +23,14 @@ message Table {
   // repeated ReplicationGroupId ReplicationGroupIds
 }
 
-// A command to create a table.
+// A Cmd serves as a raft log entry to commit an atomic operation into meta data storage.
+
+message CmdCreateDatabase {
+  string db_name = 20;
+  Db db = 50;
+}
+
 message CmdCreateTable {
-  int64 db_id = 10;
   string db_name = 20;
   string table_name = 30;
   Table table = 40;
