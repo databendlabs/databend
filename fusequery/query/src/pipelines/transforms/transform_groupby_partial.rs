@@ -7,16 +7,19 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use common_datablocks::DataBlock;
-use common_datavalues::concat_row_to_one_key;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_planners::ExpressionPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
+use hashbrown::HashMap;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
+
+// Table for <group_key, indices>
+type GroupTable = HashMap<Vec<u8>, Vec<u32>, ahash::RandomState>;
 
 pub struct GroupByPartialTransform {
     group_exprs: Vec<ExpressionPlan>,
@@ -76,20 +79,33 @@ impl IProcessor for GroupByPartialTransform {
         let mut stream = self.input.execute().await?;
         while let Some(block) = stream.next().await {
             let block = block?;
-
-            // Eval the group value column.
+            let mut group_indices = GroupTable::default();
             let mut group_columns = Vec::with_capacity(group_funcs_length);
-            for func in &group_funcs {
-                group_columns.push(func.eval(&block)?.to_array(block.num_rows())?);
-            }
 
-            // Make group.
-            for row in 0..block.num_rows() {
-                let mut group_key = vec![];
-                for col in &group_columns {
-                    concat_row_to_one_key(col, row, &mut group_key)?;
+            // 1.1 Eval the group expr columns.
+            {
+                for func in &group_funcs {
+                    group_columns.push(func.eval(&block)?.to_array(block.num_rows())?);
                 }
             }
+
+            // 1.2 Make group with indices.
+            {
+                for row in 0..block.num_rows() {
+                    let mut group_key = vec![];
+                    for col in &group_columns {
+                        common_datavalues::concat_row_to_one_key(col, row, &mut group_key)?;
+                    }
+                    group_indices
+                        .raw_entry_mut()
+                        .from_key(&group_key)
+                        .and_modify(|_k, v| v.push(row as u32))
+                        .or_insert_with(|| (group_key.clone(), vec![row as u32]));
+                }
+            }
+
+            // 1.3 Get all sub blocks group by group_key.
+            {}
 
             let group_block = DataBlock::create(group_schema.clone(), group_columns);
             blocks.push(group_block);

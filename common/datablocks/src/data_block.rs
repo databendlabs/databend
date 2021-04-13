@@ -58,6 +58,10 @@ impl DataBlock {
         &self.columns[index]
     }
 
+    pub fn columns(&self) -> &Vec<DataArrayRef> {
+        &self.columns
+    }
+
     pub fn column_by_name(&self, name: &str) -> Result<&DataArrayRef> {
         if name == "*" {
             Ok(&self.columns[0])
