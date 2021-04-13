@@ -33,6 +33,10 @@ impl ToTypeNameFunction {
 }
 
 impl IFunction for ToTypeNameFunction {
+    fn name(&self) -> &str {
+        "ToTypeNameFunction"
+    }
+
     fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
         Ok(DataType::Utf8)
     }

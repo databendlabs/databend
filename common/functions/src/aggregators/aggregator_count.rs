@@ -39,6 +39,10 @@ impl AggregatorCountFunction {
 }
 
 impl IFunction for AggregatorCountFunction {
+    fn name(&self) -> &str {
+        "AggregatorCountFunction"
+    }
+
     fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
         self.arg.return_type(input_schema)
     }

@@ -28,6 +28,10 @@ impl ColumnFunction {
 }
 
 impl IFunction for ColumnFunction {
+    fn name(&self) -> &str {
+        "ColumnFunction"
+    }
+
     fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
         let field = if self.value == "*" {
             input_schema.field(0)

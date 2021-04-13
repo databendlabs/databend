@@ -25,6 +25,10 @@ impl LiteralFunction {
 }
 
 impl IFunction for LiteralFunction {
+    fn name(&self) -> &str {
+        "LiteralFunction"
+    }
+
     fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
         Ok(self.value.data_type())
     }

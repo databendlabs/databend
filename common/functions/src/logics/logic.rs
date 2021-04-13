@@ -56,6 +56,10 @@ impl LogicFunction {
 }
 
 impl IFunction for LogicFunction {
+    fn name(&self) -> &str {
+        "LogicFunction"
+    }
+
     fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
         Ok(DataType::Boolean)
     }

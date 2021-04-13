@@ -18,7 +18,11 @@ async fn test_transform_partial_groupby() -> anyhow::Result<()> {
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
     // sum(number)+1, avg(number)
-    let aggr_exprs = vec![add(sum(col("number")), lit(2u64)), avg(col("number"))];
+    let aggr_exprs = vec![
+        add(sum(col("number")), lit(2u64)),
+        avg(col("number")),
+        modular(col("number"), lit(3u64)),
+    ];
     let group_exprs = vec![modular(col("number"), lit(3u64))];
     let aggr_partial = PlanBuilder::create(test_source.number_schema_for_test()?)
         .aggregate_partial(aggr_exprs.clone(), group_exprs.clone())?
