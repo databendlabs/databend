@@ -6,9 +6,12 @@ use std::any::Any;
 use std::sync::Arc;
 
 use anyhow::Result;
+use common_datablocks::block_take_by_indices;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_functions::IFunction;
+use common_infallible::RwLock;
 use common_planners::ExpressionPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -19,24 +22,29 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
 
 // Table for <group_key, indices>
-type GroupTable = HashMap<Vec<u8>, Vec<u32>, ahash::RandomState>;
+type GroupIndicesTable = HashMap<Vec<u8>, Vec<u32>, ahash::RandomState>;
+type GroupFuncTable = RwLock<HashMap<Vec<u8>, Vec<Box<dyn IFunction>>, ahash::RandomState>>;
 
 pub struct GroupByPartialTransform {
+    aggr_exprs: Vec<ExpressionPlan>,
     group_exprs: Vec<ExpressionPlan>,
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>,
+    groups: GroupFuncTable,
 }
 
 impl GroupByPartialTransform {
     pub fn create(
         schema: DataSchemaRef,
-        _aggr_exprs: Vec<ExpressionPlan>,
+        aggr_exprs: Vec<ExpressionPlan>,
         group_exprs: Vec<ExpressionPlan>,
     ) -> Self {
         Self {
+            aggr_exprs,
             group_exprs,
             schema,
             input: Arc::new(EmptyProcessor::create()),
+            groups: RwLock::new(HashMap::default()),
         }
     }
 }
@@ -79,7 +87,7 @@ impl IProcessor for GroupByPartialTransform {
         let mut stream = self.input.execute().await?;
         while let Some(block) = stream.next().await {
             let block = block?;
-            let mut group_indices = GroupTable::default();
+            let mut group_indices = GroupIndicesTable::default();
             let mut group_columns = Vec::with_capacity(group_funcs_length);
 
             // 1.1 Eval the group expr columns.
@@ -105,7 +113,34 @@ impl IProcessor for GroupByPartialTransform {
             }
 
             // 1.3 Get all sub blocks group by group_key.
-            {}
+            {
+                // TODO(BohuTANG): error handle
+                group_indices.iter().for_each(|(gk, gv)| {
+                    self.groups
+                        .write()
+                        .raw_entry_mut()
+                        .from_key(gk)
+                        .and_modify(|_k, aggr_funcs| {
+                            let take_block = block_take_by_indices(&block, &gv).unwrap();
+                            aggr_funcs
+                                .iter_mut()
+                                .for_each(|func| func.accumulate(&take_block).unwrap());
+                        })
+                        .or_insert_with(|| {
+                            let take_block = block_take_by_indices(&block, &gv).unwrap();
+                            let aggr_funcs = self
+                                .aggr_exprs
+                                .iter()
+                                .map(|x| {
+                                    let mut func = x.to_function().unwrap();
+                                    func.accumulate(&take_block).unwrap();
+                                    func
+                                })
+                                .collect::<Vec<_>>();
+                            (gk.clone(), aggr_funcs)
+                        });
+                });
+            }
 
             let group_block = DataBlock::create(group_schema.clone(), group_columns);
             blocks.push(group_block);

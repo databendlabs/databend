@@ -8,9 +8,9 @@ use common_arrow::arrow::compute;
 
 use crate::DataBlock;
 
-pub fn block_take_by_indices(raw: &DataBlock, indices: Vec<u32>) -> Result<DataBlock> {
+pub fn block_take_by_indices(raw: &DataBlock, indices: &[u32]) -> Result<DataBlock> {
     let mut batch_indices: UInt32Builder = UInt32Builder::new(0);
-    batch_indices.append_slice(&indices)?;
+    batch_indices.append_slice(indices)?;
     let batch_indices = batch_indices.finish();
 
     let takes = raw

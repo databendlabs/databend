@@ -5,7 +5,7 @@
 use crate::block_take_by_indices;
 
 #[test]
-fn test_datablock_kernel_take() -> anyhow::Result<()> {
+fn test_data_block_kernel_take() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_datavalues::*;
@@ -25,7 +25,7 @@ fn test_datablock_kernel_take() -> anyhow::Result<()> {
         ],
     );
 
-    let take = block_take_by_indices(&raw, vec![0, 2])?;
+    let take = block_take_by_indices(&raw, &[0, 2])?;
     assert_eq!(raw.schema(), take.schema());
 
     let expected = vec![
