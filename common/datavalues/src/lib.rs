@@ -45,6 +45,7 @@ pub use crate::data_array::Int64Array;
 pub use crate::data_array::Int8Array;
 pub use crate::data_array::NullArray;
 pub use crate::data_array::StringArray;
+pub use crate::data_array::StructArray;
 pub use crate::data_array::UInt16Array;
 pub use crate::data_array::UInt32Array;
 pub use crate::data_array::UInt64Array;

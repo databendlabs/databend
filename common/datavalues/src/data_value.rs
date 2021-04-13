@@ -6,6 +6,7 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Error;
 use anyhow::Result;
@@ -14,6 +15,7 @@ use serde::Serialize;
 
 use crate::BooleanArray;
 use crate::DataArrayRef;
+use crate::DataField;
 use crate::DataType;
 use crate::Float32Array;
 use crate::Float64Array;
@@ -23,6 +25,7 @@ use crate::Int64Array;
 use crate::Int8Array;
 use crate::NullArray;
 use crate::StringArray;
+use crate::StructArray;
 use crate::UInt16Array;
 use crate::UInt32Array;
 use crate::UInt64Array;
@@ -83,7 +86,17 @@ impl DataValue {
             DataValue::Float32(_) => DataType::Float32,
             DataValue::Float64(_) => DataType::Float64,
             DataValue::String(_) => DataType::Utf8,
-            DataValue::Struct(_) => unimplemented!(),
+            DataValue::Struct(v) => {
+                let fields = v
+                    .iter()
+                    .enumerate()
+                    .map(|(i, x)| {
+                        let typ = x.data_type();
+                        DataField::new(format!("item_{}", i).as_str(), typ, true)
+                    })
+                    .collect::<Vec<_>>();
+                DataType::Struct(fields)
+            }
         }
     }
 
@@ -146,6 +159,21 @@ impl DataValue {
                 Arc::new(Float64Array::from(vec![*v; size])) as DataArrayRef
             }
             DataValue::String(v) => Arc::new(StringArray::from(vec![v.as_deref(); size])),
+            DataValue::Struct(v) => {
+                let mut array = vec![];
+                for (i, x) in v.iter().enumerate() {
+                    let val_array = x.to_array(1)?;
+                    array.push((
+                        DataField::new(
+                            format!("item_{}", i).as_str(),
+                            val_array.data_type().clone(),
+                            false,
+                        ),
+                        val_array as DataArrayRef,
+                    ));
+                }
+                Arc::new(StructArray::from(array))
+            }
             other => {
                 bail!(format!(
                     "DataValue Error: DataValue to array cannot be {:?}",
@@ -191,6 +219,17 @@ impl DataValue {
             DataType::Int8 => typed_cast_from_array_to_data_value!(array, index, Int8Array, Int8),
             DataType::Utf8 => {
                 typed_cast_from_array_to_data_value!(array, index, StringArray, String)
+            }
+            DataType::Struct(_) => {
+                let strut_array = array
+                    .as_any()
+                    .downcast_ref::<StructArray>()
+                    .ok_or_else(|| anyhow!("Failed to downcast StructArray".to_string()))?;
+                let nested_array = strut_array.column(index);
+                let scalar_vec = (0..nested_array.len())
+                    .map(|i| DataValue::try_from_array(&nested_array, i))
+                    .collect::<Result<Vec<_>>>()?;
+                DataValue::Struct(scalar_vec)
             }
             other => {
                 bail!(format!(

@@ -19,3 +19,4 @@ pub type UInt64Array = arrow::array::UInt64Array;
 pub type Float32Array = arrow::array::Float32Array;
 pub type Float64Array = arrow::array::Float64Array;
 pub type StringArray = arrow::array::StringArray;
+pub type StructArray = arrow::array::StructArray;
