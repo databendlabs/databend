@@ -57,6 +57,7 @@ pub use crate::data_array_logic::data_array_logic_op;
 pub use crate::data_columnar_value::DataColumnarValue;
 pub use crate::data_field::DataField;
 pub use crate::data_kernel::concat_row_to_one_key;
+pub use crate::data_kernel::data_value_vec_to_array;
 pub use crate::data_schema::DataSchema;
 pub use crate::data_schema::DataSchemaRef;
 pub use crate::data_type::numerical_arithmetic_coercion;

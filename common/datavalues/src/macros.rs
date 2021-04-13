@@ -355,7 +355,7 @@ macro_rules! build_list {
                             DataValue::$SCALAR_TY(None) => {
                                 builder.values().append_null().unwrap();
                             }
-                            _ => panic!("Incompatible DataValue for list"),
+                            _ => anyhow::bail!("Incompatible DataValue for list"),
                         };
                     }
                     builder.append(true).unwrap();
@@ -363,5 +363,22 @@ macro_rules! build_list {
                 builder.finish()
             }
         }
+    }};
+}
+
+macro_rules! try_build_array {
+    ($VALUE_BUILDER_TY:ident, $SCALAR_TY:ident, $VALUES:expr) => {{
+        let len = $VALUES.len();
+        let mut builder = $VALUE_BUILDER_TY::new(len);
+        for scalar_value in $VALUES {
+            match scalar_value {
+                DataValue::$SCALAR_TY(Some(v)) => builder.append_value(v.clone())?,
+                DataValue::$SCALAR_TY(None) => {
+                    builder.append_null()?;
+                }
+                _ => bail!("Incompatible DataValue for list"),
+            };
+        }
+        Ok(builder.finish().slice(0, len))
     }};
 }

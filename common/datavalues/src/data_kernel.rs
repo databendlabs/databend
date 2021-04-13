@@ -5,37 +5,11 @@
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Result;
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::ArrayRef;
-use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::array::Date32Array;
-use common_arrow::arrow::array::DictionaryArray;
-use common_arrow::arrow::array::Float32Array;
-use common_arrow::arrow::array::Float64Array;
-use common_arrow::arrow::array::Int16Array;
-use common_arrow::arrow::array::Int32Array;
-use common_arrow::arrow::array::Int64Array;
-use common_arrow::arrow::array::Int8Array;
-use common_arrow::arrow::array::StringArray;
-use common_arrow::arrow::array::TimestampMicrosecondArray;
-use common_arrow::arrow::array::TimestampMillisecondArray;
-use common_arrow::arrow::array::TimestampNanosecondArray;
-use common_arrow::arrow::array::UInt16Array;
-use common_arrow::arrow::array::UInt32Array;
-use common_arrow::arrow::array::UInt64Array;
-use common_arrow::arrow::array::UInt8Array;
-use common_arrow::arrow::datatypes::ArrowDictionaryKeyType;
-use common_arrow::arrow::datatypes::ArrowNativeType;
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::datatypes::Int16Type;
-use common_arrow::arrow::datatypes::Int32Type;
-use common_arrow::arrow::datatypes::Int64Type;
-use common_arrow::arrow::datatypes::Int8Type;
-use common_arrow::arrow::datatypes::TimeUnit;
-use common_arrow::arrow::datatypes::UInt16Type;
-use common_arrow::arrow::datatypes::UInt32Type;
-use common_arrow::arrow::datatypes::UInt64Type;
-use common_arrow::arrow::datatypes::UInt8Type;
+use common_arrow::arrow::array::*;
+use common_arrow::arrow::datatypes::*;
+
+use crate::DataArrayRef;
+use crate::DataValue;
 
 /// Appends a sequence of [u8] bytes for the value in `col[row]` to
 /// `vec` to be used as a key into the hash map
@@ -182,4 +156,22 @@ fn dictionary_create_key_for_col<K: ArrowDictionaryKeyType>(
     })?;
 
     concat_row_to_one_key(&dict_col.values(), values_index, vec)
+}
+
+/// Convert data value vectors to data array.
+pub fn data_value_vec_to_array(values: &[DataValue]) -> Result<DataArrayRef> {
+    match values[0].data_type() {
+        DataType::Int8 => try_build_array!(Int8Builder, Int8, values),
+        DataType::Int16 => try_build_array!(Int16Builder, Int16, values),
+        DataType::Int32 => try_build_array!(Int32Builder, Int32, values),
+        DataType::Int64 => try_build_array!(Int64Builder, Int64, values),
+        DataType::UInt8 => try_build_array!(UInt8Builder, UInt8, values),
+        DataType::UInt16 => try_build_array!(UInt16Builder, UInt16, values),
+        DataType::UInt32 => try_build_array!(UInt32Builder, UInt32, values),
+        DataType::UInt64 => try_build_array!(UInt64Builder, UInt64, values),
+        DataType::Float32 => try_build_array!(Float32Builder, Float32, values),
+        DataType::Float64 => try_build_array!(Float64Builder, Float64, values),
+        DataType::Utf8 => try_build_array!(StringBuilder, Utf8, values),
+        other => bail!("Unexpected type:{} for DataValue List", other),
+    }
 }

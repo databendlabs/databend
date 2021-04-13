@@ -7,6 +7,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::Result;
+use common_datablocks::DataBlock;
+use common_datavalues::data_value_vec_to_array;
+use common_datavalues::DataArrayRef;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_functions::IFunction;
@@ -87,7 +90,7 @@ impl IProcessor for GroupByFinalTransform {
                             let mut funcs = aggr_funcs.clone();
                             for (i, func) in funcs.iter_mut().enumerate() {
                                 if let DataValue::Utf8(Some(col)) =
-                                    DataValue::try_from_array(block.column(i), 0)?
+                                    DataValue::try_from_array(block.column(i), row)?
                                 {
                                     let val: DataValue = serde_json::from_str(&col)?;
                                     if let DataValue::Struct(states) = val {
@@ -100,7 +103,7 @@ impl IProcessor for GroupByFinalTransform {
                         Some(funcs) => {
                             for (i, func) in funcs.iter_mut().enumerate() {
                                 if let DataValue::Utf8(Some(col)) =
-                                    DataValue::try_from_array(block.column(i), 0)?
+                                    DataValue::try_from_array(block.column(i), row)?
                                 {
                                     let val: DataValue = serde_json::from_str(&col)?;
                                     if let DataValue::Struct(states) = val {
@@ -116,10 +119,33 @@ impl IProcessor for GroupByFinalTransform {
         let delta = start.elapsed();
         info!("Group by final cost: {:?}", delta);
 
+        // Collect the merge states.
+        let groups = self.groups.read();
+        let mut aggr_values: Vec<Vec<DataValue>> = {
+            let mut values = vec![];
+            for _i in 0..aggr_funcs_length {
+                values.push(vec![])
+            }
+            values
+        };
+        for (_, aggr_funcs) in groups.iter() {
+            for (i, func) in aggr_funcs.iter().enumerate() {
+                let merge = func.merge_result()?;
+                aggr_values[i].push(merge);
+            }
+        }
+
+        // Build final state block.
+        let mut columns: Vec<DataArrayRef> = Vec::with_capacity(self.aggr_exprs.len());
+        for value in &aggr_values {
+            columns.push(data_value_vec_to_array(value.as_slice())?);
+        }
+        let block = DataBlock::create(self.schema.clone(), columns);
+
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![],
+            vec![block],
         )))
     }
 }

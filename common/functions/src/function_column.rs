@@ -76,7 +76,10 @@ impl IFunction for ColumnFunction {
         Ok(vec![saved.clone()])
     }
 
-    fn merge(&mut self, _states: &[DataValue]) -> Result<()> {
+    fn merge(&mut self, states: &[DataValue]) -> Result<()> {
+        if self.saved.is_none() {
+            self.saved = Some(states[0].clone());
+        }
         Ok(())
     }
 

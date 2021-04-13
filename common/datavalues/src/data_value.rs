@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+// Borrow from apache/arrow/rust/datafusion/src/scalar.rs
+// See notice.md
+
 use std::convert::TryFrom;
 use std::fmt;
 use std::sync::Arc;
@@ -179,8 +182,10 @@ impl DataValue {
                 DataType::UInt16 => build_list!(UInt16Builder, UInt16, values, size),
                 DataType::UInt32 => build_list!(UInt32Builder, UInt32, values, size),
                 DataType::UInt64 => build_list!(UInt64Builder, UInt64, values, size),
+                DataType::Float32 => build_list!(Float32Builder, Float32, values, size),
+                DataType::Float64 => build_list!(Float64Builder, Float64, values, size),
                 DataType::Utf8 => build_list!(StringBuilder, Utf8, values, size),
-                other => bail!("Unexpected DataType:{} for list", other),
+                other => bail!("Unexpected type:{} for DataValue List", other),
             }),
             DataValue::Struct(v) => {
                 let mut array = vec![];
