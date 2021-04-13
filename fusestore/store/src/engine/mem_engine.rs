@@ -10,11 +10,13 @@ use tonic::Status;
 use crate::protobuf::CmdCreateDatabase;
 use crate::protobuf::CmdCreateTable;
 use crate::protobuf::Db;
+use crate::protobuf::Table;
 
 // MemEngine is a prototype storage that is primarily used for testing purposes.
 pub struct MemEngine {
     pub dbs: HashMap<String, Db>,
     pub next_id: i64,
+    pub next_ver: i64,
 }
 
 impl MemEngine {
@@ -23,6 +25,7 @@ impl MemEngine {
         let e = MemEngine {
             dbs: HashMap::new(),
             next_id: 0,
+            next_ver: 0,
         };
         Arc::new(Mutex::new(e))
     }
@@ -45,6 +48,7 @@ impl MemEngine {
 
         let db_id = self.create_id();
         db.db_id = db_id;
+        db.ver = self.create_ver();
 
         self.dbs.insert(cmd.db_name, db);
 
@@ -86,6 +90,7 @@ impl MemEngine {
 
         let table_id = self.create_id();
         table.table_id = table_id;
+        table.ver = self.create_ver();
 
         let db = self.dbs.get_mut(&cmd.db_name).unwrap();
 
@@ -95,9 +100,30 @@ impl MemEngine {
         Ok(table_id)
     }
 
+    pub fn get_table(&mut self, db_name: String, table_name: String) -> Result<Table, Status> {
+        let db = self
+            .dbs
+            .get(&db_name)
+            .ok_or_else(|| Status::not_found(format!("database not found: {:}", db_name)))?;
+
+        let table_id = db
+            .table_name_to_id
+            .get(&table_name)
+            .ok_or_else(|| Status::not_found(format!("table not found: {:}", table_name)))?;
+
+        let table = db.tables.get(&table_id).unwrap();
+        Ok(table.clone())
+    }
+
     pub fn create_id(&mut self) -> i64 {
         let id = self.next_id;
         self.next_id += 1;
         id
+    }
+
+    pub fn create_ver(&mut self) -> i64 {
+        let ver = self.next_ver;
+        self.next_ver += 1;
+        ver
     }
 }

@@ -9,21 +9,29 @@ package store_meta;
 
 message Db {
   int64 db_id = 1;
+  // Every modification has a corresponding unique ver.
+  int64 ver = 20;
   map<string, int64> table_name_to_id = 2;
   map<int64, Table> tables = 3;
 }
 
 message Table {
-  int64    table_id = 1;
-  bytes    schema = 5;
-  // a func(string, Vec<ReplicationGroupId>) mapping PartitionBy expr to replication group.
-  // A FuseQuery process should consider this to determine where to send the
-  // read or write operations.
-  bytes    placement_policy = 10;
+  int64 table_id = 1;
+  // Every modification has a corresponding unique ver.
+  int64 ver = 20;
+
+  bytes schema = 5;
+
+  map<string, string> options = 30;
+  // a func(string, Vec<ReplicationGroupId>) mapping PartitionBy expr to
+  // replication group. A FuseQuery process should consider this to determine
+  // where to send the read or write operations.
+  bytes placement_policy = 10;
   // repeated ReplicationGroupId ReplicationGroupIds
 }
 
-// A Cmd serves as a raft log entry to commit an atomic operation into meta data storage.
+// A Cmd serves as a raft log entry to commit an atomic operation into meta data
+// storage.
 
 message CmdCreateDatabase {
   string db_name = 20;

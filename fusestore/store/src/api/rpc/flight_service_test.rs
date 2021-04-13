@@ -2,13 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_flights::GetTableActionResult;
 use log::info;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_create_database() -> anyhow::Result<()> {
-    use common_flights::store_do_action::StoreDoActionResult;
-    use common_flights::CreateDatabaseActionResult;
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::DatabaseEngineType;
@@ -33,13 +32,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
         let res = client.create_database(plan.clone()).await;
         info!("create database res: {:?}", res);
         let res = res.unwrap();
-        match res {
-            StoreDoActionResult::CreateDatabase(rst) => {
-                let CreateDatabaseActionResult { database_id } = rst;
-                assert_eq!(0, database_id, "first database id is 0");
-            }
-            _ => panic!("expect CreateDatabaseActionResult"),
-        }
+        assert_eq!(0, res.database_id, "first database id is 0");
     }
     {
         // create second db
@@ -53,28 +46,19 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
         let res = client.create_database(plan.clone()).await;
         info!("create database res: {:?}", res);
         let res = res.unwrap();
-        match res {
-            StoreDoActionResult::CreateDatabase(rst) => {
-                let CreateDatabaseActionResult { database_id } = rst;
-                assert_eq!(1, database_id, "second database id is 1");
-            }
-            _ => panic!("expect CreateDatabaseActionResult"),
-        }
+        assert_eq!(1, res.database_id, "second database id is 1");
     }
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_create_table() -> anyhow::Result<()> {
+async fn test_flight_create_get_table() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_arrow::arrow::datatypes::DataType;
     use common_datavalues::DataField;
     use common_datavalues::DataSchema;
-    use common_flights::store_do_action::StoreDoActionResult;
-    use common_flights::CreateDatabaseActionResult;
-    use common_flights::CreateTableActionResult;
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
@@ -90,7 +74,7 @@ async fn test_flight_create_table() -> anyhow::Result<()> {
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     {
-        // create db
+        // prepare db
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: "db1".to_string(),
@@ -103,13 +87,10 @@ async fn test_flight_create_table() -> anyhow::Result<()> {
         info!("create database res: {:?}", res);
 
         let res = res.unwrap();
-        match res {
-            StoreDoActionResult::CreateDatabase(rst) => {
-                let CreateDatabaseActionResult { database_id } = rst;
-                assert_eq!(0, database_id, "first database id is 0");
-            }
-            _ => panic!("expect CreateDatabaseActionResult"),
-        }
+        assert_eq!(0, res.database_id, "first database id is 0");
+    }
+    {
+        // create table and fetch it
 
         // Table schema with metadata(due to serde issue).
         let schema = Arc::new(DataSchema::new_with_metadata(
@@ -122,53 +103,50 @@ async fn test_flight_create_table() -> anyhow::Result<()> {
 
         // Create table plan.
         let mut plan = CreateTablePlan {
-            // TODO
             if_not_exists: false,
             db: "db1".to_string(),
             table: "tb2".to_string(),
-            schema,
+            schema: schema.clone(),
+            // TODO check get_table
+            options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
             // TODO
             engine: TableEngineType::JsonEachRaw,
-            // TODO
-            options: Default::default(),
         };
 
         {
             // create table OK
-            let res = client.create_table(plan.clone()).await;
-            info!("create table res: {:?}", res);
+            let res = client.create_table(plan.clone()).await.unwrap();
+            assert_eq!(1, res.table_id, "table id is 1");
 
-            let res = res.unwrap();
-            match res {
-                StoreDoActionResult::CreateTable(rst) => {
-                    let CreateTableActionResult { table_id } = rst;
-                    assert_eq!(1, table_id, "table id is 1");
-                }
-                _ => panic!("expect CreateTableActionResult"),
-            }
+            let got = client.get_table("db1".into(), "tb2".into()).await.unwrap();
+            let want = GetTableActionResult {
+                table_id: 1,
+                db: "db1".into(),
+                name: "tb2".into(),
+                schema: schema.clone(),
+            };
+            assert_eq!(want, got, "get created table");
         }
 
         {
-            // create table again, override
-            // TODO fetch table to confirm it is updated
-            let res = client.create_table(plan.clone()).await;
-            info!("create table res: {:?}", res);
+            // create table again, override, with if_not_exists = false
+            let res = client.create_table(plan.clone()).await.unwrap();
+            assert_eq!(2, res.table_id, "new table id");
 
-            let res = res.unwrap();
-            match res {
-                StoreDoActionResult::CreateTable(rst) => {
-                    let CreateTableActionResult { table_id } = rst;
-                    assert_eq!(2, table_id, "new table id");
-                }
-                _ => panic!("expect CreateTableActionResult"),
-            }
+            let got = client.get_table("db1".into(), "tb2".into()).await.unwrap();
+            let want = GetTableActionResult {
+                table_id: 2,
+                db: "db1".into(),
+                name: "tb2".into(),
+                schema: schema.clone(),
+            };
+            assert_eq!(want, got, "get created table");
         }
 
         {
             // create table with if_not_exists=true
             plan.if_not_exists = true;
 
-            // TODO fetch table to confirm it is NOT updated
             let res = client.create_table(plan.clone()).await;
             info!("create table res: {:?}", res);
 
@@ -177,6 +155,17 @@ async fn test_flight_create_table() -> anyhow::Result<()> {
                 "status: Some entity that we attempted to create already exists: table exists",
                 status.to_string()
             );
+
+            // get_table returns the old table
+
+            let got = client.get_table("db1".into(), "tb2".into()).await.unwrap();
+            let want = GetTableActionResult {
+                table_id: 2,
+                db: "db1".into(),
+                name: "tb2".into(),
+                schema: schema.clone(),
+            };
+            assert_eq!(want, got, "get old table");
         }
     }
 
