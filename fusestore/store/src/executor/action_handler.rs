@@ -39,6 +39,7 @@ impl ActionHandler {
             meta: MemEngine::create(),
         }
     }
+
     pub async fn execute(&self, action: StoreDoAction) -> Result<StoreDoActionResult, Status> {
         match action {
             StoreDoAction::ReadPlan(_) => Err(Status::internal("Store read plan unimplemented")),
@@ -56,6 +57,7 @@ impl ActionHandler {
             db: Some(Db {
                 // meta fills it
                 db_id: -1,
+                ver: -1,
                 table_name_to_id: HashMap::new(),
                 tables: HashMap::new(),
             }),
@@ -86,6 +88,7 @@ impl ActionHandler {
         let table = Table {
             // the storage engine fills the id.
             table_id: -1,
+            ver: -1,
             schema: flight_data.data_header,
             // TODO
             placement_policy: vec![],

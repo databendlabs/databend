@@ -15,6 +15,7 @@ use crate::protobuf::Db;
 pub struct MemEngine {
     pub dbs: HashMap<String, Db>,
     pub next_id: i64,
+    pub next_ver: i64,
 }
 
 impl MemEngine {
@@ -23,6 +24,7 @@ impl MemEngine {
         let e = MemEngine {
             dbs: HashMap::new(),
             next_id: 0,
+            next_ver: 0,
         };
         Arc::new(Mutex::new(e))
     }
@@ -45,6 +47,7 @@ impl MemEngine {
 
         let db_id = self.create_id();
         db.db_id = db_id;
+        db.ver = self.create_ver();
 
         self.dbs.insert(cmd.db_name, db);
 
@@ -86,6 +89,7 @@ impl MemEngine {
 
         let table_id = self.create_id();
         table.table_id = table_id;
+        table.ver = self.create_ver();
 
         let db = self.dbs.get_mut(&cmd.db_name).unwrap();
 
@@ -99,5 +103,11 @@ impl MemEngine {
         let id = self.next_id;
         self.next_id += 1;
         id
+    }
+
+    pub fn create_ver(&mut self) -> i64 {
+        let ver = self.next_ver;
+        self.next_ver += 1;
+        ver
     }
 }

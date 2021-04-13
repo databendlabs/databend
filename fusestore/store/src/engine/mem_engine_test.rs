@@ -9,6 +9,7 @@ use crate::protobuf::Db;
 
 #[test]
 fn test_mem_engine_create_database() -> anyhow::Result<()> {
+    // TODO check generated ver
     let eng = MemEngine::create();
 
     let mut eng = eng.lock().unwrap();
@@ -17,6 +18,7 @@ fn test_mem_engine_create_database() -> anyhow::Result<()> {
         db_name: "foo".into(),
         db: Some(Db {
             db_id: -1,
+            ver: -1,
             table_name_to_id: HashMap::new(),
             tables: HashMap::new(),
         }),
@@ -25,6 +27,7 @@ fn test_mem_engine_create_database() -> anyhow::Result<()> {
         db_name: "bar".into(),
         db: Some(Db {
             db_id: -1,
+            ver: -1,
             table_name_to_id: HashMap::new(),
             tables: HashMap::new(),
         }),
@@ -37,6 +40,7 @@ fn test_mem_engine_create_database() -> anyhow::Result<()> {
         assert_eq!(
             Db {
                 db_id: 0,
+                ver: 0,
                 table_name_to_id: HashMap::new(),
                 tables: HashMap::new(),
             },
@@ -51,6 +55,7 @@ fn test_mem_engine_create_database() -> anyhow::Result<()> {
         assert_eq!(
             Db {
                 db_id: 1,
+                ver: 1,
                 table_name_to_id: HashMap::new(),
                 tables: HashMap::new(),
             },
@@ -65,6 +70,7 @@ fn test_mem_engine_create_database() -> anyhow::Result<()> {
         assert_eq!(
             Db {
                 db_id: 1,
+                ver: 1,
                 table_name_to_id: HashMap::new(),
                 tables: HashMap::new(),
             },
