@@ -10,6 +10,7 @@ use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Error;
 use anyhow::Result;
+use common_arrow::arrow::array::*;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -48,7 +49,8 @@ pub enum DataValue {
     Float32(Option<f32>),
     Float64(Option<f64>),
     Binary(Option<Vec<u8>>),
-    String(Option<String>),
+    List(Option<Vec<DataValue>>, DataType),
+    Utf8(Option<String>),
     Struct(Vec<DataValue>),
 }
 
@@ -69,8 +71,9 @@ impl DataValue {
                 | DataValue::UInt64(None)
                 | DataValue::Float32(None)
                 | DataValue::Float64(None)
-                | DataValue::String(None)
+                | DataValue::Utf8(None)
                 | DataValue::Binary(None)
+                | DataValue::List(None, _)
         )
     }
 
@@ -88,8 +91,11 @@ impl DataValue {
             DataValue::UInt64(_) => DataType::UInt64,
             DataValue::Float32(_) => DataType::Float32,
             DataValue::Float64(_) => DataType::Float64,
-            DataValue::String(_) => DataType::Utf8,
+            DataValue::Utf8(_) => DataType::Utf8,
             DataValue::Binary(_) => DataType::Binary,
+            DataValue::List(_, data_type) => {
+                DataType::List(Box::new(DataField::new("item", data_type.clone(), true)))
+            }
             DataValue::Struct(v) => {
                 let fields = v
                     .iter()
@@ -162,8 +168,20 @@ impl DataValue {
             DataValue::Float64(Some(v)) => {
                 Arc::new(Float64Array::from(vec![*v; size])) as DataArrayRef
             }
-            DataValue::String(v) => Arc::new(StringArray::from(vec![v.as_deref(); size])),
+            DataValue::Utf8(v) => Arc::new(StringArray::from(vec![v.as_deref(); size])),
             DataValue::Binary(v) => Arc::new(BinaryArray::from(vec![v.as_deref(); size])),
+            DataValue::List(values, data_type) => Arc::new(match data_type {
+                DataType::Int8 => build_list!(Int8Builder, Int8, values, size),
+                DataType::Int16 => build_list!(Int16Builder, Int16, values, size),
+                DataType::Int32 => build_list!(Int32Builder, Int32, values, size),
+                DataType::Int64 => build_list!(Int64Builder, Int64, values, size),
+                DataType::UInt8 => build_list!(UInt8Builder, UInt8, values, size),
+                DataType::UInt16 => build_list!(UInt16Builder, UInt16, values, size),
+                DataType::UInt32 => build_list!(UInt32Builder, UInt32, values, size),
+                DataType::UInt64 => build_list!(UInt64Builder, UInt64, values, size),
+                DataType::Utf8 => build_list!(StringBuilder, Utf8, values, size),
+                other => bail!("Unexpected DataType:{} for list", other),
+            }),
             DataValue::Struct(v) => {
                 let mut array = vec![];
                 for (i, x) in v.iter().enumerate() {
@@ -223,7 +241,7 @@ impl DataValue {
             }
             DataType::Int8 => typed_cast_from_array_to_data_value!(array, index, Int8Array, Int8),
             DataType::Utf8 => {
-                typed_cast_from_array_to_data_value!(array, index, StringArray, String)
+                typed_cast_from_array_to_data_value!(array, index, StringArray, Utf8)
             }
             DataType::Binary => {
                 typed_cast_from_array_to_data_value!(array, index, BinaryArray, Binary)
@@ -316,7 +334,7 @@ impl fmt::Display for DataValue {
             DataValue::UInt16(v) => format_data_value_with_option!(f, v),
             DataValue::UInt32(v) => format_data_value_with_option!(f, v),
             DataValue::UInt64(v) => format_data_value_with_option!(f, v),
-            DataValue::String(v) => format_data_value_with_option!(f, v),
+            DataValue::Utf8(v) => format_data_value_with_option!(f, v),
             DataValue::Binary(None) => write!(f, "NULL"),
             DataValue::Binary(Some(v)) => write!(
                 f,
@@ -326,6 +344,17 @@ impl fmt::Display for DataValue {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
+            DataValue::List(None, ..) => write!(f, "NULL"),
+            DataValue::List(Some(v), ..) => {
+                write!(
+                    f,
+                    "{}",
+                    v.iter()
+                        .map(|v| format!("{}", v))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
+            }
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }
     }
@@ -346,9 +375,10 @@ impl fmt::Debug for DataValue {
             DataValue::UInt64(v) => format_data_value_with_option!(f, v),
             DataValue::Float32(v) => format_data_value_with_option!(f, v),
             DataValue::Float64(v) => format_data_value_with_option!(f, v),
-            DataValue::String(v) => format_data_value_with_option!(f, v),
+            DataValue::Utf8(v) => format_data_value_with_option!(f, v),
             DataValue::Binary(None) => write!(f, "{}", self),
             DataValue::Binary(Some(_)) => write!(f, "\"{}\"", self),
+            DataValue::List(_, _) => write!(f, "[{}]", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }
     }

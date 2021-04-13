@@ -30,7 +30,7 @@ impl Settings {
         let setting_val = DataValue::Struct(vec![
             DataValue::UInt64(Some(val)),
             DataValue::UInt64(Some(val)),
-            DataValue::String(Some(desc)),
+            DataValue::Utf8(Some(desc)),
         ]);
         settings.insert(key, setting_val);
         Ok(())
@@ -73,7 +73,7 @@ impl Settings {
         let setting_val = DataValue::Struct(vec![
             DataValue::Int64(Some(val)),
             DataValue::Int64(Some(val)),
-            DataValue::String(Some(desc)),
+            DataValue::Utf8(Some(desc)),
         ]);
         settings.insert(key, setting_val);
         Ok(())
@@ -116,7 +116,7 @@ impl Settings {
         let setting_val = DataValue::Struct(vec![
             DataValue::Float64(Some(val)),
             DataValue::Float64(Some(val)),
-            DataValue::String(Some(desc)),
+            DataValue::Utf8(Some(desc)),
         ]);
         settings.insert(key, setting_val);
         Ok(())
@@ -158,9 +158,9 @@ impl Settings {
         let mut settings = self.settings.write();
         let default_value = val.clone();
         let setting_val = DataValue::Struct(vec![
-            DataValue::String(Some(val)),
-            DataValue::String(Some(default_value)),
-            DataValue::String(Some(desc)),
+            DataValue::Utf8(Some(val)),
+            DataValue::Utf8(Some(default_value)),
+            DataValue::Utf8(Some(desc)),
         ]);
         settings.insert(key, setting_val);
         Ok(())
@@ -174,7 +174,7 @@ impl Settings {
 
         if let DataValue::Struct(values) = setting_val {
             let v = DataValue::Struct(vec![
-                DataValue::String(Some(val)),
+                DataValue::Utf8(Some(val)),
                 values[1].clone(),
                 values[2].clone(),
             ]);
@@ -190,7 +190,7 @@ impl Settings {
             .ok_or_else(|| anyhow!("Unknown variable: {:?}", key))?;
 
         if let DataValue::Struct(values) = setting_val {
-            if let DataValue::String(Some(result)) = values[0].clone() {
+            if let DataValue::Utf8(Some(result)) = values[0].clone() {
                 return Ok(result);
             }
         }
@@ -205,7 +205,7 @@ impl Settings {
         for (k, v) in settings.iter() {
             if let DataValue::Struct(values) = v {
                 let res = DataValue::Struct(vec![
-                    DataValue::String(Some(k.to_string())),
+                    DataValue::Utf8(Some(k.to_string())),
                     values[0].clone(),
                     values[1].clone(),
                     values[2].clone(),

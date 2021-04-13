@@ -22,12 +22,12 @@ fn test_data_value_arithmetic() {
             name: "min-passed",
             args: vec![
                 vec![
-                    DataValue::String(Some("xx".to_string())),
+                    DataValue::Utf8(Some("xx".to_string())),
                     DataValue::Int8(Some(2)),
                 ],
                 vec![
-                    DataValue::String(Some("x1".to_string())),
-                    DataValue::String(Some("x2".to_string())),
+                    DataValue::Utf8(Some("x1".to_string())),
+                    DataValue::Utf8(Some("x2".to_string())),
                 ],
                 vec![DataValue::Int8(Some(1)), DataValue::Int8(Some(2))],
                 vec![DataValue::Int16(Some(1)), DataValue::Int16(Some(2))],
@@ -42,8 +42,8 @@ fn test_data_value_arithmetic() {
             ],
             op: DataValueAggregateOperator::Min,
             expect: vec![
-                DataValue::String(Some("xx".to_string())),
-                DataValue::String(Some("x1".to_string())),
+                DataValue::Utf8(Some("xx".to_string())),
+                DataValue::Utf8(Some("x1".to_string())),
                 DataValue::Int8(Some(1)),
                 DataValue::Int16(Some(1)),
                 DataValue::Int32(Some(1)),
@@ -63,12 +63,12 @@ fn test_data_value_arithmetic() {
             name: "max-passed",
             args: vec![
                 vec![
-                    DataValue::String(Some("xx".to_string())),
+                    DataValue::Utf8(Some("xx".to_string())),
                     DataValue::Int8(Some(2)),
                 ],
                 vec![
-                    DataValue::String(Some("x1".to_string())),
-                    DataValue::String(Some("x2".to_string())),
+                    DataValue::Utf8(Some("x1".to_string())),
+                    DataValue::Utf8(Some("x2".to_string())),
                 ],
                 vec![DataValue::Int8(Some(1)), DataValue::Int8(Some(2))],
                 vec![DataValue::Int16(Some(1)), DataValue::Int16(Some(2))],
@@ -83,8 +83,8 @@ fn test_data_value_arithmetic() {
             ],
             op: DataValueAggregateOperator::Max,
             expect: vec![
-                DataValue::String(Some("xx".to_string())),
-                DataValue::String(Some("x2".to_string())),
+                DataValue::Utf8(Some("xx".to_string())),
+                DataValue::Utf8(Some("x2".to_string())),
                 DataValue::Int8(Some(2)),
                 DataValue::Int16(Some(2)),
                 DataValue::Int32(Some(2)),
@@ -104,12 +104,12 @@ fn test_data_value_arithmetic() {
             name: "sum-passed",
             args: vec![
                 vec![
-                    DataValue::String(Some("xx".to_string())),
+                    DataValue::Utf8(Some("xx".to_string())),
                     DataValue::Int8(Some(2)),
                 ],
                 vec![
-                    DataValue::String(Some("x1".to_string())),
-                    DataValue::String(Some("x2".to_string())),
+                    DataValue::Utf8(Some("x1".to_string())),
+                    DataValue::Utf8(Some("x2".to_string())),
                 ],
                 vec![DataValue::Int8(Some(1)), DataValue::Int8(Some(2))],
                 vec![DataValue::Int16(Some(1)), DataValue::Int16(Some(2))],
@@ -124,8 +124,8 @@ fn test_data_value_arithmetic() {
             ],
             op: DataValueAggregateOperator::Sum,
             expect: vec![
-                DataValue::String(Some("xx".to_string())),
-                DataValue::String(Some("x2".to_string())),
+                DataValue::Utf8(Some("xx".to_string())),
+                DataValue::Utf8(Some("x2".to_string())),
                 DataValue::Int8(Some(3)),
                 DataValue::Int16(Some(3)),
                 DataValue::Int32(Some(3)),
@@ -146,12 +146,12 @@ fn test_data_value_arithmetic() {
             name: "avg-failed",
             args: vec![
                 vec![
-                    DataValue::String(Some("xx".to_string())),
+                    DataValue::Utf8(Some("xx".to_string())),
                     DataValue::Int8(Some(2)),
                 ],
                 vec![
-                    DataValue::String(Some("x1".to_string())),
-                    DataValue::String(Some("x2".to_string())),
+                    DataValue::Utf8(Some("x1".to_string())),
+                    DataValue::Utf8(Some("x2".to_string())),
                 ],
                 vec![DataValue::Int8(Some(1)), DataValue::Int8(Some(2))],
                 vec![DataValue::Int16(Some(1)), DataValue::Int16(Some(2))],

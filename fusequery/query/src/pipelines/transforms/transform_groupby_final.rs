@@ -86,7 +86,7 @@ impl IProcessor for GroupByFinalTransform {
                         None => {
                             let mut funcs = aggr_funcs.clone();
                             for (i, func) in funcs.iter_mut().enumerate() {
-                                if let DataValue::String(Some(col)) =
+                                if let DataValue::Utf8(Some(col)) =
                                     DataValue::try_from_array(block.column(i), 0)?
                                 {
                                     let val: DataValue = serde_json::from_str(&col)?;
@@ -99,7 +99,7 @@ impl IProcessor for GroupByFinalTransform {
                         }
                         Some(funcs) => {
                             for (i, func) in funcs.iter_mut().enumerate() {
-                                if let DataValue::String(Some(col)) =
+                                if let DataValue::Utf8(Some(col)) =
                                     DataValue::try_from_array(block.column(i), 0)?
                                 {
                                     let val: DataValue = serde_json::from_str(&col)?;
