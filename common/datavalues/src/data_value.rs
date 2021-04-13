@@ -13,6 +13,7 @@ use anyhow::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::data_array::BinaryArray;
 use crate::BooleanArray;
 use crate::DataArrayRef;
 use crate::DataField;
@@ -46,6 +47,7 @@ pub enum DataValue {
     UInt64(Option<u64>),
     Float32(Option<f32>),
     Float64(Option<f64>),
+    Binary(Option<Vec<u8>>),
     String(Option<String>),
     Struct(Vec<DataValue>),
 }
@@ -68,6 +70,7 @@ impl DataValue {
                 | DataValue::Float32(None)
                 | DataValue::Float64(None)
                 | DataValue::String(None)
+                | DataValue::Binary(None)
         )
     }
 
@@ -86,6 +89,7 @@ impl DataValue {
             DataValue::Float32(_) => DataType::Float32,
             DataValue::Float64(_) => DataType::Float64,
             DataValue::String(_) => DataType::Utf8,
+            DataValue::Binary(_) => DataType::Binary,
             DataValue::Struct(v) => {
                 let fields = v
                     .iter()
@@ -159,6 +163,7 @@ impl DataValue {
                 Arc::new(Float64Array::from(vec![*v; size])) as DataArrayRef
             }
             DataValue::String(v) => Arc::new(StringArray::from(vec![v.as_deref(); size])),
+            DataValue::Binary(v) => Arc::new(BinaryArray::from(vec![v.as_deref(); size])),
             DataValue::Struct(v) => {
                 let mut array = vec![];
                 for (i, x) in v.iter().enumerate() {
@@ -219,6 +224,9 @@ impl DataValue {
             DataType::Int8 => typed_cast_from_array_to_data_value!(array, index, Int8Array, Int8),
             DataType::Utf8 => {
                 typed_cast_from_array_to_data_value!(array, index, StringArray, String)
+            }
+            DataType::Binary => {
+                typed_cast_from_array_to_data_value!(array, index, BinaryArray, Binary)
             }
             DataType::Struct(_) => {
                 let strut_array = array
@@ -309,6 +317,15 @@ impl fmt::Display for DataValue {
             DataValue::UInt32(v) => format_data_value_with_option!(f, v),
             DataValue::UInt64(v) => format_data_value_with_option!(f, v),
             DataValue::String(v) => format_data_value_with_option!(f, v),
+            DataValue::Binary(None) => write!(f, "NULL"),
+            DataValue::Binary(Some(v)) => write!(
+                f,
+                "{}",
+                v.iter()
+                    .map(|v| format!("{}", v))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }
     }
@@ -330,6 +347,8 @@ impl fmt::Debug for DataValue {
             DataValue::Float32(v) => format_data_value_with_option!(f, v),
             DataValue::Float64(v) => format_data_value_with_option!(f, v),
             DataValue::String(v) => format_data_value_with_option!(f, v),
+            DataValue::Binary(None) => write!(f, "{}", self),
+            DataValue::Binary(Some(_)) => write!(f, "\"{}\"", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }
     }

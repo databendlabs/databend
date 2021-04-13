@@ -94,6 +94,7 @@ impl IProcessor for AggregatorFinalTransform {
         if !final_result.is_empty() {
             blocks.push(DataBlock::create(self.schema.clone(), final_result));
         }
+
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,

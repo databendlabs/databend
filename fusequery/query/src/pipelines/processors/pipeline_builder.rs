@@ -13,6 +13,7 @@ use crate::pipelines::processors::Pipeline;
 use crate::pipelines::transforms::AggregatorFinalTransform;
 use crate::pipelines::transforms::AggregatorPartialTransform;
 use crate::pipelines::transforms::FilterTransform;
+use crate::pipelines::transforms::GroupByPartialTransform;
 use crate::pipelines::transforms::LimitTransform;
 use crate::pipelines::transforms::ProjectionTransform;
 use crate::pipelines::transforms::RemoteTransform;
@@ -72,12 +73,22 @@ impl PipelineBuilder {
                 Ok(true)
             }
             PlanNode::AggregatorPartial(plan) => {
-                pipeline.add_simple_transform(|| {
-                    Ok(Box::new(AggregatorPartialTransform::try_create(
-                        plan.schema(),
-                        plan.aggr_expr.clone(),
-                    )?))
-                })?;
+                if plan.group_expr.is_empty() {
+                    pipeline.add_simple_transform(|| {
+                        Ok(Box::new(AggregatorPartialTransform::try_create(
+                            plan.schema(),
+                            plan.aggr_expr.clone(),
+                        )?))
+                    })?;
+                } else {
+                    pipeline.add_simple_transform(|| {
+                        Ok(Box::new(GroupByPartialTransform::create(
+                            plan.schema(),
+                            plan.aggr_expr.clone(),
+                            plan.group_expr.clone(),
+                        )))
+                    })?;
+                }
                 Ok(true)
             }
             PlanNode::AggregatorFinal(plan) => {
