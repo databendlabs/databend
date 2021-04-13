@@ -21,6 +21,8 @@ message Table {
   int64 ver = 20;
 
   bytes schema = 5;
+
+  map<string, string> options = 30;
   // a func(string, Vec<ReplicationGroupId>) mapping PartitionBy expr to
   // replication group. A FuseQuery process should consider this to determine
   // where to send the read or write operations.

@@ -182,7 +182,6 @@ impl FlightService for FlightServiceImpl {
         // Check token.
         let _claim = self.check_token(&request.metadata())?;
 
-        // Action.
         let action: StoreDoAction = request.try_into()?;
         info!("Receive do_action: {:?}", action);
         let rst = self.action_handler.execute(action).await?;

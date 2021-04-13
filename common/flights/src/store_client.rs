@@ -23,6 +23,10 @@ use crate::store_do_action::CreateDatabaseAction;
 use crate::store_do_action::CreateTableAction;
 use crate::store_do_action::StoreDoAction;
 use crate::store_do_action::StoreDoActionResult;
+use crate::CreateDatabaseActionResult;
+use crate::CreateTableActionResult;
+use crate::GetTableAction;
+use crate::GetTableActionResult;
 
 #[derive(Clone)]
 pub struct StoreClient {
@@ -45,20 +49,43 @@ impl StoreClient {
     pub async fn create_database(
         &mut self,
         plan: CreateDatabasePlan,
-    ) -> anyhow::Result<StoreDoActionResult> {
+    ) -> anyhow::Result<CreateDatabaseActionResult> {
         let action = StoreDoAction::CreateDatabase(CreateDatabaseAction { plan });
         let rst = self.do_action(&action).await?;
-        Ok(rst)
+
+        if let StoreDoActionResult::CreateDatabase(rst) = rst {
+            return Ok(rst);
+        }
+        anyhow::bail!("invalid response")
     }
 
     /// Create table call.
     pub async fn create_table(
         &mut self,
         plan: CreateTablePlan,
-    ) -> anyhow::Result<StoreDoActionResult> {
+    ) -> anyhow::Result<CreateTableActionResult> {
         let action = StoreDoAction::CreateTable(CreateTableAction { plan });
         let rst = self.do_action(&action).await?;
-        Ok(rst)
+
+        if let StoreDoActionResult::CreateTable(rst) = rst {
+            return Ok(rst);
+        }
+        anyhow::bail!("invalid response")
+    }
+
+    /// Get table.
+    pub async fn get_table(
+        &mut self,
+        db: String,
+        table: String,
+    ) -> anyhow::Result<GetTableActionResult> {
+        let action = StoreDoAction::GetTable(GetTableAction { db, table });
+        let rst = self.do_action(&action).await?;
+
+        if let StoreDoActionResult::GetTable(rst) = rst {
+            return Ok(rst);
+        }
+        anyhow::bail!("invalid response")
     }
 
     /// Handshake.

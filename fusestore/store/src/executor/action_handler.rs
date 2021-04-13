@@ -3,15 +3,20 @@
 // SPDX-Lise-Identifier: Apache-2.0.
 
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use common_arrow::arrow::datatypes::Schema;
 use common_arrow::arrow_flight;
+use common_arrow::arrow_flight::FlightData;
 use common_flights::store_do_action::CreateDatabaseActionResult;
 use common_flights::store_do_action::StoreDoAction;
 use common_flights::CreateDatabaseAction;
 use common_flights::CreateTableAction;
 use common_flights::CreateTableActionResult;
+use common_flights::GetTableAction;
+use common_flights::GetTableActionResult;
 use common_flights::StoreDoActionResult;
 #[allow(unused_imports)]
 use log::error;
@@ -45,6 +50,7 @@ impl ActionHandler {
             StoreDoAction::ReadPlan(_) => Err(Status::internal("Store read plan unimplemented")),
             StoreDoAction::CreateDatabase(a) => self.create_db(a).await,
             StoreDoAction::CreateTable(a) => self.create_table(a).await,
+            StoreDoAction::GetTable(a) => self.get_table(a).await,
         }
     }
 
@@ -90,6 +96,8 @@ impl ActionHandler {
             table_id: -1,
             ver: -1,
             schema: flight_data.data_header,
+            options: plan.options,
+
             // TODO
             placement_policy: vec![],
         };
@@ -105,5 +113,31 @@ impl ActionHandler {
         Ok(StoreDoActionResult::CreateTable(CreateTableActionResult {
             table_id,
         }))
+    }
+
+    async fn get_table(&self, act: GetTableAction) -> Result<StoreDoActionResult, Status> {
+        let db_name = act.db;
+        let table_name = act.table;
+
+        info!("create table: {:}: {:?}", db_name, table_name);
+
+        let mut meta = self.meta.lock().unwrap();
+
+        let table = meta.get_table(db_name.clone(), table_name.clone())?;
+
+        let schema = Schema::try_from(&FlightData {
+            data_header: table.schema,
+            ..Default::default()
+        })
+        .map_err(|e| Status::internal(format!("invalid schema: {:}", e.to_string())))?;
+
+        let rst = StoreDoActionResult::GetTable(GetTableActionResult {
+            table_id: table.table_id,
+            db: db_name,
+            name: table_name,
+            schema: Arc::new(schema),
+        });
+
+        Ok(rst)
     }
 }

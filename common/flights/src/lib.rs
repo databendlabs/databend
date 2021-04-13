@@ -17,6 +17,8 @@ pub use store_do_action::CreateDatabaseAction;
 pub use store_do_action::CreateDatabaseActionResult;
 pub use store_do_action::CreateTableAction;
 pub use store_do_action::CreateTableActionResult;
+pub use store_do_action::GetTableAction;
+pub use store_do_action::GetTableActionResult;
 pub use store_do_action::ReadPlanAction;
 pub use store_do_action::ReadPlanActionResult;
 pub use store_do_action::StoreDoAction;

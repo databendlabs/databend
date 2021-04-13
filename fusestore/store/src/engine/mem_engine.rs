@@ -10,6 +10,7 @@ use tonic::Status;
 use crate::protobuf::CmdCreateDatabase;
 use crate::protobuf::CmdCreateTable;
 use crate::protobuf::Db;
+use crate::protobuf::Table;
 
 // MemEngine is a prototype storage that is primarily used for testing purposes.
 pub struct MemEngine {
@@ -97,6 +98,21 @@ impl MemEngine {
         db.tables.insert(table_id, table);
 
         Ok(table_id)
+    }
+
+    pub fn get_table(&mut self, db_name: String, table_name: String) -> Result<Table, Status> {
+        let db = self
+            .dbs
+            .get(&db_name)
+            .ok_or_else(|| Status::not_found(format!("database not found: {:}", db_name)))?;
+
+        let table_id = db
+            .table_name_to_id
+            .get(&table_name)
+            .ok_or_else(|| Status::not_found(format!("table not found: {:}", table_name)))?;
+
+        let table = db.tables.get(&table_id).unwrap();
+        Ok(table.clone())
     }
 
     pub fn create_id(&mut self) -> i64 {

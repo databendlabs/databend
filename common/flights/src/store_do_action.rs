@@ -8,6 +8,7 @@ use std::io::Cursor;
 
 use common_arrow::arrow_flight;
 use common_arrow::arrow_flight::Action;
+use common_datavalues::DataSchemaRef;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::PlanNode;
@@ -20,15 +21,40 @@ use crate::protobuf::FlightStoreRequest;
 pub struct ReadPlanAction {
     pub push_down_plan: PlanNode,
 }
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct ReadPlanActionResult {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CreateDatabaseAction {
     pub plan: CreateDatabasePlan,
 }
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct CreateDatabaseActionResult {
+    pub database_id: i64,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CreateTableAction {
     pub plan: CreateTablePlan,
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct CreateTableActionResult {
+    pub table_id: i64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct GetTableAction {
+    pub db: String,
+    pub table: String,
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct GetTableActionResult {
+    pub table_id: i64,
+    pub db: String,
+    pub name: String,
+    pub schema: DataSchemaRef,
+    // TODO options? RemoteTable does not have an option field yet.
+    // pub options: TableOptions,
 }
 
 // Action wrapper for do_action.
@@ -37,26 +63,15 @@ pub enum StoreDoAction {
     ReadPlan(ReadPlanAction),
     CreateDatabase(CreateDatabaseAction),
     CreateTable(CreateTableAction),
+    GetTable(GetTableAction),
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct ReadPlanActionResult {}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct CreateDatabaseActionResult {
-    pub database_id: i64,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct CreateTableActionResult {
-    pub table_id: i64,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StoreDoActionResult {
     ReadPlan(ReadPlanActionResult),
     CreateDatabase(CreateDatabaseActionResult),
     CreateTable(CreateTableActionResult),
+    GetTable(GetTableActionResult),
 }
 
 /// Try convert tonic::Request<Action> to DoActionAction.
