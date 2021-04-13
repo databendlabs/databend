@@ -8,6 +8,7 @@ pub mod tests;
 pub mod api;
 pub mod configs;
 pub mod engine;
+pub mod executor;
 pub mod metrics;
 
 #[allow(clippy::all)]
