@@ -3,11 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 // use std::collections::HashMap;
-use std::collections::HashMap;
 use std::convert::TryInto;
 use std::pin::Pin;
-use std::sync::Arc;
-use std::sync::Mutex;
 
 use common_arrow::arrow_flight;
 use common_arrow::arrow_flight::flight_service_server::FlightService;
@@ -26,11 +23,9 @@ use common_arrow::arrow_flight::PutResult;
 use common_arrow::arrow_flight::SchemaResult;
 use common_arrow::arrow_flight::Ticket;
 use common_flights::flight_result_to_str;
-use common_flights::store_do_action::CreateDatabaseActionResult;
 use common_flights::store_do_action::StoreDoAction;
 use common_flights::store_do_action::StoreDoActionResult;
 use common_flights::store_do_get::StoreDoGet;
-use common_flights::CreateTableActionResult;
 use common_flights::FlightClaim;
 use common_flights::FlightToken;
 use futures::Stream;
@@ -47,25 +42,22 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::configs::Config;
-use crate::engine::MemEngine;
-use crate::protobuf::CmdCreateDatabase;
-use crate::protobuf::CmdCreateTable;
-use crate::protobuf::Db;
-use crate::protobuf::Table;
+use crate::executor::ActionHandler;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct FlightServiceImpl {
     token: FlightToken,
-    meta: Arc<Mutex<MemEngine>>,
+    action_handler: ActionHandler,
 }
 
 impl FlightServiceImpl {
     pub fn create(_conf: Config) -> Self {
         Self {
             token: FlightToken::create(),
-            meta: MemEngine::create(),
+            // TODO pass in action handler
+            action_handler: ActionHandler::create(),
         }
     }
 
@@ -193,66 +185,9 @@ impl FlightService for FlightServiceImpl {
         // Action.
         let action: StoreDoAction = request.try_into()?;
         info!("Receive do_action: {:?}", action);
+        let rst = self.action_handler.execute(action).await?;
 
-        match action {
-            StoreDoAction::ReadPlan(_) => Err(Status::internal("Store read plan unimplemented")),
-            StoreDoAction::CreateDatabase(a) => {
-                let plan = a.plan;
-                let mut meta = self.meta.lock().unwrap();
-
-                let cmd = CmdCreateDatabase {
-                    db_name: plan.db,
-                    db: Some(Db {
-                        // meta fills it
-                        db_id: -1,
-                        table_name_to_id: HashMap::new(),
-                        tables: HashMap::new(),
-                    }),
-                };
-
-                let database_id = meta
-                    .create_database(cmd, plan.if_not_exists)
-                    .map_err(|e| Status::internal(e.to_string()))?;
-
-                self.once_stream_resp(StoreDoActionResult::CreateDatabase(
-                    CreateDatabaseActionResult { database_id },
-                ))
-            }
-
-            StoreDoAction::CreateTable(a) => {
-                let plan = a.plan;
-                let db_name = plan.db;
-                let table_name = plan.table;
-
-                info!("create table: {:}: {:?}", db_name, table_name);
-
-                let mut meta = self.meta.lock().unwrap();
-
-                let options = common_arrow::arrow::ipc::writer::IpcWriteOptions::default();
-                let flight_data =
-                    arrow_flight::utils::flight_data_from_arrow_schema(&plan.schema, &options);
-
-                let table = Table {
-                    // the storage engine fills the id.
-                    table_id: -1,
-                    schema: flight_data.data_header,
-                    // TODO
-                    placement_policy: vec![],
-                };
-
-                let cmd = CmdCreateTable {
-                    db_name,
-                    table_name,
-                    table: Some(table),
-                };
-
-                let table_id = meta.create_table(cmd, plan.if_not_exists)?;
-
-                self.once_stream_resp(StoreDoActionResult::CreateTable(CreateTableActionResult {
-                    table_id,
-                }))
-            }
-        }
+        self.once_stream_resp(rst)
     }
 
     type ListActionsStream = FlightStream<ActionType>;
