@@ -86,7 +86,7 @@ impl IProcessor for AggregatorFinalTransform {
             if merge_result.is_null() {
                 break;
             }
-            final_result.push(merge_result.to_array(1)?);
+            final_result.push(merge_result.to_array_with_size(1)?);
         }
 
         let mut blocks = vec![];

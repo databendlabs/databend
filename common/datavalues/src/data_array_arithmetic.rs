@@ -32,14 +32,15 @@ pub fn data_array_arithmetic_op(
             (left_array.clone(), right_array.clone())
         }
         (DataColumnarValue::Array(array), DataColumnarValue::Scalar(scalar)) => {
-            (array.clone(), scalar.to_array(array.len())?)
+            (array.clone(), scalar.to_array_with_size(array.len())?)
         }
         (DataColumnarValue::Scalar(scalar), DataColumnarValue::Array(array)) => {
-            (scalar.to_array(array.len())?, array.clone())
+            (scalar.to_array_with_size(array.len())?, array.clone())
         }
-        (DataColumnarValue::Scalar(left_scalar), DataColumnarValue::Scalar(right_scalar)) => {
-            (left_scalar.to_array(1)?, right_scalar.to_array(1)?)
-        }
+        (DataColumnarValue::Scalar(left_scalar), DataColumnarValue::Scalar(right_scalar)) => (
+            left_scalar.to_array_with_size(1)?,
+            right_scalar.to_array_with_size(1)?,
+        ),
     };
 
     let coercion_type = super::data_type::numerical_arithmetic_coercion(

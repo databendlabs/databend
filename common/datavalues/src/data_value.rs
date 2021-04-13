@@ -142,7 +142,7 @@ impl DataValue {
         }
     }
 
-    pub fn to_array(&self, size: usize) -> Result<DataArrayRef> {
+    pub fn to_array_with_size(&self, size: usize) -> Result<DataArrayRef> {
         Ok(match self {
             DataValue::Null => Arc::new(NullArray::new(size)),
             DataValue::Boolean(Some(v)) => {
@@ -185,7 +185,7 @@ impl DataValue {
             DataValue::Struct(v) => {
                 let mut array = vec![];
                 for (i, x) in v.iter().enumerate() {
-                    let val_array = x.to_array(1)?;
+                    let val_array = x.to_array_with_size(1)?;
                     array.push((
                         DataField::new(
                             format!("item_{}", i).as_str(),
@@ -245,6 +245,23 @@ impl DataValue {
             }
             DataType::Binary => {
                 typed_cast_from_array_to_data_value!(array, index, BinaryArray, Binary)
+            }
+            DataType::List(nested_type) => {
+                let list_array = array
+                    .as_any()
+                    .downcast_ref::<ListArray>()
+                    .ok_or_else(|| anyhow!("Failed to downcast ListArray"))?;
+                let value = match list_array.is_null(index) {
+                    true => None,
+                    false => {
+                        let nested_array = list_array.value(index);
+                        let scalar_vec = (0..nested_array.len())
+                            .map(|i| DataValue::try_from_array(&nested_array, i))
+                            .collect::<Result<Vec<_>>>()?;
+                        Some(scalar_vec)
+                    }
+                };
+                DataValue::List(value, nested_type.data_type().clone())
             }
             DataType::Struct(_) => {
                 let strut_array = array
