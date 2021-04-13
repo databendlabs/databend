@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::Result;
+use common_arrow::arrow::array::BinaryBuilder;
 use common_arrow::arrow::array::StringBuilder;
 use common_datablocks::block_take_by_indices;
 use common_datablocks::DataBlock;
@@ -75,6 +76,35 @@ impl IProcessor for GroupByPartialTransform {
         self
     }
 
+    /// Create hash group based on row index and apply the function with vector.
+    /// For example:
+    /// row_idx, A
+    /// 0, 1
+    /// 1, 2
+    /// 2, 3
+    /// 3, 4
+    /// 4, 5
+    ///
+    /// grouping by [A%3]
+    /// 1.1)
+    /// row_idx, group_key
+    /// 0, 1
+    /// 1, 2
+    /// 2, 0
+    /// 3, 1
+    /// 4, 2
+    ///
+    /// 1.2) make indices group(for vector compute)
+    /// group_key, indices
+    /// 0, [2]
+    /// 1, [0, 3]
+    /// 2, [1, 4]
+    ///
+    /// 1.3) apply aggregate function(SUM(A)) to the take block
+    /// group_key, SUM(A)
+    /// 0, 3
+    /// 1, 5
+    /// 2, 7
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let group_funcs = self
             .group_exprs
@@ -118,7 +148,7 @@ impl IProcessor for GroupByPartialTransform {
                     let take_block = block_take_by_indices(&block, &group_indices)?;
                     let mut groups = self.groups.write();
                     match groups.get_mut(&group_key) {
-                        // 1.3.1 New group.
+                        // New group.
                         None => {
                             let mut aggr_funcs = vec![];
                             for expr in &self.aggr_exprs {
@@ -128,7 +158,7 @@ impl IProcessor for GroupByPartialTransform {
                             }
                             groups.insert(group_key.clone(), aggr_funcs);
                         }
-                        // 1.3.2 Accumulate result against the take block by indices.
+                        // Accumulate result against the take block by indices.
                         Some(aggr_funcs) => {
                             for func in aggr_funcs {
                                 func.accumulate(&take_block)?
@@ -151,25 +181,28 @@ impl IProcessor for GroupByPartialTransform {
                 fields.push(field);
             }
         }
+        fields.push(DataField::new("_group_by_key", DataType::Binary, false));
 
         // Builders.
-        let mut builders: Vec<StringBuilder> = (0..fields.len())
+        let mut builders: Vec<StringBuilder> = (0..fields.len() - 1)
             .map(|_| StringBuilder::new(groups.len()))
             .collect();
-
-        for (_key, funcs) in groups.iter() {
+        let mut group_key_builder = BinaryBuilder::new(groups.len());
+        for (key, funcs) in groups.iter() {
             for (idx, func) in funcs.iter().enumerate() {
                 let states = DataValue::Struct(func.accumulate_result()?);
                 let ser = serde_json::to_string(&states)?;
                 builders[idx].append_value(ser.as_str())?;
             }
+            group_key_builder.append_value(key)?;
         }
 
         let mut columns: Vec<DataArrayRef> = Vec::with_capacity(fields.len());
         for mut builder in builders {
-            let array = builder.finish();
-            columns.push(Arc::new(array));
+            columns.push(Arc::new(builder.finish()));
         }
+        columns.push(Arc::new(group_key_builder.finish()));
+
         let schema = Arc::new(DataSchema::new(fields));
         let block = DataBlock::create(schema, columns);
 
