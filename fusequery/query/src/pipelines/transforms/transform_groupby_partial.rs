@@ -4,12 +4,18 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
 use anyhow::Result;
+use common_arrow::arrow::array::StringBuilder;
 use common_datablocks::block_take_by_indices;
 use common_datablocks::DataBlock;
+use common_datavalues::DataArrayRef;
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
+use common_datavalues::DataValue;
 use common_functions::IFunction;
 use common_infallible::RwLock;
 use common_planners::ExpressionPlan;
@@ -17,6 +23,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
 use hashbrown::HashMap;
+use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
@@ -69,13 +76,6 @@ impl IProcessor for GroupByPartialTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let group_fields = self
-            .group_exprs
-            .iter()
-            .map(|x| x.to_data_field(&self.schema))
-            .collect::<Result<Vec<_>>>()?;
-        let group_schema = Arc::new(DataSchema::new(group_fields));
-
         let group_funcs = self
             .group_exprs
             .iter()
@@ -83,7 +83,7 @@ impl IProcessor for GroupByPartialTransform {
             .collect::<Result<Vec<_>>>()?;
         let group_funcs_length = group_funcs.len();
 
-        let mut blocks = vec![];
+        let start = Instant::now();
         let mut stream = self.input.execute().await?;
         while let Some(block) = stream.next().await {
             let block = block?;
@@ -112,44 +112,71 @@ impl IProcessor for GroupByPartialTransform {
                 }
             }
 
-            // 1.3 Get all sub blocks group by group_key.
+            // 1.3 Apply take blocks to aggregate function by group_key.
             {
-                // TODO(BohuTANG): error handle
-                group_indices.iter().for_each(|(gk, gv)| {
-                    self.groups
-                        .write()
-                        .raw_entry_mut()
-                        .from_key(gk)
-                        .and_modify(|_k, aggr_funcs| {
-                            let take_block = block_take_by_indices(&block, &gv).unwrap();
-                            aggr_funcs
-                                .iter_mut()
-                                .for_each(|func| func.accumulate(&take_block).unwrap());
-                        })
-                        .or_insert_with(|| {
-                            let take_block = block_take_by_indices(&block, &gv).unwrap();
-                            let aggr_funcs = self
-                                .aggr_exprs
-                                .iter()
-                                .map(|x| {
-                                    let mut func = x.to_function().unwrap();
-                                    func.accumulate(&take_block).unwrap();
-                                    func
-                                })
-                                .collect::<Vec<_>>();
-                            (gk.clone(), aggr_funcs)
-                        });
-                });
+                for (group_key, group_indices) in group_indices {
+                    let take_block = block_take_by_indices(&block, &group_indices)?;
+                    let mut groups = self.groups.write();
+                    match groups.get_mut(&group_key) {
+                        // 1.3.1 New group.
+                        None => {
+                            let mut aggr_funcs = vec![];
+                            for expr in &self.aggr_exprs {
+                                let mut func = expr.to_function()?;
+                                func.accumulate(&take_block)?;
+                                aggr_funcs.push(func);
+                            }
+                            groups.insert(group_key.clone(), aggr_funcs);
+                        }
+                        // 1.3.2 Accumulate result against the take block by indices.
+                        Some(aggr_funcs) => {
+                            for func in aggr_funcs {
+                                func.accumulate(&take_block)?
+                            }
+                        }
+                    }
+                }
             }
-
-            let group_block = DataBlock::create(group_schema.clone(), group_columns);
-            blocks.push(group_block);
         }
+        let delta = start.elapsed();
+        info!("Group by partial cost: {:?}", delta);
+
+        let groups = self.groups.read();
+
+        // Fields.
+        let mut fields = vec![];
+        if let Some((_, funcs)) = groups.iter().next() {
+            for func in funcs {
+                let field = DataField::new(format!("{}", func).as_str(), DataType::Utf8, false);
+                fields.push(field);
+            }
+        }
+
+        // Builders.
+        let mut builders: Vec<StringBuilder> = (0..fields.len())
+            .map(|_| StringBuilder::new(groups.len()))
+            .collect();
+
+        for (_key, funcs) in groups.iter() {
+            for (idx, func) in funcs.iter().enumerate() {
+                let states = DataValue::Struct(func.accumulate_result()?);
+                let ser = serde_json::to_string(&states)?;
+                builders[idx].append_value(ser.as_str())?;
+            }
+        }
+
+        let mut columns: Vec<DataArrayRef> = Vec::with_capacity(fields.len());
+        for mut builder in builders {
+            let array = builder.finish();
+            columns.push(Arc::new(array));
+        }
+        let schema = Arc::new(DataSchema::new(fields));
+        let block = DataBlock::create(schema, columns);
 
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            blocks,
+            vec![block],
         )))
     }
 }

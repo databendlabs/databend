@@ -19,7 +19,7 @@ async fn test_transform_partial_groupby() -> anyhow::Result<()> {
 
     // sum(number)+1, avg(number)
     let aggr_exprs = vec![add(sum(col("number")), lit(2u64)), avg(col("number"))];
-    let group_exprs = vec![modular(col("number"), lit(3u64)), col("number")];
+    let group_exprs = vec![modular(col("number"), lit(3u64))];
     let aggr_partial = PlanBuilder::create(test_source.number_schema_for_test()?)
         .aggregate_partial(aggr_exprs.clone(), group_exprs.clone())?
         .build()?;
@@ -43,21 +43,15 @@ async fn test_transform_partial_groupby() -> anyhow::Result<()> {
     let block = &result[0];
     assert_eq!(block.num_columns(), 2);
 
+    // SELECT SUM(number)+2, AVG(number) ... GROUP BY number%3;
     let expected = vec![
-        "+-------------------+--------+",
-        "| modulo(number, 3) | number |",
-        "+-------------------+--------+",
-        "| 0                 | 0      |",
-        "| 0                 | 3      |",
-        "| 0                 | 6      |",
-        "| 0                 | 9      |",
-        "| 1                 | 1      |",
-        "| 1                 | 4      |",
-        "| 1                 | 7      |",
-        "| 2                 | 2      |",
-        "| 2                 | 5      |",
-        "| 2                 | 8      |",
-        "+-------------------+--------+",
+        "+----------------------------------------+------------------------------------------------------+",
+        "| plus(sum(number), 2)                   | avg(number)                                          |",
+        "+----------------------------------------+------------------------------------------------------+",
+        "| {\"Struct\":[{\"UInt64\":12},{\"UInt8\":2}]} | {\"Struct\":[{\"Struct\":[{\"UInt64\":12},{\"UInt64\":3}]}]} |",
+        "| {\"Struct\":[{\"UInt64\":15},{\"UInt8\":2}]} | {\"Struct\":[{\"Struct\":[{\"UInt64\":15},{\"UInt64\":3}]}]} |",
+        "| {\"Struct\":[{\"UInt64\":18},{\"UInt8\":2}]} | {\"Struct\":[{\"Struct\":[{\"UInt64\":18},{\"UInt64\":4}]}]} |",
+        "+----------------------------------------+------------------------------------------------------+",
     ];
     crate::assert_blocks_sorted_eq!(expected, result.as_slice());
 
