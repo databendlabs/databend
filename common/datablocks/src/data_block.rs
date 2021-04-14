@@ -60,7 +60,7 @@ impl DataBlock {
         &self.columns[index]
     }
 
-    pub fn columns(&self) -> &Vec<DataArrayRef> {
+    pub fn columns(&self) -> &[DataArrayRef] {
         &self.columns
     }
 
