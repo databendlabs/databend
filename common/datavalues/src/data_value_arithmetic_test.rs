@@ -20,7 +20,7 @@ fn test_data_value_arithmetic() {
     let args = vec![
         // Error.
         vec![
-            DataValue::String(Some("xx".to_string())),
+            DataValue::Utf8(Some("xx".to_string())),
             DataValue::Int8(Some(2)),
         ],
         // Float64.
@@ -142,7 +142,7 @@ fn test_data_value_arithmetic() {
             op: DataValueArithmeticOperator::Plus,
             expect: vec![
                 // Place Hold.
-                DataValue::String(Some("xx".to_string())),
+                DataValue::Utf8(Some("xx".to_string())),
                 // Float64.
                 DataValue::Float64(Some(5.0)),
                 DataValue::Float64(Some(5.0)),
@@ -262,7 +262,7 @@ fn test_data_value_arithmetic() {
             op: DataValueArithmeticOperator::Minus,
             expect: vec![
                 // Place Hold.
-                DataValue::String(Some("xx".to_string())),
+                DataValue::Utf8(Some("xx".to_string())),
                 // Float64.
                 DataValue::Float64(Some(1.0)),
                 DataValue::Float64(Some(1.0)),
@@ -382,7 +382,7 @@ fn test_data_value_arithmetic() {
             op: DataValueArithmeticOperator::Mul,
             expect: vec![
                 // Place Hold.
-                DataValue::String(Some("xx".to_string())),
+                DataValue::Utf8(Some("xx".to_string())),
                 // Float64.
                 DataValue::Float64(Some(6.0)),
                 DataValue::Float64(Some(6.0)),
@@ -502,7 +502,7 @@ fn test_data_value_arithmetic() {
             op: DataValueArithmeticOperator::Div,
             expect: vec![
                 // Place Hold.
-                DataValue::String(Some("xx".to_string())),
+                DataValue::Utf8(Some("xx".to_string())),
                 // Float64.
                 DataValue::Float64(Some(1.5)),
                 DataValue::Float64(Some(1.5)),

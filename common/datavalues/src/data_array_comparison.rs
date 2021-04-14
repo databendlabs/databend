@@ -10,6 +10,7 @@ use common_arrow::arrow;
 use crate::DataArrayRef;
 use crate::DataColumnarValue;
 use crate::DataType;
+use crate::DataValue;
 use crate::DataValueComparisonOperator;
 use crate::Float32Array;
 use crate::Float64Array;
@@ -57,8 +58,8 @@ pub fn data_array_comparison_op(
             let coercion_type =
                 super::data_type::equal_coercion(&array.data_type(), &scalar.data_type())?;
             let left_array = arrow::compute::cast(&array, &coercion_type)?;
-            let right_array = arrow::compute::cast(&scalar.to_array(1)?, &coercion_type)?;
-            let scalar = super::DataValue::try_from_array(&right_array, 0)?;
+            let right_array = arrow::compute::cast(&scalar.to_array_with_size(1)?, &coercion_type)?;
+            let scalar = DataValue::try_from_array(&right_array, 0)?;
 
             match op {
                 DataValueComparisonOperator::Eq => arrow_array_op_scalar!(left_array, scalar, eq),
@@ -79,9 +80,9 @@ pub fn data_array_comparison_op(
         (DataColumnarValue::Scalar(scalar), DataColumnarValue::Array(array)) => {
             let coercion_type =
                 super::data_type::equal_coercion(&array.data_type(), &scalar.data_type())?;
-            let left_array = arrow::compute::cast(&scalar.to_array(1)?, &coercion_type)?;
+            let left_array = arrow::compute::cast(&scalar.to_array_with_size(1)?, &coercion_type)?;
             let right_array = arrow::compute::cast(&array, &coercion_type)?;
-            let scalar = super::DataValue::try_from_array(&left_array, 0)?;
+            let scalar = DataValue::try_from_array(&left_array, 0)?;
 
             match op {
                 DataValueComparisonOperator::Eq => arrow_array_op_scalar!(right_array, scalar, eq),
@@ -103,8 +104,10 @@ pub fn data_array_comparison_op(
                 &left_scala.data_type(),
                 &right_scalar.data_type(),
             )?;
-            let left_array = arrow::compute::cast(&left_scala.to_array(1)?, &coercion_type)?;
-            let right_array = arrow::compute::cast(&right_scalar.to_array(1)?, &coercion_type)?;
+            let left_array =
+                arrow::compute::cast(&left_scala.to_array_with_size(1)?, &coercion_type)?;
+            let right_array =
+                arrow::compute::cast(&right_scalar.to_array_with_size(1)?, &coercion_type)?;
 
             match op {
                 DataValueComparisonOperator::Eq => arrow_array_op!(&left_array, &right_array, eq),

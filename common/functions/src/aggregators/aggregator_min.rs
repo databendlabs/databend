@@ -38,6 +38,10 @@ impl AggregatorMinFunction {
 }
 
 impl IFunction for AggregatorMinFunction {
+    fn name(&self) -> &str {
+        "AggregatorMinFunction"
+    }
+
     fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
         self.arg.return_type(input_schema)
     }

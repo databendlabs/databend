@@ -41,6 +41,10 @@ impl AggregatorAvgFunction {
 }
 
 impl IFunction for AggregatorAvgFunction {
+    fn name(&self) -> &str {
+        "AggregatorAvgFunction"
+    }
+
     fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
         Ok(DataType::Float64)
     }

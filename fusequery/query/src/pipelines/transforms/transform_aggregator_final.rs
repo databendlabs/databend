@@ -68,8 +68,7 @@ impl IProcessor for AggregatorFinalTransform {
         while let Some(block) = stream.next().await {
             let block = block?;
             for (i, func) in funcs.iter_mut().enumerate() {
-                if let DataValue::String(Some(col)) = DataValue::try_from_array(block.column(i), 0)?
-                {
+                if let DataValue::Utf8(Some(col)) = DataValue::try_from_array(block.column(i), 0)? {
                     let val: DataValue = serde_json::from_str(&col)?;
                     if let DataValue::Struct(states) = val {
                         func.merge(&states)?;
@@ -87,13 +86,14 @@ impl IProcessor for AggregatorFinalTransform {
             if merge_result.is_null() {
                 break;
             }
-            final_result.push(merge_result.to_array(1)?);
+            final_result.push(merge_result.to_array_with_size(1)?);
         }
 
         let mut blocks = vec![];
         if !final_result.is_empty() {
             blocks.push(DataBlock::create(self.schema.clone(), final_result));
         }
+
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,

@@ -3,16 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::convert::TryInto;
+use std::fmt;
 use std::sync::Arc;
 
 use anyhow::Result;
 use common_arrow::arrow;
 use common_arrow::arrow::record_batch::RecordBatch;
+use common_arrow::arrow::record_batch::RecordBatchOptions;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DataBlock {
     schema: DataSchemaRef,
     columns: Vec<DataArrayRef>,
@@ -58,6 +60,10 @@ impl DataBlock {
         &self.columns[index]
     }
 
+    pub fn columns(&self) -> &[DataArrayRef] {
+        &self.columns
+    }
+
     pub fn column_by_name(&self, name: &str) -> Result<&DataArrayRef> {
         if name == "*" {
             Ok(&self.columns[0])
@@ -72,9 +78,13 @@ impl TryInto<arrow::record_batch::RecordBatch> for DataBlock {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<RecordBatch, Self::Error> {
-        Ok(arrow::record_batch::RecordBatch::try_new(
+        let options = RecordBatchOptions {
+            match_field_names: false,
+        };
+        Ok(arrow::record_batch::RecordBatch::try_new_with_options(
             self.schema.clone(),
             self.columns.clone(),
+            &options,
         )?)
     }
 }
@@ -84,5 +94,18 @@ impl TryInto<DataBlock> for arrow::record_batch::RecordBatch {
 
     fn try_into(self) -> Result<DataBlock, Self::Error> {
         Ok(DataBlock::create(self.schema(), Vec::from(self.columns())))
+    }
+}
+
+impl fmt::Debug for DataBlock {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let batch = self
+            .clone()
+            .try_into()
+            .expect("Try convert data_block to batch_record error");
+        let formatted = common_arrow::arrow::util::pretty::pretty_format_batches(&[batch])
+            .expect("Pretty format batches error");
+        let lines: Vec<&str> = formatted.trim().lines().collect();
+        write!(f, "\n{:#?}\n", lines)
     }
 }

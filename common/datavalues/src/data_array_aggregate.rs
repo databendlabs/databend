@@ -223,10 +223,10 @@ pub fn data_array_aggregate_op(
         },
         DataType::Utf8 => match op {
             DataValueAggregateOperator::Min => {
-                typed_array_min_max_string_to_data_value!(value, StringArray, String, min_string)
+                typed_array_min_max_string_to_data_value!(value, StringArray, Utf8, min_string)
             }
             DataValueAggregateOperator::Max => {
-                typed_array_min_max_string_to_data_value!(value, StringArray, String, max_string)
+                typed_array_min_max_string_to_data_value!(value, StringArray, Utf8, max_string)
             }
             DataValueAggregateOperator::Count => DataValue::UInt64(Some(value.len() as u64)),
             _ => {

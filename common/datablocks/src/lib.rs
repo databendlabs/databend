@@ -3,11 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[cfg(test)]
+mod data_block_kernel_test;
+#[cfg(test)]
 mod data_block_test;
 
 #[macro_use]
 mod macros;
 
 mod data_block;
+mod data_block_kernel;
 
-pub use crate::data_block::DataBlock;
+pub use data_block::DataBlock;
+pub use data_block_kernel::block_take_by_indices;

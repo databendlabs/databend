@@ -38,6 +38,10 @@ impl AggregatorMaxFunction {
 }
 
 impl IFunction for AggregatorMaxFunction {
+    fn name(&self) -> &str {
+        "AggregatorMaxFunction"
+    }
+
     fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
         self.arg.return_type(input_schema)
     }

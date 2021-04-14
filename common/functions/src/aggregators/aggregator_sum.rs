@@ -38,6 +38,10 @@ impl AggregatorSumFunction {
 }
 
 impl IFunction for AggregatorSumFunction {
+    fn name(&self) -> &str {
+        "AggregatorSumFunction"
+    }
+
     fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
         self.arg.return_type(input_schema)
     }

@@ -23,6 +23,10 @@ impl UdfExampleFunction {
 }
 
 impl IFunction for UdfExampleFunction {
+    fn name(&self) -> &str {
+        "UdfExampleFunction"
+    }
+
     fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
         Ok(DataType::Boolean)
     }

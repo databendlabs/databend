@@ -33,6 +33,10 @@ impl ToTypeNameFunction {
 }
 
 impl IFunction for ToTypeNameFunction {
+    fn name(&self) -> &str {
+        "ToTypeNameFunction"
+    }
+
     fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
         Ok(DataType::Utf8)
     }
@@ -43,9 +47,7 @@ impl IFunction for ToTypeNameFunction {
 
     fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         let type_name = format!("{}", self.arg.return_type(block.schema())?);
-        Ok(DataColumnarValue::Scalar(DataValue::String(Some(
-            type_name,
-        ))))
+        Ok(DataColumnarValue::Scalar(DataValue::Utf8(Some(type_name))))
     }
 }
 

@@ -66,6 +66,10 @@ impl ArithmeticFunction {
 }
 
 impl IFunction for ArithmeticFunction {
+    fn name(&self) -> &str {
+        "ArithmeticFunction"
+    }
+
     fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
         datavalues::numerical_arithmetic_coercion(
             &self.op,

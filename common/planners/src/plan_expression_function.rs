@@ -18,6 +18,11 @@ pub fn add(left: ExpressionPlan, right: ExpressionPlan) -> ExpressionPlan {
     binary_expr(left, "+", right)
 }
 
+/// Mod binary function.
+pub fn modular(left: ExpressionPlan, right: ExpressionPlan) -> ExpressionPlan {
+    binary_expr(left, "%", right)
+}
+
 /// sum() aggregate function.
 pub fn sum(other: ExpressionPlan) -> ExpressionPlan {
     ExpressionPlan::Function {

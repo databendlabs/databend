@@ -4,18 +4,20 @@
 
 use std::fmt;
 
+use anyhow::anyhow;
 use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
+use common_datavalues::DataValue;
 
 use crate::IFunction;
 
 #[derive(Clone, Debug)]
 pub struct ColumnFunction {
     value: String,
-    saved: Option<DataColumnarValue>,
+    saved: Option<DataValue>,
 }
 
 impl ColumnFunction {
@@ -28,6 +30,10 @@ impl ColumnFunction {
 }
 
 impl IFunction for ColumnFunction {
+    fn name(&self) -> &str {
+        "ColumnFunction"
+    }
+
     fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
         let field = if self.value == "*" {
             input_schema.field(0)
@@ -51,6 +57,38 @@ impl IFunction for ColumnFunction {
         Ok(DataColumnarValue::Array(
             block.column_by_name(self.value.as_str())?.clone(),
         ))
+    }
+
+    fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
+        if self.saved.is_none() {
+            let array = block.column_by_name(self.value.as_str())?;
+            let first = DataValue::try_from_array(array, 0)?;
+            self.saved = Some(first);
+        }
+        Ok(())
+    }
+
+    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
+        let saved = self
+            .saved
+            .as_ref()
+            .ok_or_else(|| anyhow!("column saved is None"))?;
+        Ok(vec![saved.clone()])
+    }
+
+    fn merge(&mut self, states: &[DataValue]) -> Result<()> {
+        if self.saved.is_none() {
+            self.saved = Some(states[0].clone());
+        }
+        Ok(())
+    }
+
+    fn merge_result(&self) -> Result<DataValue> {
+        let saved = self
+            .saved
+            .as_ref()
+            .ok_or_else(|| anyhow!("column saved is None"))?;
+        Ok(saved.clone())
     }
 }
 
