@@ -240,26 +240,15 @@ pub fn numerical_arithmetic_coercion(
     let max_size = cmp::max(numeric_byte_size(lhs_type)?, numeric_byte_size(rhs_type)?);
 
     match op {
-        DataValueArithmeticOperator::Plus | DataValueArithmeticOperator::Mul => {
+        DataValueArithmeticOperator::Plus
+        | DataValueArithmeticOperator::Mul
+        | DataValueArithmeticOperator::Modulo => {
             construct_numeric_type(has_signed, has_float, next_size(max_size))
         }
         DataValueArithmeticOperator::Minus => {
             construct_numeric_type(true, has_float, next_size(max_size))
         }
         DataValueArithmeticOperator::Div => Ok(Float64),
-        DataValueArithmeticOperator::Modulo => {
-            // https://github.com/ClickHouse/ClickHouse/blob/master/src/Functions/DivisionUtils.h#L113-L117
-            let mut bytes_size = numeric_byte_size(rhs_type)?;
-            if has_signed {
-                bytes_size = next_size(bytes_size);
-            }
-            let type0 = construct_numeric_type(has_signed, false, bytes_size)?;
-            if has_float {
-                Ok(Float64)
-            } else {
-                Ok(type0)
-            }
-        }
     }
 }
 

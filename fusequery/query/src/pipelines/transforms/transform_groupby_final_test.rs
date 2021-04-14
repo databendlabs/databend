@@ -17,7 +17,7 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
-    // sum(number)+1, avg(number)
+    // sum(number)+2, avg(number), number%3
     let aggr_exprs = vec![
         add(sum(col("number")), lit(2u64)),
         avg(col("number")),
@@ -34,7 +34,7 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
 
     // Pipeline.
     let mut pipeline = Pipeline::create();
-    let source = test_source.number_source_transform_for_test(10)?;
+    let source = test_source.number_source_transform_for_test(1000)?;
     pipeline.add_source(Arc::new(source))?;
     pipeline.add_simple_transform(|| {
         Ok(Box::new(GroupByPartialTransform::create(
@@ -63,9 +63,9 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
         "+----------------------+-------------+-------------------+",
         "| plus(sum(number), 2) | avg(number) | modulo(number, 3) |",
         "+----------------------+-------------+-------------------+",
-        "| 14                   | 4           | 1                 |", // SUM= 1+4+7
-        "| 17                   | 5           | 2                 |", // SUM= 2+5+8
-        "| 20                   | 4.5         | 0                 |", // SUM= 0+3+6+9
+        "| 166169               | 499         | 1                 |",
+        "| 166502               | 500         | 2                 |",
+        "| 166835               | 499.5       | 0                 |",
         "+----------------------+-------------+-------------------+",
     ];
     crate::assert_blocks_sorted_eq!(expected, result.as_slice());
