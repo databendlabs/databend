@@ -9,7 +9,6 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Error;
 use anyhow::Result;
@@ -209,96 +208,6 @@ impl DataValue {
                 ));
             }
         })
-    }
-
-    /// Converts a value in `array` at `index` into a ScalarValue
-    pub fn try_from_array(array: &DataArrayRef, index: usize) -> Result<Self> {
-        Ok(match array.data_type() {
-            DataType::Boolean => {
-                typed_cast_from_array_to_data_value!(array, index, BooleanArray, Boolean)
-            }
-            DataType::Float64 => {
-                typed_cast_from_array_to_data_value!(array, index, Float64Array, Float64)
-            }
-            DataType::Float32 => {
-                typed_cast_from_array_to_data_value!(array, index, Float32Array, Float32)
-            }
-            DataType::UInt64 => {
-                typed_cast_from_array_to_data_value!(array, index, UInt64Array, UInt64)
-            }
-            DataType::UInt32 => {
-                typed_cast_from_array_to_data_value!(array, index, UInt32Array, UInt32)
-            }
-            DataType::UInt16 => {
-                typed_cast_from_array_to_data_value!(array, index, UInt16Array, UInt16)
-            }
-            DataType::UInt8 => {
-                typed_cast_from_array_to_data_value!(array, index, UInt8Array, UInt8)
-            }
-            DataType::Int64 => {
-                typed_cast_from_array_to_data_value!(array, index, Int64Array, Int64)
-            }
-            DataType::Int32 => {
-                typed_cast_from_array_to_data_value!(array, index, Int32Array, Int32)
-            }
-            DataType::Int16 => {
-                typed_cast_from_array_to_data_value!(array, index, Int16Array, Int16)
-            }
-            DataType::Int8 => typed_cast_from_array_to_data_value!(array, index, Int8Array, Int8),
-            DataType::Utf8 => {
-                typed_cast_from_array_to_data_value!(array, index, StringArray, Utf8)
-            }
-            DataType::Binary => {
-                typed_cast_from_array_to_data_value!(array, index, BinaryArray, Binary)
-            }
-            DataType::List(nested_type) => {
-                let list_array = array
-                    .as_any()
-                    .downcast_ref::<ListArray>()
-                    .ok_or_else(|| anyhow!("Failed to downcast ListArray"))?;
-                let value = match list_array.is_null(index) {
-                    true => None,
-                    false => {
-                        let nested_array = list_array.value(index);
-                        let scalar_vec = (0..nested_array.len())
-                            .map(|i| DataValue::try_from_array(&nested_array, i))
-                            .collect::<Result<Vec<_>>>()?;
-                        Some(scalar_vec)
-                    }
-                };
-                DataValue::List(value, nested_type.data_type().clone())
-            }
-            DataType::Struct(_) => {
-                let strut_array = array
-                    .as_any()
-                    .downcast_ref::<StructArray>()
-                    .ok_or_else(|| anyhow!("Failed to downcast StructArray".to_string()))?;
-                let nested_array = strut_array.column(index);
-                let scalar_vec = (0..nested_array.len())
-                    .map(|i| DataValue::try_from_array(&nested_array, i))
-                    .collect::<Result<Vec<_>>>()?;
-                DataValue::Struct(scalar_vec)
-            }
-            other => {
-                bail!(format!(
-                    "DataValue Error: Can't create a scalar of array of type \"{:?}\"",
-                    other
-                ));
-            }
-        })
-    }
-
-    pub fn try_from_literal(literal: &str) -> Result<Self> {
-        match literal.parse::<i64>() {
-            Ok(n) => {
-                if n >= 0 {
-                    Ok(DataValue::UInt64(Some(n as u64)))
-                } else {
-                    Ok(DataValue::Int64(Some(n)))
-                }
-            }
-            Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?))),
-        }
     }
 }
 

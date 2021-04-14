@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn test_data_kernel_create_key() -> anyhow::Result<()> {
+fn test_data_value_kernel_concat_row_key() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use pretty_assertions::assert_eq;
@@ -43,7 +43,7 @@ fn test_data_kernel_create_key() -> anyhow::Result<()> {
         for row in 0..2 {
             let mut key: Vec<u8> = vec![];
             for col in 0..t.args.len() {
-                concat_row_to_one_key(&t.args[col], row, &mut key)?;
+                DataValue::concat_row_to_one_key(&t.args[col], row, &mut key)?;
             }
             assert_eq!(format!("{:?}", key), t.expect[row]);
         }

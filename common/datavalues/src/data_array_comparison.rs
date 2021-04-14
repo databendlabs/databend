@@ -10,6 +10,7 @@ use common_arrow::arrow;
 use crate::DataArrayRef;
 use crate::DataColumnarValue;
 use crate::DataType;
+use crate::DataValue;
 use crate::DataValueComparisonOperator;
 use crate::Float32Array;
 use crate::Float64Array;
@@ -58,7 +59,7 @@ pub fn data_array_comparison_op(
                 super::data_type::equal_coercion(&array.data_type(), &scalar.data_type())?;
             let left_array = arrow::compute::cast(&array, &coercion_type)?;
             let right_array = arrow::compute::cast(&scalar.to_array_with_size(1)?, &coercion_type)?;
-            let scalar = super::DataValue::try_from_array(&right_array, 0)?;
+            let scalar = DataValue::try_from_array(&right_array, 0)?;
 
             match op {
                 DataValueComparisonOperator::Eq => arrow_array_op_scalar!(left_array, scalar, eq),
@@ -81,7 +82,7 @@ pub fn data_array_comparison_op(
                 super::data_type::equal_coercion(&array.data_type(), &scalar.data_type())?;
             let left_array = arrow::compute::cast(&scalar.to_array_with_size(1)?, &coercion_type)?;
             let right_array = arrow::compute::cast(&array, &coercion_type)?;
-            let scalar = super::DataValue::try_from_array(&left_array, 0)?;
+            let scalar = DataValue::try_from_array(&left_array, 0)?;
 
             match op {
                 DataValueComparisonOperator::Eq => arrow_array_op_scalar!(right_array, scalar, eq),

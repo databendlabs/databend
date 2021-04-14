@@ -133,7 +133,7 @@ impl IProcessor for GroupByPartialTransform {
                 for row in 0..block.num_rows() {
                     let mut group_key = vec![];
                     for col in &group_columns {
-                        common_datavalues::concat_row_to_one_key(col, row, &mut group_key)?;
+                        DataValue::concat_row_to_one_key(col, row, &mut group_key)?;
                     }
                     group_indices
                         .raw_entry_mut()

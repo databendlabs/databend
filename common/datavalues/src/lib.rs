@@ -11,11 +11,11 @@ mod data_array_comparison_test;
 #[cfg(test)]
 mod data_array_logic_test;
 #[cfg(test)]
-mod data_kernel_test;
-#[cfg(test)]
 mod data_value_aggregate_test;
 #[cfg(test)]
 mod data_value_arithmetic_test;
+#[cfg(test)]
+mod data_value_kernel_test;
 
 #[macro_use]
 mod macros;
@@ -65,8 +65,6 @@ pub use crate::data_value::DataValue;
 pub use crate::data_value::DataValueRef;
 pub use crate::data_value_aggregate::data_value_aggregate_op;
 pub use crate::data_value_arithmetic::data_value_arithmetic_op;
-pub use crate::data_value_kernel::concat_row_to_one_key;
-pub use crate::data_value_kernel::try_into_data_array;
 pub use crate::data_value_operator::DataValueAggregateOperator;
 pub use crate::data_value_operator::DataValueArithmeticOperator;
 pub use crate::data_value_operator::DataValueComparisonOperator;
