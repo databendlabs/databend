@@ -123,7 +123,8 @@ impl IProcessor for GroupByPartialTransform {
             // 1.1 Eval the group expr columns.
             {
                 for func in &group_funcs {
-                    group_columns.push(func.eval(&block)?.to_array(block.num_rows())?);
+                    let group_column = func.eval(&block)?.to_array(block.num_rows())?;
+                    group_columns.push(group_column);
                 }
             }
 

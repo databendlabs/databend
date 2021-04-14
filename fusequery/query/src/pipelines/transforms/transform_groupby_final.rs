@@ -8,7 +8,7 @@ use std::time::Instant;
 
 use anyhow::Result;
 use common_datablocks::DataBlock;
-use common_datavalues::data_value_vec_to_array;
+use common_datavalues::try_into_data_array;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
@@ -138,7 +138,7 @@ impl IProcessor for GroupByFinalTransform {
         // Build final state block.
         let mut columns: Vec<DataArrayRef> = Vec::with_capacity(self.aggr_exprs.len());
         for value in &aggr_values {
-            columns.push(data_value_vec_to_array(value.as_slice())?);
+            columns.push(try_into_data_array(value.as_slice())?);
         }
         let block = DataBlock::create(self.schema.clone(), columns);
 

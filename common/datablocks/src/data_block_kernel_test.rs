@@ -2,15 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::block_take_by_indices;
-
 #[test]
 fn test_data_block_kernel_take() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_datavalues::*;
 
-    use crate::DataBlock;
+    use crate::*;
 
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("a", DataType::Int64, false),

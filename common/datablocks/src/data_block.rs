@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::convert::TryInto;
+use std::fmt;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -13,7 +14,7 @@ use common_datavalues::DataArrayRef;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DataBlock {
     schema: DataSchemaRef,
     columns: Vec<DataArrayRef>,
@@ -93,5 +94,18 @@ impl TryInto<DataBlock> for arrow::record_batch::RecordBatch {
 
     fn try_into(self) -> Result<DataBlock, Self::Error> {
         Ok(DataBlock::create(self.schema(), Vec::from(self.columns())))
+    }
+}
+
+impl fmt::Debug for DataBlock {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let batch = self
+            .clone()
+            .try_into()
+            .expect("Try convert data_block to batch_record error");
+        let formatted = common_arrow::arrow::util::pretty::pretty_format_batches(&[batch])
+            .expect("Pretty format batches error");
+        let lines: Vec<&str> = formatted.trim().lines().collect();
+        write!(f, "\n{:#?}\n", lines)
     }
 }

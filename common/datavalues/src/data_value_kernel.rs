@@ -159,7 +159,7 @@ fn dictionary_create_key_for_col<K: ArrowDictionaryKeyType>(
 }
 
 /// Convert data value vectors to data array.
-pub fn data_value_vec_to_array(values: &[DataValue]) -> Result<DataArrayRef> {
+pub fn try_into_data_array(values: &[DataValue]) -> Result<DataArrayRef> {
     match values[0].data_type() {
         DataType::Int8 => try_build_array!(Int8Builder, Int8, values),
         DataType::Int16 => try_build_array!(Int16Builder, Int16, values),
