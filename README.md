@@ -87,8 +87,8 @@ Note:
 - [x] Type coercion
 - [x] Parallel Query Execution
 - [x] Distributed Query Execution
+- [x] GroupBy
 - [ ] Sorting (WIP)
-- [ ] GroupBy (WIP)
 - [ ] Joins (TODO)
 
 #### SQL Support
@@ -123,7 +123,7 @@ Note:
 
 - [x] 0.1 Support aggregation select (2021.02)
 - [x] 0.2 Support distributed query (2021.03)
-- [ ] 0.3 Support group by (WIP)
+- [x] 0.3 Support group by (2021.04)
 - [ ] 0.4 Support order by
 - [ ] 0.5 Support sub queries
 - [ ] 0.6 Support join
