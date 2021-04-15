@@ -41,10 +41,7 @@ impl ExpressionPlan {
     fn to_function_with_depth(&self, depth: usize) -> Result<Box<dyn IFunction>> {
         match self {
             ExpressionPlan::Column(ref v) => Ok(ColumnFunction::try_create(v.as_str())?),
-            ExpressionPlan::Literal(ref v) => {
-                let field_value = v.to_field_value();
-                Ok(LiteralFunction::try_create(field_value)?)
-            }
+            ExpressionPlan::Literal(ref v) => Ok(LiteralFunction::try_create(v.clone())?),
             ExpressionPlan::BinaryExpression { left, op, right } => {
                 let l = left.to_function_with_depth(depth)?;
                 let r = right.to_function_with_depth(depth + 1)?;
