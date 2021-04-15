@@ -23,7 +23,7 @@ fn test_data_block_kernel_take() -> anyhow::Result<()> {
         ],
     );
 
-    let take = block_take_by_indices(&raw, &[0, 2])?;
+    let take = DataBlock::block_take_by_indices(&raw, &[0, 2])?;
     assert_eq!(raw.schema(), take.schema());
 
     let expected = vec![
