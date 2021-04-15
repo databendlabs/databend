@@ -14,6 +14,8 @@ mod data_array_logic_test;
 mod data_value_aggregate_test;
 #[cfg(test)]
 mod data_value_arithmetic_test;
+#[cfg(test)]
+mod data_value_kernel_test;
 
 #[macro_use]
 mod macros;
@@ -30,6 +32,7 @@ mod data_type;
 mod data_value;
 mod data_value_aggregate;
 mod data_value_arithmetic;
+mod data_value_kernel;
 mod data_value_operator;
 
 pub use crate::data_array::BooleanArray;
@@ -42,6 +45,7 @@ pub use crate::data_array::Int64Array;
 pub use crate::data_array::Int8Array;
 pub use crate::data_array::NullArray;
 pub use crate::data_array::StringArray;
+pub use crate::data_array::StructArray;
 pub use crate::data_array::UInt16Array;
 pub use crate::data_array::UInt32Array;
 pub use crate::data_array::UInt64Array;
@@ -54,9 +58,8 @@ pub use crate::data_columnar_value::DataColumnarValue;
 pub use crate::data_field::DataField;
 pub use crate::data_schema::DataSchema;
 pub use crate::data_schema::DataSchemaRef;
-pub use crate::data_type::numerical_arithmetic_coercion;
-pub use crate::data_type::numerical_coercion;
 pub use crate::data_type::DataType;
+pub use crate::data_type::*;
 pub use crate::data_value::DataValue;
 pub use crate::data_value::DataValueRef;
 pub use crate::data_value_aggregate::data_value_aggregate_op;

@@ -59,6 +59,7 @@ git clone https://github.com/datafuselabs/datafuse.git
 
 2. Make sure you have [Kubernetes](https://kubernetes.io/) cluster running
 
+3. Make sure you have [Helm](https://helm.sh/) installed
 ### 4.2 Build Image
 
 `make docker` to build image `datafuselabs/fuse-query`

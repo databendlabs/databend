@@ -37,7 +37,7 @@ fn test_array_aggregate() {
             ],
             op: DataValueAggregateOperator::Min,
             expect: vec![
-                DataValue::String(Some("x1".to_string())),
+                DataValue::Utf8(Some("x1".to_string())),
                 DataValue::Int8(Some(1)),
                 DataValue::Int16(Some(1)),
                 DataValue::Int32(Some(1)),
@@ -68,7 +68,7 @@ fn test_array_aggregate() {
             ],
             op: DataValueAggregateOperator::Max,
             expect: vec![
-                DataValue::String(Some("x2".to_string())),
+                DataValue::Utf8(Some("x2".to_string())),
                 DataValue::Int8(Some(4)),
                 DataValue::Int16(Some(4)),
                 DataValue::Int32(Some(4)),
@@ -99,7 +99,7 @@ fn test_array_aggregate() {
             ],
             op: DataValueAggregateOperator::Sum,
             expect: vec![
-                DataValue::String(Some("xx".to_string())),
+                DataValue::Utf8(Some("xx".to_string())),
                 DataValue::Int8(Some(10)),
                 DataValue::Int16(Some(10)),
                 DataValue::Int32(Some(10)),

@@ -66,6 +66,10 @@ impl ComparisonFunction {
 }
 
 impl IFunction for ComparisonFunction {
+    fn name(&self) -> &str {
+        "ComparisonFunction"
+    }
+
     fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
         Ok(DataType::Boolean)
     }

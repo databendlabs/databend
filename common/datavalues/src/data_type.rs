@@ -222,6 +222,7 @@ pub fn numerical_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Da
     )
 }
 
+#[inline]
 pub fn numerical_arithmetic_coercion(
     op: &DataValueArithmeticOperator,
     lhs_type: &DataType,
@@ -229,10 +230,12 @@ pub fn numerical_arithmetic_coercion(
 ) -> Result<DataType> {
     // error on any non-numeric type
     if !is_numeric(lhs_type) || !is_numeric(rhs_type) {
-        bail!(format!(
+        bail!(
             "DataValue Error: Unsupported ({:?}) {} ({:?})",
-            lhs_type, op, rhs_type
-        ));
+            lhs_type,
+            op,
+            rhs_type
+        );
     };
 
     let has_signed = is_signed_numeric(lhs_type) || is_signed_numeric(rhs_type);
@@ -240,26 +243,15 @@ pub fn numerical_arithmetic_coercion(
     let max_size = cmp::max(numeric_byte_size(lhs_type)?, numeric_byte_size(rhs_type)?);
 
     match op {
-        DataValueArithmeticOperator::Plus | DataValueArithmeticOperator::Mul => {
+        DataValueArithmeticOperator::Plus
+        | DataValueArithmeticOperator::Mul
+        | DataValueArithmeticOperator::Modulo => {
             construct_numeric_type(has_signed, has_float, next_size(max_size))
         }
         DataValueArithmeticOperator::Minus => {
             construct_numeric_type(true, has_float, next_size(max_size))
         }
         DataValueArithmeticOperator::Div => Ok(Float64),
-        DataValueArithmeticOperator::Modulo => {
-            // https://github.com/ClickHouse/ClickHouse/blob/master/src/Functions/DivisionUtils.h#L113-L117
-            let mut bytes_size = numeric_byte_size(rhs_type)?;
-            if has_signed {
-                bytes_size = next_size(bytes_size);
-            }
-            let type0 = construct_numeric_type(has_signed, false, bytes_size)?;
-            if has_float {
-                Ok(Float64)
-            } else {
-                Ok(type0)
-            }
-        }
     }
 }
 
@@ -271,18 +263,4 @@ pub fn equal_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataTy
     }
 
     numerical_coercion(lhs_type, rhs_type).or_else(|_| dictionary_coercion(lhs_type, rhs_type))
-}
-
-// coercion rules that assume an ordered set, such as "less than".
-// These are the union of all numerical coercion rules and all string coercion rules
-#[allow(dead_code)]
-pub fn order_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
-    if lhs_type == rhs_type {
-        // same type => all good
-        return Ok(lhs_type.clone());
-    }
-
-    numerical_coercion(lhs_type, rhs_type)
-        .or_else(|_| string_coercion(lhs_type, rhs_type))
-        .or_else(|_| dictionary_coercion(lhs_type, rhs_type))
 }

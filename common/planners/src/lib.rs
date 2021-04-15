@@ -69,6 +69,7 @@ pub use crate::plan_expression::ExpressionPlan;
 pub use crate::plan_expression_column::col;
 pub use crate::plan_expression_function::add;
 pub use crate::plan_expression_function::avg;
+pub use crate::plan_expression_function::modular;
 pub use crate::plan_expression_function::sum;
 pub use crate::plan_expression_literal::lit;
 pub use crate::plan_filter::FilterPlan;

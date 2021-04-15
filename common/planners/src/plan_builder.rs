@@ -102,11 +102,8 @@ impl PlanBuilder {
         aggr_expr: Vec<ExpressionPlan>,
         group_expr: Vec<ExpressionPlan>,
     ) -> Result<Self> {
-        let mut all_expr: Vec<ExpressionPlan> = group_expr.clone();
-        aggr_expr.iter().for_each(|x| all_expr.push(x.clone()));
-
         let input_schema = self.plan.schema();
-        let aggr_fields = self.exprs_to_fields(&all_expr, &input_schema)?;
+        let aggr_fields = self.exprs_to_fields(&aggr_expr, &input_schema)?;
 
         Ok(match mode {
             AggregateMode::Partial => {

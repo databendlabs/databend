@@ -8,6 +8,7 @@ use anyhow::Result;
 use crate::DataValue;
 use crate::DataValueAggregateOperator;
 
+#[inline]
 pub fn data_value_aggregate_op(
     op: DataValueAggregateOperator,
     left: DataValue,
@@ -156,12 +157,12 @@ pub fn data_value_aggregate_op(
                 ));
             }
         },
-        (DataValue::String(lhs), DataValue::String(rhs)) => match op {
+        (DataValue::Utf8(lhs), DataValue::Utf8(rhs)) => match op {
             DataValueAggregateOperator::Min => {
-                typed_data_value_min_max_string!(lhs, rhs, String, min)
+                typed_data_value_min_max_string!(lhs, rhs, Utf8, min)
             }
             DataValueAggregateOperator::Max => {
-                typed_data_value_min_max_string!(lhs, rhs, String, max)
+                typed_data_value_min_max_string!(lhs, rhs, Utf8, max)
             }
             _ => {
                 bail!(format!(

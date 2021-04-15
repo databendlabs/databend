@@ -25,10 +25,11 @@ impl DataColumnarValue {
         x
     }
 
+    #[inline]
     pub fn to_array(&self, size: usize) -> Result<DataArrayRef> {
         match self {
             DataColumnarValue::Array(array) => Ok(array.clone()),
-            DataColumnarValue::Scalar(scalar) => scalar.to_array(size),
+            DataColumnarValue::Scalar(scalar) => scalar.to_array_with_size(size),
         }
     }
 }

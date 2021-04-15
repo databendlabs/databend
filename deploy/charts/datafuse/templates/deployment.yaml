@@ -38,10 +38,19 @@ spec:
                 name: {{ include "datafuse.fullname" . }}
           ports:
             - name: mysql
-              containerPort: 3307
+              containerPort: {{ .Values.configs.mysqlPort }}
+              protocol: TCP
+            - name: clickhouse
+              containerPort: {{ .Values.configs.clickhousePort }}
               protocol: TCP
             - name: http
-              containerPort: 8080
+              containerPort: {{ .Values.configs.httpAPIPort }}
+              protocol: TCP
+            - name: metric
+              containerPort: {{ .Values.configs.metricAPIPort }}
+              protocol: TCP
+            - name: rpc
+              containerPort: {{ .Values.configs.rpcAPIPort }}
               protocol: TCP
           livenessProbe:
             httpGet:

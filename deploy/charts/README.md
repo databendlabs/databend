@@ -29,4 +29,4 @@ export FUSE_HTTP_PORT=$(kubectl get --namespace default -o jsonpath="{.spec.port
 curl http://127.0.0.1:$FUSE_HTTP_PORT/v1/configs
 ```
 
-More to see [building-and-running.md](../docs/overview/building-and-running.md)
+More to see [building-and-running.md](../../docs/overview/building-and-running.md)

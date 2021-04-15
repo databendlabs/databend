@@ -137,7 +137,7 @@ macro_rules! compute_op_scalar {
 macro_rules! compute_utf8_op_scalar {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
         let ll = downcast_array!($LEFT, $DT)?;
-        if let crate::DataValue::String(Some(string_value)) = $RIGHT {
+        if let crate::DataValue::Utf8(Some(string_value)) = $RIGHT {
             Ok(Arc::new(
                 paste::expr! {common_arrow::arrow::compute::[<$OP _utf8_scalar>]}(
                     &ll,
@@ -331,4 +331,54 @@ macro_rules! typed_cast_from_data_value_to_std {
             }
         }
     };
+}
+
+macro_rules! build_list {
+    ($VALUE_BUILDER_TY:ident, $SCALAR_TY:ident, $VALUES:expr, $SIZE:expr) => {{
+        match $VALUES {
+            // the return on the macro is necessary, to short-circuit and return ArrayRef
+            None => {
+                return Ok(common_arrow::arrow::array::new_null_array(
+                    &DataType::List(Box::new(DataField::new("item", DataType::$SCALAR_TY, true))),
+                    $SIZE,
+                ))
+            }
+            Some(values) => {
+                let mut builder = ListBuilder::new($VALUE_BUILDER_TY::new(values.len()));
+
+                for _ in 0..$SIZE {
+                    for scalar_value in values {
+                        match scalar_value {
+                            DataValue::$SCALAR_TY(Some(v)) => {
+                                builder.values().append_value(v.clone()).unwrap()
+                            }
+                            DataValue::$SCALAR_TY(None) => {
+                                builder.values().append_null().unwrap();
+                            }
+                            _ => anyhow::bail!("Incompatible DataValue for list"),
+                        };
+                    }
+                    builder.append(true).unwrap();
+                }
+                builder.finish()
+            }
+        }
+    }};
+}
+
+macro_rules! try_build_array {
+    ($VALUE_BUILDER_TY:ident, $SCALAR_TY:ident, $VALUES:expr) => {{
+        let len = $VALUES.len();
+        let mut builder = $VALUE_BUILDER_TY::new(len);
+        for scalar_value in $VALUES {
+            match scalar_value {
+                DataValue::$SCALAR_TY(Some(v)) => builder.append_value(v.clone())?,
+                DataValue::$SCALAR_TY(None) => {
+                    builder.append_null()?;
+                }
+                _ => bail!("Incompatible DataValue for list"),
+            };
+        }
+        Ok(builder.finish().slice(0, len))
+    }};
 }

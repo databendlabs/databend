@@ -31,6 +31,10 @@ impl AliasFunction {
 }
 
 impl IFunction for AliasFunction {
+    fn name(&self) -> &str {
+        "AliasFunction"
+    }
+
     fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
         self.func.return_type(input_schema)
     }

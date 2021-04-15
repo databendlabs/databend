@@ -2,10 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+// use std::collections::HashMap;
 use std::convert::TryInto;
 use std::pin::Pin;
-use std::sync::Arc;
-use std::sync::Mutex;
 
 use common_arrow::arrow_flight;
 use common_arrow::arrow_flight::flight_service_server::FlightService;
@@ -24,7 +23,6 @@ use common_arrow::arrow_flight::PutResult;
 use common_arrow::arrow_flight::SchemaResult;
 use common_arrow::arrow_flight::Ticket;
 use common_flights::flight_result_to_str;
-use common_flights::store_do_action::CreateDatabaseActionResult;
 use common_flights::store_do_action::StoreDoAction;
 use common_flights::store_do_action::StoreDoActionResult;
 use common_flights::store_do_get::StoreDoGet;
@@ -44,21 +42,22 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::configs::Config;
-use crate::engine::MemEngine;
+use crate::executor::ActionHandler;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct FlightServiceImpl {
     token: FlightToken,
-    meta: Arc<Mutex<MemEngine>>,
+    action_handler: ActionHandler,
 }
 
 impl FlightServiceImpl {
     pub fn create(_conf: Config) -> Self {
         Self {
             token: FlightToken::create(),
-            meta: MemEngine::create(),
+            // TODO pass in action handler
+            action_handler: ActionHandler::create(),
         }
     }
 
@@ -183,31 +182,11 @@ impl FlightService for FlightServiceImpl {
         // Check token.
         let _claim = self.check_token(&request.metadata())?;
 
-        // Action.
         let action: StoreDoAction = request.try_into()?;
         info!("Receive do_action: {:?}", action);
+        let rst = self.action_handler.execute(action).await?;
 
-        match action {
-            StoreDoAction::ReadPlan(_) => Err(Status::internal("Store read plan unimplemented")),
-            StoreDoAction::CreateDatabase(a) => {
-                let plan = a.plan;
-                let mut meta = self.meta.lock().unwrap();
-                let database_id = meta
-                    .create_database(plan)
-                    .map_err(|e| Status::internal(e.to_string()))?;
-
-                let action_rst =
-                    StoreDoActionResult::CreateDatabase(CreateDatabaseActionResult { database_id });
-                let rst = arrow_flight::Result::from(action_rst);
-                info!("single Result stream: {:}", flight_result_to_str(&rst));
-                let output = futures::stream::once(async { Ok(rst) });
-
-                Ok(Response::new(Box::pin(output)))
-            }
-            StoreDoAction::CreateTable(_) => {
-                Err(Status::internal("Store create table unimplemented"))
-            }
-        }
+        self.once_stream_resp(rst)
     }
 
     type ListActionsStream = FlightStream<ActionType>;
@@ -216,5 +195,19 @@ impl FlightService for FlightServiceImpl {
         _request: Request<Empty>,
     ) -> Result<Response<Self::ListActionsStream>, Status> {
         unimplemented!()
+    }
+}
+impl FlightServiceImpl {
+    fn once_stream_resp(
+        &self,
+        action_rst: StoreDoActionResult,
+    ) -> Result<Response<FlightStream<arrow_flight::Result>>, Status> {
+        let rst = arrow_flight::Result::from(action_rst);
+
+        info!("oneshot Result stream: {:}", flight_result_to_str(&rst));
+
+        let output = futures::stream::once(async { Ok(rst) });
+
+        Ok(Response::new(Box::pin(output)))
     }
 }

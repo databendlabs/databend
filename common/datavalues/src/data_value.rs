@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+// Borrow from apache/arrow/rust/datafusion/src/scalar.rs
+// See notice.md
+
 use std::convert::TryFrom;
 use std::fmt;
 use std::sync::Arc;
@@ -9,11 +12,14 @@ use std::sync::Arc;
 use anyhow::bail;
 use anyhow::Error;
 use anyhow::Result;
+use common_arrow::arrow::array::*;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::data_array::BinaryArray;
 use crate::BooleanArray;
 use crate::DataArrayRef;
+use crate::DataField;
 use crate::DataType;
 use crate::Float32Array;
 use crate::Float64Array;
@@ -23,6 +29,7 @@ use crate::Int64Array;
 use crate::Int8Array;
 use crate::NullArray;
 use crate::StringArray;
+use crate::StructArray;
 use crate::UInt16Array;
 use crate::UInt32Array;
 use crate::UInt64Array;
@@ -43,7 +50,9 @@ pub enum DataValue {
     UInt64(Option<u64>),
     Float32(Option<f32>),
     Float64(Option<f64>),
-    String(Option<String>),
+    Binary(Option<Vec<u8>>),
+    List(Option<Vec<DataValue>>, DataType),
+    Utf8(Option<String>),
     Struct(Vec<DataValue>),
 }
 
@@ -64,7 +73,9 @@ impl DataValue {
                 | DataValue::UInt64(None)
                 | DataValue::Float32(None)
                 | DataValue::Float64(None)
-                | DataValue::String(None)
+                | DataValue::Utf8(None)
+                | DataValue::Binary(None)
+                | DataValue::List(None, _)
         )
     }
 
@@ -82,44 +93,26 @@ impl DataValue {
             DataValue::UInt64(_) => DataType::UInt64,
             DataValue::Float32(_) => DataType::Float32,
             DataValue::Float64(_) => DataType::Float64,
-            DataValue::String(_) => DataType::Utf8,
-            DataValue::Struct(_) => unimplemented!(),
+            DataValue::Utf8(_) => DataType::Utf8,
+            DataValue::Binary(_) => DataType::Binary,
+            DataValue::List(_, data_type) => {
+                DataType::List(Box::new(DataField::new("item", data_type.clone(), true)))
+            }
+            DataValue::Struct(v) => {
+                let fields = v
+                    .iter()
+                    .enumerate()
+                    .map(|(i, x)| {
+                        let typ = x.data_type();
+                        DataField::new(format!("item_{}", i).as_str(), typ, true)
+                    })
+                    .collect::<Vec<_>>();
+                DataType::Struct(fields)
+            }
         }
     }
 
-    // LiteralValue from planner, we turn Int64, UInt64 to specific minimal type
-    pub fn to_field_value(&self) -> Self {
-        match *self {
-            DataValue::Int64(Some(i)) => {
-                if i < i8::MAX as i64 {
-                    return DataValue::Int8(Some(i as i8));
-                }
-                if i < i16::MAX as i64 {
-                    return DataValue::Int16(Some(i as i16));
-                }
-                if i < i32::MAX as i64 {
-                    return DataValue::Int32(Some(i as i32));
-                }
-                self.clone()
-            }
-
-            DataValue::UInt64(Some(i)) => {
-                if i < u8::MAX as u64 {
-                    return DataValue::UInt8(Some(i as u8));
-                }
-                if i < u16::MAX as u64 {
-                    return DataValue::UInt16(Some(i as u16));
-                }
-                if i < u32::MAX as u64 {
-                    return DataValue::UInt32(Some(i as u32));
-                }
-                self.clone()
-            }
-            _ => self.clone(),
-        }
-    }
-
-    pub fn to_array(&self, size: usize) -> Result<DataArrayRef> {
+    pub fn to_array_with_size(&self, size: usize) -> Result<DataArrayRef> {
         Ok(match self {
             DataValue::Null => Arc::new(NullArray::new(size)),
             DataValue::Boolean(Some(v)) => {
@@ -145,73 +138,44 @@ impl DataValue {
             DataValue::Float64(Some(v)) => {
                 Arc::new(Float64Array::from(vec![*v; size])) as DataArrayRef
             }
-            DataValue::String(v) => Arc::new(StringArray::from(vec![v.as_deref(); size])),
-            other => {
-                bail!(format!(
-                    "DataValue Error: DataValue to array cannot be NONE {:?}",
-                    other
-                ));
-            }
-        })
-    }
-
-    /// Converts a value in `array` at `index` into a ScalarValue
-    pub fn try_from_array(array: &DataArrayRef, index: usize) -> Result<Self> {
-        Ok(match array.data_type() {
-            DataType::Boolean => {
-                typed_cast_from_array_to_data_value!(array, index, BooleanArray, Boolean)
-            }
-            DataType::Float64 => {
-                typed_cast_from_array_to_data_value!(array, index, Float64Array, Float64)
-            }
-            DataType::Float32 => {
-                typed_cast_from_array_to_data_value!(array, index, Float32Array, Float32)
-            }
-            DataType::UInt64 => {
-                typed_cast_from_array_to_data_value!(array, index, UInt64Array, UInt64)
-            }
-            DataType::UInt32 => {
-                typed_cast_from_array_to_data_value!(array, index, UInt32Array, UInt32)
-            }
-            DataType::UInt16 => {
-                typed_cast_from_array_to_data_value!(array, index, UInt16Array, UInt16)
-            }
-            DataType::UInt8 => {
-                typed_cast_from_array_to_data_value!(array, index, UInt8Array, UInt8)
-            }
-            DataType::Int64 => {
-                typed_cast_from_array_to_data_value!(array, index, Int64Array, Int64)
-            }
-            DataType::Int32 => {
-                typed_cast_from_array_to_data_value!(array, index, Int32Array, Int32)
-            }
-            DataType::Int16 => {
-                typed_cast_from_array_to_data_value!(array, index, Int16Array, Int16)
-            }
-            DataType::Int8 => typed_cast_from_array_to_data_value!(array, index, Int8Array, Int8),
-            DataType::Utf8 => {
-                typed_cast_from_array_to_data_value!(array, index, StringArray, String)
-            }
-            other => {
-                bail!(format!(
-                    "DataValue Error: Can't create a scalar of array of type \"{:?}\"",
-                    other
-                ));
-            }
-        })
-    }
-
-    pub fn try_from_literal(literal: &str) -> Result<Self> {
-        match literal.parse::<i64>() {
-            Ok(n) => {
-                if n >= 0 {
-                    Ok(DataValue::UInt64(Some(n as u64)))
-                } else {
-                    Ok(DataValue::Int64(Some(n)))
+            DataValue::Utf8(v) => Arc::new(StringArray::from(vec![v.as_deref(); size])),
+            DataValue::Binary(v) => Arc::new(BinaryArray::from(vec![v.as_deref(); size])),
+            DataValue::List(values, data_type) => Arc::new(match data_type {
+                DataType::Int8 => build_list!(Int8Builder, Int8, values, size),
+                DataType::Int16 => build_list!(Int16Builder, Int16, values, size),
+                DataType::Int32 => build_list!(Int32Builder, Int32, values, size),
+                DataType::Int64 => build_list!(Int64Builder, Int64, values, size),
+                DataType::UInt8 => build_list!(UInt8Builder, UInt8, values, size),
+                DataType::UInt16 => build_list!(UInt16Builder, UInt16, values, size),
+                DataType::UInt32 => build_list!(UInt32Builder, UInt32, values, size),
+                DataType::UInt64 => build_list!(UInt64Builder, UInt64, values, size),
+                DataType::Float32 => build_list!(Float32Builder, Float32, values, size),
+                DataType::Float64 => build_list!(Float64Builder, Float64, values, size),
+                DataType::Utf8 => build_list!(StringBuilder, Utf8, values, size),
+                other => bail!("Unexpected type:{} for DataValue List", other),
+            }),
+            DataValue::Struct(v) => {
+                let mut array = vec![];
+                for (i, x) in v.iter().enumerate() {
+                    let val_array = x.to_array_with_size(1)?;
+                    array.push((
+                        DataField::new(
+                            format!("item_{}", i).as_str(),
+                            val_array.data_type().clone(),
+                            false,
+                        ),
+                        val_array as DataArrayRef,
+                    ));
                 }
+                Arc::new(StructArray::from(array))
             }
-            Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?))),
-        }
+            other => {
+                bail!(format!(
+                    "DataValue Error: DataValue to array cannot be {:?}",
+                    other
+                ));
+            }
+        })
     }
 }
 
@@ -269,7 +233,27 @@ impl fmt::Display for DataValue {
             DataValue::UInt16(v) => format_data_value_with_option!(f, v),
             DataValue::UInt32(v) => format_data_value_with_option!(f, v),
             DataValue::UInt64(v) => format_data_value_with_option!(f, v),
-            DataValue::String(v) => format_data_value_with_option!(f, v),
+            DataValue::Utf8(v) => format_data_value_with_option!(f, v),
+            DataValue::Binary(None) => write!(f, "NULL"),
+            DataValue::Binary(Some(v)) => write!(
+                f,
+                "{}",
+                v.iter()
+                    .map(|v| format!("{}", v))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+            DataValue::List(None, ..) => write!(f, "NULL"),
+            DataValue::List(Some(v), ..) => {
+                write!(
+                    f,
+                    "{}",
+                    v.iter()
+                        .map(|v| format!("{}", v))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
+            }
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }
     }
@@ -290,7 +274,10 @@ impl fmt::Debug for DataValue {
             DataValue::UInt64(v) => format_data_value_with_option!(f, v),
             DataValue::Float32(v) => format_data_value_with_option!(f, v),
             DataValue::Float64(v) => format_data_value_with_option!(f, v),
-            DataValue::String(v) => format_data_value_with_option!(f, v),
+            DataValue::Utf8(v) => format_data_value_with_option!(f, v),
+            DataValue::Binary(None) => write!(f, "{}", self),
+            DataValue::Binary(Some(_)) => write!(f, "\"{}\"", self),
+            DataValue::List(_, _) => write!(f, "[{}]", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }
     }

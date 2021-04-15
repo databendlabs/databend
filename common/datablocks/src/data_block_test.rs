@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn test_datablock() -> anyhow::Result<()> {
+fn test_data_block() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_datavalues::*;

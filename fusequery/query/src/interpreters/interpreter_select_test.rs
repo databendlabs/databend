@@ -4,9 +4,8 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_select_interpreter() -> anyhow::Result<()> {
-    use common_datavalues::*;
     use common_planners::*;
-    use futures::stream::StreamExt;
+    use futures::TryStreamExt;
 
     use crate::interpreters::*;
     use crate::sql::*;
@@ -20,8 +19,13 @@ async fn test_select_interpreter() -> anyhow::Result<()> {
         let executor = SelectInterpreter::try_create(ctx.clone(), plan)?;
         assert_eq!(executor.name(), "SelectInterpreter");
 
-        let mut stream = executor.execute().await?;
-        while let Some(_block) = stream.next().await {}
+        let stream = executor.execute().await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let block = &result[0];
+        assert_eq!(block.num_columns(), 1);
+
+        let expected = vec!["++", "||", "++", "++"];
+        crate::assert_blocks_sorted_eq!(expected, result.as_slice());
     } else {
         assert!(false)
     }
@@ -32,25 +36,19 @@ async fn test_select_interpreter() -> anyhow::Result<()> {
         let executor = SelectInterpreter::try_create(ctx.clone(), plan)?;
         assert_eq!(executor.name(), "SelectInterpreter");
 
-        let mut stream = executor.execute().await?;
-        if let Some(block) = stream.next().await {
-            let block = block?;
-            assert_eq!(1, block.num_rows());
-            assert_eq!(4, block.num_columns());
+        let stream = executor.execute().await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let block = &result[0];
+        assert_eq!(block.num_columns(), 4);
 
-            let sc = block.schema().clone();
-            let types: Vec<&DataType> = sc.fields().iter().map(|f| f.data_type()).collect();
-            assert_eq!(
-                vec![
-                    &DataType::UInt16,
-                    &DataType::UInt16,
-                    &DataType::UInt16,
-                    &DataType::UInt16
-                ],
-                types
-            );
-        }
-        while let Some(_block) = stream.next().await {}
+        let expected = vec![
+            "+------------+------------+----------------+----------------+",
+            "| plus(1, 1) | plus(2, 2) | multiply(3, 3) | multiply(4, 4) |",
+            "+------------+------------+----------------+----------------+",
+            "| 2          | 4          | 9              | 16             |",
+            "+------------+------------+----------------+----------------+",
+        ];
+        crate::assert_blocks_sorted_eq!(expected, result.as_slice());
     }
 
     Ok(())

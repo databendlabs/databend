@@ -5,7 +5,7 @@
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_explain_interpreter() -> anyhow::Result<()> {
     use common_planners::*;
-    use futures::stream::StreamExt;
+    use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
 
     use crate::interpreters::*;
@@ -19,8 +19,21 @@ async fn test_explain_interpreter() -> anyhow::Result<()> {
         let executor = ExplainInterpreter::try_create(ctx, plan)?;
         assert_eq!(executor.name(), "ExplainInterpreter");
 
-        let mut stream = executor.execute().await?;
-        while let Some(_block) = stream.next().await {}
+        let stream = executor.execute().await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let block = &result[0];
+        assert_eq!(block.num_columns(), 1);
+
+        let expected = vec![
+            "+---------------------------------------------------------------------------------------------------------------------+",
+            "| explain                                                                                                             |",
+            "+---------------------------------------------------------------------------------------------------------------------+",
+            "| Projection: number:UInt64                                                                                           |",
+            "|   Filter: ((number + 1) = 4)                                                                                        |",
+            "|     ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80] |",
+            "+---------------------------------------------------------------------------------------------------------------------+",
+        ];
+        crate::assert_blocks_sorted_eq!(expected, result.as_slice());
     } else {
         assert!(false)
     }

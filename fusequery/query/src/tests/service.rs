@@ -21,7 +21,7 @@ pub async fn try_start_service(nums: usize) -> Result<Vec<String>> {
         let (addr, _) = start_one_service().await?;
         results.push(addr.clone());
     }
-    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
 
     Ok(results)
 }

@@ -315,7 +315,7 @@ impl PlanParser {
                 Ok(ExpressionPlan::Literal(DataValue::try_from_literal(n)?))
             }
             sqlparser::ast::Expr::Value(sqlparser::ast::Value::SingleQuotedString(s)) => {
-                Ok(ExpressionPlan::Literal(DataValue::String(Some(s.clone()))))
+                Ok(ExpressionPlan::Literal(DataValue::Utf8(Some(s.clone()))))
             }
             sqlparser::ast::Expr::BinaryOp { left, op, right } => {
                 Ok(ExpressionPlan::BinaryExpression {

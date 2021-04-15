@@ -12,13 +12,13 @@ pub trait ILiteral {
 
 impl ILiteral for &str {
     fn to_literal(&self) -> ExpressionPlan {
-        ExpressionPlan::Literal(DataValue::String(Some(self.to_string())))
+        ExpressionPlan::Literal(DataValue::Utf8(Some(self.to_string())))
     }
 }
 
 impl ILiteral for String {
     fn to_literal(&self) -> ExpressionPlan {
-        ExpressionPlan::Literal(DataValue::String(Some(self.clone())))
+        ExpressionPlan::Literal(DataValue::Utf8(Some(self.clone())))
     }
 }
 
