@@ -229,10 +229,12 @@ pub fn numerical_arithmetic_coercion(
 ) -> Result<DataType> {
     // error on any non-numeric type
     if !is_numeric(lhs_type) || !is_numeric(rhs_type) {
-        bail!(format!(
+        bail!(
             "DataValue Error: Unsupported ({:?}) {} ({:?})",
-            lhs_type, op, rhs_type
-        ));
+            lhs_type,
+            op,
+            rhs_type
+        );
     };
 
     let has_signed = is_signed_numeric(lhs_type) || is_signed_numeric(rhs_type);

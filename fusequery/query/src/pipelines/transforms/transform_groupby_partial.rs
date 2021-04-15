@@ -10,7 +10,6 @@ use std::time::Instant;
 use anyhow::Result;
 use common_arrow::arrow::array::BinaryBuilder;
 use common_arrow::arrow::array::StringBuilder;
-use common_datablocks::block_take_by_indices;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataField;
@@ -159,7 +158,7 @@ impl IProcessor for GroupByPartialTransform {
             // 1.3 Apply take blocks to aggregate function by group_key.
             {
                 for (group_key, group_indices) in group_indices {
-                    let take_block = block_take_by_indices(&block, &group_indices)?;
+                    let take_block = DataBlock::block_take_by_indices(&block, &group_indices)?;
                     let mut groups = self.groups.write();
                     match groups.get_mut(&group_key) {
                         // New group.
