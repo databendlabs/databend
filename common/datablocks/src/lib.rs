@@ -11,6 +11,9 @@ mod data_block_test;
 mod macros;
 
 mod data_block;
-mod data_block_kernel;
+mod data_block_concat;
+mod data_block_sort;
 
-pub use data_block::DataBlock;
+pub use crate::data_block::DataBlock;
+pub use crate::data_block_concat::concat_blocks;
+pub use crate::data_block_sort::*;

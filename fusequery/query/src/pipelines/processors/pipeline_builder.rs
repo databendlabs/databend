@@ -18,6 +18,8 @@ use crate::pipelines::transforms::GroupByPartialTransform;
 use crate::pipelines::transforms::LimitTransform;
 use crate::pipelines::transforms::ProjectionTransform;
 use crate::pipelines::transforms::RemoteTransform;
+use crate::pipelines::transforms::SortMergeTransform;
+use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
 use crate::planners::PlanScheduler;
 use crate::sessions::FuseQueryContextRef;
@@ -120,6 +122,36 @@ impl PipelineBuilder {
                 })?;
                 Ok(true)
             }
+            PlanNode::Sort(plan) => {
+                //TODO sort limit
+                let limit = None;
+                pipeline.add_simple_transform(|| {
+                    Ok(Box::new(SortPartialTransform::try_create(
+                        plan.schema(),
+                        plan.order_by.clone(),
+                        limit,
+                    )?))
+                })?;
+
+                pipeline.add_simple_transform(|| {
+                    Ok(Box::new(SortMergeTransform::try_create(
+                        plan.schema(),
+                        plan.order_by.clone(),
+                        limit,
+                    )?))
+                })?;
+
+                pipeline.merge_processor()?;
+                pipeline.add_simple_transform(|| {
+                    Ok(Box::new(SortMergeTransform::try_create(
+                        plan.schema(),
+                        plan.order_by.clone(),
+                        limit,
+                    )?))
+                })?;
+                Ok(true)
+            }
+
             PlanNode::Limit(plan) => {
                 pipeline.merge_processor()?;
                 pipeline

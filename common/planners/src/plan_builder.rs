@@ -23,6 +23,7 @@ use crate::PlanRewriter;
 use crate::ProjectionPlan;
 use crate::ScanPlan;
 use crate::SelectPlan;
+use crate::SortPlan;
 use crate::StagePlan;
 use crate::StageState;
 
@@ -172,6 +173,13 @@ impl PlanBuilder {
     pub fn filter(&self, expr: ExpressionPlan) -> Result<Self> {
         Ok(Self::from(&PlanNode::Filter(FilterPlan {
             predicate: expr,
+            input: Arc::new(self.plan.clone()),
+        })))
+    }
+
+    pub fn sort(&self, exprs: &[ExpressionPlan]) -> Result<Self> {
+        Ok(Self::from(&PlanNode::Sort(SortPlan {
+            order_by: exprs.to_vec(),
             input: Arc::new(self.plan.clone()),
         })))
     }
