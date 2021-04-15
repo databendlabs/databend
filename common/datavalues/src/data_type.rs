@@ -222,6 +222,7 @@ pub fn numerical_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Da
     )
 }
 
+#[inline]
 pub fn numerical_arithmetic_coercion(
     op: &DataValueArithmeticOperator,
     lhs_type: &DataType,
