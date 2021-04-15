@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -23,7 +24,6 @@ use common_planners::ExpressionPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
-use hashbrown::HashMap;
 use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;
@@ -111,14 +111,15 @@ impl IProcessor for GroupByPartialTransform {
             .iter()
             .map(|x| x.to_function())
             .collect::<Result<Vec<_>>>()?;
-        let group_funcs_length = group_funcs.len();
+        let group_funcs_len = group_funcs.len();
+        let aggr_funcs_len = self.aggr_exprs.len();
 
         let start = Instant::now();
         let mut stream = self.input.execute().await?;
         while let Some(block) = stream.next().await {
             let block = block?;
             let mut group_indices = GroupIndicesTable::default();
-            let mut group_columns = Vec::with_capacity(group_funcs_length);
+            let mut group_columns = Vec::with_capacity(group_funcs_len);
 
             // 1.1 Eval the group expr columns.
             {
@@ -130,16 +131,28 @@ impl IProcessor for GroupByPartialTransform {
 
             // 1.2 Make group with indices.
             {
+                let mut group_key_len = 16;
+                for col in &group_columns {
+                    let typ = col.data_type();
+                    if common_datavalues::is_integer(typ) {
+                        group_key_len += common_datavalues::numeric_byte_size(typ)?;
+                    }
+                }
+
+                let mut group_key = Vec::with_capacity(group_key_len);
                 for row in 0..block.num_rows() {
-                    let mut group_key = vec![];
+                    group_key.clear();
                     for col in &group_columns {
                         DataValue::concat_row_to_one_key(col, row, &mut group_key)?;
                     }
-                    group_indices
-                        .raw_entry_mut()
-                        .from_key(&group_key)
-                        .and_modify(|_k, v| v.push(row as u32))
-                        .or_insert_with(|| (group_key.clone(), vec![row as u32]));
+                    match group_indices.get_mut(&group_key) {
+                        None => {
+                            group_indices.insert(group_key.clone(), vec![row as u32]);
+                        }
+                        Some(v) => {
+                            v.push(row as u32);
+                        }
+                    }
                 }
             }
 
@@ -151,7 +164,7 @@ impl IProcessor for GroupByPartialTransform {
                     match groups.get_mut(&group_key) {
                         // New group.
                         None => {
-                            let mut aggr_funcs = vec![];
+                            let mut aggr_funcs = Vec::with_capacity(aggr_funcs_len);
                             for expr in &self.aggr_exprs {
                                 let mut func = expr.to_function()?;
                                 func.accumulate(&take_block)?;
@@ -175,7 +188,7 @@ impl IProcessor for GroupByPartialTransform {
         let groups = self.groups.read();
 
         // Fields.
-        let mut fields = vec![];
+        let mut fields = Vec::with_capacity(aggr_funcs_len + 1);
         if let Some((_, funcs)) = groups.iter().next() {
             for func in funcs {
                 let field = DataField::new(format!("{}", func).as_str(), DataType::Utf8, false);

@@ -61,6 +61,7 @@ pub use crate::data_schema::DataSchemaRef;
 pub use crate::data_type::numerical_arithmetic_coercion;
 pub use crate::data_type::numerical_coercion;
 pub use crate::data_type::DataType;
+pub use crate::data_type::*;
 pub use crate::data_value::DataValue;
 pub use crate::data_value::DataValueRef;
 pub use crate::data_value_aggregate::data_value_aggregate_op;

@@ -25,6 +25,7 @@ impl DataColumnarValue {
         x
     }
 
+    #[inline]
     pub fn to_array(&self, size: usize) -> Result<DataArrayRef> {
         match self {
             DataColumnarValue::Array(array) => Ok(array.clone()),

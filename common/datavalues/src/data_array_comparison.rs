@@ -24,6 +24,7 @@ use crate::UInt32Array;
 use crate::UInt64Array;
 use crate::UInt8Array;
 
+#[inline]
 pub fn data_array_comparison_op(
     op: DataValueComparisonOperator,
     left: &DataColumnarValue,

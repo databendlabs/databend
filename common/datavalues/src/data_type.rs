@@ -261,17 +261,3 @@ pub fn equal_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataTy
 
     numerical_coercion(lhs_type, rhs_type).or_else(|_| dictionary_coercion(lhs_type, rhs_type))
 }
-
-// coercion rules that assume an ordered set, such as "less than".
-// These are the union of all numerical coercion rules and all string coercion rules
-#[allow(dead_code)]
-pub fn order_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
-    if lhs_type == rhs_type {
-        // same type => all good
-        return Ok(lhs_type.clone());
-    }
-
-    numerical_coercion(lhs_type, rhs_type)
-        .or_else(|_| string_coercion(lhs_type, rhs_type))
-        .or_else(|_| dictionary_coercion(lhs_type, rhs_type))
-}
