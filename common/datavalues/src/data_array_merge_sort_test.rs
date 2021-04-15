@@ -8,9 +8,9 @@ fn test_indices_other() -> anyhow::Result<()> {
 
     use common_arrow::arrow::compute::SortOptions;
 
-    use crate::data_array_merge_sort::merge_array;
-    use crate::data_array_merge_sort::merge_indices;
+    use crate::merge_indices;
     use crate::DataArrayRef;
+    use crate::UInt32Array;
 
     let a = Arc::new(UInt32Array::from(vec![None, Some(1), Some(2), Some(4)]));
     let b = Arc::new(UInt32Array::from(vec![None, Some(3)]));
@@ -32,9 +32,10 @@ fn test_indices_many() -> anyhow::Result<()> {
 
     use common_arrow::arrow::compute::SortOptions;
 
-    use crate::data_array_merge_sort::merge_array;
-    use crate::data_array_merge_sort::merge_indices;
+    use crate::merge_array;
+    use crate::merge_indices;
     use crate::DataArrayRef;
+    use crate::UInt32Array;
 
     let a1 = Arc::new(UInt32Array::from(vec![None, Some(1), Some(3)]));
     let b1 = Arc::new(UInt32Array::from(vec![None, Some(2), Some(3), Some(5)]));
@@ -69,9 +70,10 @@ fn test_merge_array() -> anyhow::Result<()> {
 
     use common_arrow::arrow::compute::SortOptions;
 
-    use crate::data_array_merge_sort::merge_array;
-    use crate::data_array_merge_sort::merge_indices;
+    use crate::merge_array;
+    use crate::merge_indices;
     use crate::DataArrayRef;
+    use crate::UInt32Array;
 
     let a1: DataArrayRef = Arc::new(UInt32Array::from(vec![Some(1), Some(3), Some(5)]));
     let b1: DataArrayRef = Arc::new(UInt32Array::from(vec![Some(2), Some(4), Some(6)]));
@@ -117,9 +119,10 @@ fn test_merge_array2() -> anyhow::Result<()> {
 
     use common_arrow::arrow::compute::SortOptions;
 
-    use crate::data_array_merge_sort::merge_array;
-    use crate::data_array_merge_sort::merge_indices;
+    use crate::merge_array;
+    use crate::merge_indices;
     use crate::DataArrayRef;
+    use crate::UInt32Array;
 
     let a1: DataArrayRef = Arc::new(UInt32Array::from(
         (1..500)
