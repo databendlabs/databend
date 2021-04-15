@@ -21,6 +21,7 @@ impl DataValue {
     ///
     /// key-0: u8[1, 'a']
     /// key-1: u8[2, 'b']
+    #[inline]
     pub fn concat_row_to_one_key(col: &ArrayRef, row: usize, vec: &mut Vec<u8>) -> Result<()> {
         match col.data_type() {
             DataType::Boolean => {
@@ -140,6 +141,7 @@ impl DataValue {
         Ok(())
     }
 
+    #[inline]
     fn dictionary_create_key_for_col<K: ArrowDictionaryKeyType>(
         col: &ArrayRef,
         row: usize,

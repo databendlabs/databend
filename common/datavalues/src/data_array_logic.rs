@@ -12,6 +12,7 @@ use crate::DataArrayRef;
 use crate::DataColumnarValue;
 use crate::DataValueLogicOperator;
 
+#[inline]
 pub fn data_array_logic_op(
     op: DataValueLogicOperator,
     left: &DataColumnarValue,

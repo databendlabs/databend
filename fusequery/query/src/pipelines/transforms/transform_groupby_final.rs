@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -17,7 +18,6 @@ use common_planners::ExpressionPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
-use hashbrown::HashMap;
 use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;

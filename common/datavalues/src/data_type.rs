@@ -222,6 +222,7 @@ pub fn numerical_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Da
     )
 }
 
+#[inline]
 pub fn numerical_arithmetic_coercion(
     op: &DataValueArithmeticOperator,
     lhs_type: &DataType,
@@ -229,10 +230,12 @@ pub fn numerical_arithmetic_coercion(
 ) -> Result<DataType> {
     // error on any non-numeric type
     if !is_numeric(lhs_type) || !is_numeric(rhs_type) {
-        bail!(format!(
+        bail!(
             "DataValue Error: Unsupported ({:?}) {} ({:?})",
-            lhs_type, op, rhs_type
-        ));
+            lhs_type,
+            op,
+            rhs_type
+        );
     };
 
     let has_signed = is_signed_numeric(lhs_type) || is_signed_numeric(rhs_type);
@@ -260,18 +263,4 @@ pub fn equal_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataTy
     }
 
     numerical_coercion(lhs_type, rhs_type).or_else(|_| dictionary_coercion(lhs_type, rhs_type))
-}
-
-// coercion rules that assume an ordered set, such as "less than".
-// These are the union of all numerical coercion rules and all string coercion rules
-#[allow(dead_code)]
-pub fn order_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
-    if lhs_type == rhs_type {
-        // same type => all good
-        return Ok(lhs_type.clone());
-    }
-
-    numerical_coercion(lhs_type, rhs_type)
-        .or_else(|_| string_coercion(lhs_type, rhs_type))
-        .or_else(|_| dictionary_coercion(lhs_type, rhs_type))
 }

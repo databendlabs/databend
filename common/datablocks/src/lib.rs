@@ -14,4 +14,3 @@ mod data_block;
 mod data_block_kernel;
 
 pub use data_block::DataBlock;
-pub use data_block_kernel::block_take_by_indices;

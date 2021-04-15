@@ -9,7 +9,6 @@ use std::sync::Arc;
 use anyhow::Result;
 use common_arrow::arrow;
 use common_arrow::arrow::record_batch::RecordBatch;
-use common_arrow::arrow::record_batch::RecordBatchOptions;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -78,13 +77,9 @@ impl TryInto<arrow::record_batch::RecordBatch> for DataBlock {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<RecordBatch, Self::Error> {
-        let options = RecordBatchOptions {
-            match_field_names: false,
-        };
-        Ok(arrow::record_batch::RecordBatch::try_new_with_options(
+        Ok(arrow::record_batch::RecordBatch::try_new(
             self.schema.clone(),
             self.columns.clone(),
-            &options,
         )?)
     }
 }

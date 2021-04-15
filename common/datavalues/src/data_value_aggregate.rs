@@ -8,6 +8,7 @@ use anyhow::Result;
 use crate::DataValue;
 use crate::DataValueAggregateOperator;
 
+#[inline]
 pub fn data_value_aggregate_op(
     op: DataValueAggregateOperator,
     left: DataValue,
