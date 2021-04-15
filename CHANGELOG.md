@@ -7,6 +7,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [0.3.0] 2021-04-15
 
 ### Added
-* Support ClickHouse Server protocol (#225) - Thanks @sundy-li 
-* Support Helm chart for datafuse (#253) - Thanks @tlightsky
-* Support group-by aggregation (#296)
+* [FuseQuery] Support ClickHouse Server protocol (#225) - Thanks @sundy-li 
+* [FuseQuery] Support Helm chart for datafuse (#253) - Thanks @tlightsky
+* [FuseQuery] Support group-by aggregation (#296)
