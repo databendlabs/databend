@@ -9,7 +9,6 @@ target/*
 
 # cargo
 .cargo/
-examples/
 
 # profile
 flamegraph.*
