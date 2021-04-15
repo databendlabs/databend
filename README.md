@@ -117,7 +117,7 @@ Note:
 ### Try Datafuse
 
 * [How to Run](docs/overview/building-and-running.md)
-* [How to Run Cluster](fusequery/example/cluster.sh)
+* [How to Run 3-node cluster](deploy/examples/3-ndoes-cluster.sh)
 
 ## Roadmap
 
