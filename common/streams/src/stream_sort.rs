@@ -6,7 +6,6 @@ use std::task::Context;
 use std::task::Poll;
 
 use anyhow::Result;
-use common_datablocks::sort_block;
 use common_datablocks::DataBlock;
 use common_datablocks::SortColumnDescription;
 use futures::stream::Stream;
@@ -42,7 +41,11 @@ impl Stream for SortStream {
         ctx: &mut Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         self.input.poll_next_unpin(ctx).map(|x| match x {
-            Some(Ok(v)) => Some(sort_block(&v, &self.sort_columns_descriptions, self.limit)),
+            Some(Ok(v)) => Some(DataBlock::sort_block(
+                &v,
+                &self.sort_columns_descriptions,
+                self.limit,
+            )),
             other => other,
         })
     }

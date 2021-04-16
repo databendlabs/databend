@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common_datablocks::merge_sort_blocks;
+use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_planners::ExpressionPlan;
 use common_streams::DataBlockStream;
@@ -70,7 +70,7 @@ impl IProcessor for SortMergeTransform {
 
         let results = match blocks.len() {
             0 => vec![],
-            _ => vec![merge_sort_blocks(
+            _ => vec![DataBlock::merge_sort_blocks(
                 &blocks,
                 &sort_columns_descriptions,
                 self.limit,

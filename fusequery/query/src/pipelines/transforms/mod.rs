@@ -21,6 +21,8 @@ mod transform_projection_test;
 #[cfg(test)]
 mod transform_remote_test;
 #[cfg(test)]
+mod transform_sort_test;
+#[cfg(test)]
 mod transform_source_test;
 
 mod transform_aggregator_final;
