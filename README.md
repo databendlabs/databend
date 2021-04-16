@@ -69,7 +69,9 @@ in Rust, inspired by [ClickHouse](https://github.com/ClickHouse/ClickHouse) and 
 |SELECT sum(number+number+number) FROM numbers_mt | (23.14 s.)|**×5.47 slow, (126.67 s.)** <br /> 789.47 million rows/s., 6.32 GB/s.|
 |SELECT sum(number) / count(number) FROM numbers_mt | (3.09 s.) | **×1.96 slow, (6.07 s.)** <br /> 16.48 billion rows/s., 131.88 GB/s.|
 |SELECT sum(number) / count(number), max(number), min(number) FROM numbers_mt |(6.73 s.)| **×4.01 slow, (27.59 s.)** <br /> 3.62 billion rows/s., 28.99 GB/s.|
+|SELECT number FROM numbers_mt(10000000000) ORDER BY number DESC LIMIT 1000|(6.91 s.)| **×1.42 slow, (9.83 s.)** <br /> 1.02 billion rows/s., 8.14 GB/s.|
 |SELECT max(number),sum(number) FROM numbers_mt(1000000000) GROUP BY number % 3, number % 4, number % 5 |(10.87 s.)| **×1.95 fast, (5.58 s.)** <br /> 179.23 million rows/s., 1.43 GB/s.|
+
 
 Note:
 * ClickHouse system.numbers_mt is <b>16-way</b> parallelism processing
@@ -88,9 +90,9 @@ Note:
 - [x] Type coercion
 - [x] Parallel Query Execution
 - [x] Distributed Query Execution
-- [x] GroupBy
-- [x] Sorting
-- [ ] Joins (TODO)
+- [x] Hash GroupBy
+- [x] Merge-Sort OrderBy
+- [ ] Joins (WIP)
 
 #### SQL Support
 
@@ -102,7 +104,7 @@ Note:
 - [x] UDF Functions
 - [x] SubQueries
 - [x] Sorting
-- [ ] Joins (TODO)
+- [ ] Joins (WIP)
 - [ ] Window (TODO)
 
 
