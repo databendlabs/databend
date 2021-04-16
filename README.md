@@ -100,8 +100,8 @@ Note:
 - [x] Aggregate Functions
 - [x] Scalar Functions
 - [x] UDF Functions
+- [x] SubQueries
 - [ ] Sorting (WIP)
-- [ ] SubQueries (TOO)
 - [ ] Joins (TODO)
 - [ ] Window (TODO)
 
@@ -126,8 +126,7 @@ Note:
 - [x] 0.2 Support distributed query (2021.03)
 - [x] 0.3 Support group by (2021.04)
 - [ ] 0.4 Support order by
-- [ ] 0.5 Support sub queries
-- [ ] 0.6 Support join
+- [ ] 0.5 Support join
 - [ ] 1.0 Support TPC-H benchmark
 
 ## Contributing
