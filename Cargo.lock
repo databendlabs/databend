@@ -1094,6 +1094,7 @@ dependencies = [
  "serde",
  "serde_json",
  "structopt",
+ "tempfile",
  "threadpool",
  "tokio",
  "tokio-stream",

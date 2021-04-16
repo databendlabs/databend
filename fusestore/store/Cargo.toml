@@ -50,6 +50,7 @@ tonic = "0.4"
 
 [dev-dependencies]
 pretty_assertions = "0.7"
+tempfile = "3.2.0"
 
 [build-dependencies]
 tonic-build = "0.4"
