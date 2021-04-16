@@ -9,7 +9,6 @@ fn test_indices_other() -> anyhow::Result<()> {
     use common_arrow::arrow::compute::SortOptions;
 
     use crate::merge_indices;
-    use crate::DataArrayRef;
     use crate::UInt32Array;
 
     let a = Arc::new(UInt32Array::from(vec![None, Some(1), Some(2), Some(4)]));
@@ -32,9 +31,7 @@ fn test_indices_many() -> anyhow::Result<()> {
 
     use common_arrow::arrow::compute::SortOptions;
 
-    use crate::merge_array;
     use crate::merge_indices;
-    use crate::DataArrayRef;
     use crate::UInt32Array;
 
     let a1 = Arc::new(UInt32Array::from(vec![None, Some(1), Some(3)]));
