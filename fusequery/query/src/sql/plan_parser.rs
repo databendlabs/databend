@@ -22,6 +22,7 @@ use common_planners::SettingPlan;
 use common_planners::StageState;
 use common_planners::VarValue;
 use sqlparser::ast::FunctionArg;
+use sqlparser::ast::OrderByExpr;
 use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 
@@ -155,7 +156,9 @@ impl PlanParser {
     /// Generate a logic plan from an SQL query
     pub fn query_to_plan(&self, query: &sqlparser::ast::Query) -> Result<PlanNode> {
         match &query.body {
-            sqlparser::ast::SetExpr::Select(s) => self.select_to_plan(s.as_ref(), &query.limit),
+            sqlparser::ast::SetExpr::Select(s) => {
+                self.select_to_plan(s.as_ref(), &query.limit, &query.order_by)
+            }
             _ => bail!("Query {} not implemented yet", query.body),
         }
     }
@@ -165,6 +168,7 @@ impl PlanParser {
         &self,
         select: &sqlparser::ast::Select,
         limit: &Option<sqlparser::ast::Expr>,
+        order_by: &[OrderByExpr],
     ) -> Result<PlanNode> {
         if select.having.is_some() {
             bail!("HAVING is not implemented yet");
@@ -197,6 +201,9 @@ impl PlanParser {
         } else {
             self.project(&plan, projection_expr)?
         };
+
+        // order by
+        let plan = self.sort(&plan, order_by)?;
 
         // limit.
         let plan = self.limit(&plan, limit)?;
@@ -403,6 +410,25 @@ impl PlanParser {
             .stage(self.ctx.get_id()?, StageState::AggregatorMerge)?
             .aggregate_final(aggr_expr, group_expr)?
             .build()
+    }
+
+    fn sort(&self, input: &PlanNode, order_by: &[OrderByExpr]) -> Result<PlanNode> {
+        if order_by.is_empty() {
+            return Ok(input.clone());
+        }
+
+        let order_by_exprs: Vec<ExpressionPlan> = order_by
+            .iter()
+            .map(|e| -> Result<ExpressionPlan> {
+                Ok(ExpressionPlan::Sort {
+                    expr: Box::new(self.sql_to_rex(&e.expr, &input.schema())?),
+                    asc: e.asc.unwrap_or(true),
+                    nulls_first: e.nulls_first.unwrap_or(true),
+                })
+            })
+            .collect::<Result<Vec<ExpressionPlan>>>()?;
+
+        PlanBuilder::from(&input).sort(&order_by_exprs)?.build()
     }
 
     /// Wrap a plan in a limit

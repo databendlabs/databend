@@ -132,6 +132,18 @@ impl PlanRewriter {
                 Ok(ExpressionPlan::Alias(alias.clone(), Box::new(new_expr)))
             }
 
+            ExpressionPlan::Sort {
+                expr,
+                asc,
+                nulls_first,
+            } => {
+                let new_expr = PlanRewriter::expr_rewrite_alias(expr, data)?;
+                Ok(ExpressionPlan::Sort {
+                    expr: Box::new(new_expr),
+                    asc: *asc,
+                    nulls_first: *nulls_first,
+                })
+            }
             ExpressionPlan::Wildcard | ExpressionPlan::Literal(_) => Ok(expr.clone()),
         }
     }

@@ -162,6 +162,7 @@ def run_tests_array(all_tests_with_params):
             return ''
 
     for case in all_tests:
+        failures = 0
         if SERVER_DIED:
             break
 

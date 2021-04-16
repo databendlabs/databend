@@ -33,6 +33,15 @@ pub enum ExpressionPlan {
         op: String,
         args: Vec<ExpressionPlan>,
     },
+    /// A sort expression, that can be used to sort values.
+    Sort {
+        /// The expression to sort on
+        expr: Box<ExpressionPlan>,
+        /// The direction of the sort
+        asc: bool,
+        /// Whether to put Nulls before all other data values
+        nulls_first: bool,
+    },
     /// All fields(*) in a schema.
     Wildcard,
 }
@@ -65,6 +74,7 @@ impl ExpressionPlan {
                 func.set_depth(depth);
                 Ok(AliasFunction::try_create(alias.clone(), func)?)
             }
+            ExpressionPlan::Sort { expr, .. } => Ok(expr.to_function_with_depth(depth)?),
             ExpressionPlan::Wildcard => Ok(ColumnFunction::try_create("*")?),
         }
     }
@@ -97,6 +107,7 @@ impl fmt::Debug for ExpressionPlan {
                 write!(f, "({:?} {} {:?})", left, op, right,)
             }
             ExpressionPlan::Function { op, args } => write!(f, "{}({:?})", op, args),
+            ExpressionPlan::Sort { expr, .. } => write!(f, "{:?}", expr),
             ExpressionPlan::Wildcard => write!(f, "*"),
         }
     }

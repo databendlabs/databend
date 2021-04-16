@@ -13,4 +13,5 @@ mod macros;
 mod data_block;
 mod data_block_kernel;
 
-pub use data_block::DataBlock;
+pub use crate::data_block::DataBlock;
+pub use crate::data_block_kernel::*;

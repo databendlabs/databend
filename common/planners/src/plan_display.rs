@@ -73,6 +73,21 @@ impl PlanNode {
                                 write!(f, "Filter: {:?}", plan.predicate)?;
                                 Ok(true)
                             }
+                            PlanNode::Sort(plan) => {
+                                write!(f, "Sort: ")?;
+                                for i in 0..plan.order_by.len() {
+                                    if i > 0 {
+                                        write!(f, ", ")?;
+                                    }
+                                    write!(
+                                        f,
+                                        "{:?}:{:?}",
+                                        plan.order_by[i],
+                                        plan.schema().fields()[i].data_type()
+                                    )?;
+                                }
+                                Ok(true)
+                            }
                             PlanNode::Limit(plan) => {
                                 write!(f, "Limit: {}", plan.n)?;
                                 Ok(true)
