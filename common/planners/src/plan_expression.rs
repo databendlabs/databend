@@ -7,8 +7,10 @@ use std::fmt;
 use anyhow::Result;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_functions::AliasFunction;
+use common_functions::CastFunction;
 use common_functions::ColumnFunction;
 use common_functions::FunctionFactory;
 use common_functions::IFunction;
@@ -33,6 +35,7 @@ pub enum ExpressionPlan {
         op: String,
         args: Vec<ExpressionPlan>,
     },
+
     /// A sort expression, that can be used to sort values.
     Sort {
         /// The expression to sort on
@@ -44,6 +47,14 @@ pub enum ExpressionPlan {
     },
     /// All fields(*) in a schema.
     Wildcard,
+    /// Casts the expression to a given type and will return a runtime error if the expression cannot be cast.
+    /// This expression is guaranteed to have a fixed type.
+    Cast {
+        /// The expression being cast
+        expr: Box<ExpressionPlan>,
+        /// The `DataType` the expression will yield
+        data_type: DataType,
+    },
 }
 
 impl ExpressionPlan {
@@ -76,6 +87,10 @@ impl ExpressionPlan {
             }
             ExpressionPlan::Sort { expr, .. } => Ok(expr.to_function_with_depth(depth)?),
             ExpressionPlan::Wildcard => Ok(ColumnFunction::try_create("*")?),
+            ExpressionPlan::Cast { expr, data_type } => Ok(CastFunction::create(
+                expr.to_function_with_depth(depth)?,
+                data_type.clone(),
+            )),
         }
     }
 
@@ -109,6 +124,9 @@ impl fmt::Debug for ExpressionPlan {
             ExpressionPlan::Function { op, args } => write!(f, "{}({:?})", op, args),
             ExpressionPlan::Sort { expr, .. } => write!(f, "{:?}", expr),
             ExpressionPlan::Wildcard => write!(f, "*"),
+            ExpressionPlan::Cast { expr, data_type } => {
+                write!(f, "CAST({:?} AS {:?})", expr, data_type)
+            }
         }
     }
 }

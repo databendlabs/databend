@@ -60,7 +60,7 @@ impl MysqlStream {
                     coltype: ColumnType::MYSQL_TYPE_SHORT,
                     colflags: ColumnFlags::empty(),
                 },
-                DataType::Date64 => Column {
+                DataType::Date64 | DataType::Date32 => Column {
                     table: "".to_string(),
                     column: field.name().to_string(),
                     coltype: ColumnType::MYSQL_TYPE_TIMESTAMP,

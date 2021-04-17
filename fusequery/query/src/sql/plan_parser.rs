@@ -29,6 +29,7 @@ use sqlparser::ast::TableFactor;
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::make_data_type;
+use crate::sql::make_sql_interval_to_literal;
 use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfExplain;
@@ -313,10 +314,10 @@ impl PlanParser {
     /// Generate a relational expression from a SQL expression
     pub fn sql_to_rex(
         &self,
-        sql: &sqlparser::ast::Expr,
+        expr: &sqlparser::ast::Expr,
         schema: &DataSchema,
     ) -> Result<ExpressionPlan> {
-        match sql {
+        match expr {
             sqlparser::ast::Expr::Identifier(ref v) => Ok(ExpressionPlan::Column(v.clone().value)),
             sqlparser::ast::Expr::Value(sqlparser::ast::Value::Number(n, _)) => {
                 Ok(ExpressionPlan::Literal(DataValue::try_from_literal(n)?))
@@ -350,7 +351,30 @@ impl PlanParser {
                 })
             }
             sqlparser::ast::Expr::Wildcard => Ok(ExpressionPlan::Wildcard),
-            _ => bail!("Unsupported ExpressionPlan: {}", sql),
+            sqlparser::ast::Expr::TypedString { data_type, value } => Ok(ExpressionPlan::Cast {
+                expr: Box::new(ExpressionPlan::Literal(DataValue::Utf8(Some(
+                    value.clone(),
+                )))),
+                data_type: make_data_type(data_type)?,
+            }),
+            sqlparser::ast::Expr::Cast { expr, data_type } => Ok(ExpressionPlan::Cast {
+                expr: Box::from(self.sql_to_rex(expr, schema)?),
+                data_type: make_data_type(data_type)?,
+            }),
+            sqlparser::ast::Expr::Value(sqlparser::ast::Value::Interval {
+                value,
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision,
+            }) => make_sql_interval_to_literal(
+                value,
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision,
+            ),
+            other => bail!("Unsupported expression: {}, type: {:?}", expr, other),
         }
     }
 
