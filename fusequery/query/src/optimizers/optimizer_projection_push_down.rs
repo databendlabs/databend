@@ -119,7 +119,7 @@ fn optimize_plan(
             let mut new_expr = Vec::new();
             let mut new_fields = Vec::new();
             // Gather all columns needed
-            println!("(2) {:?}", schema.fields());
+            println!("Projection: (2) {:?}", schema.fields());
             schema
                 .fields()
                 .iter()
@@ -247,7 +247,11 @@ fn optimize_plan(
                 description: description.to_string(),
             }))
         }
+        PlanNode::Empty(_) => {
+            Ok(plan.clone())
+        }
         _ => {
+            println!("others:{:?}", plan);
             let input = plan.input();
             let new_input = optimize_plan(optimizer, &input, &required_columns, has_projection)?;
             let mut cloned_plan = plan.clone();
@@ -268,13 +272,14 @@ impl IOptimizer for ProjectionPushDownOptimizer {
         });
 
         // set of all columns referred by the plan
+        println!("get required columns");
         let required_columns = plan
             .schema()
             .fields()
             .iter()
             .map(|f| f.name().clone())
             .collect::<HashSet<String>>();
-
+        println!("postorder");
         plan.walk_postorder(|node| {
             let mut new_node = optimize_plan(self, node, &required_columns, true)?;
             new_node.set_input(&rewritten_node)?;
