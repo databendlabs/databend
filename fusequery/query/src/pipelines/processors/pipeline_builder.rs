@@ -18,6 +18,8 @@ use crate::pipelines::transforms::GroupByPartialTransform;
 use crate::pipelines::transforms::LimitTransform;
 use crate::pipelines::transforms::ProjectionTransform;
 use crate::pipelines::transforms::RemoteTransform;
+use crate::pipelines::transforms::SortMergeTransform;
+use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
 use crate::planners::PlanScheduler;
 use crate::sessions::FuseQueryContextRef;
@@ -34,6 +36,15 @@ impl PipelineBuilder {
 
     pub fn build(&self) -> Result<Pipeline> {
         info!("Received for plan:\n{:?}", self.plan);
+
+        let mut limit = None;
+        self.plan.walk_preorder(|node| match node {
+            PlanNode::Limit(ref limit_plan) => {
+                limit = Some(limit_plan.n);
+                Ok(true)
+            }
+            _ => Ok(true),
+        })?;
 
         let mut pipeline = Pipeline::create();
         self.plan.walk_postorder(|node| match node {
@@ -120,6 +131,47 @@ impl PipelineBuilder {
                 })?;
                 Ok(true)
             }
+            PlanNode::Sort(plan) => {
+                // processor 1: block ---> sort_stream
+                // processor 2: block ---> sort_stream
+                // processor 3: block ---> sort_stream
+                pipeline.add_simple_transform(|| {
+                    Ok(Box::new(SortPartialTransform::try_create(
+                        plan.schema(),
+                        plan.order_by.clone(),
+                        limit,
+                    )?))
+                })?;
+
+                // processor 1: [sorted blocks ...] ---> merge to one sorted block
+                // processor 2: [sorted blocks ...] ---> merge to one sorted block
+                // processor 3: [sorted blocks ...] ---> merge to one sorted block
+                pipeline.add_simple_transform(|| {
+                    Ok(Box::new(SortMergeTransform::try_create(
+                        plan.schema(),
+                        plan.order_by.clone(),
+                        limit,
+                    )?))
+                })?;
+
+                // processor1 sorted block --
+                //                             \
+                // processor2 sorted block ----> processor  --> merge to one sorted block
+                //                             /
+                // processor3 sorted block --
+                if pipeline.last_pipe()?.nums() > 1 {
+                    pipeline.merge_processor()?;
+                    pipeline.add_simple_transform(|| {
+                        Ok(Box::new(SortMergeTransform::try_create(
+                            plan.schema(),
+                            plan.order_by.clone(),
+                            limit,
+                        )?))
+                    })?;
+                }
+                Ok(true)
+            }
+
             PlanNode::Limit(plan) => {
                 pipeline.merge_processor()?;
                 pipeline

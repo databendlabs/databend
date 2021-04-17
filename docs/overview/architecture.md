@@ -9,11 +9,11 @@ title: Architecture
 
 ## FuseQuery
   
-  FuseQuery is a Cloud Distributed SQL Query Engine at scale.
+  [FuseQuery](../../fusequery) is a Distributed Query Engine(Inspired by ClickHouse) at scale
 
 ## FuseStore
 
-FuseStore is a Distributed Table Storage Engine, the data is organized in MergeTree(ClickHouse) and stored in S3 or others object storage services.
+[FuseStore](../../fusestore) is a Distributed Table Storage Engine(Inspired by ClickHouse MergeTree) at scale.
 
 
 

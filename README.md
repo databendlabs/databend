@@ -69,6 +69,9 @@ in Rust, inspired by [ClickHouse](https://github.com/ClickHouse/ClickHouse) and 
 |SELECT sum(number+number+number) FROM numbers_mt | (23.14 s.)|**×5.47 slow, (126.67 s.)** <br /> 789.47 million rows/s., 6.32 GB/s.|
 |SELECT sum(number) / count(number) FROM numbers_mt | (3.09 s.) | **×1.96 slow, (6.07 s.)** <br /> 16.48 billion rows/s., 131.88 GB/s.|
 |SELECT sum(number) / count(number), max(number), min(number) FROM numbers_mt |(6.73 s.)| **×4.01 slow, (27.59 s.)** <br /> 3.62 billion rows/s., 28.99 GB/s.|
+|SELECT number FROM numbers_mt(10000000000) ORDER BY number DESC LIMIT 1000|(6.91 s.)| **×1.42 slow, (9.83 s.)** <br /> 1.02 billion rows/s., 8.14 GB/s.|
+|SELECT max(number),sum(number) FROM numbers_mt(1000000000) GROUP BY number % 3, number % 4, number % 5 |(10.87 s.)| **×1.95 fast, (5.58 s.)** <br /> 179.23 million rows/s., 1.43 GB/s.|
+
 
 Note:
 * ClickHouse system.numbers_mt is <b>16-way</b> parallelism processing
@@ -87,9 +90,9 @@ Note:
 - [x] Type coercion
 - [x] Parallel Query Execution
 - [x] Distributed Query Execution
-- [x] GroupBy
-- [ ] Sorting (WIP)
-- [ ] Joins (TODO)
+- [x] Hash GroupBy
+- [x] Merge-Sort OrderBy
+- [ ] Joins (WIP)
 
 #### SQL Support
 
@@ -99,9 +102,9 @@ Note:
 - [x] Aggregate Functions
 - [x] Scalar Functions
 - [x] UDF Functions
-- [ ] Sorting (WIP)
-- [ ] SubQueries (TOO)
-- [ ] Joins (TODO)
+- [x] SubQueries
+- [x] Sorting
+- [ ] Joins (WIP)
 - [ ] Window (TODO)
 
 
@@ -117,21 +120,22 @@ Note:
 ### Try Datafuse
 
 * [How to Run](docs/overview/building-and-running.md)
-* [How to Run Cluster](fusequery/example/cluster.sh)
+* [How to Run 3-node cluster](deploy/examples/3-nodes-cluster.sh)
+
+## Contributing
+
+* [Contribution Guide](docs/development/contributing.md)
+* [Coding Guidelines](docs/development/coding-guidelines.md)
+* [How to Profile](docs/development/how-to-profile.md)
 
 ## Roadmap
 
 - [x] 0.1 Support aggregation select (2021.02)
 - [x] 0.2 Support distributed query (2021.03)
 - [x] 0.3 Support group by (2021.04)
-- [ ] 0.4 Support order by
-- [ ] 0.5 Support sub queries
-- [ ] 0.6 Support join
+- [x] 0.4 Support order by (2021.04)
+- [ ] 0.5 Support join
 - [ ] 1.0 Support TPC-H benchmark
-
-## Contributing
-
-You can learn more about contributing to the Datafuse project by reading our [Contribution Guide](docs/development/contributing.md) and by viewing our [Code of Conduct](docs/policies/code-of-conduct.md).
 
 ## License
 

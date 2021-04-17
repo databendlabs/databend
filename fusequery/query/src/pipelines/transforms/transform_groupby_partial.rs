@@ -130,11 +130,13 @@ impl IProcessor for GroupByPartialTransform {
 
             // 1.2 Make group with indices.
             {
-                let mut group_key_len = 16;
+                let mut group_key_len = 0;
                 for col in &group_columns {
                     let typ = col.data_type();
                     if common_datavalues::is_integer(typ) {
                         group_key_len += common_datavalues::numeric_byte_size(typ)?;
+                    } else {
+                        group_key_len += 4;
                     }
                 }
 

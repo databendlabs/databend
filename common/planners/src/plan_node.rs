@@ -21,6 +21,7 @@ use crate::ReadDataSourcePlan;
 use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
+use crate::SortPlan;
 use crate::StagePlan;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -31,6 +32,7 @@ pub enum PlanNode {
     AggregatorPartial(AggregatorPartialPlan),
     AggregatorFinal(AggregatorFinalPlan),
     Filter(FilterPlan),
+    Sort(SortPlan),
     Limit(LimitPlan),
     Scan(ScanPlan),
     ReadSource(ReadDataSourcePlan),
@@ -59,6 +61,7 @@ impl PlanNode {
             PlanNode::CreateDatabase(v) => v.schema(),
             PlanNode::CreateTable(v) => v.schema(),
             PlanNode::SetVariable(v) => v.schema(),
+            PlanNode::Sort(v) => v.schema(),
         }
     }
 
@@ -78,6 +81,7 @@ impl PlanNode {
             PlanNode::CreateTable(_) => "CreateTablePlan",
             PlanNode::CreateDatabase(_) => "CreateDatabasePlan",
             PlanNode::SetVariable(_) => "SetVariablePlan",
+            PlanNode::Sort(_) => "SortPlan",
         }
     }
 
@@ -91,6 +95,7 @@ impl PlanNode {
             PlanNode::Limit(v) => v.input(),
             PlanNode::Explain(v) => v.input(),
             PlanNode::Select(v) => v.input(),
+            PlanNode::Sort(v) => v.input(),
 
             _ => Arc::new(PlanNode::Empty(EmptyPlan {
                 schema: Arc::new(DataSchema::empty()),
@@ -108,6 +113,7 @@ impl PlanNode {
             PlanNode::Limit(v) => v.set_input(node),
             PlanNode::Explain(v) => v.set_input(node),
             PlanNode::Select(v) => v.set_input(node),
+            PlanNode::Sort(v) => v.set_input(node),
 
             _ => Ok(()),
         }

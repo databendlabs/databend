@@ -11,6 +11,8 @@ mod data_array_comparison_test;
 #[cfg(test)]
 mod data_array_logic_test;
 #[cfg(test)]
+mod data_array_merge_sort_test;
+#[cfg(test)]
 mod data_value_aggregate_test;
 #[cfg(test)]
 mod data_value_arithmetic_test;
@@ -25,6 +27,7 @@ mod data_array_aggregate;
 mod data_array_arithmetic;
 mod data_array_comparison;
 mod data_array_logic;
+mod data_array_merge_sort;
 mod data_columnar_value;
 mod data_field;
 mod data_schema;
@@ -54,6 +57,8 @@ pub use crate::data_array_aggregate::data_array_aggregate_op;
 pub use crate::data_array_arithmetic::data_array_arithmetic_op;
 pub use crate::data_array_comparison::data_array_comparison_op;
 pub use crate::data_array_logic::data_array_logic_op;
+pub use crate::data_array_merge_sort::merge_array;
+pub use crate::data_array_merge_sort::merge_indices;
 pub use crate::data_columnar_value::DataColumnarValue;
 pub use crate::data_field::DataField;
 pub use crate::data_schema::DataSchema;
