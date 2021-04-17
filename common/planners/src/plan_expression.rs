@@ -10,6 +10,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_functions::AliasFunction;
+use common_functions::CastFunction;
 use common_functions::ColumnFunction;
 use common_functions::FunctionFactory;
 use common_functions::IFunction;
@@ -86,7 +87,11 @@ impl ExpressionPlan {
             }
             ExpressionPlan::Sort { expr, .. } => Ok(expr.to_function_with_depth(depth)?),
             ExpressionPlan::Wildcard => Ok(ColumnFunction::try_create("*")?),
-            ExpressionPlan::Cast { expr, .. } => Ok(expr.to_function_with_depth(depth)?),
+            ExpressionPlan::Cast { expr, data_type } => Ok(CastFunction::create(
+                expr.to_function_with_depth(depth)?,
+                data_type.clone(),
+                false,
+            )),
         }
     }
 

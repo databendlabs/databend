@@ -146,6 +146,10 @@ impl DataValue {
         }
     }
 
+    pub fn to_array(&self) -> Result<DataArrayRef> {
+        self.to_array_with_size(1)
+    }
+
     pub fn to_array_with_size(&self, size: usize) -> Result<DataArrayRef> {
         Ok(match self {
             DataValue::Null => Arc::new(NullArray::new(size)),
