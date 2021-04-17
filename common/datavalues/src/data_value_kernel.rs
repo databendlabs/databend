@@ -219,6 +219,44 @@ impl DataValue {
             DataType::Binary => {
                 typed_cast_from_array_to_data_value!(array, index, BinaryArray, Binary)
             }
+            DataType::Date32 => {
+                typed_cast_from_array_to_data_value!(array, index, Date32Array, Date32)
+            }
+            DataType::Date64 => {
+                typed_cast_from_array_to_data_value!(array, index, Date64Array, Date64)
+            }
+            DataType::Timestamp(TimeUnit::Second, _) => {
+                typed_cast_from_array_to_data_value!(
+                    array,
+                    index,
+                    TimestampSecondArray,
+                    TimestampSecond
+                )
+            }
+            DataType::Timestamp(TimeUnit::Millisecond, _) => {
+                typed_cast_from_array_to_data_value!(
+                    array,
+                    index,
+                    TimestampMillisecondArray,
+                    TimestampMillisecond
+                )
+            }
+            DataType::Timestamp(TimeUnit::Microsecond, _) => {
+                typed_cast_from_array_to_data_value!(
+                    array,
+                    index,
+                    TimestampMicrosecondArray,
+                    TimestampMicrosecond
+                )
+            }
+            DataType::Timestamp(TimeUnit::Nanosecond, _) => {
+                typed_cast_from_array_to_data_value!(
+                    array,
+                    index,
+                    TimestampNanosecondArray,
+                    TimestampNanosecond
+                )
+            }
             DataType::List(nested_type) => {
                 let list_array = array
                     .as_any()

@@ -356,7 +356,11 @@ impl PlanParser {
                 )))),
                 data_type: make_data_type(data_type)?,
             }),
-            other => bail!("Unsupported expression: {}, type: {}", expr, other),
+            sqlparser::ast::Expr::Cast { expr, data_type } => Ok(ExpressionPlan::Cast {
+                expr: Box::from(self.sql_to_rex(expr, schema)?),
+                data_type: make_data_type(data_type)?,
+            }),
+            other => bail!("Unsupported expression: {}, type: {:?}", expr, other),
         }
     }
 
