@@ -29,6 +29,7 @@ use sqlparser::ast::TableFactor;
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::make_data_type;
+use crate::sql::make_sql_interval_to_literal;
 use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfExplain;
@@ -360,6 +361,19 @@ impl PlanParser {
                 expr: Box::from(self.sql_to_rex(expr, schema)?),
                 data_type: make_data_type(data_type)?,
             }),
+            sqlparser::ast::Expr::Value(sqlparser::ast::Value::Interval {
+                value,
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision,
+            }) => make_sql_interval_to_literal(
+                value,
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision,
+            ),
             other => bail!("Unsupported expression: {}, type: {:?}", expr, other),
         }
     }
