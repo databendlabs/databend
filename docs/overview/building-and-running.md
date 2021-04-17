@@ -3,7 +3,7 @@ id: building-and-running
 title: Building and Running
 ---
 
-This document describes how to build and run [FuseQuery](https://github.com/datafuselabs/datafuse/tree/master/query) as a distributed query engine.
+This document describes how to build and run [FuseQuery](https://github.com/datafuselabs/datafuse/tree/master/fusequery) as a distributed query engine.
 
 ## 1. Run with Docker (Recommended)
 
