@@ -8,12 +8,15 @@ use std::sync::Arc;
 use anyhow::Result;
 use common_arrow::arrow::error::Result as ArrowResult;
 use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataField;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::EmptyPlan;
 use common_planners::ExpressionPlan;
 use common_planners::PlanNode;
 use common_planners::ProjectionPlan;
+use common_planners::ReadDataSourcePlan;
 
 use crate::optimizers::IOptimizer;
 use crate::optimizers::Optimizer;
@@ -60,10 +63,10 @@ fn expr_to_name(e: &ExpressionPlan) -> Result<String> {
 }
 
 fn get_projected_schema(
-    schema: &Schema,
-    required_columns: &HashSet<string>,
+    schema: &DataSchema,
+    required_columns: &HashSet<String>,
     has_projection: bool,
-) -> Result<SchemaRef> {
+) -> Result<DataSchemaRef> {
     // Discard non-existing columns, e.g. when the column derives from aggregation
     let mut projection: Vec<usize> = required_columns
         .iter()
@@ -86,12 +89,12 @@ fn get_projected_schema(
         }
     }
     // sort the projection to get deterministic behavior
-    projetion.sort_unstable();
+    projection.sort_unstable();
 
     // create the projected schema
     let mut projected_fields: Vec<DataField> = Vec::with_capacity(projection.len());
     for i in &projection {
-        projected_fields.push(DataField::From(schema.fields()[*i].clone()));
+        projected_fields.push(schema.fields()[*i].clone());
     }
     Ok(Arc::new(DataSchema::new(projected_fields)))
 }
@@ -223,7 +226,7 @@ fn optimize_plan(
             }))
         }
 
-        PlanNode::ReadDataSource(ReadDataSourcePlan {
+        PlanNode::ReadSource(ReadDataSourcePlan {
             db,
             table,
             schema,
@@ -231,22 +234,22 @@ fn optimize_plan(
             statistics,
             description,
         }) => {
-            let projected_scheme = get_projected_schema(schema, required_columns, has_projection)?;
+            let projected_schema = get_projected_schema(schema, required_columns, has_projection)?;
 
-            Ok(PlanNode::ReadDataSource {
+            Ok(PlanNode::ReadSource(ReadDataSourcePlan {
                 db: db.to_string(),
                 table: table.to_string(),
                 schema: projected_schema,
                 partitions: partitions.clone(),
                 statistics: statistics.clone(),
                 description: description.to_string(),
-            })
+            }))
         }
         _ => {
             let input = plan.input();
             let new_input = optimize_plan(optimizer, &input, &required_columns, has_projection)?;
-            let cloned_plan = plan.clone();
-            cloned_plan.set_input(new_input);
+            let mut cloned_plan = plan.clone();
+            cloned_plan.set_input(&new_input)?;
             Ok(cloned_plan)
         }
     }
