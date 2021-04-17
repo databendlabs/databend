@@ -122,6 +122,12 @@ Note:
 * [How to Run](docs/overview/building-and-running.md)
 * [How to Run 3-node cluster](deploy/examples/3-nodes-cluster.sh)
 
+## Contributing
+
+* [Contribution Guide](docs/development/contributing.md)
+* [Coding Guidelines](docs/development/coding-guidelines.md)
+* [How to Profile](docs/development/how-to-profile.md)
+
 ## Roadmap
 
 - [x] 0.1 Support aggregation select (2021.02)
@@ -130,10 +136,6 @@ Note:
 - [x] 0.4 Support order by (2021.04)
 - [ ] 0.5 Support join
 - [ ] 1.0 Support TPC-H benchmark
-
-## Contributing
-
-You can learn more about contributing to the Datafuse project by reading our [Contribution Guide](docs/development/contributing.md) and by viewing our [Code of Conduct](docs/policies/code-of-conduct.md).
 
 ## License
 
