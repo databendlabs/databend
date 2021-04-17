@@ -24,20 +24,11 @@ pub struct CastFunction {
     expr: Box<dyn IFunction>,
     /// The data type to cast to
     cast_type: DataType,
-    force_cast: bool,
 }
 
 impl CastFunction {
-    pub fn create(
-        expr: Box<dyn IFunction>,
-        cast_type: DataType,
-        force_cast: bool,
-    ) -> Box<dyn IFunction> {
-        Box::new(Self {
-            expr,
-            cast_type,
-            force_cast,
-        })
+    pub fn create(expr: Box<dyn IFunction>, cast_type: DataType) -> Box<dyn IFunction> {
+        Box::new(Self { expr, cast_type })
     }
 }
 

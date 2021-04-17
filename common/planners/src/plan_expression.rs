@@ -90,7 +90,6 @@ impl ExpressionPlan {
             ExpressionPlan::Cast { expr, data_type } => Ok(CastFunction::create(
                 expr.to_function_with_depth(depth)?,
                 data_type.clone(),
-                false,
             )),
         }
     }
