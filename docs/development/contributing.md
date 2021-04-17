@@ -22,7 +22,7 @@ For detailed guidance on how to contribute to the codebase refer to [Coding Guid
 
 ## Documentation
 
-All developer documentation is published on the DataFuse developer site. 
+All developer documentation is published on the Datafuse developer site. 
 
 ## Pull Requests
 
