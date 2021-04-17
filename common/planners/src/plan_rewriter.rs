@@ -145,6 +145,13 @@ impl PlanRewriter {
                 })
             }
             ExpressionPlan::Wildcard | ExpressionPlan::Literal(_) => Ok(expr.clone()),
+            ExpressionPlan::Cast { expr, data_type } => {
+                let new_expr = PlanRewriter::expr_rewrite_alias(expr, data)?;
+                Ok(ExpressionPlan::Cast {
+                    expr: Box::new(new_expr),
+                    data_type: data_type.clone(),
+                })
+            }
         }
     }
 }

@@ -77,6 +77,7 @@ impl Optimizer {
             ExpressionPlan::Function { args, .. } => args.clone(),
             ExpressionPlan::Wildcard => vec![],
             ExpressionPlan::Sort { expr, .. } => vec![expr.as_ref().clone()],
+            ExpressionPlan::Cast { expr, .. } => vec![expr.as_ref().clone()],
         })
     }
 
