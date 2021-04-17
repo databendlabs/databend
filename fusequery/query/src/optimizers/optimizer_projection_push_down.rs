@@ -7,9 +7,9 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use common_arrow::arrow::error::Result as ArrowResult;
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataField;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::EmptyPlan;
@@ -106,6 +106,7 @@ fn optimize_plan(
     has_projection: bool,
 ) -> Result<PlanNode> {
     let mut new_required_columns = required_columns.clone();
+    println!("(1) {:?}", required_columns);
     match plan {
         PlanNode::Projection(ProjectionPlan {
             expr,
@@ -118,6 +119,7 @@ fn optimize_plan(
             let mut new_expr = Vec::new();
             let mut new_fields = Vec::new();
             // Gather all columns needed
+            println!("(2) {:?}", schema.fields());
             schema
                 .fields()
                 .iter()
