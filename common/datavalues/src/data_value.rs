@@ -7,6 +7,7 @@
 
 use std::convert::TryFrom;
 use std::fmt;
+use std::iter::repeat;
 use std::sync::Arc;
 
 use anyhow::bail;
@@ -55,6 +56,7 @@ pub enum DataValue {
     Binary(Option<Vec<u8>>),
     Utf8(Option<String>),
 
+    /// Datetime.
     /// Date stored as a signed 32bit int
     Date32(Option<i32>),
     /// Date stored as a signed 64bit int
@@ -172,6 +174,42 @@ impl DataValue {
             }
             DataValue::Utf8(v) => Arc::new(StringArray::from(vec![v.as_deref(); size])),
             DataValue::Binary(v) => Arc::new(BinaryArray::from(vec![v.as_deref(); size])),
+            DataValue::Date32(e) => match e {
+                Some(value) => Arc::new(Date32Array::from_value(*value, size)),
+                None => new_null_array(&DataType::Date32, size),
+            },
+            DataValue::Date64(e) => match e {
+                Some(value) => Arc::new(Date64Array::from_value(*value, size)),
+                None => new_null_array(&DataType::Date64, size),
+            },
+            DataValue::TimestampSecond(e) => match e {
+                Some(value) => Arc::new(TimestampSecondArray::from_iter_values(
+                    repeat(*value).take(size),
+                )),
+                None => new_null_array(&DataType::Timestamp(TimeUnit::Second, None), size),
+            },
+            DataValue::TimestampMillisecond(e) => match e {
+                Some(value) => Arc::new(TimestampMillisecondArray::from_iter_values(
+                    repeat(*value).take(size),
+                )),
+                None => new_null_array(&DataType::Timestamp(TimeUnit::Millisecond, None), size),
+            },
+            DataValue::TimestampMicrosecond(e) => match e {
+                Some(value) => Arc::new(TimestampMicrosecondArray::from_value(*value, size)),
+                None => new_null_array(&DataType::Timestamp(TimeUnit::Microsecond, None), size),
+            },
+            DataValue::TimestampNanosecond(e) => match e {
+                Some(value) => Arc::new(TimestampNanosecondArray::from_value(*value, size)),
+                None => new_null_array(&DataType::Timestamp(TimeUnit::Nanosecond, None), size),
+            },
+            DataValue::IntervalDayTime(e) => match e {
+                Some(value) => Arc::new(IntervalDayTimeArray::from_value(*value, size)),
+                None => new_null_array(&DataType::Interval(IntervalUnit::DayTime), size),
+            },
+            DataValue::IntervalYearMonth(e) => match e {
+                Some(value) => Arc::new(IntervalYearMonthArray::from_value(*value, size)),
+                None => new_null_array(&DataType::Interval(IntervalUnit::YearMonth), size),
+            },
             DataValue::List(values, data_type) => Arc::new(match data_type {
                 DataType::Int8 => build_list!(Int8Builder, Int8, values, size),
                 DataType::Int16 => build_list!(Int16Builder, Int16, values, size),
@@ -240,6 +278,10 @@ impl TryFrom<&DataType> for DataValue {
             DataType::UInt64 => DataValue::UInt64(None),
             DataType::Float32 => DataValue::Float32(None),
             DataType::Float64 => DataValue::Float64(None),
+            DataType::Timestamp(TimeUnit::Second, _) => DataValue::TimestampSecond(None),
+            DataType::Timestamp(TimeUnit::Millisecond, _) => DataValue::TimestampMillisecond(None),
+            DataType::Timestamp(TimeUnit::Microsecond, _) => DataValue::TimestampMicrosecond(None),
+            DataType::Timestamp(TimeUnit::Nanosecond, _) => DataValue::TimestampNanosecond(None),
             _ => {
                 bail!(format!(
                     "DataValue Error: Unsupported try_from() for data type: {:?}",
@@ -275,6 +317,14 @@ impl fmt::Display for DataValue {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
+            DataValue::Date32(v) => format_data_value_with_option!(f, v),
+            DataValue::Date64(v) => format_data_value_with_option!(f, v),
+            DataValue::TimestampSecond(v) => format_data_value_with_option!(f, v),
+            DataValue::TimestampMillisecond(v) => format_data_value_with_option!(f, v),
+            DataValue::TimestampMicrosecond(v) => format_data_value_with_option!(f, v),
+            DataValue::TimestampNanosecond(v) => format_data_value_with_option!(f, v),
+            DataValue::IntervalDayTime(v) => format_data_value_with_option!(f, v),
+            DataValue::IntervalYearMonth(v) => format_data_value_with_option!(f, v),
             DataValue::List(None, ..) => write!(f, "NULL"),
             DataValue::List(Some(v), ..) => {
                 write!(
@@ -309,6 +359,24 @@ impl fmt::Debug for DataValue {
             DataValue::Utf8(v) => format_data_value_with_option!(f, v),
             DataValue::Binary(None) => write!(f, "{}", self),
             DataValue::Binary(Some(_)) => write!(f, "\"{}\"", self),
+            DataValue::Date32(_) => write!(f, "Date32(\"{}\")", self),
+            DataValue::Date64(_) => write!(f, "Date64(\"{}\")", self),
+            DataValue::IntervalDayTime(_) => {
+                write!(f, "IntervalDayTime(\"{}\")", self)
+            }
+            DataValue::IntervalYearMonth(_) => {
+                write!(f, "IntervalYearMonth(\"{}\")", self)
+            }
+            DataValue::TimestampSecond(_) => write!(f, "TimestampSecond({})", self),
+            DataValue::TimestampMillisecond(_) => {
+                write!(f, "TimestampMillisecond({})", self)
+            }
+            DataValue::TimestampMicrosecond(_) => {
+                write!(f, "TimestampMicrosecond({})", self)
+            }
+            DataValue::TimestampNanosecond(_) => {
+                write!(f, "TimestampNanosecond({})", self)
+            }
             DataValue::List(_, _) => write!(f, "[{}]", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }

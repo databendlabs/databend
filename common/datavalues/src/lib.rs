@@ -38,6 +38,7 @@ mod data_value_arithmetic;
 mod data_value_kernel;
 mod data_value_operator;
 
+pub use crate::data_array::BinaryArray;
 pub use crate::data_array::BooleanArray;
 pub use crate::data_array::DataArrayRef;
 pub use crate::data_array::Float32Array;
