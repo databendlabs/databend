@@ -15,11 +15,7 @@ fn test_projection_push_down_optimizer() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let plan = PlanNode::Projection(ProjectionPlan {
-        expr: vec![
-            col("a"),
-            col("b"),
-            col("c"),
-        ],
+        expr: vec![col("a"), col("b"), col("c")],
         schema: Arc::new(DataSchema::new(vec![
             DataField::new("a", DataType::Utf8, false),
             DataField::new("b", DataType::Utf8, false),

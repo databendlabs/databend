@@ -247,9 +247,7 @@ fn optimize_plan(
                 description: description.to_string(),
             }))
         }
-        PlanNode::Empty(_) => {
-            Ok(plan.clone())
-        }
+        PlanNode::Empty(_) => Ok(plan.clone()),
         _ => {
             println!("others:{:?}", plan);
             let input = plan.input();
