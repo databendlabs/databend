@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn test_projection_push_down_optimizer() -> anyhow::Result<()> {
+fn test_projection_push_down_optimizer_1() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_datavalues::*;
@@ -29,6 +29,31 @@ fn test_projection_push_down_optimizer() -> anyhow::Result<()> {
 
     let expect = "\
     Projection: a:Utf8, b:Utf8, c:Utf8";
+    let actual = format!("{:?}", optimized);
+    assert_eq!(expect, actual);
+
+    Ok(())
+}
+
+#[test]
+fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
+    use pretty_assertions::assert_eq;
+
+    use crate::optimizers::*;
+    use crate::sql::*;
+
+    let ctx = crate::tests::try_create_context()?;
+
+    let plan = PlanParser::create(ctx.clone()).build_from_sql(
+        "select (number+1) as c1, number as c2, (number*2) as c3 from numbers_mt(10000) where (c1+c3+1)=1",
+    )?;
+
+    let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
+    let optimized = projection_push_down.optimize(&plan)?;
+    let expect = "\
+    Projection: (number + 1) as c1:UInt64, number as c2:UInt64, (number * 2) as c3:UInt64\
+    \n  Filter: (((c1 + c3) + 1) = 1)\
+    \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);
 
