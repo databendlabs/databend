@@ -10,8 +10,11 @@ edition = "2018"
 # Workspace dependencies
 
 # Github dependencies
-arrow = { git = "https://github.com/apache/arrow", rev="62f8c20", features = ["prettyprint", "simd"] }
+arrow = { git = "https://github.com/apache/arrow", rev="62f8c20"}
 arrow-flight = { git = "https://github.com/apache/arrow", rev="62f8c20" }
 parquet = { git = "https://github.com/apache/arrow", rev="62f8c20" }
 
 # Crates.io dependencies
+
+[dev-dependencies]
+arrow = { git = "https://github.com/apache/arrow", rev="62f8c20", features = ["prettyprint"] }
