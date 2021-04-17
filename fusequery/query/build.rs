@@ -16,6 +16,11 @@ fn main() {
         println!("cargo:rerun-if-changed=.git/HEAD");
     }
 
+    println!("cargo:rerun-if-env-changed=CFG_RELEASE_CHANNEL");
+    if option_env!("CFG_RELEASE_CHANNEL").map_or(true, |c| c == "nightly" || c == "dev") {
+        println!("cargo:rustc-cfg=nightly");
+    }
+
     create_version_info();
 }
 
@@ -30,14 +35,23 @@ fn create_version_info() {
 // Try to get hash and date of the last commit on a best effort basis. If anything goes wrong
 // (git not installed or if this is not a git repository) just return an empty string.
 fn commit_info() -> String {
-    match (commit_hash(), commit_date()) {
-        (Some(hash), Some(date)) => format!(
-            "{}-{} ({})",
+    match (channel(), commit_hash(), commit_date()) {
+        (channel, Some(hash), Some(date)) => format!(
+            "{}-{} ({} {})",
             option_env!("CARGO_PKG_VERSION").unwrap_or("unknown"),
+            channel,
             hash.trim_end(),
             date
         ),
         _ => String::new(),
+    }
+}
+
+fn channel() -> String {
+    if let Ok(channel) = env::var("CFG_RELEASE_CHANNEL") {
+        channel
+    } else {
+        "nightly".to_owned()
     }
 }
 
