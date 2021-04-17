@@ -13,10 +13,11 @@ use anyhow::bail;
 use anyhow::Error;
 use anyhow::Result;
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::datatypes::*;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::data_array::BinaryArray;
+use crate::BinaryArray;
 use crate::BooleanArray;
 use crate::DataArrayRef;
 use crate::DataField;
@@ -38,6 +39,7 @@ use crate::UInt8Array;
 /// A specific value of a data type.
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub enum DataValue {
+    /// Base type.
     Null,
     Boolean(Option<bool>),
     Int8(Option<i8>),
@@ -51,8 +53,27 @@ pub enum DataValue {
     Float32(Option<f32>),
     Float64(Option<f64>),
     Binary(Option<Vec<u8>>),
-    List(Option<Vec<DataValue>>, DataType),
     Utf8(Option<String>),
+
+    /// Date stored as a signed 32bit int
+    Date32(Option<i32>),
+    /// Date stored as a signed 64bit int
+    Date64(Option<i64>),
+    /// Timestamp Second
+    TimestampSecond(Option<i64>),
+    /// Timestamp Milliseconds
+    TimestampMillisecond(Option<i64>),
+    /// Timestamp Microseconds
+    TimestampMicrosecond(Option<i64>),
+    /// Timestamp Nanoseconds
+    TimestampNanosecond(Option<i64>),
+    /// Interval with YearMonth unit
+    IntervalYearMonth(Option<i32>),
+    /// Interval with DayTime unit
+    IntervalDayTime(Option<i64>),
+
+    // Container struct.
+    List(Option<Vec<DataValue>>, DataType),
     Struct(Vec<DataValue>),
 }
 
@@ -73,8 +94,11 @@ impl DataValue {
                 | DataValue::UInt64(None)
                 | DataValue::Float32(None)
                 | DataValue::Float64(None)
-                | DataValue::Utf8(None)
                 | DataValue::Binary(None)
+                | DataValue::Utf8(None)
+                | DataValue::TimestampMillisecond(None)
+                | DataValue::TimestampMicrosecond(None)
+                | DataValue::TimestampNanosecond(None)
                 | DataValue::List(None, _)
         )
     }
@@ -95,6 +119,14 @@ impl DataValue {
             DataValue::Float64(_) => DataType::Float64,
             DataValue::Utf8(_) => DataType::Utf8,
             DataValue::Binary(_) => DataType::Binary,
+            DataValue::Date32(_) => DataType::Date32,
+            DataValue::Date64(_) => DataType::Date64,
+            DataValue::TimestampSecond(_) => DataType::Timestamp(TimeUnit::Second, None),
+            DataValue::TimestampMillisecond(_) => DataType::Timestamp(TimeUnit::Millisecond, None),
+            DataValue::TimestampMicrosecond(_) => DataType::Timestamp(TimeUnit::Microsecond, None),
+            DataValue::TimestampNanosecond(_) => DataType::Timestamp(TimeUnit::Nanosecond, None),
+            DataValue::IntervalYearMonth(_) => DataType::Interval(IntervalUnit::YearMonth),
+            DataValue::IntervalDayTime(_) => DataType::Interval(IntervalUnit::DayTime),
             DataValue::List(_, data_type) => {
                 DataType::List(Box::new(DataField::new("item", data_type.clone(), true)))
             }
