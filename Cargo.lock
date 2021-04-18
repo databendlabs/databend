@@ -565,6 +565,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-progress"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common-infallible",
+ "pretty_assertions",
+]
+
+[[package]]
 name = "common-streams"
 version = "0.1.0"
 dependencies = [
@@ -573,6 +582,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-functions",
+ "common-progress",
  "crossbeam 0.8.0",
  "futures",
  "pretty_assertions",

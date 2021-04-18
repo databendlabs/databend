@@ -13,6 +13,7 @@ mod stream_limit;
 mod stream_parquet;
 mod stream_sort;
 
+pub use crate::stream::IStream;
 pub use crate::stream::SendableDataBlockStream;
 pub use crate::stream_csv::CsvStream;
 pub use crate::stream_datablock::DataBlockStream;

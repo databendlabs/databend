@@ -55,6 +55,11 @@ impl DataBlock {
         self.columns.len()
     }
 
+    /// Data Block physical memory size
+    pub fn memory_size(&self) -> usize {
+        self.columns.iter().map(|x| x.get_array_memory_size()).sum()
+    }
+
     pub fn column(&self, index: usize) -> &DataArrayRef {
         &self.columns[index]
     }

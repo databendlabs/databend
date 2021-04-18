@@ -8,7 +8,7 @@ use std::task::Poll;
 use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datablocks::SortColumnDescription;
-use futures::stream::Stream;
+use futures::Stream;
 use futures::StreamExt;
 
 use crate::SendableDataBlockStream;

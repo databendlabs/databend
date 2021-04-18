@@ -9,6 +9,7 @@ members = [
     "common/functions",
     "common/infallible",
     "common/planners",
+    "common/progress",
     "common/streams",
 
     # FuseQuery

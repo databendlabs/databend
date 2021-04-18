@@ -8,13 +8,19 @@ use std::task::Poll;
 use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use futures::stream::Stream;
+use common_progress::Progress;
+use common_progress::ProgressCallback;
+use common_progress::ProgressRef;
+
+use crate::IStream;
 
 pub struct DataBlockStream {
     current: usize,
     schema: DataSchemaRef,
     data: Vec<DataBlock>,
     projects: Option<Vec<usize>>,
+    progress: Option<ProgressRef>,
+    progress_callback: Option<ProgressCallback>,
 }
 
 impl DataBlockStream {
@@ -28,11 +34,20 @@ impl DataBlockStream {
             schema,
             data,
             projects,
+            progress: None,
+            progress_callback: None,
         }
     }
 }
 
-impl Stream for DataBlockStream {
+impl IStream for DataBlockStream {
+    fn set_progress_callback(&mut self, callback: ProgressCallback) {
+        self.progress = Some(Progress::create());
+        self.progress_callback = Some(callback);
+    }
+}
+
+impl futures::Stream for DataBlockStream {
     type Item = Result<DataBlock>;
 
     fn poll_next(
@@ -42,6 +57,14 @@ impl Stream for DataBlockStream {
         Poll::Ready(if self.current < self.data.len() {
             self.current += 1;
             let block = &self.data[self.current - 1];
+
+            // Progress.
+            if let (Some(progress), Some(callback)) = (&self.progress, self.progress_callback) {
+                progress.add_rows(block.num_rows());
+                progress.add_bytes(block.memory_size());
+                (callback)(progress);
+            }
+
             Some(Ok(match &self.projects {
                 Some(v) => DataBlock::create(
                     self.schema.clone(),

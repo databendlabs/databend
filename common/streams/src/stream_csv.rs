@@ -12,7 +12,7 @@ use common_arrow::arrow::csv;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use csv as csv_crate;
-use futures::stream::Stream;
+use futures::Stream;
 
 pub struct CsvStream {
     reader: csv_crate::Reader<File>,
