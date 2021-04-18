@@ -37,6 +37,63 @@ fn test_projection_push_down_optimizer_1() -> anyhow::Result<()> {
 
 #[test]
 fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
+    use std::sync::Arc;
+    use std::mem::size_of;
+
+    use common_datavalues::*;
+    use common_planners::*;
+    use pretty_assertions::assert_eq;
+
+    use crate::optimizers::*;
+
+    let ctx = crate::tests::try_create_context()?;
+    let total = ctx.get_max_block_size()? as u64;
+    let statistics = Statistics {
+        read_rows: total as usize,
+        read_bytes: ((total) * size_of::<u64>() as u64) as usize,
+    };
+    ctx.try_set_statistics(&statistics)?;
+    let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
+            db: "system".to_string(),
+            table: "test".to_string(),
+            schema: Arc::new(DataSchema::new(vec![
+                DataField::new("a", DataType::Utf8, false),
+                DataField::new("b", DataType::Utf8, false),
+                DataField::new("c", DataType::Utf8, false),
+            ])),
+            partitions: Test::generate_partitions(8, total as u64),
+            statistics: statistics.clone(),
+            description: format!(
+                "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
+                "test".to_string(), statistics.read_rows, statistics.read_bytes
+            ),
+        }
+    );
+
+    let plan = PlanNode::Projection(ProjectionPlan {
+        expr: vec![col("a"), col("c")],
+        schema: Arc::new(DataSchema::new(vec![
+            DataField::new("a", DataType::Utf8, false),
+            DataField::new("c", DataType::Utf8, false),
+        ])),
+        input: Arc::from(source_plan),
+    });
+
+    let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
+    let optimized = projection_push_down.optimize(&plan)?;
+
+    let expect = "\
+    Projection: a:Utf8, c:Utf8\
+    \n  ReadDataSource: scan partitions: [8], scan schema: [a:Utf8, c:Utf8], statistics: [read_rows: 10000, read_bytes: 80000]";
+    let actual = format!("{:?}", optimized);
+    assert_eq!(expect, actual);
+
+    Ok(())
+}
+
+
+#[test]
+fn test_projection_push_down_optimizer_3() -> anyhow::Result<()> {
     use pretty_assertions::assert_eq;
 
     use crate::optimizers::*;
