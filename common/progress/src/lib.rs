@@ -7,3 +7,4 @@ mod progress;
 pub use progress::Progress;
 pub use progress::ProgressCallback;
 pub use progress::ProgressRef;
+pub use progress::ProgressValues;

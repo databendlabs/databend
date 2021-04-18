@@ -7,7 +7,12 @@ use std::sync::Arc;
 use common_infallible::RwLock;
 
 pub type ProgressRef = Arc<Progress>;
-pub type ProgressCallback = fn(&ProgressRef);
+pub type ProgressCallback = Fn(&ProgressRef) + Send + Sync;
+
+pub struct ProgressValues {
+    pub read_rows: usize,
+    pub read_bytes: usize,
+}
 
 #[derive(Clone)]
 pub struct Progress {
@@ -31,8 +36,21 @@ impl Progress {
         *self.read_bytes.write() += bytes;
     }
 
+    pub fn get_values(&self) -> ProgressValues {
+        let read_rows = *self.read_rows.read() as usize;
+        let read_bytes = *self.read_bytes.read() as usize;
+
+        ProgressValues {
+            read_rows,
+            read_bytes,
+        }
+    }
+
     pub fn reset(&self) {
         *self.read_rows.write() = 0;
         *self.read_bytes.write() = 0;
     }
+
+    // Placeholder for default callback init.
+    pub fn default_callback(_: &ProgressRef) {}
 }
