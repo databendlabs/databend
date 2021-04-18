@@ -37,8 +37,8 @@ fn test_projection_push_down_optimizer_1() -> anyhow::Result<()> {
 
 #[test]
 fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
-    use std::sync::Arc;
     use std::mem::size_of;
+    use std::sync::Arc;
 
     use common_datavalues::*;
     use common_planners::*;
@@ -54,21 +54,22 @@ fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
     };
     ctx.try_set_statistics(&statistics)?;
     let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
-            db: "system".to_string(),
-            table: "test".to_string(),
-            schema: Arc::new(DataSchema::new(vec![
-                DataField::new("a", DataType::Utf8, false),
-                DataField::new("b", DataType::Utf8, false),
-                DataField::new("c", DataType::Utf8, false),
-            ])),
-            partitions: Test::generate_partitions(8, total as u64),
-            statistics: statistics.clone(),
-            description: format!(
-                "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
-                "test".to_string(), statistics.read_rows, statistics.read_bytes
-            ),
-        }
-    );
+        db: "system".to_string(),
+        table: "test".to_string(),
+        schema: Arc::new(DataSchema::new(vec![
+            DataField::new("a", DataType::Utf8, false),
+            DataField::new("b", DataType::Utf8, false),
+            DataField::new("c", DataType::Utf8, false),
+        ])),
+        partitions: Test::generate_partitions(8, total as u64),
+        statistics: statistics.clone(),
+        description: format!(
+            "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
+            "test".to_string(),
+            statistics.read_rows,
+            statistics.read_bytes
+        ),
+    });
 
     let plan = PlanNode::Projection(ProjectionPlan {
         expr: vec![col("a"), col("c")],
@@ -90,7 +91,6 @@ fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
 
     Ok(())
 }
-
 
 #[test]
 fn test_projection_push_down_optimizer_3() -> anyhow::Result<()> {
