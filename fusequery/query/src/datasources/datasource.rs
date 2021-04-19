@@ -25,6 +25,7 @@ use crate::datasources::ITableFunction;
 #[async_trait::async_trait]
 pub trait IDataSource: Sync + Send {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn IDatabase>>;
+    fn get_databases(&self) -> Result<Vec<String>>;
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>>;
     fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>>;
     fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>>;
@@ -133,6 +134,14 @@ impl IDataSource for DataSource {
             .ok_or_else(|| anyhow!("DataSource Error: Unknown database: '{}'", db_name))?;
         let table = database.get_table(table_name)?;
         Ok(table.clone())
+    }
+
+    fn get_databases(&self) -> Result<Vec<String>> {
+        let mut results = vec![];
+        for (k, _v) in self.databases.read().iter() {
+            results.push(k.clone());
+        }
+        Ok(results)
     }
 
     fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>> {

@@ -12,6 +12,8 @@ mod interpreter_explain_test;
 mod interpreter_select_test;
 #[cfg(test)]
 mod interpreter_setting_test;
+#[cfg(test)]
+mod interpreter_use_database_test;
 
 mod interpreter;
 mod interpreter_create_database;
@@ -20,6 +22,7 @@ mod interpreter_explain;
 mod interpreter_factory;
 mod interpreter_select;
 mod interpreter_setting;
+mod interpreter_use_database;
 
 pub use interpreter::IInterpreter;
 pub use interpreter_create_database::CreateDatabaseInterpreter;
@@ -28,3 +31,4 @@ pub use interpreter_explain::ExplainInterpreter;
 pub use interpreter_factory::InterpreterFactory;
 pub use interpreter_select::SelectInterpreter;
 pub use interpreter_setting::SettingInterpreter;
+pub use interpreter_use_database::UseDatabaseInterpreter;

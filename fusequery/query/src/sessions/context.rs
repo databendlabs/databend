@@ -30,7 +30,7 @@ pub struct FuseQueryContext {
     datasource: Arc<dyn IDataSource>,
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Partition>>>,
-    pub progress_callback: Arc<RwLock<Option<ProgressCallback>>>,
+    progress_callback: Arc<RwLock<Option<ProgressCallback>>>,
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;

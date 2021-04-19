@@ -20,6 +20,7 @@ use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_planners::SettingPlan;
 use common_planners::StageState;
+use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
 use sqlparser::ast::FunctionArg;
 use sqlparser::ast::OrderByExpr;
@@ -31,6 +32,7 @@ use crate::sessions::FuseQueryContextRef;
 use crate::sql::make_data_type;
 use crate::sql::make_sql_interval_to_literal;
 use crate::sql::sql_statement::DfCreateTable;
+use crate::sql::sql_statement::DfUseDatabase;
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfExplain;
 use crate::sql::DfParser;
@@ -58,6 +60,7 @@ impl PlanParser {
             DfStatement::Statement(v) => self.sql_statement_to_plan(&v),
             DfStatement::Explain(v) => self.sql_explain_to_plan(&v),
             DfStatement::CreateDatabase(v) => self.sql_create_database_to_plan(&v),
+            DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(&v),
             DfStatement::CreateTable(v) => self.sql_create_table_to_plan(&v),
 
             // TODO: support like and other filters in show queries
@@ -109,6 +112,11 @@ impl PlanParser {
             engine: create.engine,
             options,
         }))
+    }
+
+    pub fn sql_use_database_to_plan(&self, use_db: &DfUseDatabase) -> Result<PlanNode> {
+        let db = use_db.name.0[0].value.clone();
+        Ok(PlanNode::UseDatabase(UseDatabasePlan { db }))
     }
 
     pub fn sql_create_table_to_plan(&self, create: &DfCreateTable) -> Result<PlanNode> {

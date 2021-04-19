@@ -9,6 +9,7 @@ mod tests {
     use sqlparser::ast::*;
     use sqlparser::parser::*;
 
+    use crate::sql::sql_statement::DfUseDatabase;
     use crate::sql::*;
 
     fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<(), ParserError> {
@@ -132,6 +133,24 @@ mod tests {
         // positive case
         expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables))?;
         expect_parse_ok("SHOW SETTINGS", DfStatement::ShowSettings(DfShowSettings))?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn use_database_test() -> Result<(), ParserError> {
+        expect_parse_ok(
+            "USe db1",
+            DfStatement::UseDatabase(DfUseDatabase {
+                name: ObjectName(vec![Ident::new("db1")]),
+            }),
+        )?;
+        expect_parse_ok(
+            "use db1",
+            DfStatement::UseDatabase(DfUseDatabase {
+                name: ObjectName(vec![Ident::new("db1")]),
+            }),
+        )?;
 
         Ok(())
     }

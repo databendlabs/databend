@@ -52,6 +52,7 @@ mod plan_setting;
 mod plan_sort;
 mod plan_stage;
 mod plan_statistics;
+mod plan_use_database;
 mod plan_walker;
 mod test;
 
@@ -91,4 +92,5 @@ pub use crate::plan_sort::SortPlan;
 pub use crate::plan_stage::StagePlan;
 pub use crate::plan_stage::StageState;
 pub use crate::plan_statistics::Statistics;
+pub use crate::plan_use_database::UseDatabasePlan;
 pub use crate::test::Test;
