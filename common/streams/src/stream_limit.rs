@@ -8,8 +8,8 @@ use std::task::Poll;
 use anyhow::Result;
 use common_arrow::arrow;
 use common_datablocks::DataBlock;
-use futures::stream::Stream;
-use futures::stream::StreamExt;
+use futures::Stream;
+use futures::StreamExt;
 
 use crate::SendableDataBlockStream;
 

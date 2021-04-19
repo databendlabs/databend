@@ -1,5 +1,5 @@
 [package]
-name = "common-arrow"
+name = "common-progress"
 version = "0.1.0"
 authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
@@ -8,12 +8,12 @@ edition = "2018"
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
+common-infallible = {path = "../infallible"}
 
 # Github dependencies
-arrow = { git = "https://github.com/apache/arrow", rev="62f8c20", features = ["prettyprint", "simd"] }
-arrow-flight = { git = "https://github.com/apache/arrow", rev="62f8c20" }
-parquet = { git = "https://github.com/apache/arrow", rev="62f8c20" }
 
 # Crates.io dependencies
+anyhow = "1.0.40"
 
 [dev-dependencies]
+pretty_assertions = "0.7"

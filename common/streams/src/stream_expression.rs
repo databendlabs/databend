@@ -9,8 +9,8 @@ use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_functions::IFunction;
-use futures::stream::Stream;
-use futures::stream::StreamExt;
+use futures::Stream;
+use futures::StreamExt;
 
 use crate::SendableDataBlockStream;
 
