@@ -125,7 +125,7 @@ impl<'a> DfParser<'a> {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
                     }
-                    Keyword::NoKeyword => match w.value.as_str() {
+                    Keyword::NoKeyword => match w.value.to_uppercase().as_str() {
                         // Use database
                         "USE" => self.parse_use_database(),
                         _ => self.expected("Keyword", self.parser.peek_token()),
@@ -295,6 +295,10 @@ impl<'a> DfParser<'a> {
 
     // Parse 'use database' db name.
     fn parse_use_database(&mut self) -> Result<DfStatement, ParserError> {
+        if !self.consume_token("USE") {
+            return self.expected("Must USE", self.parser.peek_token());
+        }
+
         let name = self.parser.parse_object_name()?;
         Ok(DfStatement::UseDatabase(DfUseDatabase { name }))
     }

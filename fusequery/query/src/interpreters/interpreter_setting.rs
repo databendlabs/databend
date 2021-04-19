@@ -37,7 +37,6 @@ impl IInterpreter for SettingInterpreter {
         for var in plan.vars {
             match var.variable.to_lowercase().as_str() {
                 // To be compatible with some drivers
-                // eg: usql and mycli
                 "sql_mode" | "autocommit" => {}
                 _ => {
                     self.ctx.update_settings(&var.variable, var.value)?;
