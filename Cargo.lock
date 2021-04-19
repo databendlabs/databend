@@ -2768,12 +2768,12 @@ dependencies = [
 
 [[package]]
 name = "simple_asn1"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db8d597fce66eb0f19dd129b9956e4054cba21aeaf97d4116595027b670fac50"
+checksum = "6e0e9076e5242ff5a58e854cb478ea9caebce01088f86d3d9c6ad336b7655263"
 dependencies = [
  "chrono",
- "num-bigint 0.3.2",
+ "num-bigint 0.4.0",
  "num-traits",
  "thiserror",
 ]
