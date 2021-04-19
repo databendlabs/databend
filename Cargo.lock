@@ -586,6 +586,7 @@ dependencies = [
  "common-progress",
  "crossbeam 0.8.0",
  "futures",
+ "pin-project-lite",
  "pretty_assertions",
  "tokio",
 ]
