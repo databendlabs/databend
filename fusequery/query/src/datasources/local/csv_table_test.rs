@@ -45,6 +45,8 @@ async fn test_csv_table() -> anyhow::Result<()> {
         "| 2       |",
         "| 3       |",
         "| 4       |",
+        "| 5       |",
+        "| 6       |",
         "+---------+",
     ];
     crate::assert_blocks_sorted_eq!(expected, result.as_slice());
