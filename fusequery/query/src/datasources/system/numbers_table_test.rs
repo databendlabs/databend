@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_progress::ProgressRef;
-
 #[test]
 fn test_numbers_table_generate_parts() -> anyhow::Result<()> {
     use common_planners::Partition;
@@ -100,14 +98,6 @@ async fn test_number_table() -> anyhow::Result<()> {
     let source_plan = table.read_plan(ctx.clone(), scan)?;
     ctx.try_set_partitions(source_plan.partitions)?;
 
-    let mut all_rows = 0;
-    let mut all_bytes = 0;
-    ctx.set_progress_callback(|p: &ProgressRef| {
-        let values = p.get_values();
-        all_rows += values.read_rows;
-        all_bytes += values.read_bytes;
-    });
-
     let stream = table.read(ctx).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
@@ -128,8 +118,6 @@ async fn test_number_table() -> anyhow::Result<()> {
         "+--------+",
     ];
     crate::assert_blocks_sorted_eq!(expected, result.as_slice());
-    assert_eq!(8, all_rows);
-    assert_eq!(80, all_bytes);
 
     Ok(())
 }

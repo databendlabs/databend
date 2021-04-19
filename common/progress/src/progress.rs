@@ -7,7 +7,9 @@ use std::sync::Arc;
 use common_infallible::RwLock;
 
 pub type ProgressRef = Arc<Progress>;
-pub type ProgressCallback = Fn(&ProgressRef) + Send + Sync;
+
+/// Progress callback is called with progress about the stream read progress.
+pub type ProgressCallback = Box<dyn FnMut(&ProgressRef) + Send + Sync + 'static>;
 
 pub struct ProgressValues {
     pub read_rows: usize,

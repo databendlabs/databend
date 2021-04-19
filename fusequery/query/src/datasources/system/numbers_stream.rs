@@ -17,9 +17,6 @@ use common_arrow::arrow::datatypes::DataType;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::UInt64Array;
-use common_progress::Progress;
-use common_progress::ProgressCallback;
-use common_progress::ProgressRef;
 use futures::stream::Stream;
 
 use crate::sessions::FuseQueryContextRef;
@@ -35,28 +32,15 @@ pub struct NumbersStream {
     schema: DataSchemaRef,
     block_index: usize,
     blocks: Vec<BlockRange>,
-    progress: Option<ProgressRef>,
-    progress_callback: Arc<ProgressCallback>,
 }
 
 impl NumbersStream {
     pub fn create(ctx: FuseQueryContextRef, schema: DataSchemaRef) -> Self {
-        let (progress, progress_callback) =
-            if let Some(progress_callback) = ctx.get_progress_callback() {
-                (Some(Progress::create()), progress_callback)
-            } else {
-                (
-                    None,
-                    Arc::new(Progress::default_callback) as Arc<ProgressCallback>,
-                )
-            };
         NumbersStream {
             ctx,
             schema,
             block_index: 0,
             blocks: vec![],
-            progress,
-            progress_callback,
         }
     }
 
@@ -139,13 +123,6 @@ impl Stream for NumbersStream {
                         self.schema.clone(),
                         vec![Arc::new(UInt64Array::from(arr_data))],
                     );
-
-                    // Set progress.
-                    if let Some(progress) = &self.progress {
-                        progress.add_rows(block.num_rows());
-                        progress.add_bytes(block.memory_size());
-                        (self.progress_callback)(progress);
-                    }
                     Some(Ok(block))
                 }
             }

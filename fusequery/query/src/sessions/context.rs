@@ -12,7 +12,6 @@ use common_planners::Partition;
 use common_planners::Partitions;
 use common_planners::Statistics;
 use common_progress::ProgressCallback;
-use common_progress::ProgressRef;
 use uuid::Uuid;
 
 use crate::clusters::Cluster;
@@ -31,7 +30,7 @@ pub struct FuseQueryContext {
     datasource: Arc<dyn IDataSource>,
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Partition>>>,
-    progress_callback: Arc<RwLock<Option<Arc<ProgressCallback>>>>,
+    pub progress_callback: Arc<RwLock<Option<ProgressCallback>>>,
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
@@ -74,17 +73,8 @@ impl FuseQueryContext {
     /// By default, it is called for leaf sources, after each block
     /// Note that the callback can be called from different threads.
     /// Demo see datasources/system/numbers_table_test.rs
-    pub fn set_progress_callback<F>(&self, callback: F)
-    where
-        F: Fn(&ProgressRef) + Send + Sync,
-    {
-        *self.progress_callback.write() = Some(Arc::new(callback));
-    }
-
-    /// get progress callback from context.
-    pub fn get_progress_callback(&self) -> Option<Arc<ProgressCallback>> {
-        let progress_lock = self.progress_callback.as_ref().read();
-        progress_lock.clone()
+    pub fn set_progress_callback(&self, callback: ProgressCallback) {
+        *self.progress_callback.write() = Some(callback);
     }
 
     // Steal n partitions from the partition pool by the pipeline worker.
