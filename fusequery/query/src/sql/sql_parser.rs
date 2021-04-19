@@ -22,6 +22,7 @@ use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 
+use crate::sql::sql_statement::DfUseDatabase;
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateTable;
 use crate::sql::DfExplain;
@@ -124,6 +125,11 @@ impl<'a> DfParser<'a> {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
                     }
+                    Keyword::NoKeyword => match w.value.as_str() {
+                        // Use database
+                        "USE" => self.parse_use_database(),
+                        _ => self.expected("Keyword", self.parser.peek_token()),
+                    },
                     _ => {
                         // use the native parser
                         Ok(DfStatement::Statement(self.parser.parse_statement()?))
@@ -285,6 +291,12 @@ impl<'a> DfParser<'a> {
         };
 
         Ok(DfStatement::CreateDatabase(create))
+    }
+
+    // Parse 'use database' db name.
+    fn parse_use_database(&mut self) -> Result<DfStatement, ParserError> {
+        let name = self.parser.parse_object_name()?;
+        Ok(DfStatement::UseDatabase(DfUseDatabase { name }))
     }
 
     fn parse_database_engine(&mut self) -> Result<DatabaseEngineType, ParserError> {

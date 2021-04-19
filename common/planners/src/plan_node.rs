@@ -23,6 +23,7 @@ use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::SortPlan;
 use crate::StagePlan;
+use crate::UseDatabasePlan;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub enum PlanNode {
@@ -40,6 +41,7 @@ pub enum PlanNode {
     Explain(ExplainPlan),
     CreateTable(CreateTablePlan),
     CreateDatabase(CreateDatabasePlan),
+    UseDatabase(UseDatabasePlan),
     SetVariable(SettingPlan),
 }
 
@@ -62,6 +64,7 @@ impl PlanNode {
             PlanNode::CreateTable(v) => v.schema(),
             PlanNode::SetVariable(v) => v.schema(),
             PlanNode::Sort(v) => v.schema(),
+            PlanNode::UseDatabase(v) => v.schema(),
         }
     }
 
@@ -82,6 +85,7 @@ impl PlanNode {
             PlanNode::CreateDatabase(_) => "CreateDatabasePlan",
             PlanNode::SetVariable(_) => "SetVariablePlan",
             PlanNode::Sort(_) => "SortPlan",
+            PlanNode::UseDatabase(_) => "UseDatabasePlan",
         }
     }
 
