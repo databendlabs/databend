@@ -72,7 +72,6 @@ impl FuseQueryContext {
     /// Set progress callback to context.
     /// By default, it is called for leaf sources, after each block
     /// Note that the callback can be called from different threads.
-    /// Demo see datasources/system/numbers_table_test.rs
     pub fn set_progress_callback(&self, callback: ProgressCallback) {
         *self.progress_callback.write() = Some(callback);
     }

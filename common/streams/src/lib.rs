@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[cfg(test)]
-mod tests;
+mod stream_datablock_test;
+
+#[cfg(test)]
+mod stream_progress_test;
 
 mod stream;
 mod stream_csv;

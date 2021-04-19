@@ -11,12 +11,13 @@ pub type ProgressRef = Arc<Progress>;
 /// Progress callback is called with progress about the stream read progress.
 pub type ProgressCallback = Box<dyn FnMut(&ProgressRef) + Send + Sync + 'static>;
 
+#[derive(Debug)]
 pub struct ProgressValues {
     pub read_rows: usize,
     pub read_bytes: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Progress {
     read_rows: Arc<RwLock<usize>>,
     read_bytes: Arc<RwLock<usize>>,

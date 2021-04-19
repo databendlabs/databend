@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_chunk_stream() {
+#[tokio::test]
+async fn test_datablock_stream() {
     use std::sync::Arc;
 
     use common_datablocks::*;
