@@ -7,6 +7,7 @@ use std::fs::File;
 use std::task::Context;
 use std::task::Poll;
 
+use anyhow::anyhow;
 use anyhow::Result;
 use common_arrow::arrow::csv;
 use common_datablocks::DataBlock;
@@ -32,16 +33,18 @@ impl Stream for CsvStream {
         mut self: std::pin::Pin<&mut Self>,
         _: &mut Context<'_>,
     ) -> Poll<Option<Self::Item>> {
-        let batch = self.reader.next();
-        match batch {
-            Some(Ok(batch)) => {
-                let block = batch.try_into();
-                match block {
-                    Ok(block) => Poll::Ready(Some(Ok(block))),
-                    _ => Poll::Ready(None),
+        match self.reader.next() {
+            Some(result) => match result {
+                Ok(batch) => {
+                    let block = batch.try_into();
+                    match block {
+                        Ok(block) => Poll::Ready(Some(Ok(block))),
+                        Err(e) => Poll::Ready(Some(Err(e))),
+                    }
                 }
-            }
-            _ => Poll::Ready(None),
+                Err(e) => Poll::Ready(Some(Err(anyhow!("{:?}", e)))),
+            },
+            None => Poll::Ready(None),
         }
     }
 }
