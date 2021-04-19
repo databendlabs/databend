@@ -9,7 +9,6 @@ use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_progress::Progress;
 use common_progress::ProgressCallback;
-use common_progress::ProgressRef;
 use futures::Stream;
 use pin_project_lite::pin_project;
 
@@ -20,7 +19,7 @@ pin_project! {
         #[pin]
         input: SendableDataBlockStream,
         callback: ProgressCallback,
-        progress: ProgressRef,
+        progress: Progress,
     }
 }
 

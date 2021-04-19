@@ -31,7 +31,7 @@ async fn test_progress_stream() -> anyhow::Result<()> {
     );
 
     let mut all_rows = 0;
-    let progress = Box::new(move |progress: &ProgressRef| {
+    let progress = Box::new(move |progress: &Progress| {
         all_rows += progress.get_values().read_rows;
         println!("{}", all_rows);
     });
