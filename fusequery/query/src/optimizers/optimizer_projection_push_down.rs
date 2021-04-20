@@ -12,7 +12,6 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
-use common_planners::EmptyPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::PlanNode;
@@ -277,7 +276,7 @@ impl IOptimizer for ProjectionPushDownOptimizer {
             .iter()
             .map(|f| f.name().clone())
             .collect::<HashSet<String>>();
-        let mut new_node = optimize_plan(self, plan, &required_columns, false)?;
+        let new_node = optimize_plan(self, plan, &required_columns, false)?;
         Ok(new_node)
     }
 }
