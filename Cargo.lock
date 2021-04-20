@@ -2103,9 +2103,9 @@ dependencies = [
 
 [[package]]
 name = "p256"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ca0196a204bb3f33305ba4a48b38f6e6e621cba8603a4e0650e6532e0949de4"
+checksum = "8adcc06fe90ec8fb2d2ad46746d2cbd639b158d4240364aa832da7e263dbee91"
 dependencies = [
  "ecdsa",
  "elliptic-curve",
