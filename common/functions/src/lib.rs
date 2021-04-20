@@ -5,6 +5,7 @@
 mod aggregators;
 mod arithmetics;
 mod comparisons;
+mod expressions;
 mod function;
 mod function_alias;
 mod function_column;
@@ -13,6 +14,7 @@ mod function_literal;
 mod logics;
 mod udfs;
 
+pub use crate::expressions::CastFunction;
 pub use crate::function::IFunction;
 pub use crate::function_alias::AliasFunction;
 pub use crate::function_column::ColumnFunction;

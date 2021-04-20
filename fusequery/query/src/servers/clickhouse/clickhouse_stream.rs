@@ -9,10 +9,7 @@ use std::task::Poll;
 use anyhow::bail;
 use anyhow::Result;
 use clickhouse_srv::types::Block as ClickHouseBlock;
-use common_arrow::arrow::array::as_boolean_array;
-use common_arrow::arrow::array::as_primitive_array;
-use common_arrow::arrow::array::as_string_array;
-use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::*;
 use common_arrow::arrow::datatypes::*;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
@@ -79,6 +76,15 @@ impl ClickHouseStream {
                 }
                 DataType::Float64 => {
                     let data = build_primitive_column::<Float64Type>(column)?;
+                    result = result.column(name, data);
+                }
+
+                DataType::Date32 => {
+                    let data = build_primitive_column::<Date32Type>(column)?;
+                    result = result.column(name, data);
+                }
+                DataType::Date64 => {
+                    let data = build_primitive_column::<Date64Type>(column)?;
                     result = result.column(name, data);
                 }
 

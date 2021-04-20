@@ -40,14 +40,26 @@ pub struct DfCreateDatabase {
     pub options: Vec<SqlOption>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct DfUseDatabase {
+    pub name: ObjectName,
+}
+
 /// Tokens parsed by `DFParser` are converted into these values.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DfStatement {
-    /// ANSI SQL AST node
+    // ANSI SQL AST node
     Statement(SQLStatement),
     Explain(DfExplain),
-    ShowTables(DfShowTables),
-    ShowSettings(DfShowSettings),
+
+    // Databases.
     CreateDatabase(DfCreateDatabase),
+    UseDatabase(DfUseDatabase),
+
+    // Tables.
+    ShowTables(DfShowTables),
     CreateTable(DfCreateTable),
+
+    // Settings.
+    ShowSettings(DfShowSettings),
 }

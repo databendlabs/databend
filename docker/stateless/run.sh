@@ -9,8 +9,7 @@ function run_tests()
 {
   cd tests
   mkdir -p test_output
-  ./fuse-test --print-time  --jobs 4  2>&1 \
-      | tee -a test_output/test_result.txt
+  ./fuse-test --print-time  --jobs 4   
 }
 
 export -f run_tests

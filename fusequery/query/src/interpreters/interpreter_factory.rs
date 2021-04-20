@@ -8,12 +8,13 @@ use anyhow::bail;
 use anyhow::Result;
 use common_planners::PlanNode;
 
-use crate::interpreters::interpreter_create_table::CreateTableInterpreter;
 use crate::interpreters::CreateDatabaseInterpreter;
+use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::ExplainInterpreter;
 use crate::interpreters::IInterpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::interpreters::SettingInterpreter;
+use crate::interpreters::UseDatabaseInterpreter;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct InterpreterFactory;
@@ -25,6 +26,7 @@ impl InterpreterFactory {
             PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx, v),
             PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx, v),
             PlanNode::CreateDatabase(v) => CreateDatabaseInterpreter::try_create(ctx, v),
+            PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx, v),
             _ => bail!("Can't get the interpreter by plan:{}", plan.name()),
         }

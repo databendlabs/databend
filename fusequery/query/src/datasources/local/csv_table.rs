@@ -6,6 +6,7 @@ use std::any::Any;
 use std::fs::File;
 
 use anyhow::bail;
+use anyhow::Context;
 use anyhow::Result;
 use common_datavalues::DataSchemaRef;
 use common_planners::Partition;
@@ -86,7 +87,13 @@ impl ITable for CsvTable {
     }
 
     async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
-        let reader = File::open(self.file.clone())?;
+        let current_dir = std::env::current_dir()?;
+        let reader = File::open(self.file.clone()).with_context(|| {
+            format!(
+                "Failed to read file:{}, current dir: {:?}",
+                self.file, current_dir
+            )
+        })?;
         Ok(Box::pin(CsvStream::try_create(
             self.schema.clone(),
             reader,

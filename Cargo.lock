@@ -91,7 +91,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "arrow"
 version = "4.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow?rev=62f8c20#62f8c20306f366a848f1392eba97665ef155a2b2"
+source = "git+https://github.com/apache/arrow-rs?rev=08a662f#08a662f2b256c625ea1be6b9bbaec43026906bb7"
 dependencies = [
  "cfg_aliases",
  "chrono",
@@ -102,7 +102,6 @@ dependencies = [
  "lazy_static",
  "lexical-core",
  "num 0.3.1",
- "packed_simd_2",
  "prettytable-rs",
  "rand 0.7.3",
  "regex",
@@ -114,7 +113,7 @@ dependencies = [
 [[package]]
 name = "arrow-flight"
 version = "4.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow?rev=62f8c20#62f8c20306f366a848f1392eba97665ef155a2b2"
+source = "git+https://github.com/apache/arrow-rs?rev=08a662f#08a662f2b256c625ea1be6b9bbaec43026906bb7"
 dependencies = [
  "arrow",
  "bytes 1.0.1",
@@ -540,6 +539,7 @@ name = "common-functions"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "common-arrow",
  "common-datablocks",
  "common-datavalues",
  "common-infallible",
@@ -565,6 +565,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-progress"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common-infallible",
+ "pretty_assertions",
+]
+
+[[package]]
 name = "common-streams"
 version = "0.1.0"
 dependencies = [
@@ -573,8 +582,10 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-functions",
+ "common-progress",
  "crossbeam 0.8.0",
  "futures",
+ "pin-project-lite",
  "pretty_assertions",
  "tokio",
 ]
@@ -1036,6 +1047,7 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-planners",
+ "common-progress",
  "common-streams",
  "crossbeam 0.8.0",
  "env_logger",
@@ -1572,12 +1584,6 @@ checksum = "9385f66bf6105b241aa65a61cb923ef20efc665cb9f9bb50ac2f0c4b7f378d41"
 
 [[package]]
 name = "libm"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fc7aa29613bd6a620df431842069224d8bc9011086b1db4c0e0cd47fa03ec9a"
-
-[[package]]
-name = "libm"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
@@ -1952,7 +1958,7 @@ dependencies = [
  "autocfg 0.1.7",
  "byteorder",
  "lazy_static",
- "libm 0.2.1",
+ "libm",
  "num-integer",
  "num-iter",
  "num-traits",
@@ -2031,7 +2037,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a64b1ec5cda2586e284722486d802acf1f7dbdc623e2bfc57e65ca1cd099290"
 dependencies = [
  "autocfg 1.0.1",
- "libm 0.2.1",
+ "libm",
 ]
 
 [[package]]
@@ -2107,16 +2113,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "packed_simd_2"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3278e0492f961fd4ae70909f56b2723a7e8d01a228427294e19cdfdebda89a17"
-dependencies = [
- "cfg-if 0.1.10",
- "libm 0.1.4",
-]
-
-[[package]]
 name = "parking_lot"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2144,7 +2140,7 @@ dependencies = [
 [[package]]
 name = "parquet"
 version = "4.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow?rev=62f8c20#62f8c20306f366a848f1392eba97665ef155a2b2"
+source = "git+https://github.com/apache/arrow-rs?rev=08a662f#08a662f2b256c625ea1be6b9bbaec43026906bb7"
 dependencies = [
  "arrow",
  "base64 0.12.3",

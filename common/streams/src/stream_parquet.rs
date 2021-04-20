@@ -8,7 +8,7 @@ use std::task::Poll;
 use anyhow::Result;
 use common_datablocks::DataBlock;
 use crossbeam::channel::Receiver;
-use futures::stream::Stream;
+use futures::Stream;
 
 pub struct ParquetStream {
     response_rx: Receiver<Option<Result<DataBlock>>>,

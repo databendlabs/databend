@@ -8,7 +8,6 @@ use std::task::Poll;
 use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use futures::stream::Stream;
 
 pub struct DataBlockStream {
     current: usize,
@@ -32,7 +31,7 @@ impl DataBlockStream {
     }
 }
 
-impl Stream for DataBlockStream {
+impl futures::Stream for DataBlockStream {
     type Item = Result<DataBlock>;
 
     fn poll_next(
@@ -42,6 +41,7 @@ impl Stream for DataBlockStream {
         Poll::Ready(if self.current < self.data.len() {
             self.current += 1;
             let block = &self.data[self.current - 1];
+
             Some(Ok(match &self.projects {
                 Some(v) => DataBlock::create(
                     self.schema.clone(),
