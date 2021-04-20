@@ -14,6 +14,7 @@ use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::EmptyPlan;
 use common_planners::ExpressionPlan;
+use common_planners::FilterPlan;
 use common_planners::PlanNode;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
@@ -106,7 +107,6 @@ fn optimize_plan(
     has_projection: bool,
 ) -> Result<PlanNode> {
     let mut new_required_columns = required_columns.clone();
-    println!("(1) {:?}", required_columns);
     match plan {
         PlanNode::Projection(ProjectionPlan {
             expr,
@@ -119,7 +119,6 @@ fn optimize_plan(
             let mut new_expr = Vec::new();
             let mut new_fields = Vec::new();
             // Gather all columns needed
-            println!("Projection: (2) {:?}", schema.fields());
             schema
                 .fields()
                 .iter()
@@ -146,6 +145,14 @@ fn optimize_plan(
                     schema: Arc::new(DataSchema::new(new_fields)),
                 }))
             }
+        }
+        PlanNode::Filter(FilterPlan { predicate, input }) => {
+            expr_to_column_names(predicate, &mut new_required_columns)?;
+            let new_input =
+                optimize_plan(optimizer, &input, &new_required_columns, has_projection)?;
+            let mut cloned_plan = plan.clone();
+            cloned_plan.set_input(&new_input)?;
+            Ok(cloned_plan)
         }
         PlanNode::AggregatorFinal(AggregatorFinalPlan {
             aggr_expr,
@@ -249,7 +256,6 @@ fn optimize_plan(
         }
         PlanNode::Empty(_) => Ok(plan.clone()),
         _ => {
-            println!("others:{:?}", plan);
             let input = plan.input();
             let new_input = optimize_plan(optimizer, &input, &required_columns, has_projection)?;
             let mut cloned_plan = plan.clone();
@@ -265,25 +271,13 @@ impl IOptimizer for ProjectionPushDownOptimizer {
     }
 
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
-        let mut rewritten_node = PlanNode::Empty(EmptyPlan {
-            schema: Arc::new(DataSchema::empty()),
-        });
-
-        // set of all columns referred by the plan
-        println!("get required columns");
         let required_columns = plan
             .schema()
             .fields()
             .iter()
             .map(|f| f.name().clone())
             .collect::<HashSet<String>>();
-        println!("postorder");
-        plan.walk_postorder(|node| {
-            let mut new_node = optimize_plan(self, node, &required_columns, true)?;
-            new_node.set_input(&rewritten_node)?;
-            rewritten_node = new_node;
-            Ok(true)
-        })?;
-        Ok(rewritten_node)
+        let mut new_node = optimize_plan(self, plan, &required_columns, false)?;
+        Ok(new_node)
     }
 }
