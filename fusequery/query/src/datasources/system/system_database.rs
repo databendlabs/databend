@@ -31,6 +31,7 @@ impl SystemDatabase {
             Arc::new(system::NumbersTable::create("numbers_mt")),
             Arc::new(system::TablesTable::create()),
             Arc::new(system::ClustersTable::create()),
+            Arc::new(system::DatabasesTable::create()),
         ];
         let mut tables: HashMap<String, Arc<dyn ITable>> = HashMap::default();
         for tbl in table_list.iter() {

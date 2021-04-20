@@ -5,30 +5,32 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
-use common_planners::DatabaseEngineType;
-use common_planners::ExplainType;
-use common_planners::TableEngineType;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOptionDef;
 use sqlparser::ast::Ident;
 use sqlparser::ast::SqlOption;
 use sqlparser::ast::TableConstraint;
 use sqlparser::ast::Value;
-use sqlparser::dialect::keywords::Keyword;
 use sqlparser::dialect::Dialect;
 use sqlparser::dialect::GenericDialect;
+use sqlparser::dialect::keywords::Keyword;
 use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 
-use crate::sql::sql_statement::DfUseDatabase;
+use common_planners::DatabaseEngineType;
+use common_planners::ExplainType;
+use common_planners::TableEngineType;
+
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateTable;
 use crate::sql::DfExplain;
 use crate::sql::DfShowSettings;
 use crate::sql::DfShowTables;
 use crate::sql::DfStatement;
+use crate::sql::sql_statement::DfShowDatabases;
+use crate::sql::sql_statement::DfUseDatabase;
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
@@ -119,6 +121,8 @@ impl<'a> DfParser<'a> {
 
                         if self.consume_token("TABLES") {
                             Ok(DfStatement::ShowTables(DfShowTables))
+                        } else if self.consume_token("DATABASES") {
+                            Ok(DfStatement::ShowDatabases(DfShowDatabases))
                         } else if self.consume_token("SETTINGS") {
                             Ok(DfStatement::ShowSettings(DfShowSettings))
                         } else {

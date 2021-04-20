@@ -14,6 +14,9 @@ use sqlparser::ast::Statement as SQLStatement;
 pub struct DfShowTables;
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct DfShowDatabases;
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DfShowSettings;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -53,6 +56,7 @@ pub enum DfStatement {
     Explain(DfExplain),
 
     // Databases.
+    ShowDatabases(DfShowDatabases),
     CreateDatabase(DfCreateDatabase),
     UseDatabase(DfUseDatabase),
 
