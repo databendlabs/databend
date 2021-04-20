@@ -23,6 +23,9 @@ async fn test_tables_table() -> anyhow::Result<()> {
         "+----------+",
         "| name     |",
         "+----------+",
+        "| default  |",
+        "| for_test |",
+        "| local    |",
         "| system   |",
         "+----------+",
     ];

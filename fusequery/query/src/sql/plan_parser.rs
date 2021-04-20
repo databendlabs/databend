@@ -59,9 +59,9 @@ impl PlanParser {
         match statement {
             DfStatement::Statement(v) => self.sql_statement_to_plan(&v),
             DfStatement::Explain(v) => self.sql_explain_to_plan(&v),
-            DfStatement::ShowDatabases(_) => self.build_from_sql(
-                format!("SELECT name FROM system.databases ORDER BY name").as_str()
-            ),
+            DfStatement::ShowDatabases(_) => {
+                self.build_from_sql("SELECT name FROM system.databases ORDER BY name")
+            }
             DfStatement::CreateDatabase(v) => self.sql_create_database_to_plan(&v),
             DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(&v),
             DfStatement::CreateTable(v) => self.sql_create_table_to_plan(&v),
