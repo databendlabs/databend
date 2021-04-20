@@ -53,3 +53,87 @@ async fn test_csv_table() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_csv_table_parse_error() -> anyhow::Result<()> {
+    use std::env;
+
+    use common_datavalues::*;
+    use common_planners::*;
+    use futures::TryStreamExt;
+
+    use crate::datasources::local::*;
+
+    let options: TableOptions = [(
+        "location".to_string(),
+        env::current_dir()?
+            .join("../../tests/data/sample.csv")
+            .display()
+            .to_string(),
+    )]
+    .iter()
+    .cloned()
+    .collect();
+
+    let ctx = crate::tests::try_create_context()?;
+    let table = CsvTable::try_create(
+        "default".into(),
+        "test_csv".into(),
+        DataSchema::new(vec![
+            DataField::new("column1", DataType::UInt64, false),
+            DataField::new("column2", DataType::UInt64, false),
+            DataField::new("column3", DataType::UInt64, false),
+            DataField::new("column4", DataType::UInt64, false),
+        ])
+        .into(),
+        options,
+    )?;
+    table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
+
+    let stream = table.read(ctx).await?;
+    let result = stream.try_collect::<Vec<_>>().await;
+    assert_eq!(true, result.is_err());
+    if let Err(e) = result {
+        assert_eq!(
+            "ParseError(\"Error while parsing value \\\'Shanghai\\\' for column 1 at line 1\")",
+            e.to_string()
+        );
+    };
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_csv_table_file_not_found_error() -> anyhow::Result<()> {
+    use std::env;
+
+    use common_datavalues::*;
+    use common_planners::*;
+
+    use crate::datasources::local::*;
+
+    let options: TableOptions = [(
+        "location".to_string(),
+        env::current_dir()?
+            .join("../../tests/data/sample-x.csv")
+            .display()
+            .to_string(),
+    )]
+    .iter()
+    .cloned()
+    .collect();
+
+    let ctx = crate::tests::try_create_context()?;
+    let table = CsvTable::try_create(
+        "default".into(),
+        "test_csv".into(),
+        DataSchema::new(vec![DataField::new("column1", DataType::UInt64, false)]).into(),
+        options,
+    )?;
+    table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
+
+    let result = table.read(ctx).await;
+    assert_eq!(true, result.is_err());
+
+    Ok(())
+}
