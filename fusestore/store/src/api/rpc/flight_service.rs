@@ -5,10 +5,10 @@
 // use std::collections::HashMap;
 use std::convert::TryInto;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use common_arrow::arrow_flight;
 use common_arrow::arrow_flight::flight_service_server::FlightService;
-use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
 use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::ActionType;
 use common_arrow::arrow_flight::BasicAuth;
@@ -35,6 +35,9 @@ use log::error;
 #[allow(unused_imports)]
 use log::info;
 use prost::Message;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::Sender;
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::metadata::MetadataMap;
 use tonic::Request;
 use tonic::Response;
@@ -43,26 +46,24 @@ use tonic::Streaming;
 
 use crate::configs::Config;
 use crate::executor::ActionHandler;
+use crate::fs::IFileSystem;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
-pub struct FlightServiceImpl {
+/// StoreFlightImpl provides data access API-s for FuseQuery, in arrow-flight protocol.
+pub struct StoreFlightImpl {
     token: FlightToken,
     action_handler: ActionHandler
 }
 
-impl FlightServiceImpl {
-    pub fn create(_conf: Config) -> Self {
+impl StoreFlightImpl {
+    pub fn create(_conf: Config, fs: Arc<dyn IFileSystem>) -> Self {
         Self {
             token: FlightToken::create(),
             // TODO pass in action handler
-            action_handler: ActionHandler::create()
+            action_handler: ActionHandler::create(fs)
         }
-    }
-
-    pub fn make_server(self) -> FlightServiceServer<impl FlightService> {
-        FlightServiceServer::new(self)
     }
 
     fn check_token(&self, metadata: &MetadataMap) -> Result<FlightClaim, Status> {
@@ -81,7 +82,7 @@ impl FlightServiceImpl {
 }
 
 #[async_trait::async_trait]
-impl FlightService for FlightServiceImpl {
+impl FlightService for StoreFlightImpl {
     type HandshakeStream = FlightStream<HandshakeResponse>;
     async fn handshake(
         &self,
@@ -143,7 +144,8 @@ impl FlightService for FlightServiceImpl {
         unimplemented!()
     }
 
-    type DoGetStream = FlightStream<FlightData>;
+    type DoGetStream =
+        Pin<Box<dyn Stream<Item = Result<FlightData, tonic::Status>> + Send + Sync + 'static>>;
     async fn do_get(
         &self,
         request: Request<Ticket>
@@ -154,7 +156,21 @@ impl FlightService for FlightServiceImpl {
         // Action.
         let action: StoreDoGet = request.try_into()?;
         match action {
-            StoreDoGet::Read(_) => Err(Status::internal("Store read unimplemented"))
+            StoreDoGet::Read(_) => Err(Status::internal("Store read unimplemented")),
+            StoreDoGet::Pull(pull) => {
+                let key = pull.key;
+
+                let (tx, rx): (
+                    Sender<Result<FlightData, tonic::Status>>,
+                    Receiver<Result<FlightData, tonic::Status>>
+                ) = tokio::sync::mpsc::channel(2);
+
+                self.action_handler.do_pull_file(key, tx).await?;
+
+                Ok(Response::new(
+                    Box::pin(ReceiverStream::new(rx)) as Self::DoGetStream
+                ))
+            }
         }
     }
 
@@ -197,7 +213,7 @@ impl FlightService for FlightServiceImpl {
         unimplemented!()
     }
 }
-impl FlightServiceImpl {
+impl StoreFlightImpl {
     fn once_stream_resp(
         &self,
         action_rst: StoreDoActionResult

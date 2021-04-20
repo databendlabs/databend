@@ -44,13 +44,13 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3"
 threadpool = "1.8.1"
+tempfile = "3.2.0"
 tokio = { version = "1.5", features = ["macros", "rt","rt-multi-thread", "sync"] }
 tokio-stream = "0.1"
 tonic = "0.4"
 
 [dev-dependencies]
 pretty_assertions = "0.7"
-tempfile = "3.2.0"
 
 [build-dependencies]
 tonic-build = "0.4"

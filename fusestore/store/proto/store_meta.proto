@@ -43,3 +43,28 @@ message CmdCreateTable {
   string table_name = 30;
   Table table = 40;
 }
+
+// meta service
+
+message SetReq {
+  string key = 1;
+  string value = 2;
+
+  // if_absent==true:  AKA add. write key=value only when key is absent.
+  // if_absent==false: AKA set. always overrides.
+  bool if_absent = 3;
+}
+message SetReply { bool ok = 1; }
+
+message GetReq { string key = 1; }
+message GetReply {
+  bool ok = 1;
+  string key = 2;
+  string value = 3;
+}
+
+service MetaService {
+
+  rpc Set(SetReq) returns (SetReply) {}
+  rpc Get(GetReq) returns (GetReply) {}
+}

@@ -13,7 +13,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
     use common_planners::DatabaseEngineType;
 
     // 1. Service starts.
-    let addr = crate::tests::start_one_service().await?;
+    let addr = crate::tests::start_store_server().await?;
 
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -69,7 +69,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
     info!("init logging");
 
     // 1. Service starts.
-    let addr = crate::tests::start_one_service().await?;
+    let addr = crate::tests::start_store_server().await?;
 
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 

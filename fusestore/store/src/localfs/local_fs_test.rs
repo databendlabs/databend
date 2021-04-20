@@ -6,17 +6,17 @@ use tempfile::tempdir;
 
 use crate::fs::IFileSystem;
 use crate::fs::ListResult;
-use crate::fs::LocalFS;
+use crate::localfs::LocalFS;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_localfs_read_all() -> anyhow::Result<()> {
     let dir = tempdir()?;
     let root = dir.path();
 
-    let f = LocalFS::try_create(root)?;
+    let f = LocalFS::try_create(root.to_str().unwrap().to_string())?;
     {
         // read absent file
-        let got = f.read_all("foo.txt").await;
+        let got = f.read_all("foo.txt".into()).await;
         assert_eq!(
             "No such file or directory (os error 2)",
             got.err().unwrap().root_cause().to_string()
@@ -25,7 +25,7 @@ async fn test_localfs_read_all() -> anyhow::Result<()> {
     {
         // add foo.txt and read
         f.add("foo.txt".to_string(), "123".as_bytes()).await?;
-        let got = f.read_all("foo.txt").await?;
+        let got = f.read_all("foo.txt".into()).await?;
         assert_eq!("123", std::str::from_utf8(&got)?);
     }
     {
@@ -38,20 +38,20 @@ async fn test_localfs_read_all() -> anyhow::Result<()> {
     }
     {
         // add long/bar.txt and read
-        f.add("long/bar.txt", "456".as_bytes()).await?;
-        let got = f.read_all("long/bar.txt").await?;
+        f.add("long/bar.txt".into(), "456".as_bytes()).await?;
+        let got = f.read_all("long/bar.txt".into()).await?;
         assert_eq!("456", std::str::from_utf8(&got)?);
     }
 
     {
         // add long/path/file.txt and read
-        f.add("long/path/file.txt", "789".as_bytes()).await?;
-        let got = f.read_all("long/path/file.txt").await?;
+        f.add("long/path/file.txt".into(), "789".as_bytes()).await?;
+        let got = f.read_all("long/path/file.txt".into()).await?;
         assert_eq!("789", std::str::from_utf8(&got)?);
     }
     {
         // list
-        let got = f.list("long").await?;
+        let got = f.list("long".into()).await?;
         assert_eq!(
             ListResult {
                 dirs: vec!["path".into()],
