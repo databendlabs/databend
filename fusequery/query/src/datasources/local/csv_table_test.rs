@@ -109,7 +109,6 @@ async fn test_csv_table_file_not_found_error() -> anyhow::Result<()> {
 
     use common_datavalues::*;
     use common_planners::*;
-    use futures::TryStreamExt;
 
     use crate::datasources::local::*;
 
@@ -133,8 +132,7 @@ async fn test_csv_table_file_not_found_error() -> anyhow::Result<()> {
     )?;
     table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
 
-    let stream = table.read(ctx).await?;
-    let result = stream.try_collect::<Vec<_>>().await;
+    let result = table.read(ctx).await;
     assert_eq!(true, result.is_err());
 
     Ok(())
