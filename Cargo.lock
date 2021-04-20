@@ -1535,13 +1535,14 @@ dependencies = [
 
 [[package]]
 name = "k256"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf02ecc966e1b7e8db1c81ac8f321ba24d1cfab5b634961fab10111f015858e1"
+checksum = "4476a0808212a9e81ce802eb1a0cfc60e73aea296553bacc0fac7e1268bc572a"
 dependencies = [
  "cfg-if 1.0.0",
  "ecdsa",
  "elliptic-curve",
+ "sha2 0.9.3",
 ]
 
 [[package]]
