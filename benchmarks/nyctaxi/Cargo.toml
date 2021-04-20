@@ -1,0 +1,22 @@
+[package]
+name = "benchmarks-nyctaxi"
+version = "0.1.0"
+authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+common-datavalues = {path = "../../common/datavalues"}
+common-planners = {path = "../../common/planners"}
+fuse-query = {path = "../../fusequery/query"}
+
+# Github dependencies
+
+# Crates.io dependencies
+futures = "0.3"
+structopt = "0.3"
+tokio = { version = "1.5", features = ["macros", "rt","rt-multi-thread", "sync"] }
+
+[dev-dependencies]

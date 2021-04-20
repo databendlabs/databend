@@ -3,10 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
-use std::fs::File;
 
 use anyhow::bail;
-use anyhow::Context;
 use anyhow::Result;
 use common_datavalues::DataSchemaRef;
 use common_planners::Partition;
@@ -24,7 +22,7 @@ pub struct CsvTable {
     db: String,
     name: String,
     schema: DataSchemaRef,
-    file: String,
+    options: TableOptions,
 }
 
 impl CsvTable {
@@ -34,19 +32,12 @@ impl CsvTable {
         schema: DataSchemaRef,
         options: TableOptions,
     ) -> Result<Box<dyn ITable>> {
-        let file = options.get("location");
-        return match file {
-            Some(file) => {
-                let table = CsvTable {
-                    db,
-                    name,
-                    schema,
-                    file: file.trim_matches(|s| s == '\'' || s == '"').to_string(),
-                };
-                Ok(Box::new(table))
-            }
-            _ => bail!("CSV Engine must contains file location options"),
-        };
+        Ok(Box::new(Self {
+            db,
+            name,
+            schema,
+            options,
+        }))
     }
 }
 
@@ -87,16 +78,18 @@ impl ITable for CsvTable {
     }
 
     async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
-        let current_dir = std::env::current_dir()?;
-        let reader = File::open(self.file.clone()).with_context(|| {
-            format!(
-                "Failed to read file:{}, current dir: {:?}",
-                self.file, current_dir
-            )
-        })?;
+        let file = match self.options.get("location") {
+            None => {
+                bail!("CSV Engine must contains file location options")
+            }
+            Some(v) => v.trim_matches(|s| s == '\'' || s == '"').to_string(),
+        };
+
+        let has_header = self.options.get("has_header").is_some();
         Ok(Box::pin(CsvStream::try_create(
             self.schema.clone(),
-            reader,
+            file,
+            has_header,
         )?))
     }
 }
