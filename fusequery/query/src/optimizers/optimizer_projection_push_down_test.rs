@@ -71,21 +71,27 @@ fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
         ),
     });
 
+    let filter_plan = PlanBuilder::from(&source_plan)
+        .filter(col("a").gt(lit(6)).and(col("b").lt_eq(lit(10))))?
+        .build()?;
+
     let plan = PlanNode::Projection(ProjectionPlan {
         expr: vec![col("a"), col("c")],
-        schema: Arc::new(DataSchema::new(vec![
-            DataField::new("a", DataType::Utf8, false),
-            DataField::new("c", DataType::Utf8, false),
-        ])),
-        input: Arc::from(source_plan),
+        schema: Arc::new(DataSchema::new(vec![DataField::new(
+            "a",
+            DataType::Utf8,
+            false,
+        )])),
+        input: Arc::from(filter_plan),
     });
 
     let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
     let optimized = projection_push_down.optimize(&plan)?;
 
     let expect = "\
-    Projection: a:Utf8, c:Utf8\
-    \n  ReadDataSource: scan partitions: [8], scan schema: [a:Utf8, c:Utf8], statistics: [read_rows: 10000, read_bytes: 80000]";
+    Projection: a:Utf8\
+    \n  Filter: ((a > 6) and (b <= 10))\
+    \n    ReadDataSource: scan partitions: [8], scan schema: [a:Utf8], statistics: [read_rows: 10000, read_bytes: 80000]";
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);
 
