@@ -8,9 +8,9 @@ edition = "2018"
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-datavalues = {path = "../../common/datavalues"}
-common-planners = {path = "../../common/planners"}
-fuse-query = {path = "../../fusequery/query"}
+common-datavalues = {path = "../../../common/datavalues"}
+common-planners = {path = "../../../common/planners"}
+fuse-query = {path = "../../query"}
 
 # Github dependencies
 
