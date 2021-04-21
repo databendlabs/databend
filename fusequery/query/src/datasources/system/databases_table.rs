@@ -70,7 +70,7 @@ impl ITable for DatabasesTable {
                 version: 0,
             }],
             statistics: Statistics::default(),
-            description: "(Read from system.functions table)".to_string(),
+            description: "(Read from system.databases table)".to_string(),
         })
     }
 
