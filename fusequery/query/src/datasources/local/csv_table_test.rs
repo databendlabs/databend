@@ -30,7 +30,7 @@ async fn test_csv_table() -> anyhow::Result<()> {
         DataSchema::new(vec![DataField::new("column1", DataType::UInt64, false)]).into(),
         options,
     )?;
-    table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
+    table.read_plan(ctx.clone(), &ScanPlan::empty())?;
 
     let stream = table.read(ctx).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -88,7 +88,7 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
         .into(),
         options,
     )?;
-    table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
+    table.read_plan(ctx.clone(), &ScanPlan::empty())?;
 
     let stream = table.read(ctx).await?;
     let result = stream.try_collect::<Vec<_>>().await;
@@ -130,7 +130,7 @@ async fn test_csv_table_file_not_found_error() -> anyhow::Result<()> {
         DataSchema::new(vec![DataField::new("column1", DataType::UInt64, false)]).into(),
         options,
     )?;
-    table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
+    table.read_plan(ctx.clone(), &ScanPlan::empty())?;
 
     let result = table.read(ctx).await;
     assert_eq!(true, result.is_err());

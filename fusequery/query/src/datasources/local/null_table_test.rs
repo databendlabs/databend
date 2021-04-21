@@ -17,7 +17,7 @@ async fn test_null_table() -> anyhow::Result<()> {
         DataSchema::new(vec![DataField::new("a", DataType::UInt64, false)]).into(),
         TableOptions::default(),
     )?;
-    table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
+    table.read_plan(ctx.clone(), &ScanPlan::empty())?;
     assert_eq!(table.engine(), "Null");
 
     let stream = table.read(ctx).await?;

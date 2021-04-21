@@ -25,6 +25,7 @@ fn test_scan_plan() -> anyhow::Result<()> {
             DataType::Utf8,
             false,
         )])),
+        filters: vec![],
         limit: None,
     });
     let _ = scan.schema();

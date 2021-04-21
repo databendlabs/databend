@@ -255,8 +255,12 @@ impl PlanParser {
 
         let scan =
             PlanBuilder::scan(db_name, table_name, schema.as_ref(), None, None, None)?.build()?;
-        let datasource_plan = table.read_plan(self.ctx.clone(), scan)?;
-        Ok(PlanNode::ReadSource(datasource_plan))
+        if let PlanNode::Scan(plan) = scan {
+            let datasource_plan = table.read_plan(self.ctx.clone(), &plan)?;
+            Ok(PlanNode::ReadSource(datasource_plan))
+        } else {
+            bail!("Cannot downcast to scan plan")
+        }
     }
 
     fn plan_table_with_joins(&self, t: &sqlparser::ast::TableWithJoins) -> Result<PlanNode> {
@@ -308,8 +312,13 @@ impl PlanParser {
                     None,
                 )?
                 .build()?;
-                let datasource_plan = table.read_plan(self.ctx.clone(), scan)?;
-                Ok(PlanNode::ReadSource(datasource_plan))
+
+                if let PlanNode::Scan(plan) = scan {
+                    let datasource_plan = table.read_plan(self.ctx.clone(), &plan)?;
+                    Ok(PlanNode::ReadSource(datasource_plan))
+                } else {
+                    bail!("Cannot downcast to scan plan")
+                }
             }
             sqlparser::ast::TableFactor::Derived { subquery, .. } => self.query_to_plan(subquery),
             sqlparser::ast::TableFactor::NestedJoin(table_with_joins) => {

@@ -30,7 +30,7 @@ async fn test_parquet_table() -> anyhow::Result<()> {
         DataSchema::new(vec![DataField::new("id", DataType::Int32, false)]).into(),
         options,
     )?;
-    table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
+    table.read_plan(ctx.clone(), &ScanPlan::empty())?;
 
     let stream = table.read(ctx).await?;
     let blocks = stream.try_collect::<Vec<_>>().await?;

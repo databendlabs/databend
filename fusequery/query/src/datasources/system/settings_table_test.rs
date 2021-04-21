@@ -15,7 +15,7 @@ async fn test_settings_table() -> anyhow::Result<()> {
     ctx.set_max_threads(2)?;
 
     let table = SettingsTable::create();
-    table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
+    table.read_plan(ctx.clone(), &ScanPlan::empty())?;
 
     let stream = table.read(ctx).await?;
     let result = stream.try_collect::<Vec<_>>().await?;

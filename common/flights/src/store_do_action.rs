@@ -11,7 +11,7 @@ use common_arrow::arrow_flight::Action;
 use common_datavalues::DataSchemaRef;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
-use common_planners::PlanNode;
+use common_planners::ScanPlan;
 use prost::Message;
 use tonic::Request;
 
@@ -19,7 +19,7 @@ use crate::protobuf::FlightStoreRequest;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ReadPlanAction {
-    pub push_down_plan: PlanNode,
+    pub scan: ScanPlan,
 }
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct ReadPlanActionResult {}
