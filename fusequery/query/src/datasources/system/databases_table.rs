@@ -59,7 +59,7 @@ impl ITable for DatabasesTable {
     fn read_plan(
         &self,
         _ctx: FuseQueryContextRef,
-        _push_down_plan: &ScanPlan,
+        _scan: &ScanPlan,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
