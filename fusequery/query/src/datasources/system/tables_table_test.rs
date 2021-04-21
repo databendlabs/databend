@@ -24,6 +24,7 @@ async fn test_tables_table() -> anyhow::Result<()> {
         "| database | name       | engine          |",
         "+----------+------------+-----------------+",
         "| system   | clusters   | SystemClusters  |",
+        "| system   | databases  | SystemDatabases |",
         "| system   | functions  | SystemFunctions |",
         "| system   | numbers    | SystemNumbers   |",
         "| system   | numbers_mt | SystemNumbersMt |",

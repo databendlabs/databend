@@ -45,7 +45,7 @@ impl ITable for DatabasesTable {
     }
 
     fn engine(&self) -> &str {
-        "SystemTables"
+        "SystemDatabases"
     }
 
     fn as_any(&self) -> &dyn Any {

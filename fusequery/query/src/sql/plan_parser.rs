@@ -69,7 +69,7 @@ impl PlanParser {
             // TODO: support like and other filters in show queries
             DfStatement::ShowTables(_) => self.build_from_sql(
                 format!(
-                    "SELECT name FROM system.tables where database = '{}'",
+                    "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
                     self.ctx.get_default_db()?
                 )
                 .as_str(),
