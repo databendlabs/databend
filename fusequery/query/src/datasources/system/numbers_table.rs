@@ -17,7 +17,6 @@ use common_datavalues::DataValue;
 use common_planners::ExpressionPlan;
 use common_planners::Partition;
 use common_planners::Partitions;
-use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
@@ -99,26 +98,20 @@ impl ITable for NumbersTable {
         Ok(self.schema.clone())
     }
 
-    fn read_plan(
-        &self,
-        ctx: FuseQueryContextRef,
-        push_down_plan: PlanNode,
-    ) -> Result<ReadDataSourcePlan> {
+    fn read_plan(&self, ctx: FuseQueryContextRef, scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
         let mut total = ctx.get_max_block_size()? as u64;
 
-        if let PlanNode::Scan(plan) = push_down_plan {
-            let ScanPlan { table_args, .. } = plan;
-            if let Some(args) = table_args {
-                if let ExpressionPlan::Literal(DataValue::UInt64(Some(v))) = args {
-                    total = v;
-                }
-
-                if let ExpressionPlan::Literal(DataValue::Int64(Some(v))) = args {
-                    total = v as u64;
-                }
-            } else {
-                bail!("Must have one argument for table: system.{}", self.name());
+        let ScanPlan { table_args, .. } = scan.clone();
+        if let Some(args) = table_args {
+            if let ExpressionPlan::Literal(DataValue::UInt64(Some(v))) = args {
+                total = v;
             }
+
+            if let ExpressionPlan::Literal(DataValue::Int64(Some(v))) = args {
+                total = v as u64;
+            }
+        } else {
+            bail!("Must have one argument for table: system.{}", self.name());
         }
 
         let statistics = Statistics {

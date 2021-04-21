@@ -12,7 +12,7 @@ async fn test_functions_table() -> anyhow::Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
     let table = FunctionsTable::create();
-    table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
+    table.read_plan(ctx.clone(), &ScanPlan::empty())?;
 
     let stream = table.read(ctx).await?;
     let result = stream.try_collect::<Vec<_>>().await?;

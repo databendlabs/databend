@@ -165,6 +165,7 @@ impl PlanBuilder {
             projected_schema,
             projection,
             table_args,
+            filters: vec![],
             limit,
         })))
     }

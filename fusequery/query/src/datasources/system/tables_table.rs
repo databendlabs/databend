@@ -13,8 +13,8 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::StringArray;
 use common_planners::Partition;
-use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
+use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -56,11 +56,7 @@ impl ITable for TablesTable {
         Ok(self.schema.clone())
     }
 
-    fn read_plan(
-        &self,
-        _ctx: FuseQueryContextRef,
-        _push_down_plan: PlanNode,
-    ) -> Result<ReadDataSourcePlan> {
+    fn read_plan(&self, _ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),

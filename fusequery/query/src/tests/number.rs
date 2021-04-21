@@ -9,7 +9,6 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_planners::ExpressionPlan;
-use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 
@@ -43,14 +42,15 @@ impl NumberTestData {
         let table = datasource.get_table(self.db, self.table)?;
         table.read_plan(
             self.ctx.clone(),
-            PlanNode::Scan(ScanPlan {
+            &ScanPlan {
                 schema_name: self.db.to_string(),
                 table_schema: Arc::new(DataSchema::empty()),
                 table_args: Some(ExpressionPlan::Literal(DataValue::Int64(Some(numbers)))),
                 projection: None,
                 projected_schema: Arc::new(DataSchema::empty()),
+                filters: vec![],
                 limit: None,
-            }),
+            },
         )
     }
 

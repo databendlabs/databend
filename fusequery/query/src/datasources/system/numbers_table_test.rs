@@ -83,7 +83,7 @@ async fn test_number_table() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let table = NumbersTable::create("numbers_mt");
 
-    let scan = PlanNode::Scan(ScanPlan {
+    let scan = &ScanPlan {
         schema_name: "scan_test".to_string(),
         table_schema: Arc::new(DataSchema::new(vec![])),
         table_args: Some(ExpressionPlan::Literal(DataValue::UInt64(Some(8)))),
@@ -93,8 +93,9 @@ async fn test_number_table() -> anyhow::Result<()> {
             DataType::UInt64,
             false,
         )])),
+        filters: vec![],
         limit: None,
-    });
+    };
     let source_plan = table.read_plan(ctx.clone(), scan)?;
     ctx.try_set_partitions(source_plan.partitions)?;
 

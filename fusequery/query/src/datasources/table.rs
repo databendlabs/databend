@@ -6,8 +6,8 @@ use std::any::Any;
 
 use anyhow::Result;
 use common_datavalues::DataSchemaRef;
-use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
+use common_planners::ScanPlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::sessions::FuseQueryContextRef;
@@ -20,11 +20,7 @@ pub trait ITable: Sync + Send {
     fn schema(&self) -> Result<DataSchemaRef>;
 
     // Get the read source plan.
-    fn read_plan(
-        &self,
-        ctx: FuseQueryContextRef,
-        push_down_plan: PlanNode,
-    ) -> Result<ReadDataSourcePlan>;
+    fn read_plan(&self, ctx: FuseQueryContextRef, scan: &ScanPlan) -> Result<ReadDataSourcePlan>;
 
     // Read block datas from the underfling.
     async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream>;
