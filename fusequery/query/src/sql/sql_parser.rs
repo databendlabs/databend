@@ -22,6 +22,7 @@ use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 
+use crate::sql::sql_statement::DfShowDatabases;
 use crate::sql::sql_statement::DfUseDatabase;
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateTable;
@@ -119,6 +120,8 @@ impl<'a> DfParser<'a> {
 
                         if self.consume_token("TABLES") {
                             Ok(DfStatement::ShowTables(DfShowTables))
+                        } else if self.consume_token("DATABASES") {
+                            Ok(DfStatement::ShowDatabases(DfShowDatabases))
                         } else if self.consume_token("SETTINGS") {
                             Ok(DfStatement::ShowSettings(DfShowSettings))
                         } else {

@@ -5,6 +5,8 @@
 #[cfg(test)]
 mod clusters_table_test;
 #[cfg(test)]
+mod databases_table_test;
+#[cfg(test)]
 mod functions_table_test;
 #[cfg(test)]
 mod numbers_table_test;
@@ -14,6 +16,7 @@ mod settings_table_test;
 mod tables_table_test;
 
 mod clusters_table;
+mod databases_table;
 mod functions_table;
 mod numbers_stream;
 mod numbers_table;
@@ -24,6 +27,7 @@ mod system_factory;
 mod tables_table;
 
 pub use clusters_table::ClustersTable;
+pub use databases_table::DatabasesTable;
 pub use functions_table::FunctionsTable;
 pub use numbers_stream::NumbersStream;
 pub use numbers_table::NumbersTable;
