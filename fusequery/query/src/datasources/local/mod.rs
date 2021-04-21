@@ -10,6 +10,7 @@ mod null_table_test;
 mod parquet_table_test;
 
 mod csv_table;
+mod csv_table_stream;
 mod local_database;
 mod local_factory;
 mod null_table;

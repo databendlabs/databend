@@ -14,27 +14,41 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use csv as csv_crate;
 use futures::Stream;
+use futures::StreamExt;
 
-pub struct CsvStream {
+use crate::sessions::FuseQueryContextRef;
+
+pub struct CsvTableStream {
+    ctx: FuseQueryContextRef,
     reader: csv_crate::Reader<File>,
 }
 
-impl CsvStream {
-    pub fn try_create(schema: DataSchemaRef, file: String, has_header: bool) -> Result<Self> {
+impl CsvTableStream {
+    pub fn try_create(
+        ctx: FuseQueryContextRef,
+        schema: DataSchemaRef,
+        file: String,
+        has_header: bool,
+    ) -> Result<Self> {
         let f =
             File::open(file.clone()).with_context(|| format!("Failed to read file:{}", file))?;
         let reader = csv::Reader::new(f, schema, has_header, None, 1024, None, None);
-        Ok(CsvStream { reader })
+        Ok(CsvTableStream { ctx, reader })
     }
 }
 
-impl Stream for CsvStream {
+impl Stream for CsvTableStream {
     type Item = Result<DataBlock>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
         _: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
+        let partitions = self.ctx.try_get_partitions(1)?;
+        if partitions.is_empty() {
+            return Ok(None);
+        }
+
         match self.reader.next() {
             Some(result) => match result {
                 Ok(batch) => {
