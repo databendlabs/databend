@@ -19,7 +19,7 @@ members = [
     "fusestore/store",
 
     # Benchamrks
-    "benchmarks/nyctaxi"
+    "fusequery/benchmarks/nyctaxi"
 ]
 
 [profile.release]
