@@ -7,4 +7,4 @@
 pub mod rpc;
 mod rpc_service;
 
-pub use rpc_service::RpcService;
+pub use rpc_service::StoreServer;

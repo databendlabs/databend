@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use fuse_store::api::RpcService;
+use fuse_store::api::StoreServer;
 use fuse_store::configs::Config;
 use fuse_store::metrics::MetricService;
 use log::info;
@@ -29,9 +29,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // RPC API service.
     {
-        let srv = RpcService::create(conf.clone());
+        let srv = StoreServer::create(conf.clone());
         info!("RPC API server listening on {}", conf.rpc_api_address);
-        srv.make_server().await.expect("RPC service error");
+        srv.serve().await.expect("RPC service error");
     }
 
     Ok(())

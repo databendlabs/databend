@@ -18,9 +18,9 @@ pub struct LocalFS {
 
 /// IFS implementation on local file-system.
 impl LocalFS {
-    pub fn try_create(root: impl AsRef<Path>) -> anyhow::Result<LocalFS> {
+    pub fn try_create(root: String) -> anyhow::Result<LocalFS> {
         let f = LocalFS {
-            root: PathBuf::from(root.as_ref())
+            root: PathBuf::from(root)
         };
         Ok(f)
     }
@@ -28,13 +28,9 @@ impl LocalFS {
 
 #[async_trait]
 impl IFileSystem for LocalFS {
-    async fn add<'a>(
-        &'a self,
-        path: impl AsRef<Path> + Send + 'a,
-        data: &[u8]
-    ) -> anyhow::Result<()> {
+    async fn add<'a>(&'a self, path: String, data: &[u8]) -> anyhow::Result<()> {
         // TODO: test atomicity: write temp file and rename it
-        let p = Path::new(self.root.as_path()).join(path.as_ref());
+        let p = Path::new(self.root.as_path()).join(&path);
         let mut an = p.ancestors();
         let _tail = an.next();
         let base = an.next();
@@ -47,26 +43,28 @@ impl IFileSystem for LocalFS {
             .write(true)
             .create_new(true)
             .open(p.as_path())
-            .with_context(|| format!("LocalFS: fail to open {}", path.as_ref().display()))?;
+            .with_context(|| format!("LocalFS: fail to open {}", path))?;
+
         f.write_all(data)
-            .with_context(|| format!("LocalFS: fail to write {}", path.as_ref().display()))?;
+            .with_context(|| format!("LocalFS: fail to write {}", path))?;
+
         f.sync_all()
-            .with_context(|| format!("LocalFS: fail to sync {}", path.as_ref().display()))?;
+            .with_context(|| format!("LocalFS: fail to sync {}", path))?;
 
         Ok(())
     }
 
-    async fn read_all<'a>(&'a self, path: impl AsRef<Path> + Send + 'a) -> anyhow::Result<Vec<u8>> {
-        let p = Path::new(self.root.as_path()).join(path.as_ref());
+    async fn read_all<'a>(&'a self, path: String) -> anyhow::Result<Vec<u8>> {
+        let p = Path::new(self.root.as_path()).join(&path);
         let data = std::fs::read(p.as_path())
-            .with_context(|| format!("LocalFS: fail to read {}", path.as_ref().display()))?;
+            .with_context(|| format!("LocalFS: fail to read {}", path))?;
         Ok(data)
     }
 
-    async fn list<'a>(&'a self, path: impl AsRef<Path> + Send + 'a) -> anyhow::Result<ListResult> {
-        let p = Path::new(self.root.as_path()).join(path.as_ref());
+    async fn list<'a>(&'a self, path: String) -> anyhow::Result<ListResult> {
+        let p = Path::new(self.root.as_path()).join(&path);
         let entries = std::fs::read_dir(p.as_path())
-            .with_context(|| format!("LocalFS: fail to list {}", path.as_ref().display()))?;
+            .with_context(|| format!("LocalFS: fail to list {}", path))?;
 
         let mut dirs = vec![];
         let mut files = vec![];

@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-mod service;
+#[macro_use]
+pub mod service;
 
-pub use service::start_one_service;
+pub use service::rand_local_addr;
+pub use service::start_store_server;

@@ -22,9 +22,11 @@ use common_flights::StoreDoActionResult;
 use log::error;
 #[allow(unused_imports)]
 use log::info;
+use tokio::sync::mpsc::Sender;
 use tonic::Status;
 
 use crate::engine::MemEngine;
+use crate::fs::IFileSystem;
 use crate::protobuf::CmdCreateDatabase;
 use crate::protobuf::CmdCreateTable;
 use crate::protobuf::Db;
@@ -35,14 +37,39 @@ pub struct ActionHandler {
     // catalog: Box<dyn Catalog>,
     // tbl_spec: TableSpec,
     // db_spec: DatabaseSpec,
-    meta: Arc<Mutex<MemEngine>>
+    // TODO delegate table/database RW to fs
+    meta: Arc<Mutex<MemEngine>>,
+    fs: Arc<dyn IFileSystem>
 }
 
 impl ActionHandler {
-    pub fn create() -> Self {
+    pub fn create(fs: Arc<dyn IFileSystem>) -> Self {
         ActionHandler {
-            meta: MemEngine::create()
+            meta: MemEngine::create(),
+            fs
         }
+    }
+
+    /// Handle pull-file reqeust, which is used internally for replicating data copies.
+    /// In FuseStore impl there is no internal file id etc, thus replication use the same `key` in communacation with FuseQuery as in internal replication.
+    pub async fn do_pull_file(
+        &self,
+        key: String,
+        tx: Sender<Result<FlightData, tonic::Status>>
+    ) -> Result<(), Status> {
+        // TODO: stream read if the file is too large.
+        let buf = self
+            .fs
+            .read_all(key)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        tx.send(Ok(FlightData {
+            data_body: buf,
+            ..Default::default()
+        }))
+        .await
+        .map_err(|e| Status::internal(format!("{:?}", e)))
     }
 
     pub async fn execute(&self, action: StoreDoAction) -> Result<StoreDoActionResult, Status> {
