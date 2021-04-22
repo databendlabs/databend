@@ -6,18 +6,15 @@ use std::any::Any;
 use std::convert::TryInto;
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Result;
 use common_arrow::arrow;
-use common_datablocks::DataBlock;
+use common_datavalues as datavalues;
 use common_datavalues::BooleanArray;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
 use common_functions::IFunction;
 use common_planners::ExpressionPlan;
-use common_streams::ExpressionStream;
 use common_streams::SendableDataBlockStream;
+use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
@@ -42,21 +39,6 @@ impl FilterTransform {
             input: Arc::new(EmptyProcessor::create())
         })
     }
-
-    pub fn expression_executor(
-        _schema: &DataSchemaRef,
-        block: DataBlock,
-        funcs: Vec<Box<dyn IFunction>>
-    ) -> Result<DataBlock> {
-        let func = funcs[0].clone();
-        let result = func.eval(&block)?.to_array(block.num_rows())?;
-        let filter_result = result
-            .as_any()
-            .downcast_ref::<BooleanArray>()
-            .ok_or_else(|| anyhow!("cannot downcast to boolean array"))?;
-        let batch = arrow::compute::filter_record_batch(&block.try_into()?, filter_result)?;
-        batch.try_into()
-    }
 }
 
 #[async_trait::async_trait]
@@ -79,11 +61,24 @@ impl IProcessor for FilterTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        Ok(Box::pin(ExpressionStream::try_create(
-            self.input.execute().await?,
-            Arc::new(DataSchema::empty()),
-            vec![self.func.clone()],
-            FilterTransform::expression_executor
-        )?))
+        let func_clone = self.func.clone();
+        let input_stream = self.input.execute().await?;
+
+        let stream = input_stream.filter_map(move |v| {
+            let block = v.ok()?;
+            let rows = block.num_rows();
+            let filter_fn = func_clone.clone();
+
+            // Filter function eval result to array
+            let filter_array = filter_fn.eval(&block).ok()?.to_array(rows).ok()?;
+            // Downcast to boolean array
+            let filter_array = datavalues::downcast_array!(filter_array, BooleanArray).ok()?;
+            // Convert to arrow record_batch
+            let batch = block.try_into().ok()?;
+            let batch = arrow::compute::filter_record_batch(&batch, filter_array).ok()?;
+            let block = batch.try_into().ok()?;
+            Some(Ok(block))
+        });
+        Ok(Box::pin(stream))
     }
 }
