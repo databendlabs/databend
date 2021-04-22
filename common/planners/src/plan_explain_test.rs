@@ -17,7 +17,7 @@ fn test_explain_plan() -> anyhow::Result<()> {
         .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
         typ: ExplainType::Syntax,
-        input: Arc::new(plan),
+        input: Arc::new(plan)
     });
     let expect ="Filter: ((number + 1) = 4)\
     \n  Projection: number as c1:UInt64, number as c2:UInt64\

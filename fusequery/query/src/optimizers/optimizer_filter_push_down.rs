@@ -27,7 +27,7 @@ impl FilterPushDownOptimizer {
 /// replaces columns by its name on the projection.
 fn rewrite_alias_expr(
     expr: &ExpressionPlan,
-    projection: &HashMap<String, ExpressionPlan>,
+    projection: &HashMap<String, ExpressionPlan>
 ) -> Result<ExpressionPlan> {
     let expressions = Optimizer::expression_plan_children(expr)?;
 
@@ -51,7 +51,7 @@ impl IOptimizer for FilterPushDownOptimizer {
 
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         let mut rewritten_node = PlanNode::Empty(EmptyPlan {
-            schema: Arc::new(DataSchema::empty()),
+            schema: Arc::new(DataSchema::empty())
         });
 
         let projection_map = Optimizer::projection_to_map(plan)?;
@@ -60,7 +60,7 @@ impl IOptimizer for FilterPushDownOptimizer {
                 let rewritten_expr = rewrite_alias_expr(&filter.predicate, &projection_map)?;
                 let mut new_filter_node = PlanNode::Filter(FilterPlan {
                     predicate: rewritten_expr,
-                    input: rewritten_node.input(),
+                    input: rewritten_node.input()
                 });
                 new_filter_node.set_input(&rewritten_node)?;
                 rewritten_node = new_filter_node;

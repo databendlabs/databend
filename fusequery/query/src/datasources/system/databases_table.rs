@@ -23,7 +23,7 @@ use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct DatabasesTable {
-    schema: DataSchemaRef,
+    schema: DataSchemaRef
 }
 
 impl DatabasesTable {
@@ -32,8 +32,8 @@ impl DatabasesTable {
             schema: Arc::new(DataSchema::new(vec![DataField::new(
                 "name",
                 DataType::Utf8,
-                false,
-            )])),
+                false
+            )]))
         }
     }
 }
@@ -56,21 +56,17 @@ impl ITable for DatabasesTable {
         Ok(self.schema.clone())
     }
 
-    fn read_plan(
-        &self,
-        _ctx: FuseQueryContextRef,
-        _scan: &ScanPlan,
-    ) -> Result<ReadDataSourcePlan> {
+    fn read_plan(&self, _ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0,
+                version: 0
             }],
             statistics: Statistics::default(),
-            description: "(Read from system.databases table)".to_string(),
+            description: "(Read from system.databases table)".to_string()
         })
     }
 
@@ -83,16 +79,13 @@ impl ITable for DatabasesTable {
                     .map(|database_name| database_name.as_str())
                     .collect();
 
-                let block = DataBlock::create(
-                    self.schema.clone(),
-                    vec![Arc::new(StringArray::from(databases_name_str))],
-                );
+                let block = DataBlock::create(self.schema.clone(), vec![Arc::new(
+                    StringArray::from(databases_name_str)
+                )]);
 
-                Box::pin(DataBlockStream::create(
-                    self.schema.clone(),
-                    None,
-                    vec![block],
-                ))
+                Box::pin(DataBlockStream::create(self.schema.clone(), None, vec![
+                    block,
+                ]))
             })
     }
 }

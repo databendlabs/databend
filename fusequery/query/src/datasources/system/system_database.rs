@@ -17,7 +17,7 @@ use crate::datasources::ITableFunction;
 
 pub struct SystemDatabase {
     tables: HashMap<String, Arc<dyn ITable>>,
-    table_functions: HashMap<String, Arc<dyn ITableFunction>>,
+    table_functions: HashMap<String, Arc<dyn ITableFunction>>
 }
 
 impl SystemDatabase {
@@ -50,7 +50,7 @@ impl SystemDatabase {
 
         SystemDatabase {
             tables,
-            table_functions,
+            table_functions
         }
     }
 }

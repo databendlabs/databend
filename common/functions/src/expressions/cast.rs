@@ -23,7 +23,7 @@ pub struct CastFunction {
     /// The expression to cast
     expr: Box<dyn IFunction>,
     /// The data type to cast to
-    cast_type: DataType,
+    cast_type: DataType
 }
 
 impl CastFunction {
@@ -52,15 +52,15 @@ impl IFunction for CastFunction {
                 compute::kernels::cast::cast_with_options(
                     &v,
                     &self.cast_type,
-                    &DEFAULT_DATAFUSE_CAST_OPTIONS,
-                )?,
+                    &DEFAULT_DATAFUSE_CAST_OPTIONS
+                )?
             )),
             DataColumnarValue::Scalar(v) => {
                 let scalar_array = v.to_array()?;
                 let cast_array = compute::kernels::cast::cast_with_options(
                     &scalar_array,
                     &self.cast_type,
-                    &DEFAULT_DATAFUSE_CAST_OPTIONS,
+                    &DEFAULT_DATAFUSE_CAST_OPTIONS
                 )?;
                 let cast_scalar = DataValue::try_from_array(&cast_array, 0)?;
                 Ok(DataColumnarValue::Scalar(cast_scalar))

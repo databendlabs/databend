@@ -28,7 +28,7 @@ impl ProgressStream {
         Ok(Self {
             input,
             callback,
-            progress: Progress::create(),
+            progress: Progress::create()
         })
     }
 }
@@ -38,7 +38,7 @@ impl Stream for ProgressStream {
 
     fn poll_next(
         self: std::pin::Pin<&mut Self>,
-        ctx: &mut Context<'_>,
+        ctx: &mut Context<'_>
     ) -> Poll<Option<Self::Item>> {
         let this = self.project();
 
@@ -51,11 +51,11 @@ impl Stream for ProgressStream {
                         (this.callback)(&this.progress);
                         Poll::Ready(Some(Ok(block)))
                     }
-                    Err(e) => Poll::Ready(Some(Err(e))),
+                    Err(e) => Poll::Ready(Some(Err(e)))
                 },
-                None => Poll::Ready(None),
+                None => Poll::Ready(None)
             },
-            Poll::Pending => Poll::Pending,
+            Poll::Pending => Poll::Pending
         }
     }
 }

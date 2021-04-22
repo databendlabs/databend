@@ -60,14 +60,14 @@ pub fn numeric_byte_size(dt: &DataType) -> Result<usize> {
         DataType::Int16 | DataType::UInt16 | DataType::Float16 => Ok(2),
         DataType::Int32 | DataType::UInt32 | DataType::Float32 => Ok(4),
         DataType::Int64 | DataType::UInt64 | DataType::Float64 => Ok(8),
-        _ => bail!("Function number_byte_size argument must be numeric types"),
+        _ => bail!("Function number_byte_size argument must be numeric types")
     }
 }
 
 pub fn construct_numeric_type(
     is_signed: bool,
     is_floating: bool,
-    byte_size: usize,
+    byte_size: usize
 ) -> Result<DataType> {
     match (is_signed, is_floating, byte_size) {
         (false, false, 1) => Ok(DataType::UInt8),
@@ -97,7 +97,7 @@ pub fn construct_numeric_type(
             is_signed,
             is_floating,
             byte_size
-        ),
+        )
     }
 }
 
@@ -118,7 +118,7 @@ pub fn dictionary_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<D
     match (lhs_type, rhs_type) {
         (
             DataType::Dictionary(_lhs_index_type, lhs_value_type),
-            DataType::Dictionary(_rhs_index_type, rhs_value_type),
+            DataType::Dictionary(_rhs_index_type, rhs_value_type)
         ) => dictionary_value_coercion(lhs_value_type, rhs_value_type),
         (DataType::Dictionary(_index_type, value_type), _) => {
             dictionary_value_coercion(value_type, rhs_type)
@@ -126,7 +126,7 @@ pub fn dictionary_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<D
         (_, DataType::Dictionary(_index_type, value_type)) => {
             dictionary_value_coercion(lhs_type, value_type)
         }
-        _ => bail!("Can't construct type from {} and {}", lhs_type, rhs_type),
+        _ => bail!("Can't construct type from {} and {}", lhs_type, rhs_type)
     }
 }
 
@@ -138,7 +138,7 @@ pub fn string_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataT
         (LargeUtf8, Utf8) => Ok(LargeUtf8),
         (Utf8, LargeUtf8) => Ok(LargeUtf8),
         (LargeUtf8, LargeUtf8) => Ok(LargeUtf8),
-        _ => bail!("Can't construct type from {} and {}", lhs_type, rhs_type),
+        _ => bail!("Can't construct type from {} and {}", lhs_type, rhs_type)
     }
 }
 
@@ -164,7 +164,7 @@ pub fn numerical_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Da
             0
         } else {
             size_of_rhs
-        },
+        }
     );
 
     let max_size_of_signed_integer = cmp::max(
@@ -177,7 +177,7 @@ pub fn numerical_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Da
             0
         } else {
             size_of_rhs
-        },
+        }
     );
 
     let max_size_of_integer = cmp::max(
@@ -190,7 +190,7 @@ pub fn numerical_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Da
             0
         } else {
             size_of_rhs
-        },
+        }
     );
 
     let max_size_of_float = cmp::max(
@@ -203,7 +203,7 @@ pub fn numerical_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Da
             0
         } else {
             size_of_rhs
-        },
+        }
     );
 
     let should_double = (has_float && has_integer && max_size_of_integer >= max_size_of_float)
@@ -218,7 +218,7 @@ pub fn numerical_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Da
             cmp::max(size_of_rhs, size_of_lhs) * 2
         } else {
             cmp::max(size_of_rhs, size_of_lhs)
-        },
+        }
     )
 }
 
@@ -226,7 +226,7 @@ pub fn numerical_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Da
 pub fn numerical_arithmetic_coercion(
     op: &DataValueArithmeticOperator,
     lhs_type: &DataType,
-    rhs_type: &DataType,
+    rhs_type: &DataType
 ) -> Result<DataType> {
     // error on any non-numeric type
     if !is_numeric(lhs_type) || !is_numeric(rhs_type) {
@@ -251,7 +251,7 @@ pub fn numerical_arithmetic_coercion(
         DataValueArithmeticOperator::Minus => {
             construct_numeric_type(true, has_float, next_size(max_size))
         }
-        DataValueArithmeticOperator::Div => Ok(Float64),
+        DataValueArithmeticOperator::Div => Ok(Float64)
     }
 }
 

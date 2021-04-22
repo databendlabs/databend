@@ -13,13 +13,12 @@ fn test_data_block() -> anyhow::Result<()> {
     let schema = Arc::new(DataSchema::new(vec![DataField::new(
         "a",
         DataType::Int64,
-        false,
+        false
     )]));
 
-    let block = DataBlock::create(
-        schema.clone(),
-        vec![Arc::new(Int64Array::from(vec![1, 2, 3]))],
-    );
+    let block = DataBlock::create(schema.clone(), vec![Arc::new(Int64Array::from(vec![
+        1, 2, 3,
+    ]))]);
     assert_eq!(&schema, block.schema());
 
     assert_eq!(3, block.num_rows());

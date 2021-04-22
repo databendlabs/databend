@@ -40,7 +40,7 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
         Ok(Box::new(GroupByPartialTransform::create(
             aggr_partial.schema(),
             aggr_exprs.clone(),
-            group_exprs.clone(),
+            group_exprs.clone()
         )))
     })?;
     pipeline.merge_processor()?;
@@ -48,7 +48,7 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
         Ok(Box::new(GroupByFinalTransform::create(
             aggr_final.schema(),
             aggr_exprs.clone(),
-            group_exprs.clone(),
+            group_exprs.clone()
         )))
     })?;
 

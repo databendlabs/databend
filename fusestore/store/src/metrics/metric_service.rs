@@ -9,7 +9,7 @@ use metrics_exporter_prometheus::PrometheusBuilder;
 use crate::configs::Config;
 
 pub struct MetricService {
-    conf: Config,
+    conf: Config
 }
 
 impl MetricService {

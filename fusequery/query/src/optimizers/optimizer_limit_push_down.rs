@@ -27,10 +27,10 @@ fn limit_push_down(upper_limit: Option<usize>, plan: &PlanNode) -> Result<PlanNo
             let smallest = upper_limit.map(|x| std::cmp::min(x, *n)).unwrap_or(*n);
             Ok(PlanNode::Limit(LimitPlan {
                 n: smallest,
-                input: Arc::new(limit_push_down(Some(smallest), input.as_ref())?),
+                input: Arc::new(limit_push_down(Some(smallest), input.as_ref())?)
             }))
         }
-        _ => Ok(plan.clone()),
+        _ => Ok(plan.clone())
     }
 }
 
@@ -41,7 +41,7 @@ impl IOptimizer for LimitPushDownOptimizer {
 
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         let mut rewritten_node = PlanNode::Empty(EmptyPlan {
-            schema: Arc::new(DataSchema::empty()),
+            schema: Arc::new(DataSchema::empty())
         });
 
         plan.walk_postorder(|node| {

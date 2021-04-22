@@ -13,7 +13,7 @@ fn test_rewriter_plan() -> anyhow::Result<()> {
         name: &'static str,
         exprs: Vec<ExpressionPlan>,
         expect_str: &'static str,
-        error_msg: &'static str,
+        error_msg: &'static str
     }
 
     let tests = vec![
@@ -153,7 +153,7 @@ fn test_rewriter_plan() -> anyhow::Result<()> {
         let result = PlanRewriter::exprs_extract_aliases(t.exprs);
         match &result {
             Ok(v) => assert_eq!(t.expect_str, format!("{:?}", v), "in test_case {}", t.name),
-            Err(e) => assert_eq!(t.error_msg, e.to_string(), "in test_case {}", t.name),
+            Err(e) => assert_eq!(t.error_msg, e.to_string(), "in test_case {}", t.name)
         }
     }
 

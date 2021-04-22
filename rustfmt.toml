@@ -1,3 +1,8 @@
 reorder_imports = true
 imports_granularity = "Item"
 group_imports = "StdExternalCrate"
+where_single_line = true
+trailing_comma = "Never"
+report_fixme = "Unnumbered"
+overflow_delimited_expr = true
+

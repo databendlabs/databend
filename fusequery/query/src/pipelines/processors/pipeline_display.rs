@@ -75,7 +75,7 @@ impl Pipeline {
                                 })?;
                                 let local_pipeline = PipelineBuilder::create(
                                     remote.ctx.clone(),
-                                    remote.plan.clone(),
+                                    remote.plan.clone()
                                 )
                                 .build()?;
                                 let pipeline_display =

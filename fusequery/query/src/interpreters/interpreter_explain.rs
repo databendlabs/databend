@@ -24,13 +24,13 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct ExplainInterpreter {
     ctx: FuseQueryContextRef,
-    explain: ExplainPlan,
+    explain: ExplainPlan
 }
 
 impl ExplainInterpreter {
     pub fn try_create(
         ctx: FuseQueryContextRef,
-        explain: ExplainPlan,
+        explain: ExplainPlan
     ) -> Result<Arc<dyn IInterpreter>> {
         Ok(Arc::new(ExplainInterpreter { ctx, explain }))
     }
@@ -46,7 +46,7 @@ impl IInterpreter for ExplainInterpreter {
         let schema = Arc::new(DataSchema::new(vec![DataField::new(
             "explain",
             DataType::Utf8,
-            false,
+            false
         )]));
 
         let plan = Optimizer::create(self.ctx.clone()).optimize(&self.explain.input)?;
@@ -58,12 +58,11 @@ impl IInterpreter for ExplainInterpreter {
                 let pipeline = PipelineBuilder::create(self.ctx.clone(), plan).build()?;
                 format!("{:?}", pipeline)
             }
-            _ => format!("{:?}", PlanNode::Explain(self.explain.clone())),
+            _ => format!("{:?}", PlanNode::Explain(self.explain.clone()))
         };
-        let block = DataBlock::create(
-            schema.clone(),
-            vec![Arc::new(StringArray::from(vec![result.as_str()]))],
-        );
+        let block = DataBlock::create(schema.clone(), vec![Arc::new(StringArray::from(vec![
+            result.as_str(),
+        ]))]);
         debug!("Explain executor result: {:?}", block);
 
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))

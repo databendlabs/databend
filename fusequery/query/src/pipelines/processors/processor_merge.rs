@@ -16,7 +16,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use crate::pipelines::processors::IProcessor;
 
 pub struct MergeProcessor {
-    inputs: Vec<Arc<dyn IProcessor>>,
+    inputs: Vec<Arc<dyn IProcessor>>
 }
 
 impl MergeProcessor {
@@ -60,7 +60,7 @@ impl IProcessor for MergeProcessor {
                                 sender.send(Err(e)).await.ok();
                                 return;
                             }
-                            Ok(stream) => stream,
+                            Ok(stream) => stream
                         };
 
                         while let Some(item) = stream.next().await {

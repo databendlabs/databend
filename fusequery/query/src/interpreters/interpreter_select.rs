@@ -15,13 +15,13 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct SelectInterpreter {
     ctx: FuseQueryContextRef,
-    select: SelectPlan,
+    select: SelectPlan
 }
 
 impl SelectInterpreter {
     pub fn try_create(
         ctx: FuseQueryContextRef,
-        select: SelectPlan,
+        select: SelectPlan
     ) -> Result<Arc<dyn IInterpreter>> {
         Ok(Arc::new(SelectInterpreter { ctx, select }))
     }

@@ -16,7 +16,7 @@ use crate::protobuf::Table;
 pub struct MemEngine {
     pub dbs: HashMap<String, Db>,
     pub next_id: i64,
-    pub next_ver: i64,
+    pub next_ver: i64
 }
 
 impl MemEngine {
@@ -25,7 +25,7 @@ impl MemEngine {
         let e = MemEngine {
             dbs: HashMap::new(),
             next_id: 0,
-            next_ver: 0,
+            next_ver: 0
         };
         Arc::new(Mutex::new(e))
     }
@@ -34,7 +34,7 @@ impl MemEngine {
     pub fn create_database(
         &mut self,
         cmd: CmdCreateDatabase,
-        if_not_exists: bool,
+        if_not_exists: bool
     ) -> anyhow::Result<i64> {
         // TODO: support plan.engine plan.options
         let curr = self.dbs.get(&cmd.db_name);
@@ -69,7 +69,7 @@ impl MemEngine {
     pub fn create_table(
         &mut self,
         cmd: CmdCreateTable,
-        if_not_exists: bool,
+        if_not_exists: bool
     ) -> Result<i64, Status> {
         // TODO: support plan.engine plan.options
 

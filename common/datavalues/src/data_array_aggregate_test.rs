@@ -16,7 +16,7 @@ fn test_array_aggregate() {
         args: Vec<DataArrayRef>,
         expect: Vec<DataValue>,
         error: Vec<&'static str>,
-        op: DataValueAggregateOperator,
+        op: DataValueAggregateOperator
     }
 
     let tests = vec![
@@ -49,7 +49,7 @@ fn test_array_aggregate() {
                 DataValue::Float32(Some(1.0)),
                 DataValue::Float64(Some(1.0)),
             ],
-            error: vec![""],
+            error: vec![""]
         },
         ArrayTest {
             name: "max-passed",
@@ -80,7 +80,7 @@ fn test_array_aggregate() {
                 DataValue::Float32(Some(4.0)),
                 DataValue::Float64(Some(4.0)),
             ],
-            error: vec![""],
+            error: vec![""]
         },
         ArrayTest {
             name: "sum-passed",
@@ -111,7 +111,7 @@ fn test_array_aggregate() {
                 DataValue::Float32(Some(10.0)),
                 DataValue::Float64(Some(10.0)),
             ],
-            error: vec!["DataValue Error: Unsupported data_array_sum for data type: Utf8"],
+            error: vec!["DataValue Error: Unsupported data_array_sum for data type: Utf8"]
         },
         ArrayTest {
             name: "avg-failed",
@@ -142,7 +142,7 @@ fn test_array_aggregate() {
                 "DataValue Error: Unsupported data_array_avg for data type: UInt64",
                 "DataValue Error: Unsupported data_array_avg for data type: Float32",
                 "DataValue Error: Unsupported data_array_avg for data type: Float64",
-            ],
+            ]
         },
     ];
 
@@ -151,7 +151,7 @@ fn test_array_aggregate() {
             let result = data_array_aggregate_op(t.op.clone(), args.clone());
             match result {
                 Ok(v) => assert_eq!(v, t.expect[i]),
-                Err(e) => assert_eq!(t.error[i], e.to_string()),
+                Err(e) => assert_eq!(t.error[i], e.to_string())
             }
         }
     }

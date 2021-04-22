@@ -27,7 +27,7 @@ async fn test_transform_projection() -> anyhow::Result<()> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ProjectionTransform::try_create(
                 plan.schema.clone(),
-                plan.expr.clone(),
+                plan.expr.clone()
             )?))
         })?;
     }

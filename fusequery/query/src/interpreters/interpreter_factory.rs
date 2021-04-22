@@ -28,7 +28,7 @@ impl InterpreterFactory {
             PlanNode::CreateDatabase(v) => CreateDatabaseInterpreter::try_create(ctx, v),
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx, v),
-            _ => bail!("Can't get the interpreter by plan:{}", plan.name()),
+            _ => bail!("Can't get the interpreter by plan:{}", plan.name())
         }
     }
 }

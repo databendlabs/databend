@@ -20,7 +20,7 @@ use crate::LiteralFunction;
 pub struct AggregatorCountFunction {
     depth: usize,
     arg: Box<dyn IFunction>,
-    state: DataValue,
+    state: DataValue
 }
 
 impl AggregatorCountFunction {
@@ -33,7 +33,7 @@ impl AggregatorCountFunction {
         Ok(Box::new(AggregatorCountFunction {
             depth: 0,
             arg,
-            state: DataValue::Null,
+            state: DataValue::Null
         }))
     }
 }
@@ -64,7 +64,7 @@ impl IFunction for AggregatorCountFunction {
         self.state = datavalues::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
-            DataValue::UInt64(Some(rows as u64)),
+            DataValue::UInt64(Some(rows as u64))
         )?;
         Ok(())
     }
@@ -78,7 +78,7 @@ impl IFunction for AggregatorCountFunction {
         self.state = datavalues::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
-            val,
+            val
         )?;
         Ok(())
     }

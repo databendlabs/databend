@@ -23,7 +23,7 @@ use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct TablesTable {
-    schema: DataSchemaRef,
+    schema: DataSchemaRef
 }
 
 impl TablesTable {
@@ -33,7 +33,7 @@ impl TablesTable {
                 DataField::new("database", DataType::Utf8, false),
                 DataField::new("name", DataType::Utf8, false),
                 DataField::new("engine", DataType::Utf8, false),
-            ])),
+            ]))
         }
     }
 }
@@ -63,10 +63,10 @@ impl ITable for TablesTable {
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0,
+                version: 0
             }],
             statistics: Statistics::default(),
-            description: "(Read from system.functions table)".to_string(),
+            description: "(Read from system.functions table)".to_string()
         })
     }
 
@@ -77,19 +77,16 @@ impl ITable for TablesTable {
         let names: Vec<&str> = database_tables.iter().map(|(_, v)| v.name()).collect();
         let engines: Vec<&str> = database_tables.iter().map(|(_, v)| v.engine()).collect();
 
-        let block = DataBlock::create(
-            self.schema.clone(),
-            vec![
-                Arc::new(StringArray::from(databases)),
-                Arc::new(StringArray::from(names)),
-                Arc::new(StringArray::from(engines)),
-            ],
-        );
+        let block = DataBlock::create(self.schema.clone(), vec![
+            Arc::new(StringArray::from(databases)),
+            Arc::new(StringArray::from(names)),
+            Arc::new(StringArray::from(engines)),
+        ]);
 
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block],
+            vec![block]
         )))
     }
 }

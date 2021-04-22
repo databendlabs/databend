@@ -28,7 +28,7 @@ pub fn make_data_type(sql_type: &SQLDataType) -> Result<DataType> {
         SQLDataType::Time => Ok(DataType::Time64(TimeUnit::Millisecond)),
         SQLDataType::Timestamp => Ok(DataType::Date64),
 
-        _ => bail!("The SQL data type {:?} is not implemented", sql_type),
+        _ => bail!("The SQL data type {:?} is not implemented", sql_type)
     }
 }
 
@@ -39,7 +39,7 @@ pub fn make_sql_interval_to_literal(
     leading_field: &Option<DateTimeField>,
     leading_precision: &Option<u64>,
     last_field: &Option<DateTimeField>,
-    fractional_seconds_precision: &Option<u64>,
+    fractional_seconds_precision: &Option<u64>
 ) -> Result<ExpressionPlan> {
     if leading_field.is_some() {
         bail!(
@@ -113,7 +113,7 @@ pub fn make_sql_interval_to_literal(
             "minutes" | "minute" => Ok((0, 0, interval_period * 60_f32 * MILLIS_PER_SECOND)),
             "seconds" | "second" => Ok((0, 0, interval_period * MILLIS_PER_SECOND)),
             "milliseconds" | "millisecond" => Ok((0, 0, interval_period)),
-            _ => bail!("Invalid input syntax for type interval: {:?}", value),
+            _ => bail!("Invalid input syntax for type interval: {:?}", value)
         }
     };
 
@@ -131,7 +131,7 @@ pub fn make_sql_interval_to_literal(
 
         let (diff_month, diff_days, diff_millis) = calculate_from_part(
             interval_period_str.unwrap(),
-            parts.next().unwrap_or("second"),
+            parts.next().unwrap_or("second")
         )?;
 
         result_month += diff_month as i64;
@@ -168,12 +168,12 @@ pub fn make_sql_interval_to_literal(
 
     if result_month != 0 {
         return Ok(ExpressionPlan::Literal(DataValue::IntervalYearMonth(Some(
-            result_month as i32,
+            result_month as i32
         ))));
     }
 
     let result: i64 = (result_days << 32) | result_millis;
     Ok(ExpressionPlan::Literal(DataValue::IntervalDayTime(Some(
-        result,
+        result
     ))))
 }

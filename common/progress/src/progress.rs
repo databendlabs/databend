@@ -11,20 +11,20 @@ pub type ProgressCallback = Box<dyn FnMut(&Progress) + Send + Sync + 'static>;
 #[derive(Debug)]
 pub struct ProgressValues {
     pub read_rows: usize,
-    pub read_bytes: usize,
+    pub read_bytes: usize
 }
 
 #[derive(Debug)]
 pub struct Progress {
     read_rows: AtomicU64,
-    read_bytes: AtomicU64,
+    read_bytes: AtomicU64
 }
 
 impl Progress {
     pub fn create() -> Self {
         Self {
             read_rows: AtomicU64::new(0),
-            read_bytes: AtomicU64::new(0),
+            read_bytes: AtomicU64::new(0)
         }
     }
 
@@ -41,7 +41,7 @@ impl Progress {
         let read_bytes = self.read_bytes.load(Ordering::Relaxed) as usize;
         ProgressValues {
             read_rows,
-            read_bytes,
+            read_bytes
         }
     }
 

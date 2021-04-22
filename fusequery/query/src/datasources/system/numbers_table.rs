@@ -29,7 +29,7 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct NumbersTable {
     table: &'static str,
-    schema: DataSchemaRef,
+    schema: DataSchemaRef
 }
 
 impl NumbersTable {
@@ -44,8 +44,8 @@ impl NumbersTable {
             table,
             schema: Arc::new(DataSchema::new_with_metadata(
                 vec![DataField::new("number", DataType::UInt64, false)],
-                metadata,
-            )),
+                metadata
+            ))
         }
     }
 
@@ -57,7 +57,7 @@ impl NumbersTable {
         if part_size == 0 {
             partitions.push(Partition {
                 name: format!("{}-{}-{}", total, 0, total,),
-                version: 0,
+                version: 0
             })
         } else {
             for part in 0..workers {
@@ -68,7 +68,7 @@ impl NumbersTable {
                 }
                 partitions.push(Partition {
                     name: format!("{}-{}-{}", total, part_begin, part_end,),
-                    version: 0,
+                    version: 0
                 })
             }
         }
@@ -86,7 +86,7 @@ impl ITable for NumbersTable {
         match self.table {
             "numbers" => "SystemNumbers",
             "numbers_mt" => "SystemNumbersMt",
-            _ => unreachable!(),
+            _ => unreachable!()
         }
     }
 
@@ -116,7 +116,7 @@ impl ITable for NumbersTable {
 
         let statistics = Statistics {
             read_rows: total as usize,
-            read_bytes: ((total) * size_of::<u64>() as u64) as usize,
+            read_bytes: ((total) * size_of::<u64>() as u64) as usize
         };
         ctx.try_set_statistics(&statistics)?;
 
@@ -129,7 +129,7 @@ impl ITable for NumbersTable {
             description: format!(
                 "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
                 self.table, statistics.read_rows, statistics.read_bytes
-            ),
+            )
         })
     }
 
@@ -148,9 +148,7 @@ impl ITableFunction for NumbersTable {
     }
 
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn ITable + 'a>
-    where
-        Self: 'a,
-    {
+    where Self: 'a {
         self
     }
 }

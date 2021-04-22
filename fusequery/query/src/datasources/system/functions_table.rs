@@ -24,7 +24,7 @@ use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct FunctionsTable {
-    schema: DataSchemaRef,
+    schema: DataSchemaRef
 }
 
 impl FunctionsTable {
@@ -33,8 +33,8 @@ impl FunctionsTable {
             schema: Arc::new(DataSchema::new(vec![DataField::new(
                 "name",
                 DataType::Utf8,
-                false,
-            )])),
+                false
+            )]))
         }
     }
 }
@@ -64,24 +64,23 @@ impl ITable for FunctionsTable {
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0,
+                version: 0
             }],
             statistics: Statistics::default(),
-            description: "(Read from system.functions table)".to_string(),
+            description: "(Read from system.functions table)".to_string()
         })
     }
 
     async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
         let func_names = FunctionFactory::registered_names();
         let names: Vec<&str> = func_names.iter().map(|x| x.as_ref()).collect();
-        let block = DataBlock::create(
-            self.schema.clone(),
-            vec![Arc::new(StringArray::from(names))],
-        );
+        let block = DataBlock::create(self.schema.clone(), vec![Arc::new(StringArray::from(
+            names
+        ))]);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block],
+            vec![block]
         )))
     }
 }

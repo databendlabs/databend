@@ -19,7 +19,7 @@ fn test_stage_plan() -> anyhow::Result<()> {
         .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
         typ: ExplainType::Syntax,
-        input: Arc::new(plan),
+        input: Arc::new(plan)
     });
     let expect = "Projection: sumx:UInt64\
     \n  AggregatorFinal: groupBy=[[]], aggr=[[sum([number]) as sumx]]\

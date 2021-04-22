@@ -10,7 +10,7 @@ use common_datablocks::DataBlock;
 use msql_srv::*;
 
 pub struct MysqlStream {
-    blocks: Vec<DataBlock>,
+    blocks: Vec<DataBlock>
 }
 
 impl MysqlStream {
@@ -40,33 +40,33 @@ impl MysqlStream {
                     table: "".to_string(),
                     column: field.name().to_string(),
                     coltype: ColumnType::MYSQL_TYPE_LONG,
-                    colflags: ColumnFlags::empty(),
+                    colflags: ColumnFlags::empty()
                 },
                 DataType::Float32 | DataType::Float64 => Column {
                     table: "".to_string(),
                     column: field.name().to_string(),
                     coltype: ColumnType::MYSQL_TYPE_FLOAT,
-                    colflags: ColumnFlags::empty(),
+                    colflags: ColumnFlags::empty()
                 },
                 DataType::Utf8 => Column {
                     table: "".to_string(),
                     column: field.name().to_string(),
                     coltype: ColumnType::MYSQL_TYPE_VARCHAR,
-                    colflags: ColumnFlags::empty(),
+                    colflags: ColumnFlags::empty()
                 },
                 DataType::Boolean => Column {
                     table: "".to_string(),
                     column: field.name().to_string(),
                     coltype: ColumnType::MYSQL_TYPE_SHORT,
-                    colflags: ColumnFlags::empty(),
+                    colflags: ColumnFlags::empty()
                 },
                 DataType::Date64 | DataType::Date32 => Column {
                     table: "".to_string(),
                     column: field.name().to_string(),
                     coltype: ColumnType::MYSQL_TYPE_TIMESTAMP,
-                    colflags: ColumnFlags::empty(),
+                    colflags: ColumnFlags::empty()
                 },
-                _ => bail!("Unsupported column type:{:?}", field.data_type()),
+                _ => bail!("Unsupported column type:{:?}", field.data_type())
             });
         }
 

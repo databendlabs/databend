@@ -12,10 +12,10 @@ async fn test_datablock_stream() {
 
     use crate::*;
 
-    let mut s1 = DataBlockStream::create(
-        Arc::new(DataSchema::empty()),
-        None,
-        vec![DataBlock::empty(), DataBlock::empty(), DataBlock::empty()],
-    );
+    let mut s1 = DataBlockStream::create(Arc::new(DataSchema::empty()), None, vec![
+        DataBlock::empty(),
+        DataBlock::empty(),
+        DataBlock::empty(),
+    ]);
     while let Some(_) = s1.next().await {}
 }
