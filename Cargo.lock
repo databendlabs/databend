@@ -528,6 +528,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-exception"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "common-flights"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,11 @@
+[package]
+name = "common-exception"
+version = "0.1.0"
+authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies] # In alphabetical order
+thiserror = "1.0.24"
+
