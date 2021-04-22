@@ -7,7 +7,7 @@ fn test_util_generate_parts() -> anyhow::Result<()> {
     use common_planners::Partition;
     use pretty_assertions::assert_eq;
 
-    use crate::datasources::*;
+    use crate::datasources::util::*;
 
     {
         // deal with remainder
@@ -64,5 +64,23 @@ fn test_util_generate_parts() -> anyhow::Result<()> {
         );
     }
 
+    Ok(())
+}
+
+#[test]
+fn test_lines_count() -> anyhow::Result<()> {
+    use std::env;
+
+    use pretty_assertions::assert_eq;
+
+    use crate::datasources::util::*;
+
+    let file = env::current_dir()?
+        .join("../../tests/data/sample.csv")
+        .display()
+        .to_string();
+
+    let lines = count_lines(std::fs::File::open(file.as_str())?)?;
+    assert_eq!(6, lines);
     Ok(())
 }

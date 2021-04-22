@@ -14,11 +14,11 @@ mod remote;
 mod system;
 mod table;
 mod table_function;
-mod util;
+
+pub mod util;
 
 pub use database::IDatabase;
 pub use datasource::DataSource;
 pub use datasource::IDataSource;
 pub use table::ITable;
 pub use table_function::ITableFunction;
-pub use util::generate_parts;

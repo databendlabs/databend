@@ -20,8 +20,8 @@ use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
 
-use crate::datasources::generate_parts;
 use crate::datasources::system::NumbersStream;
+use crate::datasources::util::generate_parts;
 use crate::datasources::ITable;
 use crate::datasources::ITableFunction;
 use crate::sessions::FuseQueryContextRef;
