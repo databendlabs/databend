@@ -15,13 +15,13 @@ use crate::protobuf::FlightQueryRequest;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct FetchPartitionAction {
     pub uuid: String,
-    pub nums: u32,
+    pub nums: u32
 }
 
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum QueryDoAction {
-    FetchPartition(FetchPartitionAction),
+    FetchPartition(FetchPartitionAction)
 }
 
 /// Try convert tonic::Request<Action> to DoActionAction.
@@ -50,13 +50,13 @@ impl TryInto<Request<Action>> for &QueryDoAction {
 
     fn try_into(self) -> Result<Request<Action>, Self::Error> {
         let flight_request = FlightQueryRequest {
-            body: serde_json::to_string(&self)?,
+            body: serde_json::to_string(&self)?
         };
         let mut buf = vec![];
         flight_request.encode(&mut buf)?;
         let request = tonic::Request::new(Action {
             r#type: "".to_string(),
-            body: buf,
+            body: buf
         });
         Ok(request)
     }

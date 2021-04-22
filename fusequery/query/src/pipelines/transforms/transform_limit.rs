@@ -14,14 +14,14 @@ use crate::pipelines::processors::IProcessor;
 
 pub struct LimitTransform {
     limit: usize,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn IProcessor>
 }
 
 impl LimitTransform {
     pub fn try_create(limit: usize) -> Result<Self> {
         Ok(LimitTransform {
             limit,
-            input: Arc::new(EmptyProcessor::create()),
+            input: Arc::new(EmptyProcessor::create())
         })
     }
 }
@@ -48,7 +48,7 @@ impl IProcessor for LimitTransform {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(LimitStream::try_create(
             self.input.execute().await?,
-            self.limit,
+            self.limit
         )?))
     }
 }

@@ -55,7 +55,7 @@ async fn test_localfs_read_all() -> anyhow::Result<()> {
         assert_eq!(
             ListResult {
                 dirs: vec!["path".into()],
-                files: vec!["bar.txt".into()],
+                files: vec!["bar.txt".into()]
             },
             got
         );

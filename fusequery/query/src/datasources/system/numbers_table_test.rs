@@ -24,10 +24,10 @@ async fn test_number_table() -> anyhow::Result<()> {
         projected_schema: Arc::new(DataSchema::new(vec![DataField::new(
             "number",
             DataType::UInt64,
-            false,
+            false
         )])),
         filters: vec![],
-        limit: None,
+        limit: None
     };
     let source_plan = table.read_plan(ctx.clone(), scan)?;
     ctx.try_set_partitions(source_plan.partitions)?;

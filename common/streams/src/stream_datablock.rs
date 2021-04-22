@@ -13,20 +13,20 @@ pub struct DataBlockStream {
     current: usize,
     schema: DataSchemaRef,
     data: Vec<DataBlock>,
-    projects: Option<Vec<usize>>,
+    projects: Option<Vec<usize>>
 }
 
 impl DataBlockStream {
     pub fn create(
         schema: DataSchemaRef,
         projects: Option<Vec<usize>>,
-        data: Vec<DataBlock>,
+        data: Vec<DataBlock>
     ) -> Self {
         DataBlockStream {
             current: 0,
             schema,
             data,
-            projects,
+            projects
         }
     }
 }
@@ -36,7 +36,7 @@ impl futures::Stream for DataBlockStream {
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
-        _: &mut Context<'_>,
+        _: &mut Context<'_>
     ) -> Poll<Option<Self::Item>> {
         Poll::Ready(if self.current < self.data.len() {
             self.current += 1;
@@ -45,9 +45,9 @@ impl futures::Stream for DataBlockStream {
             Some(Ok(match &self.projects {
                 Some(v) => DataBlock::create(
                     self.schema.clone(),
-                    v.iter().map(|x| block.column(*x).clone()).collect(),
+                    v.iter().map(|x| block.column(*x).clone()).collect()
                 ),
-                None => block.clone(),
+                None => block.clone()
             }))
         } else {
             None

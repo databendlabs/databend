@@ -17,7 +17,7 @@ pub trait IOptimizer {
 }
 
 pub struct Optimizer {
-    optimizers: Vec<Box<dyn IOptimizer>>,
+    optimizers: Vec<Box<dyn IOptimizer>>
 }
 
 impl Optimizer {
@@ -37,14 +37,14 @@ impl Optimizer {
 
     fn projections_to_map(
         plan: &PlanNode,
-        map: &mut HashMap<String, ExpressionPlan>,
+        map: &mut HashMap<String, ExpressionPlan>
     ) -> Result<()> {
         match plan {
             PlanNode::Projection(v) => {
                 v.schema.fields().iter().enumerate().for_each(|(i, field)| {
                     let expr = match &v.expr[i] {
                         ExpressionPlan::Alias(_alias, plan) => plan.as_ref().clone(),
-                        other => other.clone(),
+                        other => other.clone()
                     };
                     map.insert(field.name().clone(), expr);
                 })
@@ -77,13 +77,13 @@ impl Optimizer {
             ExpressionPlan::Function { args, .. } => args.clone(),
             ExpressionPlan::Wildcard => vec![],
             ExpressionPlan::Sort { expr, .. } => vec![expr.as_ref().clone()],
-            ExpressionPlan::Cast { expr, .. } => vec![expr.as_ref().clone()],
+            ExpressionPlan::Cast { expr, .. } => vec![expr.as_ref().clone()]
         })
     }
 
     pub fn rebuild_from_exprs(
         expr: &ExpressionPlan,
-        expressions: &[ExpressionPlan],
+        expressions: &[ExpressionPlan]
     ) -> ExpressionPlan {
         match expr {
             ExpressionPlan::Alias(alias, _) => {
@@ -94,13 +94,13 @@ impl Optimizer {
             ExpressionPlan::BinaryExpression { op, .. } => ExpressionPlan::BinaryExpression {
                 left: Box::new(expressions[0].clone()),
                 op: op.clone(),
-                right: Box::new(expressions[1].clone()),
+                right: Box::new(expressions[1].clone())
             },
             ExpressionPlan::Function { op, .. } => ExpressionPlan::Function {
                 op: op.clone(),
-                args: expressions.to_vec(),
+                args: expressions.to_vec()
             },
-            other => other.clone(),
+            other => other.clone()
         }
     }
 }

@@ -9,7 +9,7 @@ fn binary_expr(l: ExpressionPlan, op: &str, r: ExpressionPlan) -> ExpressionPlan
     ExpressionPlan::BinaryExpression {
         left: Box::new(l),
         op: op.to_string(),
-        right: Box::new(r),
+        right: Box::new(r)
     }
 }
 
@@ -27,7 +27,7 @@ pub fn modular(left: ExpressionPlan, right: ExpressionPlan) -> ExpressionPlan {
 pub fn sum(other: ExpressionPlan) -> ExpressionPlan {
     ExpressionPlan::Function {
         op: "sum".to_string(),
-        args: vec![other],
+        args: vec![other]
     }
 }
 
@@ -35,7 +35,7 @@ pub fn sum(other: ExpressionPlan) -> ExpressionPlan {
 pub fn avg(other: ExpressionPlan) -> ExpressionPlan {
     ExpressionPlan::Function {
         op: "avg".to_string(),
-        args: vec![other],
+        args: vec![other]
     }
 }
 

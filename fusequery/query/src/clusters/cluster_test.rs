@@ -16,7 +16,7 @@ fn test_cluster() -> anyhow::Result<()> {
         cpus: 4,
         priority: 5,
         address: "127.0.0.1:9001".to_string(),
-        local: false,
+        local: false
     };
     cluster.add_node(&node1)?;
 
@@ -25,7 +25,7 @@ fn test_cluster() -> anyhow::Result<()> {
         cpus: 8,
         priority: 5,
         address: "127.0.0.1:9002".to_string(),
-        local: false,
+        local: false
     };
     cluster.add_node(&node2)?;
 

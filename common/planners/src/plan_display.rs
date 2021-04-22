@@ -26,103 +26,102 @@ impl PlanNode {
                     Ok(())
                 };
 
-                self.0
-                    .walk_preorder(|node| {
-                        write_indent(f)?;
-                        match node {
-                            PlanNode::Stage(plan) => {
-                                write!(
-                                    f,
-                                    "RedistributeStage[state: {:?}, id: {}]",
-                                    plan.state, plan.id
-                                )?;
-                                Ok(true)
-                            }
-                            PlanNode::Projection(plan) => {
-                                write!(f, "Projection: ")?;
-                                for i in 0..plan.expr.len() {
-                                    if i > 0 {
-                                        write!(f, ", ")?;
-                                    }
-                                    write!(
-                                        f,
-                                        "{:?}:{:?}",
-                                        plan.expr[i],
-                                        plan.schema().fields()[i].data_type()
-                                    )?;
-                                }
-                                Ok(true)
-                            }
-                            PlanNode::AggregatorPartial(plan) => {
-                                write!(
-                                    f,
-                                    "AggregatorPartial: groupBy=[{:?}], aggr=[{:?}]",
-                                    plan.group_expr, plan.aggr_expr
-                                )?;
-                                Ok(true)
-                            }
-                            PlanNode::AggregatorFinal(plan) => {
-                                write!(
-                                    f,
-                                    "AggregatorFinal: groupBy=[{:?}], aggr=[{:?}]",
-                                    plan.group_expr, plan.aggr_expr
-                                )?;
-                                Ok(true)
-                            }
-                            PlanNode::Filter(plan) => {
-                                write!(f, "Filter: {:?}", plan.predicate)?;
-                                Ok(true)
-                            }
-                            PlanNode::Sort(plan) => {
-                                write!(f, "Sort: ")?;
-                                for i in 0..plan.order_by.len() {
-                                    if i > 0 {
-                                        write!(f, ", ")?;
-                                    }
-                                    write!(
-                                        f,
-                                        "{:?}:{:?}",
-                                        plan.order_by[i],
-                                        plan.schema().fields()[i].data_type()
-                                    )?;
-                                }
-                                Ok(true)
-                            }
-                            PlanNode::Limit(plan) => {
-                                write!(f, "Limit: {}", plan.n)?;
-                                Ok(true)
-                            }
-                            PlanNode::ReadSource(plan) => {
-                                write!(
-                                    f,
-                                    "ReadDataSource: scan partitions: [{}], scan schema: {}, statistics: [read_rows: {:?}, read_bytes: {:?}]",
-                                    plan.partitions.len(),
-                                    PlanNode::display_schema(plan.schema.as_ref()),
-                                    plan.statistics.read_rows,
-                                    plan.statistics.read_bytes,
-                                )?;
-                                Ok(false)
-                            }
-                            PlanNode::Explain(plan) => {
-                                write!(f, "{:?}", plan.input())?;
-                                Ok(false)
-                            }
-                            PlanNode::Select(plan) => {
-                                write!(f, "{:?}", plan.input())?;
-                                Ok(false)
-                            }
-                            PlanNode::CreateTable(plan) => {
-                                write!(f, "Create table {:}.{:}", plan.db, plan.table)?;
-                                write!(f, " {:},", plan.schema)?;
-                                // need engine to impl Display
-                                write!(f, " engine: {},", plan.engine.to_string())?;
-                                write!(f, " if_not_exists:{:},", plan.if_not_exists)?;
-                                write!(f, " option: {:?}", plan.options)?;
-                                Ok(false)
-                            }
-                            _ => Ok(false),
+                self.0.walk_preorder(|node| {
+                    write_indent(f)?;
+                    match node {
+                        PlanNode::Stage(plan) => {
+                            write!(
+                                f,
+                                "RedistributeStage[state: {:?}, id: {}]",
+                                plan.state, plan.id
+                            )?;
+                            Ok(true)
                         }
-                    })
+                        PlanNode::Projection(plan) => {
+                            write!(f, "Projection: ")?;
+                            for i in 0..plan.expr.len() {
+                                if i > 0 {
+                                    write!(f, ", ")?;
+                                }
+                                write!(
+                                    f,
+                                    "{:?}:{:?}",
+                                    plan.expr[i],
+                                    plan.schema().fields()[i].data_type()
+                                )?;
+                            }
+                            Ok(true)
+                        }
+                        PlanNode::AggregatorPartial(plan) => {
+                            write!(
+                                f,
+                                "AggregatorPartial: groupBy=[{:?}], aggr=[{:?}]",
+                                plan.group_expr, plan.aggr_expr
+                            )?;
+                            Ok(true)
+                        }
+                        PlanNode::AggregatorFinal(plan) => {
+                            write!(
+                                f,
+                                "AggregatorFinal: groupBy=[{:?}], aggr=[{:?}]",
+                                plan.group_expr, plan.aggr_expr
+                            )?;
+                            Ok(true)
+                        }
+                        PlanNode::Filter(plan) => {
+                            write!(f, "Filter: {:?}", plan.predicate)?;
+                            Ok(true)
+                        }
+                        PlanNode::Sort(plan) => {
+                            write!(f, "Sort: ")?;
+                            for i in 0..plan.order_by.len() {
+                                if i > 0 {
+                                    write!(f, ", ")?;
+                                }
+                                write!(
+                                    f,
+                                    "{:?}:{:?}",
+                                    plan.order_by[i],
+                                    plan.schema().fields()[i].data_type()
+                                )?;
+                            }
+                            Ok(true)
+                        }
+                        PlanNode::Limit(plan) => {
+                            write!(f, "Limit: {}", plan.n)?;
+                            Ok(true)
+                        }
+                        PlanNode::ReadSource(plan) => {
+                            write!(
+                                f,
+                                "ReadDataSource: scan partitions: [{}], scan schema: {}, statistics: [read_rows: {:?}, read_bytes: {:?}]",
+                                plan.partitions.len(),
+                                PlanNode::display_schema(plan.schema.as_ref()),
+                                plan.statistics.read_rows,
+                                plan.statistics.read_bytes,
+                            )?;
+                            Ok(false)
+                        }
+                        PlanNode::Explain(plan) => {
+                            write!(f, "{:?}", plan.input())?;
+                            Ok(false)
+                        }
+                        PlanNode::Select(plan) => {
+                            write!(f, "{:?}", plan.input())?;
+                            Ok(false)
+                        }
+                        PlanNode::CreateTable(plan) => {
+                            write!(f, "Create table {:}.{:}", plan.db, plan.table)?;
+                            write!(f, " {:},", plan.schema)?;
+                            // need engine to impl Display
+                            write!(f, " engine: {},", plan.engine.to_string())?;
+                            write!(f, " if_not_exists:{:},", plan.if_not_exists)?;
+                            write!(f, " option: {:?}", plan.options)?;
+                            Ok(false)
+                        }
+                        _ => Ok(false),
+                    }
+                })
                     .map_err(|_| fmt::Error)?;
                 Ok(())
             }

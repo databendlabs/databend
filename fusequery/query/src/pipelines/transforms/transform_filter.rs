@@ -24,7 +24,7 @@ use crate::pipelines::processors::IProcessor;
 
 pub struct FilterTransform {
     func: Box<dyn IFunction>,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn IProcessor>
 }
 
 impl FilterTransform {
@@ -39,14 +39,14 @@ impl FilterTransform {
 
         Ok(FilterTransform {
             func,
-            input: Arc::new(EmptyProcessor::create()),
+            input: Arc::new(EmptyProcessor::create())
         })
     }
 
     pub fn expression_executor(
         _schema: &DataSchemaRef,
         block: DataBlock,
-        funcs: Vec<Box<dyn IFunction>>,
+        funcs: Vec<Box<dyn IFunction>>
     ) -> Result<DataBlock> {
         let func = funcs[0].clone();
         let result = func.eval(&block)?.to_array(block.num_rows())?;
@@ -83,7 +83,7 @@ impl IProcessor for FilterTransform {
             self.input.execute().await?,
             Arc::new(DataSchema::empty()),
             vec![self.func.clone()],
-            FilterTransform::expression_executor,
+            FilterTransform::expression_executor
         )?))
     }
 }

@@ -17,7 +17,7 @@ pub fn generate_parts(start: u64, workers: u64, total: u64) -> Partitions {
     if part_size == 0 {
         partitions.push(Partition {
             name: format!("{}-{}-{}", total, start, total,),
-            version: 0,
+            version: 0
         })
     } else {
         for part in 0..workers {
@@ -31,7 +31,7 @@ pub fn generate_parts(start: u64, workers: u64, total: u64) -> Partitions {
             }
             partitions.push(Partition {
                 name: format!("{}-{}-{}", total, part_begin, part_end,),
-                version: 0,
+                version: 0
             })
         }
     }
@@ -48,7 +48,7 @@ pub fn count_lines<R: io::Read>(handle: R) -> Result<usize, io::Error> {
     while match reader.read_until(sep, &mut line) {
         Ok(n) if n > 0 => true,
         Err(e) => return Err(e),
-        _ => false,
+        _ => false
     } {
         if *line.last().unwrap() == sep {
             count += 1;

@@ -23,7 +23,7 @@ use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct OneTable {
-    schema: DataSchemaRef,
+    schema: DataSchemaRef
 }
 
 impl OneTable {
@@ -32,8 +32,8 @@ impl OneTable {
             schema: Arc::new(DataSchema::new(vec![DataField::new(
                 "dummy",
                 DataType::UInt8,
-                false,
-            )])),
+                false
+            )]))
         }
     }
 }
@@ -63,22 +63,21 @@ impl ITable for OneTable {
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0,
+                version: 0
             }],
             statistics: Statistics::default(),
-            description: "(Read from system.one table)".to_string(),
+            description: "(Read from system.one table)".to_string()
         })
     }
 
     async fn read(&self, _: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
-        let block = DataBlock::create(
-            self.schema.clone(),
-            vec![Arc::new(UInt8Array::from(vec![1u8]))],
-        );
+        let block = DataBlock::create(self.schema.clone(), vec![Arc::new(UInt8Array::from(vec![
+            1u8,
+        ]))]);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block],
+            vec![block]
         )))
     }
 }

@@ -16,7 +16,7 @@ struct QueryAliasData {
     aliases: HashMap<String, ExpressionPlan>,
     inside_aliases: HashSet<String>,
     // deepest alias current step in
-    current_alias: String,
+    current_alias: String
 }
 
 impl PlanRewriter {
@@ -28,7 +28,7 @@ impl PlanRewriter {
         let mut data = QueryAliasData {
             aliases: mp,
             inside_aliases: HashSet::new(),
-            current_alias: "".into(),
+            current_alias: "".into()
         };
 
         exprs
@@ -39,7 +39,7 @@ impl PlanRewriter {
 
     fn exprs_to_map(
         exprs: &[ExpressionPlan],
-        mp: &mut HashMap<String, ExpressionPlan>,
+        mp: &mut HashMap<String, ExpressionPlan>
     ) -> Result<()> {
         for expr in exprs.iter() {
             if let ExpressionPlan::Alias(alias, alias_expr) = expr {
@@ -62,7 +62,7 @@ impl PlanRewriter {
 
     fn expr_rewrite_alias(
         expr: &ExpressionPlan,
-        data: &mut QueryAliasData,
+        data: &mut QueryAliasData
     ) -> Result<ExpressionPlan> {
         match expr {
             ExpressionPlan::Column(field) => {
@@ -98,7 +98,7 @@ impl PlanRewriter {
                 Ok(ExpressionPlan::BinaryExpression {
                     left: Box::new(left_new),
                     op: op.clone(),
-                    right: Box::new(right_new),
+                    right: Box::new(right_new)
                 })
             }
 
@@ -111,9 +111,9 @@ impl PlanRewriter {
                 match new_args {
                     Ok(v) => Ok(ExpressionPlan::Function {
                         op: op.clone(),
-                        args: v,
+                        args: v
                     }),
-                    Err(v) => Err(v),
+                    Err(v) => Err(v)
                 }
             }
 
@@ -135,13 +135,13 @@ impl PlanRewriter {
             ExpressionPlan::Sort {
                 expr,
                 asc,
-                nulls_first,
+                nulls_first
             } => {
                 let new_expr = PlanRewriter::expr_rewrite_alias(expr, data)?;
                 Ok(ExpressionPlan::Sort {
                     expr: Box::new(new_expr),
                     asc: *asc,
-                    nulls_first: *nulls_first,
+                    nulls_first: *nulls_first
                 })
             }
             ExpressionPlan::Wildcard | ExpressionPlan::Literal(_) => Ok(expr.clone()),
@@ -149,7 +149,7 @@ impl PlanRewriter {
                 let new_expr = PlanRewriter::expr_rewrite_alias(expr, data)?;
                 Ok(ExpressionPlan::Cast {
                     expr: Box::new(new_expr),
-                    data_type: data_type.clone(),
+                    data_type: data_type.clone()
                 })
             }
         }

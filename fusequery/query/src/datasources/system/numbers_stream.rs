@@ -24,14 +24,14 @@ use crate::sessions::FuseQueryContextRef;
 #[derive(Debug, Clone)]
 struct BlockRange {
     begin: u64,
-    end: u64,
+    end: u64
 }
 
 pub struct NumbersStream {
     ctx: FuseQueryContextRef,
     schema: DataSchemaRef,
     block_index: usize,
-    blocks: Vec<BlockRange>,
+    blocks: Vec<BlockRange>
 }
 
 impl NumbersStream {
@@ -40,7 +40,7 @@ impl NumbersStream {
             ctx,
             schema,
             block_index: 0,
-            blocks: vec![],
+            blocks: vec![]
         }
     }
 
@@ -74,7 +74,7 @@ impl NumbersStream {
                         }
                         blocks.push(BlockRange {
                             begin: range_begin,
-                            end: range_end,
+                            end: range_end
                         });
                     }
                 }
@@ -97,7 +97,7 @@ impl NumbersStream {
                 let buffer = Buffer::from_raw_parts(
                     NonNull::new(me.as_mut_ptr() as *mut u8).unwrap(),
                     me.len() * byte_size,
-                    me.capacity() * byte_size,
+                    me.capacity() * byte_size
                 );
 
                 let arr_data = ArrayData::builder(DataType::UInt64)
@@ -106,10 +106,9 @@ impl NumbersStream {
                     .add_buffer(buffer)
                     .build();
 
-                let block = DataBlock::create(
-                    self.schema.clone(),
-                    vec![Arc::new(UInt64Array::from(arr_data))],
-                );
+                let block = DataBlock::create(self.schema.clone(), vec![Arc::new(
+                    UInt64Array::from(arr_data)
+                )]);
                 Some(block)
             }
         })
@@ -121,7 +120,7 @@ impl Stream for NumbersStream {
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
-        _: &mut Context<'_>,
+        _: &mut Context<'_>
     ) -> Poll<Option<Self::Item>> {
         let block = self.try_get_one_block()?;
 

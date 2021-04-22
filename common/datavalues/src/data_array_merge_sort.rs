@@ -65,7 +65,7 @@ pub fn merge_indices(
     lhs: &[ArrayRef],
     rhs: &[ArrayRef],
     options: &[SortOptions],
-    limit: Option<usize>,
+    limit: Option<usize>
 ) -> Result<Vec<bool>> {
     if lhs.len() != rhs.len() {
         bail!(
@@ -110,7 +110,7 @@ pub fn merge_indices(
                         Ordering::Less
                     }
                 }
-                (false, false) => Ordering::Equal,
+                (false, false) => Ordering::Equal
             };
             if descending {
                 result = result.reverse();
@@ -131,7 +131,7 @@ pub fn merge_indices(
 
     let limits = match limit {
         Some(limit) => limit.min(max_left + max_right),
-        _ => max_left + max_right,
+        _ => max_left + max_right
     };
 
     let mut result = Vec::with_capacity(limits);
@@ -140,7 +140,7 @@ pub fn merge_indices(
             (true, true) => break,
             (false, true) => Ordering::Less,
             (true, false) => Ordering::Greater,
-            (false, false) => (cmp)(left, right),
+            (false, false) => (cmp)(left, right)
         };
         let value = if order == Ordering::Less {
             left += 1;

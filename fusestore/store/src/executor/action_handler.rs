@@ -35,13 +35,13 @@ pub struct ActionHandler {
     // catalog: Box<dyn Catalog>,
     // tbl_spec: TableSpec,
     // db_spec: DatabaseSpec,
-    meta: Arc<Mutex<MemEngine>>,
+    meta: Arc<Mutex<MemEngine>>
 }
 
 impl ActionHandler {
     pub fn create() -> Self {
         ActionHandler {
-            meta: MemEngine::create(),
+            meta: MemEngine::create()
         }
     }
 
@@ -50,7 +50,7 @@ impl ActionHandler {
             StoreDoAction::ReadPlan(_) => Err(Status::internal("Store read plan unimplemented")),
             StoreDoAction::CreateDatabase(a) => self.create_db(a).await,
             StoreDoAction::CreateTable(a) => self.create_table(a).await,
-            StoreDoAction::GetTable(a) => self.get_table(a).await,
+            StoreDoAction::GetTable(a) => self.get_table(a).await
         }
     }
 
@@ -65,8 +65,8 @@ impl ActionHandler {
                 db_id: -1,
                 ver: -1,
                 table_name_to_id: HashMap::new(),
-                tables: HashMap::new(),
-            }),
+                tables: HashMap::new()
+            })
         };
 
         let database_id = meta
@@ -74,7 +74,7 @@ impl ActionHandler {
             .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(StoreDoActionResult::CreateDatabase(
-            CreateDatabaseActionResult { database_id },
+            CreateDatabaseActionResult { database_id }
         ))
     }
 
@@ -99,19 +99,19 @@ impl ActionHandler {
             options: plan.options,
 
             // TODO
-            placement_policy: vec![],
+            placement_policy: vec![]
         };
 
         let cmd = CmdCreateTable {
             db_name,
             table_name,
-            table: Some(table),
+            table: Some(table)
         };
 
         let table_id = meta.create_table(cmd, plan.if_not_exists)?;
 
         Ok(StoreDoActionResult::CreateTable(CreateTableActionResult {
-            table_id,
+            table_id
         }))
     }
 
@@ -135,7 +135,7 @@ impl ActionHandler {
             table_id: table.table_id,
             db: db_name,
             name: table_name,
-            schema: Arc::new(schema),
+            schema: Arc::new(schema)
         });
 
         Ok(rst)

@@ -14,7 +14,7 @@ use crate::sessions::SessionRef;
 pub struct RpcService {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionRef,
+    session_manager: SessionRef
 }
 
 impl RpcService {
@@ -22,7 +22,7 @@ impl RpcService {
         Self {
             conf,
             cluster,
-            session_manager,
+            session_manager
         }
     }
 
@@ -33,7 +33,7 @@ impl RpcService {
         let flight_srv = FlightService::create(
             self.conf.clone(),
             self.cluster.clone(),
-            self.session_manager.clone(),
+            self.session_manager.clone()
         );
 
         Server::builder()

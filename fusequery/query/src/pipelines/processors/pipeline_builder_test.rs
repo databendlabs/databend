@@ -12,7 +12,7 @@ async fn test_local_pipeline_build() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let plan = PlanParser::create(ctx.clone()).build_from_sql(
-        "select sum(number+1)+2 as sumx from numbers_mt(80000) where (number+1)=4 limit 1",
+        "select sum(number+1)+2 as sumx from numbers_mt(80000) where (number+1)=4 limit 1"
     )?;
     let pipeline = PipelineBuilder::create(ctx, plan).build()?;
     let expect = "LimitTransform × 1 processor\
@@ -41,7 +41,7 @@ async fn test_distributed_pipeline_build() -> anyhow::Result<()> {
     ctx_more_cpu.set_max_threads(cpus * 40)?;
 
     let plan = PlanParser::create(ctx_more_cpu.clone()).build_from_sql(
-        "select sum(number+1)+2 as sumx from numbers_mt(80000) where (number+1)=4 limit 1",
+        "select sum(number+1)+2 as sumx from numbers_mt(80000) where (number+1)=4 limit 1"
     )?;
     let pipeline = PipelineBuilder::create(ctx, plan).build()?;
     let expect = "LimitTransform × 1 processor\

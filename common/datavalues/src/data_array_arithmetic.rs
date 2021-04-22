@@ -26,7 +26,7 @@ use crate::UInt8Array;
 pub fn data_array_arithmetic_op(
     op: DataValueArithmeticOperator,
     left: &DataColumnarValue,
-    right: &DataColumnarValue,
+    right: &DataColumnarValue
 ) -> Result<DataArrayRef> {
     let (left_array, right_array) = match (left, right) {
         (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
@@ -40,14 +40,14 @@ pub fn data_array_arithmetic_op(
         }
         (DataColumnarValue::Scalar(left_scalar), DataColumnarValue::Scalar(right_scalar)) => (
             left_scalar.to_array_with_size(1)?,
-            right_scalar.to_array_with_size(1)?,
-        ),
+            right_scalar.to_array_with_size(1)?
+        )
     };
 
     let coercion_type = super::data_type::numerical_arithmetic_coercion(
         &op,
         &left_array.data_type(),
-        &right_array.data_type(),
+        &right_array.data_type()
     )?;
     let left_array = arrow::compute::cast(&left_array, &coercion_type)?;
     let right_array = arrow::compute::cast(&right_array, &coercion_type)?;

@@ -21,7 +21,7 @@ pub struct RemoteDatabase {
     name: String,
     conf: Config,
     tables: RwLock<HashMap<String, Arc<dyn ITable>>>,
-    store_client: RwLock<Option<StoreClient>>,
+    store_client: RwLock<Option<StoreClient>>
 }
 
 impl RemoteDatabase {
@@ -30,7 +30,7 @@ impl RemoteDatabase {
             name,
             conf,
             tables: RwLock::new(HashMap::default()),
-            store_client: RwLock::new(None),
+            store_client: RwLock::new(None)
         }
     }
 

@@ -14,13 +14,13 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct CreateTableInterpreter {
     ctx: FuseQueryContextRef,
-    plan: CreateTablePlan,
+    plan: CreateTablePlan
 }
 
 impl CreateTableInterpreter {
     pub fn try_create(
         ctx: FuseQueryContextRef,
-        plan: CreateTablePlan,
+        plan: CreateTablePlan
     ) -> Result<Arc<dyn IInterpreter>> {
         Ok(Arc::new(CreateTableInterpreter { ctx, plan }))
     }
@@ -40,7 +40,7 @@ impl IInterpreter for CreateTableInterpreter {
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema.clone(),
             None,
-            vec![],
+            vec![]
         )))
     }
 }

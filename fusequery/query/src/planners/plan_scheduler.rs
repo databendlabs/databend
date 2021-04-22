@@ -26,7 +26,7 @@ impl PlanScheduler {
                 source_plan = node.clone();
                 Ok(false)
             }
-            _ => Ok(true),
+            _ => Ok(true)
         })?;
 
         // If partition numbers <= current node cpus, schedule all the partitions to current node.
@@ -67,7 +67,7 @@ impl PlanScheduler {
                 let left = total_chunks - num_chunks_so_far;
                 chunk_size = min(
                     (p_usize * total_chunks - remainder) / priority_sum + 1,
-                    left,
+                    left
                 );
 
                 info!(
@@ -85,7 +85,7 @@ impl PlanScheduler {
             num_chunks_so_far += chunk_size;
 
             let mut rewritten_node = PlanNode::Empty(EmptyPlan {
-                schema: Arc::new(DataSchema::empty()),
+                schema: Arc::new(DataSchema::empty())
             });
 
             // Walk and rewrite the plan from the source.

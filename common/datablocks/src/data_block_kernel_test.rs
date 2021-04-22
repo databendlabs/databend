@@ -15,13 +15,10 @@ fn test_data_block_kernel_take() -> anyhow::Result<()> {
         DataField::new("b", DataType::Utf8, false),
     ]));
 
-    let raw = DataBlock::create(
-        schema.clone(),
-        vec![
-            Arc::new(Int64Array::from(vec![1, 2, 3])),
-            Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
-        ],
-    );
+    let raw = DataBlock::create(schema.clone(), vec![
+        Arc::new(Int64Array::from(vec![1, 2, 3])),
+        Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
+    ]);
 
     let take = DataBlock::block_take_by_indices(&raw, &[0, 2])?;
     assert_eq!(raw.schema(), take.schema());
@@ -53,27 +50,18 @@ fn test_data_block_kernel_concat() -> anyhow::Result<()> {
     ]));
 
     let blocks = vec![
-        DataBlock::create(
-            schema.clone(),
-            vec![
-                Arc::new(Int64Array::from(vec![1, 2, 3])),
-                Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
-            ],
-        ),
-        DataBlock::create(
-            schema.clone(),
-            vec![
-                Arc::new(Int64Array::from(vec![4, 5, 6])),
-                Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
-            ],
-        ),
-        DataBlock::create(
-            schema.clone(),
-            vec![
-                Arc::new(Int64Array::from(vec![7, 8, 9])),
-                Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
-            ],
-        ),
+        DataBlock::create(schema.clone(), vec![
+            Arc::new(Int64Array::from(vec![1, 2, 3])),
+            Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
+        ]),
+        DataBlock::create(schema.clone(), vec![
+            Arc::new(Int64Array::from(vec![4, 5, 6])),
+            Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
+        ]),
+        DataBlock::create(schema.clone(), vec![
+            Arc::new(Int64Array::from(vec![7, 8, 9])),
+            Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
+        ]),
     ];
 
     let results = DataBlock::concat_blocks(&blocks)?;
@@ -112,19 +100,16 @@ fn test_data_block_sort() -> anyhow::Result<()> {
         DataField::new("b", DataType::Utf8, false),
     ]));
 
-    let raw = DataBlock::create(
-        schema.clone(),
-        vec![
-            Arc::new(Int64Array::from(vec![6, 4, 3, 2, 1, 7])),
-            Arc::new(StringArray::from(vec!["b1", "b2", "b3", "b4", "b5", "b6"])),
-        ],
-    );
+    let raw = DataBlock::create(schema.clone(), vec![
+        Arc::new(Int64Array::from(vec![6, 4, 3, 2, 1, 7])),
+        Arc::new(StringArray::from(vec!["b1", "b2", "b3", "b4", "b5", "b6"])),
+    ]);
 
     {
         let options = vec![SortColumnDescription {
             column_name: "a".to_owned(),
             asc: true,
-            nulls_first: false,
+            nulls_first: false
         }];
         let results = DataBlock::sort_block(&raw, &options, Some(3))?;
         assert_eq!(raw.schema(), results.schema());
@@ -145,7 +130,7 @@ fn test_data_block_sort() -> anyhow::Result<()> {
         let options = vec![SortColumnDescription {
             column_name: "a".to_owned(),
             asc: false,
-            nulls_first: false,
+            nulls_first: false
         }];
         let results = DataBlock::sort_block(&raw, &options, Some(3))?;
         assert_eq!(raw.schema(), results.schema());

@@ -27,7 +27,7 @@ pub struct ArithmeticFunction {
     depth: usize,
     op: DataValueArithmeticOperator,
     left: Box<dyn IFunction>,
-    right: Box<dyn IFunction>,
+    right: Box<dyn IFunction>
 }
 
 impl ArithmeticFunction {
@@ -48,7 +48,7 @@ impl ArithmeticFunction {
 
     pub fn try_create_func(
         op: DataValueArithmeticOperator,
-        args: &[Box<dyn IFunction>],
+        args: &[Box<dyn IFunction>]
     ) -> Result<Box<dyn IFunction>> {
         ensure!(
             args.len() == 2,
@@ -60,7 +60,7 @@ impl ArithmeticFunction {
             depth: 0,
             op,
             left: args[0].clone(),
-            right: args[1].clone(),
+            right: args[1].clone()
         }))
     }
 }
@@ -74,7 +74,7 @@ impl IFunction for ArithmeticFunction {
         datavalues::numerical_arithmetic_coercion(
             &self.op,
             &self.left.return_type(input_schema)?,
-            &self.right.return_type(input_schema)?,
+            &self.right.return_type(input_schema)?
         )
     }
 
@@ -92,7 +92,7 @@ impl IFunction for ArithmeticFunction {
                 let data_value = DataValue::try_from_array(&result, 0)?;
                 Ok(DataColumnarValue::Scalar(data_value))
             }
-            _ => Ok(DataColumnarValue::Array(result)),
+            _ => Ok(DataColumnarValue::Array(result))
         }
     }
 
@@ -110,7 +110,7 @@ impl IFunction for ArithmeticFunction {
     fn accumulate_result(&self) -> Result<Vec<DataValue>> {
         Ok([
             &self.left.accumulate_result()?[..],
-            &self.right.accumulate_result()?[..],
+            &self.right.accumulate_result()?[..]
         ]
         .concat())
     }
@@ -124,7 +124,7 @@ impl IFunction for ArithmeticFunction {
         datavalues::data_value_arithmetic_op(
             self.op.clone(),
             self.left.merge_result()?,
-            self.right.merge_result()?,
+            self.right.merge_result()?
         )
     }
 

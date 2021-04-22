@@ -38,14 +38,14 @@ fn test_indices_many() -> anyhow::Result<()> {
     let b1 = Arc::new(UInt32Array::from(vec![None, Some(2), Some(3), Some(5)]));
     let option1 = SortOptions {
         descending: false,
-        nulls_first: true,
+        nulls_first: true
     };
 
     let a2 = Arc::new(UInt32Array::from(vec![Some(2), Some(3), Some(5)]));
     let b2 = Arc::new(UInt32Array::from(vec![Some(1), Some(4), Some(6), Some(6)]));
     let option2 = SortOptions {
         descending: true,
-        nulls_first: true,
+        nulls_first: true
     };
 
     let c = merge_indices(&[a1, a2], &[b1, b2], &[option1, option2], None)?;
@@ -77,21 +77,21 @@ fn test_merge_array() -> anyhow::Result<()> {
 
     let option1 = SortOptions {
         descending: false,
-        nulls_first: true,
+        nulls_first: true
     };
 
     let a2: DataArrayRef = Arc::new(UInt32Array::from(vec![Some(1), Some(3), Some(5)]));
     let b2: DataArrayRef = Arc::new(UInt32Array::from(vec![Some(2), Some(4), Some(6)]));
     let option2 = SortOptions {
         descending: false,
-        nulls_first: true,
+        nulls_first: true
     };
 
     let c = merge_indices(
         &[a1.clone(), a2.clone()],
         &[b1.clone(), b2.clone()],
         &[option1, option2],
-        None,
+        None
     )?;
 
     assert_eq!(c, vec![true, false, true, false, true, false]);
@@ -124,17 +124,17 @@ fn test_merge_array2() -> anyhow::Result<()> {
     let a1: DataArrayRef = Arc::new(UInt32Array::from(
         (1..500)
             .map(|s| Some(s as u32))
-            .collect::<Vec<Option<u32>>>(),
+            .collect::<Vec<Option<u32>>>()
     ));
     let b1: DataArrayRef = Arc::new(UInt32Array::from(
         (500..1000)
             .map(|s| Some(s as u32))
-            .collect::<Vec<Option<u32>>>(),
+            .collect::<Vec<Option<u32>>>()
     ));
 
     let option1 = SortOptions {
         descending: false,
-        nulls_first: true,
+        nulls_first: true
     };
 
     let c = merge_indices(&[a1.clone()], &[b1.clone()], &[option1], None)?;
@@ -146,7 +146,7 @@ fn test_merge_array2() -> anyhow::Result<()> {
     let expect: DataArrayRef = Arc::new(UInt32Array::from(
         (1..1000)
             .map(|s| Some(s as u32))
-            .collect::<Vec<Option<u32>>>(),
+            .collect::<Vec<Option<u32>>>()
     ));
 
     assert_eq!(*d, *expect);

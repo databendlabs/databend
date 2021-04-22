@@ -25,8 +25,8 @@ fn test_mem_engine_create_database() -> anyhow::Result<()> {
             db_id: -1,
             ver: -1,
             table_name_to_id: HashMap::new(),
-            tables: HashMap::new(),
-        }),
+            tables: HashMap::new()
+        })
     };
     let cmdbar = CmdCreateDatabase {
         db_name: "bar".into(),
@@ -34,8 +34,8 @@ fn test_mem_engine_create_database() -> anyhow::Result<()> {
             db_id: -1,
             ver: -1,
             table_name_to_id: HashMap::new(),
-            tables: HashMap::new(),
-        }),
+            tables: HashMap::new()
+        })
     };
 
     {
@@ -47,7 +47,7 @@ fn test_mem_engine_create_database() -> anyhow::Result<()> {
                 db_id: 0,
                 ver: 0,
                 table_name_to_id: HashMap::new(),
-                tables: HashMap::new(),
+                tables: HashMap::new()
             },
             eng.get_database("foo".into()).unwrap()
         );
@@ -62,7 +62,7 @@ fn test_mem_engine_create_database() -> anyhow::Result<()> {
                 db_id: 1,
                 ver: 1,
                 table_name_to_id: HashMap::new(),
-                tables: HashMap::new(),
+                tables: HashMap::new()
             },
             eng.get_database("bar".into()).unwrap()
         );
@@ -77,7 +77,7 @@ fn test_mem_engine_create_database() -> anyhow::Result<()> {
                 db_id: 1,
                 ver: 1,
                 table_name_to_id: HashMap::new(),
-                tables: HashMap::new(),
+                tables: HashMap::new()
             },
             eng.get_database("bar".into()).unwrap(),
             "got the previous bar"
@@ -99,8 +99,8 @@ fn test_mem_engine_create_get_table() -> anyhow::Result<()> {
             db_id: -1,
             ver: -1,
             table_name_to_id: HashMap::new(),
-            tables: HashMap::new(),
-        }),
+            tables: HashMap::new()
+        })
     };
 
     let cmd_table = CmdCreateTable {
@@ -111,8 +111,8 @@ fn test_mem_engine_create_get_table() -> anyhow::Result<()> {
             ver: -1,
             schema: vec![1, 2, 3],
             options: maplit::hashmap! {"key".into() => "val".into()},
-            placement_policy: vec![1, 2, 3],
-        }),
+            placement_policy: vec![1, 2, 3]
+        })
     };
 
     {
@@ -137,7 +137,7 @@ fn test_mem_engine_create_get_table() -> anyhow::Result<()> {
                 ver: 1,
                 schema: vec![1, 2, 3],
                 options: maplit::hashmap! {"key".into() => "val".into()},
-                placement_policy: vec![1, 2, 3],
+                placement_policy: vec![1, 2, 3]
             },
             got
         );

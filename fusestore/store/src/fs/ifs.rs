@@ -15,7 +15,7 @@ pub trait IFileSystem {
     async fn add<'a>(
         &'a self,
         path: impl AsRef<Path> + Send + 'a,
-        data: &[u8],
+        data: &[u8]
     ) -> anyhow::Result<()>;
 
     /// read all bytes from a file

@@ -23,7 +23,7 @@ async fn test_cluster() -> anyhow::Result<()> {
                 name: "9090".to_string(),
                 cpus: 4,
                 priority: 8,
-                address: "127.0.0.1:9090".to_string(),
+                address: "127.0.0.1:9090".to_string()
             })
             .reply(&filter);
         assert_eq!(200, res.await.status());
@@ -36,7 +36,7 @@ async fn test_cluster() -> anyhow::Result<()> {
                 name: "9091".to_string(),
                 cpus: 4,
                 priority: 4,
-                address: "127.0.0.1:9091".to_string(),
+                address: "127.0.0.1:9091".to_string()
             })
             .reply(&filter);
         assert_eq!(200, res.await.status());
@@ -52,7 +52,7 @@ async fn test_cluster() -> anyhow::Result<()> {
                 name: "9091".to_string(),
                 cpus: 4,
                 priority: 4,
-                address: "127.0.0.1:9091".to_string(),
+                address: "127.0.0.1:9091".to_string()
             })
             .reply(&filter);
         assert_eq!(200, res.await.status());

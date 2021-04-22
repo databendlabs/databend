@@ -10,7 +10,7 @@ use crate::configs::Config;
 
 pub struct Router {
     cfg: Config,
-    cluster: ClusterRef,
+    cluster: ClusterRef
 }
 
 impl Router {
@@ -19,7 +19,7 @@ impl Router {
     }
 
     pub fn router(
-        &self,
+        &self
     ) -> Result<impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone> {
         let v1 = super::v1::hello::hello_handler(self.cfg.clone())
             .or(super::v1::config::config_handler(self.cfg.clone()))

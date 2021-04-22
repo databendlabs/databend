@@ -26,7 +26,7 @@ pub struct CsvTable {
     name: String,
     schema: DataSchemaRef,
     file: String,
-    has_header: bool,
+    has_header: bool
 }
 
 impl CsvTable {
@@ -34,14 +34,14 @@ impl CsvTable {
         db: String,
         name: String,
         schema: DataSchemaRef,
-        options: TableOptions,
+        options: TableOptions
     ) -> Result<Box<dyn ITable>> {
         let has_header = options.get("has_header").is_some();
         let file = match options.get("location") {
             None => {
                 bail!("CSV Engine must contains file location options")
             }
-            Some(v) => v.trim_matches(|s| s == '\'' || s == '"').to_string(),
+            Some(v) => v.trim_matches(|s| s == '\'' || s == '"').to_string()
         };
 
         Ok(Box::new(Self {
@@ -49,7 +49,7 @@ impl CsvTable {
             name,
             schema,
             file,
-            has_header,
+            has_header
         }))
     }
 }
@@ -76,7 +76,7 @@ impl ITable for CsvTable {
         let start_line: usize = if self.has_header { 1 } else { 0 };
         let file = &self.file;
         let lines_count = count_lines(
-            File::open(file.clone()).with_context(|| format!("Cannot find file:{}", file))?,
+            File::open(file.clone()).with_context(|| format!("Cannot find file:{}", file))?
         )?;
 
         Ok(ReadDataSourcePlan {
@@ -86,10 +86,10 @@ impl ITable for CsvTable {
             partitions: generate_parts(
                 start_line as u64,
                 ctx.get_max_block_size()?,
-                lines_count as u64,
+                lines_count as u64
             ),
             statistics: Statistics::default(),
-            description: format!("(Read from CSV Engine table  {}.{})", self.db, self.name),
+            description: format!("(Read from CSV Engine table  {}.{})", self.db, self.name)
         })
     }
 
@@ -97,7 +97,7 @@ impl ITable for CsvTable {
         Ok(Box::pin(CsvTableStream::try_create(
             ctx,
             self.schema.clone(),
-            self.file.clone(),
+            self.file.clone()
         )?))
     }
 }

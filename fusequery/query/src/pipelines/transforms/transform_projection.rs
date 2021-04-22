@@ -21,7 +21,7 @@ use crate::pipelines::transforms::ExpressionTransform;
 pub struct ProjectionTransform {
     schema: DataSchemaRef,
     expression: ExpressionTransform,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn IProcessor>
 }
 
 impl ProjectionTransform {
@@ -29,14 +29,14 @@ impl ProjectionTransform {
         Ok(ProjectionTransform {
             schema: schema.clone(),
             expression: ExpressionTransform::try_create(schema, exprs)?,
-            input: Arc::new(EmptyProcessor::create()),
+            input: Arc::new(EmptyProcessor::create())
         })
     }
 
     pub fn projection_executor(
         projected_schema: &DataSchemaRef,
         block: DataBlock,
-        _funcs: Vec<Box<dyn IFunction>>,
+        _funcs: Vec<Box<dyn IFunction>>
     ) -> Result<DataBlock> {
         let mut columns: Vec<DataArrayRef> = Vec::with_capacity(projected_schema.fields().len());
 
@@ -72,7 +72,7 @@ impl IProcessor for ProjectionTransform {
             self.expression.execute().await?,
             self.schema.clone(),
             vec![],
-            ProjectionTransform::projection_executor,
+            ProjectionTransform::projection_executor
         )?))
     }
 }

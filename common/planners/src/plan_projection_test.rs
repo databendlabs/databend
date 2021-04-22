@@ -16,9 +16,9 @@ fn test_projection_plan() -> anyhow::Result<()> {
         schema: Arc::new(DataSchema::new(vec![DataField::new(
             "a",
             DataType::Utf8,
-            false,
+            false
         )])),
-        input: Arc::from(PlanBuilder::empty().build()?),
+        input: Arc::from(PlanBuilder::empty().build()?)
     });
     let _ = projection.schema();
     let expect = "Projection: a:Utf8";

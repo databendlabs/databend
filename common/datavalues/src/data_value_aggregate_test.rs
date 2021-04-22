@@ -14,7 +14,7 @@ fn test_data_value_arithmetic() {
         args: Vec<Vec<DataValue>>,
         expect: Vec<DataValue>,
         error: Vec<&'static str>,
-        op: DataValueAggregateOperator,
+        op: DataValueAggregateOperator
     }
 
     let tests = vec![
@@ -189,7 +189,7 @@ fn test_data_value_arithmetic() {
             let result = data_value_aggregate_op(t.op.clone(), args[0].clone(), args[1].clone());
             match result {
                 Ok(v) => assert_eq!(v, t.expect[i]),
-                Err(e) => assert_eq!(t.error[i], e.to_string()),
+                Err(e) => assert_eq!(t.error[i], e.to_string())
             }
         }
     }

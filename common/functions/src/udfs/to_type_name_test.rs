@@ -21,13 +21,13 @@ fn test_to_type_name_function() -> anyhow::Result<()> {
         block: DataBlock,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>,
+        func: Box<dyn IFunction>
     }
 
     let schema = Arc::new(DataSchema::new(vec![DataField::new(
         "a",
         DataType::Boolean,
-        false,
+        false
     )]));
 
     let field_a = ColumnFunction::try_create("a").unwrap();
@@ -37,14 +37,13 @@ fn test_to_type_name_function() -> anyhow::Result<()> {
         display: "toTypeName(a)",
         nullable: false,
         func: ToTypeNameFunction::try_create(&[field_a.clone()])?,
-        block: DataBlock::create(
-            schema.clone(),
-            vec![Arc::new(BooleanArray::from(vec![true, true, true, false]))],
-        ),
+        block: DataBlock::create(schema.clone(), vec![Arc::new(BooleanArray::from(vec![
+            true, true, true, false,
+        ]))]),
         expect: Arc::new(StringArray::from(vec![
             "Boolean", "Boolean", "Boolean", "Boolean",
         ])),
-        error: "",
+        error: ""
     }];
 
     for t in tests {

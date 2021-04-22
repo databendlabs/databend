@@ -14,11 +14,11 @@ pub struct ClusterNodeRequest {
     // Larger value means higher
     // priority
     pub priority: u8,
-    pub address: String,
+    pub address: String
 }
 
 pub fn cluster_handler(
-    cluster: ClusterRef,
+    cluster: ClusterRef
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     cluster_list_node(cluster.clone())
         .or(cluster_add_node(cluster.clone()))
@@ -27,7 +27,7 @@ pub fn cluster_handler(
 
 /// GET /v1/cluster/list
 fn cluster_list_node(
-    cluster: ClusterRef,
+    cluster: ClusterRef
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::path!("v1" / "cluster" / "list")
         .and(warp::get())
@@ -36,7 +36,7 @@ fn cluster_list_node(
 }
 
 fn cluster_add_node(
-    cluster: ClusterRef,
+    cluster: ClusterRef
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::path!("v1" / "cluster" / "add")
         .and(warp::post())
@@ -46,7 +46,7 @@ fn cluster_add_node(
 }
 
 fn cluster_remove_node(
-    cluster: ClusterRef,
+    cluster: ClusterRef
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::path!("v1" / "cluster" / "remove")
         .and(warp::post())
@@ -56,7 +56,7 @@ fn cluster_remove_node(
 }
 
 fn with_cluster(
-    cluster: ClusterRef,
+    cluster: ClusterRef
 ) -> impl Filter<Extract = (ClusterRef,), Error = std::convert::Infallible> + Clone {
     warp::any().map(move || cluster.clone())
 }
@@ -75,7 +75,7 @@ mod handlers {
     use crate::clusters::Node;
 
     pub async fn list_node(
-        cluster: ClusterRef,
+        cluster: ClusterRef
     ) -> Result<impl warp::Reply, std::convert::Infallible> {
         // TODO(BohuTANG): error handler
         let nodes = cluster.get_nodes().unwrap();
@@ -84,7 +84,7 @@ mod handlers {
 
     pub async fn add_node(
         req: ClusterNodeRequest,
-        cluster: ClusterRef,
+        cluster: ClusterRef
     ) -> Result<impl warp::Reply, std::convert::Infallible> {
         info!("Cluster add node: {:?}", req);
         // TODO(BohuTANG): error handler
@@ -94,7 +94,7 @@ mod handlers {
                 cpus: req.cpus,
                 priority: req.priority,
                 address: req.address,
-                local: false,
+                local: false
             })
             .unwrap();
         Ok(warp::http::StatusCode::OK)
@@ -102,7 +102,7 @@ mod handlers {
 
     pub async fn remove_node(
         req: ClusterNodeRequest,
-        cluster: ClusterRef,
+        cluster: ClusterRef
     ) -> Result<impl warp::Reply, std::convert::Infallible> {
         info!("Cluster remove node: {:?}", req);
         // TODO(BohuTANG): error handler

@@ -24,7 +24,7 @@ use crate::UInt8Array;
 #[inline]
 pub fn data_array_aggregate_op(
     op: DataValueAggregateOperator,
-    value: DataArrayRef,
+    value: DataArrayRef
 ) -> Result<DataValue> {
     Ok(match value.data_type() {
         DataType::Int8 => match op {

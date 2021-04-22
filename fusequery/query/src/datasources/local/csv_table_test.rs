@@ -19,7 +19,7 @@ async fn test_csv_table() -> anyhow::Result<()> {
         env::current_dir()?
             .join("../../tests/data/sample.csv")
             .display()
-            .to_string(),
+            .to_string()
     )]
     .iter()
     .cloned()
@@ -30,7 +30,7 @@ async fn test_csv_table() -> anyhow::Result<()> {
         "default".into(),
         "test_csv".into(),
         DataSchema::new(vec![DataField::new("column1", DataType::UInt64, false)]).into(),
-        options,
+        options
     )?;
 
     let scan_plan = &ScanPlan {
@@ -41,10 +41,10 @@ async fn test_csv_table() -> anyhow::Result<()> {
         projected_schema: Arc::new(DataSchema::new(vec![DataField::new(
             "column1",
             DataType::UInt64,
-            false,
+            false
         )])),
         filters: vec![],
-        limit: None,
+        limit: None
     };
     let source_plan = table.read_plan(ctx.clone(), &scan_plan)?;
     ctx.try_set_partitions(source_plan.partitions)?;
@@ -87,7 +87,7 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
         env::current_dir()?
             .join("../../tests/data/sample.csv")
             .display()
-            .to_string(),
+            .to_string()
     )]
     .iter()
     .cloned()
@@ -104,7 +104,7 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
             DataField::new("column4", DataType::UInt64, false),
         ])
         .into(),
-        options,
+        options
     )?;
     let scan_plan = &ScanPlan {
         schema_name: "".to_string(),
@@ -114,10 +114,10 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
         projected_schema: Arc::new(DataSchema::new(vec![DataField::new(
             "column2",
             DataType::UInt64,
-            false,
+            false
         )])),
         filters: vec![],
-        limit: None,
+        limit: None
     };
     let source_plan = table.read_plan(ctx.clone(), &scan_plan)?;
     ctx.try_set_partitions(source_plan.partitions)?;

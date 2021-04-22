@@ -15,21 +15,21 @@ pub type ClusterRef = Arc<Cluster>;
 
 pub struct Cluster {
     cfg: Config,
-    nodes: Mutex<HashMap<String, Node>>,
+    nodes: Mutex<HashMap<String, Node>>
 }
 
 impl Cluster {
     pub fn create(cfg: Config) -> ClusterRef {
         Arc::new(Cluster {
             cfg,
-            nodes: Mutex::new(HashMap::new()),
+            nodes: Mutex::new(HashMap::new())
         })
     }
 
     pub fn empty() -> ClusterRef {
         Arc::new(Cluster {
             cfg: Config::default(),
-            nodes: Mutex::new(HashMap::new()),
+            nodes: Mutex::new(HashMap::new())
         })
     }
 
@@ -47,7 +47,7 @@ impl Cluster {
             // The value of "priority" must be in [0,10].
             priority: n.priority,
             address: n.address.clone(),
-            local: false,
+            local: false
         };
         if node.address == self.cfg.rpc_api_address {
             node.local = true;

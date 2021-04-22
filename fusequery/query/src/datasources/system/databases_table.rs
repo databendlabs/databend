@@ -22,30 +22,30 @@ use common_streams::SendableDataBlockStream;
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
-pub struct TablesTable {
+pub struct DatabasesTable {
     schema: DataSchemaRef
 }
 
-impl TablesTable {
+impl DatabasesTable {
     pub fn create() -> Self {
-        TablesTable {
-            schema: Arc::new(DataSchema::new(vec![
-                DataField::new("database", DataType::Utf8, false),
-                DataField::new("name", DataType::Utf8, false),
-                DataField::new("engine", DataType::Utf8, false),
-            ]))
+        DatabasesTable {
+            schema: Arc::new(DataSchema::new(vec![DataField::new(
+                "name",
+                DataType::Utf8,
+                false
+            )]))
         }
     }
 }
 
 #[async_trait::async_trait]
-impl ITable for TablesTable {
+impl ITable for DatabasesTable {
     fn name(&self) -> &str {
-        "tables"
+        "databases"
     }
 
     fn engine(&self) -> &str {
-        "SystemTables"
+        "SystemDatabases"
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -66,27 +66,26 @@ impl ITable for TablesTable {
                 version: 0
             }],
             statistics: Statistics::default(),
-            description: "(Read from system.functions table)".to_string()
+            description: "(Read from system.databases table)".to_string()
         })
     }
 
     async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
-        let database_tables = ctx.get_datasource().get_all_tables()?;
+        ctx.get_datasource()
+            .get_databases()
+            .map(|databases_name| -> SendableDataBlockStream {
+                let databases_name_str: Vec<&str> = databases_name
+                    .iter()
+                    .map(|database_name| database_name.as_str())
+                    .collect();
 
-        let databases: Vec<&str> = database_tables.iter().map(|(d, _)| d.as_str()).collect();
-        let names: Vec<&str> = database_tables.iter().map(|(_, v)| v.name()).collect();
-        let engines: Vec<&str> = database_tables.iter().map(|(_, v)| v.engine()).collect();
+                let block = DataBlock::create(self.schema.clone(), vec![Arc::new(
+                    StringArray::from(databases_name_str)
+                )]);
 
-        let block = DataBlock::create(self.schema.clone(), vec![
-            Arc::new(StringArray::from(databases)),
-            Arc::new(StringArray::from(names)),
-            Arc::new(StringArray::from(engines)),
-        ]);
-
-        Ok(Box::pin(DataBlockStream::create(
-            self.schema.clone(),
-            None,
-            vec![block]
-        )))
+                Box::pin(DataBlockStream::create(self.schema.clone(), None, vec![
+                    block,
+                ]))
+            })
     }
 }

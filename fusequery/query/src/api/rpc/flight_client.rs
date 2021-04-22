@@ -24,7 +24,7 @@ use tokio_stream::StreamExt;
 use tonic::Request;
 
 pub struct FlightClient {
-    client: FlightServiceClient<tonic::transport::channel::Channel>,
+    client: FlightServiceClient<tonic::transport::channel::Channel>
 }
 
 impl FlightClient {
@@ -37,11 +37,11 @@ impl FlightClient {
     pub async fn execute_remote_plan_action(
         &mut self,
         job_id: String,
-        plan: &PlanNode,
+        plan: &PlanNode
     ) -> Result<SendableDataBlockStream> {
         let action = QueryDoGet::ExecutePlan(ExecutePlanAction {
             job_id: job_id.clone(),
-            plan: plan.clone(),
+            plan: plan.clone()
         });
         self.do_get(&action).await
     }
@@ -70,7 +70,7 @@ impl FlightClient {
             None => bail!(
                 "Can not receive data from flight server, action:{:?}",
                 action
-            ),
+            )
         }
     }
 
@@ -85,7 +85,7 @@ impl FlightClient {
                     action
                 )
             }
-            Some(resp) => Ok(resp.body),
+            Some(resp) => Ok(resp.body)
         }
     }
 }

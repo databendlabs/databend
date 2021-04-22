@@ -14,13 +14,13 @@ use common_infallible::RwLock;
 #[derive(Debug, Clone)]
 pub struct Settings {
     // DataValue is of DataValue::Struct([name, value, default_value, description])
-    settings: Arc<RwLock<HashMap<&'static str, DataValue>>>,
+    settings: Arc<RwLock<HashMap<&'static str, DataValue>>>
 }
 
 impl Settings {
     pub fn create() -> Self {
         Settings {
-            settings: Arc::new(RwLock::new(HashMap::default())),
+            settings: Arc::new(RwLock::new(HashMap::default()))
         }
     }
 

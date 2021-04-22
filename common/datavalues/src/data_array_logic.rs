@@ -16,7 +16,7 @@ use crate::DataValueLogicOperator;
 pub fn data_array_logic_op(
     op: DataValueLogicOperator,
     left: &DataColumnarValue,
-    right: &DataColumnarValue,
+    right: &DataColumnarValue
 ) -> Result<DataArrayRef> {
     match (left, right) {
         (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => match op {
@@ -32,6 +32,6 @@ pub fn data_array_logic_op(
             op,
             left.data_type(),
             right.data_type()
-        ),
+        )
     }
 }
