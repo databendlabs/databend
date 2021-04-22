@@ -28,6 +28,10 @@ struct Opt {
     #[structopt(short = "i", long = "iterations", default_value = "3")]
     iterations: usize,
 
+    /// Number of threads for query execution
+    #[structopt(short = "t", long = "threads", default_value = "0")]
+    threads: usize,
+
     /// Path to data files
     #[structopt(parse(from_os_str), required = true, short = "p", long = "path")]
     path: PathBuf
@@ -37,10 +41,19 @@ struct Opt {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = Opt::from_args();
-    println!("Running benchmarks with the following options: {:?}", opt);
+    let ctx = FuseQueryContext::try_create()?;
+    if opt.threads > 0 {
+        ctx.set_max_threads(opt.threads as u64)?;
+    }
+
+    println!(
+        "Running benchmarks with the following options: {:?}, max_threads [{:?}], block_size[{:?}]",
+        opt,
+        ctx.get_max_threads()?,
+        ctx.get_max_block_size()?
+    );
 
     // Create csv table.
-    let ctx = FuseQueryContext::try_create()?;
     let data_source = ctx.get_datasource();
     let database = data_source.get_database("default")?;
     let mut options: TableOptions = HashMap::new();
@@ -61,6 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for (name, sql) in &queries {
         println!("Executing '{}'", name);
+        println!("Query '{}'", sql);
         for i in 0..opt.iterations {
             let start = Instant::now();
             let plan = PlanParser::create(ctx.clone()).build_from_sql(sql)?;

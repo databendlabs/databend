@@ -44,7 +44,7 @@ impl NumbersStream {
         }
     }
 
-    fn try_get_one_block(&mut self) -> Result<Option<BlockRange>> {
+    fn try_get_one_block(&mut self) -> Result<Option<DataBlock>> {
         if (self.block_index as usize) == self.blocks.len() {
             let partitions = self.ctx.try_get_partitions(1)?;
             if partitions.is_empty() {
@@ -85,7 +85,33 @@ impl NumbersStream {
 
         let current = self.blocks[self.block_index].clone();
         self.block_index += 1;
-        Ok(Some(current))
+
+        Ok(if current.begin == current.end {
+            None
+        } else {
+            let v = (current.begin..current.end).collect::<Vec<u64>>();
+            let mut me = ManuallyDrop::new(v);
+            let byte_size = mem::size_of::<u64>();
+
+            unsafe {
+                let buffer = Buffer::from_raw_parts(
+                    NonNull::new(me.as_mut_ptr() as *mut u8).unwrap(),
+                    me.len() * byte_size,
+                    me.capacity() * byte_size
+                );
+
+                let arr_data = ArrayData::builder(DataType::UInt64)
+                    .len(me.len())
+                    .offset(0)
+                    .add_buffer(buffer)
+                    .build();
+
+                let block = DataBlock::create(self.schema.clone(), vec![Arc::new(
+                    UInt64Array::from(arr_data)
+                )]);
+                Some(block)
+            }
+        })
     }
 }
 
@@ -96,35 +122,8 @@ impl Stream for NumbersStream {
         mut self: std::pin::Pin<&mut Self>,
         _: &mut Context<'_>
     ) -> Poll<Option<Self::Item>> {
-        let current = self.try_get_one_block()?;
+        let block = self.try_get_one_block()?;
 
-        Poll::Ready(match current {
-            None => None,
-            Some(current) if current.begin == current.end => None,
-            Some(current) => {
-                let v = (current.begin..current.end).collect::<Vec<u64>>();
-                let mut me = ManuallyDrop::new(v);
-                let byte_size = mem::size_of::<u64>();
-
-                unsafe {
-                    let buffer = Buffer::from_raw_parts(
-                        NonNull::new(me.as_mut_ptr() as *mut u8).unwrap(),
-                        me.len() * byte_size,
-                        me.capacity() * byte_size
-                    );
-
-                    let arr_data = ArrayData::builder(DataType::UInt64)
-                        .len(me.len())
-                        .offset(0)
-                        .add_buffer(buffer)
-                        .build();
-
-                    let block = DataBlock::create(self.schema.clone(), vec![Arc::new(
-                        UInt64Array::from(arr_data)
-                    )]);
-                    Some(Ok(block))
-                }
-            }
-        })
+        Poll::Ready(block.map(Ok))
     }
 }

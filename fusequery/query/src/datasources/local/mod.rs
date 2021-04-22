@@ -10,12 +10,14 @@ mod null_table_test;
 mod parquet_table_test;
 
 mod csv_table;
+mod csv_table_stream;
 mod local_database;
 mod local_factory;
 mod null_table;
 mod parquet_table;
 
 pub use csv_table::CsvTable;
+pub use csv_table_stream::CsvTableStream;
 pub use local_database::LocalDatabase;
 pub use local_factory::LocalFactory;
 pub use null_table::NullTable;
