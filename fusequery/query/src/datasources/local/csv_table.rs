@@ -77,12 +77,13 @@ impl ITable for CsvTable {
         let lines_count = count_lines(
             File::open(file.clone()).with_context(|| format!("Cannot find file:{}", file))?,
         )?;
+        let start_line = if self.has_header { 1 } else { 0 };
 
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
-            partitions: generate_parts(ctx.get_max_block_size()?, lines_count as u64),
+            partitions: generate_parts(start_line, ctx.get_max_block_size()?, lines_count as u64),
             statistics: Statistics::default(),
             description: format!("(Read from CSV Engine table  {}.{})", self.db, self.name),
         })
@@ -93,7 +94,6 @@ impl ITable for CsvTable {
             ctx,
             self.schema.clone(),
             self.file.clone(),
-            self.has_header,
         )?))
     }
 }

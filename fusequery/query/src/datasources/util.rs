@@ -9,7 +9,7 @@ use std::io::BufReader;
 use common_planners::Partition;
 use common_planners::Partitions;
 
-pub fn generate_parts(workers: u64, total: u64) -> Partitions {
+pub fn generate_parts(first_start_line_no: u64, workers: u64, total: u64) -> Partitions {
     let part_size = total / workers;
     let part_remain = total % workers;
 
@@ -21,7 +21,10 @@ pub fn generate_parts(workers: u64, total: u64) -> Partitions {
         })
     } else {
         for part in 0..workers {
-            let part_begin = part * part_size;
+            let mut part_begin = part * part_size;
+            if part == 0 && first_start_line_no > 0 {
+                part_begin = first_start_line_no;
+            }
             let mut part_end = (part + 1) * part_size;
             if part == (workers - 1) && part_remain > 0 {
                 part_end += part_remain;

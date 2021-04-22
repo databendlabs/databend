@@ -11,7 +11,7 @@ fn test_util_generate_parts() -> anyhow::Result<()> {
 
     {
         // deal with remainder
-        let ps = generate_parts(3, 11);
+        let ps = generate_parts(0, 3, 11);
 
         assert_eq!(3, ps.len());
         assert_eq!(
@@ -39,7 +39,7 @@ fn test_util_generate_parts() -> anyhow::Result<()> {
 
     {
         // total is zero
-        let ps = generate_parts(3, 0);
+        let ps = generate_parts(0, 3, 0);
 
         assert_eq!(1, ps.len());
         assert_eq!(
@@ -52,7 +52,7 @@ fn test_util_generate_parts() -> anyhow::Result<()> {
     }
     {
         // only one part, total < workers
-        let ps = generate_parts(3, 2);
+        let ps = generate_parts(0, 3, 2);
 
         assert_eq!(1, ps.len());
         assert_eq!(

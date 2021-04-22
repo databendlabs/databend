@@ -127,7 +127,7 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
     assert_eq!(true, result.is_err());
     if let Err(e) = result {
         assert_eq!(
-            "ParseError(\"Error while parsing value \\\'Shanghai\\\' for column 1 at line 1\")",
+            "Parser error: Error while parsing value \'Shanghai\' for column 1 at line 1",
             e.to_string()
         );
     };
