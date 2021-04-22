@@ -116,6 +116,27 @@ impl ClickHouseSession for Session {
     fn server_display_name(&self) -> &str {
         "datafuse"
     }
+
+    fn dbms_version_major(&self) -> u64 {
+        2021
+    }
+
+    fn dbms_version_minor(&self) -> u64 {
+        5
+    }
+
+    fn dbms_version_patch(&self) -> u64 {
+        0
+    }
+
+    fn timezone(&self) -> &str {
+        "UTC"
+    }
+
+    // MIN_SERVER_REVISION for suggestions
+    fn dbms_tcp_protocol_version(&self) -> u64 {
+        54405
+    }
 }
 
 pub struct ClickHouseHandler {
