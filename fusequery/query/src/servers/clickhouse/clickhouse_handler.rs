@@ -133,7 +133,7 @@ impl ClickHouseSession for Session {
         "UTC"
     }
 
-    // MIN_SERVER_REVISION for suggestions
+    // the MIN_SERVER_REVISION for suggestions is 54406
     fn dbms_tcp_protocol_version(&self) -> u64 {
         54405
     }
