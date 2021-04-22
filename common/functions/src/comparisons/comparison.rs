@@ -28,7 +28,7 @@ pub struct ComparisonFunction {
     op: DataValueComparisonOperator,
     left: Box<dyn IFunction>,
     right: Box<dyn IFunction>,
-    saved: Option<DataColumnarValue>,
+    saved: Option<DataColumnarValue>
 }
 
 impl ComparisonFunction {
@@ -47,7 +47,7 @@ impl ComparisonFunction {
 
     pub fn try_create_func(
         op: DataValueComparisonOperator,
-        args: &[Box<dyn IFunction>],
+        args: &[Box<dyn IFunction>]
     ) -> Result<Box<dyn IFunction>> {
         ensure!(
             args.len() == 2,
@@ -60,7 +60,7 @@ impl ComparisonFunction {
             op,
             left: args[0].clone(),
             right: args[1].clone(),
-            saved: None,
+            saved: None
         }))
     }
 }
@@ -83,8 +83,8 @@ impl IFunction for ComparisonFunction {
             datavalues::data_array_comparison_op(
                 self.op.clone(),
                 &self.left.eval(block)?,
-                &self.right.eval(block)?,
-            )?,
+                &self.right.eval(block)?
+            )?
         ))
     }
 

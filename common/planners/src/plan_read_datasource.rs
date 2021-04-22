@@ -17,7 +17,7 @@ pub struct ReadDataSourcePlan {
     pub schema: DataSchemaRef,
     pub partitions: Partitions,
     pub statistics: Statistics,
-    pub description: String,
+    pub description: String
 }
 
 impl ReadDataSourcePlan {
@@ -28,7 +28,7 @@ impl ReadDataSourcePlan {
             schema: Arc::from(DataSchema::empty()),
             partitions: vec![],
             statistics: Statistics::default(),
-            description: "".to_string(),
+            description: "".to_string()
         }
     }
 

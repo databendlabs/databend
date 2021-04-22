@@ -31,7 +31,7 @@ async fn test_transform_sort() -> anyhow::Result<()> {
         Ok(Box::new(SortPartialTransform::try_create(
             plan.schema().clone(),
             sort_expression.clone(),
-            None,
+            None
         )?))
     })?;
 
@@ -39,7 +39,7 @@ async fn test_transform_sort() -> anyhow::Result<()> {
         Ok(Box::new(SortMergeTransform::try_create(
             plan.schema().clone(),
             sort_expression.clone(),
-            None,
+            None
         )?))
     })?;
 
@@ -49,7 +49,7 @@ async fn test_transform_sort() -> anyhow::Result<()> {
             Ok(Box::new(SortMergeTransform::try_create(
                 plan.schema().clone(),
                 sort_expression.clone(),
-                None,
+                None
             )?))
         })?;
     }

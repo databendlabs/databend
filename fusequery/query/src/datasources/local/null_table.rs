@@ -8,8 +8,8 @@ use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_planners::Partition;
-use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
+use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_planners::TableOptions;
 use common_streams::DataBlockStream;
@@ -21,7 +21,7 @@ use crate::sessions::FuseQueryContextRef;
 pub struct NullTable {
     db: String,
     name: String,
-    schema: DataSchemaRef,
+    schema: DataSchemaRef
 }
 
 impl NullTable {
@@ -29,7 +29,7 @@ impl NullTable {
         db: String,
         name: String,
         schema: DataSchemaRef,
-        _options: TableOptions,
+        _options: TableOptions
     ) -> Result<Box<dyn ITable>> {
         let table = Self { db, name, schema };
         Ok(Box::new(table))
@@ -54,21 +54,17 @@ impl ITable for NullTable {
         Ok(self.schema.clone())
     }
 
-    fn read_plan(
-        &self,
-        _ctx: FuseQueryContextRef,
-        _push_down_plan: PlanNode,
-    ) -> Result<ReadDataSourcePlan> {
+    fn read_plan(&self, _ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0,
+                version: 0
             }],
             statistics: Statistics::default(),
-            description: format!("(Read from Null Engine table  {}.{})", self.db, self.name),
+            description: format!("(Read from Null Engine table  {}.{})", self.db, self.name)
         })
     }
 
@@ -78,7 +74,7 @@ impl ITable for NullTable {
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block],
+            vec![block]
         )))
     }
 }

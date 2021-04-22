@@ -26,7 +26,7 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct PipelineBuilder {
     ctx: FuseQueryContextRef,
-    plan: PlanNode,
+    plan: PlanNode
 }
 
 impl PipelineBuilder {
@@ -43,7 +43,7 @@ impl PipelineBuilder {
                 limit = Some(limit_plan.n);
                 Ok(true)
             }
-            _ => Ok(true),
+            _ => Ok(true)
         })?;
 
         let mut pipeline = Pipeline::create();
@@ -68,7 +68,7 @@ impl PipelineBuilder {
                             self.ctx.clone(),
                             self.ctx.get_id()?,
                             executor.address,
-                            remote_plan_node.clone(),
+                            remote_plan_node.clone()
                         )?;
                         pipeline.add_source(Arc::new(remote_transform))?;
                     }
@@ -79,7 +79,7 @@ impl PipelineBuilder {
                 pipeline.add_simple_transform(|| {
                     Ok(Box::new(ProjectionTransform::try_create(
                         plan.schema.clone(),
-                        plan.expr.clone(),
+                        plan.expr.clone()
                     )?))
                 })?;
                 Ok(true)
@@ -89,7 +89,7 @@ impl PipelineBuilder {
                     pipeline.add_simple_transform(|| {
                         Ok(Box::new(AggregatorPartialTransform::try_create(
                             plan.schema(),
-                            plan.aggr_expr.clone(),
+                            plan.aggr_expr.clone()
                         )?))
                     })?;
                 } else {
@@ -97,7 +97,7 @@ impl PipelineBuilder {
                         Ok(Box::new(GroupByPartialTransform::create(
                             plan.schema(),
                             plan.aggr_expr.clone(),
-                            plan.group_expr.clone(),
+                            plan.group_expr.clone()
                         )))
                     })?;
                 }
@@ -109,7 +109,7 @@ impl PipelineBuilder {
                     pipeline.add_simple_transform(|| {
                         Ok(Box::new(AggregatorFinalTransform::try_create(
                             plan.schema(),
-                            plan.aggr_expr.clone(),
+                            plan.aggr_expr.clone()
                         )?))
                     })?;
                 } else {
@@ -117,7 +117,7 @@ impl PipelineBuilder {
                         Ok(Box::new(GroupByFinalTransform::create(
                             plan.schema(),
                             plan.aggr_expr.clone(),
-                            plan.group_expr.clone(),
+                            plan.group_expr.clone()
                         )))
                     })?;
                 }
@@ -126,7 +126,7 @@ impl PipelineBuilder {
             PlanNode::Filter(plan) => {
                 pipeline.add_simple_transform(|| {
                     Ok(Box::new(FilterTransform::try_create(
-                        plan.predicate.clone(),
+                        plan.predicate.clone()
                     )?))
                 })?;
                 Ok(true)
@@ -139,7 +139,7 @@ impl PipelineBuilder {
                     Ok(Box::new(SortPartialTransform::try_create(
                         plan.schema(),
                         plan.order_by.clone(),
-                        limit,
+                        limit
                     )?))
                 })?;
 
@@ -150,7 +150,7 @@ impl PipelineBuilder {
                     Ok(Box::new(SortMergeTransform::try_create(
                         plan.schema(),
                         plan.order_by.clone(),
-                        limit,
+                        limit
                     )?))
                 })?;
 
@@ -165,7 +165,7 @@ impl PipelineBuilder {
                         Ok(Box::new(SortMergeTransform::try_create(
                             plan.schema(),
                             plan.order_by.clone(),
-                            limit,
+                            limit
                         )?))
                     })?;
                 }
@@ -195,7 +195,7 @@ impl PipelineBuilder {
                     let source = SourceTransform::try_create(
                         self.ctx.clone(),
                         plan.db.as_str(),
-                        plan.table.as_str(),
+                        plan.table.as_str()
                     )?;
                     pipeline.add_source(Arc::new(source))?;
                 }

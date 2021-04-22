@@ -11,7 +11,7 @@ use common_arrow::arrow_flight::Action;
 use common_datavalues::DataSchemaRef;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
-use common_planners::PlanNode;
+use common_planners::ScanPlan;
 use prost::Message;
 use tonic::Request;
 
@@ -19,42 +19,40 @@ use crate::protobuf::FlightStoreRequest;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ReadPlanAction {
-    pub push_down_plan: PlanNode,
+    pub scan: ScanPlan
 }
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct ReadPlanActionResult {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CreateDatabaseAction {
-    pub plan: CreateDatabasePlan,
+    pub plan: CreateDatabasePlan
 }
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseActionResult {
-    pub database_id: i64,
+    pub database_id: i64
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CreateTableAction {
-    pub plan: CreateTablePlan,
+    pub plan: CreateTablePlan
 }
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateTableActionResult {
-    pub table_id: i64,
+    pub table_id: i64
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetTableAction {
     pub db: String,
-    pub table: String,
+    pub table: String
 }
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetTableActionResult {
     pub table_id: i64,
     pub db: String,
     pub name: String,
-    pub schema: DataSchemaRef,
-    // TODO options? RemoteTable does not have an option field yet.
-    // pub options: TableOptions,
+    pub schema: DataSchemaRef
 }
 
 // Action wrapper for do_action.
@@ -63,7 +61,7 @@ pub enum StoreDoAction {
     ReadPlan(ReadPlanAction),
     CreateDatabase(CreateDatabaseAction),
     CreateTable(CreateTableAction),
-    GetTable(GetTableAction),
+    GetTable(GetTableAction)
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -71,7 +69,7 @@ pub enum StoreDoActionResult {
     ReadPlan(ReadPlanActionResult),
     CreateDatabase(CreateDatabaseActionResult),
     CreateTable(CreateTableActionResult),
-    GetTable(GetTableActionResult),
+    GetTable(GetTableActionResult)
 }
 
 /// Try convert tonic::Request<Action> to DoActionAction.
@@ -100,13 +98,13 @@ impl TryInto<Request<Action>> for &StoreDoAction {
 
     fn try_into(self) -> Result<Request<Action>, Self::Error> {
         let flight_request = FlightStoreRequest {
-            body: serde_json::to_string(&self)?,
+            body: serde_json::to_string(&self)?
         };
         let mut buf = vec![];
         flight_request.encode(&mut buf)?;
         let request = tonic::Request::new(Action {
             r#type: "".to_string(),
-            body: buf,
+            body: buf
         });
         Ok(request)
     }

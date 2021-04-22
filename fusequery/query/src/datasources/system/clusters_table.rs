@@ -14,8 +14,8 @@ use common_datavalues::DataType;
 use common_datavalues::StringArray;
 use common_datavalues::UInt32Array;
 use common_planners::Partition;
-use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
+use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -24,7 +24,7 @@ use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ClustersTable {
-    schema: DataSchemaRef,
+    schema: DataSchemaRef
 }
 
 impl ClustersTable {
@@ -34,7 +34,7 @@ impl ClustersTable {
                 DataField::new("name", DataType::Utf8, false),
                 DataField::new("address", DataType::Utf8, false),
                 DataField::new("cpus", DataType::Int32, false),
-            ])),
+            ]))
         }
     }
 }
@@ -57,21 +57,17 @@ impl ITable for ClustersTable {
         Ok(self.schema.clone())
     }
 
-    fn read_plan(
-        &self,
-        _ctx: FuseQueryContextRef,
-        _push_down_plan: PlanNode,
-    ) -> Result<ReadDataSourcePlan> {
+    fn read_plan(&self, _ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0,
+                version: 0
             }],
             statistics: Statistics::default(),
-            description: "(Read from system.clusters table)".to_string(),
+            description: "(Read from system.clusters table)".to_string()
         })
     }
 
@@ -80,18 +76,15 @@ impl ITable for ClustersTable {
         let names: Vec<&str> = nodes.iter().map(|x| x.name.as_str()).collect();
         let addresses: Vec<&str> = nodes.iter().map(|x| x.address.as_str()).collect();
         let cpus: Vec<u32> = nodes.iter().map(|x| x.cpus as u32).collect();
-        let block = DataBlock::create(
-            self.schema.clone(),
-            vec![
-                Arc::new(StringArray::from(names)),
-                Arc::new(StringArray::from(addresses)),
-                Arc::new(UInt32Array::from(cpus)),
-            ],
-        );
+        let block = DataBlock::create(self.schema.clone(), vec![
+            Arc::new(StringArray::from(names)),
+            Arc::new(StringArray::from(addresses)),
+            Arc::new(UInt32Array::from(cpus)),
+        ]);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block],
+            vec![block]
         )))
     }
 }

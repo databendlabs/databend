@@ -9,14 +9,15 @@ use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
 use common_datavalues::DataSchemaRef;
-use common_planners::Partition;
-use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
+use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_planners::TableOptions;
-use common_streams::CsvStream;
 use common_streams::SendableDataBlockStream;
 
+use crate::datasources::local::CsvTableStream;
+use crate::datasources::util::count_lines;
+use crate::datasources::util::generate_parts;
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
@@ -25,6 +26,7 @@ pub struct CsvTable {
     name: String,
     schema: DataSchemaRef,
     file: String,
+    has_header: bool
 }
 
 impl CsvTable {
@@ -32,21 +34,23 @@ impl CsvTable {
         db: String,
         name: String,
         schema: DataSchemaRef,
-        options: TableOptions,
+        options: TableOptions
     ) -> Result<Box<dyn ITable>> {
-        let file = options.get("location");
-        return match file {
-            Some(file) => {
-                let table = CsvTable {
-                    db,
-                    name,
-                    schema,
-                    file: file.trim_matches(|s| s == '\'' || s == '"').to_string(),
-                };
-                Ok(Box::new(table))
+        let has_header = options.get("has_header").is_some();
+        let file = match options.get("location") {
+            None => {
+                bail!("CSV Engine must contains file location options")
             }
-            _ => bail!("CSV Engine must contains file location options"),
+            Some(v) => v.trim_matches(|s| s == '\'' || s == '"').to_string()
         };
+
+        Ok(Box::new(Self {
+            db,
+            name,
+            schema,
+            file,
+            has_header
+        }))
     }
 }
 
@@ -68,35 +72,32 @@ impl ITable for CsvTable {
         Ok(self.schema.clone())
     }
 
-    fn read_plan(
-        &self,
-        _ctx: FuseQueryContextRef,
-        _push_down_plan: PlanNode,
-    ) -> Result<ReadDataSourcePlan> {
+    fn read_plan(&self, ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
+        let start_line: usize = if self.has_header { 1 } else { 0 };
+        let file = &self.file;
+        let lines_count = count_lines(
+            File::open(file.clone()).with_context(|| format!("Cannot find file:{}", file))?
+        )?;
+
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
-            partitions: vec![Partition {
-                name: "".to_string(),
-                version: 0,
-            }],
+            partitions: generate_parts(
+                start_line as u64,
+                ctx.get_max_threads()?,
+                lines_count as u64
+            ),
             statistics: Statistics::default(),
-            description: format!("(Read from CSV Engine table  {}.{})", self.db, self.name),
+            description: format!("(Read from CSV Engine table  {}.{})", self.db, self.name)
         })
     }
 
-    async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
-        let current_dir = std::env::current_dir()?;
-        let reader = File::open(self.file.clone()).with_context(|| {
-            format!(
-                "Failed to read file:{}, current dir: {:?}",
-                self.file, current_dir
-            )
-        })?;
-        Ok(Box::pin(CsvStream::try_create(
+    async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
+        Ok(Box::pin(CsvTableStream::try_create(
+            ctx,
             self.schema.clone(),
-            reader,
+            self.file.clone()
         )?))
     }
 }

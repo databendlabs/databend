@@ -18,7 +18,7 @@ use futures::stream::Stream;
 use futures::StreamExt;
 
 pub struct ClickHouseStream {
-    input: SendableDataBlockStream,
+    input: SendableDataBlockStream
 }
 
 impl ClickHouseStream {
@@ -98,7 +98,7 @@ impl ClickHouseStream {
                     result = result.column(name, data);
                 }
 
-                _ => bail!("Unsupported column type:{:?}", column.data_type()),
+                _ => bail!("Unsupported column type:{:?}", column.data_type())
             }
         }
         Ok(result)
@@ -112,15 +112,13 @@ impl Stream for ClickHouseStream {
         self.input.poll_next_unpin(ctx).map(|x| match x {
             Some(Ok(v)) => Some(self.convert_block(v)),
             Some(Err(e)) => Some(Err(e)),
-            _other => None,
+            _other => None
         })
     }
 }
 
 fn build_primitive_column<T>(values: &DataArrayRef) -> Result<Vec<Option<T::Native>>>
-where
-    T: ArrowPrimitiveType,
-{
+where T: ArrowPrimitiveType {
     let values = as_primitive_array::<T>(values);
 
     Ok(match values.null_count() {
@@ -136,7 +134,7 @@ where
                     Some(values.value(i))
                 }
             })
-            .collect::<Vec<Option<T::Native>>>(),
+            .collect::<Vec<Option<T::Native>>>()
     })
 }
 
@@ -156,7 +154,7 @@ fn build_boolean_column(values: &DataArrayRef) -> Result<Vec<Option<u8>>> {
                     Some(values.value(i) as u8)
                 }
             })
-            .collect::<Vec<Option<u8>>>(),
+            .collect::<Vec<Option<u8>>>()
     })
 }
 
@@ -175,6 +173,6 @@ fn build_string_column(values: &DataArrayRef) -> Result<Vec<Option<&str>>> {
                     Some(values.value(i))
                 }
             })
-            .collect::<Vec<Option<&str>>>(),
+            .collect::<Vec<Option<&str>>>()
     })
 }

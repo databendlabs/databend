@@ -76,7 +76,7 @@ pub enum DataValue {
 
     // Container struct.
     List(Option<Vec<DataValue>>, DataType),
-    Struct(Vec<DataValue>),
+    Struct(Vec<DataValue>)
 }
 
 pub type DataValueRef = Box<DataValue>;
@@ -180,39 +180,39 @@ impl DataValue {
             DataValue::Binary(v) => Arc::new(BinaryArray::from(vec![v.as_deref(); size])),
             DataValue::Date32(e) => match e {
                 Some(value) => Arc::new(Date32Array::from_value(*value, size)),
-                None => new_null_array(&DataType::Date32, size),
+                None => new_null_array(&DataType::Date32, size)
             },
             DataValue::Date64(e) => match e {
                 Some(value) => Arc::new(Date64Array::from_value(*value, size)),
-                None => new_null_array(&DataType::Date64, size),
+                None => new_null_array(&DataType::Date64, size)
             },
             DataValue::TimestampSecond(e) => match e {
                 Some(value) => Arc::new(TimestampSecondArray::from_iter_values(
-                    repeat(*value).take(size),
+                    repeat(*value).take(size)
                 )),
-                None => new_null_array(&DataType::Timestamp(TimeUnit::Second, None), size),
+                None => new_null_array(&DataType::Timestamp(TimeUnit::Second, None), size)
             },
             DataValue::TimestampMillisecond(e) => match e {
                 Some(value) => Arc::new(TimestampMillisecondArray::from_iter_values(
-                    repeat(*value).take(size),
+                    repeat(*value).take(size)
                 )),
-                None => new_null_array(&DataType::Timestamp(TimeUnit::Millisecond, None), size),
+                None => new_null_array(&DataType::Timestamp(TimeUnit::Millisecond, None), size)
             },
             DataValue::TimestampMicrosecond(e) => match e {
                 Some(value) => Arc::new(TimestampMicrosecondArray::from_value(*value, size)),
-                None => new_null_array(&DataType::Timestamp(TimeUnit::Microsecond, None), size),
+                None => new_null_array(&DataType::Timestamp(TimeUnit::Microsecond, None), size)
             },
             DataValue::TimestampNanosecond(e) => match e {
                 Some(value) => Arc::new(TimestampNanosecondArray::from_value(*value, size)),
-                None => new_null_array(&DataType::Timestamp(TimeUnit::Nanosecond, None), size),
+                None => new_null_array(&DataType::Timestamp(TimeUnit::Nanosecond, None), size)
             },
             DataValue::IntervalDayTime(e) => match e {
                 Some(value) => Arc::new(IntervalDayTimeArray::from_value(*value, size)),
-                None => new_null_array(&DataType::Interval(IntervalUnit::DayTime), size),
+                None => new_null_array(&DataType::Interval(IntervalUnit::DayTime), size)
             },
             DataValue::IntervalYearMonth(e) => match e {
                 Some(value) => Arc::new(IntervalYearMonthArray::from_value(*value, size)),
-                None => new_null_array(&DataType::Interval(IntervalUnit::YearMonth), size),
+                None => new_null_array(&DataType::Interval(IntervalUnit::YearMonth), size)
             },
             DataValue::List(values, data_type) => Arc::new(match data_type {
                 DataType::Int8 => build_list!(Int8Builder, Int8, values, size),
@@ -226,7 +226,7 @@ impl DataValue {
                 DataType::Float32 => build_list!(Float32Builder, Float32, values, size),
                 DataType::Float64 => build_list!(Float64Builder, Float64, values, size),
                 DataType::Utf8 => build_list!(StringBuilder, Utf8, values, size),
-                other => bail!("Unexpected type:{} for DataValue List", other),
+                other => bail!("Unexpected type:{} for DataValue List", other)
             }),
             DataValue::Struct(v) => {
                 let mut array = vec![];
@@ -236,9 +236,9 @@ impl DataValue {
                         DataField::new(
                             format!("item_{}", i).as_str(),
                             val_array.data_type().clone(),
-                            false,
+                            false
                         ),
-                        val_array as DataArrayRef,
+                        val_array as DataArrayRef
                     ));
                 }
                 Arc::new(StructArray::from(array))
@@ -340,7 +340,7 @@ impl fmt::Display for DataValue {
                         .join(",")
                 )
             }
-            DataValue::Struct(v) => write!(f, "{:?}", v),
+            DataValue::Struct(v) => write!(f, "{:?}", v)
         }
     }
 }
@@ -382,7 +382,7 @@ impl fmt::Debug for DataValue {
                 write!(f, "TimestampNanosecond({})", self)
             }
             DataValue::List(_, _) => write!(f, "[{}]", self),
-            DataValue::Struct(v) => write!(f, "{:?}", v),
+            DataValue::Struct(v) => write!(f, "{:?}", v)
         }
     }
 }

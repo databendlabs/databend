@@ -12,7 +12,7 @@ async fn test_tables_table() -> anyhow::Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
     let table = TablesTable::create();
-    table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
+    table.read_plan(ctx.clone(), &ScanPlan::empty())?;
 
     let stream = table.read(ctx).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -24,6 +24,7 @@ async fn test_tables_table() -> anyhow::Result<()> {
         "| database | name       | engine          |",
         "+----------+------------+-----------------+",
         "| system   | clusters   | SystemClusters  |",
+        "| system   | databases  | SystemDatabases |",
         "| system   | functions  | SystemFunctions |",
         "| system   | numbers    | SystemNumbers   |",
         "| system   | numbers_mt | SystemNumbersMt |",

@@ -9,6 +9,6 @@ pub fn sort(name: &str, asc: bool, nulls_first: bool) -> ExpressionPlan {
     ExpressionPlan::Sort {
         expr: Box::new(col(name)),
         asc,
-        nulls_first,
+        nulls_first
     }
 }

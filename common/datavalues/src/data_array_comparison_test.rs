@@ -16,7 +16,7 @@ fn test_array_comparison() {
         args: Vec<Vec<DataArrayRef>>,
         expect: Vec<DataArrayRef>,
         error: Vec<&'static str>,
-        op: DataValueComparisonOperator,
+        op: DataValueComparisonOperator
     }
 
     let tests = vec![
@@ -47,7 +47,7 @@ fn test_array_comparison() {
                 Arc::new(BooleanArray::from(vec![false, false, true, false])),
                 Arc::new(BooleanArray::from(vec![true, true, true, true])),
             ],
-            error: vec![""],
+            error: vec![""]
         },
         ArrayTest {
             name: "lt-passed",
@@ -59,7 +59,7 @@ fn test_array_comparison() {
             expect: vec![Arc::new(BooleanArray::from(vec![
                 false, false, true, false,
             ]))],
-            error: vec![""],
+            error: vec![""]
         },
         ArrayTest {
             name: "lt-eq-passed",
@@ -69,7 +69,7 @@ fn test_array_comparison() {
             ]],
             op: DataValueComparisonOperator::LtEq,
             expect: vec![Arc::new(BooleanArray::from(vec![true, true, true, false]))],
-            error: vec![""],
+            error: vec![""]
         },
         ArrayTest {
             name: "gt-passed",
@@ -81,7 +81,7 @@ fn test_array_comparison() {
             expect: vec![Arc::new(BooleanArray::from(vec![
                 false, false, false, true,
             ]))],
-            error: vec![""],
+            error: vec![""]
         },
         ArrayTest {
             name: "gt-eq-passed",
@@ -91,7 +91,7 @@ fn test_array_comparison() {
             ]],
             op: DataValueComparisonOperator::GtEq,
             expect: vec![Arc::new(BooleanArray::from(vec![true, true, false, true]))],
-            error: vec![""],
+            error: vec![""]
         },
         ArrayTest {
             name: "not-eq-passed",
@@ -101,7 +101,7 @@ fn test_array_comparison() {
             ]],
             op: DataValueComparisonOperator::NotEq,
             expect: vec![Arc::new(BooleanArray::from(vec![false, false, true, true]))],
-            error: vec![""],
+            error: vec![""]
         },
     ];
 
@@ -110,11 +110,11 @@ fn test_array_comparison() {
             let result = data_array_comparison_op(
                 t.op.clone(),
                 &DataColumnarValue::Array(args[0].clone()),
-                &DataColumnarValue::Array(args[1].clone()),
+                &DataColumnarValue::Array(args[1].clone())
             );
             match result {
                 Ok(v) => assert_eq!(v.as_ref(), t.expect[i].as_ref()),
-                Err(e) => assert_eq!(t.error[i], e.to_string()),
+                Err(e) => assert_eq!(t.error[i], e.to_string())
             }
         }
     }
@@ -133,7 +133,7 @@ fn test_array_scalar_comparison() {
         scalar: DataValue,
         expect: DataArrayRef,
         error: &'static str,
-        op: DataValueComparisonOperator,
+        op: DataValueComparisonOperator
     }
 
     let tests = vec![
@@ -143,7 +143,7 @@ fn test_array_scalar_comparison() {
             scalar: DataValue::Int8(Some(3)),
             op: DataValueComparisonOperator::Eq,
             expect: Arc::new(BooleanArray::from(vec![false, true, false, false])),
-            error: "",
+            error: ""
         },
         ArrayTest {
             name: "eq-different-type-passed",
@@ -151,7 +151,7 @@ fn test_array_scalar_comparison() {
             scalar: DataValue::Int32(Some(3)),
             op: DataValueComparisonOperator::Eq,
             expect: Arc::new(BooleanArray::from(vec![false, true, false, false])),
-            error: "",
+            error: ""
         },
         ArrayTest {
             name: "lt-passed",
@@ -159,7 +159,7 @@ fn test_array_scalar_comparison() {
             scalar: DataValue::Int8(Some(3)),
             op: DataValueComparisonOperator::Lt,
             expect: Arc::new(BooleanArray::from(vec![false, false, true, true])),
-            error: "",
+            error: ""
         },
         ArrayTest {
             name: "lt-eq-passed",
@@ -167,7 +167,7 @@ fn test_array_scalar_comparison() {
             scalar: DataValue::Int8(Some(3)),
             op: DataValueComparisonOperator::LtEq,
             expect: Arc::new(BooleanArray::from(vec![false, true, true, true])),
-            error: "",
+            error: ""
         },
         ArrayTest {
             name: "gt-passed",
@@ -175,7 +175,7 @@ fn test_array_scalar_comparison() {
             scalar: DataValue::Int8(Some(3)),
             op: DataValueComparisonOperator::Gt,
             expect: Arc::new(BooleanArray::from(vec![true, false, false, false])),
-            error: "",
+            error: ""
         },
         ArrayTest {
             name: "gt-eq-passed",
@@ -183,7 +183,7 @@ fn test_array_scalar_comparison() {
             scalar: DataValue::Int8(Some(3)),
             op: DataValueComparisonOperator::GtEq,
             expect: Arc::new(BooleanArray::from(vec![true, true, false, false])),
-            error: "",
+            error: ""
         },
     ];
 
@@ -191,11 +191,11 @@ fn test_array_scalar_comparison() {
         let result = data_array_comparison_op(
             t.op.clone(),
             &DataColumnarValue::Array(t.array),
-            &DataColumnarValue::Scalar(t.scalar),
+            &DataColumnarValue::Scalar(t.scalar)
         );
         match result {
             Ok(v) => assert_eq!(v.as_ref(), t.expect.as_ref()),
-            Err(e) => assert_eq!(t.error, e.to_string()),
+            Err(e) => assert_eq!(t.error, e.to_string())
         }
     }
 }
@@ -213,7 +213,7 @@ fn test_scalar_array_comparison() {
         scalar: DataValue,
         expect: DataArrayRef,
         error: &'static str,
-        op: DataValueComparisonOperator,
+        op: DataValueComparisonOperator
     }
 
     let tests = vec![
@@ -223,7 +223,7 @@ fn test_scalar_array_comparison() {
             scalar: DataValue::Int8(Some(3)),
             op: DataValueComparisonOperator::Eq,
             expect: Arc::new(BooleanArray::from(vec![false, true, false, false])),
-            error: "",
+            error: ""
         },
         ArrayTest {
             name: "eq-different-type-passed",
@@ -231,7 +231,7 @@ fn test_scalar_array_comparison() {
             scalar: DataValue::Int32(Some(3)),
             op: DataValueComparisonOperator::Eq,
             expect: Arc::new(BooleanArray::from(vec![false, true, false, false])),
-            error: "",
+            error: ""
         },
         ArrayTest {
             name: "lt-passed",
@@ -239,7 +239,7 @@ fn test_scalar_array_comparison() {
             scalar: DataValue::Int8(Some(3)),
             op: DataValueComparisonOperator::Lt,
             expect: Arc::new(BooleanArray::from(vec![true, false, false, false])),
-            error: "",
+            error: ""
         },
         ArrayTest {
             name: "lt-eq-passed",
@@ -247,7 +247,7 @@ fn test_scalar_array_comparison() {
             scalar: DataValue::Int8(Some(3)),
             op: DataValueComparisonOperator::LtEq,
             expect: Arc::new(BooleanArray::from(vec![true, true, false, false])),
-            error: "",
+            error: ""
         },
         ArrayTest {
             name: "gt-passed",
@@ -255,7 +255,7 @@ fn test_scalar_array_comparison() {
             scalar: DataValue::Int8(Some(3)),
             op: DataValueComparisonOperator::Gt,
             expect: Arc::new(BooleanArray::from(vec![false, false, true, true])),
-            error: "",
+            error: ""
         },
         ArrayTest {
             name: "gt-eq-passed",
@@ -263,7 +263,7 @@ fn test_scalar_array_comparison() {
             scalar: DataValue::Int8(Some(3)),
             op: DataValueComparisonOperator::GtEq,
             expect: Arc::new(BooleanArray::from(vec![false, true, true, true])),
-            error: "",
+            error: ""
         },
     ];
 
@@ -271,11 +271,11 @@ fn test_scalar_array_comparison() {
         let result = data_array_comparison_op(
             t.op.clone(),
             &DataColumnarValue::Scalar(t.scalar),
-            &DataColumnarValue::Array(t.array),
+            &DataColumnarValue::Array(t.array)
         );
         match result {
             Ok(v) => assert_eq!(v.as_ref(), t.expect.as_ref()),
-            Err(e) => assert_eq!(t.error, e.to_string()),
+            Err(e) => assert_eq!(t.error, e.to_string())
         }
     }
 }

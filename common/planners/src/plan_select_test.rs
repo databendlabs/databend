@@ -14,13 +14,13 @@ fn test_select_wildcard_plan() -> anyhow::Result<()> {
     let schema = Arc::new(DataSchema::new(vec![DataField::new(
         "a",
         DataType::Utf8,
-        false,
+        false
     )]));
     let plan = PlanBuilder::create(schema)
         .project(vec![col("a")])?
         .build()?;
     let select = PlanNode::Select(SelectPlan {
-        input: Arc::new(plan),
+        input: Arc::new(plan)
     });
     let expect = "Projection: a:Utf8";
     let actual = format!("{:?}", select);

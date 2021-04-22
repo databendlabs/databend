@@ -14,7 +14,7 @@ fn test_data_value_arithmetic() {
         args: &'a Vec<Vec<DataValue>>,
         expect: Vec<DataValue>,
         error: Vec<&'static str>,
-        op: DataValueArithmeticOperator,
+        op: DataValueArithmeticOperator
     }
 
     let args = vec![
@@ -254,7 +254,7 @@ fn test_data_value_arithmetic() {
                 DataValue::UInt64(Some(5)),
                 DataValue::UInt64(Some(5)),
             ],
-            error: vec!["DataValue Error: Unsupported data value operator: Utf8 plus Int8"],
+            error: vec!["DataValue Error: Unsupported data value operator: Utf8 plus Int8"]
         },
         ScalarTest {
             name: "sub-passed",
@@ -374,7 +374,7 @@ fn test_data_value_arithmetic() {
                 DataValue::UInt64(Some(1)),
                 DataValue::UInt64(Some(1)),
             ],
-            error: vec!["DataValue Error: Unsupported data value operator: Utf8 minus Int8"],
+            error: vec!["DataValue Error: Unsupported data value operator: Utf8 minus Int8"]
         },
         ScalarTest {
             name: "mul-passed",
@@ -494,7 +494,7 @@ fn test_data_value_arithmetic() {
                 DataValue::UInt64(Some(6)),
                 DataValue::UInt64(Some(6)),
             ],
-            error: vec!["DataValue Error: Unsupported data value operator: Utf8 multiply Int8"],
+            error: vec!["DataValue Error: Unsupported data value operator: Utf8 multiply Int8"]
         },
         ScalarTest {
             name: "div-passed",
@@ -614,7 +614,7 @@ fn test_data_value_arithmetic() {
                 DataValue::Float64(Some(1.5)),
                 DataValue::Float64(Some(1.5)),
             ],
-            error: vec!["DataValue Error: Unsupported data value operator: Utf8 divide Int8"],
+            error: vec!["DataValue Error: Unsupported data value operator: Utf8 divide Int8"]
         },
     ];
 
@@ -623,7 +623,7 @@ fn test_data_value_arithmetic() {
             let result = data_value_arithmetic_op(t.op.clone(), args[0].clone(), args[1].clone());
             match result {
                 Ok(v) => assert_eq!(v, t.expect[i]),
-                Err(e) => assert_eq!(t.error[i], e.to_string()),
+                Err(e) => assert_eq!(t.error[i], e.to_string())
             }
         }
     }

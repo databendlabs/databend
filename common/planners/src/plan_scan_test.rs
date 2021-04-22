@@ -16,16 +16,17 @@ fn test_scan_plan() -> anyhow::Result<()> {
         table_schema: Arc::new(DataSchema::new(vec![DataField::new(
             "a",
             DataType::Utf8,
-            false,
+            false
         )])),
         table_args: None,
         projection: None,
         projected_schema: Arc::new(DataSchema::new(vec![DataField::new(
             "a",
             DataType::Utf8,
-            false,
+            false
         )])),
-        limit: None,
+        filters: vec![],
+        limit: None
     });
     let _ = scan.schema();
     let expect = "";

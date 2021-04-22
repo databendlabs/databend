@@ -11,8 +11,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_functions::IFunction;
 use common_planners::ExpressionPlan;
-use common_streams::ExpressionStream;
 use common_streams::SendableDataBlockStream;
+use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
@@ -25,7 +25,7 @@ use crate::pipelines::processors::IProcessor;
 pub struct ExpressionTransform {
     funcs: Vec<Box<dyn IFunction>>,
     schema: DataSchemaRef,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn IProcessor>
 }
 
 impl ExpressionTransform {
@@ -45,20 +45,8 @@ impl ExpressionTransform {
         Ok(ExpressionTransform {
             funcs,
             schema,
-            input: Arc::new(EmptyProcessor::create()),
+            input: Arc::new(EmptyProcessor::create())
         })
-    }
-
-    pub fn expression_executor(
-        projected_schema: &DataSchemaRef,
-        block: DataBlock,
-        funcs: Vec<Box<dyn IFunction>>,
-    ) -> Result<DataBlock> {
-        let mut column_values = Vec::with_capacity(funcs.len());
-        for func in funcs {
-            column_values.push(func.eval(&block)?.to_array(block.num_rows())?);
-        }
-        Ok(DataBlock::create(projected_schema.clone(), column_values))
     }
 }
 
@@ -82,11 +70,22 @@ impl IProcessor for ExpressionTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        Ok(Box::pin(ExpressionStream::try_create(
-            self.input.execute().await?,
-            self.schema.clone(),
-            self.funcs.clone(),
-            ExpressionTransform::expression_executor,
-        )?))
+        let projected_schema = self.schema.clone();
+        let funcs_clone = self.funcs.clone();
+
+        let input_stream = self.input.execute().await?;
+        let stream = input_stream.filter_map(move |v| {
+            let block = v.ok()?;
+            let rows = block.num_rows();
+
+            let mut column_values = Vec::with_capacity(funcs_clone.len());
+            for func in &funcs_clone {
+                column_values.push(func.eval(&block).ok()?.to_array(rows).ok()?);
+            }
+            let block = DataBlock::create(projected_schema.clone(), column_values);
+            Some(Ok(block))
+        });
+
+        Ok(Box::pin(stream))
     }
 }

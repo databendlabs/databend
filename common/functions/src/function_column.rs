@@ -17,14 +17,14 @@ use crate::IFunction;
 #[derive(Clone, Debug)]
 pub struct ColumnFunction {
     value: String,
-    saved: Option<DataValue>,
+    saved: Option<DataValue>
 }
 
 impl ColumnFunction {
     pub fn try_create(value: &str) -> Result<Box<dyn IFunction>> {
         Ok(Box::new(ColumnFunction {
             value: value.to_string(),
-            saved: None,
+            saved: None
         }))
     }
 }
@@ -55,7 +55,7 @@ impl IFunction for ColumnFunction {
 
     fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         Ok(DataColumnarValue::Array(
-            block.column_by_name(self.value.as_str())?.clone(),
+            block.column_by_name(self.value.as_str())?.clone()
         ))
     }
 

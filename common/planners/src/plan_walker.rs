@@ -9,14 +9,14 @@ use crate::PlanNode;
 #[derive(PartialEq)]
 enum WalkOrder {
     PreOrder,
-    PostOrder,
+    PostOrder
 }
 
 impl PlanNode {
     fn walk_base(
         order: WalkOrder,
         node: &PlanNode,
-        mut visitor: impl FnMut(&PlanNode) -> Result<bool>,
+        mut visitor: impl FnMut(&PlanNode) -> Result<bool>
     ) -> Result<()> {
         let mut nodes = vec![];
         let mut tmp = node.clone();

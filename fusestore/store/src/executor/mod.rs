@@ -5,3 +5,6 @@
 mod action_handler;
 
 pub use action_handler::ActionHandler;
+
+#[cfg(test)]
+mod action_handler_test;

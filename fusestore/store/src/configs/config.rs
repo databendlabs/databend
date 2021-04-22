@@ -24,7 +24,7 @@ pub struct Config {
         env = "FUSE_QUERY_RPC_API_ADDRESS",
         default_value = "127.0.0.1:9191"
     )]
-    pub rpc_api_address: String,
+    pub rpc_api_address: String
 }
 
 impl Config {
@@ -34,7 +34,7 @@ impl Config {
             version: include_str!(concat!(env!("OUT_DIR"), "/version-info.txt")).to_string(),
             log_level: "debug".to_string(),
             metric_api_address: "127.0.0.1:7171".to_string(),
-            rpc_api_address: "127.0.0.1:9191".to_string(),
+            rpc_api_address: "127.0.0.1:9191".to_string()
         }
     }
 

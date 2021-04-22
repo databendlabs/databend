@@ -22,9 +22,11 @@ use common_flights::StoreDoActionResult;
 use log::error;
 #[allow(unused_imports)]
 use log::info;
+use tokio::sync::mpsc::Sender;
 use tonic::Status;
 
 use crate::engine::MemEngine;
+use crate::fs::IFileSystem;
 use crate::protobuf::CmdCreateDatabase;
 use crate::protobuf::CmdCreateTable;
 use crate::protobuf::Db;
@@ -35,14 +37,39 @@ pub struct ActionHandler {
     // catalog: Box<dyn Catalog>,
     // tbl_spec: TableSpec,
     // db_spec: DatabaseSpec,
+    // TODO delegate table/database RW to fs
     meta: Arc<Mutex<MemEngine>>,
+    fs: Arc<dyn IFileSystem>
 }
 
 impl ActionHandler {
-    pub fn create() -> Self {
+    pub fn create(fs: Arc<dyn IFileSystem>) -> Self {
         ActionHandler {
             meta: MemEngine::create(),
+            fs
         }
+    }
+
+    /// Handle pull-file reqeust, which is used internally for replicating data copies.
+    /// In FuseStore impl there is no internal file id etc, thus replication use the same `key` in communacation with FuseQuery as in internal replication.
+    pub async fn do_pull_file(
+        &self,
+        key: String,
+        tx: Sender<Result<FlightData, tonic::Status>>
+    ) -> Result<(), Status> {
+        // TODO: stream read if the file is too large.
+        let buf = self
+            .fs
+            .read_all(key)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        tx.send(Ok(FlightData {
+            data_body: buf,
+            ..Default::default()
+        }))
+        .await
+        .map_err(|e| Status::internal(format!("{:?}", e)))
     }
 
     pub async fn execute(&self, action: StoreDoAction) -> Result<StoreDoActionResult, Status> {
@@ -50,7 +77,7 @@ impl ActionHandler {
             StoreDoAction::ReadPlan(_) => Err(Status::internal("Store read plan unimplemented")),
             StoreDoAction::CreateDatabase(a) => self.create_db(a).await,
             StoreDoAction::CreateTable(a) => self.create_table(a).await,
-            StoreDoAction::GetTable(a) => self.get_table(a).await,
+            StoreDoAction::GetTable(a) => self.get_table(a).await
         }
     }
 
@@ -65,8 +92,8 @@ impl ActionHandler {
                 db_id: -1,
                 ver: -1,
                 table_name_to_id: HashMap::new(),
-                tables: HashMap::new(),
-            }),
+                tables: HashMap::new()
+            })
         };
 
         let database_id = meta
@@ -74,7 +101,7 @@ impl ActionHandler {
             .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(StoreDoActionResult::CreateDatabase(
-            CreateDatabaseActionResult { database_id },
+            CreateDatabaseActionResult { database_id }
         ))
     }
 
@@ -99,19 +126,19 @@ impl ActionHandler {
             options: plan.options,
 
             // TODO
-            placement_policy: vec![],
+            placement_policy: vec![]
         };
 
         let cmd = CmdCreateTable {
             db_name,
             table_name,
-            table: Some(table),
+            table: Some(table)
         };
 
         let table_id = meta.create_table(cmd, plan.if_not_exists)?;
 
         Ok(StoreDoActionResult::CreateTable(CreateTableActionResult {
-            table_id,
+            table_id
         }))
     }
 
@@ -135,7 +162,7 @@ impl ActionHandler {
             table_id: table.table_id,
             db: db_name,
             name: table_name,
-            schema: Arc::new(schema),
+            schema: Arc::new(schema)
         });
 
         Ok(rst)

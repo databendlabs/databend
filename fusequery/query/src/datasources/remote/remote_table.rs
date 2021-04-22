@@ -7,8 +7,8 @@ use std::any::Any;
 use anyhow::bail;
 use anyhow::Result;
 use common_datavalues::DataSchemaRef;
-use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
+use common_planners::ScanPlan;
 use common_planners::TableOptions;
 use common_streams::SendableDataBlockStream;
 
@@ -19,7 +19,7 @@ use crate::sessions::FuseQueryContextRef;
 pub struct RemoteTable {
     pub(crate) db: String,
     name: String,
-    schema: DataSchemaRef,
+    schema: DataSchemaRef
 }
 
 impl RemoteTable {
@@ -28,7 +28,7 @@ impl RemoteTable {
         db: String,
         name: String,
         schema: DataSchemaRef,
-        _options: TableOptions,
+        _options: TableOptions
     ) -> Result<Box<dyn ITable>> {
         let table = Self { db, name, schema };
         Ok(Box::new(table))
@@ -53,11 +53,7 @@ impl ITable for RemoteTable {
         Ok(self.schema.clone())
     }
 
-    fn read_plan(
-        &self,
-        _ctx: FuseQueryContextRef,
-        _push_down_plan: PlanNode,
-    ) -> Result<ReadDataSourcePlan> {
+    fn read_plan(&self, _ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
         bail!("RemoteTable read_plan not yet implemented")
     }
 

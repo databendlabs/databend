@@ -17,7 +17,7 @@ use crate::datasources::ITableFunction;
 
 pub struct SystemDatabase {
     tables: HashMap<String, Arc<dyn ITable>>,
-    table_functions: HashMap<String, Arc<dyn ITableFunction>>,
+    table_functions: HashMap<String, Arc<dyn ITableFunction>>
 }
 
 impl SystemDatabase {
@@ -31,6 +31,7 @@ impl SystemDatabase {
             Arc::new(system::NumbersTable::create("numbers_mt")),
             Arc::new(system::TablesTable::create()),
             Arc::new(system::ClustersTable::create()),
+            Arc::new(system::DatabasesTable::create()),
         ];
         let mut tables: HashMap<String, Arc<dyn ITable>> = HashMap::default();
         for tbl in table_list.iter() {
@@ -49,7 +50,7 @@ impl SystemDatabase {
 
         SystemDatabase {
             tables,
-            table_functions,
+            table_functions
         }
     }
 }

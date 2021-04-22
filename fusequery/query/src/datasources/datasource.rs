@@ -37,7 +37,7 @@ pub struct DataSource {
     conf: Config,
     databases: RwLock<HashMap<String, Arc<dyn IDatabase>>>,
     table_functions: RwLock<HashMap<String, Arc<dyn ITableFunction>>>,
-    store_client: RwLock<Option<StoreClient>>,
+    store_client: RwLock<Option<StoreClient>>
 }
 
 impl DataSource {
@@ -46,7 +46,7 @@ impl DataSource {
             conf: Config::default(),
             databases: Default::default(),
             table_functions: Default::default(),
-            store_client: RwLock::new(None),
+            store_client: RwLock::new(None)
         };
 
         datasource.register_system_database()?;

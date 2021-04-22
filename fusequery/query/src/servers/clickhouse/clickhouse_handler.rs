@@ -25,7 +25,7 @@ use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 
 struct Session {
-    ctx: FuseQueryContextRef,
+    ctx: FuseQueryContextRef
 }
 
 impl Session {
@@ -37,7 +37,7 @@ impl Session {
         &self,
         query: &str,
         _stage: u64,
-        writer: &mut ResultWriter,
+        writer: &mut ResultWriter
     ) -> Result<()> {
         self.ctx.reset()?;
         let start = Instant::now();
@@ -99,13 +99,13 @@ impl ClickHouseSession for Session {
         &self,
         query: &str,
         stage: u64,
-        writer: &mut ResultWriter,
+        writer: &mut ResultWriter
     ) -> clickhouse_srv::errors::Result<()> {
         match self.execute_fuse_query(query, stage, writer) {
             Err(e) => Err(clickhouse_srv::errors::Error::Other(Cow::from(
-                e.to_string(),
+                e.to_string()
             ))),
-            _ => Ok(()),
+            _ => Ok(())
         }
     }
 
@@ -116,12 +116,33 @@ impl ClickHouseSession for Session {
     fn server_display_name(&self) -> &str {
         "datafuse"
     }
+
+    fn dbms_version_major(&self) -> u64 {
+        2021
+    }
+
+    fn dbms_version_minor(&self) -> u64 {
+        5
+    }
+
+    fn dbms_version_patch(&self) -> u64 {
+        0
+    }
+
+    fn timezone(&self) -> &str {
+        "UTC"
+    }
+
+    // the MIN_SERVER_REVISION for suggestions is 54406
+    fn dbms_tcp_protocol_version(&self) -> u64 {
+        54405
+    }
 }
 
 pub struct ClickHouseHandler {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionRef,
+    session_manager: SessionRef
 }
 
 impl ClickHouseHandler {
@@ -129,7 +150,7 @@ impl ClickHouseHandler {
         Self {
             conf,
             cluster,
-            session_manager,
+            session_manager
         }
     }
 

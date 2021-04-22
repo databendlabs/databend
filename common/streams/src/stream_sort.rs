@@ -16,19 +16,19 @@ use crate::SendableDataBlockStream;
 pub struct SortStream {
     input: SendableDataBlockStream,
     sort_columns_descriptions: Vec<SortColumnDescription>,
-    limit: Option<usize>,
+    limit: Option<usize>
 }
 
 impl SortStream {
     pub fn try_create(
         input: SendableDataBlockStream,
         sort_columns_descriptions: Vec<SortColumnDescription>,
-        limit: Option<usize>,
+        limit: Option<usize>
     ) -> Result<Self> {
         Ok(SortStream {
             input,
             sort_columns_descriptions,
-            limit,
+            limit
         })
     }
 }
@@ -38,15 +38,15 @@ impl Stream for SortStream {
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
-        ctx: &mut Context<'_>,
+        ctx: &mut Context<'_>
     ) -> Poll<Option<Self::Item>> {
         self.input.poll_next_unpin(ctx).map(|x| match x {
             Some(Ok(v)) => Some(DataBlock::sort_block(
                 &v,
                 &self.sort_columns_descriptions,
-                self.limit,
+                self.limit
             )),
-            other => other,
+            other => other
         })
     }
 }

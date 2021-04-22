@@ -16,7 +16,7 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct ToTypeNameFunction {
-    arg: Box<dyn IFunction>,
+    arg: Box<dyn IFunction>
 }
 
 impl ToTypeNameFunction {
@@ -27,7 +27,7 @@ impl ToTypeNameFunction {
         );
 
         Ok(Box::new(ToTypeNameFunction {
-            arg: args[0].clone(),
+            arg: args[0].clone()
         }))
     }
 }

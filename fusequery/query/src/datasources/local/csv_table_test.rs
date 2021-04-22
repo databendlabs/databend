@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
 #[tokio::test]
 async fn test_csv_table() -> anyhow::Result<()> {
     use std::env;
@@ -17,7 +19,7 @@ async fn test_csv_table() -> anyhow::Result<()> {
         env::current_dir()?
             .join("../../tests/data/sample.csv")
             .display()
-            .to_string(),
+            .to_string()
     )]
     .iter()
     .cloned()
@@ -28,9 +30,24 @@ async fn test_csv_table() -> anyhow::Result<()> {
         "default".into(),
         "test_csv".into(),
         DataSchema::new(vec![DataField::new("column1", DataType::UInt64, false)]).into(),
-        options,
+        options
     )?;
-    table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
+
+    let scan_plan = &ScanPlan {
+        schema_name: "".to_string(),
+        table_schema: Arc::new(DataSchema::new(vec![])),
+        table_args: None,
+        projection: None,
+        projected_schema: Arc::new(DataSchema::new(vec![DataField::new(
+            "column1",
+            DataType::UInt64,
+            false
+        )])),
+        filters: vec![],
+        limit: None
+    };
+    let source_plan = table.read_plan(ctx.clone(), &scan_plan)?;
+    ctx.try_set_partitions(source_plan.partitions)?;
 
     let stream = table.read(ctx).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -61,6 +78,7 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
     use common_datavalues::*;
     use common_planners::*;
     use futures::TryStreamExt;
+    use pretty_assertions::assert_eq;
 
     use crate::datasources::local::*;
 
@@ -69,7 +87,7 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
         env::current_dir()?
             .join("../../tests/data/sample.csv")
             .display()
-            .to_string(),
+            .to_string()
     )]
     .iter()
     .cloned()
@@ -86,54 +104,33 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
             DataField::new("column4", DataType::UInt64, false),
         ])
         .into(),
-        options,
+        options
     )?;
-    table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
+    let scan_plan = &ScanPlan {
+        schema_name: "".to_string(),
+        table_schema: Arc::new(DataSchema::new(vec![])),
+        table_args: None,
+        projection: None,
+        projected_schema: Arc::new(DataSchema::new(vec![DataField::new(
+            "column2",
+            DataType::UInt64,
+            false
+        )])),
+        filters: vec![],
+        limit: None
+    };
+    let source_plan = table.read_plan(ctx.clone(), &scan_plan)?;
+    ctx.try_set_partitions(source_plan.partitions)?;
 
     let stream = table.read(ctx).await?;
     let result = stream.try_collect::<Vec<_>>().await;
     assert_eq!(true, result.is_err());
     if let Err(e) = result {
         assert_eq!(
-            "ParseError(\"Error while parsing value \\\'Shanghai\\\' for column 1 at line 1\")",
+            "Parser error: Error while parsing value \'Shanghai\' for column 1 at line 1",
             e.to_string()
         );
     };
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_csv_table_file_not_found_error() -> anyhow::Result<()> {
-    use std::env;
-
-    use common_datavalues::*;
-    use common_planners::*;
-
-    use crate::datasources::local::*;
-
-    let options: TableOptions = [(
-        "location".to_string(),
-        env::current_dir()?
-            .join("../../tests/data/sample-x.csv")
-            .display()
-            .to_string(),
-    )]
-    .iter()
-    .cloned()
-    .collect();
-
-    let ctx = crate::tests::try_create_context()?;
-    let table = CsvTable::try_create(
-        "default".into(),
-        "test_csv".into(),
-        DataSchema::new(vec![DataField::new("column1", DataType::UInt64, false)]).into(),
-        options,
-    )?;
-    table.read_plan(ctx.clone(), PlanBuilder::empty().build()?)?;
-
-    let result = table.read(ctx).await;
-    assert_eq!(true, result.is_err());
 
     Ok(())
 }

@@ -21,7 +21,7 @@ use crate::IFunction;
 pub struct AggregatorSumFunction {
     depth: usize,
     arg: Box<dyn IFunction>,
-    state: DataValue,
+    state: DataValue
 }
 
 impl AggregatorSumFunction {
@@ -32,7 +32,7 @@ impl AggregatorSumFunction {
         Ok(Box::new(AggregatorSumFunction {
             depth: 0,
             arg: args[0].clone(),
-            state: DataValue::Null,
+            state: DataValue::Null
         }))
     }
 }
@@ -67,8 +67,8 @@ impl IFunction for AggregatorSumFunction {
             self.state.clone(),
             datavalues::data_array_aggregate_op(
                 DataValueAggregateOperator::Sum,
-                val.to_array(rows)?,
-            )?,
+                val.to_array(rows)?
+            )?
         )?;
 
         Ok(())
@@ -83,7 +83,7 @@ impl IFunction for AggregatorSumFunction {
         self.state = datavalues::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
-            val,
+            val
         )?;
         Ok(())
     }

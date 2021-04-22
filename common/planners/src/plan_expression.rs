@@ -28,12 +28,12 @@ pub enum ExpressionPlan {
     BinaryExpression {
         left: Box<ExpressionPlan>,
         op: String,
-        right: Box<ExpressionPlan>,
+        right: Box<ExpressionPlan>
     },
     /// Functions with a set of arguments.
     Function {
         op: String,
-        args: Vec<ExpressionPlan>,
+        args: Vec<ExpressionPlan>
     },
 
     /// A sort expression, that can be used to sort values.
@@ -43,7 +43,7 @@ pub enum ExpressionPlan {
         /// The direction of the sort
         asc: bool,
         /// Whether to put Nulls before all other data values
-        nulls_first: bool,
+        nulls_first: bool
     },
     /// All fields(*) in a schema.
     Wildcard,
@@ -53,8 +53,8 @@ pub enum ExpressionPlan {
         /// The expression being cast
         expr: Box<ExpressionPlan>,
         /// The `DataType` the expression will yield
-        data_type: DataType,
-    },
+        data_type: DataType
+    }
 }
 
 impl ExpressionPlan {
@@ -89,8 +89,8 @@ impl ExpressionPlan {
             ExpressionPlan::Wildcard => Ok(ColumnFunction::try_create("*")?),
             ExpressionPlan::Cast { expr, data_type } => Ok(CastFunction::create(
                 expr.to_function_with_depth(depth)?,
-                data_type.clone(),
-            )),
+                data_type.clone()
+            ))
         }
     }
 
@@ -103,7 +103,7 @@ impl ExpressionPlan {
         Ok(DataField::new(
             format!("{}", func).as_str(),
             func.return_type(&input_schema)?,
-            func.nullable(&input_schema)?,
+            func.nullable(&input_schema)?
         ))
     }
 

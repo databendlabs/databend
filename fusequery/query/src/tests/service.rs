@@ -43,7 +43,7 @@ pub async fn try_create_context_with_nodes(nums: usize) -> Result<FuseQueryConte
             cpus: 4,
             priority: 10,
             address: addr.clone(),
-            local: false,
+            local: false
         })?;
     }
     Ok(ctx)
@@ -52,7 +52,7 @@ pub async fn try_create_context_with_nodes(nums: usize) -> Result<FuseQueryConte
 // Start a cluster and return the context who has the cluster info.
 pub async fn try_create_context_with_nodes_and_priority(
     nums: usize,
-    p: &[u8],
+    p: &[u8]
 ) -> Result<FuseQueryContextRef> {
     // p is the priority array of the nodes.
     // Its length of it should be nums.
@@ -65,7 +65,7 @@ pub async fn try_create_context_with_nodes_and_priority(
             cpus: 4,
             priority: p[i],
             address: addr.clone(),
-            local: false,
+            local: false
         })?;
     }
     Ok(ctx)

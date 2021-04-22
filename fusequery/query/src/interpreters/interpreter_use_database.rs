@@ -16,13 +16,13 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct UseDatabaseInterpreter {
     ctx: FuseQueryContextRef,
-    plan: UseDatabasePlan,
+    plan: UseDatabasePlan
 }
 
 impl UseDatabaseInterpreter {
     pub fn try_create(
         ctx: FuseQueryContextRef,
-        plan: UseDatabasePlan,
+        plan: UseDatabasePlan
     ) -> Result<Arc<dyn IInterpreter>> {
         Ok(Arc::new(UseDatabaseInterpreter { ctx, plan }))
     }

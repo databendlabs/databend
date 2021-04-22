@@ -37,21 +37,21 @@ pub struct GroupByPartialTransform {
     group_exprs: Vec<ExpressionPlan>,
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>,
-    groups: GroupFuncTable,
+    groups: GroupFuncTable
 }
 
 impl GroupByPartialTransform {
     pub fn create(
         schema: DataSchemaRef,
         aggr_exprs: Vec<ExpressionPlan>,
-        group_exprs: Vec<ExpressionPlan>,
+        group_exprs: Vec<ExpressionPlan>
     ) -> Self {
         Self {
             aggr_exprs,
             group_exprs,
             schema,
             input: Arc::new(EmptyProcessor::create()),
-            groups: RwLock::new(HashMap::default()),
+            groups: RwLock::new(HashMap::default())
         }
     }
 }
@@ -224,7 +224,7 @@ impl IProcessor for GroupByPartialTransform {
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block],
+            vec![block]
         )))
     }
 }

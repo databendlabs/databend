@@ -21,7 +21,7 @@ fn test_plan_display_indent() -> anyhow::Result<()> {
     let schema = Arc::new(DataSchema::new(vec![DataField::new(
         "a",
         DataType::Int64,
-        false,
+        false
     )]));
 
     let mut options = HashMap::new();
@@ -33,7 +33,7 @@ fn test_plan_display_indent() -> anyhow::Result<()> {
         table: "bar".into(),
         schema,
         engine: TableEngineType::JsonEachRaw,
-        options,
+        options
     });
 
     assert_eq!(

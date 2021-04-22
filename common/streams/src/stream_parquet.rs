@@ -11,7 +11,7 @@ use crossbeam::channel::Receiver;
 use futures::Stream;
 
 pub struct ParquetStream {
-    response_rx: Receiver<Option<Result<DataBlock>>>,
+    response_rx: Receiver<Option<Result<DataBlock>>>
 }
 
 impl ParquetStream {
@@ -27,7 +27,7 @@ impl Stream for ParquetStream {
         match self.response_rx.recv() {
             Ok(block) => Poll::Ready(block),
             // RecvError means receiver has exited and closed the channel
-            Err(_) => Poll::Ready(None),
+            Err(_) => Poll::Ready(None)
         }
     }
 }
