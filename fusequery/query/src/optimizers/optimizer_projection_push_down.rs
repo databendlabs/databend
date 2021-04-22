@@ -58,14 +58,14 @@ fn exprvec_to_column_names(expr: &[ExpressionPlan], accum: &mut HashSet<String>)
 fn expr_to_name(e: &ExpressionPlan) -> Result<String> {
     match e {
         ExpressionPlan::Column(name) => Ok(name.clone()),
-        _ => Err(anyhow::anyhow!("Ignore ExpressionPlan that is not Column.")),
+        _ => Err(anyhow::anyhow!("Ignore ExpressionPlan that is not Column."))
     }
 }
 
 fn get_projected_schema(
     schema: &DataSchema,
     required_columns: &HashSet<String>,
-    has_projection: bool,
+    has_projection: bool
 ) -> Result<DataSchemaRef> {
     // Discard non-existing columns, e.g. when the column derives from aggregation
     let mut projection: Vec<usize> = required_columns
@@ -103,14 +103,14 @@ fn optimize_plan(
     optimizer: &ProjectionPushDownOptimizer,
     plan: &PlanNode,
     required_columns: &HashSet<String>,
-    has_projection: bool,
+    has_projection: bool
 ) -> Result<PlanNode> {
     let mut new_required_columns = required_columns.clone();
     match plan {
         PlanNode::Projection(ProjectionPlan {
             expr,
             schema,
-            input,
+            input
         }) => {
             // projection:
             // remove any expression that is not needed
@@ -141,7 +141,7 @@ fn optimize_plan(
                 Ok(PlanNode::Projection(ProjectionPlan {
                     expr: new_expr,
                     input: Arc::new(new_input),
-                    schema: Arc::new(DataSchema::new(new_fields)),
+                    schema: Arc::new(DataSchema::new(new_fields))
                 }))
             }
         }
@@ -157,7 +157,7 @@ fn optimize_plan(
             aggr_expr,
             group_expr,
             schema,
-            input,
+            input
         }) => {
             // final aggregate:
             // Remove any aggregate expression that is not needed
@@ -184,7 +184,7 @@ fn optimize_plan(
                     .iter()
                     .filter(|x| new_required_columns.contains(x.name()))
                     .cloned()
-                    .collect(),
+                    .collect()
             );
             Ok(PlanNode::AggregatorFinal(AggregatorFinalPlan {
                 aggr_expr: new_aggr_expr,
@@ -194,14 +194,14 @@ fn optimize_plan(
                     optimizer,
                     &input,
                     &new_required_columns,
-                    true,
-                )?),
+                    true
+                )?)
             }))
         }
         PlanNode::AggregatorPartial(AggregatorPartialPlan {
             aggr_expr,
             group_expr,
-            input,
+            input
         }) => {
             // Partial aggregate:
             // Remove any aggregate expression that is not needed
@@ -229,8 +229,8 @@ fn optimize_plan(
                     optimizer,
                     &input,
                     &new_required_columns,
-                    has_projection,
-                )?),
+                    has_projection
+                )?)
             }))
         }
 
@@ -240,7 +240,7 @@ fn optimize_plan(
             schema,
             partitions,
             statistics,
-            description,
+            description
         }) => {
             let projected_schema = get_projected_schema(schema, required_columns, has_projection)?;
 
@@ -250,7 +250,7 @@ fn optimize_plan(
                 schema: projected_schema,
                 partitions: partitions.clone(),
                 statistics: statistics.clone(),
-                description: description.to_string(),
+                description: description.to_string()
             }))
         }
         PlanNode::Empty(_) => Ok(plan.clone()),
@@ -278,5 +278,121 @@ impl IOptimizer for ProjectionPushDownOptimizer {
             .collect::<HashSet<String>>();
         let new_node = optimize_plan(self, plan, &required_columns, false)?;
         Ok(new_node)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::mem::size_of;
+    use std::sync::Arc;
+
+    use common_datavalues::*;
+    use common_planners::*;
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+    use crate::optimizers::*;
+    use crate::sql::*;
+
+    #[test]
+    fn test_projection_push_down_optimizer_1() -> anyhow::Result<()> {
+        let ctx = crate::tests::try_create_context()?;
+
+        let plan = PlanNode::Projection(ProjectionPlan {
+            expr: vec![col("a"), col("b"), col("c")],
+            schema: Arc::new(DataSchema::new(vec![
+                DataField::new("a", DataType::Utf8, false),
+                DataField::new("b", DataType::Utf8, false),
+                DataField::new("c", DataType::Utf8, false),
+            ])),
+            input: Arc::from(PlanBuilder::empty().build()?)
+        });
+
+        let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
+        let optimized = projection_push_down.optimize(&plan)?;
+
+        let expect = "\
+        Projection: a:Utf8, b:Utf8, c:Utf8";
+
+        let actual = format!("{:?}", optimized);
+        assert_eq!(expect, actual);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
+        let ctx = crate::tests::try_create_context()?;
+
+        let total = ctx.get_max_block_size()? as u64;
+        let statistics = Statistics {
+            read_rows: total as usize,
+            read_bytes: ((total) * size_of::<u64>() as u64) as usize
+        };
+        ctx.try_set_statistics(&statistics)?;
+        let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
+            db: "system".to_string(),
+            table: "test".to_string(),
+            schema: Arc::new(DataSchema::new(vec![
+                DataField::new("a", DataType::Utf8, false),
+                DataField::new("b", DataType::Utf8, false),
+                DataField::new("c", DataType::Utf8, false),
+            ])),
+            partitions: Test::generate_partitions(8, total as u64),
+            statistics: statistics.clone(),
+            description: format!(
+                "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
+                "test".to_string(),
+                statistics.read_rows,
+                statistics.read_bytes
+            )
+        });
+
+        let filter_plan = PlanBuilder::from(&source_plan)
+            .filter(col("a").gt(lit(6)).and(col("b").lt_eq(lit(10))))?
+            .build()?;
+
+        let plan = PlanNode::Projection(ProjectionPlan {
+            expr: vec![col("a")],
+            schema: Arc::new(DataSchema::new(vec![DataField::new(
+                "a",
+                DataType::Utf8,
+                false
+            )])),
+            input: Arc::from(filter_plan)
+        });
+
+        let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
+        let optimized = projection_push_down.optimize(&plan)?;
+
+        let expect = "\
+        Projection: a:Utf8\
+        \n  Filter: ((a > 6) and (b <= 10))\
+        \n    ReadDataSource: scan partitions: [8], scan schema: [a:Utf8, b:Utf8], statistics: [read_rows: 10000, read_bytes: 80000]";
+        let actual = format!("{:?}", optimized);
+        assert_eq!(expect, actual);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_projection_push_down_optimizer_3() -> anyhow::Result<()> {
+        let ctx = crate::tests::try_create_context()?;
+
+        let plan = PlanParser::create(ctx.clone()).build_from_sql(
+            "select (number+1) as c1, number as c2, (number*2) as c3 from numbers_mt(10000) where (c1+c3+1)=1",
+        )?;
+
+        let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
+        let optimized = projection_push_down.optimize(&plan)?;
+        let expect = "\
+        Projection: (number + 1) as c1:UInt64, number as c2:UInt64, (number * 2) as c3:UInt64\
+        \n  Filter: (((c1 + c3) + 1) = 1)\
+        \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
+
+        let actual = format!("{:?}", optimized);
+        assert_eq!(expect, actual);
+
+        Ok(())
     }
 }
