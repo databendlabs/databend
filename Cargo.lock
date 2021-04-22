@@ -1062,6 +1062,7 @@ dependencies = [
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
+ "common-exception",
  "common-flights",
  "common-functions",
  "common-infallible",

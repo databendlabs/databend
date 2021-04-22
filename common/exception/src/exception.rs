@@ -20,6 +20,7 @@ macro_rules! build_error_codes {
 
 build_error_codes! {
     Ok(0),
-    UNSUPPORTED_METHOD(1),
-    UNKNOWN_EXCEPTION(1000)
+    MySQLProtocolError(1),
+    UnknownException(1000),
+    TokioError(1001)
 }

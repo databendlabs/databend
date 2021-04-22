@@ -6,8 +6,9 @@ use std::io;
 use std::net;
 use std::time::Instant;
 
-use anyhow::Result;
+use anyhow::{Result, Error};
 use common_datablocks::DataBlock;
+use common_exception::ErrorCodes;
 use futures::stream::StreamExt;
 use log::debug;
 use log::error;
@@ -17,11 +18,16 @@ use threadpool::ThreadPool;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::interpreters::InterpreterFactory;
+use crate::interpreters::{InterpreterFactory, IInterpreter};
 use crate::servers::mysql::MysqlStream;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
+use tokio::runtime::Runtime;
+use common_planners::Statistics;
+use std::sync::Arc;
+use common_streams::SendableDataBlockStream;
+use tokio_stream::StreamExt as OtherStreamExt;
 
 struct Session {
     ctx: FuseQueryContextRef
@@ -53,62 +59,51 @@ impl<W: io::Write> MysqlShim<W> for Session {
         self.ctx.reset()?;
 
         let start = Instant::now();
-        let plan = PlanParser::create(self.ctx.clone()).build_from_sql(query);
-        match plan {
-            Ok(v) => match InterpreterFactory::get(self.ctx.clone(), v) {
-                Ok(executor) => {
-                    let result: Result<Vec<DataBlock>> =
-                        tokio::runtime::Builder::new_multi_thread()
-                            .enable_io()
-                            .worker_threads(self.ctx.get_max_threads()? as usize)
-                            .build()?
-                            .block_on(async move {
-                                let start = Instant::now();
-                                let mut r = vec![];
-                                let mut stream = executor.execute().await?;
-                                while let Some(block) = stream.next().await {
-                                    r.push(block?);
-                                }
-                                let duration = start.elapsed();
-                                debug!(
-                                    "MySQLHandler executor cost:{:?}, statistics:{:?}",
-                                    duration,
-                                    self.ctx.try_get_statistics()?
-                                );
-                                Ok(r)
-                            });
 
-                    match result {
-                        Ok(blocks) => {
-                            let start = Instant::now();
-                            let stream = MysqlStream::create(blocks);
-                            stream.execute(writer)?;
-                            let duration = start.elapsed();
-                            debug!("MySQLHandler send to client cost:{:?}", duration);
-                        }
-                        Err(e) => {
-                            error!("ResultError {:?}", e);
-                            writer
-                                .error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!("ResultError {:?}", e);
-                    writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?
-                }
-            },
-            Err(e) => {
-                error!("ResultError {:?}", e);
-                writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{:?}", e).as_bytes())?;
-            }
+        // fn with_timer<T, R>(function: Box<FnOnce(T) -> R>) -> Box<FnOnce(T) -> R> {
+        //     return Box::new(|v: T| -> R{
+        //         let start = Instant::now();
+        //         let result = function(v);
+        //         let duration = start.elapsed();
+        //         debug!("MySQLHandler executor cost:{:?}, statistics:{:?}", duration, v);
+        //         result
+        //     });
+        // }
+
+        fn build_runtime(max_threads: Result<u64>) -> Result<Runtime> {
+            max_threads.and_then(|v| {
+                tokio::runtime::Builder::new_multi_thread().enable_io().worker_threads(v as usize).build()
+                    .map_err(|tokio_error| -> ErrorCodes { ErrorCodes::TokioError(format!("{}", tokio_error)) })
+            })
         }
-        histogram!(
-            super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
-            start.elapsed()
-        );
 
-        Ok(())
+        async fn data_puller(interpreter: Arc<dyn IInterpreter>, stattistics: Result<Statistics>) -> Result<Vec<DataBlock>> {
+            // use tokio_stream::StreamExt;
+            /*{
+                    let start = Instant::now();
+                    let x = ;
+                    while let Some(block) = stream.next().await {
+                        // result.and_then(|list| list.append)
+                        result.push(block?);
+                    }
+                    let duration = start.elapsed();
+                    debug!("MySQLHandler executor cost:{:?}, statistics:{:?}", duration, v);
+                    result
+                }*/
+
+
+            // first we zip statistics and interpreter container
+            stattistics.and_then(|v| { async { interpreter.execute().await.map(|s| (v, s)) } })
+                // then we pull data
+                .and_then(|(_statistics_v, stream)| { async { tokio_stream::StreamExt::collect(stream).await } })
+        }
+
+        PlanParser::create(self.ctx.clone()).build_from_sql(query)
+            .and_then(|built_plan| InterpreterFactory::get(self.ctx.clone(), built_plan))
+            .and_then(|interpreter| build_runtime(self.ctx.get_max_threads()).map(|runtime| (runtime, interpreter)))
+            .and_then(|(runtime, interpreter)| runtime.block_on(async move { data_puller(interpreter, self.ctx.try_get_statistics) }))
+            .and_then(|data_blocks| MysqlStream::create(data_blocks).execute(writer))
+            .or_else(|exception| writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", exception).as_bytes()).map_err(|io_error| { anyhow!(format ! ("{}", io_error)) }))
     }
 
     fn on_init(&mut self, db: &str, writer: InitWriter<W>) -> Result<()> {
@@ -121,7 +116,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
                 error!("{}", e);
                 writer.error(
                     ErrorKind::ER_BAD_DB_ERROR,
-                    format!("Unknown database: {:?}", db).as_bytes()
+                    format!("Unknown database: {:?}", db).as_bytes(),
                 )?;
             }
         };
