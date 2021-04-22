@@ -41,6 +41,7 @@ impl CsvTableStream {
         let begin: usize = names[1].parse()?;
         let end: usize = names[2].parse()?;
         let bounds = Some((begin, end));
+        let block_size = end - begin;
 
         let file = File::open(self.file.clone())
             .with_context(|| format!("Failed to read csv file:{}", self.file.clone()))?;
@@ -49,7 +50,7 @@ impl CsvTableStream {
             self.schema.clone(),
             false,
             None,
-            self.ctx.get_max_block_size()? as usize,
+            block_size,
             bounds,
             None
         );

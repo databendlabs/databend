@@ -85,7 +85,7 @@ impl ITable for CsvTable {
             schema: self.schema.clone(),
             partitions: generate_parts(
                 start_line as u64,
-                ctx.get_max_block_size()?,
+                ctx.get_max_threads()?,
                 lines_count as u64
             ),
             statistics: Statistics::default(),
