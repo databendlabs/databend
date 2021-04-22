@@ -17,13 +17,13 @@ use crate::protobuf::FlightStoreRequest;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ReadAction {
     pub partition: Partitions,
-    pub push_down: PlanNode,
+    pub push_down: PlanNode
 }
 
 // Action wrapper for do_get.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum StoreDoGet {
-    Read(ReadAction),
+    Read(ReadAction)
 }
 
 /// Try convert tonic::Request<Ticket> to DoGetAction.
@@ -52,7 +52,7 @@ impl TryInto<Request<Ticket>> for &StoreDoGet {
 
     fn try_into(self) -> Result<Request<Ticket>, Self::Error> {
         let flight_request = FlightStoreRequest {
-            body: serde_json::to_string(&self)?,
+            body: serde_json::to_string(&self)?
         };
 
         let mut buf = vec![];

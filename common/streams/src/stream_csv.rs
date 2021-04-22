@@ -16,7 +16,7 @@ use csv as csv_crate;
 use futures::Stream;
 
 pub struct CsvStream {
-    reader: csv_crate::Reader<File>,
+    reader: csv_crate::Reader<File>
 }
 
 impl CsvStream {
@@ -33,7 +33,7 @@ impl Stream for CsvStream {
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
-        _: &mut std::task::Context<'_>,
+        _: &mut std::task::Context<'_>
     ) -> Poll<Option<Self::Item>> {
         match self.reader.next() {
             Some(result) => match result {
@@ -41,12 +41,12 @@ impl Stream for CsvStream {
                     let block = batch.try_into();
                     match block {
                         Ok(block) => Poll::Ready(Some(Ok(block))),
-                        Err(e) => Poll::Ready(Some(Err(e))),
+                        Err(e) => Poll::Ready(Some(Err(e)))
                     }
                 }
-                Err(e) => Poll::Ready(Some(Err(anyhow!("{:?}", e)))),
+                Err(e) => Poll::Ready(Some(Err(anyhow!("{:?}", e))))
             },
-            None => Poll::Ready(None),
+            None => Poll::Ready(None)
         }
     }
 }

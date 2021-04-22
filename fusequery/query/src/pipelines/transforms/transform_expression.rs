@@ -25,7 +25,7 @@ use crate::pipelines::processors::IProcessor;
 pub struct ExpressionTransform {
     funcs: Vec<Box<dyn IFunction>>,
     schema: DataSchemaRef,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn IProcessor>
 }
 
 impl ExpressionTransform {
@@ -45,14 +45,14 @@ impl ExpressionTransform {
         Ok(ExpressionTransform {
             funcs,
             schema,
-            input: Arc::new(EmptyProcessor::create()),
+            input: Arc::new(EmptyProcessor::create())
         })
     }
 
     pub fn expression_executor(
         projected_schema: &DataSchemaRef,
         block: DataBlock,
-        funcs: Vec<Box<dyn IFunction>>,
+        funcs: Vec<Box<dyn IFunction>>
     ) -> Result<DataBlock> {
         let mut column_values = Vec::with_capacity(funcs.len());
         for func in funcs {
@@ -86,7 +86,7 @@ impl IProcessor for ExpressionTransform {
             self.input.execute().await?,
             self.schema.clone(),
             self.funcs.clone(),
-            ExpressionTransform::expression_executor,
+            ExpressionTransform::expression_executor
         )?))
     }
 }

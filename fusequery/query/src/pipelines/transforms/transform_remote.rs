@@ -19,7 +19,7 @@ pub struct RemoteTransform {
     remote_addr: String,
     pub ctx: FuseQueryContextRef,
     pub plan: PlanNode,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn IProcessor>
 }
 
 impl RemoteTransform {
@@ -27,14 +27,14 @@ impl RemoteTransform {
         ctx: FuseQueryContextRef,
         job_id: String,
         remote_addr: String,
-        plan: PlanNode,
+        plan: PlanNode
     ) -> Result<Self> {
         Ok(Self {
             job_id,
             remote_addr,
             ctx,
             plan,
-            input: Arc::new(EmptyProcessor::create()),
+            input: Arc::new(EmptyProcessor::create())
         })
     }
 }
@@ -63,7 +63,7 @@ impl IProcessor for RemoteTransform {
         Ok(Box::pin(
             client
                 .execute_remote_plan_action(self.job_id.clone(), &self.plan)
-                .await?,
+                .await?
         ))
     }
 }

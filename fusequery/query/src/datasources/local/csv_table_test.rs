@@ -17,7 +17,7 @@ async fn test_csv_table() -> anyhow::Result<()> {
         env::current_dir()?
             .join("../../tests/data/sample.csv")
             .display()
-            .to_string(),
+            .to_string()
     )]
     .iter()
     .cloned()
@@ -28,7 +28,7 @@ async fn test_csv_table() -> anyhow::Result<()> {
         "default".into(),
         "test_csv".into(),
         DataSchema::new(vec![DataField::new("column1", DataType::UInt64, false)]).into(),
-        options,
+        options
     )?;
     table.read_plan(ctx.clone(), &ScanPlan::empty())?;
 
@@ -69,7 +69,7 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
         env::current_dir()?
             .join("../../tests/data/sample.csv")
             .display()
-            .to_string(),
+            .to_string()
     )]
     .iter()
     .cloned()
@@ -86,7 +86,7 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
             DataField::new("column4", DataType::UInt64, false),
         ])
         .into(),
-        options,
+        options
     )?;
     table.read_plan(ctx.clone(), &ScanPlan::empty())?;
 
@@ -117,7 +117,7 @@ async fn test_csv_table_file_not_found_error() -> anyhow::Result<()> {
         env::current_dir()?
             .join("../../tests/data/sample-x.csv")
             .display()
-            .to_string(),
+            .to_string()
     )]
     .iter()
     .cloned()
@@ -128,7 +128,7 @@ async fn test_csv_table_file_not_found_error() -> anyhow::Result<()> {
         "default".into(),
         "test_csv".into(),
         DataSchema::new(vec![DataField::new("column1", DataType::UInt64, false)]).into(),
-        options,
+        options
     )?;
     table.read_plan(ctx.clone(), &ScanPlan::empty())?;
 

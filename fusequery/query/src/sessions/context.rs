@@ -30,7 +30,7 @@ pub struct FuseQueryContext {
     datasource: Arc<dyn IDataSource>,
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Partition>>>,
-    progress_callback: Arc<RwLock<Option<ProgressCallback>>>,
+    progress_callback: Arc<RwLock<Option<ProgressCallback>>>
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
@@ -45,7 +45,7 @@ impl FuseQueryContext {
             datasource: Arc::new(DataSource::try_create()?),
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            progress_callback: Arc::new(RwLock::new(None)),
+            progress_callback: Arc::new(RwLock::new(None))
         };
 
         ctx.initial_settings()?;
@@ -103,7 +103,7 @@ impl FuseQueryContext {
         let statistics = self.statistics.read();
         Ok(Statistics {
             read_rows: statistics.read_rows,
-            read_bytes: statistics.read_bytes,
+            read_bytes: statistics.read_bytes
         })
     }
 

@@ -19,7 +19,7 @@ use crate::sessions::FuseQueryContextRef;
 pub struct RemoteTable {
     pub(crate) db: String,
     name: String,
-    schema: DataSchemaRef,
+    schema: DataSchemaRef
 }
 
 impl RemoteTable {
@@ -28,7 +28,7 @@ impl RemoteTable {
         db: String,
         name: String,
         schema: DataSchemaRef,
-        _options: TableOptions,
+        _options: TableOptions
     ) -> Result<Box<dyn ITable>> {
         let table = Self { db, name, schema };
         Ok(Box::new(table))

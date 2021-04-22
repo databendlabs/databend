@@ -22,7 +22,7 @@ pub struct DfShowSettings;
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfExplain {
     pub typ: ExplainType,
-    pub statement: Box<SQLStatement>,
+    pub statement: Box<SQLStatement>
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,7 +32,7 @@ pub struct DfCreateTable {
     pub name: ObjectName,
     pub columns: Vec<ColumnDef>,
     pub engine: TableEngineType,
-    pub options: Vec<SqlOption>,
+    pub options: Vec<SqlOption>
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,12 +40,12 @@ pub struct DfCreateDatabase {
     pub if_not_exists: bool,
     pub name: ObjectName,
     pub engine: DatabaseEngineType,
-    pub options: Vec<SqlOption>,
+    pub options: Vec<SqlOption>
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfUseDatabase {
-    pub name: ObjectName,
+    pub name: ObjectName
 }
 
 /// Tokens parsed by `DFParser` are converted into these values.
@@ -65,5 +65,5 @@ pub enum DfStatement {
     CreateTable(DfCreateTable),
 
     // Settings.
-    ShowSettings(DfShowSettings),
+    ShowSettings(DfShowSettings)
 }

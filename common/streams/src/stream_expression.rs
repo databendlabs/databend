@@ -20,7 +20,7 @@ pub struct ExpressionStream {
     input: SendableDataBlockStream,
     schema: DataSchemaRef,
     exprs: Vec<Box<dyn IFunction>>,
-    func: ExpressionFunc,
+    func: ExpressionFunc
 }
 
 impl ExpressionStream {
@@ -28,13 +28,13 @@ impl ExpressionStream {
         input: SendableDataBlockStream,
         schema: DataSchemaRef,
         exprs: Vec<Box<dyn IFunction>>,
-        func: ExpressionFunc,
+        func: ExpressionFunc
     ) -> Result<Self> {
         Ok(ExpressionStream {
             input,
             schema,
             exprs,
-            func,
+            func
         })
     }
 }
@@ -44,11 +44,11 @@ impl Stream for ExpressionStream {
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
-        ctx: &mut Context<'_>,
+        ctx: &mut Context<'_>
     ) -> Poll<Option<Self::Item>> {
         self.input.poll_next_unpin(ctx).map(|x| match x {
             Some(Ok(v)) => Some((self.func)(&self.schema, v, self.exprs.clone())),
-            other => other,
+            other => other
         })
     }
 }

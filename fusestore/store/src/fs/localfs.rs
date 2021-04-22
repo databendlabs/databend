@@ -13,14 +13,14 @@ use crate::fs::IFileSystem;
 use crate::fs::ListResult;
 
 pub struct LocalFS {
-    root: PathBuf,
+    root: PathBuf
 }
 
 /// IFS implementation on local file-system.
 impl LocalFS {
     pub fn try_create(root: impl AsRef<Path>) -> anyhow::Result<LocalFS> {
         let f = LocalFS {
-            root: PathBuf::from(root.as_ref()),
+            root: PathBuf::from(root.as_ref())
         };
         Ok(f)
     }
@@ -31,7 +31,7 @@ impl IFileSystem for LocalFS {
     async fn add<'a>(
         &'a self,
         path: impl AsRef<Path> + Send + 'a,
-        data: &[u8],
+        data: &[u8]
     ) -> anyhow::Result<()> {
         // TODO: test atomicity: write temp file and rename it
         let p = Path::new(self.root.as_path()).join(path.as_ref());
@@ -86,7 +86,7 @@ impl IFileSystem for LocalFS {
                         files.push(f);
                     }
                 }
-                Err(e) => return Err(e).context("LocalFS: fail to read entry"),
+                Err(e) => return Err(e).context("LocalFS: fail to read entry")
             }
         }
 

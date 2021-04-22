@@ -13,7 +13,7 @@ use crate::pipelines::processors::MergeProcessor;
 use crate::pipelines::processors::Pipe;
 
 pub struct Pipeline {
-    pipes: Vec<Pipe>,
+    pipes: Vec<Pipe>
 }
 
 impl Pipeline {
@@ -30,7 +30,7 @@ impl Pipeline {
     pub fn nums(&self) -> usize {
         match self.pipes.last() {
             None => 0,
-            Some(v) => v.nums(),
+            Some(v) => v.nums()
         }
     }
 
@@ -70,7 +70,7 @@ impl Pipeline {
     ///
     pub fn add_simple_transform(
         &mut self,
-        f: impl Fn() -> Result<Box<dyn IProcessor>>,
+        f: impl Fn() -> Result<Box<dyn IProcessor>>
     ) -> Result<()> {
         let last_pipe = self.last_pipe()?;
         let mut new_pipe = Pipe::create();

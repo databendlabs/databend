@@ -34,7 +34,7 @@ pub struct ParquetTable {
     db: String,
     name: String,
     schema: DataSchemaRef,
-    file: String,
+    file: String
 }
 
 impl ParquetTable {
@@ -42,7 +42,7 @@ impl ParquetTable {
         db: String,
         name: String,
         schema: DataSchemaRef,
-        options: TableOptions,
+        options: TableOptions
     ) -> Result<Box<dyn ITable>> {
         let file = options.get("location");
         return match file {
@@ -51,11 +51,11 @@ impl ParquetTable {
                     db,
                     name,
                     schema,
-                    file: file.trim_matches(|s| s == '\'' || s == '"').to_string(),
+                    file: file.trim_matches(|s| s == '\'' || s == '"').to_string()
                 };
                 Ok(Box::new(table))
             }
-            _ => bail!("Parquet Engine must contains file location options"),
+            _ => bail!("Parquet Engine must contains file location options")
         };
     }
 }
@@ -63,7 +63,7 @@ impl ParquetTable {
 fn read_file(
     file: &str,
     tx: Sender<Option<Result<DataBlock>>>,
-    projection: &[usize],
+    projection: &[usize]
 ) -> Result<()> {
     let file_reader = File::open(file)?;
     let file_reader = SerializedFileReader::new(file_reader)?;
@@ -120,13 +120,13 @@ impl ITable for ParquetTable {
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0,
+                version: 0
             }],
             statistics: Statistics::default(),
             description: format!(
                 "(Read from Parquet Engine table  {}.{})",
                 self.db, self.name
-            ),
+            )
         })
     }
 

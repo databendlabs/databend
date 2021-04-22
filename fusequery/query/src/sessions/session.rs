@@ -15,7 +15,7 @@ use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct Session {
-    sessions: RwLock<HashMap<String, FuseQueryContextRef>>,
+    sessions: RwLock<HashMap<String, FuseQueryContextRef>>
 }
 
 pub type SessionRef = Arc<Session>;
@@ -23,7 +23,7 @@ pub type SessionRef = Arc<Session>;
 impl Session {
     pub fn create() -> SessionRef {
         Arc::new(Session {
-            sessions: RwLock::new(HashMap::new()),
+            sessions: RwLock::new(HashMap::new())
         })
     }
 

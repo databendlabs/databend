@@ -15,7 +15,7 @@ pub struct FilterPlan {
     /// The predicate expression, which must have Boolean type.
     pub predicate: ExpressionPlan,
     /// The incoming logical plan
-    pub input: Arc<PlanNode>,
+    pub input: Arc<PlanNode>
 }
 
 impl FilterPlan {

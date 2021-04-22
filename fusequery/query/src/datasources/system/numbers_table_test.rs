@@ -19,21 +19,21 @@ fn test_numbers_table_generate_parts() -> anyhow::Result<()> {
         assert_eq!(
             Partition {
                 name: "11-0-3".into(),
-                version: 0,
+                version: 0
             },
             ps[0]
         );
         assert_eq!(
             Partition {
                 name: "11-3-6".into(),
-                version: 0,
+                version: 0
             },
             ps[1]
         );
         assert_eq!(
             Partition {
                 name: "11-6-11".into(),
-                version: 0,
+                version: 0
             },
             ps[2]
         );
@@ -47,7 +47,7 @@ fn test_numbers_table_generate_parts() -> anyhow::Result<()> {
         assert_eq!(
             Partition {
                 name: "0-0-0".into(),
-                version: 0,
+                version: 0
             },
             ps[0]
         );
@@ -60,7 +60,7 @@ fn test_numbers_table_generate_parts() -> anyhow::Result<()> {
         assert_eq!(
             Partition {
                 name: "2-0-2".into(),
-                version: 0,
+                version: 0
             },
             ps[0]
         );
@@ -91,10 +91,10 @@ async fn test_number_table() -> anyhow::Result<()> {
         projected_schema: Arc::new(DataSchema::new(vec![DataField::new(
             "number",
             DataType::UInt64,
-            false,
+            false
         )])),
         filters: vec![],
-        limit: None,
+        limit: None
     };
     let source_plan = table.read_plan(ctx.clone(), scan)?;
     ctx.try_set_partitions(source_plan.partitions)?;

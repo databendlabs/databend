@@ -16,7 +16,7 @@ use common_datavalues::DataSchemaRef;
 #[derive(Clone)]
 pub struct DataBlock {
     schema: DataSchemaRef,
-    columns: Vec<DataArrayRef>,
+    columns: Vec<DataArrayRef>
 }
 
 impl DataBlock {
@@ -27,7 +27,7 @@ impl DataBlock {
     pub fn empty() -> Self {
         DataBlock {
             schema: Arc::new(DataSchema::empty()),
-            columns: vec![],
+            columns: vec![]
         }
     }
 
@@ -84,7 +84,7 @@ impl TryInto<arrow::record_batch::RecordBatch> for DataBlock {
     fn try_into(self) -> Result<RecordBatch, Self::Error> {
         Ok(arrow::record_batch::RecordBatch::try_new(
             self.schema.clone(),
-            self.columns.clone(),
+            self.columns.clone()
         )?)
     }
 }

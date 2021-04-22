@@ -20,7 +20,7 @@ use crate::IFunction;
 pub struct AggregatorMaxFunction {
     depth: usize,
     arg: Box<dyn IFunction>,
-    state: DataValue,
+    state: DataValue
 }
 
 impl AggregatorMaxFunction {
@@ -32,7 +32,7 @@ impl AggregatorMaxFunction {
         Ok(Box::new(AggregatorMaxFunction {
             depth: 0,
             arg: args[0].clone(),
-            state: DataValue::Null,
+            state: DataValue::Null
         }))
     }
 }
@@ -66,8 +66,8 @@ impl IFunction for AggregatorMaxFunction {
             self.state.clone(),
             datavalues::data_array_aggregate_op(
                 DataValueAggregateOperator::Max,
-                val.to_array(rows)?,
-            )?,
+                val.to_array(rows)?
+            )?
         )?;
         Ok(())
     }
@@ -81,7 +81,7 @@ impl IFunction for AggregatorMaxFunction {
         self.state = datavalues::data_value_aggregate_op(
             DataValueAggregateOperator::Max,
             self.state.clone(),
-            val,
+            val
         )?;
         Ok(())
     }

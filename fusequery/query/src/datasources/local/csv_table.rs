@@ -22,7 +22,7 @@ pub struct CsvTable {
     db: String,
     name: String,
     schema: DataSchemaRef,
-    options: TableOptions,
+    options: TableOptions
 }
 
 impl CsvTable {
@@ -30,13 +30,13 @@ impl CsvTable {
         db: String,
         name: String,
         schema: DataSchemaRef,
-        options: TableOptions,
+        options: TableOptions
     ) -> Result<Box<dyn ITable>> {
         Ok(Box::new(Self {
             db,
             name,
             schema,
-            options,
+            options
         }))
     }
 }
@@ -66,10 +66,10 @@ impl ITable for CsvTable {
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0,
+                version: 0
             }],
             statistics: Statistics::default(),
-            description: format!("(Read from CSV Engine table  {}.{})", self.db, self.name),
+            description: format!("(Read from CSV Engine table  {}.{})", self.db, self.name)
         })
     }
 
@@ -78,14 +78,14 @@ impl ITable for CsvTable {
             None => {
                 bail!("CSV Engine must contains file location options")
             }
-            Some(v) => v.trim_matches(|s| s == '\'' || s == '"').to_string(),
+            Some(v) => v.trim_matches(|s| s == '\'' || s == '"').to_string()
         };
 
         let has_header = self.options.get("has_header").is_some();
         Ok(Box::pin(CsvStream::try_create(
             self.schema.clone(),
             file,
-            has_header,
+            has_header
         )?))
     }
 }

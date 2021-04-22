@@ -16,7 +16,7 @@ pub enum TableEngineType {
     /// Comma separated values
     Csv,
     /// Null ENGINE
-    Null,
+    Null
 }
 
 impl ToString for TableEngineType {
@@ -25,7 +25,7 @@ impl ToString for TableEngineType {
             TableEngineType::JsonEachRaw => "JSON".into(),
             TableEngineType::Parquet => "Parquet".into(),
             TableEngineType::Csv => "CSV".into(),
-            TableEngineType::Null => "Null".into(),
+            TableEngineType::Null => "Null".into()
         }
     }
 }
@@ -42,7 +42,7 @@ pub struct CreateTablePlan {
     pub schema: DataSchemaRef,
     /// The file type of physical file
     pub engine: TableEngineType,
-    pub options: TableOptions,
+    pub options: TableOptions
 }
 
 impl CreateTablePlan {

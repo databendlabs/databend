@@ -10,7 +10,7 @@ use crate::api::rpc::FlightServiceImpl;
 use crate::configs::Config;
 
 pub struct RpcService {
-    conf: Config,
+    conf: Config
 }
 
 impl RpcService {

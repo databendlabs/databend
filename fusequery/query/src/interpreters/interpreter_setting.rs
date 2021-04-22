@@ -17,7 +17,7 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct SettingInterpreter {
     ctx: FuseQueryContextRef,
-    set: SettingPlan,
+    set: SettingPlan
 }
 
 impl SettingInterpreter {
@@ -47,7 +47,7 @@ impl IInterpreter for SettingInterpreter {
         let schema = Arc::new(DataSchema::new(vec![DataField::new(
             "set",
             DataType::Utf8,
-            false,
+            false
         )]));
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
     }

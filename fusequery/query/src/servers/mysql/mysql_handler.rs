@@ -24,7 +24,7 @@ use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 
 struct Session {
-    ctx: FuseQueryContextRef,
+    ctx: FuseQueryContextRef
 }
 
 impl Session {
@@ -121,7 +121,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
                 error!("{}", e);
                 writer.error(
                     ErrorKind::ER_BAD_DB_ERROR,
-                    format!("Unknown database: {:?}", db).as_bytes(),
+                    format!("Unknown database: {:?}", db).as_bytes()
                 )?;
             }
         };
@@ -132,7 +132,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
 pub struct MysqlHandler {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionRef,
+    session_manager: SessionRef
 }
 
 impl MysqlHandler {
@@ -140,7 +140,7 @@ impl MysqlHandler {
         Self {
             conf,
             cluster,
-            session_manager,
+            session_manager
         }
     }
 

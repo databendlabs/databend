@@ -26,12 +26,12 @@ impl Test {
         let schema = Arc::new(DataSchema::new(vec![DataField::new(
             "number",
             DataType::UInt64,
-            false,
+            false
         )]));
 
         let statistics = Statistics {
             read_rows: total,
-            read_bytes: total * 8,
+            read_bytes: total * 8
         };
 
         Ok(PlanNode::ReadSource(ReadDataSourcePlan {
@@ -43,7 +43,7 @@ impl Test {
             description: format!(
                 "(Read from system.numbers_mt table, Read Rows:{}, Read Bytes:{})",
                 statistics.read_rows, statistics.read_bytes
-            ),
+            )
         }))
     }
 
@@ -55,7 +55,7 @@ impl Test {
         if part_size == 0 {
             partitions.push(Partition {
                 name: format!("{}-{}-{}", total, 0, total,),
-                version: 0,
+                version: 0
             })
         } else {
             for part in 0..workers {
@@ -66,7 +66,7 @@ impl Test {
                 }
                 partitions.push(Partition {
                     name: format!("{}-{}-{}", total, part_begin, part_end,),
-                    version: 0,
+                    version: 0
                 })
             }
         }

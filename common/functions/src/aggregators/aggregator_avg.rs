@@ -21,7 +21,7 @@ use crate::IFunction;
 pub struct AggregatorAvgFunction {
     depth: usize,
     arg: Box<dyn IFunction>,
-    state: DataValue,
+    state: DataValue
 }
 
 impl AggregatorAvgFunction {
@@ -35,7 +35,7 @@ impl AggregatorAvgFunction {
         Ok(Box::new(AggregatorAvgFunction {
             depth: 0,
             arg: args[0].clone(),
-            state: DataValue::Struct(vec![DataValue::Null, DataValue::UInt64(Some(0))]),
+            state: DataValue::Struct(vec![DataValue::Null, DataValue::UInt64(Some(0))])
         }))
     }
 }
@@ -71,13 +71,13 @@ impl IFunction for AggregatorAvgFunction {
                 values[0].clone(),
                 datavalues::data_array_aggregate_op(
                     DataValueAggregateOperator::Sum,
-                    val.to_array(1)?,
-                )?,
+                    val.to_array(1)?
+                )?
             )?;
             let count = datavalues::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
                 values[1].clone(),
-                DataValue::UInt64(Some(rows as u64)),
+                DataValue::UInt64(Some(rows as u64))
             )?;
 
             self.state = DataValue::Struct(vec![sum, count]);
@@ -97,12 +97,12 @@ impl IFunction for AggregatorAvgFunction {
             let sum = datavalues::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
                 new_states[0].clone(),
-                old_states[0].clone(),
+                old_states[0].clone()
             )?;
             let count = datavalues::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
                 new_states[1].clone(),
-                old_states[1].clone(),
+                old_states[1].clone()
             )?;
             self.state = DataValue::Struct(vec![sum, count]);
         }
@@ -114,7 +114,7 @@ impl IFunction for AggregatorAvgFunction {
             datavalues::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Div,
                 states[0].clone(),
-                states[1].clone(),
+                states[1].clone()
             )?
         } else {
             self.state.clone()

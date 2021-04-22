@@ -42,7 +42,7 @@ pub enum PlanNode {
     CreateTable(CreateTablePlan),
     CreateDatabase(CreateDatabasePlan),
     UseDatabase(UseDatabasePlan),
-    SetVariable(SettingPlan),
+    SetVariable(SettingPlan)
 }
 
 impl PlanNode {
@@ -64,7 +64,7 @@ impl PlanNode {
             PlanNode::CreateTable(v) => v.schema(),
             PlanNode::SetVariable(v) => v.schema(),
             PlanNode::Sort(v) => v.schema(),
-            PlanNode::UseDatabase(v) => v.schema(),
+            PlanNode::UseDatabase(v) => v.schema()
         }
     }
 
@@ -85,7 +85,7 @@ impl PlanNode {
             PlanNode::CreateDatabase(_) => "CreateDatabasePlan",
             PlanNode::SetVariable(_) => "SetVariablePlan",
             PlanNode::Sort(_) => "SortPlan",
-            PlanNode::UseDatabase(_) => "UseDatabasePlan",
+            PlanNode::UseDatabase(_) => "UseDatabasePlan"
         }
     }
 
@@ -102,8 +102,8 @@ impl PlanNode {
             PlanNode::Sort(v) => v.input(),
 
             _ => Arc::new(PlanNode::Empty(EmptyPlan {
-                schema: Arc::new(DataSchema::empty()),
-            })),
+                schema: Arc::new(DataSchema::empty())
+            }))
         }
     }
 
@@ -119,7 +119,7 @@ impl PlanNode {
             PlanNode::Select(v) => v.set_input(node),
             PlanNode::Sort(v) => v.set_input(node),
 
-            _ => Ok(()),
+            _ => Ok(())
         }
     }
 }

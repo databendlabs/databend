@@ -20,13 +20,13 @@ use crate::datasources::ITable;
 use crate::datasources::ITableFunction;
 
 pub struct LocalDatabase {
-    tables: RwLock<HashMap<String, Arc<dyn ITable>>>,
+    tables: RwLock<HashMap<String, Arc<dyn ITable>>>
 }
 
 impl LocalDatabase {
     pub fn create() -> Self {
         LocalDatabase {
-            tables: RwLock::new(HashMap::default()),
+            tables: RwLock::new(HashMap::default())
         }
     }
 }
@@ -70,7 +70,7 @@ impl IDatabase for LocalDatabase {
             TableEngineType::Null => {
                 NullTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
             }
-            _ => bail!("Unsupported engine: {:?}", plan.engine),
+            _ => bail!("Unsupported engine: {:?}", plan.engine)
         };
 
         self.tables.write().insert(table_name, Arc::from(table));

@@ -6,7 +6,7 @@ use common_datavalues::DataSchemaRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct EmptyPlan {
-    pub schema: DataSchemaRef,
+    pub schema: DataSchemaRef
 }
 
 impl EmptyPlan {

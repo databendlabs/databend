@@ -145,7 +145,7 @@ impl DataValue {
     fn dictionary_create_key_for_col<K: ArrowDictionaryKeyType>(
         col: &ArrayRef,
         row: usize,
-        vec: &mut Vec<u8>,
+        vec: &mut Vec<u8>
     ) -> Result<()> {
         let dict_col = col.as_any().downcast_ref::<DictionaryArray<K>>().unwrap();
 
@@ -175,7 +175,7 @@ impl DataValue {
             DataType::Float32 => try_build_array!(Float32Builder, Float32, values),
             DataType::Float64 => try_build_array!(Float64Builder, Float64, values),
             DataType::Utf8 => try_build_array!(StringBuilder, Utf8, values),
-            other => bail!("Unexpected type:{} for DataValue List", other),
+            other => bail!("Unexpected type:{} for DataValue List", other)
         }
     }
 
@@ -303,7 +303,7 @@ impl DataValue {
                     Ok(DataValue::Int64(Some(n)))
                 }
             }
-            Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?))),
+            Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?)))
         }
     }
 }

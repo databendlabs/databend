@@ -24,7 +24,7 @@ pub struct LogicFunction {
     op: DataValueLogicOperator,
     left: Box<dyn IFunction>,
     right: Box<dyn IFunction>,
-    saved: Option<DataColumnarValue>,
+    saved: Option<DataColumnarValue>
 }
 
 impl LogicFunction {
@@ -37,7 +37,7 @@ impl LogicFunction {
 
     pub fn try_create_func(
         op: DataValueLogicOperator,
-        args: &[Box<dyn IFunction>],
+        args: &[Box<dyn IFunction>]
     ) -> Result<Box<dyn IFunction>> {
         ensure!(
             args.len() == 2,
@@ -50,7 +50,7 @@ impl LogicFunction {
             op,
             left: args[0].clone(),
             right: args[1].clone(),
-            saved: None,
+            saved: None
         }))
     }
 }
@@ -72,7 +72,7 @@ impl IFunction for LogicFunction {
         Ok(DataColumnarValue::Array(datavalues::data_array_logic_op(
             self.op.clone(),
             &self.left.eval(block)?,
-            &self.right.eval(block)?,
+            &self.right.eval(block)?
         )?))
     }
 

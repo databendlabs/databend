@@ -21,20 +21,20 @@ pub struct SortPartialTransform {
     schema: DataSchemaRef,
     exprs: Vec<ExpressionPlan>,
     limit: Option<usize>,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn IProcessor>
 }
 
 impl SortPartialTransform {
     pub fn try_create(
         schema: DataSchemaRef,
         exprs: Vec<ExpressionPlan>,
-        limit: Option<usize>,
+        limit: Option<usize>
     ) -> Result<Self> {
         Ok(SortPartialTransform {
             schema,
             exprs,
             limit,
-            input: Arc::new(EmptyProcessor::create()),
+            input: Arc::new(EmptyProcessor::create())
         })
     }
 }
@@ -62,14 +62,14 @@ impl IProcessor for SortPartialTransform {
         Ok(Box::pin(SortStream::try_create(
             self.input.execute().await?,
             get_sort_descriptions(&self.schema, &self.exprs)?,
-            self.limit,
+            self.limit
         )?))
     }
 }
 
 pub fn get_sort_descriptions(
     schema: &DataSchemaRef,
-    exprs: &[ExpressionPlan],
+    exprs: &[ExpressionPlan]
 ) -> Result<Vec<SortColumnDescription>> {
     let mut sort_columns_descriptions = vec![];
     for x in exprs {
@@ -77,13 +77,13 @@ pub fn get_sort_descriptions(
             ExpressionPlan::Sort {
                 ref expr,
                 asc,
-                nulls_first,
+                nulls_first
             } => {
                 let column_name = expr.to_data_field(schema)?.name().clone();
                 sort_columns_descriptions.push(SortColumnDescription {
                     column_name,
                     asc,
-                    nulls_first,
+                    nulls_first
                 });
             }
             _ => {

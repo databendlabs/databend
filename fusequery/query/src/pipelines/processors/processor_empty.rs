@@ -43,7 +43,7 @@ impl IProcessor for EmptyProcessor {
         Ok(Box::pin(DataBlockStream::create(
             Arc::new(DataSchema::empty()),
             None,
-            vec![],
+            vec![]
         )))
     }
 }

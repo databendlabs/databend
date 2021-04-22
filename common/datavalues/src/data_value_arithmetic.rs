@@ -33,7 +33,7 @@ macro_rules! typed_data_value_operator {
 pub fn data_value_arithmetic_op(
     op: DataValueArithmeticOperator,
     left: DataValue,
-    right: DataValue,
+    right: DataValue
 ) -> Result<DataValue> {
     Ok(match (&left, &right) {
         (DataValue::Null, _) => right,
@@ -367,6 +367,6 @@ pub fn data_value_arithmetic_op(
                     rhs.data_type(),
                 ));
             }
-        },
+        }
     })
 }

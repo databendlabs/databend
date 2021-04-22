@@ -33,14 +33,14 @@ async fn test_transform_final_aggregator() -> anyhow::Result<()> {
     pipeline.add_simple_transform(|| {
         Ok(Box::new(AggregatorPartialTransform::try_create(
             aggr_partial.schema(),
-            aggr_exprs.clone(),
+            aggr_exprs.clone()
         )?))
     })?;
     pipeline.merge_processor()?;
     pipeline.add_simple_transform(|| {
         Ok(Box::new(AggregatorFinalTransform::try_create(
             aggr_final.schema(),
-            aggr_exprs.clone(),
+            aggr_exprs.clone()
         )?))
     })?;
 
