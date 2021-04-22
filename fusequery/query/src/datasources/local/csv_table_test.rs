@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
 #[tokio::test]
 async fn test_csv_table() -> anyhow::Result<()> {
     use std::env;
@@ -30,7 +32,22 @@ async fn test_csv_table() -> anyhow::Result<()> {
         DataSchema::new(vec![DataField::new("column1", DataType::UInt64, false)]).into(),
         options,
     )?;
-    table.read_plan(ctx.clone(), &ScanPlan::empty())?;
+
+    let scan_plan = &ScanPlan {
+        schema_name: "".to_string(),
+        table_schema: Arc::new(DataSchema::new(vec![])),
+        table_args: None,
+        projection: None,
+        projected_schema: Arc::new(DataSchema::new(vec![DataField::new(
+            "column1",
+            DataType::UInt64,
+            false,
+        )])),
+        filters: vec![],
+        limit: None,
+    };
+    let source_plan = table.read_plan(ctx.clone(), &scan_plan)?;
+    ctx.try_set_partitions(source_plan.partitions)?;
 
     let stream = table.read(ctx).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -89,7 +106,21 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
         .into(),
         options,
     )?;
-    table.read_plan(ctx.clone(), &ScanPlan::empty())?;
+    let scan_plan = &ScanPlan {
+        schema_name: "".to_string(),
+        table_schema: Arc::new(DataSchema::new(vec![])),
+        table_args: None,
+        projection: None,
+        projected_schema: Arc::new(DataSchema::new(vec![DataField::new(
+            "column2",
+            DataType::UInt64,
+            false,
+        )])),
+        filters: vec![],
+        limit: None,
+    };
+    let source_plan = table.read_plan(ctx.clone(), &scan_plan)?;
+    ctx.try_set_partitions(source_plan.partitions)?;
 
     let stream = table.read(ctx).await?;
     let result = stream.try_collect::<Vec<_>>().await;
