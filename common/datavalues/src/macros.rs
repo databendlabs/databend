@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#[macro_export]
 macro_rules! downcast_array {
     ($ARRAY:expr, $TYPE:ident) => {
         if let Some(v) = $ARRAY.as_any().downcast_ref::<$TYPE>() {
