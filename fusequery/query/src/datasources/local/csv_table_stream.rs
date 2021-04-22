@@ -40,7 +40,6 @@ impl CsvTableStream {
         let names: Vec<_> = part.name.split('-').collect();
         let begin: usize = names[1].parse()?;
         let end: usize = names[2].parse()?;
-
         let bounds = Some((begin, end));
 
         let file = File::open(self.file.clone())

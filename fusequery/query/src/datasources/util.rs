@@ -9,21 +9,21 @@ use std::io::BufReader;
 use common_planners::Partition;
 use common_planners::Partitions;
 
-pub fn generate_parts(first_start_line_no: u64, workers: u64, total: u64) -> Partitions {
+pub fn generate_parts(start: u64, workers: u64, total: u64) -> Partitions {
     let part_size = total / workers;
     let part_remain = total % workers;
 
     let mut partitions = Vec::with_capacity(workers as usize);
     if part_size == 0 {
         partitions.push(Partition {
-            name: format!("{}-{}-{}", total, 0, total,),
+            name: format!("{}-{}-{}", total, start, total,),
             version: 0,
         })
     } else {
         for part in 0..workers {
             let mut part_begin = part * part_size;
-            if part == 0 && first_start_line_no > 0 {
-                part_begin = first_start_line_no;
+            if part == 0 && start > 0 {
+                part_begin = start;
             }
             let mut part_end = (part + 1) * part_size;
             if part == (workers - 1) && part_remain > 0 {
