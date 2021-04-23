@@ -8,5 +8,3 @@ mod exception_test;
 pub mod exception;
 
 pub use crate::exception::ErrorCodes;
-
-

@@ -1,7 +1,9 @@
 use thiserror::Error;
 
 macro_rules! as_item {
-    ($i:item) => { $i };
+    ($i:item) => {
+        $i
+    };
 }
 
 macro_rules! build_error_codes {
@@ -21,6 +23,8 @@ macro_rules! build_error_codes {
 build_error_codes! {
     Ok(0),
     MySQLProtocolError(1),
+    UnknownTypeOfQuery(2),
+
     UnknownException(1000),
     TokioError(1001)
 }

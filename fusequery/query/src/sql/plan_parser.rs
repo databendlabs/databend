@@ -11,6 +11,7 @@ use anyhow::Result;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataValue;
+use common_exception::ErrorCodes;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::ExplainPlan;
@@ -47,7 +48,7 @@ impl PlanParser {
         Self { ctx }
     }
 
-    pub fn build_from_sql(&self, query: &str) -> Result<PlanNode> {
+    fn build_from_sql_impl(&self, query: &str) -> Result<PlanNode> {
         let statements = DfParser::parse_sql(query)?;
         if statements.len() != 1 {
             bail!("Only support single query");
@@ -55,26 +56,33 @@ impl PlanParser {
         self.statement_to_plan(&statements[0])
     }
 
+    pub fn build_from_sql(&self, query: &str) -> Result<PlanNode, ErrorCodes> {
+        self.build_from_sql_impl(query)
+            .map_err(|exception| ErrorCodes::UnknownException(format!("{}", exception)))
+    }
+
     pub fn statement_to_plan(&self, statement: &DfStatement) -> Result<PlanNode> {
         match statement {
             DfStatement::Statement(v) => self.sql_statement_to_plan(&v),
             DfStatement::Explain(v) => self.sql_explain_to_plan(&v),
             DfStatement::ShowDatabases(_) => {
-                self.build_from_sql("SELECT name FROM system.databases ORDER BY name")
+                self.build_from_sql_impl("SELECT name FROM system.databases ORDER BY name")
             }
             DfStatement::CreateDatabase(v) => self.sql_create_database_to_plan(&v),
             DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(&v),
             DfStatement::CreateTable(v) => self.sql_create_table_to_plan(&v),
 
             // TODO: support like and other filters in show queries
-            DfStatement::ShowTables(_) => self.build_from_sql(
+            DfStatement::ShowTables(_) => self.build_from_sql_impl(
                 format!(
                     "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
                     self.ctx.get_default_db()?
                 )
                 .as_str()
             ),
-            DfStatement::ShowSettings(_) => self.build_from_sql("SELECT name FROM system.settings")
+            DfStatement::ShowSettings(_) => {
+                self.build_from_sql_impl("SELECT name FROM system.settings")
+            }
         }
     }
 

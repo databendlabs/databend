@@ -4,30 +4,38 @@
 
 use std::io;
 use std::net;
+use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::{Result, Error};
+use anyhow::Error;
+use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCodes;
-use futures::stream::StreamExt;
+use common_planners::Statistics;
+use common_streams::SendableDataBlockStream;
+use futures::future;
+use futures::future::BoxFuture;
+use futures::future::Then;
+use futures::Future;
+use futures::FutureExt;
+use futures::TryFutureExt;
 use log::debug;
 use log::error;
 use metrics::histogram;
 use msql_srv::*;
 use threadpool::ThreadPool;
+use tokio::runtime::Runtime;
+use tokio_stream::StreamExt as OtherStreamExt;
+use warp::body::stream;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::interpreters::{InterpreterFactory, IInterpreter};
+use crate::interpreters::IInterpreter;
+use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::MysqlStream;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
-use tokio::runtime::Runtime;
-use common_planners::Statistics;
-use std::sync::Arc;
-use common_streams::SendableDataBlockStream;
-use tokio_stream::StreamExt as OtherStreamExt;
 
 struct Session {
     ctx: FuseQueryContextRef
@@ -60,50 +68,30 @@ impl<W: io::Write> MysqlShim<W> for Session {
 
         let start = Instant::now();
 
-        // fn with_timer<T, R>(function: Box<FnOnce(T) -> R>) -> Box<FnOnce(T) -> R> {
-        //     return Box::new(|v: T| -> R{
-        //         let start = Instant::now();
-        //         let result = function(v);
-        //         let duration = start.elapsed();
-        //         debug!("MySQLHandler executor cost:{:?}, statistics:{:?}", duration, v);
-        //         result
-        //     });
-        // }
-
-        fn build_runtime(max_threads: Result<u64>) -> Result<Runtime> {
-            max_threads.and_then(|v| {
-                tokio::runtime::Builder::new_multi_thread().enable_io().worker_threads(v as usize).build()
-                    .map_err(|tokio_error| -> ErrorCodes { ErrorCodes::TokioError(format!("{}", tokio_error)) })
-            })
+        fn build_runtime(max_threads: Result<u64>) -> Result<Runtime, ErrorCodes> {
+            max_threads.map_err(|e| ErrorCodes::UnknownException(String::from("Missing max_thread settings.")))
+                .and_then(|v| {
+                    tokio::runtime::Builder::new_multi_thread().enable_io()
+                        .worker_threads(v as usize).build()
+                        .map_err(|tokio_error| ErrorCodes::TokioError(format!("{}", tokio_error)))
+                })
         }
 
-        async fn data_puller(interpreter: Arc<dyn IInterpreter>, stattistics: Result<Statistics>) -> Result<Vec<DataBlock>> {
-            // use tokio_stream::StreamExt;
-            /*{
-                    let start = Instant::now();
-                    let x = ;
-                    while let Some(block) = stream.next().await {
-                        // result.and_then(|list| list.append)
-                        result.push(block?);
-                    }
-                    let duration = start.elapsed();
-                    debug!("MySQLHandler executor cost:{:?}, statistics:{:?}", duration, v);
-                    result
-                }*/
-
-
-            // first we zip statistics and interpreter container
-            stattistics.and_then(|v| { async { interpreter.execute().await.map(|s| (v, s)) } })
-                // then we pull data
-                .and_then(|(_statistics_v, stream)| { async { tokio_stream::StreamExt::collect(stream).await } })
+        type DataPuller<'a> = BoxFuture<'a, Result<Vec<DataBlock>, ErrorCodes>>;
+        fn data_puller<'a>(interpreter: &'a Arc<dyn IInterpreter>, _statistics: Result<Statistics>) -> DataPuller<'a> {
+            return interpreter.execute().then(|r_stream| match r_stream {
+                Ok(stream) => stream.collect().left_future(),
+                Err(e) => futures::future::err(e).right_future()
+            }).map(|data_blocks| data_blocks.map_err(|exception| ErrorCodes::UnknownException(format!("{}", exception)))).boxed();
         }
 
         PlanParser::create(self.ctx.clone()).build_from_sql(query)
             .and_then(|built_plan| InterpreterFactory::get(self.ctx.clone(), built_plan))
             .and_then(|interpreter| build_runtime(self.ctx.get_max_threads()).map(|runtime| (runtime, interpreter)))
-            .and_then(|(runtime, interpreter)| runtime.block_on(async move { data_puller(interpreter, self.ctx.try_get_statistics) }))
-            .and_then(|data_blocks| MysqlStream::create(data_blocks).execute(writer))
-            .or_else(|exception| writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", exception).as_bytes()).map_err(|io_error| { anyhow!(format ! ("{}", io_error)) }))
+            .and_then(|(runtime, interpreter)| runtime.block_on(data_puller(&interpreter, self.ctx.try_get_statistics())))
+            .and_then(|data_blocks| MysqlStream::create(data_blocks).execute(writer).or_else(|_| Result::Ok(())))
+            .or_else(|error_codes| Result::Ok(()))
+        // .or_else(|exception| writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", exception).as_bytes()).or_else(|_| { Result::Ok(()) }))
     }
 
     fn on_init(&mut self, db: &str, writer: InitWriter<W>) -> Result<()> {
@@ -116,7 +104,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
                 error!("{}", e);
                 writer.error(
                     ErrorKind::ER_BAD_DB_ERROR,
-                    format!("Unknown database: {:?}", db).as_bytes(),
+                    format!("Unknown database: {:?}", db).as_bytes()
                 )?;
             }
         };

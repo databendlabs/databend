@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use anyhow::Result;
+use common_exception::ErrorCodes;
 use common_planners::PlanNode;
 
 use crate::interpreters::CreateDatabaseInterpreter;
@@ -20,7 +21,7 @@ use crate::sessions::FuseQueryContextRef;
 pub struct InterpreterFactory;
 
 impl InterpreterFactory {
-    pub fn get(ctx: FuseQueryContextRef, plan: PlanNode) -> Result<Arc<dyn IInterpreter>> {
+    fn get_impl(ctx: FuseQueryContextRef, plan: PlanNode) -> Result<Arc<dyn IInterpreter>> {
         match plan {
             PlanNode::Select(v) => SelectInterpreter::try_create(ctx, v),
             PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx, v),
@@ -30,5 +31,9 @@ impl InterpreterFactory {
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx, v),
             _ => bail!("Can't get the interpreter by plan:{}", plan.name())
         }
+    }
+    pub fn get(ctx: FuseQueryContextRef, plan: PlanNode) -> Result<Arc<dyn IInterpreter>, ErrorCodes> {
+        InterpreterFactory::get_impl(ctx, plan)
+            .map_err(|exception| ErrorCodes::UnknownException(format!("{}", exception)))
     }
 }
