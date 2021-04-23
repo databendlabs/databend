@@ -49,7 +49,7 @@ Schema related operations such as `create table` or `create database` are wrappe
 Data operation such as reading or writing a block are done with
 `FlightService::do_get` and `FlightService::do_put`.
 
-See [common/flights/src/store_client.rs](common/flights/src/store_client.rs).
+See [common/flights/src/store_client.rs](../../../common/flights/src/store_client.rs).
 
 
 # DFS
