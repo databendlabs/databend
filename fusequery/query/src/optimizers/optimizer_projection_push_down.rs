@@ -417,7 +417,7 @@ mod tests {
 
         let group_exprs = vec![col("a"), col("c")];
 
-        // SELECT a FROM table WHERE b = 10 GROUP BY a, C HAVING d < 9 ORDER BY e LIMIT 10;
+        // SELECT a FROM table WHERE b = 10 GROUP BY a, c HAVING d < 9 ORDER BY e LIMIT 10;
         let plan = PlanBuilder::from(&source_plan)
             .limit(10)?
             .sort(&vec![col("e")])?
