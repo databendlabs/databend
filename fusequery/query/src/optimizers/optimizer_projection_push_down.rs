@@ -292,7 +292,6 @@ mod tests {
 
     use super::*;
     use crate::optimizers::*;
-    use crate::sql::*;
 
     #[test]
     fn test_projection_push_down_optimizer_1() -> anyhow::Result<()> {
@@ -379,16 +378,53 @@ mod tests {
     fn test_projection_push_down_optimizer_3() -> anyhow::Result<()> {
         let ctx = crate::tests::try_create_context()?;
 
-        let plan = PlanParser::create(ctx.clone()).build_from_sql(
-            "select (number+1) as c1, number as c2, (number*2) as c3 from numbers_mt(10000) where (c1+c3+1)=1",
-        )?;
+        let total = ctx.get_max_block_size()? as u64;
+        let statistics = Statistics {
+            read_rows: total as usize,
+            read_bytes: ((total) * size_of::<u64>() as u64) as usize
+        };
+        ctx.try_set_statistics(&statistics)?;
+        let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
+            db: "system".to_string(),
+            table: "test".to_string(),
+            schema: Arc::new(DataSchema::new(vec![
+                DataField::new("a", DataType::Utf8, false),
+                DataField::new("b", DataType::Utf8, false),
+                DataField::new("c", DataType::Utf8, false),
+                DataField::new("d", DataType::Utf8, false),
+                DataField::new("e", DataType::Utf8, false),
+            ])),
+            partitions: Test::generate_partitions(8, total as u64),
+            statistics: statistics.clone(),
+            description: format!(
+                "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
+                "test".to_string(),
+                statistics.read_rows,
+                statistics.read_bytes
+            )
+        });
+
+        let group_exprs = vec![col("a"), col("c")];
+
+        // SELECT a FROM table WHERE b = 10 GROUP BY a, C HAVING d < 9 ORDER BY e LIMIT 10;
+        let plan = PlanBuilder::from(&source_plan)
+            .limit(10)?
+            .sort(&vec![col("e")])?
+            .aggregate_partial(vec![], group_exprs)?
+            .filter(col("b").eq(lit(10)))?
+            .project(vec![col("a")])?
+            .build()?;
 
         let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
         let optimized = projection_push_down.optimize(&plan)?;
+
         let expect = "\
-        Projection: (number + 1) as c1:UInt64, number as c2:UInt64, (number * 2) as c3:UInt64\
-        \n  Filter: (((c1 + c3) + 1) = 1)\
-        \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
+        Projection: a:Utf8\
+        \n  Filter: (b = 10)\
+        \n    AggregatorPartial: groupBy=[[a, c]], aggr=[[]]\
+        \n      Sort: e:Utf8\
+        \n        Limit: 10\
+        \n          ReadDataSource: scan partitions: [8], scan schema: [a:Utf8, b:Utf8, c:Utf8], statistics: [read_rows: 10000, read_bytes: 80000]";
 
         let actual = format!("{:?}", optimized);
         assert_eq!(expect, actual);
