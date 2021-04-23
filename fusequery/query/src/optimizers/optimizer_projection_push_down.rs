@@ -17,6 +17,7 @@ use common_planners::FilterPlan;
 use common_planners::PlanNode;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
+use common_planners::SortPlan;
 
 use crate::optimizers::IOptimizer;
 use crate::optimizers::Optimizer;
@@ -147,6 +148,14 @@ fn optimize_plan(
         }
         PlanNode::Filter(FilterPlan { predicate, input }) => {
             expr_to_column_names(predicate, &mut new_required_columns)?;
+            let new_input =
+                optimize_plan(optimizer, &input, &new_required_columns, has_projection)?;
+            let mut cloned_plan = plan.clone();
+            cloned_plan.set_input(&new_input)?;
+            Ok(cloned_plan)
+        }
+        PlanNode::Sort(SortPlan { order_by, input }) => {
+            exprvec_to_column_names(order_by, &mut new_required_columns)?;
             let new_input =
                 optimize_plan(optimizer, &input, &new_required_columns, has_projection)?;
             let mut cloned_plan = plan.clone();
@@ -393,6 +402,8 @@ mod tests {
                 DataField::new("c", DataType::Utf8, false),
                 DataField::new("d", DataType::Utf8, false),
                 DataField::new("e", DataType::Utf8, false),
+                DataField::new("f", DataType::Utf8, false),
+                DataField::new("g", DataType::Utf8, false),
             ])),
             partitions: Test::generate_partitions(8, total as u64),
             statistics: statistics.clone(),
@@ -426,7 +437,7 @@ mod tests {
         \n      Filter: (d < 10)\
         \n        Sort: e:Utf8\
         \n          Limit: 10\
-        \n            ReadDataSource: scan partitions: [8], scan schema: [a:Utf8, b:Utf8, c:Utf8, d:Utf8], statistics: [read_rows: 10000, read_bytes: 80000]";
+        \n            ReadDataSource: scan partitions: [8], scan schema: [a:Utf8, b:Utf8, c:Utf8, d:Utf8, e:Utf8], statistics: [read_rows: 10000, read_bytes: 80000]";
 
         let actual = format!("{:?}", optimized);
         assert_eq!(expect, actual);
