@@ -25,13 +25,21 @@ impl OptimizerCommon {
                     map.insert(field.name().clone(), expr);
                 })
             }
-            PlanNode::AggregatorPartial(v) => Self::projections_to_map(v.input.as_ref(), map)?,
-            PlanNode::AggregatorFinal(v) => Self::projections_to_map(v.input.as_ref(), map)?,
-            PlanNode::Filter(v) => Self::projections_to_map(v.input.as_ref(), map)?,
-            PlanNode::Limit(v) => Self::projections_to_map(v.input.as_ref(), map)?,
-            PlanNode::Explain(v) => Self::projections_to_map(v.input.as_ref(), map)?,
-            PlanNode::Select(v) => Self::projections_to_map(v.input.as_ref(), map)?,
-            _ => {}
+            // Aggregator aggr_expr is the projection
+            PlanNode::AggregatorPartial(v) => {
+                for expr in &v.aggr_expr {
+                    let field = expr.to_data_field(&v.input.schema())?;
+                    map.insert(field.name().clone(), expr.clone());
+                }
+            }
+            // Aggregator aggr_expr is the projection
+            PlanNode::AggregatorFinal(v) => {
+                for expr in &v.aggr_expr {
+                    let field = expr.to_data_field(&v.input.schema())?;
+                    map.insert(field.name().clone(), expr.clone());
+                }
+            }
+            other => Self::projections_to_map(other.input().as_ref(), map)?
         }
         Ok(())
     }

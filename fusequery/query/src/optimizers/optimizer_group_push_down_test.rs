@@ -18,9 +18,9 @@ fn test_group_by_push_down_optimizer() -> anyhow::Result<()> {
     let mut group_push_down = GroupByPushDownOptimizer::create(ctx);
     let optimized = group_push_down.optimize(&plan)?;
     let expect = "\
-    AggregatorFinal: groupBy=[[c2]], aggr=[[(number + 1) as c1, ((number % 3) + 1) as c2]]\
+    AggregatorFinal: groupBy=[[((number % 3) + 1) as c2]], aggr=[[(number + 1) as c1, ((number % 3) + 1) as c2]]\
     \n  RedistributeStage[state: AggregatorMerge, id: 0]\
-    \n    AggregatorPartial: groupBy=[[c2]], aggr=[[(number + 1) as c1, ((number % 3) + 1) as c2]]\
+    \n    AggregatorPartial: groupBy=[[((number % 3) + 1) as c2]], aggr=[[(number + 1) as c1, ((number % 3) + 1) as c2]]\
     \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);
