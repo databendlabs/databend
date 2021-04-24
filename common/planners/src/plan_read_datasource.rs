@@ -10,7 +10,7 @@ use common_datavalues::DataSchemaRef;
 use crate::Partitions;
 use crate::Statistics;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ReadDataSourcePlan {
     pub db: String,
     pub table: String,

@@ -2,18 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Result;
 use common_datavalues::DataSchema;
 use common_planners::EmptyPlan;
-use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::PlanNode;
 
 use crate::optimizers::IOptimizer;
-use crate::optimizers::Optimizer;
+use crate::optimizers::OptimizerCommon;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct FilterPushDownOptimizer {}
@@ -22,26 +20,6 @@ impl FilterPushDownOptimizer {
     pub fn create(_ctx: FuseQueryContextRef) -> Self {
         FilterPushDownOptimizer {}
     }
-}
-
-/// replaces columns by its name on the projection.
-fn rewrite_alias_expr(
-    expr: &ExpressionPlan,
-    projection: &HashMap<String, ExpressionPlan>
-) -> Result<ExpressionPlan> {
-    let expressions = Optimizer::expression_plan_children(expr)?;
-
-    let expressions = expressions
-        .iter()
-        .map(|e| rewrite_alias_expr(e, &projection))
-        .collect::<Result<Vec<_>>>()?;
-
-    if let ExpressionPlan::Column(name) = expr {
-        if let Some(expr) = projection.get(name) {
-            return Ok(expr.clone());
-        }
-    }
-    Ok(Optimizer::rebuild_from_exprs(&expr, &expressions))
 }
 
 impl IOptimizer for FilterPushDownOptimizer {
@@ -54,10 +32,11 @@ impl IOptimizer for FilterPushDownOptimizer {
             schema: Arc::new(DataSchema::empty())
         });
 
-        let projection_map = Optimizer::projection_to_map(plan)?;
+        let projection_map = OptimizerCommon::projection_to_map(plan)?;
         plan.walk_postorder(|node| {
             if let PlanNode::Filter(filter) = node {
-                let rewritten_expr = rewrite_alias_expr(&filter.predicate, &projection_map)?;
+                let rewritten_expr =
+                    OptimizerCommon::rewrite_alias_expr(&filter.predicate, &projection_map)?;
                 let mut new_filter_node = PlanNode::Filter(FilterPlan {
                     predicate: rewritten_expr,
                     input: rewritten_node.input()
