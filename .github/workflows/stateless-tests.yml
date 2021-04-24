@@ -19,7 +19,7 @@ jobs:
       - name: Run Tests
         run: |
           echo "Starting fues-query"
-          nohub target/release/fuse-query&
+          nohup target/release/fuse-query&
           sleep 3
           echo "Starting fuse-test"
           cd tests
