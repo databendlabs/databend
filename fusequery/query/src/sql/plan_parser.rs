@@ -208,13 +208,14 @@ impl PlanParser {
         }
 
         let plan = if !select.group_by.is_empty() || has_aggregator {
-            self.aggregate(&plan, projection_expr, &select.group_by)?
+            // Put order after the aggregation projection.
+            self.aggregate(&plan, projection_expr, &select.group_by)
+                .and_then(|plan| self.sort(&plan, order_by))?
         } else {
-            self.project(&plan, projection_expr)?
+            // Put order front of projection.
+            self.sort(&plan, order_by)
+                .and_then(|plan| self.project(&plan, projection_expr))?
         };
-
-        // order by
-        let plan = self.sort(&plan, order_by)?;
 
         // limit.
         let plan = self.limit(&plan, limit)?;
