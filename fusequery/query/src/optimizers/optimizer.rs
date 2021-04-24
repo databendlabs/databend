@@ -23,8 +23,8 @@ impl Optimizer {
     pub fn create(ctx: FuseQueryContextRef) -> Self {
         let optimizers: Vec<Box<dyn IOptimizer>> = vec![
             Box::new(FilterPushDownOptimizer::create(ctx.clone())),
-            Box::new(LimitPushDownOptimizer::create(ctx.clone())),
-            Box::new(GroupByPushDownOptimizer::create(ctx)),
+            Box::new(GroupByPushDownOptimizer::create(ctx.clone())),
+            Box::new(LimitPushDownOptimizer::create(ctx)),
         ];
         Optimizer { optimizers }
     }
