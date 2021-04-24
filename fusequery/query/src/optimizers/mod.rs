@@ -8,6 +8,7 @@ mod optimizer_filter_push_down_test;
 mod optimizer_group_push_down_test;
 #[cfg(test)]
 mod optimizer_limit_push_down_test;
+#[cfg(test)]
 mod optimizer_projection_push_down_test;
 
 mod optimizer;
