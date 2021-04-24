@@ -14,12 +14,13 @@ jobs:
           profile: minimal
           components: rustfmt
           override: true
+      - uses: Swatinem/rust-cache@v1
       - name: Build
         run: cargo build --release
       - name: Run Tests
         run: |
           echo "Starting fues-query"
-          nohup target/release/fuse-query&
+          nohup target/release/fuse-query --log-level ERROR&
           sleep 3
           echo "Starting fuse-test"
           cd tests
