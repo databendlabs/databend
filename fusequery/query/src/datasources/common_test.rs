@@ -7,11 +7,11 @@ fn test_util_generate_parts() -> anyhow::Result<()> {
     use common_planners::Partition;
     use pretty_assertions::assert_eq;
 
-    use crate::datasources::util::*;
+    use crate::datasources::Common;
 
     {
         // deal with remainder
-        let ps = generate_parts(0, 3, 11);
+        let ps = Common::generate_parts(0, 3, 11);
 
         assert_eq!(3, ps.len());
         assert_eq!(
@@ -39,7 +39,7 @@ fn test_util_generate_parts() -> anyhow::Result<()> {
 
     {
         // total is zero
-        let ps = generate_parts(0, 3, 0);
+        let ps = Common::generate_parts(0, 3, 0);
 
         assert_eq!(1, ps.len());
         assert_eq!(
@@ -52,7 +52,7 @@ fn test_util_generate_parts() -> anyhow::Result<()> {
     }
     {
         // only one part, total < workers
-        let ps = generate_parts(0, 3, 2);
+        let ps = Common::generate_parts(0, 3, 2);
 
         assert_eq!(1, ps.len());
         assert_eq!(
@@ -73,14 +73,14 @@ fn test_lines_count() -> anyhow::Result<()> {
 
     use pretty_assertions::assert_eq;
 
-    use crate::datasources::util::*;
+    use crate::datasources::Common;
 
     let file = env::current_dir()?
         .join("../../tests/data/sample.csv")
         .display()
         .to_string();
 
-    let lines = count_lines(std::fs::File::open(file.as_str())?)?;
+    let lines = Common::count_lines(std::fs::File::open(file.as_str())?)?;
     assert_eq!(6, lines);
     Ok(())
 }

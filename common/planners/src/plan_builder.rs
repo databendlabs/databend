@@ -104,7 +104,7 @@ impl PlanBuilder {
         group_expr: Vec<ExpressionPlan>
     ) -> Result<Self> {
         let input_schema = self.plan.schema();
-        let aggr_fields = self.exprs_to_fields(&aggr_expr, &input_schema)?;
+        let aggr_projection_fields = self.exprs_to_fields(&aggr_expr, &input_schema)?;
 
         Ok(match mode {
             AggregateMode::Partial => {
@@ -118,7 +118,7 @@ impl PlanBuilder {
                 input: Arc::new(self.plan.clone()),
                 aggr_expr,
                 group_expr,
-                schema: Arc::new(DataSchema::new(aggr_fields))
+                schema: Arc::new(DataSchema::new(aggr_projection_fields))
             }))
         })
     }
