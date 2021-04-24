@@ -7,18 +7,12 @@ use std::net;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::Error;
 use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCodes;
 use common_planners::Statistics;
-use common_streams::SendableDataBlockStream;
-use futures::future;
 use futures::future::BoxFuture;
-use futures::future::Then;
-use futures::Future;
 use futures::FutureExt;
-use futures::TryFutureExt;
 use log::debug;
 use log::error;
 use metrics::histogram;
@@ -26,16 +20,15 @@ use msql_srv::*;
 use threadpool::ThreadPool;
 use tokio::runtime::Runtime;
 use tokio_stream::StreamExt as OtherStreamExt;
-use warp::body::stream;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::interpreters::IInterpreter;
 use crate::interpreters::InterpreterFactory;
-use crate::servers::mysql::MysqlStream;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
+use crate::servers::mysql::mysql_on_query_endpoint::done;
 
 struct Session {
     ctx: FuseQueryContextRef
@@ -45,28 +38,32 @@ impl Session {
     pub fn create(ctx: FuseQueryContextRef) -> Self {
         Session { ctx }
     }
+
+    fn on_write_error(e: std::io::Error) -> Result<()> {
+        error!("{}", e);
+        Result::Ok(())
+    }
 }
 
 impl<W: io::Write> MysqlShim<W> for Session {
     type Error = anyhow::Error;
 
-    fn on_prepare(&mut self, _: &str, _: StatementMetaWriter<W>) -> Result<()> {
-        unimplemented!()
+    fn on_prepare(&mut self, _: &str, writer: StatementMetaWriter<W>) -> Result<()> {
+        writer.error(ErrorKind::ER_UNKNOWN_ERROR, "Prepare is not support in DataFuse.".as_bytes()).or_else(Session::on_write_error)
     }
 
-    fn on_execute(&mut self, _: u32, _: ParamParser, _: QueryResultWriter<W>) -> Result<()> {
-        unimplemented!()
+    fn on_execute(&mut self, _: u32, _: ParamParser, writer: QueryResultWriter<W>) -> Result<()> {
+        writer.error(ErrorKind::ER_UNKNOWN_ERROR, "Execute is not support in DataFuse.".as_bytes()).or_else(Session::on_write_error)
     }
 
     fn on_close(&mut self, _: u32) {
         unimplemented!()
     }
 
-    fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> Result<()> {
+    fn on_query(&mut self, query: &str, query_writer: QueryResultWriter<W>) -> Result<()> {
         debug!("{}", query);
         self.ctx.reset()?;
-
-        let start = Instant::now();
+        // let start = Instant::now();
 
         fn build_runtime(max_threads: Result<u64>) -> Result<Runtime, ErrorCodes> {
             max_threads.map_err(|e| ErrorCodes::UnknownException(String::from("Missing max_thread settings.")))
@@ -89,23 +86,18 @@ impl<W: io::Write> MysqlShim<W> for Session {
             .and_then(|built_plan| InterpreterFactory::get(self.ctx.clone(), built_plan))
             .and_then(|interpreter| build_runtime(self.ctx.get_max_threads()).map(|runtime| (runtime, interpreter)))
             .and_then(|(runtime, interpreter)| runtime.block_on(data_puller(&interpreter, self.ctx.try_get_statistics())))
-            .and_then(|data_blocks| MysqlStream::create(data_blocks).execute(writer).or_else(|_| Result::Ok(())))
-            .or_else(|error_codes| Result::Ok(()))
-        // .or_else(|exception| writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", exception).as_bytes()).or_else(|_| { Result::Ok(()) }))
+            .map(|v| Some(v)).transpose().map(done(query_writer)).map(|s| s.or_else(|_| Result::Ok(()))).unwrap_or(anyhow::Result::Ok(()))
     }
 
     fn on_init(&mut self, db: &str, writer: InitWriter<W>) -> Result<()> {
         debug!("MySQL use db:{}", db);
         match self.ctx.set_default_db(db.to_string()) {
             Ok(..) => {
-                writer.ok()?;
+                writer.ok().or_else(Self::on_write_error);
             }
             Err(e) => {
                 error!("{}", e);
-                writer.error(
-                    ErrorKind::ER_BAD_DB_ERROR,
-                    format!("Unknown database: {:?}", db).as_bytes()
-                )?;
+                writer.error(ErrorKind::ER_BAD_DB_ERROR, format!("Unknown database: {:?}", db).as_bytes())?;
             }
         };
         Ok(())
