@@ -6,6 +6,8 @@ use anyhow::Result;
 use common_planners::PlanNode;
 
 use crate::optimizers::FilterPushDownOptimizer;
+use crate::optimizers::GroupByPushDownOptimizer;
+use crate::optimizers::LimitPushDownOptimizer;
 use crate::sessions::FuseQueryContextRef;
 
 pub trait IOptimizer {
@@ -19,8 +21,11 @@ pub struct Optimizer {
 
 impl Optimizer {
     pub fn create(ctx: FuseQueryContextRef) -> Self {
-        let optimizers: Vec<Box<dyn IOptimizer>> =
-            vec![Box::new(FilterPushDownOptimizer::create(ctx))];
+        let optimizers: Vec<Box<dyn IOptimizer>> = vec![
+            Box::new(FilterPushDownOptimizer::create(ctx.clone())),
+            Box::new(LimitPushDownOptimizer::create(ctx.clone())),
+            Box::new(GroupByPushDownOptimizer::create(ctx)),
+        ];
         Optimizer { optimizers }
     }
 

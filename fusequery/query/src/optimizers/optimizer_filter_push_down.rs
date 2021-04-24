@@ -11,7 +11,7 @@ use common_planners::FilterPlan;
 use common_planners::PlanNode;
 
 use crate::optimizers::IOptimizer;
-use crate::optimizers::OptimizerUtil;
+use crate::optimizers::OptimizerCommon;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct FilterPushDownOptimizer {}
@@ -32,11 +32,11 @@ impl IOptimizer for FilterPushDownOptimizer {
             schema: Arc::new(DataSchema::empty())
         });
 
-        let projection_map = OptimizerUtil::projection_to_map(plan)?;
+        let projection_map = OptimizerCommon::projection_to_map(plan)?;
         plan.walk_postorder(|node| {
             if let PlanNode::Filter(filter) = node {
                 let rewritten_expr =
-                    OptimizerUtil::rewrite_alias_expr(&filter.predicate, &projection_map)?;
+                    OptimizerCommon::rewrite_alias_expr(&filter.predicate, &projection_map)?;
                 let mut new_filter_node = PlanNode::Filter(FilterPlan {
                     predicate: rewritten_expr,
                     input: rewritten_node.input()

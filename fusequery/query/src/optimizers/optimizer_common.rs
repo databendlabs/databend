@@ -8,9 +8,9 @@ use anyhow::Result;
 use common_planners::ExpressionPlan;
 use common_planners::PlanNode;
 
-pub struct OptimizerUtil;
+pub struct OptimizerCommon;
 
-impl OptimizerUtil {
+impl OptimizerCommon {
     pub fn projections_to_map(
         plan: &PlanNode,
         map: &mut HashMap<String, ExpressionPlan>

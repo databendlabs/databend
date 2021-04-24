@@ -12,7 +12,7 @@ use common_planners::EmptyPlan;
 use common_planners::PlanNode;
 
 use crate::optimizers::IOptimizer;
-use crate::optimizers::OptimizerUtil;
+use crate::optimizers::OptimizerCommon;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct GroupByPushDownOptimizer {}
@@ -33,14 +33,14 @@ impl IOptimizer for GroupByPushDownOptimizer {
             schema: Arc::new(DataSchema::empty())
         });
 
-        let projection_map = OptimizerUtil::projection_to_map(plan)?;
+        let projection_map = OptimizerCommon::projection_to_map(plan)?;
         plan.walk_postorder(|node| {
             match node {
                 PlanNode::AggregatorPartial(plan) => {
                     let aggr_expr =
-                        OptimizerUtil::rewrite_alias_exprs(&projection_map, &plan.aggr_expr)?;
+                        OptimizerCommon::rewrite_alias_exprs(&projection_map, &plan.aggr_expr)?;
                     let group_expr =
-                        OptimizerUtil::rewrite_alias_exprs(&projection_map, &plan.group_expr)?;
+                        OptimizerCommon::rewrite_alias_exprs(&projection_map, &plan.group_expr)?;
                     let mut new_node = PlanNode::AggregatorPartial(AggregatorPartialPlan {
                         group_expr,
                         aggr_expr,
@@ -51,9 +51,9 @@ impl IOptimizer for GroupByPushDownOptimizer {
                 }
                 PlanNode::AggregatorFinal(plan) => {
                     let aggr_expr =
-                        OptimizerUtil::rewrite_alias_exprs(&projection_map, &plan.aggr_expr)?;
+                        OptimizerCommon::rewrite_alias_exprs(&projection_map, &plan.aggr_expr)?;
                     let group_expr =
-                        OptimizerUtil::rewrite_alias_exprs(&projection_map, &plan.group_expr)?;
+                        OptimizerCommon::rewrite_alias_exprs(&projection_map, &plan.group_expr)?;
                     let mut new_node = PlanNode::AggregatorFinal(AggregatorFinalPlan {
                         group_expr,
                         aggr_expr,
