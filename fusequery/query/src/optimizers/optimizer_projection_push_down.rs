@@ -59,7 +59,10 @@ fn exprvec_to_column_names(expr: &[ExpressionPlan], accum: &mut HashSet<String>)
 fn expr_to_name(e: &ExpressionPlan) -> Result<String> {
     match e {
         ExpressionPlan::Column(name) => Ok(name.clone()),
-        _ => Err(anyhow::anyhow!("Ignore ExpressionPlan that is not Column."))
+        _ => {
+            println!("{:?}", e);
+            Err(anyhow::anyhow!("Ignore ExpressionPlan that is not Column."))
+        } 
     }
 }
 
