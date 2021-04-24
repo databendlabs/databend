@@ -20,7 +20,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::SortPlan;
 
 use crate::optimizers::IOptimizer;
-use crate::optimizers::Optimizer;
+use crate::optimizers::OptimizerCommon;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ProjectionPushDownOptimizer {}
@@ -34,7 +34,7 @@ impl ProjectionPushDownOptimizer {
 /// Recursively walk an expression tree, collecting the unique set of column names
 /// referenced in the expression
 fn expr_to_column_names(expr: &ExpressionPlan, accum: &mut HashSet<String>) -> Result<()> {
-    let expressions = Optimizer::expression_plan_children(expr)?;
+    let expressions = OptimizerCommon::expression_plan_children(expr)?;
 
     let _expressions = expressions
         .iter()
