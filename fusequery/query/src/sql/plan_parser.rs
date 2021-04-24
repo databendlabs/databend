@@ -29,14 +29,13 @@ use sqlparser::ast::TableFactor;
 
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
-use crate::sql::make_data_type;
-use crate::sql::make_sql_interval_to_literal;
 use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::sql_statement::DfUseDatabase;
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfExplain;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
+use crate::sql::SqlCommon;
 
 pub struct PlanParser {
     ctx: FuseQueryContextRef
@@ -137,7 +136,7 @@ impl PlanParser {
         for col in create.columns.iter() {
             fields.push(DataField::new(
                 &col.name.value,
-                make_data_type(&col.data_type)?,
+                SqlCommon::make_data_type(&col.data_type)?,
                 false
             ));
         }
@@ -209,13 +208,14 @@ impl PlanParser {
         }
 
         let plan = if !select.group_by.is_empty() || has_aggregator {
-            self.aggregate(&plan, projection_expr, &select.group_by)?
+            // Put order after the aggregation projection.
+            self.aggregate(&plan, projection_expr, &select.group_by)
+                .and_then(|plan| self.sort(&plan, order_by))?
         } else {
-            self.project(&plan, projection_expr)?
+            // Put order front of projection.
+            self.sort(&plan, order_by)
+                .and_then(|plan| self.project(&plan, projection_expr))?
         };
-
-        // order by
-        let plan = self.sort(&plan, order_by)?;
 
         // limit.
         let plan = self.limit(&plan, limit)?;
@@ -375,11 +375,11 @@ impl PlanParser {
                 expr: Box::new(ExpressionPlan::Literal(DataValue::Utf8(Some(
                     value.clone()
                 )))),
-                data_type: make_data_type(data_type)?
+                data_type: SqlCommon::make_data_type(data_type)?
             }),
             sqlparser::ast::Expr::Cast { expr, data_type } => Ok(ExpressionPlan::Cast {
                 expr: Box::from(self.sql_to_rex(expr, schema)?),
-                data_type: make_data_type(data_type)?
+                data_type: SqlCommon::make_data_type(data_type)?
             }),
             sqlparser::ast::Expr::Value(sqlparser::ast::Value::Interval {
                 value,
@@ -387,7 +387,7 @@ impl PlanParser {
                 leading_precision,
                 last_field,
                 fractional_seconds_precision
-            }) => make_sql_interval_to_literal(
+            }) => SqlCommon::make_sql_interval_to_literal(
                 value,
                 leading_field,
                 leading_precision,
