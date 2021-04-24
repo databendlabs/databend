@@ -1,20 +1,26 @@
 name: Stateless Tests
 on: [push, pull_request]
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Builds
-        id: docker_build
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          components: rustfmt
+          override: true
+      - name: Build
+        run: cargo build --release
+      - name: Run Tests
         run: |
-          docker build -t fuse-test -f docker/stateless/Dockerfile .
-
-      - name: Stateless Tests
-        run: docker run --rm fuse-test
+          echo "Starting fues-query"
+          nohub target/release/fuse-query&
+          sleep 3
+          echo "Starting fuse-test"
+          cd tests
+          ./fuse-test
