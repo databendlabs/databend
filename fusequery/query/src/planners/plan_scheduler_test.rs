@@ -19,12 +19,12 @@ fn test_scheduler_plan_with_one_node() -> anyhow::Result<()> {
         .project(vec![col("number")])?
         .build()?;
 
-    let plans = PlanScheduler::schedule(ctx, &plan)?;
+    let plans = PlanScheduler::reschedule(ctx, &plan)?;
     let expects = vec!["Projection: number:UInt64
   Filter: (number = 1)
     ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]"];
 
-    for (i, plan) in plans.iter().enumerate() {
+    for (i, (_, plan)) in plans.iter().enumerate() {
         let actual = format!("{:?}", plan);
         assert_eq!(expects[i], actual);
     }
@@ -52,7 +52,7 @@ fn test_scheduler_plan_with_more_cpus_1_node() -> anyhow::Result<()> {
         .project(vec![col("number")])?
         .build()?;
 
-    let plans = PlanScheduler::schedule(ctx, &plan)?;
+    let plans = PlanScheduler::reschedule(ctx, &plan)?;
     let expects = vec!["Projection: number:UInt64
   Filter: (number = 1)
     ReadDataSource: scan partitions: [320], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]"];
@@ -85,7 +85,7 @@ async fn test_scheduler_plan_with_3_nodes() -> anyhow::Result<()> {
         .project(vec![col("number")])?
         .build()?;
 
-    let plans = PlanScheduler::schedule(ctx, &plan)?;
+    let plans = PlanScheduler::reschedule(ctx, &plan)?;
     let expects = vec!["Projection: number:UInt64
   Filter: (number = 1)
     ReadDataSource: scan partitions: [107], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
@@ -97,7 +97,7 @@ async fn test_scheduler_plan_with_3_nodes() -> anyhow::Result<()> {
     ReadDataSource: scan partitions: [106], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
     ];
 
-    for (i, plan) in plans.iter().enumerate() {
+    for (i, (_, plan)) in plans.iter().enumerate() {
         let actual = format!("{:?}", plan);
         assert_eq!(expects[i], actual);
     }
@@ -126,7 +126,7 @@ async fn test_scheduler_plan_with_3_nodes_diff_priority() -> anyhow::Result<()> 
         .project(vec![col("number")])?
         .build()?;
 
-    let plans = PlanScheduler::schedule(ctx, &plan)?;
+    let plans = PlanScheduler::reschedule(ctx, &plan)?;
     let expects = vec!["Projection: number:UInt64
   Filter: (number = 1)
     ReadDataSource: scan partitions: [161], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
@@ -138,7 +138,7 @@ async fn test_scheduler_plan_with_3_nodes_diff_priority() -> anyhow::Result<()> 
     ReadDataSource: scan partitions: [62], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
     ];
 
-    for (i, plan) in plans.iter().enumerate() {
+    for (i, (_, plan)) in plans.iter().enumerate() {
         let actual = format!("{:?}", plan);
         assert_eq!(expects[i], actual);
     }
