@@ -10,8 +10,8 @@ use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
-use common_datavalues::{self as datavalues};
 
 use crate::IFunction;
 use crate::LiteralFunction;
@@ -61,7 +61,7 @@ impl IFunction for AggregatorCountFunction {
 
     fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
         let rows = block.num_rows();
-        self.state = datavalues::data_value_arithmetic_op(
+        self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
             DataValue::UInt64(Some(rows as u64))
@@ -75,7 +75,7 @@ impl IFunction for AggregatorCountFunction {
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
         let val = states[self.depth].clone();
-        self.state = datavalues::data_value_arithmetic_op(
+        self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
             val

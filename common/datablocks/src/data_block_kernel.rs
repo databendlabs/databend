@@ -6,8 +6,7 @@ use anyhow::bail;
 use anyhow::Result;
 use common_arrow::arrow::array::UInt32Builder;
 use common_arrow::arrow::compute;
-use common_datavalues::merge_array;
-use common_datavalues::merge_indices;
+use common_datavalues::DataArrayMerge;
 
 use crate::DataBlock;
 
@@ -117,7 +116,8 @@ impl DataBlock {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let indices = merge_indices(&sort_arrays[0], &sort_arrays[1], &sort_options, limit)?;
+        let indices =
+            DataArrayMerge::merge_indices(&sort_arrays[0], &sort_arrays[1], &sort_options, limit)?;
 
         let indices = match limit {
             Some(limit) => &indices[0..limit.min(indices.len())],
@@ -128,7 +128,7 @@ impl DataBlock {
             .columns()
             .iter()
             .zip(rhs.columns().iter())
-            .map(|(a, b)| merge_array(a, b, &indices))
+            .map(|(a, b)| DataArrayMerge::merge_array(a, b, &indices))
             .collect::<Result<Vec<_>>>()?;
 
         Ok(DataBlock::create(lhs.schema().clone(), arrays))

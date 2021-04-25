@@ -6,7 +6,7 @@
 fn test_data_value_arithmetic() {
     use pretty_assertions::assert_eq;
 
-    use super::*;
+    use crate::*;
 
     #[allow(dead_code)]
     struct ScalarTest<'a> {
@@ -620,7 +620,11 @@ fn test_data_value_arithmetic() {
 
     for t in tests {
         for (i, args) in t.args.iter().enumerate() {
-            let result = data_value_arithmetic_op(t.op.clone(), args[0].clone(), args[1].clone());
+            let result = DataValueArithmetic::data_value_arithmetic_op(
+                t.op.clone(),
+                args[0].clone(),
+                args[1].clone()
+            );
             match result {
                 Ok(v) => assert_eq!(v, t.expect[i]),
                 Err(e) => assert_eq!(t.error[i], e.to_string())

@@ -107,7 +107,7 @@ fn test_array_comparison() {
 
     for t in tests {
         for (i, args) in t.args.iter().enumerate() {
-            let result = data_array_comparison_op(
+            let result = DataArrayComparison::data_array_comparison_op(
                 t.op.clone(),
                 &DataColumnarValue::Array(args[0].clone()),
                 &DataColumnarValue::Array(args[1].clone())
@@ -188,7 +188,7 @@ fn test_array_scalar_comparison() {
     ];
 
     for t in tests {
-        let result = data_array_comparison_op(
+        let result = DataArrayComparison::data_array_comparison_op(
             t.op.clone(),
             &DataColumnarValue::Array(t.array),
             &DataColumnarValue::Scalar(t.scalar)
@@ -268,7 +268,7 @@ fn test_scalar_array_comparison() {
     ];
 
     for t in tests {
-        let result = data_array_comparison_op(
+        let result = DataArrayComparison::data_array_comparison_op(
             t.op.clone(),
             &DataColumnarValue::Scalar(t.scalar),
             &DataColumnarValue::Array(t.array)
