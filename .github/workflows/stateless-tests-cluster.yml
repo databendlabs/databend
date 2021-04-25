@@ -1,4 +1,4 @@
-name: Stateless Tests
+name: Stateless Tests(Cluster)
 on: [push, pull_request]
 
 env:
@@ -15,14 +15,7 @@ jobs:
           components: rustfmt
           override: true
       - name: Build
-        run: cargo build --release
-      - name: Run Stateless Tests with Standalone mode
-        run: |
-          echo "Starting Standalone fuse-query"
-          scripts/ci/fusequery-standalone.sh
-          echo "Starting fuse-test"
-          cd tests
-          ./fuse-test
+        run: cargo build --verbose
       - name: Run Stateless Tests with Cluster mode
         run: |
           echo "Starting Cluster fuse-query"
