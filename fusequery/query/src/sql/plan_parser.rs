@@ -48,22 +48,11 @@ impl PlanParser {
         Self { ctx }
     }
 
-    // fn build_from_sql_impl(&self, query: &str) -> Result<PlanNode> {
-    //
-    //     let statements = DfParser::parse_sql(query)?;
-    //     if statements.len() != 1 {
-    //         bail!("Only support single query");
-    //     }
-    //     self.statement_to_plan(&statements[0])
-    // }
-
     pub fn build_from_sql(&self, query: &str) -> Result<PlanNode, ErrorCodes> {
         DfParser::parse_sql(query).and_then(|statement| {
             statement.first().map(|statement| self.statement_to_plan(&statement))
                 .unwrap_or(Result::Err(ErrorCodes::SyntexException(String::from("Only support single query"))))
         })
-        // self.build_from_sql_impl(query)
-        //     .map_err(|exception| ErrorCodes::UnknownException(format!("{}", exception)))
     }
 
     pub fn statement_to_plan(&self, statement: &DfStatement) -> Result<PlanNode, ErrorCodes> {
@@ -74,9 +63,7 @@ impl PlanParser {
         match statement {
             DfStatement::Statement(v) => self.sql_statement_to_plan(&v).map_err(convert_error),
             DfStatement::Explain(v) => self.sql_explain_to_plan(&v).map_err(convert_error),
-            DfStatement::ShowDatabases(_) => {
-                self.build_from_sql("SELECT name FROM system.databases ORDER BY name")
-            }
+            DfStatement::ShowDatabases(_) => self.build_from_sql("SELECT name FROM system.databases ORDER BY name"),
             DfStatement::CreateDatabase(v) => self.sql_create_database_to_plan(&v).map_err(convert_error),
             DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(&v).map_err(convert_error),
             DfStatement::CreateTable(v) => self.sql_create_table_to_plan(&v).map_err(convert_error),
@@ -86,12 +73,9 @@ impl PlanParser {
                 format!(
                     "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
                     self.ctx.get_current_database()
-                )
-                    .as_str()
+                ).as_str()
             ),
-            DfStatement::ShowSettings(_) => {
-                self.build_from_sql("SELECT name FROM system.settings")
-            }
+            DfStatement::ShowSettings(_) => self.build_from_sql("SELECT name FROM system.settings"),
         }
     }
 
