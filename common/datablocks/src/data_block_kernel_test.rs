@@ -10,15 +10,13 @@ fn test_data_block_kernel_take() -> anyhow::Result<()> {
 
     use crate::*;
 
-    let schema = Arc::new(DataSchema::new(vec![
-        DataField::new("a", DataType::Int64, false),
-        DataField::new("b", DataType::Utf8, false),
-    ]));
-
-    let raw = DataBlock::create(schema.clone(), vec![
-        Arc::new(Int64Array::from(vec![1, 2, 3])),
-        Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
-    ]);
+    let raw = DataBlock::try_from_iter(vec![
+        (
+            "a",
+            Arc::new(Int64Array::from(vec![1, 2, 3])) as DataArrayRef
+        ),
+        ("b", Arc::new(StringArray::from(vec!["b1", "b2", "b3"]))),
+    ])?;
 
     let take = DataBlock::block_take_by_indices(&raw, &[0, 2])?;
     assert_eq!(raw.schema(), take.schema());
@@ -44,24 +42,28 @@ fn test_data_block_kernel_concat() -> anyhow::Result<()> {
 
     use crate::*;
 
-    let schema = Arc::new(DataSchema::new(vec![
-        DataField::new("a", DataType::Int64, false),
-        DataField::new("b", DataType::Utf8, false),
-    ]));
-
     let blocks = vec![
-        DataBlock::create(schema.clone(), vec![
-            Arc::new(Int64Array::from(vec![1, 2, 3])),
-            Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
-        ]),
-        DataBlock::create(schema.clone(), vec![
-            Arc::new(Int64Array::from(vec![4, 5, 6])),
-            Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
-        ]),
-        DataBlock::create(schema.clone(), vec![
-            Arc::new(Int64Array::from(vec![7, 8, 9])),
-            Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
-        ]),
+        DataBlock::try_from_iter(vec![
+            (
+                "a",
+                Arc::new(Int64Array::from(vec![1, 2, 3])) as DataArrayRef
+            ),
+            ("b", Arc::new(StringArray::from(vec!["b1", "b2", "b3"]))),
+        ])?,
+        DataBlock::try_from_iter(vec![
+            (
+                "a",
+                Arc::new(Int64Array::from(vec![4, 5, 6])) as DataArrayRef
+            ),
+            ("b", Arc::new(StringArray::from(vec!["b1", "b2", "b3"]))),
+        ])?,
+        DataBlock::try_from_iter(vec![
+            (
+                "a",
+                Arc::new(Int64Array::from(vec![7, 8, 9])) as DataArrayRef
+            ),
+            ("b", Arc::new(StringArray::from(vec!["b1", "b2", "b3"]))),
+        ])?,
     ];
 
     let results = DataBlock::concat_blocks(&blocks)?;
@@ -146,5 +148,44 @@ fn test_data_block_sort() -> anyhow::Result<()> {
         ];
         crate::assert_blocks_eq!(expected, vec![results]);
     }
+    Ok(())
+}
+
+#[test]
+fn test_data_block_kernel_try_from_iter() -> anyhow::Result<()> {
+    use std::sync::Arc;
+
+    use common_datavalues::*;
+
+    use crate::*;
+
+    let a = (
+        "a",
+        Arc::new(Int64Array::from(vec![Some(1), None, Some(3)])) as DataArrayRef
+    );
+    let b = (
+        "b",
+        Arc::new(StringArray::from(vec!["b1", "b2", "b3"])) as DataArrayRef
+    );
+
+    let block = DataBlock::try_from_iter(vec![a, b])?;
+
+    let expected_schema = Arc::new(DataSchema::new(vec![
+        DataField::new("a", DataType::Int64, true),
+        DataField::new("b", DataType::Utf8, false),
+    ]));
+    assert_eq!(block.schema(), &expected_schema);
+
+    let expected = vec![
+        "+---+----+",
+        "| a | b  |",
+        "+---+----+",
+        "| 1 | b1 |",
+        "|   | b2 |",
+        "| 3 | b3 |",
+        "+---+----+",
+    ];
+    crate::assert_blocks_eq!(expected, vec![block]);
+
     Ok(())
 }

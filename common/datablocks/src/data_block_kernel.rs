@@ -2,12 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
 use anyhow::bail;
 use anyhow::Result;
 use common_arrow::arrow::array::UInt32Builder;
 use common_arrow::arrow::compute;
 use common_datavalues::merge_array;
 use common_datavalues::merge_indices;
+use common_datavalues::DataArrayRef;
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
 
 use crate::DataBlock;
 
@@ -162,5 +167,54 @@ impl DataBlock {
                 DataBlock::merge_sort_block(&left, &right, sort_columns_descriptions, limit)
             }
         }
+    }
+
+    /// Create a `DataBlock` from an iterable list of pairs of the
+    /// form `(field_name, array)`, with the same requirements on
+    /// fields and arrays as [`DataBlock::create`]. This method is
+    /// often used to create a single `DataBlock` from arrays,
+    /// e.g. for testing.
+    ///
+    /// The resulting schema is marked as nullable for each column if
+    /// the array for that column is has any nulls. To explicitly
+    /// specify nullability, use [`DataBlock::try_from_iter_with_nullable`]
+    ///
+    /// Example:
+    /// let a: DataArrayRef = Arc::new(Int32Array::from(vec![1, 2]));
+    /// let b: DataArrayRef = Arc::new(StringArray::from(vec!["a", "b"]));
+    ///
+    /// let block = DataBlock::try_from_iter(vec![
+    ///   ("a", a),
+    ///   ("b", b),
+    /// ]);
+    pub fn try_from_iter<I, F>(value: I) -> Result<Self>
+    where
+        I: IntoIterator<Item = (F, DataArrayRef)>,
+        F: AsRef<str>
+    {
+        let iter = value.into_iter().map(|(field_name, array)| {
+            let nullable = array.null_count() > 0;
+            (field_name, array, nullable)
+        });
+
+        Self::try_from_iter_with_nullable(iter)
+    }
+
+    pub fn try_from_iter_with_nullable<I, F>(value: I) -> Result<Self>
+    where
+        I: IntoIterator<Item = (F, DataArrayRef, bool)>,
+        F: AsRef<str>
+    {
+        let (fields, columns) = value
+            .into_iter()
+            .map(|(field_name, array, nullable)| {
+                let field_name = field_name.as_ref();
+                let field = DataField::new(field_name, array.data_type().clone(), nullable);
+                (field, array)
+            })
+            .unzip();
+
+        let schema = Arc::new(DataSchema::new(fields));
+        Ok(DataBlock::create(schema, columns))
     }
 }
