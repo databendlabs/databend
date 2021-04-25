@@ -8,4 +8,4 @@ mod clickhouse;
 mod mysql;
 
 pub use clickhouse::ClickHouseHandler;
-pub use mysql::MysqlHandler;
+pub use mysql::MySQLHandler;

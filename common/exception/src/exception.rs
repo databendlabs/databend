@@ -26,6 +26,7 @@ build_error_codes! {
     UnknownTypeOfQuery(2),
     UnImplement(3),
     UnknownDatabase(4),
+    UnknownSetting(5),
 
     UnknownException(1000),
     TokioError(1001)

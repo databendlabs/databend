@@ -9,8 +9,9 @@ use common_planners::CreateDatabasePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::IInterpreter;
+use crate::interpreters::{IInterpreter, InterpreterPtr};
 use crate::sessions::FuseQueryContextRef;
+use common_exception::ErrorCodes;
 
 pub struct CreateDatabaseInterpreter {
     ctx: FuseQueryContextRef,
@@ -20,8 +21,8 @@ pub struct CreateDatabaseInterpreter {
 impl CreateDatabaseInterpreter {
     pub fn try_create(
         ctx: FuseQueryContextRef,
-        plan: CreateDatabasePlan
-    ) -> Result<Arc<dyn IInterpreter>> {
+        plan: CreateDatabasePlan,
+    ) -> Result<InterpreterPtr, ErrorCodes> {
         Ok(Arc::new(CreateDatabaseInterpreter { ctx, plan }))
     }
 }

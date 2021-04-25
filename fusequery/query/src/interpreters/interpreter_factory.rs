@@ -21,7 +21,7 @@ use crate::sessions::FuseQueryContextRef;
 pub struct InterpreterFactory;
 
 impl InterpreterFactory {
-    fn get_impl(ctx: FuseQueryContextRef, plan: PlanNode) -> Result<Arc<dyn IInterpreter>> {
+    pub fn get(ctx: FuseQueryContextRef, plan: PlanNode) -> Result<Arc<dyn IInterpreter>, ErrorCodes> {
         match plan {
             PlanNode::Select(v) => SelectInterpreter::try_create(ctx, v),
             PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx, v),
@@ -29,11 +29,7 @@ impl InterpreterFactory {
             PlanNode::CreateDatabase(v) => CreateDatabaseInterpreter::try_create(ctx, v),
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx, v),
-            _ => bail!("Can't get the interpreter by plan:{}", plan.name())
+            _ => Result::Err(ErrorCodes::UnknownTypeOfQuery(format!("Can't get the interpreter by plan:{}", plan.name())))
         }
-    }
-    pub fn get(ctx: FuseQueryContextRef, plan: PlanNode) -> Result<Arc<dyn IInterpreter>, ErrorCodes> {
-        InterpreterFactory::get_impl(ctx, plan)
-            .map_err(|exception| ErrorCodes::UnknownException(format!("{}", exception)))
     }
 }

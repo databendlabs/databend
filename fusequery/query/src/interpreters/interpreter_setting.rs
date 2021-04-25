@@ -12,8 +12,9 @@ use common_planners::SettingPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::IInterpreter;
+use crate::interpreters::{IInterpreter, InterpreterPtr};
 use crate::sessions::FuseQueryContextRef;
+use common_exception::ErrorCodes;
 
 pub struct SettingInterpreter {
     ctx: FuseQueryContextRef,
@@ -21,7 +22,7 @@ pub struct SettingInterpreter {
 }
 
 impl SettingInterpreter {
-    pub fn try_create(ctx: FuseQueryContextRef, set: SettingPlan) -> Result<Arc<dyn IInterpreter>> {
+    pub fn try_create(ctx: FuseQueryContextRef, set: SettingPlan) -> Result<InterpreterPtr, ErrorCodes> {
         Ok(Arc::new(SettingInterpreter { ctx, set }))
     }
 }

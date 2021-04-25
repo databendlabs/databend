@@ -9,8 +9,9 @@ use common_planners::CreateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::IInterpreter;
+use crate::interpreters::{IInterpreter, InterpreterPtr};
 use crate::sessions::FuseQueryContextRef;
+use common_exception::ErrorCodes;
 
 pub struct CreateTableInterpreter {
     ctx: FuseQueryContextRef,
@@ -21,7 +22,7 @@ impl CreateTableInterpreter {
     pub fn try_create(
         ctx: FuseQueryContextRef,
         plan: CreateTablePlan
-    ) -> Result<Arc<dyn IInterpreter>> {
+    ) -> Result<InterpreterPtr, ErrorCodes> {
         Ok(Arc::new(CreateTableInterpreter { ctx, plan }))
     }
 }

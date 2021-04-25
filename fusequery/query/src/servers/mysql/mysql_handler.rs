@@ -54,13 +54,13 @@ impl<W: io::Write> MysqlShim<W> for Session {
         unimplemented!()
     }
 
-    fn on_query(&mut self, query: &str, query_writer: QueryResultWriter<W>) -> std::io::Result<()> {
+    fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> std::io::Result<()> {
         debug!("{}", query);
         self.ctx.reset().unwrap();
         // let start = Instant::now();
 
         fn build_runtime(max_threads: Result<u64>) -> Result<Runtime, ErrorCodes> {
-            max_threads.map_err(|e| ErrorCodes::UnknownException(String::from("Missing max_thread settings.")))
+            max_threads.map_err(|e| ErrorCodes::UnknownSetting(String::from("Missing max_thread settings.")))
                 .and_then(|v| {
                     tokio::runtime::Builder::new_multi_thread().enable_io()
                         .worker_threads(v as usize).build()
@@ -81,7 +81,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
             .and_then(|built_plan| InterpreterFactory::get(self.ctx.clone(), built_plan))
             .and_then(|interpreter| build_runtime(self.ctx.get_max_threads()).map(|runtime| (runtime, interpreter)))
             .and_then(|(runtime, interpreter)| runtime.block_on(data_puller(&interpreter, self.ctx.try_get_statistics())))
-            .map(|v| Some(v)).transpose().map(done(query_writer)).unwrap()
+            .map(|v| Some(v)).transpose().map(done(writer)).unwrap()
     }
 
     fn on_init(&mut self, database_name: &str, writer: InitWriter<W>) -> std::io::Result<()> {
@@ -91,25 +91,24 @@ impl<W: io::Write> MysqlShim<W> for Session {
     }
 }
 
-pub struct MysqlHandler {
+pub struct MySQLHandler {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionRef
+    session_manager: SessionRef,
 }
 
-impl MysqlHandler {
+impl MySQLHandler {
     pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionRef) -> Self {
-        Self {
+        MySQLHandler {
             conf,
             cluster,
-            session_manager
+            session_manager,
         }
     }
 
     pub fn start(&self) -> Result<()> {
         let listener = net::TcpListener::bind(format!(
-            "{}:{}",
-            self.conf.mysql_handler_host, self.conf.mysql_handler_port
+            "{}:{}", self.conf.mysql_handler_host, self.conf.mysql_handler_port
         ))?;
         let pool = ThreadPool::new(self.conf.mysql_handler_thread_num as usize);
 

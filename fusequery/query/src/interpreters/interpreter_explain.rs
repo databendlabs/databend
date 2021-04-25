@@ -17,10 +17,11 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use log::debug;
 
-use crate::interpreters::IInterpreter;
+use crate::interpreters::{IInterpreter, InterpreterPtr};
 use crate::optimizers::Optimizer;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
+use common_exception::ErrorCodes;
 
 pub struct ExplainInterpreter {
     ctx: FuseQueryContextRef,
@@ -30,8 +31,8 @@ pub struct ExplainInterpreter {
 impl ExplainInterpreter {
     pub fn try_create(
         ctx: FuseQueryContextRef,
-        explain: ExplainPlan
-    ) -> Result<Arc<dyn IInterpreter>> {
+        explain: ExplainPlan,
+    ) -> Result<InterpreterPtr, ErrorCodes> {
         Ok(Arc::new(ExplainInterpreter { ctx, explain }))
     }
 }
