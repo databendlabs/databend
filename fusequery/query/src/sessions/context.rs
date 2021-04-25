@@ -145,7 +145,7 @@ impl FuseQueryContext {
         self.current_database.as_ref().read().clone()
     }
 
-    pub fn set_default_db(&self, new_database_name: String) -> anyhow::Result<(), ErrorCodes> {
+    pub fn set_current_database(&self, new_database_name: String) -> anyhow::Result<(), ErrorCodes> {
         self.datasource.get_database(new_database_name.as_str())
             .map(|data_database| -> (){ *self.current_database.write() = new_database_name.to_string(); })
             .map_err(|_| ErrorCodes::UnknownDatabase(format!("Database {}  doesn't exist.", new_database_name)))

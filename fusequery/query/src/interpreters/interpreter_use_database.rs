@@ -37,7 +37,7 @@ impl IInterpreter for UseDatabaseInterpreter {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let db = self.plan.db.clone();
         if self.ctx.get_datasource().get_databases()?.contains(&db) {
-            self.ctx.set_default_db(db)?;
+            self.ctx.set_current_database(db)?;
         } else {
             bail!("Unknown database: {}", db)
         }

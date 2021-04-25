@@ -87,7 +87,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
     fn on_init(&mut self, database_name: &str, writer: InitWriter<W>) -> std::io::Result<()> {
         debug!("Use `{}` for MySQLHandler", database_name);
         use crate::servers::mysql::endpoint::on_init_done as done;
-        self.ctx.set_default_db(database_name.to_string()).map(|_| Some(())).transpose().map(done(writer)).unwrap()
+        self.ctx.set_current_database(database_name.to_string()).map(|_| Some(())).transpose().map(done(writer)).unwrap()
     }
 }
 
