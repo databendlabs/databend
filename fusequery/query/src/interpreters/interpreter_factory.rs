@@ -4,7 +4,6 @@
 
 use std::sync::Arc;
 
-use anyhow::bail;
 use anyhow::Result;
 use common_exception::ErrorCodes;
 use common_planners::PlanNode;

@@ -2,12 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::io::Error;
-use std::marker::PhantomData;
-use std::sync::Arc;
-use std::sync::Mutex;
-
-use anyhow::bail;
+use log::debug;
+use log::error;
 use anyhow::Result;
 use msql_srv::*;
 
@@ -19,6 +15,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 
 use crate::servers::mysql::endpoint::IMySQLEndpoint;
+use std::time::Instant;
 
 struct MySQLOnQueryEndpoint;
 
@@ -93,6 +90,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
     }
 
     fn err(error: ErrorCodes, writer: QueryResultWriter<'a, T>) -> std::io::Result<()> {
+        error!("ResultError {:?}", error);
         writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())
     }
 }
@@ -105,7 +103,12 @@ pub fn done<'a, W: std::io::Write>(writer: QueryResultWriter<'a, W>) -> impl FnO
     return move |res: Input| -> Output {
         match res {
             Err(error) => MySQLOnQueryEndpoint::err(error, writer),
-            Ok(value) => MySQLOnQueryEndpoint::ok(value, writer)
+            Ok(value) => {
+                let start = Instant::now();
+                let output = MySQLOnQueryEndpoint::ok(value, writer);
+                debug!("MySQLHandler send to client cost:{:?}", start.elapsed());
+                output
+            }
         }
     };
 }

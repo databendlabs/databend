@@ -8,4 +8,5 @@ edition = "2018"
 
 [dependencies] # In alphabetical order
 thiserror = "1.0.24"
+sqlparser = "0.9"
 

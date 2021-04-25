@@ -14,7 +14,6 @@ use common_planners::Statistics;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use log::debug;
-use log::error;
 use metrics::histogram;
 use msql_srv::*;
 use threadpool::ThreadPool;
@@ -57,10 +56,10 @@ impl<W: io::Write> MysqlShim<W> for Session {
     fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> std::io::Result<()> {
         debug!("{}", query);
         self.ctx.reset().unwrap();
-        // let start = Instant::now();
+        let start = Instant::now();
 
         fn build_runtime(max_threads: Result<u64>) -> Result<Runtime, ErrorCodes> {
-            max_threads.map_err(|e| ErrorCodes::UnknownSetting(String::from("Missing max_thread settings.")))
+            max_threads.map_err(|_| ErrorCodes::UnknownSetting(String::from("Missing max_thread settings.")))
                 .and_then(|v| {
                     tokio::runtime::Builder::new_multi_thread().enable_io()
                         .worker_threads(v as usize).build()
@@ -77,11 +76,18 @@ impl<W: io::Write> MysqlShim<W> for Session {
         }
 
         use crate::servers::mysql::endpoint::on_query_done as done;
-        PlanParser::create(self.ctx.clone()).build_from_sql(query)
+        let output = PlanParser::create(self.ctx.clone()).build_from_sql(query)
             .and_then(|built_plan| InterpreterFactory::get(self.ctx.clone(), built_plan))
             .and_then(|interpreter| build_runtime(self.ctx.get_max_threads()).map(|runtime| (runtime, interpreter)))
             .and_then(|(runtime, interpreter)| runtime.block_on(data_puller(&interpreter, self.ctx.try_get_statistics())))
-            .map(|v| Some(v)).transpose().map(done(writer)).unwrap()
+            .map(|v| Some(v)).transpose().map(done(writer)).unwrap();
+
+        histogram!(
+            super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
+            start.elapsed()
+        );
+
+        output
     }
 
     fn on_init(&mut self, database_name: &str, writer: InitWriter<W>) -> std::io::Result<()> {
