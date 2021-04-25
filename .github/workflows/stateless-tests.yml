@@ -14,14 +14,12 @@ jobs:
           profile: minimal
           components: rustfmt
           override: true
-      - uses: Swatinem/rust-cache@v1
       - name: Build
         run: cargo build --release
-      - name: Run Tests
+      - name: Run Stateless Tests with Standalone
         run: |
           echo "Starting fues-query"
-          nohup target/release/fuse-query --log-level ERROR&
-          sleep 3
+          scripts/ci/fusequery-standalone.sh
           echo "Starting fuse-test"
           cd tests
           ./fuse-test
