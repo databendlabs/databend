@@ -76,7 +76,7 @@ impl PlanParser {
             DfStatement::ShowTables(_) => self.build_from_sql_impl(
                 format!(
                     "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
-                    self.ctx.get_default_db()?
+                    self.ctx.get_current_database()
                 )
                 .as_str()
             ),
@@ -131,7 +131,7 @@ impl PlanParser {
     }
 
     pub fn sql_create_table_to_plan(&self, create: &DfCreateTable) -> Result<PlanNode> {
-        let mut db = self.ctx.get_default_db()?;
+        let mut db = self.ctx.get_current_database();
         if create.name.0.is_empty() {
             bail!("Create table name is empty");
         }
@@ -281,7 +281,7 @@ impl PlanParser {
     fn create_relation(&self, relation: &sqlparser::ast::TableFactor) -> Result<PlanNode> {
         match relation {
             sqlparser::ast::TableFactor::Table { name, args, .. } => {
-                let mut db_name = self.ctx.get_default_db()?;
+                let mut db_name = self.ctx.get_current_database();
                 let mut table_name = name.to_string();
                 if name.0.len() == 2 {
                     db_name = name.0[0].to_string();

@@ -2,9 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+pub use self::mysql_handler::MysqlHandler;
+
+mod endpoint;
 mod mysql_handler;
 mod mysql_metrics;
-mod mysql_on_query_endpoint;
-
-pub use self::mysql_handler::MysqlHandler;
-// pub use self::mysql_stream::MysqlStream;

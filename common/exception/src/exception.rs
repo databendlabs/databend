@@ -25,6 +25,7 @@ build_error_codes! {
     MySQLProtocolError(1),
     UnknownTypeOfQuery(2),
     UnImplement(3),
+    UnknownDatabase(4),
 
     UnknownException(1000),
     TokioError(1001)

@@ -18,6 +18,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 
+use crate::servers::mysql::endpoint::IMySQLEndpoint;
+
 struct MySQLOnQueryEndpoint;
 
 impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOnQueryEndpoint {
@@ -93,14 +95,6 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
     fn err(error: ErrorCodes, writer: QueryResultWriter<'a, T>) -> std::io::Result<()> {
         writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())
     }
-}
-
-trait IMySQLEndpoint<Writer> {
-    type Input;
-
-    fn ok(data: Self::Input, writer: Writer) -> std::io::Result<()>;
-
-    fn err(error: ErrorCodes, writer: Writer) -> std::io::Result<()>;
 }
 
 type Input = anyhow::Result<Vec<DataBlock>, ErrorCodes>;
