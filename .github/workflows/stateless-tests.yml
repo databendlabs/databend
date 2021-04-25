@@ -16,10 +16,17 @@ jobs:
           override: true
       - name: Build
         run: cargo build --release
-      - name: Run Stateless Tests with Standalone
+      - name: Run Stateless Tests with Standalone mode
         run: |
-          echo "Starting fues-query"
+          echo "Starting Standalone fuse-query"
           scripts/ci/fusequery-standalone.sh
+          echo "Starting fuse-test"
+          cd tests
+          ./fuse-test
+      - name: Run Stateless Tests with Cluster mode
+        run: |
+          echo "Starting Cluster fuse-query"
+          scripts/ci/fusequery-cluster-3-nodes.sh
           echo "Starting fuse-test"
           cd tests
           ./fuse-test

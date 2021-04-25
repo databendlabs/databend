@@ -4,7 +4,7 @@ killall fuse-query
 sleep 1
 
 echo 'start cluster-1'
-nohup ../../target/release/fuse-query --rpc-api-address=0.0.0.0:9091 --http-api-address=0.0.0.0:8081 --mysql-handler-port=3307 --metric-api-address=0.0.0.0:7071 &
+nohup target/release/fuse-query --rpc-api-address=0.0.0.0:9091 --http-api-address=0.0.0.0:8081 --mysql-handler-port=3307 --metric-api-address=0.0.0.0:7071 --log-level ERROR &
 
 echo "Waiting on cluster-1..."
 while ! nc -z localhost 9091; do
@@ -16,7 +16,7 @@ while ! nc -z localhost 8081; do
 done
 
 echo 'start cluster-2'
-nohup ../../target/release/fuse-query --rpc-api-address=0.0.0.0:9092 --http-api-address=0.0.0.0:8082 --mysql-handler-port=3308 --metric-api-address=0.0.0.0:7072 &
+nohup target/release/fuse-query --rpc-api-address=0.0.0.0:9092 --http-api-address=0.0.0.0:8082 --mysql-handler-port=3308 --metric-api-address=0.0.0.0:7072 --log-level ERROR &
 
 echo "Waiting on cluster-2..."
 while ! nc -z localhost 9092; do
@@ -24,7 +24,7 @@ while ! nc -z localhost 9092; do
 done
 
 echo 'start cluster-3'
-nohup ../../target/release/fuse-query --rpc-api-address=0.0.0.0:9093 --http-api-address=0.0.0.0:8083 --mysql-handler-port=3309 --metric-api-address=0.0.0.0:7073 &
+nohup target/release/fuse-query --rpc-api-address=0.0.0.0:9093 --http-api-address=0.0.0.0:8083 --mysql-handler-port=3309 --metric-api-address=0.0.0.0:7073 --log-level ERROR &
 
 echo "Waiting on cluster-3..."
 while ! nc -z localhost 9093; do
