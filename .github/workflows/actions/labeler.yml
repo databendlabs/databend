@@ -1,0 +1,14 @@
+fusequery:
+  - fusequery/**/*
+
+fusestore:
+  - fusestore/**/*
+
+`type:testing`:
+  - tests/**/*
+
+`type:deploy`:
+  - deploy/**/*
+
+`type:documentation`:
+  - docs/**/*
