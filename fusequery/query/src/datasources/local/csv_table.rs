@@ -71,6 +71,10 @@ impl ITable for CsvTable {
         Ok(self.schema.clone())
     }
 
+    fn is_local(&self) -> bool {
+        true
+    }
+
     fn read_plan(&self, ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
         let start_line: usize = if self.has_header { 1 } else { 0 };
         let file = &self.file;

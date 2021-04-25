@@ -71,6 +71,11 @@ impl ITable for NumbersTable {
         Ok(self.schema.clone())
     }
 
+    // As remote for performance test.
+    fn is_local(&self) -> bool {
+        false
+    }
+
     fn read_plan(&self, ctx: FuseQueryContextRef, scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
         let mut total = ctx.get_max_block_size()? as u64;
 
