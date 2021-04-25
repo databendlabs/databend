@@ -20,6 +20,8 @@ fn test_scheduler_plan_with_one_node() -> anyhow::Result<()> {
         .build()?;
 
     let plans = PlanScheduler::reschedule(ctx, &plan)?;
+    assert_eq!(0, plans.len());
+
     let expects = vec!["Projection: number:UInt64
   Filter: (number = 1)
     ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]"];
@@ -53,6 +55,7 @@ fn test_scheduler_plan_with_more_cpus_1_node() -> anyhow::Result<()> {
         .build()?;
 
     let plans = PlanScheduler::reschedule(ctx, &plan)?;
+    assert_eq!(0, plans.len());
     let expects = vec!["Projection: number:UInt64
   Filter: (number = 1)
     ReadDataSource: scan partitions: [320], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]"];
@@ -64,7 +67,7 @@ fn test_scheduler_plan_with_more_cpus_1_node() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn test_scheduler_plan_with_3_nodes() -> anyhow::Result<()> {
     use common_planners::*;
     use pretty_assertions::assert_eq;
@@ -86,6 +89,7 @@ async fn test_scheduler_plan_with_3_nodes() -> anyhow::Result<()> {
         .build()?;
 
     let plans = PlanScheduler::reschedule(ctx, &plan)?;
+    assert_eq!(3, plans.len());
     let expects = vec!["Projection: number:UInt64
   Filter: (number = 1)
     ReadDataSource: scan partitions: [107], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
@@ -104,7 +108,22 @@ async fn test_scheduler_plan_with_3_nodes() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
+async fn test_scheduler_plan_with_3_nodes_local_table() -> anyhow::Result<()> {
+    use pretty_assertions::assert_eq;
+
+    use crate::planners::PlanScheduler;
+    use crate::sql::PlanParser;
+
+    let ctx = crate::tests::try_create_context_with_nodes(3).await?;
+    let plan = PlanParser::create(ctx.clone()).build_from_sql("select * from system.settings")?;
+
+    let plans = PlanScheduler::reschedule(ctx, &plan)?;
+    assert_eq!(0, plans.len());
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_scheduler_plan_with_3_nodes_diff_priority() -> anyhow::Result<()> {
     use common_planners::*;
     use pretty_assertions::assert_eq;
@@ -127,6 +146,7 @@ async fn test_scheduler_plan_with_3_nodes_diff_priority() -> anyhow::Result<()> 
         .build()?;
 
     let plans = PlanScheduler::reschedule(ctx, &plan)?;
+    assert_eq!(3, plans.len());
     let expects = vec!["Projection: number:UInt64
   Filter: (number = 1)
     ReadDataSource: scan partitions: [161], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
