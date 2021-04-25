@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use common_exception::Result;
 use common_exception::ErrorCodes;
 use common_planners::PlanNode;
 
@@ -20,7 +20,7 @@ use crate::sessions::FuseQueryContextRef;
 pub struct InterpreterFactory;
 
 impl InterpreterFactory {
-    pub fn get(ctx: FuseQueryContextRef, plan: PlanNode) -> Result<Arc<dyn IInterpreter>, ErrorCodes> {
+    pub fn get(ctx: FuseQueryContextRef, plan: PlanNode) -> Result<Arc<dyn IInterpreter>> {
         match plan {
             PlanNode::Select(v) => SelectInterpreter::try_create(ctx, v),
             PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx, v),

@@ -7,7 +7,8 @@ use std::net;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::Result;
+// use anyhow::Result;
+use common_exception::Result;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCodes;
 use common_planners::Statistics;
@@ -58,7 +59,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
         self.ctx.reset().unwrap();
         let start = Instant::now();
 
-        fn build_runtime(max_threads: Result<u64>) -> Result<Runtime, ErrorCodes> {
+        fn build_runtime(max_threads: anyhow::Result<u64>) -> Result<Runtime> {
             max_threads.map_err(|_| ErrorCodes::UnknownSetting(String::from("Missing max_thread settings.")))
                 .and_then(|v| {
                     tokio::runtime::Builder::new_multi_thread().enable_io()
@@ -67,8 +68,8 @@ impl<W: io::Write> MysqlShim<W> for Session {
                 })
         }
 
-        type DataPuller<'a> = BoxFuture<'a, Result<Vec<DataBlock>, ErrorCodes>>;
-        fn data_puller<'a>(interpreter: &'a Arc<dyn IInterpreter>, _statistics: Result<Statistics>) -> DataPuller<'a> {
+        type DataPuller<'a> = BoxFuture<'a, Result<Vec<DataBlock>>>;
+        fn data_puller<'a>(interpreter: &'a Arc<dyn IInterpreter>, _statistics: anyhow::Result<Statistics>) -> DataPuller<'a> {
             return interpreter.execute().then(|r_stream| match r_stream {
                 Ok(stream) => stream.collect().left_future(),
                 Err(e) => futures::future::err(e).right_future()
@@ -112,7 +113,7 @@ impl MySQLHandler {
         }
     }
 
-    pub fn start(&self) -> Result<()> {
+    pub fn start(&self) -> anyhow::Result<()> {
         let listener = net::TcpListener::bind(format!(
             "{}:{}", self.conf.mysql_handler_host, self.conf.mysql_handler_port
         ))?;

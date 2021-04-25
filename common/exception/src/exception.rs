@@ -36,3 +36,6 @@ build_error_codes! {
     UnknownException(1000),
     TokioError(1001)
 }
+
+pub type Result<T> = std::result::Result<T, ErrorCodes>;
+

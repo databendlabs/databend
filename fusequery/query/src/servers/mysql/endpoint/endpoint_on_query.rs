@@ -4,7 +4,6 @@
 
 use log::debug;
 use log::error;
-use anyhow::Result;
 use msql_srv::*;
 
 use common_arrow::arrow::datatypes::DataType;
@@ -13,6 +12,7 @@ use common_arrow::arrow::util::display::array_value_to_string;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
+use common_exception::Result;
 
 use crate::servers::mysql::endpoint::IMySQLEndpoint;
 use std::time::Instant;
@@ -28,7 +28,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
             return dataset_writer.completed(0, 0);
         }
 
-        fn convert_field_type(field: &Field) -> Result<ColumnType, ErrorCodes> {
+        fn convert_field_type(field: &Field) -> Result<ColumnType> {
             match field.data_type() {
                 DataType::Int8 => Ok(ColumnType::MYSQL_TYPE_LONG),
                 DataType::Int16 => Ok(ColumnType::MYSQL_TYPE_LONG),
@@ -48,7 +48,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
             }
         }
 
-        fn make_column_from_field(field: &Field) -> Result<Column, ErrorCodes> {
+        fn make_column_from_field(field: &Field) -> Result<Column> {
             convert_field_type(field).map(|column_type| {
                 Column {
                     table: "".to_string(),
@@ -59,7 +59,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
             })
         }
 
-        fn convert_schema(schema: &DataSchemaRef) -> Result<Vec<Column>, ErrorCodes> {
+        fn convert_schema(schema: &DataSchemaRef) -> Result<Vec<Column>> {
             schema.fields().iter().map(make_column_from_field).collect()
         }
 
