@@ -4,11 +4,11 @@ fusequery:
 fusestore:
   - fusestore/**/*
 
-`type:testing`:
+testing:
   - tests/**/*
 
-`type:deploy`:
+deploy:
   - deploy/**/*
 
-`type:documentation`:
+documentation:
   - docs/**/*
