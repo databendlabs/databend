@@ -56,14 +56,16 @@ fn exprvec_to_column_names(expr: &[ExpressionPlan], accum: &mut HashSet<String>)
     Ok(())
 }
 
-fn expr_to_name(e: &ExpressionPlan) -> Result<String> {
-    match e {
-        ExpressionPlan::Column(name) => Ok(name.clone()),
-        _ => {
-            println!("{:?}", e);
-            Err(anyhow::anyhow!("Ignore ExpressionPlan that is not Column."))
-        } 
+fn projection_to_column_names(plan: &PlanNode, columns: &mut HashSet<String>) -> Result<()> {
+    match plan {
+        PlanNode::Projection(v) => exprvec_to_column_names(&v.expr, columns)?,
+        // Aggregator aggr_expr is the projection
+        PlanNode::AggregatorPartial(v) => exprvec_to_column_names(&v.aggr_expr, columns)?,
+        // Aggregator aggr_expr is the projection
+        PlanNode::AggregatorFinal(v) => exprvec_to_column_names(&v.aggr_expr, columns)?,
+        other => projection_to_column_names(other.input().as_ref(), columns)?
     }
+    Ok(())
 }
 
 fn get_projected_schema(
@@ -112,42 +114,45 @@ fn optimize_plan(
     let mut new_required_columns = required_columns.clone();
     match plan {
         PlanNode::Projection(ProjectionPlan {
-            expr,
-            schema,
+            expr: _,
+            schema: _,
             input
         }) => {
             // projection:
             // remove any expression that is not needed
             // and construct the new set of columns
-            let mut new_expr = Vec::new();
-            let mut new_fields = Vec::new();
+            // let mut new_expr = Vec::new();
+            // let mut new_fields = Vec::new();
             // Gather all columns needed
-            schema
-                .fields()
-                .iter()
-                .enumerate()
-                .try_for_each(|(i, field)| {
-                    if required_columns.contains(field.name()) {
-                        new_expr.push(expr[i].clone());
-                        new_fields.push(field.clone());
-                        // gather the new set of required columns
-                        expr_to_column_names(&expr[i], &mut new_required_columns)
-                    } else {
-                        Ok(())
-                    }
-                })?;
-
+            // schema
+            //    .fields()
+            //    .iter()
+            //    .enumerate()
+            //    .try_for_each(|(i, field)| {
+            //        if required_columns.contains(field.name()) {
+            //            new_expr.push(expr[i].clone());
+            //            new_fields.push(field.clone());
+            //            // gather the new set of required columns
+            //            expr_to_column_names(&expr[i], &mut new_required_columns)
+            //        } else {
+            //            Ok(())
+            //        }
+            //    })?;
+            projection_to_column_names(&plan, &mut new_required_columns)?;
             let new_input = optimize_plan(optimizer, &input, &new_required_columns, true)?;
-            if new_fields.is_empty() {
-                // no need for an expression
-                Ok(new_input)
-            } else {
-                Ok(PlanNode::Projection(ProjectionPlan {
-                    expr: new_expr,
-                    input: Arc::new(new_input),
-                    schema: Arc::new(DataSchema::new(new_fields))
-                }))
-            }
+            //if new_fields.is_empty() {
+            //    // no need for an expression
+            //    Ok(new_input)
+            //} else {
+            let mut cloned_plan = plan.clone();
+            cloned_plan.set_input(&new_input)?;
+            Ok(cloned_plan)
+            //Ok(PlanNode::Projection(ProjectionPlan {
+            //    expr: expr.to_vec(),
+            //    input: Arc::new(new_input),
+            //    schema: Arc::new(DataSchema::from(schema)?)
+            //}))
+            //}
         }
         PlanNode::Filter(FilterPlan { predicate, input }) => {
             expr_to_column_names(predicate, &mut new_required_columns)?;
@@ -168,47 +173,58 @@ fn optimize_plan(
         PlanNode::AggregatorFinal(AggregatorFinalPlan {
             aggr_expr,
             group_expr,
-            schema,
+            schema: _,
             input
         }) => {
             // final aggregate:
             // Remove any aggregate expression that is not needed
             // and construct the new set of columns
             exprvec_to_column_names(group_expr, &mut new_required_columns)?;
+            exprvec_to_column_names(aggr_expr, &mut new_required_columns)?;
 
             // Gather all columns needed
-            let mut new_aggr_expr = Vec::new();
-            aggr_expr.iter().try_for_each(|expr| {
-                let name = expr_to_name(&expr)?;
+            //let mut new_aggr_expr = Vec::new();
+            //aggr_expr.iter().try_for_each(|expr| {
+            //    let name = expr_to_name(&expr)?;
+            //
+            //    if required_columns.contains(&name) {
+            //        new_aggr_expr.push(expr.clone());
+            //        new_required_columns.insert(name.clone());
+            //        expr_to_column_names(expr, &mut new_required_columns)
+            //    } else {
+            //        Ok(())
+            //    }
+            //})?;
 
-                if required_columns.contains(&name) {
-                    new_aggr_expr.push(expr.clone());
-                    new_required_columns.insert(name.clone());
-                    expr_to_column_names(expr, &mut new_required_columns)
-                } else {
-                    Ok(())
-                }
-            })?;
+            //let new_schema = DataSchema::new(
+            //    schema
+            //        .fields()
+            //        .iter()
+            //        .filter(|x| new_required_columns.contains(x.name()))
+            //        .cloned()
+            //        .collect()
+            //);
+            //projection_to_column_names(&plan, &mut new_required_columns)?;
+            let new_input = optimize_plan(optimizer, &input, &new_required_columns, true)?;
+            //if new_fields.is_empty() {
+            //    // no need for an expression
+            //    Ok(new_input)
+            //} else {
+            let mut cloned_plan = plan.clone();
+            cloned_plan.set_input(&new_input)?;
+            Ok(cloned_plan)
 
-            let new_schema = DataSchema::new(
-                schema
-                    .fields()
-                    .iter()
-                    .filter(|x| new_required_columns.contains(x.name()))
-                    .cloned()
-                    .collect()
-            );
-            Ok(PlanNode::AggregatorFinal(AggregatorFinalPlan {
-                aggr_expr: new_aggr_expr,
-                group_expr: group_expr.clone(),
-                schema: Arc::new(new_schema),
-                input: Arc::new(optimize_plan(
-                    optimizer,
-                    &input,
-                    &new_required_columns,
-                    true
-                )?)
-            }))
+            //Ok(PlanNode::AggregatorFinal(AggregatorFinalPlan {
+            //    aggr_expr: new_aggr_expr,
+            //    group_expr: group_expr.clone(),
+            //    schema: Arc::new(new_schema),
+            //    input: Arc::new(optimize_plan(
+            //        optimizer,
+            //        &input,
+            //        &new_required_columns,
+            //        true
+            //    )?)
+            //}))
         }
         PlanNode::AggregatorPartial(AggregatorPartialPlan {
             aggr_expr,
@@ -219,33 +235,38 @@ fn optimize_plan(
             // Remove any aggregate expression that is not needed
             // and construct the new set of columns
             exprvec_to_column_names(group_expr, &mut new_required_columns)?;
+            exprvec_to_column_names(aggr_expr, &mut new_required_columns)?;
 
             // Gather all columns needed
-            let mut new_aggr_expr = Vec::new();
-            aggr_expr.iter().try_for_each(|expr| {
-                let name = expr_to_name(&expr)?;
+            //let mut new_aggr_expr = Vec::new();
+            //aggr_expr.iter().try_for_each(|expr| {
+            //    let name = expr_to_name(&expr)?;
+            //
+            //    if required_columns.contains(&name) {
+            //        new_aggr_expr.push(expr.clone());
+            //        new_required_columns.insert(name.clone());
+            //        expr_to_column_names(expr, &mut new_required_columns)
+            //    } else {
+            //        Ok(())
+            //    }
+            //})?;
 
-                if required_columns.contains(&name) {
-                    new_aggr_expr.push(expr.clone());
-                    new_required_columns.insert(name.clone());
-                    expr_to_column_names(expr, &mut new_required_columns)
-                } else {
-                    Ok(())
-                }
-            })?;
+            let new_input = optimize_plan(optimizer, &input, &new_required_columns, true)?;
+            let mut cloned_plan = plan.clone();
+            cloned_plan.set_input(&new_input)?;
+            Ok(cloned_plan)
 
-            Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan {
-                aggr_expr: new_aggr_expr,
-                group_expr: group_expr.clone(),
-                input: Arc::new(optimize_plan(
-                    optimizer,
-                    &input,
-                    &new_required_columns,
-                    has_projection
-                )?)
-            }))
+            //Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan {
+            //    aggr_expr: new_aggr_expr,
+            //    group_expr: group_expr.clone(),
+            //    input: Arc::new(optimize_plan(
+            //        optimizer,
+            //        &input,
+            //        &new_required_columns,
+            //        has_projection
+            //    )?)
+            //}))
         }
-
         PlanNode::ReadSource(ReadDataSourcePlan {
             db,
             table,
@@ -282,12 +303,11 @@ impl IOptimizer for ProjectionPushDownOptimizer {
     }
 
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
-        let required_columns = plan
-            .schema()
-            .fields()
-            .iter()
-            .map(|f| f.name().clone())
-            .collect::<HashSet<String>>();
+        //println!("{:?}", plan);
+        let required_columns = HashSet::new();
+        //projection_to_column_names(plan, &mut required_columns)?;
+        //println!("{:?}", required_columns);
+        //let has_projection = !required_columns.is_empty();
         let new_node = optimize_plan(self, plan, &required_columns, false)?;
         Ok(new_node)
     }

@@ -36,6 +36,30 @@ mod tests {
     }
 
     #[test]
+    fn test_projection_push_down_optimizer_group_by() -> anyhow::Result<()> {
+        use pretty_assertions::assert_eq;
+
+        use crate::optimizers::*;
+        use crate::sql::*;
+
+        let ctx = crate::tests::try_create_context()?;
+
+        let plan = PlanParser::create(ctx.clone())
+            .build_from_sql("select value as c1, name as c2 from system.settings group by c2")?;
+
+        let mut project_push_down = ProjectionPushDownOptimizer::create(ctx);
+        let optimized = project_push_down.optimize(&plan)?;
+        let expect = "\
+        AggregatorFinal: groupBy=[[c2]], aggr=[[value as c1, name as c2]]\
+        \n  RedistributeStage[state: AggregatorMerge, id: 0]\
+        \n    AggregatorPartial: groupBy=[[c2]], aggr=[[value as c1, name as c2]]\
+        \n      ReadDataSource: scan partitions: [1], scan schema: [name:Utf8, value:Utf8], statistics: [read_rows: 0, read_bytes: 0]";
+        let actual = format!("{:?}", optimized);
+        assert_eq!(expect, actual);
+        Ok(())
+    }
+
+    #[test]
     fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
         let ctx = crate::tests::try_create_context()?;
 
