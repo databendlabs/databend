@@ -86,7 +86,7 @@ Note:
 - [x] Query Optimizer
 - [x] Predicate Push Down
 - [x] Limit Push Down
-- [ ] Projection Push Down (WIP)
+- [x] Projection Push Down
 - [x] Type coercion
 - [x] Parallel Query Execution
 - [x] Distributed Query Execution
