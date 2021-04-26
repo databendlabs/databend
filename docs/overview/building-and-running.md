@@ -44,7 +44,6 @@ $ make setup
 3. Running:
 
 ```text
-$ cd query
 $ make run
 ```
 
