@@ -55,17 +55,13 @@ impl PlanParser {
     }
 
     pub fn statement_to_plan(&self, statement: &DfStatement) -> Result<PlanNode, ErrorCodes> {
-        fn convert_error(error: anyhow::Error) -> ErrorCodes {
-            ErrorCodes::UnknownException(format!("{}", error))
-        }
-
         match statement {
-            DfStatement::Statement(v) => self.sql_statement_to_plan(&v).map_err(convert_error),
-            DfStatement::Explain(v) => self.sql_explain_to_plan(&v).map_err(convert_error),
+            DfStatement::Statement(v) => self.sql_statement_to_plan(&v).map_err(ErrorCodes::from_anyhow),
+            DfStatement::Explain(v) => self.sql_explain_to_plan(&v).map_err(ErrorCodes::from_anyhow),
             DfStatement::ShowDatabases(_) => self.build_from_sql("SELECT name FROM system.databases ORDER BY name"),
-            DfStatement::CreateDatabase(v) => self.sql_create_database_to_plan(&v).map_err(convert_error),
-            DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(&v).map_err(convert_error),
-            DfStatement::CreateTable(v) => self.sql_create_table_to_plan(&v).map_err(convert_error),
+            DfStatement::CreateDatabase(v) => self.sql_create_database_to_plan(&v).map_err(ErrorCodes::from_anyhow),
+            DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(&v).map_err(ErrorCodes::from_anyhow),
+            DfStatement::CreateTable(v) => self.sql_create_table_to_plan(&v).map_err(ErrorCodes::from_anyhow),
 
             // TODO: support like and other filters in show queries
             DfStatement::ShowTables(_) => self.build_from_sql(

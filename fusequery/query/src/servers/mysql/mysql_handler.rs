@@ -73,7 +73,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
             return interpreter.execute().then(|r_stream| match r_stream {
                 Ok(stream) => stream.collect().left_future(),
                 Err(e) => futures::future::err(e).right_future()
-            }).map(|data_blocks| data_blocks.map_err(|exception| ErrorCodes::UnknownException(format!("{}", exception)))).boxed();
+            }).map(|data_blocks| data_blocks.map_err(ErrorCodes::from_anyhow)).boxed();
         }
 
         use crate::servers::mysql::endpoint::on_query_done as done;
