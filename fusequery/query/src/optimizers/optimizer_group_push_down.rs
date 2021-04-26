@@ -32,9 +32,8 @@ impl IOptimizer for GroupByPushDownOptimizer {
         let mut rewritten_node = PlanNode::Empty(EmptyPlan {
             schema: Arc::new(DataSchema::empty())
         });
-        println!("{:?}", plan);
+
         let projection_map = OptimizerCommon::projection_to_map(plan)?;
-        println!("{:?}", projection_map);
         plan.walk_postorder(|node| {
             match node {
                 PlanNode::AggregatorPartial(plan) => {
