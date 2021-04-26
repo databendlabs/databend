@@ -58,6 +58,10 @@ impl ITable for SettingsTable {
         Ok(self.schema.clone())
     }
 
+    fn is_local(&self) -> bool {
+        true
+    }
+
     fn read_plan(&self, _ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),

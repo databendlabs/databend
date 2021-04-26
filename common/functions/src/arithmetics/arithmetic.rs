@@ -7,12 +7,13 @@ use std::fmt;
 use anyhow::ensure;
 use anyhow::Result;
 use common_datablocks::DataBlock;
+use common_datavalues::DataArrayArithmetic;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
-use common_datavalues::{self as datavalues};
 
 use crate::arithmetics::ArithmeticDivFunction;
 use crate::arithmetics::ArithmeticMinusFunction;
@@ -71,7 +72,7 @@ impl IFunction for ArithmeticFunction {
     }
 
     fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
-        datavalues::numerical_arithmetic_coercion(
+        common_datavalues::numerical_arithmetic_coercion(
             &self.op,
             &self.left.return_type(input_schema)?,
             &self.right.return_type(input_schema)?
@@ -85,7 +86,7 @@ impl IFunction for ArithmeticFunction {
     fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         let left = &self.left.eval(block)?;
         let right = &self.right.eval(block)?;
-        let result = datavalues::data_array_arithmetic_op(self.op.clone(), left, right)?;
+        let result = DataArrayArithmetic::data_array_arithmetic_op(self.op.clone(), left, right)?;
 
         match (left, right) {
             (DataColumnarValue::Scalar(_), DataColumnarValue::Scalar(_)) => {
@@ -121,7 +122,7 @@ impl IFunction for ArithmeticFunction {
     }
 
     fn merge_result(&self) -> Result<DataValue> {
-        datavalues::data_value_arithmetic_op(
+        DataValueArithmetic::data_value_arithmetic_op(
             self.op.clone(),
             self.left.merge_result()?,
             self.right.merge_result()?

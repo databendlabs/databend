@@ -49,26 +49,21 @@ impl PipelineBuilder {
         let mut pipeline = Pipeline::create();
         self.plan.walk_postorder(|node| match node {
             PlanNode::Stage(plan) => {
-                let executors = self.ctx.try_get_cluster()?.get_nodes()?;
-                if !executors.is_empty() {
-                    // Reset the pipes already in the pipeline.
-                    pipeline.reset();
+                let executors = PlanScheduler::reschedule(self.ctx.clone(), &plan.input.as_ref())?;
 
-                    // Reset the context partition.
+                // If the executors is not empty.
+                if !executors.is_empty() {
+                    // Reset.
+                    pipeline.reset();
                     self.ctx.reset()?;
 
-                    // Build the distributed plan for the executors.
-                    let children = plan.input().as_ref().clone();
-                    let remote_plan_nodes = PlanScheduler::schedule(self.ctx.clone(), &children)?;
-
                     // Add remote transform as the new source.
-                    for (i, remote_plan_node) in remote_plan_nodes.iter().enumerate() {
-                        let executor = executors[i % executors.len()].clone();
+                    for (address, remote_plan) in executors.iter() {
                         let remote_transform = RemoteTransform::try_create(
                             self.ctx.clone(),
                             self.ctx.get_id()?,
-                            executor.address,
-                            remote_plan_node.clone()
+                            address.clone(),
+                            remote_plan.clone()
                         )?;
                         pipeline.add_source(Arc::new(remote_transform))?;
                     }

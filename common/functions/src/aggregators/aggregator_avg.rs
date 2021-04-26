@@ -7,13 +7,14 @@ use std::fmt;
 use anyhow::bail;
 use anyhow::Result;
 use common_datablocks::DataBlock;
+use common_datavalues::DataArrayAggregate;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DataValueAggregateOperator;
+use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
-use common_datavalues::{self as datavalues};
 
 use crate::IFunction;
 
@@ -66,15 +67,15 @@ impl IFunction for AggregatorAvgFunction {
         let val = self.arg.eval(&block)?;
 
         if let DataValue::Struct(values) = self.state.clone() {
-            let sum = datavalues::data_value_arithmetic_op(
+            let sum = DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
                 values[0].clone(),
-                datavalues::data_array_aggregate_op(
+                DataArrayAggregate::data_array_aggregate_op(
                     DataValueAggregateOperator::Sum,
                     val.to_array(1)?
                 )?
             )?;
-            let count = datavalues::data_value_arithmetic_op(
+            let count = DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
                 values[1].clone(),
                 DataValue::UInt64(Some(rows as u64))
@@ -94,12 +95,12 @@ impl IFunction for AggregatorAvgFunction {
         if let (DataValue::Struct(new_states), DataValue::Struct(old_states)) =
             (val, self.state.clone())
         {
-            let sum = datavalues::data_value_arithmetic_op(
+            let sum = DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
                 new_states[0].clone(),
                 old_states[0].clone()
             )?;
-            let count = datavalues::data_value_arithmetic_op(
+            let count = DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
                 new_states[1].clone(),
                 old_states[1].clone()
@@ -111,7 +112,7 @@ impl IFunction for AggregatorAvgFunction {
 
     fn merge_result(&self) -> Result<DataValue> {
         Ok(if let DataValue::Struct(states) = self.state.clone() {
-            datavalues::data_value_arithmetic_op(
+            DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Div,
                 states[0].clone(),
                 states[1].clone()

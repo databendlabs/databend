@@ -53,6 +53,10 @@ impl ITable for RemoteTable {
         Ok(self.schema.clone())
     }
 
+    fn is_local(&self) -> bool {
+        false
+    }
+
     fn read_plan(&self, _ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
         bail!("RemoteTable read_plan not yet implemented")
     }

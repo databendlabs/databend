@@ -7,13 +7,14 @@ use std::fmt;
 use anyhow::bail;
 use anyhow::Result;
 use common_datablocks::DataBlock;
+use common_datavalues::DataArrayAggregate;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DataValueAggregateOperator;
+use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
-use common_datavalues::{self as datavalues};
 
 use crate::IFunction;
 
@@ -62,10 +63,10 @@ impl IFunction for AggregatorSumFunction {
         let rows = block.num_rows();
         let val = self.arg.eval(&block)?;
 
-        self.state = datavalues::data_value_arithmetic_op(
+        self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
-            datavalues::data_array_aggregate_op(
+            DataArrayAggregate::data_array_aggregate_op(
                 DataValueAggregateOperator::Sum,
                 val.to_array(rows)?
             )?
@@ -80,7 +81,7 @@ impl IFunction for AggregatorSumFunction {
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
         let val = states[self.depth].clone();
-        self.state = datavalues::data_value_arithmetic_op(
+        self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
             val

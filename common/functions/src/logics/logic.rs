@@ -7,11 +7,11 @@ use std::fmt;
 use anyhow::ensure;
 use anyhow::Result;
 use common_datablocks::DataBlock;
+use common_datavalues::DataArrayLogic;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValueLogicOperator;
-use common_datavalues::{self as datavalues};
 
 use crate::logics::LogicAndFunction;
 use crate::logics::LogicOrFunction;
@@ -69,11 +69,13 @@ impl IFunction for LogicFunction {
     }
 
     fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
-        Ok(DataColumnarValue::Array(datavalues::data_array_logic_op(
-            self.op.clone(),
-            &self.left.eval(block)?,
-            &self.right.eval(block)?
-        )?))
+        Ok(DataColumnarValue::Array(
+            DataArrayLogic::data_array_logic_op(
+                self.op.clone(),
+                &self.left.eval(block)?,
+                &self.right.eval(block)?
+            )?
+        ))
     }
 
     fn set_depth(&mut self, depth: usize) {

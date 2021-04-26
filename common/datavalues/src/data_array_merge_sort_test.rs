@@ -8,12 +8,11 @@ fn test_indices_other() -> anyhow::Result<()> {
 
     use common_arrow::arrow::compute::SortOptions;
 
-    use crate::merge_indices;
-    use crate::UInt32Array;
+    use crate::*;
 
     let a = Arc::new(UInt32Array::from(vec![None, Some(1), Some(2), Some(4)]));
     let b = Arc::new(UInt32Array::from(vec![None, Some(3)]));
-    let c = merge_indices(&[a], &[b], &[SortOptions::default()], None)?;
+    let c = DataArrayMerge::merge_indices(&[a], &[b], &[SortOptions::default()], None)?;
 
     // [0] false: when equal (None = None), rhs is picked
     // [1] true: None < 3
@@ -31,8 +30,7 @@ fn test_indices_many() -> anyhow::Result<()> {
 
     use common_arrow::arrow::compute::SortOptions;
 
-    use crate::merge_indices;
-    use crate::UInt32Array;
+    use crate::*;
 
     let a1 = Arc::new(UInt32Array::from(vec![None, Some(1), Some(3)]));
     let b1 = Arc::new(UInt32Array::from(vec![None, Some(2), Some(3), Some(5)]));
@@ -48,7 +46,7 @@ fn test_indices_many() -> anyhow::Result<()> {
         nulls_first: true
     };
 
-    let c = merge_indices(&[a1, a2], &[b1, b2], &[option1, option2], None)?;
+    let c = DataArrayMerge::merge_indices(&[a1, a2], &[b1, b2], &[option1, option2], None)?;
 
     // [0] true: (N = N, 2 > 1)
     // [1] false: (1 < N, irrelevant)
@@ -67,10 +65,7 @@ fn test_merge_array() -> anyhow::Result<()> {
 
     use common_arrow::arrow::compute::SortOptions;
 
-    use crate::merge_array;
-    use crate::merge_indices;
-    use crate::DataArrayRef;
-    use crate::UInt32Array;
+    use crate::*;
 
     let a1: DataArrayRef = Arc::new(UInt32Array::from(vec![Some(1), Some(3), Some(5)]));
     let b1: DataArrayRef = Arc::new(UInt32Array::from(vec![Some(2), Some(4), Some(6)]));
@@ -87,7 +82,7 @@ fn test_merge_array() -> anyhow::Result<()> {
         nulls_first: true
     };
 
-    let c = merge_indices(
+    let c = DataArrayMerge::merge_indices(
         &[a1.clone(), a2.clone()],
         &[b1.clone(), b2.clone()],
         &[option1, option2],
@@ -96,7 +91,7 @@ fn test_merge_array() -> anyhow::Result<()> {
 
     assert_eq!(c, vec![true, false, true, false, true, false]);
 
-    let d = merge_array(&a1, &b1, &c)?;
+    let d = DataArrayMerge::merge_array(&a1, &b1, &c)?;
     let expect: DataArrayRef = Arc::new(UInt32Array::from(vec![
         Some(1),
         Some(2),
@@ -116,10 +111,7 @@ fn test_merge_array2() -> anyhow::Result<()> {
 
     use common_arrow::arrow::compute::SortOptions;
 
-    use crate::merge_array;
-    use crate::merge_indices;
-    use crate::DataArrayRef;
-    use crate::UInt32Array;
+    use crate::*;
 
     let a1: DataArrayRef = Arc::new(UInt32Array::from(
         (1..500)
@@ -137,12 +129,12 @@ fn test_merge_array2() -> anyhow::Result<()> {
         nulls_first: true
     };
 
-    let c = merge_indices(&[a1.clone()], &[b1.clone()], &[option1], None)?;
+    let c = DataArrayMerge::merge_indices(&[a1.clone()], &[b1.clone()], &[option1], None)?;
 
     let c_expected = (1..1000).map(|s| s < 500).collect::<Vec<_>>();
     assert_eq!(c, c_expected);
 
-    let d = merge_array(&a1, &b1, &c)?;
+    let d = DataArrayMerge::merge_array(&a1, &b1, &c)?;
     let expect: DataArrayRef = Arc::new(UInt32Array::from(
         (1..1000)
             .map(|s| Some(s as u32))
