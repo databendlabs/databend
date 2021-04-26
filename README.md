@@ -120,7 +120,7 @@ Note:
 ### Try Datafuse
 
 * [How to Run](docs/overview/building-and-running.md)
-* [How to Run 3-node cluster](scripts/ci/fusequery-cluster-3-ndoes.sh)
+* [How to Run 3-node cluster](scripts/ci/fusequery-cluster-3-nodes.sh)
 
 ## Contributing
 
