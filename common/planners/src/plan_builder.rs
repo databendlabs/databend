@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use anyhow::bail;
 use anyhow::Result;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
@@ -97,6 +98,26 @@ impl PlanBuilder {
         })))
     }
 
+    fn aggr_expr_validity_check(&self, aggr_expr: &Vec<ExpressionPlan>) -> bool {
+        println!("{:?}", aggr_expr);
+        let aggr_fn_name: [String; 2] = ["sum".to_string(), "avg".to_string()];
+        //aggr_expr.iter().for_each(|v| match v {
+        for v in aggr_expr {
+            match v {
+                ExpressionPlan::Function { op, args: _ } => {
+                    if !aggr_fn_name.contains(&op) {
+                        println!("op: {}", op);
+                        return false;
+                    }
+                }
+                _ => {
+                    return false;
+                }
+            };
+        }
+        return true;
+    }
+
     fn aggregate(
         &self,
         mode: AggregateMode,
@@ -105,6 +126,10 @@ impl PlanBuilder {
     ) -> Result<Self> {
         let input_schema = self.plan.schema();
         let aggr_projection_fields = self.exprs_to_fields(&aggr_expr, &input_schema)?;
+
+        if !self.aggr_expr_validity_check(&aggr_expr) {
+            bail!("The expression is not an aggregate function.");
+        }
 
         Ok(match mode {
             AggregateMode::Partial => {
