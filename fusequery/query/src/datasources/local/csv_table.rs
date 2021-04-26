@@ -16,8 +16,7 @@ use common_planners::TableOptions;
 use common_streams::SendableDataBlockStream;
 
 use crate::datasources::local::CsvTableStream;
-use crate::datasources::util::count_lines;
-use crate::datasources::util::generate_parts;
+use crate::datasources::Common;
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
@@ -72,10 +71,14 @@ impl ITable for CsvTable {
         Ok(self.schema.clone())
     }
 
+    fn is_local(&self) -> bool {
+        true
+    }
+
     fn read_plan(&self, ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
         let start_line: usize = if self.has_header { 1 } else { 0 };
         let file = &self.file;
-        let lines_count = count_lines(
+        let lines_count = Common::count_lines(
             File::open(file.clone()).with_context(|| format!("Cannot find file:{}", file))?
         )?;
 
@@ -83,7 +86,7 @@ impl ITable for CsvTable {
             db: self.db.clone(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
-            partitions: generate_parts(
+            partitions: Common::generate_parts(
                 start_line as u64,
                 ctx.get_max_threads()?,
                 lines_count as u64

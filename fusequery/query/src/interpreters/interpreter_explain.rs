@@ -12,7 +12,6 @@ use common_datavalues::DataType;
 use common_datavalues::StringArray;
 use common_planners::ExplainPlan;
 use common_planners::ExplainType;
-use common_planners::PlanNode;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use log::debug;
@@ -59,7 +58,7 @@ impl IInterpreter for ExplainInterpreter {
                 let pipeline = PipelineBuilder::create(self.ctx.clone(), plan).build()?;
                 format!("{:?}", pipeline)
             }
-            _ => format!("{:?}", PlanNode::Explain(self.explain.clone()))
+            _ => format!("{:?}", plan)
         };
         let block = DataBlock::create(schema.clone(), vec![Arc::new(StringArray::from(vec![
             result.as_str(),

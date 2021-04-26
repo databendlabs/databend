@@ -7,12 +7,13 @@ use std::fmt;
 use anyhow::bail;
 use anyhow::Result;
 use common_datablocks::DataBlock;
+use common_datavalues::DataArrayAggregate;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_datavalues::DataValueAggregate;
 use common_datavalues::DataValueAggregateOperator;
-use common_datavalues::{self as datavalues};
 
 use crate::IFunction;
 
@@ -61,10 +62,10 @@ impl IFunction for AggregatorMaxFunction {
     fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
         let rows = block.num_rows();
         let val = self.arg.eval(&block)?;
-        self.state = datavalues::data_value_aggregate_op(
+        self.state = DataValueAggregate::data_value_aggregate_op(
             DataValueAggregateOperator::Max,
             self.state.clone(),
-            datavalues::data_array_aggregate_op(
+            DataArrayAggregate::data_array_aggregate_op(
                 DataValueAggregateOperator::Max,
                 val.to_array(rows)?
             )?
@@ -78,7 +79,7 @@ impl IFunction for AggregatorMaxFunction {
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
         let val = states[self.depth].clone();
-        self.state = datavalues::data_value_aggregate_op(
+        self.state = DataValueAggregate::data_value_aggregate_op(
             DataValueAggregateOperator::Max,
             self.state.clone(),
             val

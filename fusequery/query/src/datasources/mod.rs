@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[cfg(test)]
-mod tests;
+mod common_test;
 #[cfg(test)]
-mod util_test;
+mod tests;
 
+mod common;
 mod database;
 mod datasource;
 mod local;
@@ -15,8 +16,7 @@ mod system;
 mod table;
 mod table_function;
 
-pub mod util;
-
+pub use common::Common;
 pub use database::IDatabase;
 pub use datasource::DataSource;
 pub use datasource::IDataSource;

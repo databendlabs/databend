@@ -21,7 +21,7 @@ use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
 
 use crate::datasources::system::NumbersStream;
-use crate::datasources::util::generate_parts;
+use crate::datasources::Common;
 use crate::datasources::ITable;
 use crate::datasources::ITableFunction;
 use crate::sessions::FuseQueryContextRef;
@@ -71,6 +71,11 @@ impl ITable for NumbersTable {
         Ok(self.schema.clone())
     }
 
+    // As remote for performance test.
+    fn is_local(&self) -> bool {
+        false
+    }
+
     fn read_plan(&self, ctx: FuseQueryContextRef, scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
         let mut total = ctx.get_max_block_size()? as u64;
 
@@ -97,7 +102,7 @@ impl ITable for NumbersTable {
             db: "system".to_string(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
-            partitions: generate_parts(0, ctx.get_max_threads()?, total),
+            partitions: Common::generate_parts(0, ctx.get_max_threads()?, total),
             statistics: statistics.clone(),
             description: format!(
                 "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",

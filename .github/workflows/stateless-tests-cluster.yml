@@ -1,0 +1,25 @@
+name: Stateless Tests(Cluster)
+on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          components: rustfmt
+          override: true
+      - name: Build
+        run: cargo build --verbose
+      - name: Run Stateless Tests with Cluster mode
+        run: |
+          echo "Starting Cluster fuse-query"
+          scripts/ci/fusequery-cluster-3-nodes.sh
+          echo "Starting fuse-test"
+          cd tests
+          ./fuse-test

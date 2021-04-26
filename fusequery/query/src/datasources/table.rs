@@ -18,10 +18,10 @@ pub trait ITable: Sync + Send {
     fn engine(&self) -> &str;
     fn as_any(&self) -> &dyn Any;
     fn schema(&self) -> Result<DataSchemaRef>;
-
+    // Is Local or Remote.
+    fn is_local(&self) -> bool;
     // Get the read source plan.
     fn read_plan(&self, ctx: FuseQueryContextRef, scan: &ScanPlan) -> Result<ReadDataSourcePlan>;
-
-    // Read block datas from the underfling.
+    // Read block data from the underling.
     async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream>;
 }

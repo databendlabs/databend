@@ -1,0 +1,17 @@
+fusequery:
+  - fusequery/**/*
+
+fusestore:
+  - fusestore/**/*
+
+testing:
+  - tests/**/*
+
+deploy:
+  - deploy/**/*
+
+CI:
+  - scripts/**/*
+
+documentation:
+  - docs/**/*

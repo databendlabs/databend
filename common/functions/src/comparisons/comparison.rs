@@ -7,11 +7,11 @@ use std::fmt;
 use anyhow::ensure;
 use anyhow::Result;
 use common_datablocks::DataBlock;
+use common_datavalues::DataArrayComparison;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValueComparisonOperator;
-use common_datavalues::{self as datavalues};
 
 use crate::comparisons::ComparisonEqFunction;
 use crate::comparisons::ComparisonGtEqFunction;
@@ -80,7 +80,7 @@ impl IFunction for ComparisonFunction {
 
     fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         Ok(DataColumnarValue::Array(
-            datavalues::data_array_comparison_op(
+            DataArrayComparison::data_array_comparison_op(
                 self.op.clone(),
                 &self.left.eval(block)?,
                 &self.right.eval(block)?

@@ -1,0 +1,23 @@
+name: Pull Request Labeler
+on:
+  - pull_request_target
+
+jobs:
+  process:
+    name: Process
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Assign GitHub labels
+        uses: actions/labeler@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/workflows/actions/labeler.yml
+          sync-labels: true
+
+      - name: Checks if PR needs rebase
+        uses: eps1lon/actions-label-merge-conflict@releases/2.x
+        with:
+          dirtyLabel: "needs-rebase"
+          repoToken: "${{ secrets.GITHUB_TOKEN }}"

@@ -8,7 +8,7 @@ fn test_array_logic() {
 
     use pretty_assertions::assert_eq;
 
-    use super::*;
+    use crate::*;
 
     #[allow(dead_code)]
     struct ArrayTest {
@@ -44,7 +44,7 @@ fn test_array_logic() {
 
     for t in tests {
         for (i, args) in t.args.iter().enumerate() {
-            let result = data_array_logic_op(
+            let result = DataArrayLogic::data_array_logic_op(
                 t.op.clone(),
                 &DataColumnarValue::Array(args[0].clone()),
                 &DataColumnarValue::Array(args[1].clone())

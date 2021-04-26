@@ -8,7 +8,7 @@ fn test_array_arithmetic() {
 
     use pretty_assertions::assert_eq;
 
-    use super::*;
+    use crate::*;
 
     #[allow(dead_code)]
     struct ArrayTest {
@@ -290,7 +290,7 @@ fn test_array_arithmetic() {
 
     for t in tests {
         for (i, args) in t.args.iter().enumerate() {
-            let result = data_array_arithmetic_op(
+            let result = DataArrayArithmetic::data_array_arithmetic_op(
                 t.op.clone(),
                 &DataColumnarValue::Array(args[0].clone()),
                 &DataColumnarValue::Array(args[1].clone())
@@ -367,7 +367,7 @@ fn test_array_scalar_arithmetic() {
     ];
 
     for t in tests {
-        let result = data_array_arithmetic_op(
+        let result = DataArrayArithmetic::data_array_arithmetic_op(
             t.op.clone(),
             &DataColumnarValue::Array(t.array),
             &DataColumnarValue::Scalar(t.scalar)
@@ -436,7 +436,7 @@ fn test_scalar_array_arithmetic() {
     ];
 
     for t in tests {
-        let result = data_array_arithmetic_op(
+        let result = DataArrayArithmetic::data_array_arithmetic_op(
             t.op.clone(),
             &DataColumnarValue::Scalar(t.scalar),
             &DataColumnarValue::Array(t.array)

@@ -8,7 +8,7 @@ fn test_array_aggregate() {
 
     use pretty_assertions::assert_eq;
 
-    use super::*;
+    use crate::*;
 
     #[allow(dead_code)]
     struct ArrayTest {
@@ -148,7 +148,7 @@ fn test_array_aggregate() {
 
     for t in tests {
         for (i, args) in t.args.iter().enumerate() {
-            let result = data_array_aggregate_op(t.op.clone(), args.clone());
+            let result = DataArrayAggregate::data_array_aggregate_op(t.op.clone(), args.clone());
             match result {
                 Ok(v) => assert_eq!(v, t.expect[i]),
                 Err(e) => assert_eq!(t.error[i], e.to_string())
