@@ -11,6 +11,9 @@ use fuse_query::sql::PlanParser;
 use futures::StreamExt;
 
 pub mod bench_aggregate_query_sql;
+pub mod bench_filter_query_sql;
+pub mod bench_limit_query_sql;
+pub mod bench_sort_query_sql;
 
 pub async fn select_executor(sql: &str) -> Result<()> {
     let ctx = FuseQueryContext::try_create()?;

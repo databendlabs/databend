@@ -6,7 +6,7 @@ use criterion::criterion_group;
 use criterion::criterion_main;
 use criterion::Criterion;
 
-use crate::benchmarks::criterion_benchmark_suite;
+use crate::suites::criterion_benchmark_suite;
 
 fn criterion_benchmark_aggregate_query(c: &mut Criterion) {
     let queries = vec![

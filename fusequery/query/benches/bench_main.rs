@@ -4,8 +4,11 @@
 
 use criterion::criterion_main;
 
-mod benchmarks;
+mod suites;
 
 criterion_main! {
-    benchmarks::bench_aggregate_query_sql::benches,
+    suites::bench_aggregate_query_sql::benches,
+    suites::bench_filter_query_sql::benches,
+    suites::bench_limit_query_sql::benches,
+    suites::bench_sort_query_sql::benches,
 }
