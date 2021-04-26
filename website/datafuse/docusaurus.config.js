@@ -50,7 +50,7 @@ module.exports = {
           showLastUpdateTime: true,
           showLastUpdateTime: true,
           editUrl:
-            'https://github.com/datafuselabs/datafuse/blob/master/website/datafuse.dev/',
+            'https://github.com/datafuselabs/datafuse/blob/master/website/datafuse/',
           path: 'docs',
           sidebarPath: require.resolve('./sidebars.json'),
         },
