@@ -10,6 +10,3 @@ mod endpoint_on_query;
 pub use self::endpoint::IMySQLEndpoint;
 pub use self::endpoint_on_init::done as on_init_done;
 pub use self::endpoint_on_query::done as on_query_done;
-
-// pub use self::mysql_handler::MysqlHandler;
-// pub use self::mysql_stream::MysqlStream;

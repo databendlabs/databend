@@ -1,5 +1,9 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 #[test]
-fn test_data_block_kernel_take() {
+fn test_format_with_error_codes() {
     use crate::exception::*;
 
     assert_eq!(format!("{}", ErrorCodes::Ok(String::from("test message 1"))),
