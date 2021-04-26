@@ -1,4 +1,7 @@
-# FuseStore
+---
+id: fusestore-design
+title: FuseStore Design Draft
+---
 
 FuseStore is the storage layer in charge of:
 - meta data storage such as user, db, table and schema.
