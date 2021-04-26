@@ -24,6 +24,9 @@
       "functions/arithmetic-operators",
       "functions/comparison-functions",
       "functions/logical-operators"
+    ],
+    "RFCs": [
+      "rfcs/store/fusestore-design"
     ]
   }
 }
