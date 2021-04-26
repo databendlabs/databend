@@ -8,7 +8,7 @@
 const path = require('path');
 
 module.exports = {
-  title: 'Distributed ClickHouse with Cloud-Native Architecture in Rust\nBlazing Fast ~50 billion rows/s',
+  title: 'Distributed ClickHouse with Cloud-Native Architecture in Rust',
   tagline: ' ',
   organizationName: 'datafuse',
   projectName: 'datafuse',
@@ -34,7 +34,7 @@ module.exports = {
     },
     footer: {
       style: 'dark',
-      copyright: `Copyright © ${new Date().getFullYear()} DatafuseLabs. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} DatafuseLabs. Built with Docusaurus, Hermes.`,
     },
     prism: {
       defaultLanguage: 'shell',
