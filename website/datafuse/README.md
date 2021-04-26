@@ -1,4 +1,4 @@
-# [https://datafuse.dev](https://dtafuse.dev)
+# [https://datafuse.dev](https://datafuse.dev)
 
 
 This website is built using [Docusaurus 2](https://v2.docusaurus.io/), a modern static website generator.
