@@ -112,21 +112,21 @@ Note:
 
 ### Learn Datafuse
 
-* [Architecture](docs/overview/architecture.md)
-* [Performance](docs/overview/performance.md)
-* [SQL](docs/sqlstatement/)
-* [Functions](docs/functions/)
+* [Architecture](website/datafuse/docs/overview/architecture.md)
+* [Performance](website/datafuse/docs/overview/performance.md)
+* [SQL](website/datafuse/docs/sqlstatement/)
+* [Functions](website/datafuse/docs/functions/)
 
 ### Try Datafuse
 
-* [How to Run](docs/overview/building-and-running.md)
+* [How to Run](website/datafuse/docs/overview/building-and-running.md)
 * [How to Run 3-node cluster](scripts/ci/fusequery-cluster-3-nodes.sh)
 
 ## Contributing
 
-* [Contribution Guide](docs/development/contributing.md)
-* [Coding Guidelines](docs/development/coding-guidelines.md)
-* [How to Profile](docs/development/how-to-profile.md)
+* [Contribution Guide](website/datafuse/docs/development/contributing.md)
+* [Coding Guidelines](website/datafuse/docs/development/coding-guidelines.md)
+* [How to Profile](website/datafuse/docs/development/how-to-profile.md)
 
 ## Roadmap
 
