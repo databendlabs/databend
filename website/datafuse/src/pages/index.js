@@ -48,8 +48,8 @@ function Home() {
   const { siteConfig = {} } = context;
   return (
     <Layout
-      title="DataFuse"
-      description="DataFuse -- Distributed ClickHouse from scratch in Rust, Understand Your Data Better"
+      title="Datafuse"
+      description="Datafuse -- Distributed ClickHouse with Cloud-Native Architecture in Rust"
     >
       <header className={classnames('hero hero--primary', styles.heroBanner)}>
         <div className="container">

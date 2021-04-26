@@ -14,4 +14,4 @@ CI:
   - scripts/**/*
 
 documentation:
-  - website/**/*
+  - website/datafuse/docs/**/*
