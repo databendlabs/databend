@@ -7,7 +7,6 @@ use std::net;
 use std::sync::Arc;
 use std::time::Instant;
 
-// use anyhow::Result;
 use common_exception::Result;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCodes;

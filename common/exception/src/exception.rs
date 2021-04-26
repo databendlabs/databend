@@ -98,24 +98,22 @@ impl Debug for OtherErrors {
     }
 }
 
-impl From<sqlparser::parser::ParserError> for ErrorCodes {
-    fn from(error: ParserError) -> Self {
-        ErrorCodes {
-            code: 5,
-            display_text: String::from(""),
-            cause: Some(Box::new(OtherErrors::ParserError { error: error })),
-            #[cfg(feature = "backtrace")]
-            backtrace: None,
-        }
-    }
-}
-
 impl ErrorCodes {
     pub fn from_anyhow(error: anyhow::Error) -> ErrorCodes {
         ErrorCodes {
             code: 1002,
             display_text: String::from(""),
             cause: Some(Box::new(OtherErrors::AnyHow { error: error })),
+            #[cfg(feature = "backtrace")]
+            backtrace: None,
+        }
+    }
+
+    pub fn from_parser(error: sqlparser::parser::ParserError) -> ErrorCodes {
+        ErrorCodes {
+            code: 5,
+            display_text: String::from(""),
+            cause: Some(Box::new(OtherErrors::ParserError { error: error })),
             #[cfg(feature = "backtrace")]
             backtrace: None,
         }
