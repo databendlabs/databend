@@ -14,4 +14,4 @@ CI:
   - scripts/**/*
 
 documentation:
-  - docs/**/*
+  - website/**/*
