@@ -1,4 +1,4 @@
-# datafuse.dev
+# [https://datafuse.dev](https://dtafuse.dev)
 
 
 ## Developing
