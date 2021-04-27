@@ -33,7 +33,7 @@ use crate::sql::DfCreateDatabase;
 use crate::sql::DfExplain;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
-use crate::sql::SqlCommon;
+use crate::sql::SQLCommon;
 use common_arrow::arrow::datatypes::Field;
 
 pub struct PlanParser {
@@ -128,10 +128,9 @@ impl PlanParser {
         }
 
         let fields = create.columns.iter().map(|column| {
-            SqlCommon::make_data_type(&column.data_type)
-                .map(|data_type| {
-                    DataField::new(&column.name.value, data_type, false)
-                }).map_err(ErrorCodes::from_anyhow)
+            SQLCommon::make_data_type(&column.data_type).map(|data_type| {
+                DataField::new(&column.name.value, data_type, false)
+            })
         }).collect::<Result<Vec<Field>>>()?;
 
         let mut options = HashMap::new();
@@ -372,13 +371,13 @@ impl PlanParser {
                     last_field,
                     fractional_seconds_precision
                 } => {
-                    SqlCommon::make_sql_interval_to_literal(
+                    SQLCommon::make_sql_interval_to_literal(
                         value,
                         leading_field,
                         leading_precision,
                         last_field,
                         fractional_seconds_precision,
-                    ).map_err(ErrorCodes::from_anyhow)
+                    )
                 }
                 other => Result::Err(ErrorCodes::SyntexException(
                     format!("Unsupported value expression: {}, type: {:?}", value, other)
@@ -416,21 +415,21 @@ impl PlanParser {
             }
             sqlparser::ast::Expr::Wildcard => Ok(ExpressionPlan::Wildcard),
             sqlparser::ast::Expr::TypedString { data_type, value } => {
-                SqlCommon::make_data_type(data_type).map(|data_type| {
+                SQLCommon::make_data_type(data_type).map(|data_type| {
                     ExpressionPlan::Cast {
                         expr: Box::new(ExpressionPlan::Literal(DataValue::Utf8(Some(value.clone())))),
                         data_type: data_type,
                     }
-                }).map_err(ErrorCodes::from_anyhow)
+                })
             },
             sqlparser::ast::Expr::Cast { expr, data_type } => {
                 self.sql_to_rex(expr, schema).map(Box::from).and_then(|expr| {
-                    SqlCommon::make_data_type(data_type).map(|data_type| {
+                    SQLCommon::make_data_type(data_type).map(|data_type| {
                         ExpressionPlan::Cast {
                             expr: expr,
                             data_type: data_type,
                         }
-                    }).map_err(ErrorCodes::from_anyhow)
+                    })
                 })
             },
             other => {

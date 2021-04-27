@@ -13,7 +13,7 @@ mod sql_parser;
 mod sql_statement;
 
 pub use plan_parser::PlanParser;
-pub use sql_common::SqlCommon;
+pub use sql_common::SQLCommon;
 pub use sql_parser::DfParser;
 pub use sql_statement::DfCreateDatabase;
 pub use sql_statement::DfCreateTable;
