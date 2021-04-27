@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use common_exception::{Result, ErrorCodes};
+use common_exception::Result;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -76,7 +76,7 @@ impl PlanBuilder {
 
     /// Apply a projection.
     pub fn project(&self, exprs: Vec<ExpressionPlan>) -> Result<Self> {
-        let exprs = PlanRewriter::exprs_extract_aliases(exprs).map_err(ErrorCodes::from_anyhow)?;
+        let exprs = PlanRewriter::exprs_extract_aliases(exprs)?;
         let input_schema = self.plan.schema();
 
         let mut projection_exprs = vec![];
