@@ -4,17 +4,14 @@
 
 #![allow(non_snake_case)]
 
-use std::error::Error;
-use std::fmt::{Display, Formatter, Debug};
-
-use sqlparser::parser::ParserError;
 use thiserror::Error;
+use std::fmt::{Display, Formatter, Debug};
 
 #[derive(Error)]
 pub struct ErrorCodes {
     code: u16,
     display_text: String,
-    cause: Option<Box<dyn Error>>,
+    cause: Option<Box<dyn std::error::Error + Sync + Send>>,
     #[cfg(feature = "backtrace")]
     backtrace: None<std::backtrace::Backtrace>,
 }
