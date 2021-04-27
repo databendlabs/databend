@@ -195,10 +195,9 @@ impl PlanParser {
             .iter()
             .map(|expr| expr.has_aggregator())
             .fold(Ok(false), |res, item| {
-                // Zip and `&&` fold
-                res.and_then(|res| item.map(|item| res && item))
+                // Zip and `||` fold
+                res.and_then(|res| item.map(|item| res || item))
             });
-
 
         let plan = if !select.group_by.is_empty() || has_aggregator? {
             // Put order after the aggregation projection.

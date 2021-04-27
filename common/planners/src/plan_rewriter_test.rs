@@ -43,7 +43,7 @@ fn test_rewriter_plan() -> anyhow::Result<()> {
                     }).alias("z"),
             ],
             expect_str: "",
-            error_msg : "Planner Error: Cyclic aliases: x",
+            error_msg : "Code: 5, displayText = Planner Error: Cyclic aliases: x.",
         },
 
         RewriteTest{
@@ -65,7 +65,7 @@ fn test_rewriter_plan() -> anyhow::Result<()> {
                     }).alias("x"),
             ],
             expect_str: "",
-            error_msg : "Planner Error: Different expressions with the same alias x",
+            error_msg : "Code: 5, displayText = Planner Error: Different expressions with the same alias x.",
         },
 
         RewriteTest{
