@@ -4,8 +4,7 @@
 
 use std::fmt;
 
-// use anyhow::Result;
-use common_exception::{Result, ErrorCodes};
+use common_exception::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
@@ -66,7 +65,7 @@ impl IFunction for AggregatorCountFunction {
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
             DataValue::UInt64(Some(rows as u64)),
-        ).map_err(ErrorCodes::from_anyhow)?;
+        )?;
         Ok(())
     }
 
@@ -80,7 +79,7 @@ impl IFunction for AggregatorCountFunction {
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
             val,
-        ).map_err(ErrorCodes::from_anyhow)?;
+        )?;
         Ok(())
     }
 

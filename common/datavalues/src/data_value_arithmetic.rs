@@ -2,9 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::bail;
-use anyhow::Result;
-
+use common_exception::{Result, ErrorCodes};
 use crate::DataValue;
 use crate::DataValueArithmeticOperator;
 
@@ -39,9 +37,9 @@ impl DataValueArithmetic {
         left: DataValue,
         right: DataValue
     ) -> Result<DataValue> {
-        Ok(match (&left, &right) {
-            (DataValue::Null, _) => right,
-            (_, DataValue::Null) => left,
+        match (&left, &right) {
+            (DataValue::Null, _) => Ok(right),
+            (_, DataValue::Null) => Ok(left),
             _ => match (&left, &right) {
                 // Float.
                 (DataValue::Float64(lhs), DataValue::Float64(rhs)) => {
@@ -364,14 +362,16 @@ impl DataValueArithmetic {
                 }
 
                 (lhs, rhs) => {
-                    bail!(format!(
-                        "DataValue Error: Unsupported data value operator: {:?} {} {:?}",
-                        lhs.data_type(),
-                        op,
-                        rhs.data_type(),
-                    ));
+                    Result::Err(ErrorCodes::BadDataValueType(
+                        format!(
+                            "DataValue Error: Unsupported data value operator: {:?} {} {:?}",
+                            lhs.data_type(),
+                            op,
+                            rhs.data_type(),
+                        )
+                    ))
                 }
             }
-        })
+        }
     }
 }

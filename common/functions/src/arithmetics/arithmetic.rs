@@ -129,7 +129,7 @@ impl IFunction for ArithmeticFunction {
             self.op.clone(),
             self.left.merge_result()?,
             self.right.merge_result()?,
-        ).map_err(ErrorCodes::from_anyhow)
+        )
     }
 
     fn is_aggregator(&self) -> bool {

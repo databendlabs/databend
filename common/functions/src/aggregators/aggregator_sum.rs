@@ -69,9 +69,9 @@ impl IFunction for AggregatorSumFunction {
             self.state.clone(),
             DataArrayAggregate::data_array_aggregate_op(
                 DataValueAggregateOperator::Sum,
-                val.to_array(rows).map_err(ErrorCodes::from_anyhow)?,
-            ).map_err(ErrorCodes::from_anyhow)?,
-        ).map_err(ErrorCodes::from_anyhow)?;
+                val.to_array(rows)?,
+            )?,
+        )?;
 
         Ok(())
     }
@@ -86,7 +86,7 @@ impl IFunction for AggregatorSumFunction {
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
             val,
-        ).map_err(ErrorCodes::from_anyhow)?;
+        )?;
         Ok(())
     }
 

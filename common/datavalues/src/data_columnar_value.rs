@@ -2,8 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::Result;
-
+use common_exception::{Result, ErrorCodes};
 use crate::DataArrayRef;
 use crate::DataType;
 use crate::DataValue;
@@ -29,7 +28,7 @@ impl DataColumnarValue {
     pub fn to_array(&self, size: usize) -> Result<DataArrayRef> {
         match self {
             DataColumnarValue::Array(array) => Ok(array.clone()),
-            DataColumnarValue::Scalar(scalar) => scalar.to_array_with_size(size)
+            DataColumnarValue::Scalar(scalar) => scalar.to_array_with_size(size).map_err(ErrorCodes::from_anyhow)
         }
     }
 }

@@ -70,14 +70,14 @@ impl IFunction for AggregatorAvgFunction {
                 values[0].clone(),
                 DataArrayAggregate::data_array_aggregate_op(
                     DataValueAggregateOperator::Sum,
-                    val.to_array(1).map_err(ErrorCodes::from_anyhow)?,
-                ).map_err(ErrorCodes::from_anyhow)?,
-            ).map_err(ErrorCodes::from_anyhow)?;
+                    val.to_array(1)?,
+                )?,
+            )?;
             let count = DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
                 values[1].clone(),
                 DataValue::UInt64(Some(rows as u64)),
-            ).map_err(ErrorCodes::from_anyhow)?;
+            )?;
 
             self.state = DataValue::Struct(vec![sum, count]);
         }
@@ -97,12 +97,12 @@ impl IFunction for AggregatorAvgFunction {
                 DataValueArithmeticOperator::Plus,
                 new_states[0].clone(),
                 old_states[0].clone(),
-            ).map_err(ErrorCodes::from_anyhow)?;
+            )?;
             let count = DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
                 new_states[1].clone(),
                 old_states[1].clone(),
-            ).map_err(ErrorCodes::from_anyhow)?;
+            )?;
             self.state = DataValue::Struct(vec![sum, count]);
         }
         Ok(())
@@ -114,7 +114,7 @@ impl IFunction for AggregatorAvgFunction {
                 DataValueArithmeticOperator::Div,
                 states[0].clone(),
                 states[1].clone(),
-            ).map_err(ErrorCodes::from_anyhow)?
+            )?
         } else {
             self.state.clone()
         })
