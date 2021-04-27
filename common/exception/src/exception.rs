@@ -48,6 +48,7 @@ build_exceptions! {
     UnknownDatabase(3),
     UnknownSetting(4),
     SyntexException(5),
+    BadArguments(6),
 
     UnknownException(1000),
     TokioError(1001)
