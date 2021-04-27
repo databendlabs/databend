@@ -251,8 +251,9 @@ impl PlanParser {
         let table_name = "one";
 
         self.ctx.get_table(db_name, table_name)
+            .map_err(ErrorCodes::from_anyhow)
             .and_then(|table| {
-                table.schema()
+                table.schema().map_err(ErrorCodes::from_anyhow)
                     .and_then(|ref schema| {
                         PlanBuilder::scan(
                             db_name,
@@ -269,11 +270,12 @@ impl PlanParser {
                             PlanNode::Scan(ref dummy_scan_plan) => {
                                 table.read_plan(self.ctx.clone(), dummy_scan_plan)
                                     .map(|read_plan| PlanNode::ReadSource(read_plan))
+                                    .map_err(ErrorCodes::from_anyhow)
                             },
                             _unreachable_plan => panic!("Logical error: cannot downcast to scan plan")
                         }
                     })
-            }).map_err(ErrorCodes::from_anyhow)
+            })
     }
 
     fn plan_table_with_joins(&self, t: &sqlparser::ast::TableWithJoins) -> Result<PlanNode> {
@@ -321,7 +323,7 @@ impl PlanParser {
                 }
 
                 let scan = {
-                    table.schema()
+                    table.schema().map_err(ErrorCodes::from_anyhow)
                         .and_then(|schema| {
                             PlanBuilder::scan(
                                 &db_name,
@@ -336,11 +338,11 @@ impl PlanParser {
 
                 scan.and_then(|scan| match scan {
                     PlanNode::Scan(ref scan) => {
-                        table.read_plan(self.ctx.clone(), scan)
+                        table.read_plan(self.ctx.clone(), scan).map_err(ErrorCodes::from_anyhow)
                             .map(|read_plan| PlanNode::ReadSource(read_plan))
                     }
                     _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan")
-                }).map_err(ErrorCodes::from_anyhow)
+                })
             }
             Derived { subquery, .. } => self.query_to_plan(subquery),
             NestedJoin(table_with_joins) => self.plan_table_with_joins(table_with_joins),
@@ -470,7 +472,6 @@ impl PlanParser {
                         PlanBuilder::from(&plan)
                             .filter(filter_expr)
                             .and_then(|builder| builder.build())
-                            .map_err(ErrorCodes::from_anyhow)
                     })
             },
             _ => Ok(plan.clone())
@@ -480,7 +481,6 @@ impl PlanParser {
     /// Wrap a plan in a projection
     fn project(&self, input: &PlanNode, expr: Vec<ExpressionPlan>) -> Result<PlanNode> {
         PlanBuilder::from(input).project(expr).and_then(|builder| builder.build())
-            .map_err(ErrorCodes::from_anyhow)
     }
 
     /// Wrap a plan for an aggregate
@@ -503,7 +503,7 @@ impl PlanParser {
             // FIXME self.ctx.get_id().unwrap()
             .and_then(|builder| builder.stage(self.ctx.get_id().unwrap(), StageState::AggregatorMerge))
             .and_then(|builder| builder.aggregate_final(aggr_expr, group_expr))
-            .and_then(|builder| builder.build()).map_err(ErrorCodes::from_anyhow)
+            .and_then(|builder| builder.build())
     }
 
     fn sort(&self, input: &PlanNode, order_by: &[OrderByExpr]) -> Result<PlanNode> {
@@ -522,8 +522,7 @@ impl PlanParser {
             })
             .collect::<Result<Vec<ExpressionPlan>>>()?;
 
-        PlanBuilder::from(&input).sort(&order_by_exprs)
-            .and_then(|builder| builder.build()).map_err(ErrorCodes::from_anyhow)
+        PlanBuilder::from(&input).sort(&order_by_exprs).and_then(|builder| builder.build())
     }
 
     /// Wrap a plan in a limit
@@ -538,7 +537,6 @@ impl PlanParser {
                 })?;
 
                 PlanBuilder::from(&input).limit(n).and_then(|builder| builder.build())
-                    .map_err(ErrorCodes::from_anyhow)
             }
             _ => Ok(input.clone())
         }

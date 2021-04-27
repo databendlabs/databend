@@ -589,6 +589,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-datavalues",
+ "common-exception",
  "common-functions",
  "pretty_assertions",
  "serde",
