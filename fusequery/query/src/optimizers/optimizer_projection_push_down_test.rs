@@ -45,14 +45,14 @@ mod tests {
         let ctx = crate::tests::try_create_context()?;
 
         let plan = PlanParser::create(ctx.clone())
-            .build_from_sql("select value as c1, name as c2 from system.settings group by c2")?;
+            .build_from_sql("select max(value) as c1, min(name) as c2 from system.settings group by c2")?;
 
         let mut project_push_down = ProjectionPushDownOptimizer::create(ctx);
         let optimized = project_push_down.optimize(&plan)?;
         let expect = "\
-        AggregatorFinal: groupBy=[[c2]], aggr=[[value as c1, name as c2]]\
+        AggregatorFinal: groupBy=[[c2]], aggr=[[max([value]) as c1, min([name]) as c2]]\
         \n  RedistributeStage[state: AggregatorMerge, id: 0]\
-        \n    AggregatorPartial: groupBy=[[c2]], aggr=[[value as c1, name as c2]]\
+        \n    AggregatorPartial: groupBy=[[c2]], aggr=[[max([value]) as c1, min([name]) as c2]]\
         \n      ReadDataSource: scan partitions: [1], scan schema: [name:Utf8, value:Utf8], statistics: [read_rows: 0, read_bytes: 0]";
         let actual = format!("{:?}", optimized);
         assert_eq!(expect, actual);

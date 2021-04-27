@@ -21,7 +21,7 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
     let aggr_exprs = vec![
         add(sum(col("number")), lit(2u64)),
         avg(col("number")),
-        modular(col("number"), lit(3u64)),
+        avg(modular(col("number"), lit(3u64))),
     ];
     let group_exprs = vec![modular(col("number"), lit(3u64))];
     let aggr_partial = PlanBuilder::create(test_source.number_schema_for_test()?)
@@ -60,13 +60,13 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
 
     // SELECT SUM(number)+2, AVG(number), number%3 ... GROUP BY number%3;
     let expected = vec![
-        "+----------------------+-------------+-------------------+",
-        "| plus(sum(number), 2) | avg(number) | modulo(number, 3) |",
-        "+----------------------+-------------+-------------------+",
-        "| 166169               | 499         | 1                 |",
-        "| 166502               | 500         | 2                 |",
-        "| 166835               | 499.5       | 0                 |",
-        "+----------------------+-------------+-------------------+",
+        "+----------------------+-------------+------------------------+",
+        "| plus(sum(number), 2) | avg(number) | avg(modulo(number, 3)) |",
+        "+----------------------+-------------+------------------------+",
+        "| 166169               | 499         | 1                      |",
+        "| 166502               | 500         | 2                      |",
+        "| 166835               | 499.5       | 0                      |",
+        "+----------------------+-------------+------------------------+",
     ];
     crate::assert_blocks_sorted_eq!(expected, result.as_slice());
 

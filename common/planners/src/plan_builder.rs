@@ -110,7 +110,7 @@ impl PlanBuilder {
         // Aggregator check.
         for expr in &aggr_expr {
             if !expr.has_aggregator()? {
-                bail!("The expression is not an aggregate function.");
+                bail!("The expression is not an aggregate function {:?}.", expr);
             }
         }
 
