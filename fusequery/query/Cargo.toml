@@ -59,3 +59,8 @@ uuid = { version = "0.8", features = ["serde", "v4"] }
 
 [dev-dependencies]
 pretty_assertions = "0.7"
+criterion = "0.3"
+
+[[bench]]
+name = "bench_main"
+harness = false

@@ -10,8 +10,9 @@ Write your motivation for proposed changes here.
 - Bug Fix
 - Improvement
 - Performance Improvement
-- Build/Testing/Packaging Improvement
-- Documentation (changelog entry is not required)
+- Build/Testing/CI
+- Documentation
+- Website
 - Other
 
 ## Related Issues
