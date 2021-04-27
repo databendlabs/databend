@@ -4,8 +4,7 @@
 
 use std::fmt;
 
-use anyhow::ensure;
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
@@ -21,14 +20,12 @@ pub struct ToTypeNameFunction {
 
 impl ToTypeNameFunction {
     pub fn try_create(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
-        ensure!(
-            args.len() == 1,
-            "The argument size of function database must be one",
-        );
-
-        Ok(Box::new(ToTypeNameFunction {
-            arg: args[0].clone()
-        }))
+        match args.len() {
+            1 => Result::Ok(Box::new(ToTypeNameFunction { arg: args[0].clone() })),
+            _ => Result::Err(ErrorCodes::BadArguments(
+                format!("The argument size of function totypename must be one")
+            ))
+        }
     }
 }
 

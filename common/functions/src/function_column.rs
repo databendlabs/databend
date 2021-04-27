@@ -4,8 +4,7 @@
 
 use std::fmt;
 
-use anyhow::anyhow;
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
@@ -38,7 +37,7 @@ impl IFunction for ColumnFunction {
         let field = if self.value == "*" {
             input_schema.field(0)
         } else {
-            input_schema.field_with_name(self.value.as_str())?
+            input_schema.field_with_name(self.value.as_str()).map_err(ErrorCodes::from_arrow)?
         };
 
         Ok(field.data_type().clone())
@@ -48,32 +47,32 @@ impl IFunction for ColumnFunction {
         let field = if self.value == "*" {
             input_schema.field(0)
         } else {
-            input_schema.field_with_name(self.value.as_str())?
+            input_schema.field_with_name(self.value.as_str()).map_err(ErrorCodes::from_arrow)?
         };
         Ok(field.is_nullable())
     }
 
     fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
-        Ok(DataColumnarValue::Array(
-            block.column_by_name(self.value.as_str())?.clone()
-        ))
+        block.column_by_name(self.value.as_str())
+            .map(|column| {
+                DataColumnarValue::Array(column.clone())
+            }).map_err(ErrorCodes::from_anyhow)
     }
 
     fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
         if self.saved.is_none() {
-            let array = block.column_by_name(self.value.as_str())?;
-            let first = DataValue::try_from_array(array, 0)?;
+            let array = block.column_by_name(self.value.as_str()).map_err(ErrorCodes::from_anyhow)?;
+            let first = DataValue::try_from_array(array, 0).map_err(ErrorCodes::from_anyhow)?;
             self.saved = Some(first);
         }
         Ok(())
     }
 
     fn accumulate_result(&self) -> Result<Vec<DataValue>> {
-        let saved = self
-            .saved
+        self.saved
             .as_ref()
-            .ok_or_else(|| anyhow!("column saved is None"))?;
-        Ok(vec![saved.clone()])
+            .ok_or_else(|| ErrorCodes::IllegalFunctionState("column saved is None".to_string()))
+            .map(|saved| vec![saved.clone()])
     }
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
@@ -84,11 +83,10 @@ impl IFunction for ColumnFunction {
     }
 
     fn merge_result(&self) -> Result<DataValue> {
-        let saved = self
-            .saved
+        self.saved
             .as_ref()
-            .ok_or_else(|| anyhow!("column saved is None"))?;
-        Ok(saved.clone())
+            .ok_or_else(|| ErrorCodes::IllegalFunctionState("column saved is None".to_string()))
+            .map(|saved| saved.clone())
     }
 }
 

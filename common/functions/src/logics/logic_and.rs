@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::Result;
+// use anyhow::Result;
+use common_exception::Result;
 use common_datavalues::DataValueLogicOperator;
 
 use crate::logics::LogicFunction;

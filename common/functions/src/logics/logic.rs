@@ -4,8 +4,7 @@
 
 use std::fmt;
 
-use anyhow::ensure;
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayLogic;
 use common_datavalues::DataColumnarValue;
@@ -39,19 +38,20 @@ impl LogicFunction {
         op: DataValueLogicOperator,
         args: &[Box<dyn IFunction>]
     ) -> Result<Box<dyn IFunction>> {
-        ensure!(
-            args.len() == 2,
-            "Function Error: Logic function {} args length must be 2",
-            op
-        );
-
-        Ok(Box::new(LogicFunction {
-            depth: 0,
-            op,
-            left: args[0].clone(),
-            right: args[1].clone(),
-            saved: None
-        }))
+        match args.len() {
+            2 => {
+                Result::Ok(Box::new(LogicFunction {
+                    depth: 0,
+                    op,
+                    left: args[0].clone(),
+                    right: args[1].clone(),
+                    saved: None,
+                }))
+            }
+            _ => Result::Err(ErrorCodes::BadArguments(
+                format!("Function Error: Logic function {} args length must be 2", op)
+            ))
+        }
     }
 }
 
@@ -73,8 +73,8 @@ impl IFunction for LogicFunction {
             DataArrayLogic::data_array_logic_op(
                 self.op.clone(),
                 &self.left.eval(block)?,
-                &self.right.eval(block)?
-            )?
+                &self.right.eval(block)?,
+            ).map_err(ErrorCodes::from_anyhow)?
         ))
     }
 

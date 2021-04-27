@@ -4,8 +4,9 @@
 
 use std::fmt;
 
-use anyhow::bail;
-use anyhow::Result;
+// use anyhow::bail;
+// use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
@@ -21,25 +22,33 @@ pub trait IFunction: fmt::Display + Sync + Send + DynClone {
     fn set_depth(&mut self, _depth: usize) {}
 
     fn accumulate(&mut self, _block: &DataBlock) -> Result<()> {
-        bail!("Function Error: '{}' accumulate unimplemented", self.name());
+        Result::Err(ErrorCodes::UnImplement(
+            format!("Function Error: '{}' accumulate unimplemented", self.name())
+        ))
     }
 
     fn accumulate_result(&self) -> Result<Vec<DataValue>> {
-        bail!(
-            "Function Error: '{}' accumulate_result unimplemented",
-            self.name()
-        );
+        Result::Err(ErrorCodes::UnImplement(
+            format!(
+                "Function Error: '{}' accumulate_result unimplemented",
+                self.name()
+            )
+        ))
     }
 
     fn merge(&mut self, _states: &[DataValue]) -> Result<()> {
-        bail!("Function Error: '{}' merge unimplemented", self.name());
+        Result::Err(ErrorCodes::UnImplement(
+            format!("Function Error: '{}' merge unimplemented", self.name())
+        ))
     }
 
     fn merge_result(&self) -> Result<DataValue> {
-        bail!(
-            "Function Error: '{}' merge_result unimplemented",
-            self.name()
-        );
+        Result::Err(ErrorCodes::UnImplement(
+            format!(
+                "Function Error: '{}' merge_result unimplemented",
+                self.name()
+            )
+        ))
     }
 
     fn is_aggregator(&self) -> bool {

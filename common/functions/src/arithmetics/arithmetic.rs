@@ -4,8 +4,7 @@
 
 use std::fmt;
 
-use anyhow::ensure;
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayArithmetic;
 use common_datavalues::DataColumnarValue;
@@ -51,18 +50,22 @@ impl ArithmeticFunction {
         op: DataValueArithmeticOperator,
         args: &[Box<dyn IFunction>]
     ) -> Result<Box<dyn IFunction>> {
-        ensure!(
-            args.len() == 2,
-            "Function Error: Arithmetic function {} args length must be 2",
-            op
-        );
-
-        Ok(Box::new(ArithmeticFunction {
-            depth: 0,
-            op,
-            left: args[0].clone(),
-            right: args[1].clone()
-        }))
+        match args.len() {
+            2 => {
+                Ok(Box::new(ArithmeticFunction {
+                    depth: 0,
+                    op,
+                    left: args[0].clone(),
+                    right: args[1].clone(),
+                }))
+            }
+            _ => Result::Err(ErrorCodes::BadArguments(
+                format!(
+                    "Function Error: Arithmetic function {} args length must be 2",
+                    op
+                )
+            ))
+        }
     }
 }
 
@@ -75,8 +78,8 @@ impl IFunction for ArithmeticFunction {
         common_datavalues::numerical_arithmetic_coercion(
             &self.op,
             &self.left.return_type(input_schema)?,
-            &self.right.return_type(input_schema)?
-        )
+            &self.right.return_type(input_schema)?,
+        ).map_err(ErrorCodes::from_anyhow)
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
@@ -86,11 +89,11 @@ impl IFunction for ArithmeticFunction {
     fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         let left = &self.left.eval(block)?;
         let right = &self.right.eval(block)?;
-        let result = DataArrayArithmetic::data_array_arithmetic_op(self.op.clone(), left, right)?;
+        let result = DataArrayArithmetic::data_array_arithmetic_op(self.op.clone(), left, right).map_err(ErrorCodes::from_anyhow)?;
 
         match (left, right) {
             (DataColumnarValue::Scalar(_), DataColumnarValue::Scalar(_)) => {
-                let data_value = DataValue::try_from_array(&result, 0)?;
+                let data_value = DataValue::try_from_array(&result, 0).map_err(ErrorCodes::from_anyhow)?;
                 Ok(DataColumnarValue::Scalar(data_value))
             }
             _ => Ok(DataColumnarValue::Array(result))
@@ -125,8 +128,8 @@ impl IFunction for ArithmeticFunction {
         DataValueArithmetic::data_value_arithmetic_op(
             self.op.clone(),
             self.left.merge_result()?,
-            self.right.merge_result()?
-        )
+            self.right.merge_result()?,
+        ).map_err(ErrorCodes::from_anyhow)
     }
 
     fn is_aggregator(&self) -> bool {

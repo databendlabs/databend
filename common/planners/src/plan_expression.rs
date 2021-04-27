@@ -4,8 +4,7 @@
 
 use std::fmt;
 
-// use anyhow::Result;
-use common_exception::{Result, ErrorCodes};
+use common_exception::Result;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
@@ -61,8 +60,8 @@ pub enum ExpressionPlan {
 impl ExpressionPlan {
     fn to_function_with_depth(&self, depth: usize) -> Result<Box<dyn IFunction>> {
         match self {
-            ExpressionPlan::Column(ref v) => ColumnFunction::try_create(v.as_str()).map_err(ErrorCodes::from_anyhow),
-            ExpressionPlan::Literal(ref v) => LiteralFunction::try_create(v.clone()).map_err(ErrorCodes::from_anyhow),
+            ExpressionPlan::Column(ref v) => ColumnFunction::try_create(v.as_str()),
+            ExpressionPlan::Literal(ref v) => LiteralFunction::try_create(v.clone()),
             ExpressionPlan::BinaryExpression { left, op, right } => {
                 let l = left.to_function_with_depth(depth)?;
                 let r = right.to_function_with_depth(depth + 1)?;
@@ -84,10 +83,10 @@ impl ExpressionPlan {
             ExpressionPlan::Alias(alias, expr) => {
                 let mut func = expr.to_function_with_depth(depth)?;
                 func.set_depth(depth);
-                AliasFunction::try_create(alias.clone(), func).map_err(ErrorCodes::from_anyhow)
+                AliasFunction::try_create(alias.clone(), func)
             }
             ExpressionPlan::Sort { expr, .. } => expr.to_function_with_depth(depth),
-            ExpressionPlan::Wildcard => ColumnFunction::try_create("*").map_err(ErrorCodes::from_anyhow),
+            ExpressionPlan::Wildcard => ColumnFunction::try_create("*"),
             ExpressionPlan::Cast { expr, data_type } => Ok(CastFunction::create(
                 expr.to_function_with_depth(depth)?,
                 data_type.clone(),
@@ -109,7 +108,7 @@ impl ExpressionPlan {
                         nullable,
                     )
                 })
-            }).map_err(ErrorCodes::from_anyhow)
+            })
         })
     }
 

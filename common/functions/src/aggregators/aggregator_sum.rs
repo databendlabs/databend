@@ -4,8 +4,7 @@
 
 use std::fmt;
 
-use anyhow::bail;
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayAggregate;
 use common_datavalues::DataColumnarValue;
@@ -27,14 +26,16 @@ pub struct AggregatorSumFunction {
 
 impl AggregatorSumFunction {
     pub fn try_create(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
-        if args.len() != 1 {
-            bail!("Function Error: Aggregator function Sum args require single argument");
+        match args.len() {
+            1 => {
+                Ok(Box::new(AggregatorSumFunction {
+                    depth: 0,
+                    arg: args[0].clone(),
+                    state: DataValue::Null,
+                }))
+            }
+            _ => Result::Err(ErrorCodes::BadArguments("Function Error: Aggregator function Sum args require single argument".to_string()))
         }
-        Ok(Box::new(AggregatorSumFunction {
-            depth: 0,
-            arg: args[0].clone(),
-            state: DataValue::Null
-        }))
     }
 }
 
@@ -68,9 +69,9 @@ impl IFunction for AggregatorSumFunction {
             self.state.clone(),
             DataArrayAggregate::data_array_aggregate_op(
                 DataValueAggregateOperator::Sum,
-                val.to_array(rows)?
-            )?
-        )?;
+                val.to_array(rows).map_err(ErrorCodes::from_anyhow)?,
+            ).map_err(ErrorCodes::from_anyhow)?,
+        ).map_err(ErrorCodes::from_anyhow)?;
 
         Ok(())
     }
@@ -84,8 +85,8 @@ impl IFunction for AggregatorSumFunction {
         self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
-            val
-        )?;
+            val,
+        ).map_err(ErrorCodes::from_anyhow)?;
         Ok(())
     }
 
