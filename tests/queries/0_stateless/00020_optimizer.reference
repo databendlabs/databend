@@ -1,8 +1,0 @@
-filter push down: push (number+1) to filter
-Projection: (number + 1) as a:UInt64\n  Filter: ((number + 1) > 2)\n    ReadDataSource: scan partitions: [16], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]
-
-limit push down: push (limit 10) to projection
-Limit: 10\n  Projection: (number + 1) as c1:UInt64, number as c2:UInt64\n    Filter: ((((number + 1) + number) + 1) = 1)\n      ReadDataSource: scan partitions: [16], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]
-
-group by push down: push alias to group by
-AggregatorFinal: groupBy=[[((number % 3) + 1) as c2]], aggr=[[(number + 1) as c1, ((number % 3) + 1) as c2]]\n  RedistributeStage[state: AggregatorMerge, id: 0]\n    AggregatorPartial: groupBy=[[((number % 3) + 1) as c2]], aggr=[[(number + 1) as c1, ((number % 3) + 1) as c2]]\n      ReadDataSource: scan partitions: [16], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]

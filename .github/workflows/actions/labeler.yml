@@ -10,5 +10,8 @@ testing:
 deploy:
   - deploy/**/*
 
+CI:
+  - scripts/**/*
+
 documentation:
-  - docs/**/*
+  - website/datafuse/docs/**/*

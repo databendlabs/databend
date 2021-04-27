@@ -1,0 +1,32 @@
+{
+  "docs": {
+    "Overview": [
+      "overview/building-and-running",
+      "overview/architecture",
+      "overview/performance"
+    ],
+    "SQL Statements": [
+      "sqlstatement/select-statement",
+      "sqlstatement/select-aggregate",
+      "sqlstatement/explain-statement",
+      "sqlstatement/set-statement"
+
+    ],
+    "Data Types": [
+      "datatypes/datatypes-integer",
+      "datatypes/datatypes-float",
+      "datatypes/datatypes-string"
+    ],
+    "System Tables": [
+      "system/system-tables"
+    ],
+    "Functions and Operators": [
+      "functions/arithmetic-operators",
+      "functions/comparison-functions",
+      "functions/logical-operators"
+    ],
+    "RFCs": [
+      "rfcs/store/fusestore-design"
+    ]
+  }
+}

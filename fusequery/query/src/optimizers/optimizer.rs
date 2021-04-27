@@ -8,6 +8,7 @@ use common_planners::PlanNode;
 use crate::optimizers::FilterPushDownOptimizer;
 use crate::optimizers::GroupByPushDownOptimizer;
 use crate::optimizers::LimitPushDownOptimizer;
+use crate::optimizers::ProjectionPushDownOptimizer;
 use crate::sessions::FuseQueryContextRef;
 
 pub trait IOptimizer {
@@ -24,7 +25,8 @@ impl Optimizer {
         let optimizers: Vec<Box<dyn IOptimizer>> = vec![
             Box::new(FilterPushDownOptimizer::create(ctx.clone())),
             Box::new(GroupByPushDownOptimizer::create(ctx.clone())),
-            Box::new(LimitPushDownOptimizer::create(ctx)),
+            Box::new(LimitPushDownOptimizer::create(ctx.clone())),
+            Box::new(ProjectionPushDownOptimizer::create(ctx)),
         ];
         Optimizer { optimizers }
     }

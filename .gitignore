@@ -18,6 +18,7 @@ perf.*
 *.stderr
 *.stdout
 *.out
+*.swp
 
 # python
 venv/

@@ -47,7 +47,7 @@ impl Test {
         }))
     }
 
-    fn generate_partitions(workers: u64, total: u64) -> Partitions {
+    pub fn generate_partitions(workers: u64, total: u64) -> Partitions {
         let part_size = total / workers;
         let part_remain = total % workers;
 
