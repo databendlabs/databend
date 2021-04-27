@@ -572,6 +572,7 @@ dependencies = [
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
+ "common-exception",
  "common-infallible",
  "dyn-clone",
  "indexmap",

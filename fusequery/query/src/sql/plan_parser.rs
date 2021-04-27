@@ -191,19 +191,16 @@ impl PlanParser {
             .collect::<Result<Vec<ExpressionPlan>>>()?;
 
         // Aggregator check.
-        let has_aggregator = || -> Result<bool> {
-            for expr in &projection_expr {
-                match expr.has_aggregator() {
-                    Ok(true) => return Ok(true),
-                    Err(error) => return Result::Err(ErrorCodes::from_anyhow(error)),
-                    _ => {},
-                }
-            }
-            Ok(false)
-        };
+        let has_aggregator = (&projection_expr)
+            .iter()
+            .map(|expr| expr.has_aggregator())
+            .fold(Ok(false), |res, item| {
+                // Zip and `&&` fold
+                res.and_then(|res| item.map(|item| res && item))
+            });
 
 
-        let plan = if !select.group_by.is_empty() || has_aggregator()? {
+        let plan = if !select.group_by.is_empty() || has_aggregator? {
             // Put order after the aggregation projection.
             self.aggregate(&plan, projection_expr, &select.group_by)
                 .and_then(|plan| self.sort(&plan, order_by))?

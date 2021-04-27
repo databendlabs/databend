@@ -4,7 +4,8 @@
 
 use std::fmt;
 
-use anyhow::Result;
+// use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
@@ -60,8 +61,8 @@ pub enum ExpressionPlan {
 impl ExpressionPlan {
     fn to_function_with_depth(&self, depth: usize) -> Result<Box<dyn IFunction>> {
         match self {
-            ExpressionPlan::Column(ref v) => Ok(ColumnFunction::try_create(v.as_str())?),
-            ExpressionPlan::Literal(ref v) => Ok(LiteralFunction::try_create(v.clone())?),
+            ExpressionPlan::Column(ref v) => ColumnFunction::try_create(v.as_str()).map_err(ErrorCodes::from_anyhow),
+            ExpressionPlan::Literal(ref v) => LiteralFunction::try_create(v.clone()).map_err(ErrorCodes::from_anyhow),
             ExpressionPlan::BinaryExpression { left, op, right } => {
                 let l = left.to_function_with_depth(depth)?;
                 let r = right.to_function_with_depth(depth + 1)?;
@@ -83,13 +84,13 @@ impl ExpressionPlan {
             ExpressionPlan::Alias(alias, expr) => {
                 let mut func = expr.to_function_with_depth(depth)?;
                 func.set_depth(depth);
-                Ok(AliasFunction::try_create(alias.clone(), func)?)
+                AliasFunction::try_create(alias.clone(), func).map_err(ErrorCodes::from_anyhow)
             }
-            ExpressionPlan::Sort { expr, .. } => Ok(expr.to_function_with_depth(depth)?),
-            ExpressionPlan::Wildcard => Ok(ColumnFunction::try_create("*")?),
+            ExpressionPlan::Sort { expr, .. } => expr.to_function_with_depth(depth),
+            ExpressionPlan::Wildcard => ColumnFunction::try_create("*").map_err(ErrorCodes::from_anyhow),
             ExpressionPlan::Cast { expr, data_type } => Ok(CastFunction::create(
                 expr.to_function_with_depth(depth)?,
-                data_type.clone()
+                data_type.clone(),
             ))
         }
     }
@@ -99,12 +100,17 @@ impl ExpressionPlan {
     }
 
     pub fn to_data_field(&self, input_schema: &DataSchemaRef) -> Result<DataField> {
-        let func = self.to_function()?;
-        Ok(DataField::new(
-            format!("{}", func).as_str(),
-            func.return_type(&input_schema)?,
-            func.nullable(&input_schema)?
-        ))
+        self.to_function().and_then(|function| {
+            function.return_type(&input_schema).and_then(|return_type| {
+                function.nullable(&input_schema).map(|nullable| {
+                    DataField::new(
+                        format!("{}", function).as_str(),
+                        return_type,
+                        nullable,
+                    )
+                })
+            }).map_err(ErrorCodes::from_anyhow)
+        })
     }
 
     pub fn has_aggregator(&self) -> Result<bool> {

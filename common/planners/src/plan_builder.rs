@@ -60,7 +60,7 @@ impl PlanBuilder {
     ) -> Result<Vec<DataField>> {
         exprs
             .iter()
-            .map(|expr| expr.to_data_field(input_schema).map_err(ErrorCodes::from_anyhow))
+            .map(|expr| expr.to_data_field(input_schema))
             .collect::<Result<_>>()
     }
 

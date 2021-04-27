@@ -72,7 +72,7 @@ impl IProcessor for GroupByFinalTransform {
             .aggr_exprs
             .iter()
             .map(|x| x.to_function())
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<common_exception::Result<Vec<_>>>()?;
         let aggr_funcs_length = aggr_funcs.len();
 
         let start = Instant::now();

@@ -4,8 +4,7 @@
 
 use std::sync::Arc;
 
-use anyhow::anyhow;
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_infallible::RwLock;
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
@@ -18,7 +17,8 @@ use crate::udfs::UdfFunction;
 use crate::IFunction;
 
 pub struct FunctionFactory;
-pub type FactoryFunc = fn(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>>;
+
+pub type FactoryFunc = fn(args: &[Box<dyn IFunction>]) -> anyhow::Result<Box<dyn IFunction>>;
 pub type FactoryFuncRef = Arc<RwLock<IndexMap<&'static str, FactoryFunc>>>;
 
 lazy_static! {
@@ -38,8 +38,8 @@ impl FunctionFactory {
         let map = FACTORY.read();
         let creator = map
             .get(&*name.to_lowercase())
-            .ok_or_else(|| anyhow!("Unsupported Function: {}", name))?;
-        (creator)(args)
+            .ok_or_else(|| ErrorCodes::UnknownFunction(format!("Unsupported Function: {}", name)))?;
+        ((creator)(args)).map_err(ErrorCodes::from_anyhow)
     }
 
     pub fn registered_names() -> Vec<String> {

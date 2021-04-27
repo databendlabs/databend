@@ -109,7 +109,7 @@ impl IProcessor for GroupByPartialTransform {
             .group_exprs
             .iter()
             .map(|x| x.to_function())
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<common_exception::Result<Vec<_>>>()?;
         let group_funcs_len = group_funcs.len();
         let aggr_funcs_len = self.aggr_exprs.len();
 
