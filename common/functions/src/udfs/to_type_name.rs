@@ -23,7 +23,7 @@ impl ToTypeNameFunction {
     pub fn try_create(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
         ensure!(
             args.len() == 1,
-            "The argument size of function database must be one",
+            "The argument size of function ToTypeNameFunction must be one",
         );
 
         Ok(Box::new(ToTypeNameFunction {

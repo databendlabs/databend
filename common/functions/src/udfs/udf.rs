@@ -4,6 +4,7 @@
 
 use anyhow::Result;
 
+use crate::udfs::DatabaseFunction;
 use crate::udfs::ToTypeNameFunction;
 use crate::udfs::UdfExampleFunction;
 use crate::FactoryFuncRef;
@@ -16,6 +17,7 @@ impl UdfFunction {
         let mut map = map.write();
         map.insert("example", UdfExampleFunction::try_create);
         map.insert("totypename", ToTypeNameFunction::try_create);
+        map.insert("database", DatabaseFunction::try_create);
         Ok(())
     }
 }

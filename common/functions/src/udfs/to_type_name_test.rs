@@ -30,7 +30,7 @@ fn test_to_type_name_function() -> anyhow::Result<()> {
         false
     )]));
 
-    let field_a = ColumnFunction::try_create("a").unwrap();
+    let field_a = ColumnFunction::try_create("a")?;
 
     let tests = vec![Test {
         name: "to_type_name-example-passed",
@@ -48,6 +48,7 @@ fn test_to_type_name_function() -> anyhow::Result<()> {
 
     for t in tests {
         let func = t.func;
+        println!("{:?}", t.name);
         if let Err(e) = func.eval(&t.block) {
             assert_eq!(t.error, e.to_string());
         }

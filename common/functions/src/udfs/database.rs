@@ -2,27 +2,38 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::fmt;
+
+use anyhow::ensure;
 use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use std::fmt;
+
 use crate::IFunction;
 
 #[derive(Clone)]
-pub struct DataBaseFunction;
+pub struct DatabaseFunction {
+    arg: Box<dyn IFunction>
+}
 
-impl DataBaseFunction {
-    pub fn try_create(_args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
-        Ok(Box::new(DataBaseFunction {}))
+impl DatabaseFunction {
+    pub fn try_create(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
+        ensure!(
+            args.len() == 1,
+            "The argument size of function database must be one",
+        );
+
+        Ok(Box::new(Self {
+            arg: args[0].clone()
+        }))
     }
 }
 
-impl IFunction for DataBaseFunction {
+impl IFunction for DatabaseFunction {
     fn name(&self) -> &str {
-        "DataBaseFunction"
+        "DatabaseFunction"
     }
 
     fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
@@ -33,12 +44,12 @@ impl IFunction for DataBaseFunction {
         Ok(false)
     }
 
-    fn eval(&self, _block: &DataBlock) -> Result<DataColumnarValue> {
-        Ok(DataColumnarValue::Scalar(DataValue::Utf8(Some("default".to_string()))))
+    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
+        self.arg.eval(block)
     }
 }
 
-impl fmt::Display for DataBaseFunction {
+impl fmt::Display for DatabaseFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "database()")
     }
