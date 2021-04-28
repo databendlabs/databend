@@ -12,7 +12,7 @@ fn test_group_by_push_down_optimizer() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let plan = PlanParser::create(ctx.clone()).build_from_sql(
-        "select avg(number+1) as c1, number%3+1 as c2 from numbers_mt(10000) group by c2"
+        "select avg(number+1) as c1, (number%3+1) as c2 from numbers_mt(10000) group by c2"
     )?;
 
     let mut group_push_down = GroupByPushDownOptimizer::create(ctx);
