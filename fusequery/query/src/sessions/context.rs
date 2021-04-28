@@ -5,7 +5,8 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use anyhow::Result;
+// use anyhow::Result;
+use common_exception::Result;
 use common_datavalues::DataValue;
 use common_infallible::RwLock;
 use common_planners::Partition;
@@ -44,7 +45,7 @@ impl FuseQueryContext {
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings,
             cluster: Arc::new(RwLock::new(Cluster::empty())),
-            datasource: Arc::new(DataSource::try_create()?),
+            datasource: Arc::new(DataSource::try_create().map_err(ErrorCodes::from_anyhow)?),
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             progress_callback: Arc::new(RwLock::new(None)),
@@ -125,15 +126,15 @@ impl FuseQueryContext {
     }
 
     pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
-        self.datasource.get_table(db_name, table_name)
+        self.datasource.get_table(db_name, table_name).map_err(ErrorCodes::from_anyhow)
     }
 
     pub fn get_table_function(&self, function_name: &str) -> Result<Arc<dyn ITableFunction>> {
-        self.datasource.get_table_function(function_name)
+        self.datasource.get_table_function(function_name).map_err(ErrorCodes::from_anyhow)
     }
 
     pub fn get_settings(&self) -> Result<Vec<DataValue>> {
-        self.settings.get_settings()
+        self.settings.get_settings().map_err(ErrorCodes::from_anyhow)
     }
 
     pub fn get_id(&self) -> Result<String> {

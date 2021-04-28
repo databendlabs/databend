@@ -14,7 +14,6 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::{IInterpreter, InterpreterPtr};
 use crate::sessions::FuseQueryContextRef;
-use common_exception::ErrorCodes;
 
 pub struct SettingInterpreter {
     ctx: FuseQueryContextRef,
@@ -40,7 +39,7 @@ impl IInterpreter for SettingInterpreter {
                 // To be compatible with some drivers
                 "sql_mode" | "autocommit" => {}
                 _ => {
-                    self.ctx.update_settings(&var.variable, var.value).map_err(ErrorCodes::from_anyhow)?;
+                    self.ctx.update_settings(&var.variable, var.value)?;
                 }
             }
         }

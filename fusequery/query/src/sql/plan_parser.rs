@@ -248,7 +248,6 @@ impl PlanParser {
         let table_name = "one";
 
         self.ctx.get_table(db_name, table_name)
-            .map_err(ErrorCodes::from_anyhow)
             .and_then(|table| {
                 table.schema().map_err(ErrorCodes::from_anyhow)
                     .and_then(|ref schema| {
@@ -309,14 +308,12 @@ impl PlanParser {
                         }
                     }
 
-                    let table_function = self.ctx.get_table_function(&table_name)
-                        .map_err(ErrorCodes::from_anyhow)?;
+                    let table_function = self.ctx.get_table_function(&table_name)?;
                     table_name = table_function.name().to_string();
                     db_name = table_function.db().to_string();
                     table = table_function.as_table();
                 } else {
-                    table = self.ctx.get_table(&db_name, table_name.as_str())
-                        .map_err(ErrorCodes::from_anyhow)?;
+                    table = self.ctx.get_table(&db_name, table_name.as_str())?;
                 }
 
                 let scan = {

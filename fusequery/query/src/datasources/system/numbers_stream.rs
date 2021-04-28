@@ -46,12 +46,12 @@ impl NumbersStream {
 
     fn try_get_one_block(&mut self) -> Result<Option<DataBlock>> {
         if (self.block_index as usize) == self.blocks.len() {
-            let partitions = self.ctx.try_get_partitions(1).map_err(ErrorCodes::from_anyhow)?;
+            let partitions = self.ctx.try_get_partitions(1)?;
             if partitions.is_empty() {
                 return Ok(None);
             }
 
-            let block_size = self.ctx.get_max_block_size().map_err(ErrorCodes::from_anyhow)?;
+            let block_size = self.ctx.get_max_block_size()?;
             let mut blocks = Vec::with_capacity(partitions.len());
 
             for part in partitions {

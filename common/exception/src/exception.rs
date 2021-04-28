@@ -61,6 +61,8 @@ build_exceptions! {
     EmptyData(16),
     DataStructMissMatch(17),
     BadDataArrayLength(18),
+    UnknownContextID(19),
+    UnknownVariable(20),
 
     UnknownException(1000),
     TokioError(1001)
@@ -154,8 +156,6 @@ impl ErrorCodes {
             backtrace: None,
         }
     }
-
-    // pub fn from_state()
 
     pub fn from_arrow(error: common_arrow::arrow::error::ArrowError) -> ErrorCodes {
         ErrorCodes {

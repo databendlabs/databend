@@ -81,13 +81,13 @@ impl PipelineBuilder {
         if !executors.is_empty() {
             // Reset.
             pipeline.reset();
-            self.ctx.reset().map_err(ErrorCodes::from_anyhow)?;
+            self.ctx.reset()?;
 
             // Add remote transform as the new source.
             for (address, remote_plan) in executors.iter() {
                 let remote_transform = RemoteTransform::try_create(
                     self.ctx.clone(),
-                    self.ctx.get_id().map_err(ErrorCodes::from_anyhow)?,
+                    self.ctx.get_id()?,
                     address.clone(),
                     remote_plan.clone(),
                 )?;
@@ -206,9 +206,9 @@ impl PipelineBuilder {
 
     fn visit_read_data_source_plan(&self, pipeline: &mut Pipeline, plan: &ReadDataSourcePlan) -> Result<bool> {
         // Bind plan partitions to context.
-        self.ctx.try_set_partitions(plan.partitions.clone()).map_err(ErrorCodes::from_anyhow)?;
+        self.ctx.try_set_partitions(plan.partitions.clone())?;
 
-        let max_threads = self.ctx.get_max_threads().map_err(ErrorCodes::from_anyhow)? as usize;
+        let max_threads = self.ctx.get_max_threads()? as usize;
         let workers = if max_threads == 0 {
             1
         } else if max_threads > plan.partitions.len() {

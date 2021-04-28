@@ -5,8 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::anyhow;
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_infallible::RwLock;
 use common_planners::Partitions;
 use metrics::counter;
@@ -47,7 +46,7 @@ impl Session {
         let session_map = self.sessions.read();
         let ctx = session_map
             .get(&*ctx_id)
-            .ok_or_else(|| anyhow!("Unsupported context id: {}", ctx_id))?;
+            .ok_or_else(|| ErrorCodes::UnknownContextID(format!("Unsupported context id: {}", ctx_id)))?;
         ctx.try_get_partitions(nums)
     }
 }

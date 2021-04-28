@@ -8,11 +8,11 @@ macro_rules! apply_getter_setter_settings {
         $(
             paste::paste!{
                 pub fn [< get_ $NAME >](&self) -> Result<$TYPE> {
-                    self.settings.[<try_get_ $TYPE:lower>]($NAME)
+                    self.settings.[<try_get_ $TYPE:lower>]($NAME).map_err(ErrorCodes::from_anyhow)
                 }
 
                 pub fn [< set_ $NAME >](&self, value: $TYPE) -> Result<()> {
-                    self.settings.[<try_update_ $TYPE:lower>]($NAME, value)
+                    self.settings.[<try_update_ $TYPE:lower>]($NAME, value).map_err(ErrorCodes::from_anyhow)
                 }
             }
         )*
@@ -25,7 +25,7 @@ macro_rules! apply_initial_settings {
         pub fn initial_settings(&self) -> Result<()> {
             paste::paste! {
                 $(
-                    self.settings.[<try_set_ $TYPE:lower>]($NAME, $VALUE, $DESC)?;
+                    self.settings.[<try_set_ $TYPE:lower>]($NAME, $VALUE, $DESC).map_err(ErrorCodes::from_anyhow)?;
                 )*
             }
             Ok(())
@@ -39,7 +39,7 @@ macro_rules! apply_parse_value {
     };
 
     ($VALUE: expr, $TYPE: tt) => {
-        $VALUE.parse::<$TYPE>()?
+        $VALUE.parse::<$TYPE>().map_err(ErrorCodes::from_parse)?
     };
 }
 
@@ -50,14 +50,13 @@ macro_rules! apply_update_settings {
                 $(
                     if (key.to_lowercase().as_str() == $NAME) {
                         let v = apply_parse_value!{value, $TYPE};
-                        return self.settings.[<try_update_ $TYPE:lower>]($NAME, v);
+                        return self.settings.[<try_update_ $TYPE:lower>]($NAME, v).map_err(ErrorCodes::from_anyhow);
                     }
                 )*
             }
-            Err(anyhow::Error::msg(format!(
-                "Unknown variable: {:?}",
-                key
-            )))
+            Err(ErrorCodes::UnknownVariable(
+                format!("Unknown variable: {:?}", key)
+            ))
         }
     };
 }

@@ -31,7 +31,7 @@ impl CsvTableStream {
     }
 
     pub fn try_get_one_block(&self) -> Result<Option<DataBlock>> {
-        let partitions = self.ctx.try_get_partitions(1).map_err(ErrorCodes::from_anyhow)?;
+        let partitions = self.ctx.try_get_partitions(1)?;
         if partitions.is_empty() {
             return Ok(None);
         }

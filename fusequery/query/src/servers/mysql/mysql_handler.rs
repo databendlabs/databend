@@ -58,7 +58,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
         self.ctx.reset().unwrap();
         let start = Instant::now();
 
-        fn build_runtime(max_threads: anyhow::Result<u64>) -> Result<Runtime> {
+        fn build_runtime(max_threads: Result<u64>) -> Result<Runtime> {
             max_threads.map_err(|_| ErrorCodes::UnknownSetting(String::from("Missing max_thread settings.")))
                 .and_then(|v| {
                     tokio::runtime::Builder::new_multi_thread().enable_io()
@@ -68,18 +68,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
         }
 
         type DataPuller<'a> = BoxFuture<'a, Result<Vec<DataBlock>>>;
-        fn data_puller<'a>(interpreter: &'a Arc<dyn IInterpreter>, _statistics: anyhow::Result<Statistics>) -> DataPuller<'a> {
-            // interpreter.execute().then(|r_stream| {
-            //     match r_stream.map(|stream| stream.collect::<Result<Vec<DataBlock>>>()) {
-            //         Err(error_code) =>,
-            //         Ok(future_results) =>
-            //             futures,
-            //     }
-            //     //     // Future<Result<Stream>>
-            //     //     // Result<Stream>
-            //     //     // Result<Future<Result<Vec<DataBlock>>>>
-            //     //     r_stream.map(|stream| stream.collect())
-            // })
+        fn data_puller<'a>(interpreter: &'a Arc<dyn IInterpreter>, _statistics: Result<Statistics>) -> DataPuller<'a> {
             return interpreter.execute().then(|r_stream| {
                 match r_stream {
                     Err(error_code) => futures::future::err(error_code).right_future(),
