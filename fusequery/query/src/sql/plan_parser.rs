@@ -28,7 +28,7 @@ use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 
 use crate::datasources::ITable;
-use crate::functions::ContextFunctionFactory;
+use crate::functions::ContextFunction;
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::sql_statement::DfUseDatabase;
@@ -359,7 +359,7 @@ impl PlanParser {
 
                 // 1. Get the args from context by function name. such as SELECT database()
                 // common::functions::udf::database arg is ctx.get_default()
-                let ctx_args = ContextFunctionFactory::build_args_from_ctx(
+                let ctx_args = ContextFunction::build_args_from_ctx(
                     e.name.to_string().as_str(),
                     self.ctx.clone()
                 )?;
