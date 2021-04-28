@@ -1,5 +1,12 @@
 name: Website Build and Deploy
-on: [push, pull_request]
+on:
+  push:
+    paths:
+      - "website/**/*"
+  pull_request:
+    paths:
+      - "website/**/*"
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
