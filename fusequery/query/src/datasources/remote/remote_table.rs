@@ -5,7 +5,7 @@
 use std::any::Any;
 
 use anyhow::bail;
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_datavalues::DataSchemaRef;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
@@ -58,10 +58,10 @@ impl ITable for RemoteTable {
     }
 
     fn read_plan(&self, _ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
-        bail!("RemoteTable read_plan not yet implemented")
+        Result::Err(ErrorCodes::UnImplement("RemoteTable read_plan not yet implemented".to_string()))
     }
 
     async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
-        bail!("RemoteTable read not yet implemented")
+        Result::Err(ErrorCodes::UnImplement("RemoteTable read not yet implemented".to_string()))
     }
 }

@@ -48,6 +48,6 @@ impl IProcessor for SourceTransform {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let table = self.ctx.get_table(self.db.as_str(), self.table.as_str())?;
-        table.read(self.ctx.clone()).await.map_err(ErrorCodes::from_anyhow)
+        table.read(self.ctx.clone()).await
     }
 }

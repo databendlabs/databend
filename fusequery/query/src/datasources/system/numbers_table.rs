@@ -8,7 +8,7 @@ use std::mem::size_of;
 use std::sync::Arc;
 
 use anyhow::bail;
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -89,7 +89,9 @@ impl ITable for NumbersTable {
                 total = v as u64;
             }
         } else {
-            bail!("Must have one argument for table: system.{}", self.name());
+            return Result::Err(ErrorCodes::BadArguments(
+                format!("Must have one argument for table: system.{}", self.name())
+            ));
         }
 
         let statistics = Statistics {

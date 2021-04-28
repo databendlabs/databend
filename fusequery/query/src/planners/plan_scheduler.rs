@@ -26,7 +26,7 @@ impl PlanScheduler {
     ) -> Result<Vec<(String, PlanNode)>> {
         let mut results = vec![];
         let max_threads = ctx.get_max_threads()? as usize;
-        let executors = ctx.try_get_cluster()?.get_nodes().map_err(ErrorCodes::from_anyhow)?;
+        let executors = ctx.try_get_cluster()?.get_nodes()?;
 
         // Get the source plan node by walk
         let mut source_plan = ReadDataSourcePlan::empty();
@@ -51,8 +51,7 @@ impl PlanScheduler {
 
             // Local table.
             let datasource = ctx.get_datasource();
-            if datasource.get_table(source_plan.db.as_str(), source_plan.table.as_str())
-                .map_err(ErrorCodes::from_anyhow)?.is_local()
+            if datasource.get_table(source_plan.db.as_str(), source_plan.table.as_str())?.is_local()
             {
                 return Ok(vec![]);
             }

@@ -63,6 +63,10 @@ build_exceptions! {
     BadDataArrayLength(18),
     UnknownContextID(19),
     UnknownVariable(20),
+    UnknownTableFunction(21),
+    BadOption(22),
+    CannotReadFile(23),
+    ParquetError(24),
 
     UnknownException(1000),
     TokioError(1001)

@@ -6,7 +6,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use anyhow::Result;
+// use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_flights::StoreClient;
 use common_infallible::RwLock;
 use common_planners::CreateDatabasePlan;
@@ -67,7 +68,7 @@ impl DataSource {
             let store_addr = self.conf.store_api_address.clone();
             let username = self.conf.store_api_username.clone();
             let password = self.conf.store_api_password.clone();
-            let client = StoreClient::try_create(&store_addr, &username, &password).await?;
+            let client = StoreClient::try_create(&store_addr, &username, &password).await.map_err(ErrorCodes::from_anyhow)?;
             *self.store_client.write() = Some(client);
         }
         Ok(self.store_client.read().as_ref().unwrap().clone())
@@ -77,7 +78,7 @@ impl DataSource {
         let mut db_lock = self.databases.write();
         for database in databases {
             db_lock.insert(database.name().to_lowercase(), database.clone());
-            for tbl_func in database.get_table_functions()? {
+            for tbl_func in database.get_table_functions().map_err(ErrorCodes::from_anyhow)? {
                 self.table_functions
                     .write()
                     .insert(tbl_func.name().to_string(), tbl_func.clone());
@@ -89,21 +90,21 @@ impl DataSource {
     // Register local database with System engine.
     fn register_system_database(&mut self) -> Result<()> {
         let factory = SystemFactory::create();
-        let databases = factory.load_databases()?;
+        let databases = factory.load_databases().map_err(ErrorCodes::from_anyhow)?;
         self.insert_databases(databases)
     }
 
     // Register local database with Local engine.
     fn register_local_database(&mut self) -> Result<()> {
         let factory = LocalFactory::create();
-        let databases = factory.load_databases()?;
+        let databases = factory.load_databases().map_err(ErrorCodes::from_anyhow)?;
         self.insert_databases(databases)
     }
 
     // Register remote database with Remote engine.
     fn register_remote_database(&mut self) -> Result<()> {
         let factory = RemoteFactory::create(self.conf.clone());
-        let databases = factory.load_databases()?;
+        let databases = factory.load_databases().map_err(ErrorCodes::from_anyhow)?;
         self.insert_databases(databases)
     }
 
@@ -123,7 +124,11 @@ impl IDataSource for DataSource {
         let db_lock = self.databases.read();
         let database = db_lock
             .get(db_name)
-            .ok_or_else(|| anyhow!("DataSource Error: Unknown database: '{}'", db_name))?;
+            .ok_or_else(|| {
+                ErrorCodes::UnknownDatabase(
+                    format!("DataSource Error: Unknown database: '{}'", db_name)
+                )
+            })?;
         Ok(database.clone())
     }
 
@@ -131,8 +136,13 @@ impl IDataSource for DataSource {
         let db_lock = self.databases.read();
         let database = db_lock
             .get(db_name)
-            .ok_or_else(|| anyhow!("DataSource Error: Unknown database: '{}'", db_name))?;
-        let table = database.get_table(table_name)?;
+            .ok_or_else(|| {
+                ErrorCodes::UnknownDatabase(
+                    format!("DataSource Error: Unknown database: '{}'", db_name)
+                )
+            })?;
+
+        let table = database.get_table(table_name).map_err(ErrorCodes::from_anyhow)?;
         Ok(table.clone())
     }
 
@@ -147,7 +157,7 @@ impl IDataSource for DataSource {
     fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>> {
         let mut results = vec![];
         for (k, v) in self.databases.read().iter() {
-            let tables = v.get_tables()?;
+            let tables = v.get_tables().map_err(ErrorCodes::from_anyhow)?;
             for table in tables {
                 results.push((k.clone(), table.clone()));
             }
@@ -159,7 +169,11 @@ impl IDataSource for DataSource {
         let table_func_lock = self.table_functions.read();
         let table = table_func_lock
             .get(name)
-            .ok_or_else(|| anyhow!("DataSource Error: Unknown table function: '{}'", name))?;
+            .ok_or_else(|| {
+                ErrorCodes::UnknownTableFunction(
+                    format!("DataSource Error: Unknown table function: '{}'", name)
+                )
+            })?;
 
         Ok(table.clone())
     }
@@ -172,7 +186,7 @@ impl IDataSource for DataSource {
             }
             DatabaseEngineType::Remote => {
                 let mut client = self.try_get_client().await?;
-                let _action_rst = client.create_database(plan.clone()).await?;
+                let _action_rst = client.create_database(plan.clone()).await.map_err(ErrorCodes::from_anyhow)?;
                 // TODO add db id to cache
 
                 // Add local cache.

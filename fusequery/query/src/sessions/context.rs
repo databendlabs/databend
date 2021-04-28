@@ -45,7 +45,7 @@ impl FuseQueryContext {
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings,
             cluster: Arc::new(RwLock::new(Cluster::empty())),
-            datasource: Arc::new(DataSource::try_create().map_err(ErrorCodes::from_anyhow)?),
+            datasource: Arc::new(DataSource::try_create()?),
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             progress_callback: Arc::new(RwLock::new(None)),
@@ -126,11 +126,11 @@ impl FuseQueryContext {
     }
 
     pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
-        self.datasource.get_table(db_name, table_name).map_err(ErrorCodes::from_anyhow)
+        self.datasource.get_table(db_name, table_name)
     }
 
     pub fn get_table_function(&self, function_name: &str) -> Result<Arc<dyn ITableFunction>> {
-        self.datasource.get_table_function(function_name).map_err(ErrorCodes::from_anyhow)
+        self.datasource.get_table_function(function_name)
     }
 
     pub fn get_settings(&self) -> Result<Vec<DataValue>> {

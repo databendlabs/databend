@@ -249,7 +249,7 @@ impl PlanParser {
 
         self.ctx.get_table(db_name, table_name)
             .and_then(|table| {
-                table.schema().map_err(ErrorCodes::from_anyhow)
+                table.schema()
                     .and_then(|ref schema| {
                         PlanBuilder::scan(
                             db_name,
@@ -266,7 +266,6 @@ impl PlanParser {
                             PlanNode::Scan(ref dummy_scan_plan) => {
                                 table.read_plan(self.ctx.clone(), dummy_scan_plan)
                                     .map(|read_plan| PlanNode::ReadSource(read_plan))
-                                    .map_err(ErrorCodes::from_anyhow)
                             },
                             _unreachable_plan => panic!("Logical error: cannot downcast to scan plan")
                         }
@@ -317,7 +316,7 @@ impl PlanParser {
                 }
 
                 let scan = {
-                    table.schema().map_err(ErrorCodes::from_anyhow)
+                    table.schema()
                         .and_then(|schema| {
                             PlanBuilder::scan(
                                 &db_name,
@@ -332,8 +331,7 @@ impl PlanParser {
 
                 scan.and_then(|scan| match scan {
                     PlanNode::Scan(ref scan) => {
-                        table.read_plan(self.ctx.clone(), scan).map_err(ErrorCodes::from_anyhow)
-                            .map(|read_plan| PlanNode::ReadSource(read_plan))
+                        table.read_plan(self.ctx.clone(), scan).map(|read_plan| PlanNode::ReadSource(read_plan))
                     }
                     _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan")
                 })

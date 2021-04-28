@@ -32,7 +32,7 @@ impl IInterpreter for CreateTableInterpreter {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let datasource = self.ctx.get_datasource();
-        let database = datasource.get_database(self.plan.db.as_str()).map_err(ErrorCodes::from_anyhow)?;
+        let database = datasource.get_database(self.plan.db.as_str())?;
         database.create_table(self.plan.clone()).await.map_err(ErrorCodes::from_anyhow)?;
 
         Ok(Box::pin(DataBlockStream::create(
