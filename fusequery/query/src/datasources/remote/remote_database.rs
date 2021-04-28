@@ -5,8 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::bail;
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_flights::StoreClient;
 use common_infallible::RwLock;
 use common_planners::CreateTablePlan;
@@ -39,7 +38,7 @@ impl RemoteDatabase {
             let store_addr = self.conf.store_api_address.clone();
             let username = self.conf.store_api_username.clone();
             let password = self.conf.store_api_password.clone();
-            let client = StoreClient::try_create(&store_addr, &username, &password).await?;
+            let client = StoreClient::try_create(&store_addr, &username, &password).await.map_err(ErrorCodes::from_anyhow)?;
             *self.store_client.write() = Some(client);
         }
         Ok(self.store_client.read().as_ref().unwrap().clone())
@@ -57,7 +56,7 @@ impl IDatabase for RemoteDatabase {
     }
 
     fn get_table(&self, _table_name: &str) -> Result<Arc<dyn ITable>> {
-        bail!("RemoteDatabase get_table not yet implemented")
+        Result::Err(ErrorCodes::UnImplement("RemoteDatabase get_table not yet implemented".to_string()))
     }
 
     fn get_tables(&self) -> Result<Vec<Arc<dyn ITable>>> {
@@ -71,7 +70,7 @@ impl IDatabase for RemoteDatabase {
     async fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
         // Call remote create.
         let mut client = self.try_get_client().await?;
-        client.create_table(plan.clone()).await?;
+        client.create_table(plan.clone()).await.map_err(ErrorCodes::from_anyhow)?;
 
         // Update cache.
         let table = RemoteTable::try_create(plan.db, plan.table, plan.schema, plan.options)?;

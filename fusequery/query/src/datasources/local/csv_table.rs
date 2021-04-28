@@ -5,7 +5,6 @@
 use std::any::Any;
 use std::fs::File;
 
-use anyhow::bail;
 use anyhow::Context;
 use common_exception::{Result, ErrorCodes};
 use common_datavalues::DataSchemaRef;

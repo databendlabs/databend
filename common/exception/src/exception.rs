@@ -67,6 +67,7 @@ build_exceptions! {
     BadOption(22),
     CannotReadFile(23),
     ParquetError(24),
+    UnknownTable(25),
 
     UnknownException(1000),
     TokioError(1001)

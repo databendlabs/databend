@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::mem::size_of;
 use std::sync::Arc;
 
-use anyhow::bail;
 use common_exception::{Result, ErrorCodes};
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;

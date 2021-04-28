@@ -5,7 +5,7 @@
 use std::task::Context;
 use std::task::Poll;
 
-use common_exception::{Result, ErrorCodes};
+use common_exception::Result;
 use common_datablocks::DataBlock;
 use crossbeam::channel::Receiver;
 use futures::Stream;

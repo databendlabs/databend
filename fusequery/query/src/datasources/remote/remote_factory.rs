@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use common_exception::Result;
 
 use crate::configs::Config;
 use crate::datasources::remote::RemoteDatabase;

@@ -21,7 +21,6 @@ use common_streams::SendableDataBlockStream;
 
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
-use common_exception::ErrorCodes;
 
 pub struct DatabasesTable {
     schema: DataSchemaRef

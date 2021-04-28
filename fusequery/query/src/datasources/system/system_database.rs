@@ -5,15 +5,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::anyhow;
-use anyhow::bail;
-use anyhow::Result;
+use common_exception::Result;
 use common_planners::CreateTablePlan;
 
 use crate::datasources::system;
 use crate::datasources::IDatabase;
 use crate::datasources::ITable;
 use crate::datasources::ITableFunction;
+use common_exception::ErrorCodes;
 
 pub struct SystemDatabase {
     tables: HashMap<String, Arc<dyn ITable>>,
@@ -69,7 +68,7 @@ impl IDatabase for SystemDatabase {
         let table = self
             .tables
             .get(table_name)
-            .ok_or_else(|| anyhow!("DataSource Error: Unknown table: '{}'", table_name))?;
+            .ok_or_else(|| ErrorCodes::UnknownTable(format!("DataSource Error: Unknown table: '{}'", table_name)))?;
         Ok(table.clone())
     }
 
@@ -82,6 +81,8 @@ impl IDatabase for SystemDatabase {
     }
 
     async fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
-        bail!("DataSource Error: cannot create table for system database")
+        Result::Err(ErrorCodes::UnImplement(
+            "DataSource Error: cannot create table for system database".to_string()
+        ))
     }
 }

@@ -5,8 +5,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::anyhow;
-// use anyhow::Result;
 use common_exception::{Result, ErrorCodes};
 use common_flights::StoreClient;
 use common_infallible::RwLock;
@@ -78,7 +76,7 @@ impl DataSource {
         let mut db_lock = self.databases.write();
         for database in databases {
             db_lock.insert(database.name().to_lowercase(), database.clone());
-            for tbl_func in database.get_table_functions().map_err(ErrorCodes::from_anyhow)? {
+            for tbl_func in database.get_table_functions()? {
                 self.table_functions
                     .write()
                     .insert(tbl_func.name().to_string(), tbl_func.clone());
@@ -90,21 +88,21 @@ impl DataSource {
     // Register local database with System engine.
     fn register_system_database(&mut self) -> Result<()> {
         let factory = SystemFactory::create();
-        let databases = factory.load_databases().map_err(ErrorCodes::from_anyhow)?;
+        let databases = factory.load_databases()?;
         self.insert_databases(databases)
     }
 
     // Register local database with Local engine.
     fn register_local_database(&mut self) -> Result<()> {
         let factory = LocalFactory::create();
-        let databases = factory.load_databases().map_err(ErrorCodes::from_anyhow)?;
+        let databases = factory.load_databases()?;
         self.insert_databases(databases)
     }
 
     // Register remote database with Remote engine.
     fn register_remote_database(&mut self) -> Result<()> {
         let factory = RemoteFactory::create(self.conf.clone());
-        let databases = factory.load_databases().map_err(ErrorCodes::from_anyhow)?;
+        let databases = factory.load_databases()?;
         self.insert_databases(databases)
     }
 
@@ -142,7 +140,7 @@ impl IDataSource for DataSource {
                 )
             })?;
 
-        let table = database.get_table(table_name).map_err(ErrorCodes::from_anyhow)?;
+        let table = database.get_table(table_name)?;
         Ok(table.clone())
     }
 
@@ -157,7 +155,7 @@ impl IDataSource for DataSource {
     fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>> {
         let mut results = vec![];
         for (k, v) in self.databases.read().iter() {
-            let tables = v.get_tables().map_err(ErrorCodes::from_anyhow)?;
+            let tables = v.get_tables()?;
             for table in tables {
                 results.push((k.clone(), table.clone()));
             }

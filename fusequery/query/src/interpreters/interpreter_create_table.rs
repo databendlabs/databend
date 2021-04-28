@@ -11,7 +11,6 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::{IInterpreter, InterpreterPtr};
 use crate::sessions::FuseQueryContextRef;
-use common_exception::ErrorCodes;
 
 pub struct CreateTableInterpreter {
     ctx: FuseQueryContextRef,
@@ -33,7 +32,7 @@ impl IInterpreter for CreateTableInterpreter {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let datasource = self.ctx.get_datasource();
         let database = datasource.get_database(self.plan.db.as_str())?;
-        database.create_table(self.plan.clone()).await.map_err(ErrorCodes::from_anyhow)?;
+        database.create_table(self.plan.clone()).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema.clone(),

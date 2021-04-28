@@ -4,7 +4,6 @@
 
 use std::any::Any;
 
-use anyhow::bail;
 use common_exception::{Result, ErrorCodes};
 use common_datavalues::DataSchemaRef;
 use common_planners::ReadDataSourcePlan;

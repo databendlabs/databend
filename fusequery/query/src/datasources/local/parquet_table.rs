@@ -7,8 +7,6 @@ use std::convert::TryInto;
 use std::fs::File;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context};
-use anyhow::bail;
 use common_exception::{Result, ErrorCodes};
 use common_arrow::parquet::arrow::ArrowReader;
 use common_arrow::parquet::arrow::ParquetFileArrowReader;

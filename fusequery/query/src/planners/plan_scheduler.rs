@@ -14,7 +14,6 @@ use common_planners::ReadDataSourcePlan;
 use log::info;
 
 use crate::sessions::FuseQueryContextRef;
-use common_exception::ErrorCodes;
 
 pub struct PlanScheduler;
 
