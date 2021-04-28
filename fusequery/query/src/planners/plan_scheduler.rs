@@ -5,7 +5,8 @@
 use std::cmp::min;
 use std::sync::Arc;
 
-use anyhow::Result;
+// use anyhow::Result;
+use common_exception::Result;
 use common_datavalues::DataSchema;
 use common_planners::EmptyPlan;
 use common_planners::PlanNode;
@@ -13,6 +14,7 @@ use common_planners::ReadDataSourcePlan;
 use log::info;
 
 use crate::sessions::FuseQueryContextRef;
+use common_exception::ErrorCodes;
 
 pub struct PlanScheduler;
 
@@ -23,18 +25,20 @@ impl PlanScheduler {
         plan: &PlanNode
     ) -> Result<Vec<(String, PlanNode)>> {
         let mut results = vec![];
-        let max_threads = ctx.get_max_threads()? as usize;
-        let executors = ctx.try_get_cluster()?.get_nodes()?;
+        let max_threads = ctx.get_max_threads().map_err(ErrorCodes::from_anyhow)? as usize;
+        let executors = ctx.try_get_cluster().map_err(ErrorCodes::from_anyhow)?.get_nodes().map_err(ErrorCodes::from_anyhow)?;
 
         // Get the source plan node by walk
         let mut source_plan = ReadDataSourcePlan::empty();
         {
-            plan.walk_preorder(|plan| match plan {
-                PlanNode::ReadSource(node) => {
-                    source_plan = node.clone();
-                    Ok(false)
+            plan.walk_preorder(|plan| -> Result<bool> {
+                match plan {
+                    PlanNode::ReadSource(node) => {
+                        source_plan = node.clone();
+                        Ok(false)
+                    }
+                    _ => Ok(true)
                 }
-                _ => Ok(true)
             })?;
         }
 
@@ -47,9 +51,8 @@ impl PlanScheduler {
 
             // Local table.
             let datasource = ctx.get_datasource();
-            if datasource
-                .get_table(source_plan.db.as_str(), source_plan.table.as_str())?
-                .is_local()
+            if datasource.get_table(source_plan.db.as_str(), source_plan.table.as_str())
+                .map_err(ErrorCodes::from_anyhow)?.is_local()
             {
                 return Ok(vec![]);
             }
@@ -113,7 +116,7 @@ impl PlanScheduler {
                 });
 
                 // Walk and rewrite the plan from the source.
-                plan.walk_postorder(|node| {
+                plan.walk_postorder(|node| -> Result<bool> {
                     if let PlanNode::ReadSource(_) = node {
                         rewritten_node = PlanNode::ReadSource(new_source_plan.clone());
                     } else {

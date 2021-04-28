@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use common_exception::{Result, ErrorCodes};
+use common_exception::Result;
 use common_datavalues::DataSchema;
 use common_planners::EmptyPlan;
 use common_planners::FilterPlan;
@@ -33,7 +33,7 @@ impl IOptimizer for FilterPushDownOptimizer {
         });
 
         let projection_map = OptimizerCommon::projection_to_map(plan)?;
-        plan.walk_postorder(|node| {
+        plan.walk_postorder(|node| -> Result<bool> {
             if let PlanNode::Filter(filter) = node {
                 let rewritten_expr =
                     OptimizerCommon::rewrite_alias_expr(&filter.predicate, &projection_map)?;
@@ -49,7 +49,7 @@ impl IOptimizer for FilterPushDownOptimizer {
                 rewritten_node = clone_node;
             }
             Ok(true)
-        }).map_err(ErrorCodes::from_anyhow)?;
+        })?;
 
         Ok(rewritten_node)
     }

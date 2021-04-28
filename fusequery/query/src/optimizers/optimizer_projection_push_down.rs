@@ -5,7 +5,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_exception::{Result, ErrorCodes};
+use common_exception::Result;
 use common_arrow::arrow::error::Result as ArrowResult;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
@@ -109,7 +109,7 @@ fn optimize_plan(
             exprvec_to_column_names(expr, &mut new_required_columns)?;
             let new_input = optimize_plan(optimizer, &input, &new_required_columns, true)?;
             let mut cloned_plan = plan.clone();
-            cloned_plan.set_input(&new_input).map_err(ErrorCodes::from_anyhow)?;
+            cloned_plan.set_input(&new_input)?;
             Ok(cloned_plan)
         }
         PlanNode::Filter(FilterPlan { predicate, input }) => {
@@ -117,7 +117,7 @@ fn optimize_plan(
             let new_input =
                 optimize_plan(optimizer, &input, &new_required_columns, has_projection)?;
             let mut cloned_plan = plan.clone();
-            cloned_plan.set_input(&new_input).map_err(ErrorCodes::from_anyhow)?;
+            cloned_plan.set_input(&new_input)?;
             Ok(cloned_plan)
         }
         PlanNode::Sort(SortPlan { order_by, input }) => {
@@ -125,7 +125,7 @@ fn optimize_plan(
             let new_input =
                 optimize_plan(optimizer, &input, &new_required_columns, has_projection)?;
             let mut cloned_plan = plan.clone();
-            cloned_plan.set_input(&new_input).map_err(ErrorCodes::from_anyhow)?;
+            cloned_plan.set_input(&new_input)?;
             Ok(cloned_plan)
         }
         PlanNode::AggregatorFinal(AggregatorFinalPlan {
@@ -139,7 +139,7 @@ fn optimize_plan(
             exprvec_to_column_names(aggr_expr, &mut new_required_columns)?;
             let new_input = optimize_plan(optimizer, &input, &new_required_columns, true)?;
             let mut cloned_plan = plan.clone();
-            cloned_plan.set_input(&new_input).map_err(ErrorCodes::from_anyhow)?;
+            cloned_plan.set_input(&new_input)?;
             Ok(cloned_plan)
         }
         PlanNode::AggregatorPartial(AggregatorPartialPlan {
@@ -152,7 +152,7 @@ fn optimize_plan(
             exprvec_to_column_names(aggr_expr, &mut new_required_columns)?;
             let new_input = optimize_plan(optimizer, &input, &new_required_columns, true)?;
             let mut cloned_plan = plan.clone();
-            cloned_plan.set_input(&new_input).map_err(ErrorCodes::from_anyhow)?;
+            cloned_plan.set_input(&new_input)?;
             Ok(cloned_plan)
         }
         PlanNode::ReadSource(ReadDataSourcePlan {
@@ -179,7 +179,7 @@ fn optimize_plan(
             let input = plan.input();
             let new_input = optimize_plan(optimizer, &input, &required_columns, has_projection)?;
             let mut cloned_plan = plan.clone();
-            cloned_plan.set_input(&new_input).map_err(ErrorCodes::from_anyhow)?;
+            cloned_plan.set_input(&new_input)?;
             Ok(cloned_plan)
         }
     }

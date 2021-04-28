@@ -53,6 +53,7 @@ build_exceptions! {
     UnknownFunction(8),
     IllegalFunctionState(9),
     BadDataValueType(10),
+    UnknownPlan(11),
 
     UnknownException(1000),
     TokioError(1001)

@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use common_exception::{Result, ErrorCodes};
+use common_exception::Result;
 use common_datavalues::DataSchema;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
@@ -34,7 +34,7 @@ impl IOptimizer for GroupByPushDownOptimizer {
         });
 
         let projection_map = OptimizerCommon::projection_to_map(plan)?;
-        plan.walk_postorder(|node| {
+        plan.walk_postorder(|node| -> Result<bool> {
             match node {
                 PlanNode::AggregatorPartial(plan) => {
                     let aggr_expr =
@@ -70,7 +70,7 @@ impl IOptimizer for GroupByPushDownOptimizer {
                 }
             }
             Ok(true)
-        }).map_err(ErrorCodes::from_anyhow)?;
+        })?;
 
         Ok(rewritten_node)
     }
