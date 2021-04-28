@@ -71,6 +71,6 @@ impl IFunction for CastFunction {
 
 impl fmt::Display for CastFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "cast({})", self.expr)
+        write!(f, "CAST({})", self.expr)
     }
 }

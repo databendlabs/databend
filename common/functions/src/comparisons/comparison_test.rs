@@ -37,7 +37,7 @@ fn test_comparison_function() -> anyhow::Result<()> {
             name: "eq-passed",
             display: "a = b",
             nullable: false,
-            func: ComparisonEqFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
+            func: ComparisonEqFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(schema.clone(), vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2, 4])),
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
@@ -49,7 +49,7 @@ fn test_comparison_function() -> anyhow::Result<()> {
             name: "gt-passed",
             display: "a > b",
             nullable: false,
-            func: ComparisonGtFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
+            func: ComparisonGtFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(schema.clone(), vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2, 4])),
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
@@ -61,7 +61,7 @@ fn test_comparison_function() -> anyhow::Result<()> {
             name: "gt-eq-passed",
             display: "a >= b",
             nullable: false,
-            func: ComparisonGtEqFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
+            func: ComparisonGtEqFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(schema.clone(), vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2, 4])),
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
@@ -73,7 +73,7 @@ fn test_comparison_function() -> anyhow::Result<()> {
             name: "lt-passed",
             display: "a < b",
             nullable: false,
-            func: ComparisonLtFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
+            func: ComparisonLtFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(schema.clone(), vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2, 4])),
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
@@ -85,7 +85,7 @@ fn test_comparison_function() -> anyhow::Result<()> {
             name: "lt-eq-passed",
             display: "a <= b",
             nullable: false,
-            func: ComparisonLtEqFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
+            func: ComparisonLtEqFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(schema.clone(), vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2, 4])),
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
@@ -97,7 +97,10 @@ fn test_comparison_function() -> anyhow::Result<()> {
             name: "not-eq-passed",
             display: "a != b",
             nullable: false,
-            func: ComparisonNotEqFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
+            func: ComparisonNotEqFunction::try_create_func("", &[
+                field_a.clone(),
+                field_b.clone()
+            ])?,
             block: DataBlock::create(schema.clone(), vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2, 4])),
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])),

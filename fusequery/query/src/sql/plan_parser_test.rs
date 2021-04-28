@@ -20,7 +20,7 @@ fn test_plan_parser() -> anyhow::Result<()> {
         Test {
         name: "cast-passed",
         sql: "select cast('1' as int)",
-        actual: "Projection: CAST(1 AS Int32):Int32\n  ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
+        actual: "Projection: cast(1 as Int32):Int32\n  ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
         error: "",
     },
         Test {

@@ -18,19 +18,24 @@ use crate::LiteralFunction;
 
 #[derive(Clone)]
 pub struct AggregatorCountFunction {
+    display_name: String,
     depth: usize,
     arg: Box<dyn IFunction>,
     state: DataValue
 }
 
 impl AggregatorCountFunction {
-    pub fn try_create(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(
+        display_name: &str,
+        args: &[Box<dyn IFunction>]
+    ) -> Result<Box<dyn IFunction>> {
         let arg = if args.is_empty() {
             LiteralFunction::try_create(DataValue::UInt64(Some(1)))?
         } else {
             args[0].clone()
         };
         Ok(Box::new(AggregatorCountFunction {
+            display_name: display_name.to_string(),
             depth: 0,
             arg,
             state: DataValue::Null
@@ -94,6 +99,6 @@ impl IFunction for AggregatorCountFunction {
 
 impl fmt::Display for AggregatorCountFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "count({})", self.arg)
+        write!(f, "{}({})", self.display_name, self.arg)
     }
 }
