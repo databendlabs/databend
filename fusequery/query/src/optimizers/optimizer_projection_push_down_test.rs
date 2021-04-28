@@ -44,8 +44,9 @@ mod tests {
 
         let ctx = crate::tests::try_create_context()?;
 
-        let plan = PlanParser::create(ctx.clone())
-            .build_from_sql("select max(value) as c1, min(name) as c2 from system.settings group by c2")?;
+        let plan = PlanParser::create(ctx.clone()).build_from_sql(
+            "select max(value) as c1, min(name) as c2 from system.settings group by c2"
+        )?;
 
         let mut project_push_down = ProjectionPushDownOptimizer::create(ctx);
         let optimized = project_push_down.optimize(&plan)?;
