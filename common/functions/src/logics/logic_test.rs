@@ -39,7 +39,7 @@ fn test_logic_function() -> anyhow::Result<()> {
             func_name: "AndFunction",
             display: "a and b",
             nullable: false,
-            func: LogicAndFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
+            func: LogicAndFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(schema.clone(), vec![
                 Arc::new(BooleanArray::from(vec![true, true, true, false])),
                 Arc::new(BooleanArray::from(vec![true, false, true, true])),
@@ -52,7 +52,7 @@ fn test_logic_function() -> anyhow::Result<()> {
             func_name: "OrFunction",
             display: "a or b",
             nullable: false,
-            func: LogicOrFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
+            func: LogicOrFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(schema.clone(), vec![
                 Arc::new(BooleanArray::from(vec![true, true, true, false])),
                 Arc::new(BooleanArray::from(vec![true, false, true, true])),

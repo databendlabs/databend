@@ -9,6 +9,7 @@ pub mod api;
 pub mod clusters;
 pub mod configs;
 pub mod datasources;
+pub mod functions;
 pub mod interpreters;
 pub mod metrics;
 pub mod optimizers;

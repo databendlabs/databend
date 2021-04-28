@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn test_udf_function() -> anyhow::Result<()> {
+fn test_udf_example_function() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_datablocks::*;
@@ -36,7 +36,7 @@ fn test_udf_function() -> anyhow::Result<()> {
         name: "udf-example-passed",
         display: "example()",
         nullable: false,
-        func: UdfExampleFunction::try_create(&[field_a.clone(), field_b.clone()])?,
+        func: UdfExampleFunction::try_create("example", &[field_a.clone(), field_b.clone()])?,
         block: DataBlock::create(schema.clone(), vec![
             Arc::new(BooleanArray::from(vec![true, true, true, false])),
             Arc::new(BooleanArray::from(vec![true, false, true, true])),

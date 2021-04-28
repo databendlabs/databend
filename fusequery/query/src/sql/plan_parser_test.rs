@@ -16,12 +16,26 @@ fn test_plan_parser() -> anyhow::Result<()> {
         error: &'static str
     }
 
-    let tests = vec![Test {
+    let tests = vec![
+        Test {
         name: "cast-passed",
         sql: "select cast('1' as int)",
-        actual: "Projection: CAST(1 AS Int32):Int32\n  ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
+        actual: "Projection: cast(1 as Int32):Int32\n  ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
         error: "",
-    }];
+    },
+        Test {
+        name: "database-passed",
+        sql: "select database()",
+        actual: "Projection: database([default]):Utf8\n  ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
+        error: "",
+        },
+        Test {
+            name: "unsupported-function",
+            sql: "select unsupported()",
+            actual: "",
+            error: "Unsupported function: \"unsupported\"",
+        },
+    ];
 
     let ctx = crate::tests::try_create_context()?;
     for t in tests {

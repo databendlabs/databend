@@ -11,7 +11,10 @@ use crate::IFunction;
 pub struct LogicAndFunction;
 
 impl LogicAndFunction {
-    pub fn try_create_func(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[Box<dyn IFunction>]
+    ) -> Result<Box<dyn IFunction>> {
         LogicFunction::try_create_func(DataValueLogicOperator::And, args)
     }
 }

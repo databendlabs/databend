@@ -48,7 +48,11 @@ impl DataBlock {
     }
 
     pub fn num_rows(&self) -> usize {
-        self.columns[0].data().len()
+        if self.columns.is_empty() {
+            0
+        } else {
+            self.columns[0].data().len()
+        }
     }
 
     pub fn num_columns(&self) -> usize {

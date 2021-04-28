@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use anyhow::bail;
+use anyhow::ensure;
 use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayAggregate;
@@ -20,20 +20,25 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct AggregatorAvgFunction {
+    display_name: String,
     depth: usize,
     arg: Box<dyn IFunction>,
     state: DataValue
 }
 
 impl AggregatorAvgFunction {
-    pub fn try_create(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
-        if args.len() != 1 {
-            bail!(
-                "Function Error: Aggregator function Avg args require single argument".to_string(),
-            );
-        }
+    pub fn try_create(
+        display_name: &str,
+        args: &[Box<dyn IFunction>]
+    ) -> Result<Box<dyn IFunction>> {
+        ensure!(
+            args.len() == 1,
+            "Function Error: Aggregator function {} args require single argument",
+            display_name
+        );
 
         Ok(Box::new(AggregatorAvgFunction {
+            display_name: display_name.to_string(),
             depth: 0,
             arg: args[0].clone(),
             state: DataValue::Struct(vec![DataValue::Null, DataValue::UInt64(Some(0))])
@@ -129,6 +134,6 @@ impl IFunction for AggregatorAvgFunction {
 
 impl fmt::Display for AggregatorAvgFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "avg({})", self.arg)
+        write!(f, "{}({})", self.display_name, self.arg)
     }
 }

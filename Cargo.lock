@@ -91,7 +91,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "arrow"
 version = "4.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow-rs?rev=08a662f#08a662f2b256c625ea1be6b9bbaec43026906bb7"
+source = "git+https://github.com/apache/arrow-rs?rev=c3fe3bab9905739fdda75301dab07a18c91731bd#c3fe3bab9905739fdda75301dab07a18c91731bd"
 dependencies = [
  "cfg_aliases",
  "chrono",
@@ -113,7 +113,7 @@ dependencies = [
 [[package]]
 name = "arrow-flight"
 version = "4.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow-rs?rev=08a662f#08a662f2b256c625ea1be6b9bbaec43026906bb7"
+source = "git+https://github.com/apache/arrow-rs?rev=c3fe3bab9905739fdda75301dab07a18c91731bd#c3fe3bab9905739fdda75301dab07a18c91731bd"
 dependencies = [
  "arrow",
  "bytes 1.0.1",
@@ -2229,7 +2229,7 @@ dependencies = [
 [[package]]
 name = "parquet"
 version = "4.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow-rs?rev=08a662f#08a662f2b256c625ea1be6b9bbaec43026906bb7"
+source = "git+https://github.com/apache/arrow-rs?rev=c3fe3bab9905739fdda75301dab07a18c91731bd#c3fe3bab9905739fdda75301dab07a18c91731bd"
 dependencies = [
  "arrow",
  "base64 0.12.3",
