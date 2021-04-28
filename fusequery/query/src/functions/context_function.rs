@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-// use anyhow::bail;
-// use anyhow::Result;
 use common_exception::Result;
 use common_exception::ErrorCodes;
 use common_datavalues::DataValue;

@@ -2,10 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-// use anyhow::Result;
 use crate::PlanNode;
 use std::result::Result;
-// use common_exception::Result;
 
 #[derive(PartialEq)]
 enum WalkOrder {

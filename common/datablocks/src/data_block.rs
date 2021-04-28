@@ -6,7 +6,6 @@ use std::convert::TryInto;
 use std::fmt;
 use std::sync::Arc;
 
-// use anyhow::Result;
 use common_exception::{Result, ErrorCodes};
 use common_arrow::arrow;
 use common_arrow::arrow::record_batch::RecordBatch;

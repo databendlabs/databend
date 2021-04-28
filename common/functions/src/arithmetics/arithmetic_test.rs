@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+
 #[test]
-fn test_arithmetic_function() -> anyhow::Result<()> {
+fn test_arithmetic_function() -> Result<()> {
     use std::sync::Arc;
 
     use common_datablocks::DataBlock;

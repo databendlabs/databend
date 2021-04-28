@@ -4,7 +4,6 @@
 
 use std::sync::Arc;
 
-// use anyhow::Result;
 use common_exception::Result;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;

@@ -4,7 +4,6 @@
 
 use std::fmt;
 
-// use anyhow::Result;
 use common_exception::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
