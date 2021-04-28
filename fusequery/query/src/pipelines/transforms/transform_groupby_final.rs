@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataSchemaRef;
@@ -79,19 +79,19 @@ impl IProcessor for GroupByFinalTransform {
         let mut stream = self.input.execute().await?;
         while let Some(block) = stream.next().await {
             let mut groups = self.groups.write();
-            let block = block?;
+            let block = block.map_err(ErrorCodes::from_anyhow)?;
             for row in 0..block.num_rows() {
                 if let DataValue::Binary(Some(group_key)) =
-                    DataValue::try_from_array(block.column(aggr_funcs_length), row)?
+                    DataValue::try_from_array(block.column(aggr_funcs_length), row).map_err(ErrorCodes::from_anyhow)?
                 {
                     match groups.get_mut(&group_key) {
                         None => {
                             let mut funcs = aggr_funcs.clone();
                             for (i, func) in funcs.iter_mut().enumerate() {
                                 if let DataValue::Utf8(Some(col)) =
-                                    DataValue::try_from_array(block.column(i), row)?
+                                    DataValue::try_from_array(block.column(i), row).map_err(ErrorCodes::from_anyhow)?
                                 {
-                                    let val: DataValue = serde_json::from_str(&col)?;
+                                    let val: DataValue = serde_json::from_str(&col).map_err(ErrorCodes::from_serde)?;
                                     if let DataValue::Struct(states) = val {
                                         func.merge(&states)?;
                                     }
@@ -102,9 +102,9 @@ impl IProcessor for GroupByFinalTransform {
                         Some(funcs) => {
                             for (i, func) in funcs.iter_mut().enumerate() {
                                 if let DataValue::Utf8(Some(col)) =
-                                    DataValue::try_from_array(block.column(i), row)?
+                                    DataValue::try_from_array(block.column(i), row).map_err(ErrorCodes::from_anyhow)?
                                 {
-                                    let val: DataValue = serde_json::from_str(&col)?;
+                                    let val: DataValue = serde_json::from_str(&col).map_err(ErrorCodes::from_serde)?;
                                     if let DataValue::Struct(states) = val {
                                         func.merge(&states)?;
                                     }
@@ -138,7 +138,7 @@ impl IProcessor for GroupByFinalTransform {
         let mut columns: Vec<DataArrayRef> = Vec::with_capacity(self.aggr_exprs.len());
         for value in &aggr_values {
             if !value.is_empty() {
-                columns.push(DataValue::try_into_data_array(value.as_slice())?);
+                columns.push(DataValue::try_into_data_array(value.as_slice()).map_err(ErrorCodes::from_anyhow)?);
             }
         }
         let mut blocks = vec![];

@@ -55,6 +55,9 @@ build_exceptions! {
     BadDataValueType(10),
     UnknownPlan(11),
     IllegalPipelineState(12),
+    BadTransformType(13),
+    IllegalTransformConnectionState(14),
+    LogicalError(15),
 
     UnknownException(1000),
     TokioError(1001)
@@ -85,6 +88,7 @@ impl Display for ErrorCodes {
 #[derive(Error)]
 enum OtherErrors {
     AnyHow { error: anyhow::Error },
+    SerdeJSON { error: serde_json::Error },
     ArrowError { error: common_arrow::arrow::error::ArrowError },
     ParserError { error: sqlparser::parser::ParserError },
 }
@@ -93,6 +97,7 @@ impl Display for OtherErrors {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             OtherErrors::AnyHow { error } => write!(f, "{}", error),
+            OtherErrors::SerdeJSON { error } => write!(f, "{}", error),
             OtherErrors::ArrowError { error } => write!(f, "{}", error),
             OtherErrors::ParserError { error } => write!(f, "{}", error)
         }
@@ -103,6 +108,7 @@ impl Debug for OtherErrors {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             OtherErrors::AnyHow { error } => write!(f, "{:?}", error),
+            OtherErrors::SerdeJSON { error } => write!(f, "{:?}", error),
             OtherErrors::ArrowError { error } => write!(f, "{:?}", error),
             OtherErrors::ParserError { error } => write!(f, "{:?}", error),
         }
@@ -125,6 +131,16 @@ impl ErrorCodes {
             code: 1002,
             display_text: String::from(""),
             cause: Some(Box::new(OtherErrors::ArrowError { error: error })),
+            #[cfg(feature = "backtrace")]
+            backtrace: None,
+        }
+    }
+
+    pub fn from_serde(error: serde_json::Error) -> ErrorCodes {
+        ErrorCodes {
+            code: 1002,
+            display_text: String::from(""),
+            cause: Some(Box::new(OtherErrors::SerdeJSON { error: error })),
             #[cfg(feature = "backtrace")]
             backtrace: None,
         }

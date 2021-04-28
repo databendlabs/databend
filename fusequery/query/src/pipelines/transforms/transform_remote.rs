@@ -5,7 +5,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 
@@ -59,11 +59,12 @@ impl IProcessor for RemoteTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let mut client = FlightClient::try_create(self.remote_addr.clone()).await?;
+        let mut client = FlightClient::try_create(self.remote_addr.clone()).await
+            .map_err(ErrorCodes::from_anyhow)?;
         Ok(Box::pin(
             client
                 .execute_remote_plan_action(self.job_id.clone(), &self.plan)
-                .await?
+                .await.map_err(ErrorCodes::from_anyhow)?
         ))
     }
 }

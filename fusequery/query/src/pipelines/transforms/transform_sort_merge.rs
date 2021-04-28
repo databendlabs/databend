@@ -5,8 +5,8 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use anyhow::Result;
 use async_trait::async_trait;
+use common_exception::{Result, ErrorCodes};
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_planners::ExpressionPlan;
@@ -65,7 +65,7 @@ impl IProcessor for SortMergeTransform {
         let mut stream = self.input.execute().await?;
 
         while let Some(block) = stream.next().await {
-            blocks.push(block?);
+            blocks.push(block.map_err(ErrorCodes::from_anyhow)?);
         }
 
         let results = match blocks.len() {
@@ -73,8 +73,8 @@ impl IProcessor for SortMergeTransform {
             _ => vec![DataBlock::merge_sort_blocks(
                 &blocks,
                 &sort_columns_descriptions,
-                self.limit
-            )?]
+                self.limit,
+            ).map_err(ErrorCodes::from_anyhow)?]
         };
 
         Ok(Box::pin(DataBlockStream::create(

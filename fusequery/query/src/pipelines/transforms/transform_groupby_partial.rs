@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_arrow::arrow::array::BinaryBuilder;
 use common_arrow::arrow::array::StringBuilder;
 use common_datablocks::DataBlock;
@@ -116,7 +116,7 @@ impl IProcessor for GroupByPartialTransform {
         let start = Instant::now();
         let mut stream = self.input.execute().await?;
         while let Some(block) = stream.next().await {
-            let block = block?;
+            let block = block.map_err(ErrorCodes::from_anyhow)?;
             let mut group_indices = GroupIndicesTable::default();
             let mut group_columns = Vec::with_capacity(group_funcs_len);
 
@@ -144,7 +144,8 @@ impl IProcessor for GroupByPartialTransform {
                 for row in 0..block.num_rows() {
                     group_key.clear();
                     for col in &group_columns {
-                        DataValue::concat_row_to_one_key(col, row, &mut group_key)?;
+                        DataValue::concat_row_to_one_key(col, row, &mut group_key)
+                            .map_err(ErrorCodes::from_anyhow)?;
                     }
                     match group_indices.get_mut(&group_key) {
                         None => {
@@ -160,7 +161,8 @@ impl IProcessor for GroupByPartialTransform {
             // 1.3 Apply take blocks to aggregate function by group_key.
             {
                 for (group_key, group_indices) in group_indices {
-                    let take_block = DataBlock::block_take_by_indices(&block, &group_indices)?;
+                    let take_block = DataBlock::block_take_by_indices(&block, &group_indices)
+                        .map_err(ErrorCodes::from_anyhow)?;
                     let mut groups = self.groups.write();
                     match groups.get_mut(&group_key) {
                         // New group.
@@ -206,10 +208,10 @@ impl IProcessor for GroupByPartialTransform {
         for (key, funcs) in groups.iter() {
             for (idx, func) in funcs.iter().enumerate() {
                 let states = DataValue::Struct(func.accumulate_result()?);
-                let ser = serde_json::to_string(&states)?;
-                builders[idx].append_value(ser.as_str())?;
+                let ser = serde_json::to_string(&states).map_err(ErrorCodes::from_serde)?;
+                builders[idx].append_value(ser.as_str()).map_err(ErrorCodes::from_arrow)?;
             }
-            group_key_builder.append_value(key)?;
+            group_key_builder.append_value(key).map_err(ErrorCodes::from_arrow)?;
         }
 
         let mut columns: Vec<DataArrayRef> = Vec::with_capacity(fields.len());

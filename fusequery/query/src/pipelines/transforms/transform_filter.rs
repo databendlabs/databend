@@ -6,8 +6,7 @@ use std::any::Any;
 use std::convert::TryInto;
 use std::sync::Arc;
 
-use anyhow::bail;
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_arrow::arrow;
 use common_datavalues as datavalues;
 use common_datavalues::BooleanArray;
@@ -28,10 +27,12 @@ impl FilterTransform {
     pub fn try_create(predicate: ExpressionPlan) -> Result<Self> {
         let func = predicate.to_function()?;
         if func.is_aggregator() {
-            bail!(
-                "Aggregate function {:?} is found in WHERE in query",
-                predicate
-            );
+            return Result::Err(ErrorCodes::SyntexException(
+                format!(
+                    "Aggregate function {:?} is found in WHERE in query",
+                    predicate
+                )
+            ));
         }
 
         Ok(FilterTransform {

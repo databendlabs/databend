@@ -5,9 +5,8 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use anyhow::bail;
-use anyhow::Result;
 use async_trait::async_trait;
+use common_exception::{Result, ErrorCodes};
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRef;
 use common_planners::ExpressionPlan;
@@ -63,7 +62,7 @@ impl IProcessor for SortPartialTransform {
             self.input.execute().await?,
             get_sort_descriptions(&self.schema, &self.exprs)?,
             self.limit
-        )?))
+        ).map_err(ErrorCodes::from_anyhow)?))
     }
 }
 
@@ -87,10 +86,12 @@ pub fn get_sort_descriptions(
                 });
             }
             _ => {
-                bail!(
-                    "Sort expression must be ExpressionPlan::Sort, but got: {:?}",
-                    x
-                )
+                return Result::Err(ErrorCodes::BadTransformType(
+                    format!(
+                        "Sort expression must be ExpressionPlan::Sort, but got: {:?}",
+                        x
+                    )
+                ));
             }
         }
     }

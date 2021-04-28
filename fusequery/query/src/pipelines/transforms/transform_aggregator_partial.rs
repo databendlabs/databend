@@ -6,7 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataField;
@@ -71,7 +71,7 @@ impl IProcessor for AggregatorPartialTransform {
 
         let start = Instant::now();
         while let Some(block) = stream.next().await {
-            let block = block?;
+            let block = block.map_err(ErrorCodes::from_anyhow)?;
 
             for func in funcs.iter_mut() {
                 func.accumulate(&block)?;
@@ -89,7 +89,7 @@ impl IProcessor for AggregatorPartialTransform {
 
             // Column.
             let states = DataValue::Struct(func.accumulate_result()?);
-            let ser = serde_json::to_string(&states)?;
+            let ser = serde_json::to_string(&states).map_err(ErrorCodes::from_serde)?;
             let col = Arc::new(StringArray::from(vec![ser.as_str()]));
             columns.push(col);
         }

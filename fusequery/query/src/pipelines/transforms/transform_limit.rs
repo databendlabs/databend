@@ -5,7 +5,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_streams::LimitStream;
 use common_streams::SendableDataBlockStream;
 
@@ -49,6 +49,6 @@ impl IProcessor for LimitTransform {
         Ok(Box::pin(LimitStream::try_create(
             self.input.execute().await?,
             self.limit
-        )?))
+        ).map_err(ErrorCodes::from_anyhow)?))
     }
 }

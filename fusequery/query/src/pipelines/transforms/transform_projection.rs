@@ -5,7 +5,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use anyhow::Result;
+use common_exception::Result;
 use common_datavalues::DataSchemaRef;
 use common_planners::ExpressionPlan;
 use common_streams::SendableDataBlockStream;

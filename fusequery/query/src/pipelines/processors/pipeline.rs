@@ -75,7 +75,7 @@ impl Pipeline {
         let mut new_pipe = Pipe::create();
         for x in last_pipe.processors() {
             let mut p = f()?;
-            p.connect_to(x.clone()).map_err(ErrorCodes::from_anyhow)?;
+            p.connect_to(x.clone())?;
             new_pipe.add(Arc::from(p));
         }
         self.pipes.push(new_pipe);
@@ -95,7 +95,7 @@ impl Pipeline {
         if last_pipe.nums() > 1 {
             let mut merge = MergeProcessor::create();
             for x in last_pipe.processors() {
-                merge.connect_to(x.clone()).map_err(ErrorCodes::from_anyhow)?;
+                merge.connect_to(x.clone())?;
             }
             let mut new_pipe = Pipe::create();
             new_pipe.add(Arc::from(merge));
@@ -108,6 +108,6 @@ impl Pipeline {
         if self.last_pipe()?.nums() > 1 {
             self.merge_processor()?;
         }
-        self.last_pipe()?.first().execute().await.map_err(ErrorCodes::from_anyhow)
+        self.last_pipe()?.first().execute().await
     }
 }

@@ -543,6 +543,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-arrow",
+ "serde_json",
  "sqlparser",
  "thiserror",
 ]

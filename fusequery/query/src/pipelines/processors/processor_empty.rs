@@ -5,8 +5,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use anyhow::bail;
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_datavalues::DataSchema;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -28,7 +27,7 @@ impl IProcessor for EmptyProcessor {
     }
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> Result<()> {
-        bail!("Cannot call EmptyProcessor connect_to");
+        Result::Err(ErrorCodes::IllegalTransformConnectionState("Cannot call EmptyProcessor connect_to".to_string()))
     }
 
     fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {

@@ -5,8 +5,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use anyhow::bail;
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::processors::EmptyProcessor;
@@ -36,7 +35,7 @@ impl IProcessor for SourceTransform {
     }
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> Result<()> {
-        bail!("Cannot call SourceTransform connect_to");
+        Result::Err(ErrorCodes::LogicalError("Cannot call SourceTransform connect_to".to_string()))
     }
 
     fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
@@ -48,7 +47,8 @@ impl IProcessor for SourceTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let table = self.ctx.get_table(self.db.as_str(), self.table.as_str())?;
-        table.read(self.ctx.clone()).await
+        let table = self.ctx.get_table(self.db.as_str(), self.table.as_str())
+            .map_err(ErrorCodes::from_anyhow)?;
+        table.read(self.ctx.clone()).await.map_err(ErrorCodes::from_anyhow)
     }
 }
