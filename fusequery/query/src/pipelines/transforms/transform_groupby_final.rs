@@ -79,7 +79,7 @@ impl IProcessor for GroupByFinalTransform {
         let mut stream = self.input.execute().await?;
         while let Some(block) = stream.next().await {
             let mut groups = self.groups.write();
-            let block = block.map_err(ErrorCodes::from_anyhow)?;
+            let block = block?;
             for row in 0..block.num_rows() {
                 if let DataValue::Binary(Some(group_key)) =
                     DataValue::try_from_array(block.column(aggr_funcs_length), row).map_err(ErrorCodes::from_anyhow)?

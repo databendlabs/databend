@@ -5,7 +5,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use anyhow::bail;
 use common_exception::{Result, ErrorCodes};
 use common_datablocks::DataBlock;
 use common_streams::SendableDataBlockStream;
@@ -50,15 +49,14 @@ impl IProcessor for MergeProcessor {
             0 => Result::Err(ErrorCodes::IllegalTransformConnectionState("Merge processor inputs cannot be zero".to_string())),
             1 => self.inputs[0].execute().await,
             _ => {
-                let (sender, receiver) = mpsc::channel::<std::result::Result<DataBlock, anyhow::Error>>(inputs);
+                let (sender, receiver) = mpsc::channel::<Result<DataBlock>>(inputs);
                 for i in 0..inputs {
                     let input = self.inputs[i].clone();
                     let sender = sender.clone();
                     tokio::spawn(async move {
                         let mut stream = match input.execute().await {
                             Err(e) => {
-                                let res = || { bail!("{}", e) };
-                                sender.send(res()).await.ok();
+                                sender.send(Result::Err(e)).await.ok();
                                 return;
                             }
                             Ok(stream) => stream

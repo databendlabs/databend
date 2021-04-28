@@ -10,7 +10,7 @@ use anyhow::bail;
 use anyhow::Result;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
-use common_arrow::arrow_flight::Action;
+use common_arrow::arrow_flight::{Action, FlightData};
 use common_arrow::arrow_flight::Ticket;
 use common_datavalues::DataSchema;
 use common_flights::query_do_action::FetchPartitionAction;
@@ -21,7 +21,10 @@ use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
-use tonic::Request;
+use tonic::{Request, Status};
+use common_exception::ErrorCodes;
+use common_datablocks::DataBlock;
+use common_arrow::arrow::datatypes::SchemaRef;
 
 pub struct FlightClient {
     client: FlightServiceClient<tonic::transport::channel::Channel>
@@ -62,8 +65,12 @@ impl FlightClient {
             Some(flight_data) => {
                 let schema = Arc::new(DataSchema::try_from(&flight_data)?);
                 let block_stream = stream.map(move |flight_data| {
-                    let batch = flight_data_to_arrow_batch(&flight_data?, schema.clone(), &[])?;
-                    batch.try_into()
+                    fn fetch_impl(data: Result<FlightData, Status>, schema: &SchemaRef) -> anyhow::Result<DataBlock> {
+                        let batch = flight_data_to_arrow_batch(&data?, schema.clone(), &[])?;
+                        batch.try_into()
+                    }
+
+                    fetch_impl(flight_data, &schema).map_err(ErrorCodes::from_anyhow)
                 });
                 Ok(Box::pin(block_stream))
             }

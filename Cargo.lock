@@ -523,6 +523,7 @@ dependencies = [
  "anyhow",
  "common-arrow",
  "common-datavalues",
+ "common-exception",
 ]
 
 [[package]]
@@ -616,6 +617,7 @@ dependencies = [
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
+ "common-exception",
  "common-functions",
  "common-progress",
  "crossbeam 0.8.0",

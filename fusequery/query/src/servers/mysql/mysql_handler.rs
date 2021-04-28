@@ -83,9 +83,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
             return interpreter.execute().then(|r_stream| {
                 match r_stream {
                     Err(error_code) => futures::future::err(error_code).right_future(),
-                    Ok(stream) =>
-                        stream.collect::<anyhow::Result<Vec<DataBlock>>>().map(|res| res.map_err(ErrorCodes::from_anyhow))
-                            .left_future(),
+                    Ok(stream) => stream.collect::<Result<Vec<DataBlock>>>().left_future(),
                 }
             }).boxed();
         }

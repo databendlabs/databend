@@ -91,6 +91,7 @@ enum OtherErrors {
     SerdeJSON { error: serde_json::Error },
     ArrowError { error: common_arrow::arrow::error::ArrowError },
     ParserError { error: sqlparser::parser::ParserError },
+    ParseIntError { error: std::num::ParseIntError },
 }
 
 impl Display for OtherErrors {
@@ -99,7 +100,8 @@ impl Display for OtherErrors {
             OtherErrors::AnyHow { error } => write!(f, "{}", error),
             OtherErrors::SerdeJSON { error } => write!(f, "{}", error),
             OtherErrors::ArrowError { error } => write!(f, "{}", error),
-            OtherErrors::ParserError { error } => write!(f, "{}", error)
+            OtherErrors::ParserError { error } => write!(f, "{}", error),
+            OtherErrors::ParseIntError { error } => write!(f, "{}", error),
         }
     }
 }
@@ -111,6 +113,7 @@ impl Debug for OtherErrors {
             OtherErrors::SerdeJSON { error } => write!(f, "{:?}", error),
             OtherErrors::ArrowError { error } => write!(f, "{:?}", error),
             OtherErrors::ParserError { error } => write!(f, "{:?}", error),
+            OtherErrors::ParseIntError { error } => write!(f, "{:?}", error),
         }
     }
 }
@@ -125,6 +128,18 @@ impl ErrorCodes {
             backtrace: None,
         }
     }
+
+    pub fn from_parse(error: std::num::ParseIntError) -> ErrorCodes {
+        ErrorCodes {
+            code: 1002,
+            display_text: String::from(""),
+            cause: Some(Box::new(OtherErrors::ParseIntError { error: error })),
+            #[cfg(feature = "backtrace")]
+            backtrace: None,
+        }
+    }
+
+    // pub fn from_state()
 
     pub fn from_arrow(error: common_arrow::arrow::error::ArrowError) -> ErrorCodes {
         ErrorCodes {

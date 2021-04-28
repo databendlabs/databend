@@ -5,7 +5,7 @@
 use std::task::Context;
 use std::task::Poll;
 
-use anyhow::Result;
+use common_exception::Result;
 use common_arrow::arrow;
 use common_datablocks::DataBlock;
 use futures::Stream;

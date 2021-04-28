@@ -116,7 +116,7 @@ impl IProcessor for GroupByPartialTransform {
         let start = Instant::now();
         let mut stream = self.input.execute().await?;
         while let Some(block) = stream.next().await {
-            let block = block.map_err(ErrorCodes::from_anyhow)?;
+            let block = block?;
             let mut group_indices = GroupIndicesTable::default();
             let mut group_columns = Vec::with_capacity(group_funcs_len);
 

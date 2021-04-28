@@ -71,7 +71,7 @@ impl IProcessor for AggregatorPartialTransform {
 
         let start = Instant::now();
         while let Some(block) = stream.next().await {
-            let block = block.map_err(ErrorCodes::from_anyhow)?;
+            let block = block?;
 
             for func in funcs.iter_mut() {
                 func.accumulate(&block)?;

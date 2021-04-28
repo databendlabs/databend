@@ -65,7 +65,7 @@ impl IProcessor for SortMergeTransform {
         let mut stream = self.input.execute().await?;
 
         while let Some(block) = stream.next().await {
-            blocks.push(block.map_err(ErrorCodes::from_anyhow)?);
+            blocks.push(block?);
         }
 
         let results = match blocks.len() {

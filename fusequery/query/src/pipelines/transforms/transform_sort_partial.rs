@@ -62,7 +62,7 @@ impl IProcessor for SortPartialTransform {
             self.input.execute().await?,
             get_sort_descriptions(&self.schema, &self.exprs)?,
             self.limit
-        ).map_err(ErrorCodes::from_anyhow)?))
+        )?))
     }
 }
 
