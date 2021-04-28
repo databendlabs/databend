@@ -133,7 +133,7 @@ impl FuseQueryContext {
     }
 
     pub fn get_settings(&self) -> Result<Vec<DataValue>> {
-        self.settings.get_settings().map_err(ErrorCodes::from_anyhow)
+        self.settings.get_settings()
     }
 
     pub fn get_id(&self) -> Result<String> {
