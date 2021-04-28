@@ -87,7 +87,7 @@ fn test_array_arithmetic() {
                 Arc::new(Float64Array::from(vec![5.0, 5.0, 5.0, 5.0])),
                 Arc::new(Float64Array::from(vec![5.0, 5.0, 5.0, 5.0])),
             ],
-            error: vec!["DataValue Error: Unsupported (Utf8) plus (Utf8)"]
+            error: vec!["Code: 10, displayText = DataValue Error: Unsupported (Utf8) plus (Utf8)."]
         },
         ArrayTest {
             name: "minus-passed",
@@ -156,7 +156,7 @@ fn test_array_arithmetic() {
                 Arc::new(Float64Array::from(vec![3.0, 1.0, -1.0, -3.0])),
                 Arc::new(Float64Array::from(vec![3.0, 1.0, -1.0, -3.0])),
             ],
-            error: vec!["DataValue Error: Unsupported (Utf8) minus (Utf8)"]
+            error: vec!["Code: 10, displayText = DataValue Error: Unsupported (Utf8) minus (Utf8)."]
         },
         ArrayTest {
             name: "mul-passed",
@@ -220,7 +220,7 @@ fn test_array_arithmetic() {
                 Arc::new(Float64Array::from(vec![4.0, 6.0, 6.0, 4.0])),
                 Arc::new(Float64Array::from(vec![4.0, 6.0, 6.0, 4.0])),
             ],
-            error: vec!["DataValue Error: Unsupported (Utf8) multiply (Utf8)"]
+            error: vec!["Code: 10, displayText = DataValue Error: Unsupported (Utf8) multiply (Utf8)."]
         },
         ArrayTest {
             name: "div-passed",
@@ -284,7 +284,7 @@ fn test_array_arithmetic() {
                 Arc::new(Float64Array::from(vec![4.0, 1.5, 0.6666666666666666, 0.25])),
                 Arc::new(Float64Array::from(vec![4.0, 1.5, 0.6666666666666666, 0.25])),
             ],
-            error: vec!["DataValue Error: Unsupported (Utf8) divide (Utf8)"]
+            error: vec!["Code: 10, displayText = DataValue Error: Unsupported (Utf8) divide (Utf8)."]
         },
     ];
 

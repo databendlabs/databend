@@ -43,7 +43,7 @@ async fn test_setting_interpreter_error() -> anyhow::Result<()> {
     {
         let executor = SettingInterpreter::try_create(ctx, plan)?;
         if let Err(e) = executor.execute().await {
-            let expect = "Unknown variable: \"xx\"";
+            let expect = "Code: 20, displayText = \"Unknown variable: \\\"xx\\\"\".";
             let actual = format!("{:?}", e);
             assert_eq!(expect, actual);
         } else {

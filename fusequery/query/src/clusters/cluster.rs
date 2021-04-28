@@ -5,7 +5,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-// use anyhow::Result;
 use common_exception::Result;
 use common_infallible::Mutex;
 

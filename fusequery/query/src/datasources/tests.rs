@@ -13,7 +13,7 @@ async fn test_datasource() -> anyhow::Result<()> {
     // Table check.
     datasource.get_table("system", "numbers_mt")?;
     if let Err(e) = datasource.get_table("system", "numbersxx") {
-        let expect = "DataSource Error: Unknown table: \'numbersxx\'";
+        let expect = "Code: 25, displayText = \"DataSource Error: Unknown table: \\\'numbersxx\\\'\".";
         let actual = format!("{:?}", e);
         assert_eq!(expect, actual);
     }

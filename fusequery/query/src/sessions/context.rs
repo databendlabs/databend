@@ -5,7 +5,6 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-// use anyhow::Result;
 use common_exception::Result;
 use common_datavalues::DataValue;
 use common_infallible::RwLock;
@@ -146,7 +145,7 @@ impl FuseQueryContext {
         self.current_database.as_ref().read().clone()
     }
 
-    pub fn set_current_database(&self, new_database_name: String) -> anyhow::Result<(), ErrorCodes> {
+    pub fn set_current_database(&self, new_database_name: String) -> Result<()> {
         self.datasource.get_database(new_database_name.as_str())
             .map(|_| -> (){ *self.current_database.write() = new_database_name.to_string(); })
             .map_err(|_| ErrorCodes::UnknownDatabase(format!("Database {}  doesn't exist.", new_database_name)))

@@ -4,7 +4,6 @@
 
 use std::fmt;
 
-// use anyhow::Result;
 use common_exception::{Result, ErrorCodes};
 use common_arrow::arrow::compute;
 use common_arrow::arrow::compute::CastOptions;
