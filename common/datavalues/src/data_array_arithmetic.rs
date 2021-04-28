@@ -7,7 +7,7 @@ use std::sync::Arc;
 use common_arrow::arrow;
 use common_exception::{Result, ErrorCodes};
 
-use crate::DataArrayRef;
+use crate::{DataArrayRef, data_array_cast};
 use crate::DataColumnarValue;
 use crate::DataType;
 use crate::DataValueArithmeticOperator;
@@ -52,8 +52,8 @@ impl DataArrayArithmetic {
             &left_array.data_type(),
             &right_array.data_type(),
         )?;
-        let left_array = arrow::compute::cast(&left_array, &coercion_type).map_err(ErrorCodes::from_arrow)?;
-        let right_array = arrow::compute::cast(&right_array, &coercion_type).map_err(ErrorCodes::from_arrow)?;
+        let left_array = data_array_cast(&left_array, &coercion_type)?;
+        let right_array = data_array_cast(&right_array, &coercion_type)?;
         match op {
             DataValueArithmeticOperator::Plus => {
                 arrow_primitive_array_op!(&left_array, &right_array, &coercion_type, add)
