@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use anyhow::bail;
+use anyhow::ensure;
 use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayAggregate;
@@ -26,9 +26,10 @@ pub struct AggregatorMinFunction {
 
 impl AggregatorMinFunction {
     pub fn try_create(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
-        if args.len() != 1 {
-            bail!("Function Error: Aggregator function Min args require single argument");
-        }
+        ensure!(
+            args.len() == 1,
+            "Function Error: Aggregator function Min args require single argument",
+        );
 
         Ok(Box::new(AggregatorMinFunction {
             depth: 0,
