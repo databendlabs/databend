@@ -87,7 +87,7 @@ impl IFunction for ComparisonFunction {
                 self.op.clone(),
                 &self.left.eval(block)?,
                 &self.right.eval(block)?,
-            ).map_err(ErrorCodes::from_anyhow)?
+            )?
         ))
     }
 

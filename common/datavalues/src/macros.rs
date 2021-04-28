@@ -34,14 +34,6 @@ macro_rules! downcast_array_with_error_code {
 }
 
 /// Invoke a compute kernel on a pair of arrays
-macro_rules! compute_op {
-    ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
-        let ll = downcast_array!($LEFT, $DT)?;
-        let rr = downcast_array!($RIGHT, $DT)?;
-        Ok(Arc::new(common_arrow::arrow::compute::$OP(&ll, &rr)?))
-    }};
-}
-
 macro_rules! compute_op_with_error_code {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
         let ll = downcast_array_with_error_code!($LEFT, $DT)?;
@@ -53,10 +45,10 @@ macro_rules! compute_op_with_error_code {
 /// Invoke a compute kernel on a pair of binary data arrays
 macro_rules! compute_utf8_op {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
-        let ll = downcast_array!($LEFT, $DT)?;
-        let rr = downcast_array!($RIGHT, $DT)?;
+        let ll = downcast_array_with_error_code!($LEFT, $DT)?;
+        let rr = downcast_array_with_error_code!($RIGHT, $DT)?;
         Ok(Arc::new(
-            (paste::expr! {common_arrow::arrow::compute::[<$OP _utf8>]}(&ll, &rr))?
+            (paste::expr! {common_arrow::arrow::compute::[<$OP _utf8>]}(&ll, &rr)).map_err(ErrorCodes::from_arrow)?
         ))
     }};
 }
@@ -130,21 +122,23 @@ macro_rules! arrow_primitive_array_self_defined_op {
 macro_rules! arrow_array_op {
     ($LEFT:expr, $RIGHT:expr, $OP:ident) => {
         match ($LEFT).data_type() {
-            DataType::Int8 => compute_op!($LEFT, $RIGHT, $OP, Int8Array),
-            DataType::Int16 => compute_op!($LEFT, $RIGHT, $OP, Int16Array),
-            DataType::Int32 => compute_op!($LEFT, $RIGHT, $OP, Int32Array),
-            DataType::Int64 => compute_op!($LEFT, $RIGHT, $OP, Int64Array),
-            DataType::UInt8 => compute_op!($LEFT, $RIGHT, $OP, UInt8Array),
-            DataType::UInt16 => compute_op!($LEFT, $RIGHT, $OP, UInt16Array),
-            DataType::UInt32 => compute_op!($LEFT, $RIGHT, $OP, UInt32Array),
-            DataType::UInt64 => compute_op!($LEFT, $RIGHT, $OP, UInt64Array),
-            DataType::Float32 => compute_op!($LEFT, $RIGHT, $OP, Float32Array),
-            DataType::Float64 => compute_op!($LEFT, $RIGHT, $OP, Float64Array),
+            DataType::Int8 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, Int8Array),
+            DataType::Int16 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, Int16Array),
+            DataType::Int32 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, Int32Array),
+            DataType::Int64 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, Int64Array),
+            DataType::UInt8 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, UInt8Array),
+            DataType::UInt16 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, UInt16Array),
+            DataType::UInt32 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, UInt32Array),
+            DataType::UInt64 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, UInt64Array),
+            DataType::Float32 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, Float32Array),
+            DataType::Float64 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, Float64Array),
             DataType::Utf8 => compute_utf8_op!($LEFT, $RIGHT, $OP, StringArray),
-            _ => anyhow::bail!(format!(
-                "Unsupported arithmetic_compute::{} for data type: {:?}",
-                stringify!($OP),
-                ($LEFT).data_type(),
+            _ => Result::Err(ErrorCodes::BadDataValueType(
+                format!(
+                    "Unsupported arithmetic_compute::{} for data type: {:?}",
+                    stringify!($OP),
+                    ($LEFT).data_type(),
+                )
             ))
         }
     };
@@ -155,9 +149,10 @@ macro_rules! compute_op_scalar {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
         use std::convert::TryInto;
 
-        let ll = downcast_array!($LEFT, $DT)?;
+        let ll = downcast_array_with_error_code!($LEFT, $DT)?;
         Ok(Arc::new(
-            paste::expr! {common_arrow::arrow::compute::[<$OP _scalar>]}(&ll, $RIGHT.try_into()?)?
+            (paste::expr! {common_arrow::arrow::compute::[<$OP _scalar>]}(&ll, $RIGHT.try_into().map_err(ErrorCodes::from_anyhow)?))
+                .map_err(ErrorCodes::from_arrow)?
         ))
     }};
 }
@@ -165,19 +160,21 @@ macro_rules! compute_op_scalar {
 /// Invoke a compute kernel on a data array and a scalar value
 macro_rules! compute_utf8_op_scalar {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
-        let ll = downcast_array!($LEFT, $DT)?;
+        let ll = downcast_array_with_error_code!($LEFT, $DT)?;
         if let crate::DataValue::Utf8(Some(string_value)) = $RIGHT {
             Ok(Arc::new(
-                paste::expr! {common_arrow::arrow::compute::[<$OP _utf8_scalar>]}(
+                (paste::expr! {common_arrow::arrow::compute::[<$OP _utf8_scalar>]}(
                     &ll,
                     &string_value
-                )?
+                )).map_err(ErrorCodes::from_arrow)?
             ))
         } else {
-            anyhow::bail!(format!(
-                "compute_utf8_op_scalar failed to cast literal value {}",
-                $RIGHT
-            ));
+            Result::Err(ErrorCodes::BadDataValueType(
+                format!(
+                    "compute_utf8_op_scalar failed to cast literal value {}",
+                    $RIGHT
+                )
+            ))
         }
     }};
 }
@@ -198,10 +195,12 @@ macro_rules! arrow_array_op_scalar {
             DataType::Float32 => compute_op_scalar!($LEFT, $RIGHT, $OP, Float32Array),
             DataType::Float64 => compute_op_scalar!($LEFT, $RIGHT, $OP, Float64Array),
             DataType::Utf8 => compute_utf8_op_scalar!($LEFT, $RIGHT, $OP, StringArray),
-            other => Err(anyhow::Error::msg(format!(
-                "DataValue Error: Unsupported data type {:?}",
-                other
-            )))
+            other => Result::Err(ErrorCodes::BadDataValueType(
+                format!(
+                    "DataValue Error: Unsupported data type {:?}",
+                    other
+                )
+            ))
         };
         Ok(result?)
     }};
