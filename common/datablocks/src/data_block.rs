@@ -6,7 +6,8 @@ use std::convert::TryInto;
 use std::fmt;
 use std::sync::Arc;
 
-use anyhow::Result;
+// use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_arrow::arrow;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_datavalues::DataArrayRef;
@@ -76,27 +77,27 @@ impl DataBlock {
         if name == "*" {
             Ok(&self.columns[0])
         } else {
-            let idx = self.schema.index_of(name)?;
+            let idx = self.schema.index_of(name).map_err(ErrorCodes::from_arrow)?;
             Ok(&self.columns[idx])
         }
     }
 }
 
 impl TryInto<arrow::record_batch::RecordBatch> for DataBlock {
-    type Error = anyhow::Error;
+    type Error = ErrorCodes;
 
-    fn try_into(self) -> Result<RecordBatch, Self::Error> {
+    fn try_into(self) -> Result<RecordBatch> {
         Ok(arrow::record_batch::RecordBatch::try_new(
             self.schema.clone(),
-            self.columns.clone()
-        )?)
+            self.columns.clone(),
+        ).map_err(ErrorCodes::from_arrow)?)
     }
 }
 
 impl TryInto<DataBlock> for arrow::record_batch::RecordBatch {
-    type Error = anyhow::Error;
+    type Error = ErrorCodes;
 
-    fn try_into(self) -> Result<DataBlock, Self::Error> {
+    fn try_into(self) -> Result<DataBlock> {
         Ok(DataBlock::create(self.schema(), Vec::from(self.columns())))
     }
 }

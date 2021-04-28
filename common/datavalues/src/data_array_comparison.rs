@@ -69,8 +69,8 @@ impl DataArrayComparison {
                 let coercion_type =
                     super::data_type::equal_coercion(&array.data_type(), &scalar.data_type())?;
                 let left_array = data_array_cast(&array, &coercion_type)?;
-                let right_array = data_array_cast(&scalar.to_array_with_size(1).map_err(ErrorCodes::from_anyhow)?, &coercion_type)?;
-                let scalar = DataValue::try_from_array(&right_array, 0).map_err(ErrorCodes::from_anyhow)?;
+                let right_array = data_array_cast(&scalar.to_array_with_size(1)?, &coercion_type)?;
+                let scalar = DataValue::try_from_array(&right_array, 0)?;
 
                 match op {
                     DataValueComparisonOperator::Eq => {
@@ -96,9 +96,9 @@ impl DataArrayComparison {
 
             (DataColumnarValue::Scalar(scalar), DataColumnarValue::Array(array)) => {
                 let coercion_type = super::data_type::equal_coercion(&array.data_type(), &scalar.data_type())?;
-                let left_array = data_array_cast(&scalar.to_array_with_size(1).map_err(ErrorCodes::from_anyhow)?, &coercion_type)?;
+                let left_array = data_array_cast(&scalar.to_array_with_size(1)?, &coercion_type)?;
                 let right_array = data_array_cast(&array, &coercion_type)?;
-                let scalar = DataValue::try_from_array(&left_array, 0).map_err(ErrorCodes::from_anyhow)?;
+                let scalar = DataValue::try_from_array(&left_array, 0)?;
 
                 match op {
                     DataValueComparisonOperator::Eq => {
@@ -126,8 +126,8 @@ impl DataArrayComparison {
                     &left_scala.data_type(),
                     &right_scalar.data_type(),
                 )?;
-                let left_array = data_array_cast(&left_scala.to_array_with_size(1).map_err(ErrorCodes::from_anyhow)?, &coercion_type)?;
-                let right_array = data_array_cast(&right_scalar.to_array_with_size(1).map_err(ErrorCodes::from_anyhow)?, &coercion_type)?;
+                let left_array = data_array_cast(&left_scala.to_array_with_size(1)?, &coercion_type)?;
+                let right_array = data_array_cast(&right_scalar.to_array_with_size(1)?, &coercion_type)?;
 
                 match op {
                     DataValueComparisonOperator::Eq => {

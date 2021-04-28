@@ -82,14 +82,14 @@ impl IProcessor for GroupByFinalTransform {
             let block = block?;
             for row in 0..block.num_rows() {
                 if let DataValue::Binary(Some(group_key)) =
-                    DataValue::try_from_array(block.column(aggr_funcs_length), row).map_err(ErrorCodes::from_anyhow)?
+                    DataValue::try_from_array(block.column(aggr_funcs_length), row)?
                 {
                     match groups.get_mut(&group_key) {
                         None => {
                             let mut funcs = aggr_funcs.clone();
                             for (i, func) in funcs.iter_mut().enumerate() {
                                 if let DataValue::Utf8(Some(col)) =
-                                    DataValue::try_from_array(block.column(i), row).map_err(ErrorCodes::from_anyhow)?
+                                    DataValue::try_from_array(block.column(i), row)?
                                 {
                                     let val: DataValue = serde_json::from_str(&col).map_err(ErrorCodes::from_serde)?;
                                     if let DataValue::Struct(states) = val {
@@ -102,7 +102,7 @@ impl IProcessor for GroupByFinalTransform {
                         Some(funcs) => {
                             for (i, func) in funcs.iter_mut().enumerate() {
                                 if let DataValue::Utf8(Some(col)) =
-                                    DataValue::try_from_array(block.column(i), row).map_err(ErrorCodes::from_anyhow)?
+                                    DataValue::try_from_array(block.column(i), row)?
                                 {
                                     let val: DataValue = serde_json::from_str(&col).map_err(ErrorCodes::from_serde)?;
                                     if let DataValue::Struct(states) = val {
@@ -138,7 +138,7 @@ impl IProcessor for GroupByFinalTransform {
         let mut columns: Vec<DataArrayRef> = Vec::with_capacity(self.aggr_exprs.len());
         for value in &aggr_values {
             if !value.is_empty() {
-                columns.push(DataValue::try_into_data_array(value.as_slice()).map_err(ErrorCodes::from_anyhow)?);
+                columns.push(DataValue::try_into_data_array(value.as_slice())?);
             }
         }
         let mut blocks = vec![];

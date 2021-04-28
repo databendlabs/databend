@@ -25,6 +25,7 @@ use tonic::{Request, Status};
 use common_exception::ErrorCodes;
 use common_datablocks::DataBlock;
 use common_arrow::arrow::datatypes::SchemaRef;
+use common_arrow::arrow::record_batch::RecordBatch;
 
 pub struct FlightClient {
     client: FlightServiceClient<tonic::transport::channel::Channel>
@@ -65,12 +66,14 @@ impl FlightClient {
             Some(flight_data) => {
                 let schema = Arc::new(DataSchema::try_from(&flight_data)?);
                 let block_stream = stream.map(move |flight_data| {
-                    fn fetch_impl(data: Result<FlightData, Status>, schema: &SchemaRef) -> anyhow::Result<DataBlock> {
+                    fn fetch_impl(data: Result<FlightData, Status>, schema: &SchemaRef) -> anyhow::Result<RecordBatch> {
                         let batch = flight_data_to_arrow_batch(&data?, schema.clone(), &[])?;
-                        batch.try_into()
+                        Ok(batch)
                     }
 
-                    fetch_impl(flight_data, &schema).map_err(ErrorCodes::from_anyhow)
+                    fetch_impl(flight_data, &schema)
+                        .map_err(ErrorCodes::from_anyhow)
+                        .and_then(|batch| batch.try_into())
                 });
                 Ok(Box::pin(block_stream))
             }

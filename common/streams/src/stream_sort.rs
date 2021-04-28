@@ -5,7 +5,7 @@
 use std::task::Context;
 use std::task::Poll;
 
-use common_exception::{Result, ErrorCodes};
+use common_exception::Result;
 use common_datablocks::DataBlock;
 use common_datablocks::SortColumnDescription;
 use futures::Stream;
@@ -45,7 +45,7 @@ impl Stream for SortStream {
                 &v,
                 &self.sort_columns_descriptions,
                 self.limit,
-            ).map_err(ErrorCodes::from_anyhow)),
+            )),
             other => other
         })
     }

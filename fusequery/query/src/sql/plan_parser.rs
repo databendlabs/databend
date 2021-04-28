@@ -358,7 +358,6 @@ impl PlanParser {
                 sqlparser::ast::Value::Number(ref n, _) => {
                     DataValue::try_from_literal(n)
                         .map(|literal| ExpressionPlan::Literal(literal))
-                        .map_err(ErrorCodes::from_anyhow)
                 }
                 sqlparser::ast::Value::SingleQuotedString(ref value) => {
                     Ok(ExpressionPlan::Literal(DataValue::Utf8(Some(value.clone()))))

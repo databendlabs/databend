@@ -2,9 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::anyhow;
-use anyhow::bail;
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::datatypes::*;
 
@@ -127,15 +125,19 @@ impl DataValue {
                     Self::dictionary_create_key_for_col::<UInt64Type>(col, row, vec)?;
                 }
                 _ => {
-                    bail!(
-                    "Unsupported key type (dictionary index type not supported creating key) {}",
-                    col.data_type(),
-                )
+                    return Result::Err(ErrorCodes::BadDataValueType(
+                        format!(
+                            "Unsupported key type (dictionary index type not supported creating key) {}",
+                            col.data_type(),
+                        )
+                    ));
                 }
             },
             _ => {
                 // This is internal because we should have caught this before.
-                bail!("Unsupported the col type creating key {}", col.data_type(),);
+                return Result::Err(ErrorCodes::BadDataValueType(
+                    format!("Unsupported the col type creating key {}", col.data_type())
+                ));
             }
         }
         Ok(())
@@ -152,9 +154,11 @@ impl DataValue {
         // look up the index in the values dictionary
         let keys_col = dict_col.keys_array();
         let values_index = keys_col.value(row).to_usize().ok_or_else(|| {
-            anyhow!(
-                "Can not convert index to usize in dictionary of type creating group by value {:?}",
-                keys_col.data_type()
+            ErrorCodes::BadDataValueType(
+                format!(
+                    "Can not convert index to usize in dictionary of type creating group by value {:?}",
+                    keys_col.data_type()
+                )
             )
         })?;
 
@@ -175,13 +179,13 @@ impl DataValue {
             DataType::Float32 => try_build_array!(Float32Builder, Float32, values),
             DataType::Float64 => try_build_array!(Float64Builder, Float64, values),
             DataType::Utf8 => try_build_array!(StringBuilder, Utf8, values),
-            other => bail!("Unexpected type:{} for DataValue List", other)
+            other => Result::Err(ErrorCodes::BadDataValueType(format!("Unexpected type:{} for DataValue List", other)))
         }
     }
 
     /// Converts a value in `array` at `index` into a ScalarValue
     pub fn try_from_array(array: &DataArrayRef, index: usize) -> Result<DataValue> {
-        Ok(match array.data_type() {
+        match array.data_type() {
             DataType::Boolean => {
                 typed_cast_from_array_to_data_value!(array, index, BooleanArray, Boolean)
             }
@@ -261,7 +265,7 @@ impl DataValue {
                 let list_array = array
                     .as_any()
                     .downcast_ref::<ListArray>()
-                    .ok_or_else(|| anyhow!("Failed to downcast ListArray"))?;
+                    .ok_or_else(|| ErrorCodes::LogicalError("Failed to downcast ListArray".to_string()))?;
                 let value = match list_array.is_null(index) {
                     true => None,
                     false => {
@@ -272,26 +276,28 @@ impl DataValue {
                         Some(scalar_vec)
                     }
                 };
-                DataValue::List(value, nested_type.data_type().clone())
+                Ok(DataValue::List(value, nested_type.data_type().clone()))
             }
             DataType::Struct(_) => {
                 let strut_array = array
                     .as_any()
                     .downcast_ref::<StructArray>()
-                    .ok_or_else(|| anyhow!("Failed to downcast StructArray".to_string()))?;
+                    .ok_or_else(|| ErrorCodes::LogicalError("Failed to downcast StructArray".to_string()))?;
                 let nested_array = strut_array.column(index);
                 let scalar_vec = (0..nested_array.len())
                     .map(|i| Self::try_from_array(&nested_array, i))
                     .collect::<Result<Vec<_>>>()?;
-                DataValue::Struct(scalar_vec)
+                Ok(DataValue::Struct(scalar_vec))
             }
             other => {
-                bail!(format!(
-                    "DataValue Error: Can't create a scalar of array of type \"{:?}\"",
-                    other
-                ));
+                Result::Err(ErrorCodes::BadDataValueType(
+                    format!(
+                        "DataValue Error: Can't create a scalar of array of type \"{:?}\"",
+                        other
+                    )
+                ))
             }
-        })
+        }
     }
 
     pub fn try_from_literal(literal: &str) -> Result<DataValue> {
@@ -303,7 +309,7 @@ impl DataValue {
                     Ok(DataValue::Int64(Some(n)))
                 }
             }
-            Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?)))
+            Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>().map_err(ErrorCodes::from_parse_float)?)))
         }
     }
 }

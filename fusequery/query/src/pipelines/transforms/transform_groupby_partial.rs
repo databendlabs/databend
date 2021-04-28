@@ -144,8 +144,7 @@ impl IProcessor for GroupByPartialTransform {
                 for row in 0..block.num_rows() {
                     group_key.clear();
                     for col in &group_columns {
-                        DataValue::concat_row_to_one_key(col, row, &mut group_key)
-                            .map_err(ErrorCodes::from_anyhow)?;
+                        DataValue::concat_row_to_one_key(col, row, &mut group_key)?;
                     }
                     match group_indices.get_mut(&group_key) {
                         None => {
@@ -161,8 +160,7 @@ impl IProcessor for GroupByPartialTransform {
             // 1.3 Apply take blocks to aggregate function by group_key.
             {
                 for (group_key, group_indices) in group_indices {
-                    let take_block = DataBlock::block_take_by_indices(&block, &group_indices)
-                        .map_err(ErrorCodes::from_anyhow)?;
+                    let take_block = DataBlock::block_take_by_indices(&block, &group_indices)?;
                     let mut groups = self.groups.write();
                     match groups.get_mut(&group_key) {
                         // New group.

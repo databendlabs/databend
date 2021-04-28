@@ -59,16 +59,12 @@ impl IProcessor for RemoteTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        // FlightClient::try_create(self.remote_addr.clone()).await
-        //     .and_then(|client| {
-        //         client.execute_remote_plan_action(self.job_id.clone(), &self.plan).await
-        //     })
         async fn execute_impl(remote_addr: &String, job_id: &String, plan: &PlanNode)
                               -> anyhow::Result<SendableDataBlockStream> {
             let mut client = FlightClient::try_create(remote_addr.clone()).await?;
             client.execute_remote_plan_action(job_id.clone(), plan).await
         }
-        
+
         Ok(Box::pin(
             execute_impl(&self.remote_addr, &self.job_id, &self.plan)
                 .await.map_err(ErrorCodes::from_anyhow)?

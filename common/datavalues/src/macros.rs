@@ -334,11 +334,11 @@ macro_rules! array_boolean_op {
 macro_rules! typed_cast_from_array_to_data_value {
     ($array:expr, $index:expr, $ARRAYTYPE:ident, $SCALAR:ident) => {{
         use common_arrow::arrow::array::*;
-        let array = downcast_array!($array, $ARRAYTYPE)?;
-        DataValue::$SCALAR(match array.is_null($index) {
+        let array = downcast_array_with_error_code!($array, $ARRAYTYPE)?;
+        Result::Ok(DataValue::$SCALAR(match array.is_null($index) {
             true => None,
             false => Some(array.value($index).into())
-        })
+        }))
     }};
 }
 
@@ -383,7 +383,7 @@ macro_rules! build_list {
                             DataValue::$SCALAR_TY(None) => {
                                 builder.values().append_null().unwrap();
                             }
-                            _ => anyhow::bail!("Incompatible DataValue for list")
+                            _ => return Result::Err(ErrorCodes::BadDataValueType("Incompatible DataValue for list".to_string()))
                         };
                     }
                     builder.append(true).unwrap();
@@ -400,11 +400,11 @@ macro_rules! try_build_array {
         let mut builder = $VALUE_BUILDER_TY::new(len);
         for scalar_value in $VALUES {
             match scalar_value {
-                DataValue::$SCALAR_TY(Some(v)) => builder.append_value(v.clone())?,
+                DataValue::$SCALAR_TY(Some(v)) => builder.append_value(v.clone()).map_err(ErrorCodes::from_arrow)?,
                 DataValue::$SCALAR_TY(None) => {
-                    builder.append_null()?;
+                    builder.append_null().map_err(ErrorCodes::from_arrow)?;
                 }
-                _ => bail!("Incompatible DataValue for list")
+                _ => return Result::Err(ErrorCodes::BadDataValueType("Incompatible DataValue for list".to_string())),
             };
         }
         Ok(builder.finish().slice(0, len))

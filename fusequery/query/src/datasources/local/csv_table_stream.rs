@@ -57,7 +57,7 @@ impl CsvTableStream {
 
         reader.next().map(|record| {
             record.map_err(ErrorCodes::from_arrow).and_then(|record| {
-                record.try_into().map_err(ErrorCodes::from_anyhow)
+                record.try_into()
             })
         }).map(|data_block| data_block.map(|v| Some(v))).unwrap_or_else(|| Ok(None))
     }

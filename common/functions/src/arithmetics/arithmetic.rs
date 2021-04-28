@@ -93,7 +93,7 @@ impl IFunction for ArithmeticFunction {
 
         match (left, right) {
             (DataColumnarValue::Scalar(_), DataColumnarValue::Scalar(_)) => {
-                let data_value = DataValue::try_from_array(&result, 0).map_err(ErrorCodes::from_anyhow)?;
+                let data_value = DataValue::try_from_array(&result, 0)?;
                 Ok(DataColumnarValue::Scalar(data_value))
             }
             _ => Ok(DataColumnarValue::Array(result))

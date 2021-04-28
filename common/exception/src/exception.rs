@@ -58,6 +58,9 @@ build_exceptions! {
     BadTransformType(13),
     IllegalTransformConnectionState(14),
     LogicalError(15),
+    EmptyData(16),
+    DataStructMissMatch(17),
+    BadDataArrayLength(18),
 
     UnknownException(1000),
     TokioError(1001)
@@ -92,6 +95,7 @@ enum OtherErrors {
     ArrowError { error: common_arrow::arrow::error::ArrowError },
     ParserError { error: sqlparser::parser::ParserError },
     ParseIntError { error: std::num::ParseIntError },
+    ParserFloatError { error: std::num::ParseFloatError }
 }
 
 impl Display for OtherErrors {
@@ -102,6 +106,7 @@ impl Display for OtherErrors {
             OtherErrors::ArrowError { error } => write!(f, "{}", error),
             OtherErrors::ParserError { error } => write!(f, "{}", error),
             OtherErrors::ParseIntError { error } => write!(f, "{}", error),
+            OtherErrors::ParserFloatError { error } => write!(f, "{}", error),
         }
     }
 }
@@ -114,6 +119,7 @@ impl Debug for OtherErrors {
             OtherErrors::ArrowError { error } => write!(f, "{:?}", error),
             OtherErrors::ParserError { error } => write!(f, "{:?}", error),
             OtherErrors::ParseIntError { error } => write!(f, "{:?}", error),
+            OtherErrors::ParserFloatError { error } => write!(f, "{}", error),
         }
     }
 }
@@ -134,6 +140,16 @@ impl ErrorCodes {
             code: 1002,
             display_text: String::from(""),
             cause: Some(Box::new(OtherErrors::ParseIntError { error: error })),
+            #[cfg(feature = "backtrace")]
+            backtrace: None,
+        }
+    }
+
+    pub fn from_parse_float(error: std::num::ParseFloatError) -> ErrorCodes {
+        ErrorCodes {
+            code: 1002,
+            display_text: String::from(""),
+            cause: Some(Box::new(OtherErrors::ParserFloatError { error: error })),
             #[cfg(feature = "backtrace")]
             backtrace: None,
         }

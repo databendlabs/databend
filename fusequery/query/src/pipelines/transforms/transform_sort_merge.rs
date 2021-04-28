@@ -6,7 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_exception::{Result, ErrorCodes};
+use common_exception::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_planners::ExpressionPlan;
@@ -74,7 +74,7 @@ impl IProcessor for SortMergeTransform {
                 &blocks,
                 &sort_columns_descriptions,
                 self.limit,
-            ).map_err(ErrorCodes::from_anyhow)?]
+            )?]
         };
 
         Ok(Box::pin(DataBlockStream::create(
