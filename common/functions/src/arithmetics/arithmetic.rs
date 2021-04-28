@@ -79,7 +79,7 @@ impl IFunction for ArithmeticFunction {
             &self.op,
             &self.left.return_type(input_schema)?,
             &self.right.return_type(input_schema)?,
-        ).map_err(ErrorCodes::from_anyhow)
+        )
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
@@ -89,7 +89,7 @@ impl IFunction for ArithmeticFunction {
     fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         let left = &self.left.eval(block)?;
         let right = &self.right.eval(block)?;
-        let result = DataArrayArithmetic::data_array_arithmetic_op(self.op.clone(), left, right).map_err(ErrorCodes::from_anyhow)?;
+        let result = DataArrayArithmetic::data_array_arithmetic_op(self.op.clone(), left, right)?;
 
         match (left, right) {
             (DataColumnarValue::Scalar(_), DataColumnarValue::Scalar(_)) => {

@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
 use common_arrow::arrow;
+use common_exception::{Result, ErrorCodes};
 
 use crate::DataArrayRef;
 use crate::DataColumnarValue;
@@ -36,24 +36,24 @@ impl DataArrayArithmetic {
                 (left_array.clone(), right_array.clone())
             }
             (DataColumnarValue::Array(array), DataColumnarValue::Scalar(scalar)) => {
-                (array.clone(), scalar.to_array_with_size(array.len())?)
+                (array.clone(), scalar.to_array_with_size(array.len()).map_err(ErrorCodes::from_anyhow)?)
             }
             (DataColumnarValue::Scalar(scalar), DataColumnarValue::Array(array)) => {
-                (scalar.to_array_with_size(array.len())?, array.clone())
+                (scalar.to_array_with_size(array.len()).map_err(ErrorCodes::from_anyhow)?, array.clone())
             }
             (DataColumnarValue::Scalar(left_scalar), DataColumnarValue::Scalar(right_scalar)) => (
-                left_scalar.to_array_with_size(1)?,
-                right_scalar.to_array_with_size(1)?
+                left_scalar.to_array_with_size(1).map_err(ErrorCodes::from_anyhow)?,
+                right_scalar.to_array_with_size(1).map_err(ErrorCodes::from_anyhow)?
             )
         };
 
         let coercion_type = super::data_type::numerical_arithmetic_coercion(
             &op,
             &left_array.data_type(),
-            &right_array.data_type()
+            &right_array.data_type(),
         )?;
-        let left_array = arrow::compute::cast(&left_array, &coercion_type)?;
-        let right_array = arrow::compute::cast(&right_array, &coercion_type)?;
+        let left_array = arrow::compute::cast(&left_array, &coercion_type).map_err(ErrorCodes::from_arrow)?;
+        let right_array = arrow::compute::cast(&right_array, &coercion_type).map_err(ErrorCodes::from_arrow)?;
         match op {
             DataValueArithmeticOperator::Plus => {
                 arrow_primitive_array_op!(&left_array, &right_array, &coercion_type, add)

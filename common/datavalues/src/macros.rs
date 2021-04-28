@@ -17,6 +17,22 @@ macro_rules! downcast_array {
     };
 }
 
+macro_rules! downcast_array_with_error_code {
+    ($ARRAY:expr, $TYPE:ident) => {
+        if let Some(v) = $ARRAY.as_any().downcast_ref::<$TYPE>() {
+            Result::Ok(v)
+        } else {
+            Result::Err(ErrorCodes::BadDataValueType(
+                format!(
+                    "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
+                    ($ARRAY).data_type(),
+                    stringify!($TYPE)
+                )
+            ))
+        }
+    };
+}
+
 /// Invoke a compute kernel on a pair of arrays
 macro_rules! compute_op {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
@@ -26,13 +42,21 @@ macro_rules! compute_op {
     }};
 }
 
+macro_rules! compute_op_with_error_code {
+    ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
+        let ll = downcast_array_with_error_code!($LEFT, $DT)?;
+        let rr = downcast_array_with_error_code!($RIGHT, $DT)?;
+        Ok(Arc::new(common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCodes::from_arrow)?))
+    }};
+}
+
 /// Invoke a compute kernel on a pair of binary data arrays
 macro_rules! compute_utf8_op {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
         let ll = downcast_array!($LEFT, $DT)?;
         let rr = downcast_array!($RIGHT, $DT)?;
         Ok(Arc::new(
-            paste::expr! {common_arrow::arrow::compute::[<$OP _utf8>]}(&ll, &rr)?
+            (paste::expr! {common_arrow::arrow::compute::[<$OP _utf8>]}(&ll, &rr))?
         ))
     }};
 }
@@ -40,11 +64,11 @@ macro_rules! compute_utf8_op {
 /// Invoke a self defined compute kernel on a pair of arrays
 macro_rules! compute_self_defined_op {
     ($LEFT:expr, $RIGHT:expr, $OP:tt, $DT:ident) => {{
-        let ll = downcast_array!($LEFT, $DT)?;
-        let rr = downcast_array!($RIGHT, $DT)?;
+        let ll = downcast_array_with_error_code!($LEFT, $DT)?;
+        let rr = downcast_array_with_error_code!($RIGHT, $DT)?;
         Ok(Arc::new(common_arrow::arrow::compute::math_op(
             &ll, &rr, $OP
-        )?))
+        ).map_err(ErrorCodes::from_arrow)?))
     }};
 }
 
@@ -54,20 +78,22 @@ macro_rules! compute_self_defined_op {
 macro_rules! arrow_primitive_array_op {
     ($LEFT:expr, $RIGHT:expr, $RESULT:expr, $OP:ident) => {
         match $RESULT {
-            DataType::Int8 => compute_op!($LEFT, $RIGHT, $OP, Int8Array),
-            DataType::Int16 => compute_op!($LEFT, $RIGHT, $OP, Int16Array),
-            DataType::Int32 => compute_op!($LEFT, $RIGHT, $OP, Int32Array),
-            DataType::Int64 => compute_op!($LEFT, $RIGHT, $OP, Int64Array),
-            DataType::UInt8 => compute_op!($LEFT, $RIGHT, $OP, UInt8Array),
-            DataType::UInt16 => compute_op!($LEFT, $RIGHT, $OP, UInt16Array),
-            DataType::UInt32 => compute_op!($LEFT, $RIGHT, $OP, UInt32Array),
-            DataType::UInt64 => compute_op!($LEFT, $RIGHT, $OP, UInt64Array),
-            DataType::Float32 => compute_op!($LEFT, $RIGHT, $OP, Float32Array),
-            DataType::Float64 => compute_op!($LEFT, $RIGHT, $OP, Float64Array),
-            _ => anyhow::bail!(format!(
-                "Unsupported arithmetic_compute::{} for data type: {:?}",
-                stringify!($OP),
-                ($LEFT).data_type(),
+            DataType::Int8 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, Int8Array),
+            DataType::Int16 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, Int16Array),
+            DataType::Int32 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, Int32Array),
+            DataType::Int64 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, Int64Array),
+            DataType::UInt8 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, UInt8Array),
+            DataType::UInt16 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, UInt16Array),
+            DataType::UInt32 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, UInt32Array),
+            DataType::UInt64 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, UInt64Array),
+            DataType::Float32 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, Float32Array),
+            DataType::Float64 => compute_op_with_error_code!($LEFT, $RIGHT, $OP, Float64Array),
+            _ => Result::Err(ErrorCodes::BadDataValueType(
+                format!(
+                    "Unsupported arithmetic_compute::{} for data type: {:?}",
+                    stringify!($OP),
+                    ($LEFT).data_type(),
+                )
             ))
         }
     };
@@ -89,9 +115,11 @@ macro_rules! arrow_primitive_array_self_defined_op {
             DataType::UInt64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt64Array),
             DataType::Float32 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Float32Array),
             DataType::Float64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Float64Array),
-            _ => anyhow::bail!(format!(
-                "Unsupported arithmetic_compute::math_op for data type: {:?}",
-                ($LEFT).data_type(),
+            _ => Result::Err(ErrorCodes::BadDataValueType(
+                format!(
+                    "Unsupported arithmetic_compute::math_op for data type: {:?}",
+                    ($LEFT).data_type(),
+                )
             ))
         }
     };
@@ -177,22 +205,6 @@ macro_rules! arrow_array_op_scalar {
         };
         Ok(result?)
     }};
-}
-
-macro_rules! downcast_array_with_error_code {
-    ($ARRAY:expr, $TYPE:ident) => {
-        if let Some(v) = $ARRAY.as_any().downcast_ref::<$TYPE>() {
-            Result::Ok(v)
-        } else {
-            Result::Err(ErrorCodes::BadDataValueType(
-                format!(
-                    "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
-                    ($ARRAY).data_type(),
-                    stringify!($TYPE)
-                )
-            ))
-        }
-    };
 }
 
 macro_rules! typed_array_sum_to_data_value {
@@ -314,9 +326,9 @@ macro_rules! format_data_value_with_option {
 /// Invoke a boolean kernel on a pair of arrays
 macro_rules! array_boolean_op {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
-        let ll = downcast_array!($LEFT, $DT)?;
-        let rr = downcast_array!($RIGHT, $DT)?;
-        Ok(Arc::new(common_arrow::arrow::compute::$OP(&ll, &rr)?))
+        let ll = downcast_array_with_error_code!($LEFT, $DT)?;
+        let rr = downcast_array_with_error_code!($RIGHT, $DT)?;
+        Ok(Arc::new(common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCodes::from_arrow)?))
     }};
 }
 
