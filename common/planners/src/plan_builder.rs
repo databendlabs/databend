@@ -108,9 +108,21 @@ impl PlanBuilder {
         let aggr_projection_fields = self.exprs_to_fields(&aggr_expr, &input_schema)?;
 
         // Aggregator check.
-        for expr in &aggr_expr {
-            if !expr.has_aggregator()? {
-                bail!("The expression is not an aggregate function {:?}.", expr);
+        for e_aggr in &aggr_expr {
+            if !e_aggr.has_aggregator()? {
+                let mut in_group_by = false;
+                // Check in e_aggr is in group-by's list
+                for e_group in &group_expr {
+                    if let ExpressionPlan::Column(grp_name) = e_group {
+                        if grp_name == e_aggr.to_data_field(&input_schema)?.name() {
+                            in_group_by = true;
+                            break;
+                        }
+                    }
+                }
+                if !in_group_by {
+                    bail!("The expression is not an aggregate function {:?}.", e_aggr);
+                }
             }
         }
 
