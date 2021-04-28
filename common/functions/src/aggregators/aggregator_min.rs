@@ -19,19 +19,25 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct AggregatorMinFunction {
+    display_name: String,
     depth: usize,
     arg: Box<dyn IFunction>,
     state: DataValue
 }
 
 impl AggregatorMinFunction {
-    pub fn try_create(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(
+        display_name: &str,
+        args: &[Box<dyn IFunction>]
+    ) -> Result<Box<dyn IFunction>> {
         ensure!(
             args.len() == 1,
-            "Function Error: Aggregator function Min args require single argument",
+            "Function Error: Aggregator function {} args require single argument",
+            display_name
         );
 
         Ok(Box::new(AggregatorMinFunction {
+            display_name: display_name.to_string(),
             depth: 0,
             arg: args[0].clone(),
             state: DataValue::Null
@@ -99,6 +105,6 @@ impl IFunction for AggregatorMinFunction {
 
 impl fmt::Display for AggregatorMinFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "min({})", self.arg)
+        write!(f, "{}({})", self.display_name, self.arg)
     }
 }

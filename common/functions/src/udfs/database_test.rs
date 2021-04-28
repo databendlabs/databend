@@ -30,7 +30,7 @@ fn test_database_function() -> anyhow::Result<()> {
         name: "database-function-passed",
         display: "database()",
         nullable: false,
-        func: DatabaseFunction::try_create(&[database.clone()])?,
+        func: DatabaseFunction::try_create("database", &[database.clone()])?,
         block: DataBlock::empty(),
         expect: Arc::new(StringArray::from(vec!["default"])),
         error: ""

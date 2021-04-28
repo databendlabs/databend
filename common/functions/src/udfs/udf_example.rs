@@ -14,11 +14,18 @@ use common_datavalues::DataValue;
 use crate::IFunction;
 
 #[derive(Clone)]
-pub struct UdfExampleFunction;
+pub struct UdfExampleFunction {
+    display_name: String
+}
 
 impl UdfExampleFunction {
-    pub fn try_create(_args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
-        Ok(Box::new(UdfExampleFunction {}))
+    pub fn try_create(
+        display_name: &str,
+        _args: &[Box<dyn IFunction>]
+    ) -> Result<Box<dyn IFunction>> {
+        Ok(Box::new(UdfExampleFunction {
+            display_name: display_name.to_string()
+        }))
     }
 }
 
@@ -42,6 +49,6 @@ impl IFunction for UdfExampleFunction {
 
 impl fmt::Display for UdfExampleFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "example()")
+        write!(f, "{}()", self.display_name)
     }
 }
