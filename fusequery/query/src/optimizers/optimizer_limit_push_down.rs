@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_datavalues::DataSchema;
 use common_planners::EmptyPlan;
 use common_planners::LimitPlan;
@@ -55,7 +55,7 @@ impl IOptimizer for LimitPushDownOptimizer {
                 rewritten_node = clone_node;
             }
             Ok(true)
-        })?;
+        }).map_err(ErrorCodes::from_anyhow)?;
 
         Ok(rewritten_node)
     }

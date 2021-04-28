@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_datavalues::DataSchema;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
@@ -70,7 +70,7 @@ impl IOptimizer for GroupByPushDownOptimizer {
                 }
             }
             Ok(true)
-        })?;
+        }).map_err(ErrorCodes::from_anyhow)?;
 
         Ok(rewritten_node)
     }

@@ -46,8 +46,7 @@ impl IInterpreter for ExplainInterpreter {
             false,
         )]));
 
-        let plan = Optimizer::create(self.ctx.clone()).optimize(&self.explain.input)
-            .map_err(ErrorCodes::from_anyhow)?;
+        let plan = Optimizer::create(self.ctx.clone()).optimize(&self.explain.input)?;
         let result = match self.explain.typ {
             ExplainType::Graph => {
                 format!("{}", plan.display_graphviz())

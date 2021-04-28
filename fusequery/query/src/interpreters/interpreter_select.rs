@@ -33,8 +33,7 @@ impl IInterpreter for SelectInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let plan = Optimizer::create(self.ctx.clone()).optimize(&self.select.input)
-            .map_err(ErrorCodes::from_anyhow)?;
+        let plan = Optimizer::create(self.ctx.clone()).optimize(&self.select.input)?;
         PipelineBuilder::create(self.ctx.clone(), plan)
             .build().map_err(ErrorCodes::from_anyhow)?
             .execute()

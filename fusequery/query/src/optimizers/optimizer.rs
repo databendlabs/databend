@@ -2,9 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::Result;
+// use anyhow::Result;
 use common_planners::PlanNode;
 
+use common_exception::Result;
 use crate::optimizers::FilterPushDownOptimizer;
 use crate::optimizers::GroupByPushDownOptimizer;
 use crate::optimizers::LimitPushDownOptimizer;
