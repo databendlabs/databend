@@ -4,8 +4,7 @@
 
 use std::sync::Arc;
 
-use anyhow::anyhow;
-use anyhow::Result;
+use common_exception::{Result, ErrorCodes};
 use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::processors::IProcessor;
@@ -46,7 +45,7 @@ impl Pipeline {
     pub fn last_pipe(&self) -> Result<&Pipe> {
         self.pipes
             .last()
-            .ok_or_else(|| anyhow!("Pipeline last pipe can not be none"))
+            .ok_or_else(|| ErrorCodes::IllegalPipelineState("Pipeline last pipe can not be none".to_string()))
     }
 
     pub fn add_source(&mut self, source: Arc<dyn IProcessor>) -> Result<()> {
@@ -76,7 +75,7 @@ impl Pipeline {
         let mut new_pipe = Pipe::create();
         for x in last_pipe.processors() {
             let mut p = f()?;
-            p.connect_to(x.clone())?;
+            p.connect_to(x.clone()).map_err(ErrorCodes::from_anyhow)?;
             new_pipe.add(Arc::from(p));
         }
         self.pipes.push(new_pipe);
@@ -96,7 +95,7 @@ impl Pipeline {
         if last_pipe.nums() > 1 {
             let mut merge = MergeProcessor::create();
             for x in last_pipe.processors() {
-                merge.connect_to(x.clone())?;
+                merge.connect_to(x.clone()).map_err(ErrorCodes::from_anyhow)?;
             }
             let mut new_pipe = Pipe::create();
             new_pipe.add(Arc::from(merge));
@@ -109,6 +108,6 @@ impl Pipeline {
         if self.last_pipe()?.nums() > 1 {
             self.merge_processor()?;
         }
-        self.last_pipe()?.first().execute().await
+        self.last_pipe()?.first().execute().await.map_err(ErrorCodes::from_anyhow)
     }
 }

@@ -13,7 +13,6 @@ use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizer;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
-use common_exception::ErrorCodes;
 
 pub struct SelectInterpreter {
     ctx: FuseQueryContextRef,
@@ -37,6 +36,6 @@ impl IInterpreter for SelectInterpreter {
         PipelineBuilder::create(self.ctx.clone(), plan)
             .build()?
             .execute()
-            .await.map_err(ErrorCodes::from_anyhow)
+            .await
     }
 }

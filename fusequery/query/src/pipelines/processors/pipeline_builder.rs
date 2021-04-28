@@ -91,7 +91,7 @@ impl PipelineBuilder {
                     address.clone(),
                     remote_plan.clone(),
                 ).map_err(ErrorCodes::from_anyhow)?;
-                pipeline.add_source(Arc::new(remote_transform)).map_err(ErrorCodes::from_anyhow)?;
+                pipeline.add_source(Arc::new(remote_transform))?;
             }
         }
         Ok(true)
@@ -102,8 +102,8 @@ impl PipelineBuilder {
             Ok(Box::new(ProjectionTransform::try_create(
                 plan.schema.clone(),
                 plan.expr.clone(),
-            )?))
-        }).map_err(ErrorCodes::from_anyhow)?;
+            ).map_err(ErrorCodes::from_anyhow)?))
+        })?;
         Ok(true)
     }
 
@@ -113,8 +113,8 @@ impl PipelineBuilder {
                 Ok(Box::new(AggregatorPartialTransform::try_create(
                     plan.schema(),
                     plan.aggr_expr.clone(),
-                )?))
-            }).map_err(ErrorCodes::from_anyhow)?;
+                ).map_err(ErrorCodes::from_anyhow)?))
+            })?;
         } else {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(GroupByPartialTransform::create(
@@ -122,20 +122,20 @@ impl PipelineBuilder {
                     plan.aggr_expr.clone(),
                     plan.group_expr.clone(),
                 )))
-            }).map_err(ErrorCodes::from_anyhow)?;
+            })?;
         }
         Ok(true)
     }
 
     fn visit_aggregator_final_plan(pipeline: &mut Pipeline, plan: &AggregatorFinalPlan) -> Result<bool> {
-        pipeline.merge_processor().map_err(ErrorCodes::from_anyhow)?;
+        pipeline.merge_processor()?;
         if plan.group_expr.is_empty() {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(AggregatorFinalTransform::try_create(
                     plan.schema(),
                     plan.aggr_expr.clone(),
-                )?))
-            }).map_err(ErrorCodes::from_anyhow)?;
+                ).map_err(ErrorCodes::from_anyhow)?))
+            })?;
         } else {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(GroupByFinalTransform::create(
@@ -143,7 +143,7 @@ impl PipelineBuilder {
                     plan.aggr_expr.clone(),
                     plan.group_expr.clone(),
                 )))
-            }).map_err(ErrorCodes::from_anyhow)?;
+            })?;
         }
         Ok(true)
     }
@@ -152,8 +152,8 @@ impl PipelineBuilder {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
                 plan.predicate.clone()
-            )?))
-        }).map_err(ErrorCodes::from_anyhow)?;
+            ).map_err(ErrorCodes::from_anyhow)?))
+        })?;
         Ok(true)
     }
 
@@ -166,8 +166,8 @@ impl PipelineBuilder {
                 plan.schema(),
                 plan.order_by.clone(),
                 limit,
-            )?))
-        }).map_err(ErrorCodes::from_anyhow)?;
+            ).map_err(ErrorCodes::from_anyhow)?))
+        })?;
 
         // processor 1: [sorted blocks ...] ---> merge to one sorted block
         // processor 2: [sorted blocks ...] ---> merge to one sorted block
@@ -177,32 +177,30 @@ impl PipelineBuilder {
                 plan.schema(),
                 plan.order_by.clone(),
                 limit,
-            )?))
-        }).map_err(ErrorCodes::from_anyhow)?;
+            ).map_err(ErrorCodes::from_anyhow)?))
+        })?;
 
         // processor1 sorted block --
         //                             \
         // processor2 sorted block ----> processor  --> merge to one sorted block
         //                             /
         // processor3 sorted block --
-        if pipeline.last_pipe().map_err(ErrorCodes::from_anyhow)?.nums() > 1 {
-            pipeline.merge_processor().map_err(ErrorCodes::from_anyhow)?;
+        if pipeline.last_pipe()?.nums() > 1 {
+            pipeline.merge_processor()?;
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(SortMergeTransform::try_create(
                     plan.schema(),
                     plan.order_by.clone(),
                     limit,
-                )?))
-            }).map_err(ErrorCodes::from_anyhow)?;
+                ).map_err(ErrorCodes::from_anyhow)?))
+            })?;
         }
         Ok(true)
     }
 
     fn visit_limit_plan(pipeline: &mut Pipeline, plan: &LimitPlan) -> Result<bool> {
-        pipeline.merge_processor()
-            .map_err(ErrorCodes::from_anyhow)?;
-        pipeline.add_simple_transform(|| Ok(Box::new(LimitTransform::try_create(plan.n)?)))
-            .map_err(ErrorCodes::from_anyhow)?;
+        pipeline.merge_processor()?;
+        pipeline.add_simple_transform(|| Ok(Box::new(LimitTransform::try_create(plan.n).map_err(ErrorCodes::from_anyhow)?)))?;
         Ok(false)
     }
 
@@ -225,7 +223,7 @@ impl PipelineBuilder {
                 plan.db.as_str(),
                 plan.table.as_str(),
             ).map_err(ErrorCodes::from_anyhow)?;
-            pipeline.add_source(Arc::new(source)).map_err(ErrorCodes::from_anyhow)?;
+            pipeline.add_source(Arc::new(source))?;
         }
         Ok(true)
     }

@@ -54,6 +54,7 @@ build_exceptions! {
     IllegalFunctionState(9),
     BadDataValueType(10),
     UnknownPlan(11),
+    IllegalPipelineState(12),
 
     UnknownException(1000),
     TokioError(1001)
