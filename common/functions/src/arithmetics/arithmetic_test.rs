@@ -39,7 +39,7 @@ fn test_arithmetic_function() -> anyhow::Result<()> {
             name: "add-int64-passed",
             display: "plus(a, b)",
             nullable: false,
-            func: ArithmeticPlusFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
+            func: ArithmeticPlusFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(schema.clone(), vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
@@ -52,7 +52,7 @@ fn test_arithmetic_function() -> anyhow::Result<()> {
             name: "add-diff-passed",
             display: "plus(c, a)",
             nullable: false,
-            func: ArithmeticPlusFunction::try_create_func(&[field_c.clone(), field_a.clone()])?,
+            func: ArithmeticPlusFunction::try_create_func("", &[field_c.clone(), field_a.clone()])?,
             block: DataBlock::create(schema.clone(), vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
                 Arc::new(Int16Array::from(vec![1, 2, 3, 4])),
@@ -65,7 +65,10 @@ fn test_arithmetic_function() -> anyhow::Result<()> {
             name: "sub-int64-passed",
             display: "minus(a, b)",
             nullable: false,
-            func: ArithmeticMinusFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
+            func: ArithmeticMinusFunction::try_create_func("", &[
+                field_a.clone(),
+                field_b.clone()
+            ])?,
             block: DataBlock::create(schema.clone(), vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2])),
                 Arc::new(Int64Array::from(vec![1, 2, 3])),
@@ -78,7 +81,7 @@ fn test_arithmetic_function() -> anyhow::Result<()> {
             name: "mul-int64-passed",
             display: "multiply(a, b)",
             nullable: false,
-            func: ArithmeticMulFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
+            func: ArithmeticMulFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(schema.clone(), vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2])),
                 Arc::new(Int64Array::from(vec![1, 2, 3])),
@@ -91,7 +94,7 @@ fn test_arithmetic_function() -> anyhow::Result<()> {
             name: "div-int64-passed",
             display: "divide(a, b)",
             nullable: false,
-            func: ArithmeticDivFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
+            func: ArithmeticDivFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(schema.clone(), vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2])),
                 Arc::new(Int64Array::from(vec![1, 2, 3])),
@@ -104,7 +107,10 @@ fn test_arithmetic_function() -> anyhow::Result<()> {
             name: "mod-int64-passed",
             display: "modulo(a, b)",
             nullable: false,
-            func: ArithmeticModuloFunction::try_create_func(&[field_a.clone(), field_b.clone()])?,
+            func: ArithmeticModuloFunction::try_create_func("", &[
+                field_a.clone(),
+                field_b.clone()
+            ])?,
             block: DataBlock::create(schema.clone(), vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2])),
                 Arc::new(Int64Array::from(vec![1, 2, 3])),

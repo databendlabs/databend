@@ -15,15 +15,25 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct ToTypeNameFunction {
-    arg: Box<dyn IFunction>
+    display_name: String,
+    arg: Box<dyn IFunction>,
 }
 
 impl ToTypeNameFunction {
-    pub fn try_create(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(
+        display_name: &str,
+        args: &[Box<dyn IFunction>],
+    ) -> Result<Box<dyn IFunction>> {
         match args.len() {
-            1 => Result::Ok(Box::new(ToTypeNameFunction { arg: args[0].clone() })),
+            1 => Ok(Box::new(ToTypeNameFunction {
+                display_name: display_name.to_string(),
+                arg: args[0].clone(),
+            })),
             _ => Result::Err(ErrorCodes::BadArguments(
-                format!("The argument size of function totypename must be one")
+                format!(
+                    "The argument size of function {} must be one",
+                    display_name
+                )
             ))
         }
     }
@@ -50,6 +60,6 @@ impl IFunction for ToTypeNameFunction {
 
 impl fmt::Display for ToTypeNameFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "toTypeName({})", self.arg)
+        write!(f, "{}({})", self.display_name, self.arg)
     }
 }

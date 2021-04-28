@@ -1,32 +1,55 @@
 {
   "docs": {
-    "Overview": [
-      "overview/building-and-running",
+    "Guides": [
       "overview/architecture",
-      "overview/performance"
+      "overview/performance",
+      "overview/building-and-running"
     ],
-    "SQL Statements": [
-      "sqlstatement/select-statement",
-      "sqlstatement/select-aggregate",
-      "sqlstatement/explain-statement",
-      "sqlstatement/set-statement"
-
-    ],
-    "Data Types": [
-      "datatypes/datatypes-integer",
-      "datatypes/datatypes-float",
-      "datatypes/datatypes-string"
-    ],
-    "System Tables": [
-      "system/system-tables"
-    ],
-    "Functions and Operators": [
-      "functions/arithmetic-operators",
-      "functions/comparison-functions",
-      "functions/logical-operators"
+    "SQL Reference": [
+      {
+        "type": "category",
+        "label": "Aggregate Functions",
+        "items": [
+          "sqlstatement/aggregate-functions/aggregate-avg",
+          "sqlstatement/aggregate-functions/aggregate-count",
+          "sqlstatement/aggregate-functions/aggregate-max",
+          "sqlstatement/aggregate-functions/aggregate-min",
+          "sqlstatement/aggregate-functions/aggregate-sum"
+        ]
+      },
+      {
+        "type": "category",
+        "label": "Data Definition Language (DDL)",
+        "items": [
+          "sqlstatement/data-definition-language-ddl/ddl-create-database"
+        ]
+      },
+      {
+        "type": "category",
+        "label": "Data Manipulation Language (DML)",
+        "items": [
+          "sqlstatement/data-manipulation-language-dml/dml-select"
+        ]
+      },
+      {
+        "type": "category",
+        "label": "Information Functions",
+        "items": [
+          "sqlstatement/information-functions/database"
+        ]
+      },
+      {
+        "type": "category",
+        "label": "Show Commands",
+        "items": [
+          "sqlstatement/show-commands/show-databases"
+        ]
+      }
     ],
     "RFCs": [
       "rfcs/store/fusestore-design"
+    ],
+    "Release Notes": [
     ]
   }
 }

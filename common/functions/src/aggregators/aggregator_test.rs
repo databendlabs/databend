@@ -46,7 +46,9 @@ fn test_aggregator_function() -> anyhow::Result<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "count(a)",
             nullable: false,
-            func: AggregatorCountFunction::try_create(&[ColumnFunction::try_create("a")?])?,
+            func: AggregatorCountFunction::try_create("count", &[ColumnFunction::try_create(
+                "a"
+            )?])?,
             block: block.clone(),
             expect: DataValue::UInt64(Some(4)),
             error: ""
@@ -57,7 +59,7 @@ fn test_aggregator_function() -> anyhow::Result<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "max(a)",
             nullable: false,
-            func: AggregatorMaxFunction::try_create(&[ColumnFunction::try_create("a")?])?,
+            func: AggregatorMaxFunction::try_create("max", &[ColumnFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::Int64(Some(4)),
             error: ""
@@ -68,7 +70,7 @@ fn test_aggregator_function() -> anyhow::Result<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "min(a)",
             nullable: false,
-            func: AggregatorMinFunction::try_create(&[ColumnFunction::try_create("a")?])?,
+            func: AggregatorMinFunction::try_create("min", &[ColumnFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::Int64(Some(1)),
             error: ""
@@ -79,7 +81,7 @@ fn test_aggregator_function() -> anyhow::Result<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "avg(a)",
             nullable: false,
-            func: AggregatorAvgFunction::try_create(&[ColumnFunction::try_create("a")?])?,
+            func: AggregatorAvgFunction::try_create("avg", &[ColumnFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::Float64(Some(2.5)),
             error: ""
@@ -90,7 +92,7 @@ fn test_aggregator_function() -> anyhow::Result<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "sum(a)",
             nullable: false,
-            func: AggregatorSumFunction::try_create(&[ColumnFunction::try_create("a")?])?,
+            func: AggregatorSumFunction::try_create("sum", &[ColumnFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::Int64(Some(10)),
             error: ""
@@ -101,11 +103,11 @@ fn test_aggregator_function() -> anyhow::Result<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "plus(1, plus(1, sum(a)))",
             nullable: false,
-            func: ArithmeticPlusFunction::try_create_func(&[
+            func: ArithmeticPlusFunction::try_create_func("+", &[
                 LiteralFunction::try_create(DataValue::Int64(Some(1)))?,
-                ArithmeticPlusFunction::try_create_func(&[
+                ArithmeticPlusFunction::try_create_func("+", &[
                     LiteralFunction::try_create(DataValue::Int64(Some(1)))?,
-                    AggregatorSumFunction::try_create(&[ColumnFunction::try_create("a")?])?
+                    AggregatorSumFunction::try_create("sum", &[ColumnFunction::try_create("a")?])?
                 ])?
             ])?,
             block: block.clone(),
@@ -118,9 +120,9 @@ fn test_aggregator_function() -> anyhow::Result<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "divide(sum(a), count(a))",
             nullable: false,
-            func: ArithmeticDivFunction::try_create_func(&[
-                AggregatorSumFunction::try_create(&[ColumnFunction::try_create("a")?])?,
-                AggregatorCountFunction::try_create(&[ColumnFunction::try_create("a")?])?
+            func: ArithmeticDivFunction::try_create_func("/", &[
+                AggregatorSumFunction::try_create("sum", &[ColumnFunction::try_create("a")?])?,
+                AggregatorCountFunction::try_create("count", &[ColumnFunction::try_create("a")?])?
             ])?,
             block: block.clone(),
             expect: DataValue::Float64(Some(2.5)),
@@ -132,11 +134,13 @@ fn test_aggregator_function() -> anyhow::Result<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "plus(sum(plus(a, 1)), 2)",
             nullable: false,
-            func: ArithmeticPlusFunction::try_create_func(&[
-                AggregatorSumFunction::try_create(&[ArithmeticPlusFunction::try_create_func(&[
-                    ColumnFunction::try_create("a")?,
-                    LiteralFunction::try_create(DataValue::Int8(Some(1)))?
-                ])?])?,
+            func: ArithmeticPlusFunction::try_create_func("+", &[
+                AggregatorSumFunction::try_create("sum", &[
+                    ArithmeticPlusFunction::try_create_func("+", &[
+                        ColumnFunction::try_create("a")?,
+                        LiteralFunction::try_create(DataValue::Int8(Some(1)))?
+                    ])?
+                ])?,
                 LiteralFunction::try_create(DataValue::Int8(Some(2)))?
             ])?,
             block,

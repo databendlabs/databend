@@ -18,22 +18,29 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct AggregatorMaxFunction {
+    display_name: String,
     depth: usize,
     arg: Box<dyn IFunction>,
-    state: DataValue
+    state: DataValue,
 }
 
 impl AggregatorMaxFunction {
-    pub fn try_create(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(display_name: &str, args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
         match args.len() {
             1 => {
                 Ok(Box::new(AggregatorMaxFunction {
+                    display_name: display_name.to_string(),
                     depth: 0,
                     arg: args[0].clone(),
                     state: DataValue::Null,
                 }))
             }
-            _ => Result::Err(ErrorCodes::BadArguments("Function Error: Aggregator function Max args require single argument".to_string()))
+            _ => Result::Err(ErrorCodes::BadArguments(
+                format!(
+                    "Function Error: Aggregator function {} args require single argument",
+                    display_name
+                )
+            ))
         }
     }
 }
@@ -98,6 +105,6 @@ impl IFunction for AggregatorMaxFunction {
 
 impl fmt::Display for AggregatorMaxFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "max({})", self.arg)
+        write!(f, "{}({})", self.display_name, self.arg)
     }
 }

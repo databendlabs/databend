@@ -28,7 +28,7 @@ fn test_cast_function() -> anyhow::Result<()> {
     let tests = vec![
         Test {
             name: "cast-int64-to-int8-passed",
-            display: "cast(a)",
+            display: "CAST(a)",
             nullable: false,
             block: DataBlock::create(
                 Arc::new(DataSchema::new(vec![DataField::new(
@@ -44,7 +44,7 @@ fn test_cast_function() -> anyhow::Result<()> {
         },
         Test {
             name: "cast-string-to-date32-passed",
-            display: "cast(a)",
+            display: "CAST(a)",
             nullable: false,
             block: DataBlock::create(
                 Arc::new(DataSchema::new(vec![DataField::new(

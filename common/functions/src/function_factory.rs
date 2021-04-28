@@ -17,8 +17,8 @@ use crate::udfs::UdfFunction;
 use crate::IFunction;
 
 pub struct FunctionFactory;
+pub type FactoryFunc = fn(name: &str, args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>>;
 
-pub type FactoryFunc = fn(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>>;
 pub type FactoryFuncRef = Arc<RwLock<IndexMap<&'static str, FactoryFunc>>>;
 
 lazy_static! {
@@ -39,7 +39,7 @@ impl FunctionFactory {
         let creator = map
             .get(&*name.to_lowercase())
             .ok_or_else(|| ErrorCodes::UnknownFunction(format!("Unsupported Function: {}", name)))?;
-        (creator)(args)
+        (creator)(name, args)
     }
 
     pub fn check(name: &str) -> bool {

@@ -130,7 +130,7 @@ impl fmt::Debug for ExpressionPlan {
             ExpressionPlan::Sort { expr, .. } => write!(f, "{:?}", expr),
             ExpressionPlan::Wildcard => write!(f, "*"),
             ExpressionPlan::Cast { expr, data_type } => {
-                write!(f, "CAST({:?} AS {:?})", expr, data_type)
+                write!(f, "cast({:?} as {:?})", expr, data_type)
             }
         }
     }

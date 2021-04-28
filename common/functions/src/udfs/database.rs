@@ -14,14 +14,23 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct DatabaseFunction {
-    arg: Box<dyn IFunction>
+    display_name: String,
+    arg: Box<dyn IFunction>,
 }
 
 impl DatabaseFunction {
-    pub fn try_create(args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(display_name: &str, args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
         match args.len() {
-            1 => Ok(Box::new(Self { arg: args[0].clone() })),
-            _ => Result::Err(ErrorCodes::BadArguments("The argument size of function database must be one".to_string()))
+            1 => Ok(Box::new(Self {
+                display_name: display_name.to_string(),
+                arg: args[0].clone(),
+            })),
+            _ => Result::Err(ErrorCodes::BadArguments(
+                format!(
+                    "The argument size of function {} must be one",
+                    display_name
+                )
+            ))
         }
     }
 }
@@ -46,6 +55,6 @@ impl IFunction for DatabaseFunction {
 
 impl fmt::Display for DatabaseFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "database()")
+        write!(f, "{}()", self.display_name)
     }
 }
