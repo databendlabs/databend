@@ -42,6 +42,11 @@ impl FunctionFactory {
         (creator)(args)
     }
 
+    pub fn check(name: &str) -> bool {
+        let map = FACTORY.read();
+        map.contains_key(&*name.to_lowercase())
+    }
+
     pub fn registered_names() -> Vec<String> {
         let map = FACTORY.read();
         map.keys().into_iter().map(|x| x.to_string()).collect()

@@ -26,6 +26,7 @@ use sqlparser::ast::OrderByExpr;
 use sqlparser::ast::Statement;
 
 use crate::datasources::ITable;
+use crate::functions::ContextFunction;
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::sql_statement::DfUseDatabase;
@@ -396,6 +397,18 @@ impl PlanParser {
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema),
             sqlparser::ast::Expr::Function(e) => {
                 let mut args = Vec::with_capacity(e.args.len());
+
+                // 1. Get the args from context by function name. such as SELECT database()
+                // common::functions::udf::database arg is ctx.get_default()
+                let ctx_args = ContextFunction::build_args_from_ctx(
+                    e.name.to_string().as_str(),
+                    self.ctx.clone()
+                )?;
+                if !ctx_args.is_empty() {
+                    args.extend_from_slice(ctx_args.as_slice());
+                }
+
+                // 2. Get args from the ast::Expr:Function
                 for arg in &e.args {
                     match &arg {
                         FunctionArg::Named { arg, .. } => {
@@ -406,6 +419,7 @@ impl PlanParser {
                         }
                     }
                 }
+
                 Ok(ExpressionPlan::Function {
                     op: e.name.to_string(),
                     args,
