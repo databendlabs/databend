@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use common_exception::Result;
 use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
 
@@ -21,7 +21,7 @@ pub struct SelectInterpreter {
 }
 
 impl SelectInterpreter {
-    pub fn try_create(ctx: FuseQueryContextRef, select: SelectPlan) -> Result<InterpreterPtr, ErrorCodes> {
+    pub fn try_create(ctx: FuseQueryContextRef, select: SelectPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(SelectInterpreter { ctx, select }))
     }
 }
@@ -33,10 +33,11 @@ impl IInterpreter for SelectInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let plan = Optimizer::create(self.ctx.clone()).optimize(&self.select.input)?;
+        let plan = Optimizer::create(self.ctx.clone()).optimize(&self.select.input)
+            .map_err(ErrorCodes::from_anyhow)?;
         PipelineBuilder::create(self.ctx.clone(), plan)
-            .build()?
+            .build().map_err(ErrorCodes::from_anyhow)?
             .execute()
-            .await
+            .await.map_err(ErrorCodes::from_anyhow)
     }
 }

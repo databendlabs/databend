@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use common_exception::Result;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
@@ -22,7 +22,7 @@ pub struct SettingInterpreter {
 }
 
 impl SettingInterpreter {
-    pub fn try_create(ctx: FuseQueryContextRef, set: SettingPlan) -> Result<InterpreterPtr, ErrorCodes> {
+    pub fn try_create(ctx: FuseQueryContextRef, set: SettingPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(SettingInterpreter { ctx, set }))
     }
 }
@@ -40,7 +40,7 @@ impl IInterpreter for SettingInterpreter {
                 // To be compatible with some drivers
                 "sql_mode" | "autocommit" => {}
                 _ => {
-                    self.ctx.update_settings(&var.variable, var.value)?;
+                    self.ctx.update_settings(&var.variable, var.value).map_err(ErrorCodes::from_anyhow)?;
                 }
             }
         }

@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use common_exception::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
@@ -28,10 +28,7 @@ pub struct ExplainInterpreter {
 }
 
 impl ExplainInterpreter {
-    pub fn try_create(
-        ctx: FuseQueryContextRef,
-        explain: ExplainPlan,
-    ) -> Result<InterpreterPtr, ErrorCodes> {
+    pub fn try_create(ctx: FuseQueryContextRef, explain: ExplainPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(ExplainInterpreter { ctx, explain }))
     }
 }
@@ -46,16 +43,17 @@ impl IInterpreter for ExplainInterpreter {
         let schema = Arc::new(DataSchema::new(vec![DataField::new(
             "explain",
             DataType::Utf8,
-            false
+            false,
         )]));
 
-        let plan = Optimizer::create(self.ctx.clone()).optimize(&self.explain.input)?;
+        let plan = Optimizer::create(self.ctx.clone()).optimize(&self.explain.input)
+            .map_err(ErrorCodes::from_anyhow)?;
         let result = match self.explain.typ {
             ExplainType::Graph => {
                 format!("{}", plan.display_graphviz())
             }
             ExplainType::Pipeline => {
-                let pipeline = PipelineBuilder::create(self.ctx.clone(), plan).build()?;
+                let pipeline = PipelineBuilder::create(self.ctx.clone(), plan).build().map_err(ErrorCodes::from_anyhow)?;
                 format!("{:?}", pipeline)
             }
             _ => format!("{:?}", plan)

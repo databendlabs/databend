@@ -69,10 +69,25 @@ impl<W: io::Write> MysqlShim<W> for Session {
 
         type DataPuller<'a> = BoxFuture<'a, Result<Vec<DataBlock>>>;
         fn data_puller<'a>(interpreter: &'a Arc<dyn IInterpreter>, _statistics: anyhow::Result<Statistics>) -> DataPuller<'a> {
-            return interpreter.execute().then(|r_stream| match r_stream {
-                Ok(stream) => stream.collect().left_future(),
-                Err(e) => futures::future::err(e).right_future()
-            }).map(|data_blocks| data_blocks.map_err(ErrorCodes::from_anyhow)).boxed();
+            // interpreter.execute().then(|r_stream| {
+            //     match r_stream.map(|stream| stream.collect::<Result<Vec<DataBlock>>>()) {
+            //         Err(error_code) =>,
+            //         Ok(future_results) =>
+            //             futures,
+            //     }
+            //     //     // Future<Result<Stream>>
+            //     //     // Result<Stream>
+            //     //     // Result<Future<Result<Vec<DataBlock>>>>
+            //     //     r_stream.map(|stream| stream.collect())
+            // })
+            return interpreter.execute().then(|r_stream| {
+                match r_stream {
+                    Err(error_code) => futures::future::err(error_code).right_future(),
+                    Ok(stream) =>
+                        stream.collect::<anyhow::Result<Vec<DataBlock>>>().map(|res| res.map_err(ErrorCodes::from_anyhow))
+                            .left_future(),
+                }
+            }).boxed();
         }
 
         use crate::servers::mysql::endpoint::on_query_done as done;

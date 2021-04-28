@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use common_exception::Result;
 use common_planners::CreateDatabasePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -19,10 +19,7 @@ pub struct CreateDatabaseInterpreter {
 }
 
 impl CreateDatabaseInterpreter {
-    pub fn try_create(
-        ctx: FuseQueryContextRef,
-        plan: CreateDatabasePlan,
-    ) -> Result<InterpreterPtr, ErrorCodes> {
+    pub fn try_create(ctx: FuseQueryContextRef, plan: CreateDatabasePlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(CreateDatabaseInterpreter { ctx, plan }))
     }
 }
@@ -35,7 +32,7 @@ impl IInterpreter for CreateDatabaseInterpreter {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let datasource = self.ctx.get_datasource();
-        datasource.create_database(self.plan.clone()).await?;
+        datasource.create_database(self.plan.clone()).await.map_err(ErrorCodes::from_anyhow)?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
