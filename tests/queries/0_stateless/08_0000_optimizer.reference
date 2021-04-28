@@ -5,7 +5,7 @@ limit push down: push (limit 10) to projection
 Limit: 10\n  Projection: (number + 1) as c1:UInt64, number as c2:UInt64\n    Filter: ((((number + 1) + number) + 1) = 1)\n      ReadDataSource: scan partitions: [16], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]
 
 group by push down: push alias to group by
-AggregatorFinal: groupBy=[[avg([((number % 3) + 1)]) as c2]], aggr=[[max([(number + 1)]) as c1, avg([((number % 3) + 1)]) as c2]]\n  RedistributeStage[state: AggregatorMerge, id: 0]\n    AggregatorPartial: groupBy=[[avg([((number % 3) + 1)]) as c2]], aggr=[[max([(number + 1)]) as c1, avg([((number % 3) + 1)]) as c2]]\n      ReadDataSource: scan partitions: [16], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]
+AggregatorFinal: groupBy=[[((number % 3) + 1) as c2]], aggr=[[max([(number + 1)]) as c1, ((number % 3) + 1) as c2]]\n  RedistributeStage[state: AggregatorMerge, id: 0]\n    AggregatorPartial: groupBy=[[((number % 3) + 1) as c2]], aggr=[[max([(number + 1)]) as c1, ((number % 3) + 1) as c2]]\n      ReadDataSource: scan partitions: [16], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]
 
 projection push down: push (name and value) to readdatasource
 Projection: name:Utf8\n  Filter: (value > 10)\n    ReadDataSource: scan partitions: [1], scan schema: [name:Utf8, value:Utf8], statistics: [read_rows: 0, read_bytes: 0]
