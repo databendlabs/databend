@@ -132,7 +132,10 @@ impl PlanBuilder {
 
         // Aggregator check.
         for e_aggr in &aggr_expr {
-            if !e_aggr.has_aggregator()? {
+            // do not check literal expressions
+            if let ExpressionPlan::Literal(_) = e_aggr {
+                continue;
+            } else if !e_aggr.has_aggregator()? {
                 let mut in_group_by = false;
                 // Check in e_aggr is in group-by's list
                 for e_group in &group_expr {
