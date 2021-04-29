@@ -4,11 +4,10 @@
 
 use std::sync::Arc;
 
-use anyhow::bail;
-use anyhow::Result;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::col;
@@ -138,7 +137,7 @@ impl PlanBuilder {
                 continue;
             } else if !e_aggr.has_aggregator()? {
                 let mut in_group_by = false;
-                // Check in e_aggr is in group-by's list
+                // Check if e_aggr is in group-by's list
                 for e_group in &group_expr {
                     if aggr_group_expr_eq(&e_aggr, &e_group, &input_schema)? {
                         in_group_by = true;
@@ -146,7 +145,10 @@ impl PlanBuilder {
                     }
                 }
                 if !in_group_by {
-                    bail!("The expression is not an aggregate function {:?}.", e_aggr);
+                    return Result::Err(ErrorCodes::UnknownException(format!(
+                        "Expression {:?} is not an aggregate function.",
+                        e_aggr
+                    )));
                 }
             }
         }

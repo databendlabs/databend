@@ -8,7 +8,6 @@ mod tests {
     use common_planners::DatabaseEngineType;
     use common_planners::TableEngineType;
     use sqlparser::ast::*;
-    use sqlparser::parser::*;
 
     use crate::sql::sql_statement::DfUseDatabase;
     use crate::sql::*;
