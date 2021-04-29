@@ -18,6 +18,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::UInt64Array;
 use common_exception::ErrorCodes;
 use common_exception::Result;
+use common_streams::ProgressStream;
 use futures::stream::Stream;
 
 use crate::sessions::FuseQueryContextRef;
@@ -36,13 +37,15 @@ pub struct NumbersStream {
 }
 
 impl NumbersStream {
-    pub fn create(ctx: FuseQueryContextRef, schema: DataSchemaRef) -> Self {
-        NumbersStream {
+    pub fn try_create(ctx: FuseQueryContextRef, schema: DataSchemaRef) -> Result<ProgressStream> {
+        let ctx2 = ctx.clone();
+        let stream = Box::pin(NumbersStream {
             ctx,
             schema,
             block_index: 0,
             blocks: vec![]
-        }
+        });
+        ProgressStream::try_create(stream, ctx2.progress_callback()?)
     }
 
     fn try_get_one_block(&mut self) -> Result<Option<DataBlock>> {

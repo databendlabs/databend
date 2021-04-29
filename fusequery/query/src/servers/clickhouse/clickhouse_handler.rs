@@ -3,14 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::borrow::Cow;
-use std::time::Instant;
+use std::sync::Arc;
 
 use anyhow::bail;
 use anyhow::Result;
 use clickhouse_srv::*;
 use log::error;
 use log::info;
-use metrics::histogram;
+use tokio::net::TcpListener;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
@@ -19,9 +19,6 @@ use crate::servers::clickhouse::ClickHouseStream;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
-use tokio::net::TcpListener;
-use std::sync::Arc;
-use clickhouse_srv::types::Progress;
 
 struct Session {
     ctx: FuseQueryContextRef
@@ -34,16 +31,13 @@ impl Session {
 
     async fn execute_fuse_query(&self, state: &QueryState) -> Result<QueryResponse> {
         self.ctx.reset()?;
-        let start = Instant::now();
         let plan = PlanParser::create(self.ctx.clone()).build_from_sql(&state.query);
         match plan {
             Ok(v) => match InterpreterFactory::get(self.ctx.clone(), v) {
                 Ok(executor) => {
                     let stream = executor.execute().await?;
                     let input_stream = Box::pin(ClickHouseStream::create(stream));
-                    return Ok(QueryResponse {
-                        input_stream
-                    })
+                    return Ok(QueryResponse { input_stream });
                 }
                 Err(e) => {
                     error!("Execute error: {:?}", e);
@@ -60,7 +54,10 @@ impl Session {
 
 #[async_trait::async_trait]
 impl ClickHouseSession for Session {
-    async fn execute_query(&self, state: &QueryState) -> clickhouse_srv::errors::Result<QueryResponse> {
+    async fn execute_query(
+        &self,
+        state: &QueryState
+    ) -> clickhouse_srv::errors::Result<QueryResponse> {
         match self.execute_fuse_query(state).await {
             Err(e) => Err(clickhouse_srv::errors::Error::Other(Cow::from(
                 e.to_string()
@@ -98,11 +95,13 @@ impl ClickHouseSession for Session {
         54405
     }
 
-    fn get_progress(&self) -> Progress {
-        Progress {
-            rows: 10000 ,
-            bytes: 10000,
-            total_rows: 1000,
+    fn get_progress(&self) -> clickhouse_srv::types::Progress {
+        let values = self.ctx.get_progress_value();
+        info!("got new progress values {:?}", values);
+        clickhouse_srv::types::Progress {
+            rows: values.read_rows as u64,
+            bytes: values.read_bytes as u64,
+            total_rows: 0
         }
     }
 }
@@ -110,7 +109,7 @@ impl ClickHouseSession for Session {
 pub struct ClickHouseHandler {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionRef,
+    session_manager: SessionRef
 }
 
 impl ClickHouseHandler {
@@ -118,16 +117,16 @@ impl ClickHouseHandler {
         Self {
             conf,
             cluster,
-            session_manager,
+            session_manager
         }
     }
 
     pub async fn start(&self) -> Result<()> {
-
         let listener = TcpListener::bind(format!(
             "{}:{}",
             self.conf.clickhouse_handler_host, self.conf.clickhouse_handler_port
-        )).await?;
+        ))
+        .await?;
 
         loop {
             // Asynchronously wait for an inbound TcpStream.
@@ -140,13 +139,15 @@ impl ClickHouseHandler {
             let session_mgr = self.session_manager.clone();
             // Spawn our handler to be run asynchronously.
             tokio::spawn(async move {
-                if let Err(e) = ClickHouseServer::run_on_stream(Arc::new(Session::create(ctx.clone())), stream).await {
+                if let Err(e) =
+                    ClickHouseServer::run_on_stream(Arc::new(Session::create(ctx.clone())), stream)
+                        .await
+                {
                     info!("Error: {:?}", e);
                 }
                 session_mgr.try_remove_context(ctx).unwrap();
             });
         }
-        Ok(())
     }
 
     pub fn stop(&self) -> Result<()> {

@@ -109,7 +109,10 @@ impl ITable for NumbersTable {
     }
 
     async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
-        Ok(Box::pin(NumbersStream::create(ctx, self.schema.clone())))
+        Ok(Box::pin(NumbersStream::try_create(
+            ctx,
+            self.schema.clone()
+        )?))
     }
 }
 
