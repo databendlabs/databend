@@ -38,14 +38,13 @@ pub struct NumbersStream {
 
 impl NumbersStream {
     pub fn try_create(ctx: FuseQueryContextRef, schema: DataSchemaRef) -> Result<ProgressStream> {
-        let ctx2 = ctx.clone();
         let stream = Box::pin(NumbersStream {
-            ctx,
+            ctx: ctx.clone(),
             schema,
             block_index: 0,
             blocks: vec![]
         });
-        ProgressStream::try_create(stream, ctx2.progress_callback()?)
+        ProgressStream::try_create(stream, ctx.progress_callback()?)
     }
 
     fn try_get_one_block(&mut self) -> Result<Option<DataBlock>> {
