@@ -6,4 +6,5 @@ ignore:
   - "*/bin/*"
   - "*/servers/*"
   - "*/sessions/*"
+  - "*/metrics/*"
   - "*/admins/*"

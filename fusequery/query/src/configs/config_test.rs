@@ -32,6 +32,12 @@ fn test_config() -> common_exception::Result<()> {
         assert_eq!(actual, expect);
     }
 
+    // From Args.
+    {
+        let actual = Config::load_from_args();
+        assert_eq!("INFO", actual.log_level);
+    }
+
     // From file NotFound.
     {
         let actual = Config::load_from_toml("xx.toml");
