@@ -4,12 +4,12 @@
 
 use std::fmt;
 
-use anyhow::ensure;
-use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 use crate::IFunction;
 
@@ -24,16 +24,16 @@ impl DatabaseFunction {
         display_name: &str,
         args: &[Box<dyn IFunction>]
     ) -> Result<Box<dyn IFunction>> {
-        ensure!(
-            args.len() == 1,
-            "The argument size of function {} must be one",
-            display_name
-        );
-
-        Ok(Box::new(Self {
-            display_name: display_name.to_string(),
-            arg: args[0].clone()
-        }))
+        match args.len() {
+            1 => Ok(Box::new(Self {
+                display_name: display_name.to_string(),
+                arg: args[0].clone()
+            })),
+            _ => Result::Err(ErrorCodes::BadArguments(format!(
+                "The argument size of function {} must be one",
+                display_name
+            )))
+        }
     }
 }
 

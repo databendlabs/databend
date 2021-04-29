@@ -11,6 +11,7 @@ members = [
     "common/planners",
     "common/progress",
     "common/streams",
+    "common/exception",
 
     # FuseQuery
     "fusequery/query",

@@ -5,6 +5,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
+use common_exception::ErrorCodes;
 use common_planners::DatabaseEngineType;
 use common_planners::ExplainType;
 use common_planners::TableEngineType;
@@ -61,9 +62,9 @@ impl<'a> DfParser<'a> {
     }
 
     /// Parse a SQL statement and produce a set of statements with dialect
-    pub fn parse_sql(sql: &str) -> Result<Vec<DfStatement>, ParserError> {
+    pub fn parse_sql(sql: &str) -> Result<Vec<DfStatement>, ErrorCodes> {
         let dialect = &GenericDialect {};
-        DfParser::parse_sql_with_dialect(sql, dialect)
+        DfParser::parse_sql_with_dialect(sql, dialect).map_err(ErrorCodes::from_parser)
     }
 
     /// Parse a SQL statement and produce a set of statements

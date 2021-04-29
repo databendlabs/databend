@@ -5,10 +5,10 @@
 use std::any::Any;
 use std::fs::File;
 
-use anyhow::bail;
 use anyhow::Context;
-use anyhow::Result;
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
@@ -38,7 +38,9 @@ impl CsvTable {
         let has_header = options.get("has_header").is_some();
         let file = match options.get("location") {
             None => {
-                bail!("CSV Engine must contains file location options")
+                return Result::Err(ErrorCodes::BadOption(
+                    "CSV Engine must contains file location options".to_string()
+                ));
             }
             Some(v) => v.trim_matches(|s| s == '\'' || s == '"').to_string()
         };
@@ -79,8 +81,11 @@ impl ITable for CsvTable {
         let start_line: usize = if self.has_header { 1 } else { 0 };
         let file = &self.file;
         let lines_count = Common::count_lines(
-            File::open(file.clone()).with_context(|| format!("Cannot find file:{}", file))?
-        )?;
+            File::open(file.clone())
+                .with_context(|| format!("Cannot find file:{}", file))
+                .map_err(ErrorCodes::from_anyhow)?
+        )
+        .map_err(|e| ErrorCodes::CannotReadFile(e.to_string()))?;
 
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),

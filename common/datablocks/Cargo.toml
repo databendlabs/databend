@@ -10,6 +10,7 @@ edition = "2018"
 # Workspace dependencies
 common-arrow = {path = "../arrow"}
 common-datavalues = {path = "../datavalues"}
+common-exception = {path = "../exception"}
 
 # Github dependencies
 

@@ -4,12 +4,13 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use common_exception::Result;
 use common_planners::CreateDatabasePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::IInterpreter;
+use crate::interpreters::InterpreterPtr;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct CreateDatabaseInterpreter {
@@ -21,7 +22,7 @@ impl CreateDatabaseInterpreter {
     pub fn try_create(
         ctx: FuseQueryContextRef,
         plan: CreateDatabasePlan
-    ) -> Result<Arc<dyn IInterpreter>> {
+    ) -> Result<InterpreterPtr> {
         Ok(Arc::new(CreateDatabaseInterpreter { ctx, plan }))
     }
 }

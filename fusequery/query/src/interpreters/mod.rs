@@ -25,6 +25,7 @@ mod interpreter_setting;
 mod interpreter_use_database;
 
 pub use interpreter::IInterpreter;
+pub use interpreter::InterpreterPtr;
 pub use interpreter_create_database::CreateDatabaseInterpreter;
 pub use interpreter_create_table::CreateTableInterpreter;
 pub use interpreter_explain::ExplainInterpreter;

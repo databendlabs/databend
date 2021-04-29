@@ -39,7 +39,7 @@ macro_rules! apply_parse_value {
     };
 
     ($VALUE: expr, $TYPE: tt) => {
-        $VALUE.parse::<$TYPE>()?
+        $VALUE.parse::<$TYPE>().map_err(ErrorCodes::from_parse)?
     };
 }
 
@@ -54,10 +54,9 @@ macro_rules! apply_update_settings {
                     }
                 )*
             }
-            Err(anyhow::Error::msg(format!(
-                "Unknown variable: {:?}",
-                key
-            )))
+            Err(ErrorCodes::UnknownVariable(
+                format!("Unknown variable: {:?}", key)
+            ))
         }
     };
 }

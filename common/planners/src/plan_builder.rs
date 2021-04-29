@@ -4,10 +4,10 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_exception::Result;
 
 use crate::col;
 use crate::AggregatorFinalPlan;

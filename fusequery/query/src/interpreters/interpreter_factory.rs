@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use anyhow::bail;
-use anyhow::Result;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_planners::PlanNode;
 
 use crate::interpreters::CreateDatabaseInterpreter;
@@ -28,7 +28,10 @@ impl InterpreterFactory {
             PlanNode::CreateDatabase(v) => CreateDatabaseInterpreter::try_create(ctx, v),
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx, v),
-            _ => bail!("Can't get the interpreter by plan:{}", plan.name())
+            _ => Result::Err(ErrorCodes::UnknownTypeOfQuery(format!(
+                "Can't get the interpreter by plan:{}",
+                plan.name()
+            )))
         }
     }
 }

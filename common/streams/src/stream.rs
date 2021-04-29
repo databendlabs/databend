@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::Result;
 use common_datablocks::DataBlock;
+use common_exception::Result;
 
 pub type SendableDataBlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<DataBlock>> + Sync + Send>>;

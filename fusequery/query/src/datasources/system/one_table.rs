@@ -5,13 +5,13 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::UInt8Array;
+use common_exception::Result;
 use common_planners::Partition;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;

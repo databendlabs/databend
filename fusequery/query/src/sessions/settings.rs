@@ -5,10 +5,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::anyhow;
-use anyhow::bail;
-use anyhow::Result;
 use common_datavalues::DataValue;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_infallible::RwLock;
 
 #[derive(Debug, Clone)]
@@ -40,7 +39,7 @@ impl Settings {
         let mut settings = self.settings.write();
         let setting_val = settings
             .get(key)
-            .ok_or_else(|| anyhow!("Unknown variable: {:?}", key))?;
+            .ok_or_else(|| ErrorCodes::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
 
         if let DataValue::Struct(values) = setting_val {
             let v = DataValue::Struct(vec![
@@ -57,7 +56,7 @@ impl Settings {
         let settings = self.settings.read();
         let setting_val = settings
             .get(key)
-            .ok_or_else(|| anyhow!("Unknown variable: {:?}", key))?;
+            .ok_or_else(|| ErrorCodes::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
 
         if let DataValue::Struct(values) = setting_val {
             if let DataValue::UInt64(Some(result)) = values[0].clone() {
@@ -65,7 +64,10 @@ impl Settings {
             }
         }
 
-        bail!("Unknown variable: {:?}", key);
+        Result::Err(ErrorCodes::UnknownVariable(format!(
+            "Unknown variable: {:?}",
+            key
+        )))
     }
 
     pub fn try_set_i64(&self, key: &'static str, val: i64, desc: String) -> Result<()> {
@@ -83,7 +85,7 @@ impl Settings {
         let mut settings = self.settings.write();
         let setting_val = settings
             .get(key)
-            .ok_or_else(|| anyhow!("Unknown variable: {:?}", key))?;
+            .ok_or_else(|| ErrorCodes::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
 
         if let DataValue::Struct(values) = setting_val {
             let v = DataValue::Struct(vec![
@@ -100,7 +102,7 @@ impl Settings {
         let settings = self.settings.read();
         let setting_val = settings
             .get(key)
-            .ok_or_else(|| anyhow!("Unknown variable: {:?}", key))?;
+            .ok_or_else(|| ErrorCodes::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
 
         if let DataValue::Struct(values) = setting_val {
             if let DataValue::Int64(Some(result)) = values[0].clone() {
@@ -108,7 +110,10 @@ impl Settings {
             }
         }
 
-        bail!("Unknown variable: {:?}", key);
+        Result::Err(ErrorCodes::UnknownVariable(format!(
+            "Unknown variable: {:?}",
+            key
+        )))
     }
 
     pub fn try_set_f64(&self, key: &'static str, val: f64, desc: String) -> Result<()> {
@@ -126,7 +131,7 @@ impl Settings {
         let mut settings = self.settings.write();
         let setting_val = settings
             .get(key)
-            .ok_or_else(|| anyhow!("Unknown variable: {:?}", key))?;
+            .ok_or_else(|| ErrorCodes::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
 
         if let DataValue::Struct(values) = setting_val {
             let v = DataValue::Struct(vec![
@@ -143,7 +148,7 @@ impl Settings {
         let settings = self.settings.read();
         let setting_val = settings
             .get(key)
-            .ok_or_else(|| anyhow!("Unknown variable: {:?}", key))?;
+            .ok_or_else(|| ErrorCodes::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
 
         if let DataValue::Struct(values) = setting_val {
             if let DataValue::Float64(Some(result)) = values[0].clone() {
@@ -151,7 +156,10 @@ impl Settings {
             }
         }
 
-        bail!("Unknown variable: {:?}", key);
+        Result::Err(ErrorCodes::UnknownVariable(format!(
+            "Unknown variable: {:?}",
+            key
+        )))
     }
 
     pub fn try_set_string(&self, key: &'static str, val: String, desc: String) -> Result<()> {
@@ -170,7 +178,7 @@ impl Settings {
         let mut settings = self.settings.write();
         let setting_val = settings
             .get(key)
-            .ok_or_else(|| anyhow!("Unknown variable: {:?}", key))?;
+            .ok_or_else(|| ErrorCodes::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
 
         if let DataValue::Struct(values) = setting_val {
             let v = DataValue::Struct(vec![
@@ -187,7 +195,7 @@ impl Settings {
         let settings = self.settings.read();
         let setting_val = settings
             .get(key)
-            .ok_or_else(|| anyhow!("Unknown variable: {:?}", key))?;
+            .ok_or_else(|| ErrorCodes::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
 
         if let DataValue::Struct(values) = setting_val {
             if let DataValue::Utf8(Some(result)) = values[0].clone() {
@@ -195,7 +203,10 @@ impl Settings {
             }
         }
 
-        bail!("Unknown variable: {:?}", key);
+        Result::Err(ErrorCodes::UnknownVariable(format!(
+            "Unknown variable: {:?}",
+            key
+        )))
     }
 
     pub fn get_settings(&self) -> Result<Vec<DataValue>> {

@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use anyhow::Result;
+use common_exception::Result;
 use common_planners::ExpressionPlan;
 use common_planners::PlanNode;
 

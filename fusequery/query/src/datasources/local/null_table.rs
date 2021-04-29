@@ -4,9 +4,9 @@
 
 use std::any::Any;
 
-use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_exception::Result;
 use common_planners::Partition;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;

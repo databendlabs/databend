@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use anyhow::bail;
-use anyhow::Result;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 use crate::BooleanArray;
 use crate::DataArrayRef;
@@ -32,12 +32,12 @@ impl DataArrayLogic {
                     }
                 }
             }
-            _ => bail!(
+            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
                 "DataValue Error: Cannot do data_array {}, left:{:?}, right:{:?}",
                 op,
                 left.data_type(),
                 right.data_type()
-            )
+            )))
         }
     }
 }

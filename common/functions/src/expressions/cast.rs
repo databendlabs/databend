@@ -4,7 +4,6 @@
 
 use std::fmt;
 
-use anyhow::Result;
 use common_arrow::arrow::compute;
 use common_arrow::arrow::compute::CastOptions;
 use common_datablocks::DataBlock;
@@ -12,6 +11,8 @@ use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 use crate::IFunction;
 
@@ -53,7 +54,8 @@ impl IFunction for CastFunction {
                     &v,
                     &self.cast_type,
                     &DEFAULT_DATAFUSE_CAST_OPTIONS
-                )?
+                )
+                .map_err(ErrorCodes::from_arrow)?
             )),
             DataColumnarValue::Scalar(v) => {
                 let scalar_array = v.to_array()?;
@@ -61,7 +63,8 @@ impl IFunction for CastFunction {
                     &scalar_array,
                     &self.cast_type,
                     &DEFAULT_DATAFUSE_CAST_OPTIONS
-                )?;
+                )
+                .map_err(ErrorCodes::from_arrow)?;
                 let cast_scalar = DataValue::try_from_array(&cast_array, 0)?;
                 Ok(DataColumnarValue::Scalar(cast_scalar))
             }

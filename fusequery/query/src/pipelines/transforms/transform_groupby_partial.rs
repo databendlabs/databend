@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::Result;
 use common_arrow::arrow::array::BinaryBuilder;
 use common_arrow::arrow::array::StringBuilder;
 use common_datablocks::DataBlock;
@@ -17,6 +16,8 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_functions::IFunction;
 use common_infallible::RwLock;
 use common_planners::ExpressionPlan;
@@ -109,7 +110,7 @@ impl IProcessor for GroupByPartialTransform {
             .group_exprs
             .iter()
             .map(|x| x.to_function())
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<common_exception::Result<Vec<_>>>()?;
         let group_funcs_len = group_funcs.len();
         let aggr_funcs_len = self.aggr_exprs.len();
 
@@ -206,10 +207,14 @@ impl IProcessor for GroupByPartialTransform {
         for (key, funcs) in groups.iter() {
             for (idx, func) in funcs.iter().enumerate() {
                 let states = DataValue::Struct(func.accumulate_result()?);
-                let ser = serde_json::to_string(&states)?;
-                builders[idx].append_value(ser.as_str())?;
+                let ser = serde_json::to_string(&states).map_err(ErrorCodes::from_serde)?;
+                builders[idx]
+                    .append_value(ser.as_str())
+                    .map_err(ErrorCodes::from_arrow)?;
             }
-            group_key_builder.append_value(key)?;
+            group_key_builder
+                .append_value(key)
+                .map_err(ErrorCodes::from_arrow)?;
         }
 
         let mut columns: Vec<DataArrayRef> = Vec::with_capacity(fields.len());

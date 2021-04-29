@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use common_exception::Result;
 use common_planners::CreateTablePlan;
 
 use crate::datasources::ITable;

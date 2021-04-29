@@ -42,7 +42,7 @@ async fn test_use_database_interpreter_error() -> anyhow::Result<()> {
         let executor = UseDatabaseInterpreter::try_create(ctx, plan)?;
 
         if let Err(e) = executor.execute().await {
-            let expect = "Unknown database: xx";
+            let expect = "Code: 3, displayText = \"Database xx  doesn\\\'t exist.\".";
             assert_eq!(expect, format!("{:?}", e));
         } else {
             assert!(false);

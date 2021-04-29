@@ -523,6 +523,7 @@ dependencies = [
  "anyhow",
  "common-arrow",
  "common-datavalues",
+ "common-exception",
 ]
 
 [[package]]
@@ -531,9 +532,21 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-arrow",
+ "common-exception",
  "paste",
  "pretty_assertions",
  "serde",
+]
+
+[[package]]
+name = "common-exception"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common-arrow",
+ "serde_json",
+ "sqlparser",
+ "thiserror",
 ]
 
 [[package]]
@@ -563,6 +576,7 @@ dependencies = [
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
+ "common-exception",
  "common-infallible",
  "dyn-clone",
  "indexmap",
@@ -580,6 +594,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-datavalues",
+ "common-exception",
  "common-functions",
  "pretty_assertions",
  "serde",
@@ -602,6 +617,7 @@ dependencies = [
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
+ "common-exception",
  "common-functions",
  "common-progress",
  "crossbeam 0.8.0",
@@ -1100,6 +1116,7 @@ dependencies = [
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
+ "common-exception",
  "common-flights",
  "common-functions",
  "common-infallible",

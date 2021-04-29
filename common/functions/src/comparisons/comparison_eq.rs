@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::Result;
 use common_datavalues::DataValueComparisonOperator;
+use common_exception::Result;
 
 use crate::comparisons::ComparisonFunction;
 use crate::IFunction;

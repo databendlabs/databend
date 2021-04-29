@@ -4,14 +4,14 @@
 
 use std::fmt;
 
-use anyhow::ensure;
-use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayComparison;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValueComparisonOperator;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 use crate::comparisons::ComparisonEqFunction;
 use crate::comparisons::ComparisonGtEqFunction;
@@ -49,19 +49,19 @@ impl ComparisonFunction {
         op: DataValueComparisonOperator,
         args: &[Box<dyn IFunction>]
     ) -> Result<Box<dyn IFunction>> {
-        ensure!(
-            args.len() == 2,
-            "Function Error: Comparison function {} args length must be 2",
-            op
-        );
-
-        Ok(Box::new(ComparisonFunction {
-            depth: 0,
-            op,
-            left: args[0].clone(),
-            right: args[1].clone(),
-            saved: None
-        }))
+        match args.len() {
+            2 => Ok(Box::new(ComparisonFunction {
+                depth: 0,
+                op,
+                left: args[0].clone(),
+                right: args[1].clone(),
+                saved: None
+            })),
+            _ => Result::Err(ErrorCodes::BadArguments(format!(
+                "Function Error: Comparison function {} args length must be 2",
+                op
+            )))
+        }
     }
 }
 

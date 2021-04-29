@@ -10,13 +10,14 @@ use std::task::Context;
 use std::task::Poll;
 use std::usize;
 
-use anyhow::Result;
 use common_arrow::arrow::array::ArrayData;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::datatypes::DataType;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::UInt64Array;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use futures::stream::Stream;
 
 use crate::sessions::FuseQueryContextRef;
@@ -56,8 +57,8 @@ impl NumbersStream {
 
             for part in partitions {
                 let names: Vec<_> = part.name.split('-').collect();
-                let begin: u64 = names[1].parse()?;
-                let end: u64 = names[2].parse()?;
+                let begin: u64 = names[1].parse().map_err(ErrorCodes::from_parse)?;
+                let end: u64 = names[2].parse().map_err(ErrorCodes::from_parse)?;
 
                 let diff = end - begin;
                 let block_nums = diff / block_size;
