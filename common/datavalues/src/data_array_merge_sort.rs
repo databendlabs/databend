@@ -4,29 +4,30 @@
 
 use std::cmp::Ordering;
 
-use anyhow::anyhow;
-use anyhow::bail;
-use anyhow::Result;
 use common_arrow::arrow::array::build_compare;
 use common_arrow::arrow::array::make_array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::DynComparator;
 use common_arrow::arrow::array::MutableArrayData;
 use common_arrow::arrow::compute::SortOptions;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 pub struct DataArrayMerge;
 
 impl DataArrayMerge {
     pub fn merge_array(lhs: &ArrayRef, rhs: &ArrayRef, indices: &[bool]) -> Result<ArrayRef> {
         if lhs.data_type() != rhs.data_type() {
-            bail!("It is impossible to merge arrays of different data types.")
+            return Result::Err(ErrorCodes::BadDataValueType(
+                "It is impossible to merge arrays of different data types.".to_string()
+            ));
         }
 
         if lhs.len() + rhs.len() < indices.len() || indices.is_empty() {
-            bail!(
+            return Result::Err(ErrorCodes::BadDataArrayLength(format!(
                 "It is impossible to merge arrays with overflow indices, {}",
                 indices.len()
-            )
+            )));
         }
 
         let arrays = vec![lhs, rhs]
@@ -71,17 +72,27 @@ impl DataArrayMerge {
         limit: Option<usize>
     ) -> Result<Vec<bool>> {
         if lhs.len() != rhs.len() {
-            bail!(
-            "Merge requires lhs and rhs to have the same number of arrays. lhs has {}, rhs has {}.",
-            lhs.len(),
-            rhs.len()
-        )
+            return Result::Err(ErrorCodes::BadDataArrayLength(
+                format!(
+                    "Merge requires lhs and rhs to have the same number of arrays. lhs has {}, rhs has {}.",
+                    lhs.len(),
+                    rhs.len()
+                )
+            ));
         };
         if lhs.is_empty() {
-            bail!("Merge requires lhs to have at least 1 entry.")
+            return Result::Err(ErrorCodes::BadDataArrayLength(
+                "Merge requires lhs to have at least 1 entry.".to_string()
+            ));
         };
         if lhs.len() != options.len() {
-            bail!("Merge requires the number of sort options to equal number of columns. lhs has {} entries, options has {} entries", lhs.len(), options.len());
+            return Result::Err(ErrorCodes::BadDataArrayLength(
+                format!(
+                    "Merge requires the number of sort options to equal number of columns. lhs has {} entries, options has {} entries",
+                    lhs.len(),
+                    options.len()
+                )
+            ));
         };
 
         // prepare the comparison function between lhs and rhs arrays
@@ -90,7 +101,7 @@ impl DataArrayMerge {
             .zip(rhs.iter())
             .map(|(l, r)| build_compare(l.as_ref(), r.as_ref()))
             .collect::<common_arrow::arrow::error::Result<Vec<DynComparator>>>()
-            .map_err(|e| anyhow!("Build dynComparator error: {:?}", e))?;
+            .map_err(ErrorCodes::from_arrow)?;
 
         // prepare a comparison function taking into account nulls and sort options
         let cmp = |left, right| {

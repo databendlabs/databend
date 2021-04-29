@@ -7,14 +7,13 @@ use std::convert::TryInto;
 use std::fs::File;
 use std::sync::Arc;
 
-use anyhow::anyhow;
-use anyhow::bail;
-use anyhow::Result;
 use common_arrow::parquet::arrow::ArrowReader;
 use common_arrow::parquet::arrow::ParquetFileArrowReader;
 use common_arrow::parquet::file::reader::SerializedFileReader;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_planners::Partition;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
@@ -55,7 +54,9 @@ impl ParquetTable {
                 };
                 Ok(Box::new(table))
             }
-            _ => bail!("Parquet Engine must contains file location options")
+            _ => Result::Err(ErrorCodes::BadOption(
+                "Parquet Engine must contains file location options".to_string()
+            ))
         };
     }
 }
@@ -65,20 +66,22 @@ fn read_file(
     tx: Sender<Option<Result<DataBlock>>>,
     projection: &[usize]
 ) -> Result<()> {
-    let file_reader = File::open(file)?;
-    let file_reader = SerializedFileReader::new(file_reader)?;
+    let file_reader = File::open(file).map_err(|e| ErrorCodes::CannotReadFile(e.to_string()))?;
+    let file_reader = SerializedFileReader::new(file_reader)
+        .map_err(|e| ErrorCodes::ParquetError(e.to_string()))?;
     let mut arrow_reader = ParquetFileArrowReader::new(Arc::new(file_reader));
 
     // TODO projection, row filters, batch size configurable, schema judgement
     let batch_size = 2048;
-    let mut batch_reader =
-        arrow_reader.get_record_reader_by_columns(projection.to_owned(), batch_size)?;
+    let mut batch_reader = arrow_reader
+        .get_record_reader_by_columns(projection.to_owned(), batch_size)
+        .map_err(|exception| ErrorCodes::ParquetError(exception.to_string()))?;
 
     loop {
         match batch_reader.next() {
             Some(Ok(batch)) => {
                 tx.send(Some(Ok(batch.try_into()?)))
-                    .map_err(|e| anyhow!(e.to_string()))?;
+                    .map_err(|e| ErrorCodes::UnknownException(e.to_string()))?;
             }
             None => {
                 break;
@@ -86,9 +89,12 @@ fn read_file(
             Some(Err(e)) => {
                 let err_msg = format!("Error reading batch from {:?}: {}", file, e.to_string());
 
-                tx.send(Some(Err(anyhow!(err_msg.clone()))))
-                    .map_err(|e| anyhow!(e.to_string()))?;
-                bail!(err_msg);
+                tx.send(Some(Result::Err(ErrorCodes::CannotReadFile(
+                    err_msg.clone()
+                ))))
+                .map_err(|send_error| ErrorCodes::UnknownException(send_error.to_string()))?;
+
+                return Result::Err(ErrorCodes::CannotReadFile(err_msg));
             }
         }
     }

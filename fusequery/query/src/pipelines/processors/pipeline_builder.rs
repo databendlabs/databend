@@ -4,9 +4,17 @@
 
 use std::sync::Arc;
 
-use anyhow::bail;
-use anyhow::Result;
+use common_exception::ErrorCodes;
+use common_exception::Result;
+use common_planners::AggregatorFinalPlan;
+use common_planners::AggregatorPartialPlan;
+use common_planners::FilterPlan;
+use common_planners::LimitPlan;
 use common_planners::PlanNode;
+use common_planners::ProjectionPlan;
+use common_planners::ReadDataSourcePlan;
+use common_planners::SortPlan;
+use common_planners::StagePlan;
 use log::info;
 
 use crate::pipelines::processors::Pipeline;
@@ -38,174 +46,212 @@ impl PipelineBuilder {
         info!("Received for plan:\n{:?}", self.plan);
 
         let mut limit = None;
-        self.plan.walk_preorder(|node| match node {
-            PlanNode::Limit(ref limit_plan) => {
-                limit = Some(limit_plan.n);
-                Ok(true)
+        self.plan.walk_preorder(|node| -> Result<bool> {
+            match node {
+                PlanNode::Limit(ref limit_plan) => {
+                    limit = Some(limit_plan.n);
+                    Ok(true)
+                }
+                _ => Ok(true)
             }
-            _ => Ok(true)
         })?;
 
         let mut pipeline = Pipeline::create();
-        self.plan.walk_postorder(|node| match node {
-            PlanNode::Stage(plan) => {
-                let executors = PlanScheduler::reschedule(self.ctx.clone(), &plan.input.as_ref())?;
-
-                // If the executors is not empty.
-                if !executors.is_empty() {
-                    // Reset.
-                    pipeline.reset();
-                    self.ctx.reset()?;
-
-                    // Add remote transform as the new source.
-                    for (address, remote_plan) in executors.iter() {
-                        let remote_transform = RemoteTransform::try_create(
-                            self.ctx.clone(),
-                            self.ctx.get_id()?,
-                            address.clone(),
-                            remote_plan.clone()
-                        )?;
-                        pipeline.add_source(Arc::new(remote_transform))?;
-                    }
+        self.plan.walk_postorder(|node| -> Result<bool> {
+            match node {
+                PlanNode::Select(_) => Ok(true),
+                PlanNode::Stage(plan) => self.visit_stage_plan(&mut pipeline, &plan),
+                PlanNode::Projection(plan) => {
+                    PipelineBuilder::visit_projection_plan(&mut pipeline, plan)
                 }
-                Ok(true)
-            }
-            PlanNode::Projection(plan) => {
-                pipeline.add_simple_transform(|| {
-                    Ok(Box::new(ProjectionTransform::try_create(
-                        plan.schema.clone(),
-                        plan.expr.clone()
-                    )?))
-                })?;
-                Ok(true)
-            }
-            PlanNode::AggregatorPartial(plan) => {
-                if plan.group_expr.is_empty() {
-                    pipeline.add_simple_transform(|| {
-                        Ok(Box::new(AggregatorPartialTransform::try_create(
-                            plan.schema(),
-                            plan.aggr_expr.clone()
-                        )?))
-                    })?;
-                } else {
-                    pipeline.add_simple_transform(|| {
-                        Ok(Box::new(GroupByPartialTransform::create(
-                            plan.schema(),
-                            plan.aggr_expr.clone(),
-                            plan.group_expr.clone()
-                        )))
-                    })?;
+                PlanNode::AggregatorPartial(plan) => {
+                    PipelineBuilder::visit_aggregator_partial_plan(&mut pipeline, plan)
                 }
-                Ok(true)
-            }
-            PlanNode::AggregatorFinal(plan) => {
-                pipeline.merge_processor()?;
-                if plan.group_expr.is_empty() {
-                    pipeline.add_simple_transform(|| {
-                        Ok(Box::new(AggregatorFinalTransform::try_create(
-                            plan.schema(),
-                            plan.aggr_expr.clone()
-                        )?))
-                    })?;
-                } else {
-                    pipeline.add_simple_transform(|| {
-                        Ok(Box::new(GroupByFinalTransform::create(
-                            plan.schema(),
-                            plan.aggr_expr.clone(),
-                            plan.group_expr.clone()
-                        )))
-                    })?;
+                PlanNode::AggregatorFinal(plan) => {
+                    PipelineBuilder::visit_aggregator_final_plan(&mut pipeline, plan)
                 }
-                Ok(true)
-            }
-            PlanNode::Filter(plan) => {
-                pipeline.add_simple_transform(|| {
-                    Ok(Box::new(FilterTransform::try_create(
-                        plan.predicate.clone()
-                    )?))
-                })?;
-                Ok(true)
-            }
-            PlanNode::Sort(plan) => {
-                // processor 1: block ---> sort_stream
-                // processor 2: block ---> sort_stream
-                // processor 3: block ---> sort_stream
-                pipeline.add_simple_transform(|| {
-                    Ok(Box::new(SortPartialTransform::try_create(
-                        plan.schema(),
-                        plan.order_by.clone(),
-                        limit
-                    )?))
-                })?;
-
-                // processor 1: [sorted blocks ...] ---> merge to one sorted block
-                // processor 2: [sorted blocks ...] ---> merge to one sorted block
-                // processor 3: [sorted blocks ...] ---> merge to one sorted block
-                pipeline.add_simple_transform(|| {
-                    Ok(Box::new(SortMergeTransform::try_create(
-                        plan.schema(),
-                        plan.order_by.clone(),
-                        limit
-                    )?))
-                })?;
-
-                // processor1 sorted block --
-                //                             \
-                // processor2 sorted block ----> processor  --> merge to one sorted block
-                //                             /
-                // processor3 sorted block --
-                if pipeline.last_pipe()?.nums() > 1 {
-                    pipeline.merge_processor()?;
-                    pipeline.add_simple_transform(|| {
-                        Ok(Box::new(SortMergeTransform::try_create(
-                            plan.schema(),
-                            plan.order_by.clone(),
-                            limit
-                        )?))
-                    })?;
+                PlanNode::Filter(plan) => PipelineBuilder::visit_filter_plan(&mut pipeline, plan),
+                PlanNode::Sort(plan) => {
+                    PipelineBuilder::visit_sort_plan(limit, &mut pipeline, plan)
                 }
-                Ok(true)
-            }
-
-            PlanNode::Limit(plan) => {
-                pipeline.merge_processor()?;
-                pipeline
-                    .add_simple_transform(|| Ok(Box::new(LimitTransform::try_create(plan.n)?)))?;
-                Ok(false)
-            }
-            PlanNode::ReadSource(plan) => {
-                // Bind plan partitions to context.
-                self.ctx.try_set_partitions(plan.partitions.clone())?;
-
-                let max_threads = self.ctx.get_max_threads()? as usize;
-                let workers = if max_threads == 0 {
-                    1
-                } else if max_threads > plan.partitions.len() {
-                    plan.partitions.len()
-                } else {
-                    max_threads
-                };
-
-                for _i in 0..workers {
-                    let source = SourceTransform::try_create(
-                        self.ctx.clone(),
-                        plan.db.as_str(),
-                        plan.table.as_str()
-                    )?;
-                    pipeline.add_source(Arc::new(source))?;
-                }
-                Ok(true)
-            }
-            PlanNode::Select(_) => Ok(true),
-            other => {
-                bail!(
+                PlanNode::Limit(plan) => PipelineBuilder::visit_limit_plan(&mut pipeline, plan),
+                PlanNode::ReadSource(plan) => self.visit_read_data_source_plan(&mut pipeline, plan),
+                other => Result::Err(ErrorCodes::UnknownPlan(format!(
                     "Build pipeline from the plan node unsupported:{:?}",
                     other.name()
-                );
+                )))
             }
         })?;
         info!("Pipeline:\n{:?}", pipeline);
 
         Ok(pipeline)
+    }
+
+    fn visit_stage_plan(&self, pipeline: &mut Pipeline, plan: &&StagePlan) -> Result<bool> {
+        let executors = PlanScheduler::reschedule(self.ctx.clone(), &plan.input.as_ref())?;
+
+        // If the executors is not empty.
+        if !executors.is_empty() {
+            // Reset.
+            pipeline.reset();
+            self.ctx.reset()?;
+
+            // Add remote transform as the new source.
+            for (address, remote_plan) in executors.iter() {
+                let remote_transform = RemoteTransform::try_create(
+                    self.ctx.clone(),
+                    self.ctx.get_id()?,
+                    address.clone(),
+                    remote_plan.clone()
+                )?;
+                pipeline.add_source(Arc::new(remote_transform))?;
+            }
+        }
+        Ok(true)
+    }
+
+    fn visit_projection_plan(pipeline: &mut Pipeline, plan: &ProjectionPlan) -> Result<bool> {
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(ProjectionTransform::try_create(
+                plan.schema.clone(),
+                plan.expr.clone()
+            )?))
+        })?;
+        Ok(true)
+    }
+
+    fn visit_aggregator_partial_plan(
+        pipeline: &mut Pipeline,
+        plan: &AggregatorPartialPlan
+    ) -> Result<bool> {
+        if plan.group_expr.is_empty() {
+            pipeline.add_simple_transform(|| {
+                Ok(Box::new(AggregatorPartialTransform::try_create(
+                    plan.schema(),
+                    plan.aggr_expr.clone()
+                )?))
+            })?;
+        } else {
+            pipeline.add_simple_transform(|| {
+                Ok(Box::new(GroupByPartialTransform::create(
+                    plan.schema(),
+                    plan.aggr_expr.clone(),
+                    plan.group_expr.clone()
+                )))
+            })?;
+        }
+        Ok(true)
+    }
+
+    fn visit_aggregator_final_plan(
+        pipeline: &mut Pipeline,
+        plan: &AggregatorFinalPlan
+    ) -> Result<bool> {
+        pipeline.merge_processor()?;
+        if plan.group_expr.is_empty() {
+            pipeline.add_simple_transform(|| {
+                Ok(Box::new(AggregatorFinalTransform::try_create(
+                    plan.schema(),
+                    plan.aggr_expr.clone()
+                )?))
+            })?;
+        } else {
+            pipeline.add_simple_transform(|| {
+                Ok(Box::new(GroupByFinalTransform::create(
+                    plan.schema(),
+                    plan.aggr_expr.clone(),
+                    plan.group_expr.clone()
+                )))
+            })?;
+        }
+        Ok(true)
+    }
+
+    fn visit_filter_plan(pipeline: &mut Pipeline, plan: &FilterPlan) -> Result<bool> {
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(FilterTransform::try_create(
+                plan.predicate.clone()
+            )?))
+        })?;
+        Ok(true)
+    }
+
+    fn visit_sort_plan(
+        limit: Option<usize>,
+        pipeline: &mut Pipeline,
+        plan: &SortPlan
+    ) -> Result<bool> {
+        // processor 1: block ---> sort_stream
+        // processor 2: block ---> sort_stream
+        // processor 3: block ---> sort_stream
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(SortPartialTransform::try_create(
+                plan.schema(),
+                plan.order_by.clone(),
+                limit
+            )?))
+        })?;
+
+        // processor 1: [sorted blocks ...] ---> merge to one sorted block
+        // processor 2: [sorted blocks ...] ---> merge to one sorted block
+        // processor 3: [sorted blocks ...] ---> merge to one sorted block
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(SortMergeTransform::try_create(
+                plan.schema(),
+                plan.order_by.clone(),
+                limit
+            )?))
+        })?;
+
+        // processor1 sorted block --
+        //                             \
+        // processor2 sorted block ----> processor  --> merge to one sorted block
+        //                             /
+        // processor3 sorted block --
+        if pipeline.last_pipe()?.nums() > 1 {
+            pipeline.merge_processor()?;
+            pipeline.add_simple_transform(|| {
+                Ok(Box::new(SortMergeTransform::try_create(
+                    plan.schema(),
+                    plan.order_by.clone(),
+                    limit
+                )?))
+            })?;
+        }
+        Ok(true)
+    }
+
+    fn visit_limit_plan(pipeline: &mut Pipeline, plan: &LimitPlan) -> Result<bool> {
+        pipeline.merge_processor()?;
+        pipeline.add_simple_transform(|| Ok(Box::new(LimitTransform::try_create(plan.n)?)))?;
+        Ok(false)
+    }
+
+    fn visit_read_data_source_plan(
+        &self,
+        pipeline: &mut Pipeline,
+        plan: &ReadDataSourcePlan
+    ) -> Result<bool> {
+        // Bind plan partitions to context.
+        self.ctx.try_set_partitions(plan.partitions.clone())?;
+
+        let max_threads = self.ctx.get_max_threads()? as usize;
+        let workers = if max_threads == 0 {
+            1
+        } else if max_threads > plan.partitions.len() {
+            plan.partitions.len()
+        } else {
+            max_threads
+        };
+
+        for _i in 0..workers {
+            let source = SourceTransform::try_create(
+                self.ctx.clone(),
+                plan.db.as_str(),
+                plan.table.as_str()
+            )?;
+            pipeline.add_source(Arc::new(source))?;
+        }
+        Ok(true)
     }
 }

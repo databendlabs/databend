@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use anyhow::anyhow;
-use anyhow::Result;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::processors::IProcessor;
@@ -44,9 +44,9 @@ impl Pipeline {
 
     /// Last pipe of the pipeline.
     pub fn last_pipe(&self) -> Result<&Pipe> {
-        self.pipes
-            .last()
-            .ok_or_else(|| anyhow!("Pipeline last pipe can not be none"))
+        self.pipes.last().ok_or_else(|| {
+            ErrorCodes::IllegalPipelineState("Pipeline last pipe can not be none".to_string())
+        })
     }
 
     pub fn add_source(&mut self, source: Arc<dyn IProcessor>) -> Result<()> {

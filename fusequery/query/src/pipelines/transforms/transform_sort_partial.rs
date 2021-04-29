@@ -5,11 +5,11 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use anyhow::bail;
-use anyhow::Result;
 use async_trait::async_trait;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_planners::ExpressionPlan;
 use common_streams::SendableDataBlockStream;
 use common_streams::SortStream;
@@ -87,10 +87,10 @@ pub fn get_sort_descriptions(
                 });
             }
             _ => {
-                bail!(
+                return Result::Err(ErrorCodes::BadTransformType(format!(
                     "Sort expression must be ExpressionPlan::Sort, but got: {:?}",
                     x
-                )
+                )));
             }
         }
     }

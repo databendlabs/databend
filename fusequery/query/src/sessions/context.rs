@@ -5,8 +5,9 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use anyhow::Result;
 use common_datavalues::DataValue;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::Partition;
 use common_planners::Partitions;
@@ -30,7 +31,8 @@ pub struct FuseQueryContext {
     datasource: Arc<dyn IDataSource>,
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Partition>>>,
-    progress_callback: Arc<RwLock<Option<ProgressCallback>>>
+    progress_callback: Arc<RwLock<Option<ProgressCallback>>>,
+    current_database: Arc<RwLock<String>>
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
@@ -45,7 +47,8 @@ impl FuseQueryContext {
             datasource: Arc::new(DataSource::try_create()?),
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            progress_callback: Arc::new(RwLock::new(None))
+            progress_callback: Arc::new(RwLock::new(None)),
+            current_database: Arc::new(RwLock::new(String::from("default")))
         };
 
         ctx.initial_settings()?;
@@ -137,10 +140,27 @@ impl FuseQueryContext {
         Ok(self.uuid.as_ref().read().clone())
     }
 
+    pub fn get_current_database(&self) -> String {
+        self.current_database.as_ref().read().clone()
+    }
+
+    pub fn set_current_database(&self, new_database_name: String) -> Result<()> {
+        self.datasource
+            .get_database(new_database_name.as_str())
+            .map(|_| {
+                *self.current_database.write() = new_database_name.to_string();
+            })
+            .map_err(|_| {
+                ErrorCodes::UnknownDatabase(format!(
+                    "Database {}  doesn't exist.",
+                    new_database_name
+                ))
+            })
+    }
+
     apply_macros! { apply_getter_setter_settings, apply_initial_settings, apply_update_settings,
         ("max_threads", u64, num_cpus::get() as u64, "The maximum number of threads to execute the request. By default, it is determined automatically.".to_string()),
-        ("max_block_size", u64, 10000, "Maximum block size for reading".to_string()),
-        ("default_db", String, "default".to_string(), "the default database for current session".to_string())
+        ("max_block_size", u64, 10000, "Maximum block size for reading".to_string())
     }
 }
 

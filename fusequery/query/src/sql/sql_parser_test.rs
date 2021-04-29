@@ -4,6 +4,7 @@
 
 #[cfg(test)]
 mod tests {
+    use common_exception::Result;
     use common_planners::DatabaseEngineType;
     use common_planners::TableEngineType;
     use sqlparser::ast::*;
@@ -12,7 +13,7 @@ mod tests {
     use crate::sql::sql_statement::DfUseDatabase;
     use crate::sql::*;
 
-    fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<(), ParserError> {
+    fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
         let statements = DfParser::parse_sql(sql)?;
         assert_eq!(
             statements.len(),
@@ -24,7 +25,7 @@ mod tests {
     }
 
     /// Parses sql and asserts that the expected error message was found
-    fn expect_parse_error(sql: &str, expected_error: &str) -> Result<(), ParserError> {
+    fn expect_parse_error(sql: &str, expected_error: &str) -> Result<()> {
         match DfParser::parse_sql(sql) {
             Ok(statements) => {
                 panic!(
@@ -58,7 +59,7 @@ mod tests {
     }
 
     #[test]
-    fn create_database() -> Result<(), ParserError> {
+    fn create_database() -> Result<()> {
         let sql = "CREATE DATABASE db1";
         let expected = DfStatement::CreateDatabase(DfCreateDatabase {
             if_not_exists: false,
@@ -85,7 +86,7 @@ mod tests {
     }
 
     #[test]
-    fn create_table() -> Result<(), ParserError> {
+    fn create_table() -> Result<()> {
         // positive case
         let sql = "CREATE TABLE t(c1 int) ENGINE = CSV location = '/data/33.csv' ";
         let expected = DfStatement::CreateTable(DfCreateTable {
@@ -129,7 +130,7 @@ mod tests {
     }
 
     #[test]
-    fn show_queries() -> Result<(), ParserError> {
+    fn show_queries() -> Result<()> {
         // positive case
         expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables))?;
         expect_parse_ok("SHOW SETTINGS", DfStatement::ShowSettings(DfShowSettings))?;
@@ -138,7 +139,7 @@ mod tests {
     }
 
     #[test]
-    fn use_database_test() -> Result<(), ParserError> {
+    fn use_database_test() -> Result<()> {
         expect_parse_ok(
             "USe db1",
             DfStatement::UseDatabase(DfUseDatabase {

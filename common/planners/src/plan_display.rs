@@ -122,8 +122,6 @@ impl PlanNode {
                         _ => Ok(false),
                     }
                 })
-                    .map_err(|_| fmt::Error)?;
-                Ok(())
             }
         }
         Wrapper(self)

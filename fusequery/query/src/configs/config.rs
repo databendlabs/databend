@@ -23,7 +23,7 @@ pub struct Config {
     pub mysql_handler_host: String,
 
     #[structopt(long, env = "FUSE_QUERY_MYSQL_HANDLER_PORT", default_value = "3307")]
-    pub mysql_handler_port: u64,
+    pub mysql_handler_port: u16,
 
     #[structopt(
         long,

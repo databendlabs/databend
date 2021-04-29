@@ -1,0 +1,15 @@
+[package]
+name = "common-exception"
+version = "0.1.0"
+authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies] # In alphabetical order
+common-arrow = {path = "../arrow"}
+thiserror = "1.0.24"
+sqlparser = "0.9"
+anyhow = "1.0.40"
+serde_json = "1.0"
+

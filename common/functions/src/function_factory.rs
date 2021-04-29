@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use anyhow::anyhow;
-use anyhow::Result;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_infallible::RwLock;
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
@@ -19,6 +19,7 @@ use crate::IFunction;
 
 pub struct FunctionFactory;
 pub type FactoryFunc = fn(name: &str, args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>>;
+
 pub type FactoryFuncRef = Arc<RwLock<IndexMap<&'static str, FactoryFunc>>>;
 
 lazy_static! {
@@ -36,9 +37,9 @@ lazy_static! {
 impl FunctionFactory {
     pub fn get(name: &str, args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
         let map = FACTORY.read();
-        let creator = map
-            .get(&*name.to_lowercase())
-            .ok_or_else(|| anyhow!("Unsupported Function: {}", name))?;
+        let creator = map.get(&*name.to_lowercase()).ok_or_else(|| {
+            ErrorCodes::UnknownFunction(format!("Unsupported Function: {}", name))
+        })?;
         (creator)(name, args)
     }
 

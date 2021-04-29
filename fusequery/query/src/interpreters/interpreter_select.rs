@@ -4,11 +4,12 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use common_exception::Result;
 use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::IInterpreter;
+use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizer;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
@@ -19,10 +20,7 @@ pub struct SelectInterpreter {
 }
 
 impl SelectInterpreter {
-    pub fn try_create(
-        ctx: FuseQueryContextRef,
-        select: SelectPlan
-    ) -> Result<Arc<dyn IInterpreter>> {
+    pub fn try_create(ctx: FuseQueryContextRef, select: SelectPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(SelectInterpreter { ctx, select }))
     }
 }

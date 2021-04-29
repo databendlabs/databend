@@ -4,8 +4,6 @@
 
 use std::fmt;
 
-use anyhow::ensure;
-use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayAggregate;
 use common_datavalues::DataColumnarValue;
@@ -14,6 +12,8 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DataValueAggregate;
 use common_datavalues::DataValueAggregateOperator;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 use crate::IFunction;
 
@@ -30,18 +30,18 @@ impl AggregatorMinFunction {
         display_name: &str,
         args: &[Box<dyn IFunction>]
     ) -> Result<Box<dyn IFunction>> {
-        ensure!(
-            args.len() == 1,
-            "Function Error: Aggregator function {} args require single argument",
-            display_name
-        );
-
-        Ok(Box::new(AggregatorMinFunction {
-            display_name: display_name.to_string(),
-            depth: 0,
-            arg: args[0].clone(),
-            state: DataValue::Null
-        }))
+        match args.len() {
+            1 => Ok(Box::new(AggregatorMinFunction {
+                display_name: display_name.to_string(),
+                depth: 0,
+                arg: args[0].clone(),
+                state: DataValue::Null
+            })),
+            _ => Result::Err(ErrorCodes::BadArguments(format!(
+                "Function Error: Aggregator function {} args require single argument",
+                display_name
+            )))
+        }
     }
 }
 

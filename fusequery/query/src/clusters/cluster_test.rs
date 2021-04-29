@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+
 #[test]
-fn test_cluster() -> anyhow::Result<()> {
+fn test_cluster() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     use crate::clusters::cluster::Cluster;

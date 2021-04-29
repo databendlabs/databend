@@ -7,11 +7,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_functions::IFunction;
 use common_infallible::RwLock;
 use common_planners::ExpressionPlan;
@@ -72,7 +73,7 @@ impl IProcessor for GroupByFinalTransform {
             .aggr_exprs
             .iter()
             .map(|x| x.to_function())
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<common_exception::Result<Vec<_>>>()?;
         let aggr_funcs_length = aggr_funcs.len();
 
         let start = Instant::now();
@@ -91,7 +92,8 @@ impl IProcessor for GroupByFinalTransform {
                                 if let DataValue::Utf8(Some(col)) =
                                     DataValue::try_from_array(block.column(i), row)?
                                 {
-                                    let val: DataValue = serde_json::from_str(&col)?;
+                                    let val: DataValue = serde_json::from_str(&col)
+                                        .map_err(ErrorCodes::from_serde)?;
                                     if let DataValue::Struct(states) = val {
                                         func.merge(&states)?;
                                     }
@@ -104,7 +106,8 @@ impl IProcessor for GroupByFinalTransform {
                                 if let DataValue::Utf8(Some(col)) =
                                     DataValue::try_from_array(block.column(i), row)?
                                 {
-                                    let val: DataValue = serde_json::from_str(&col)?;
+                                    let val: DataValue = serde_json::from_str(&col)
+                                        .map_err(ErrorCodes::from_serde)?;
                                     if let DataValue::Struct(states) = val {
                                         func.merge(&states)?;
                                     }

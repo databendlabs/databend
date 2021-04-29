@@ -5,13 +5,13 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use anyhow::bail;
-use anyhow::Result;
 use common_datablocks::DataBlock;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_streams::SendableDataBlockStream;
-use futures::stream::StreamExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::IProcessor;
 
@@ -47,7 +47,9 @@ impl IProcessor for MergeProcessor {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let inputs = self.inputs.len();
         match inputs {
-            0 => bail!("Merge processor inputs cannot be zero"),
+            0 => Result::Err(ErrorCodes::IllegalTransformConnectionState(
+                "Merge processor inputs cannot be zero".to_string()
+            )),
             1 => self.inputs[0].execute().await,
             _ => {
                 let (sender, receiver) = mpsc::channel::<Result<DataBlock>>(inputs);
@@ -57,7 +59,7 @@ impl IProcessor for MergeProcessor {
                     tokio::spawn(async move {
                         let mut stream = match input.execute().await {
                             Err(e) => {
-                                sender.send(Err(e)).await.ok();
+                                sender.send(Result::Err(e)).await.ok();
                                 return;
                             }
                             Ok(stream) => stream
