@@ -37,6 +37,29 @@ pub struct PlanBuilder {
     plan: PlanNode
 }
 
+// Case1: group is a column, the name needs to match with aggr
+// Case2: aggr is an alias, unfold aggr
+// Case3: group and aggr are exactly the same expression
+pub fn aggr_group_expr_eq(
+    aggr: &ExpressionPlan,
+    group: &ExpressionPlan,
+    input_schema: &DataSchemaRef
+) -> Result<bool> {
+    let column_name = aggr.to_data_field(input_schema)?.name().clone();
+    if let ExpressionPlan::Column(grp_name) = group {
+        if column_name.eq(grp_name) {
+            return Ok(true);
+        }
+    } else if let ExpressionPlan::Alias(_alias, plan) = aggr {
+        return aggr_group_expr_eq(plan, group, input_schema);
+    } else if String::from(format!("{:?}", group).as_str())
+        .eq(&String::from(format!("{:?}", aggr).as_str()))
+    {
+        return Ok(true);
+    }
+    return Ok(false);
+}
+
 impl PlanBuilder {
     /// Create a builder from an existing plan
     pub fn from(plan: &PlanNode) -> Self {
@@ -113,11 +136,9 @@ impl PlanBuilder {
                 let mut in_group_by = false;
                 // Check in e_aggr is in group-by's list
                 for e_group in &group_expr {
-                    if let ExpressionPlan::Column(grp_name) = e_group {
-                        if grp_name == e_aggr.to_data_field(&input_schema)?.name() {
-                            in_group_by = true;
-                            break;
-                        }
+                    if aggr_group_expr_eq(&e_aggr, &e_group, &input_schema)? {
+                        in_group_by = true;
+                        break;
                     }
                 }
                 if !in_group_by {
