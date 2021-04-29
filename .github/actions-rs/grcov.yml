@@ -3,9 +3,7 @@ output-type: lcov
 output-path: ./lcov.info
 ignore:
   - "*/lib.rs"
-  - "*/error.rs"
   - "*/bin/*"
   - "*/servers/*"
   - "*/sessions/*"
   - "*/admins/*"
-  - "*/executors/*"
