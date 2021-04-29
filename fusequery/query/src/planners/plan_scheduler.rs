@@ -5,8 +5,8 @@
 use std::cmp::min;
 use std::sync::Arc;
 
-use anyhow::Result;
 use common_datavalues::DataSchema;
+use common_exception::Result;
 use common_planners::EmptyPlan;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
@@ -29,12 +29,14 @@ impl PlanScheduler {
         // Get the source plan node by walk
         let mut source_plan = ReadDataSourcePlan::empty();
         {
-            plan.walk_preorder(|plan| match plan {
-                PlanNode::ReadSource(node) => {
-                    source_plan = node.clone();
-                    Ok(false)
+            plan.walk_preorder(|plan| -> Result<bool> {
+                match plan {
+                    PlanNode::ReadSource(node) => {
+                        source_plan = node.clone();
+                        Ok(false)
+                    }
+                    _ => Ok(true)
                 }
-                _ => Ok(true)
             })?;
         }
 
@@ -113,7 +115,7 @@ impl PlanScheduler {
                 });
 
                 // Walk and rewrite the plan from the source.
-                plan.walk_postorder(|node| {
+                plan.walk_postorder(|node| -> Result<bool> {
                     if let PlanNode::ReadSource(_) = node {
                         rewritten_node = PlanNode::ReadSource(new_source_plan.clone());
                     } else {

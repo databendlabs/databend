@@ -4,14 +4,14 @@
 
 use std::sync::Arc;
 
-use anyhow::bail;
-use anyhow::Result;
 use common_datavalues::DataSchema;
+use common_exception::Result;
 use common_planners::UseDatabasePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::IInterpreter;
+use crate::interpreters::InterpreterPtr;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct UseDatabaseInterpreter {
@@ -20,10 +20,7 @@ pub struct UseDatabaseInterpreter {
 }
 
 impl UseDatabaseInterpreter {
-    pub fn try_create(
-        ctx: FuseQueryContextRef,
-        plan: UseDatabasePlan
-    ) -> Result<Arc<dyn IInterpreter>> {
+    pub fn try_create(ctx: FuseQueryContextRef, plan: UseDatabasePlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(UseDatabaseInterpreter { ctx, plan }))
     }
 }
@@ -35,12 +32,7 @@ impl IInterpreter for UseDatabaseInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let db = self.plan.db.clone();
-        if self.ctx.get_datasource().get_databases()?.contains(&db) {
-            self.ctx.set_default_db(db)?;
-        } else {
-            bail!("Unknown database: {}", db)
-        }
+        self.ctx.set_current_database(self.plan.db.clone())?;
         let schema = Arc::new(DataSchema::empty());
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
     }

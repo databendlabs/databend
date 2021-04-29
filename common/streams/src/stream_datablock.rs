@@ -5,9 +5,9 @@
 use std::task::Context;
 use std::task::Poll;
 
-use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_exception::Result;
 
 pub struct DataBlockStream {
     current: usize,

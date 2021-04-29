@@ -4,8 +4,6 @@
 
 use std::fmt;
 
-use anyhow::ensure;
-use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayArithmetic;
 use common_datavalues::DataColumnarValue;
@@ -14,6 +12,8 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 use crate::arithmetics::ArithmeticDivFunction;
 use crate::arithmetics::ArithmeticMinusFunction;
@@ -51,18 +51,18 @@ impl ArithmeticFunction {
         op: DataValueArithmeticOperator,
         args: &[Box<dyn IFunction>]
     ) -> Result<Box<dyn IFunction>> {
-        ensure!(
-            args.len() == 2,
-            "Function Error: Arithmetic function {} args length must be 2",
-            op
-        );
-
-        Ok(Box::new(ArithmeticFunction {
-            depth: 0,
-            op,
-            left: args[0].clone(),
-            right: args[1].clone()
-        }))
+        match args.len() {
+            2 => Ok(Box::new(ArithmeticFunction {
+                depth: 0,
+                op,
+                left: args[0].clone(),
+                right: args[1].clone()
+            })),
+            _ => Result::Err(ErrorCodes::BadArguments(format!(
+                "Function Error: Arithmetic function {} args length must be 2",
+                op
+            )))
+        }
     }
 }
 

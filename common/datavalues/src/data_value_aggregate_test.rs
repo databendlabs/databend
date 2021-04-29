@@ -56,7 +56,7 @@ fn test_data_value_arithmetic() {
                 DataValue::Float64(Some(1.0)),
             ],
             error: vec![
-                "DataValue Error: Unsupported data_value_min for data type: left:Utf8, right:Int8",
+                "Code: 10, displayText = DataValue Error: Unsupported data_value_min for data type: left:Utf8, right:Int8.",
             ],
         },
         ScalarTest {
@@ -97,7 +97,7 @@ fn test_data_value_arithmetic() {
                 DataValue::Float64(Some(2.0)),
             ],
             error: vec![
-                "DataValue Error: Unsupported data_value_max for data type: left:Utf8, right:Int8",
+                "Code: 10, displayText = DataValue Error: Unsupported data_value_max for data type: left:Utf8, right:Int8.",
             ],
         },
         ScalarTest {
@@ -138,8 +138,8 @@ fn test_data_value_arithmetic() {
                 DataValue::Float64(Some(3.0)),
             ],
             error: vec![
-                "DataValue Error: Unsupported data_value_sum for data type: left:Utf8, right:Int8",
-                "DataValue Error: Unsupported data_value_sum for data type: left:Utf8, right:Utf8",
+                "Code: 10, displayText = DataValue Error: Unsupported data_value_sum for data type: left:Utf8, right:Int8.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_value_sum for data type: left:Utf8, right:Utf8.",
             ],
         },
         ScalarTest {
@@ -168,18 +168,18 @@ fn test_data_value_arithmetic() {
             expect: vec![
             ],
             error: vec![
-                "DataValue Error: Unsupported data_value_avg for data type: left:Utf8, right:Int8",
-                "DataValue Error: Unsupported data_value_avg for data type: left:Utf8, right:Utf8",
-                "DataValue Error: Unsupported data_value_avg for data type: left:Int8, right:Int8",
-                "DataValue Error: Unsupported data_value_avg for data type: left:Int16, right:Int16",
-                "DataValue Error: Unsupported data_value_avg for data type: left:Int32, right:Int32",
-                "DataValue Error: Unsupported data_value_avg for data type: left:Int64, right:Int64",
-                "DataValue Error: Unsupported data_value_avg for data type: left:UInt8, right:UInt8",
-                "DataValue Error: Unsupported data_value_avg for data type: left:UInt16, right:UInt16",
-                "DataValue Error: Unsupported data_value_avg for data type: left:UInt32, right:UInt32",
-                "DataValue Error: Unsupported data_value_avg for data type: left:UInt64, right:UInt64",
-                "DataValue Error: Unsupported data_value_avg for data type: left:Float32, right:Float32",
-                "DataValue Error: Unsupported data_value_avg for data type: left:Float64, right:Float64",
+                "Code: 10, displayText = DataValue Error: Unsupported data_value_avg for data type: left:Utf8, right:Int8.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_value_avg for data type: left:Utf8, right:Utf8.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_value_avg for data type: left:Int8, right:Int8.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_value_avg for data type: left:Int16, right:Int16.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_value_avg for data type: left:Int32, right:Int32.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_value_avg for data type: left:Int64, right:Int64.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_value_avg for data type: left:UInt8, right:UInt8.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_value_avg for data type: left:UInt16, right:UInt16.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_value_avg for data type: left:UInt32, right:UInt32.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_value_avg for data type: left:UInt64, right:UInt64.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_value_avg for data type: left:Float32, right:Float32.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_value_avg for data type: left:Float64, right:Float64.",
             ],
         },
     ];

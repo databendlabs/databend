@@ -8,7 +8,7 @@ use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
 use fuse_query::metrics::MetricService;
 use fuse_query::servers::ClickHouseHandler;
-use fuse_query::servers::MysqlHandler;
+use fuse_query::servers::MySQLHandler;
 use fuse_query::sessions::Session;
 use log::info;
 
@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // MySQL handler.
     {
-        let handler = MysqlHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
+        let handler = MySQLHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
         tokio::spawn(async move { handler.start().expect("MySQL handler error") });
 
         info!(

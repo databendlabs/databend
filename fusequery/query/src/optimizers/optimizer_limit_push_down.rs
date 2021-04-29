@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
 use common_datavalues::DataSchema;
+use common_exception::Result;
 use common_planners::EmptyPlan;
 use common_planners::LimitPlan;
 use common_planners::PlanNode;
@@ -44,7 +44,7 @@ impl IOptimizer for LimitPushDownOptimizer {
             schema: Arc::new(DataSchema::empty())
         });
 
-        plan.walk_postorder(|node| {
+        plan.walk_postorder(|node| -> Result<bool> {
             if let PlanNode::Limit(LimitPlan { n, input: _ }) = node {
                 let mut new_filter_node = limit_push_down(Some(*n), node)?;
                 new_filter_node.set_input(&rewritten_node)?;

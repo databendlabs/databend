@@ -33,7 +33,7 @@ fn test_plan_parser() -> anyhow::Result<()> {
             name: "unsupported-function",
             sql: "select unsupported()",
             actual: "",
-            error: "Unsupported function: \"unsupported\"",
+            error: "Code: 8, displayText = Unsupported function: \"unsupported\".",
         },
     ];
 

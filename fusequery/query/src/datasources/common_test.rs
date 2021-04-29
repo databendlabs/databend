@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+
 #[test]
-fn test_util_generate_parts() -> anyhow::Result<()> {
+fn test_util_generate_parts() -> Result<()> {
     use common_planners::Partition;
     use pretty_assertions::assert_eq;
 

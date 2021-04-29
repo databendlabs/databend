@@ -111,7 +111,7 @@ fn test_array_aggregate() {
                 DataValue::Float32(Some(10.0)),
                 DataValue::Float64(Some(10.0)),
             ],
-            error: vec!["DataValue Error: Unsupported data_array_sum for data type: Utf8"]
+            error: vec!["Code: 10, displayText = DataValue Error: Unsupported data_array_sum for data type: Utf8."]
         },
         ArrayTest {
             name: "avg-failed",
@@ -131,17 +131,17 @@ fn test_array_aggregate() {
             op: DataValueAggregateOperator::Avg,
             expect: vec![],
             error: vec![
-                "DataValue Error: Unsupported data_array_avg for data type: Utf8",
-                "DataValue Error: Unsupported data_array_avg for data type: Int8",
-                "DataValue Error: Unsupported data_array_avg for data type: Int16",
-                "DataValue Error: Unsupported data_array_avg for data type: Int32",
-                "DataValue Error: Unsupported data_array_avg for data type: Int64",
-                "DataValue Error: Unsupported data_array_avg for data type: UInt8",
-                "DataValue Error: Unsupported data_array_avg for data type: UInt16",
-                "DataValue Error: Unsupported data_array_avg for data type: UInt32",
-                "DataValue Error: Unsupported data_array_avg for data type: UInt64",
-                "DataValue Error: Unsupported data_array_avg for data type: Float32",
-                "DataValue Error: Unsupported data_array_avg for data type: Float64",
+                "Code: 10, displayText = DataValue Error: Unsupported data_array_avg for data type: Utf8.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_array_avg for data type: Int8.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_array_avg for data type: Int16.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_array_avg for data type: Int32.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_array_avg for data type: Int64.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_array_avg for data type: UInt8.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_array_avg for data type: UInt16.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_array_avg for data type: UInt32.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_array_avg for data type: UInt64.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_array_avg for data type: Float32.",
+                "Code: 10, displayText = DataValue Error: Unsupported data_array_avg for data type: Float64.",
             ]
         },
     ];

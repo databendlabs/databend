@@ -5,8 +5,8 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use anyhow::bail;
-use anyhow::Result;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 use crate::ExpressionPlan;
 
@@ -48,10 +48,10 @@ impl PlanRewriter {
                     let hash_expr = format!("{:?}", expr);
 
                     if hash_result != hash_expr {
-                        bail!(
+                        return Result::Err(ErrorCodes::SyntexException(format!(
                             "Planner Error: Different expressions with the same alias {}",
                             alias
-                        );
+                        )));
                     }
                 }
                 mp.insert(alias.clone(), *alias_expr.clone());
@@ -73,7 +73,10 @@ impl PlanRewriter {
 
                 // x + 1 --> y, y + 1 --> x
                 if data.inside_aliases.contains(field) {
-                    bail!("Planner Error: Cyclic aliases: {}", field);
+                    return Result::Err(ErrorCodes::SyntexException(format!(
+                        "Planner Error: Cyclic aliases: {}",
+                        field
+                    )));
                 }
 
                 let tmp = data.aliases.get(field).cloned();
@@ -119,7 +122,10 @@ impl PlanRewriter {
 
             ExpressionPlan::Alias(alias, plan) => {
                 if data.inside_aliases.contains(alias) {
-                    bail!("Planner Error: Cyclic aliases: {}", alias);
+                    return Result::Err(ErrorCodes::SyntexException(format!(
+                        "Planner Error: Cyclic aliases: {}",
+                        alias
+                    )));
                 }
 
                 let previous_alias = data.current_alias.clone();

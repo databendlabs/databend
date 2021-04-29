@@ -6,7 +6,6 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataField;
@@ -15,6 +14,8 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::StringArray;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_functions::IFunction;
 use common_planners::ExpressionPlan;
 use common_streams::DataBlockStream;
@@ -89,7 +90,7 @@ impl IProcessor for AggregatorPartialTransform {
 
             // Column.
             let states = DataValue::Struct(func.accumulate_result()?);
-            let ser = serde_json::to_string(&states)?;
+            let ser = serde_json::to_string(&states).map_err(ErrorCodes::from_serde)?;
             let col = Arc::new(StringArray::from(vec![ser.as_str()]));
             columns.push(col);
         }
