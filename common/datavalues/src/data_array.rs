@@ -36,7 +36,3 @@ pub type StructArray = arrow::array::StructArray;
 pub fn data_array_cast(array: &ArrayRef, to_type: &DataType) -> Result<ArrayRef> {
     arrow::compute::cast(&array, &to_type).map_err(ErrorCodes::from_arrow)
 }
-
-// pub fn data_array_cast(array: &Result<ArrayRef>, to_type: &DataType) -> Result<ArrayRef> {
-//     arrow::compute::cast(&left_array, &coercion_type).map_err(ErrorCodes::from_arrow)
-// }
