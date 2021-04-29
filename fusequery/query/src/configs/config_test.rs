@@ -40,9 +40,10 @@ fn test_config() -> common_exception::Result<()> {
 
     // From file NotFound.
     {
-        let actual = Config::load_from_toml("xx.toml");
-        let expect ="Err(Code: 23, displayText = \"File: xx.toml, err: Os { code: 2, kind: NotFound, message: \\\"No such file or directory\\\" }\".)";
-        assert_eq!(format!("{:?}", actual), expect);
+        if let Err(e) = Config::load_from_toml("xx.toml") {
+            let expect = "Code: 23, displayText = File: xx.toml, err: Os { code: 2, kind: NotFound, message: \"No such file or directory\" }.";
+            assert_eq!(expect, format!("{}", e));
+        }
     }
 
     // From file.
