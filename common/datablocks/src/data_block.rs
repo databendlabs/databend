@@ -6,12 +6,13 @@ use std::convert::TryInto;
 use std::fmt;
 use std::sync::Arc;
 
-use common_exception::{Result, ErrorCodes};
 use common_arrow::arrow;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 #[derive(Clone)]
 pub struct DataBlock {
@@ -86,10 +87,8 @@ impl TryInto<arrow::record_batch::RecordBatch> for DataBlock {
     type Error = ErrorCodes;
 
     fn try_into(self) -> Result<RecordBatch> {
-        Ok(arrow::record_batch::RecordBatch::try_new(
-            self.schema.clone(),
-            self.columns.clone(),
-        ).map_err(ErrorCodes::from_arrow)?)
+        arrow::record_batch::RecordBatch::try_new(self.schema.clone(), self.columns.clone())
+            .map_err(ErrorCodes::from_arrow)
     }
 }
 

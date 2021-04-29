@@ -2,7 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::{Result, ErrorCodes};
+use common_exception::ErrorCodes;
+use common_exception::Result;
+
 use crate::DataValue;
 use crate::DataValueAggregateOperator;
 

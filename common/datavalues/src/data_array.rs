@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_arrow::arrow;
-use common_exception::{Result, ErrorCodes};
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::datatypes::DataType;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 pub type DataArrayRef = arrow::array::ArrayRef;
 
@@ -39,4 +40,3 @@ pub fn data_array_cast(array: &ArrayRef, to_type: &DataType) -> Result<ArrayRef>
 // pub fn data_array_cast(array: &Result<ArrayRef>, to_type: &DataType) -> Result<ArrayRef> {
 //     arrow::compute::cast(&left_array, &coercion_type).map_err(ErrorCodes::from_arrow)
 // }
-

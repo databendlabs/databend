@@ -4,7 +4,9 @@
 
 use std::sync::Arc;
 
-use common_exception::{Result, ErrorCodes};
+use common_exception::ErrorCodes;
+use common_exception::Result;
+
 use crate::BooleanArray;
 use crate::DataArrayRef;
 use crate::DataColumnarValue;
@@ -22,20 +24,20 @@ impl DataArrayLogic {
         match (left, right) {
             (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
                 match op {
-                    DataValueLogicOperator::And => array_boolean_op!(left_array, right_array, and, BooleanArray),
-                    DataValueLogicOperator::Or => array_boolean_op!(left_array, right_array, or, BooleanArray),
+                    DataValueLogicOperator::And => {
+                        array_boolean_op!(left_array, right_array, and, BooleanArray)
+                    }
+                    DataValueLogicOperator::Or => {
+                        array_boolean_op!(left_array, right_array, or, BooleanArray)
+                    }
                 }
             }
-            _ => {
-                Result::Err(ErrorCodes::BadDataValueType(
-                    format!(
-                        "DataValue Error: Cannot do data_array {}, left:{:?}, right:{:?}",
-                        op,
-                        left.data_type(),
-                        right.data_type()
-                    )
-                ))
-            }
+            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+                "DataValue Error: Cannot do data_array {}, left:{:?}, right:{:?}",
+                op,
+                left.data_type(),
+                right.data_type()
+            )))
         }
     }
 }

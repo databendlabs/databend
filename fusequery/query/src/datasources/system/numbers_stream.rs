@@ -10,13 +10,14 @@ use std::task::Context;
 use std::task::Poll;
 use std::usize;
 
-use common_exception::{Result, ErrorCodes};
 use common_arrow::arrow::array::ArrayData;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::datatypes::DataType;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::UInt64Array;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use futures::stream::Stream;
 
 use crate::sessions::FuseQueryContextRef;

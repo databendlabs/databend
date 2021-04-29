@@ -2,20 +2,21 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::PlanNode;
 use std::result::Result;
+
+use crate::PlanNode;
 
 #[derive(PartialEq)]
 enum WalkOrder {
     PreOrder,
-    PostOrder,
+    PostOrder
 }
 
 impl PlanNode {
     fn walk_base<E>(
         order: WalkOrder,
         node: &PlanNode,
-        mut visitor: impl FnMut(&PlanNode) -> Result<bool, E>,
+        mut visitor: impl FnMut(&PlanNode) -> Result<bool, E>
     ) -> Result<(), E> {
         let mut nodes = vec![];
         let mut tmp = node.clone();
@@ -47,7 +48,10 @@ impl PlanNode {
     /// |
     /// C(ReadSource)
     /// A Preorder walk of this graph is A B C
-    pub fn walk_preorder<E>(&self, visitor: impl FnMut(&PlanNode) -> Result<bool, E>) -> Result<(), E> {
+    pub fn walk_preorder<E>(
+        &self,
+        visitor: impl FnMut(&PlanNode) -> Result<bool, E>
+    ) -> Result<(), E> {
         Self::walk_base(WalkOrder::PreOrder, self, visitor)
     }
 
@@ -58,7 +62,10 @@ impl PlanNode {
     /// |
     /// C(ReadSource)
     /// A Postorder walk of this graph is C B A
-    pub fn walk_postorder<E>(&self, visitor: impl FnMut(&PlanNode) -> Result<bool, E>) -> Result<(), E> {
+    pub fn walk_postorder<E>(
+        &self,
+        visitor: impl FnMut(&PlanNode) -> Result<bool, E>
+    ) -> Result<(), E> {
         Self::walk_base(WalkOrder::PostOrder, self, visitor)
     }
 }

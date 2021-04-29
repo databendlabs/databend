@@ -4,9 +4,9 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_exception::Result;
 
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;

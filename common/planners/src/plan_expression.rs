@@ -4,11 +4,11 @@
 
 use std::fmt;
 
-use common_exception::Result;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_exception::Result;
 use common_functions::AliasFunction;
 use common_functions::CastFunction;
 use common_functions::ColumnFunction;
@@ -89,7 +89,7 @@ impl ExpressionPlan {
             ExpressionPlan::Wildcard => ColumnFunction::try_create("*"),
             ExpressionPlan::Cast { expr, data_type } => Ok(CastFunction::create(
                 expr.to_function_with_depth(depth)?,
-                data_type.clone(),
+                data_type.clone()
             ))
         }
     }
@@ -102,11 +102,7 @@ impl ExpressionPlan {
         self.to_function().and_then(|function| {
             function.return_type(&input_schema).and_then(|return_type| {
                 function.nullable(&input_schema).map(|nullable| {
-                    DataField::new(
-                        format!("{}", function).as_str(),
-                        return_type,
-                        nullable,
-                    )
+                    DataField::new(format!("{}", function).as_str(), return_type, nullable)
                 })
             })
         })

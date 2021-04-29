@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_exception::{Result, ErrorCodes};
 use common_arrow::arrow::array::BinaryBuilder;
 use common_arrow::arrow::array::StringBuilder;
 use common_datablocks::DataBlock;
@@ -17,6 +16,8 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_functions::IFunction;
 use common_infallible::RwLock;
 use common_planners::ExpressionPlan;
@@ -207,9 +208,13 @@ impl IProcessor for GroupByPartialTransform {
             for (idx, func) in funcs.iter().enumerate() {
                 let states = DataValue::Struct(func.accumulate_result()?);
                 let ser = serde_json::to_string(&states).map_err(ErrorCodes::from_serde)?;
-                builders[idx].append_value(ser.as_str()).map_err(ErrorCodes::from_arrow)?;
+                builders[idx]
+                    .append_value(ser.as_str())
+                    .map_err(ErrorCodes::from_arrow)?;
             }
-            group_key_builder.append_value(key).map_err(ErrorCodes::from_arrow)?;
+            group_key_builder
+                .append_value(key)
+                .map_err(ErrorCodes::from_arrow)?;
         }
 
         let mut columns: Vec<DataArrayRef> = Vec::with_capacity(fields.len());

@@ -5,8 +5,8 @@
 use std::task::Context;
 use std::task::Poll;
 
-use common_exception::Result;
 use common_datablocks::DataBlock;
+use common_exception::Result;
 use common_progress::Progress;
 use common_progress::ProgressCallback;
 use futures::Stream;

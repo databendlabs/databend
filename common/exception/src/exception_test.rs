@@ -6,8 +6,10 @@
 fn test_format_with_error_codes() {
     use crate::exception::*;
 
-    assert_eq!(format!("{}", ErrorCodes::Ok(String::from("test message 1"))),
-               String::from("Code: 0, displayText = test message 1."));
+    assert_eq!(
+        format!("{}", ErrorCodes::Ok(String::from("test message 1"))),
+        String::from("Code: 0, displayText = test message 1.")
+    );
 
     assert_eq!(
         format!("{}", ErrorCodes::Ok(String::from("test message 2"))),

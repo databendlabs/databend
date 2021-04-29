@@ -5,9 +5,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::{Result, ErrorCodes};
-
 use common_datavalues::DataValue;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_infallible::RwLock;
 
 #[derive(Debug, Clone)]
@@ -64,7 +64,10 @@ impl Settings {
             }
         }
 
-        Result::Err(ErrorCodes::UnknownVariable(format!("Unknown variable: {:?}", key)))
+        Result::Err(ErrorCodes::UnknownVariable(format!(
+            "Unknown variable: {:?}",
+            key
+        )))
     }
 
     pub fn try_set_i64(&self, key: &'static str, val: i64, desc: String) -> Result<()> {
@@ -107,7 +110,10 @@ impl Settings {
             }
         }
 
-        Result::Err(ErrorCodes::UnknownVariable(format!("Unknown variable: {:?}", key)))
+        Result::Err(ErrorCodes::UnknownVariable(format!(
+            "Unknown variable: {:?}",
+            key
+        )))
     }
 
     pub fn try_set_f64(&self, key: &'static str, val: f64, desc: String) -> Result<()> {
@@ -150,7 +156,10 @@ impl Settings {
             }
         }
 
-        Result::Err(ErrorCodes::UnknownVariable(format!("Unknown variable: {:?}", key)))
+        Result::Err(ErrorCodes::UnknownVariable(format!(
+            "Unknown variable: {:?}",
+            key
+        )))
     }
 
     pub fn try_set_string(&self, key: &'static str, val: String, desc: String) -> Result<()> {
@@ -194,7 +203,10 @@ impl Settings {
             }
         }
 
-        Result::Err(ErrorCodes::UnknownVariable(format!("Unknown variable: {:?}", key)))
+        Result::Err(ErrorCodes::UnknownVariable(format!(
+            "Unknown variable: {:?}",
+            key
+        )))
     }
 
     pub fn get_settings(&self) -> Result<Vec<DataValue>> {

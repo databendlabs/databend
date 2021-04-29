@@ -5,7 +5,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::{Result, ErrorCodes};
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_flights::StoreClient;
 use common_infallible::RwLock;
 use common_planners::CreateDatabasePlan;
@@ -66,7 +67,9 @@ impl DataSource {
             let store_addr = self.conf.store_api_address.clone();
             let username = self.conf.store_api_username.clone();
             let password = self.conf.store_api_password.clone();
-            let client = StoreClient::try_create(&store_addr, &username, &password).await.map_err(ErrorCodes::from_anyhow)?;
+            let client = StoreClient::try_create(&store_addr, &username, &password)
+                .await
+                .map_err(ErrorCodes::from_anyhow)?;
             *self.store_client.write() = Some(client);
         }
         Ok(self.store_client.read().as_ref().unwrap().clone())
@@ -120,25 +123,23 @@ impl DataSource {
 impl IDataSource for DataSource {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn IDatabase>> {
         let db_lock = self.databases.read();
-        let database = db_lock
-            .get(db_name)
-            .ok_or_else(|| {
-                ErrorCodes::UnknownDatabase(
-                    format!("DataSource Error: Unknown database: '{}'", db_name)
-                )
-            })?;
+        let database = db_lock.get(db_name).ok_or_else(|| {
+            ErrorCodes::UnknownDatabase(format!(
+                "DataSource Error: Unknown database: '{}'",
+                db_name
+            ))
+        })?;
         Ok(database.clone())
     }
 
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
         let db_lock = self.databases.read();
-        let database = db_lock
-            .get(db_name)
-            .ok_or_else(|| {
-                ErrorCodes::UnknownDatabase(
-                    format!("DataSource Error: Unknown database: '{}'", db_name)
-                )
-            })?;
+        let database = db_lock.get(db_name).ok_or_else(|| {
+            ErrorCodes::UnknownDatabase(format!(
+                "DataSource Error: Unknown database: '{}'",
+                db_name
+            ))
+        })?;
 
         let table = database.get_table(table_name)?;
         Ok(table.clone())
@@ -165,13 +166,12 @@ impl IDataSource for DataSource {
 
     fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>> {
         let table_func_lock = self.table_functions.read();
-        let table = table_func_lock
-            .get(name)
-            .ok_or_else(|| {
-                ErrorCodes::UnknownTableFunction(
-                    format!("DataSource Error: Unknown table function: '{}'", name)
-                )
-            })?;
+        let table = table_func_lock.get(name).ok_or_else(|| {
+            ErrorCodes::UnknownTableFunction(format!(
+                "DataSource Error: Unknown table function: '{}'",
+                name
+            ))
+        })?;
 
         Ok(table.clone())
     }
@@ -184,7 +184,10 @@ impl IDataSource for DataSource {
             }
             DatabaseEngineType::Remote => {
                 let mut client = self.try_get_client().await?;
-                let _action_rst = client.create_database(plan.clone()).await.map_err(ErrorCodes::from_anyhow)?;
+                let _action_rst = client
+                    .create_database(plan.clone())
+                    .await
+                    .map_err(ErrorCodes::from_anyhow)?;
                 // TODO add db id to cache
 
                 // Add local cache.

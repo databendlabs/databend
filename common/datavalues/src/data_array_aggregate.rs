@@ -2,7 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::{Result, ErrorCodes};
+use common_exception::ErrorCodes;
+use common_exception::Result;
+
 use crate::DataArrayRef;
 use crate::DataType;
 use crate::DataValue;
@@ -38,15 +40,15 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Sum => {
                     typed_array_sum_to_data_value!(value, Int8Array, Int8)
                 }
-                DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(value.len() as u64))),
+                DataValueAggregateOperator::Count => {
+                    Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
+                }
                 DataValueAggregateOperator::Avg => {
-                    Result::Err(ErrorCodes::BadDataValueType(
-                        format!(
-                            "DataValue Error: Unsupported data_array_{} for data type: {:?}",
-                            op,
-                            value.data_type()
-                        )
-                    ))
+                    Result::Err(ErrorCodes::BadDataValueType(format!(
+                        "DataValue Error: Unsupported data_array_{} for data type: {:?}",
+                        op,
+                        value.data_type()
+                    )))
                 }
             },
             DataType::Int16 => match op {
@@ -59,15 +61,15 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Sum => {
                     typed_array_sum_to_data_value!(value, Int16Array, Int16)
                 }
-                DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(value.len() as u64))),
+                DataValueAggregateOperator::Count => {
+                    Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
+                }
                 DataValueAggregateOperator::Avg => {
-                    Result::Err(ErrorCodes::BadDataValueType(
-                        format!(
-                            "DataValue Error: Unsupported data_array_{} for data type: {:?}",
-                            op,
-                            value.data_type()
-                        )
-                    ))
+                    Result::Err(ErrorCodes::BadDataValueType(format!(
+                        "DataValue Error: Unsupported data_array_{} for data type: {:?}",
+                        op,
+                        value.data_type()
+                    )))
                 }
             },
             DataType::Int32 => match op {
@@ -80,16 +82,16 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Sum => {
                     typed_array_sum_to_data_value!(value, Int32Array, Int32)
                 }
-                DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(value.len() as u64))),
+                DataValueAggregateOperator::Count => {
+                    Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
+                }
 
                 DataValueAggregateOperator::Avg => {
-                    Result::Err(ErrorCodes::BadDataValueType(
-                        format!(
-                            "DataValue Error: Unsupported data_array_{} for data type: {:?}",
-                            op,
-                            value.data_type()
-                        )
-                    ))
+                    Result::Err(ErrorCodes::BadDataValueType(format!(
+                        "DataValue Error: Unsupported data_array_{} for data type: {:?}",
+                        op,
+                        value.data_type()
+                    )))
                 }
             },
             DataType::Int64 => match op {
@@ -102,16 +104,16 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Sum => {
                     typed_array_sum_to_data_value!(value, Int64Array, Int64)
                 }
-                DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(value.len() as u64))),
+                DataValueAggregateOperator::Count => {
+                    Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
+                }
 
                 DataValueAggregateOperator::Avg => {
-                    Result::Err(ErrorCodes::BadDataValueType(
-                        format!(
-                            "DataValue Error: Unsupported data_array_{} for data type: {:?}",
-                            op,
-                            value.data_type()
-                        )
-                    ))
+                    Result::Err(ErrorCodes::BadDataValueType(format!(
+                        "DataValue Error: Unsupported data_array_{} for data type: {:?}",
+                        op,
+                        value.data_type()
+                    )))
                 }
             },
             DataType::UInt8 => match op {
@@ -124,16 +126,16 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Sum => {
                     typed_array_sum_to_data_value!(value, UInt8Array, UInt8)
                 }
-                DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(value.len() as u64))),
+                DataValueAggregateOperator::Count => {
+                    Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
+                }
 
                 DataValueAggregateOperator::Avg => {
-                    Result::Err(ErrorCodes::BadDataValueType(
-                        format!(
-                            "DataValue Error: Unsupported data_array_{} for data type: {:?}",
-                            op,
-                            value.data_type()
-                        )
-                    ))
+                    Result::Err(ErrorCodes::BadDataValueType(format!(
+                        "DataValue Error: Unsupported data_array_{} for data type: {:?}",
+                        op,
+                        value.data_type()
+                    )))
                 }
             },
             DataType::UInt16 => match op {
@@ -146,16 +148,16 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Sum => {
                     typed_array_sum_to_data_value!(value, UInt16Array, UInt16)
                 }
-                DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(value.len() as u64))),
+                DataValueAggregateOperator::Count => {
+                    Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
+                }
 
                 DataValueAggregateOperator::Avg => {
-                    Result::Err(ErrorCodes::BadDataValueType(
-                        format!(
-                            "DataValue Error: Unsupported data_array_{} for data type: {:?}",
-                            op,
-                            value.data_type()
-                        )
-                    ))
+                    Result::Err(ErrorCodes::BadDataValueType(format!(
+                        "DataValue Error: Unsupported data_array_{} for data type: {:?}",
+                        op,
+                        value.data_type()
+                    )))
                 }
             },
             DataType::UInt32 => match op {
@@ -168,16 +170,16 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Sum => {
                     typed_array_sum_to_data_value!(value, UInt32Array, UInt32)
                 }
-                DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(value.len() as u64))),
+                DataValueAggregateOperator::Count => {
+                    Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
+                }
 
                 DataValueAggregateOperator::Avg => {
-                    Result::Err(ErrorCodes::BadDataValueType(
-                        format!(
-                            "DataValue Error: Unsupported data_array_{} for data type: {:?}",
-                            op,
-                            value.data_type()
-                        )
-                    ))
+                    Result::Err(ErrorCodes::BadDataValueType(format!(
+                        "DataValue Error: Unsupported data_array_{} for data type: {:?}",
+                        op,
+                        value.data_type()
+                    )))
                 }
             },
             DataType::UInt64 => match op {
@@ -190,15 +192,15 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Sum => {
                     typed_array_sum_to_data_value!(value, UInt64Array, UInt64)
                 }
-                DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(value.len() as u64))),
+                DataValueAggregateOperator::Count => {
+                    Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
+                }
                 DataValueAggregateOperator::Avg => {
-                    Result::Err(ErrorCodes::BadDataValueType(
-                        format!(
-                            "DataValue Error: Unsupported data_array_{} for data type: {:?}",
-                            op,
-                            value.data_type()
-                        )
-                    ))
+                    Result::Err(ErrorCodes::BadDataValueType(format!(
+                        "DataValue Error: Unsupported data_array_{} for data type: {:?}",
+                        op,
+                        value.data_type()
+                    )))
                 }
             },
             DataType::Float32 => match op {
@@ -211,15 +213,15 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Sum => {
                     typed_array_sum_to_data_value!(value, Float32Array, Float32)
                 }
-                DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(value.len() as u64))),
+                DataValueAggregateOperator::Count => {
+                    Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
+                }
                 DataValueAggregateOperator::Avg => {
-                    Result::Err(ErrorCodes::BadDataValueType(
-                        format!(
-                            "DataValue Error: Unsupported data_array_{} for data type: {:?}",
-                            op,
-                            value.data_type()
-                        )
-                    ))
+                    Result::Err(ErrorCodes::BadDataValueType(format!(
+                        "DataValue Error: Unsupported data_array_{} for data type: {:?}",
+                        op,
+                        value.data_type()
+                    )))
                 }
             },
             DataType::Float64 => match op {
@@ -232,40 +234,38 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Sum => {
                     typed_array_sum_to_data_value!(value, Float64Array, Float64)
                 }
-                DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(value.len() as u64))),
+                DataValueAggregateOperator::Count => {
+                    Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
+                }
                 DataValueAggregateOperator::Avg => {
-                    Result::Err(ErrorCodes::BadDataValueType(
-                        format!(
-                            "DataValue Error: Unsupported data_array_{} for data type: {:?}",
-                            op,
-                            value.data_type()
-                        )
-                    ))
-                }
-            },
-            DataType::Utf8 => match op {
-                DataValueAggregateOperator::Min => typed_array_min_max_string_to_data_value!(value, StringArray, Utf8, min_string),
-                DataValueAggregateOperator::Max => typed_array_min_max_string_to_data_value!(value, StringArray, Utf8, max_string),
-                DataValueAggregateOperator::Count => Ok(DataValue::UInt64(Some(value.len() as u64))),
-                _ => {
-                    Result::Err(ErrorCodes::BadDataValueType(
-                        format!(
-                            "DataValue Error: Unsupported data_array_{} for data type: {:?}",
-                            op,
-                            value.data_type()
-                        )
-                    ))
-                }
-            },
-            _not_support_data_type => {
-                Result::Err(ErrorCodes::BadDataValueType(
-                    format!(
+                    Result::Err(ErrorCodes::BadDataValueType(format!(
                         "DataValue Error: Unsupported data_array_{} for data type: {:?}",
                         op,
                         value.data_type()
-                    )
-                ))
-            }
+                    )))
+                }
+            },
+            DataType::Utf8 => match op {
+                DataValueAggregateOperator::Min => {
+                    typed_array_min_max_string_to_data_value!(value, StringArray, Utf8, min_string)
+                }
+                DataValueAggregateOperator::Max => {
+                    typed_array_min_max_string_to_data_value!(value, StringArray, Utf8, max_string)
+                }
+                DataValueAggregateOperator::Count => {
+                    Ok(DataValue::UInt64(Some(value.len() as u64)))
+                }
+                _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+                    "DataValue Error: Unsupported data_array_{} for data type: {:?}",
+                    op,
+                    value.data_type()
+                )))
+            },
+            _not_support_data_type => Result::Err(ErrorCodes::BadDataValueType(format!(
+                "DataValue Error: Unsupported data_array_{} for data type: {:?}",
+                op,
+                value.data_type()
+            )))
         }
     }
 }

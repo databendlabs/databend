@@ -4,19 +4,20 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::StringArray;
+use common_exception::Result;
 use common_planners::ExplainPlan;
 use common_planners::ExplainType;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use log::debug;
 
-use crate::interpreters::{IInterpreter, InterpreterPtr};
+use crate::interpreters::IInterpreter;
+use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizer;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
@@ -42,7 +43,7 @@ impl IInterpreter for ExplainInterpreter {
         let schema = Arc::new(DataSchema::new(vec![DataField::new(
             "explain",
             DataType::Utf8,
-            false,
+            false
         )]));
 
         let plan = Optimizer::create(self.ctx.clone()).optimize(&self.explain.input)?;

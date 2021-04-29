@@ -5,9 +5,9 @@
 use std::task::Context;
 use std::task::Poll;
 
-use common_exception::Result;
 use common_datablocks::DataBlock;
 use common_datablocks::SortColumnDescription;
+use common_exception::Result;
 use futures::Stream;
 use futures::StreamExt;
 
@@ -44,7 +44,7 @@ impl Stream for SortStream {
             Some(Ok(v)) => Some(DataBlock::sort_block(
                 &v,
                 &self.sort_columns_descriptions,
-                self.limit,
+                self.limit
             )),
             other => other
         })

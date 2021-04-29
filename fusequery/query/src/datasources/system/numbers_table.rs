@@ -7,12 +7,13 @@ use std::collections::HashMap;
 use std::mem::size_of;
 use std::sync::Arc;
 
-use common_exception::{Result, ErrorCodes};
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_planners::ExpressionPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
@@ -88,9 +89,10 @@ impl ITable for NumbersTable {
                 total = v as u64;
             }
         } else {
-            return Result::Err(ErrorCodes::BadArguments(
-                format!("Must have one argument for table: system.{}", self.name())
-            ));
+            return Result::Err(ErrorCodes::BadArguments(format!(
+                "Must have one argument for table: system.{}",
+                self.name()
+            )));
         }
 
         let statistics = Statistics {

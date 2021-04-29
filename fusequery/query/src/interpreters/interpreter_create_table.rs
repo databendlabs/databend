@@ -9,7 +9,8 @@ use common_planners::CreateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::{IInterpreter, InterpreterPtr};
+use crate::interpreters::IInterpreter;
+use crate::interpreters::InterpreterPtr;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct CreateTableInterpreter {
@@ -37,7 +38,7 @@ impl IInterpreter for CreateTableInterpreter {
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema.clone(),
             None,
-            vec![],
+            vec![]
         )))
     }
 }

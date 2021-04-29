@@ -4,10 +4,11 @@
 
 use std::str::FromStr;
 
-use common_exception::{Result, ErrorCodes};
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_planners::ExpressionPlan;
 use sqlparser::ast::DataType as SQLDataType;
 use sqlparser::ast::DateTimeField;
@@ -32,7 +33,10 @@ impl SQLCommon {
             SQLDataType::Time => Ok(DataType::Time64(TimeUnit::Millisecond)),
             SQLDataType::Timestamp => Ok(DataType::Date64),
 
-            _ => Result::Err(ErrorCodes::IllegalDataType(format!("The SQL data type {:?} is not implemented", sql_type)))
+            _ => Result::Err(ErrorCodes::IllegalDataType(format!(
+                "The SQL data type {:?} is not implemented",
+                sql_type
+            )))
         }
     }
 
@@ -46,39 +50,31 @@ impl SQLCommon {
         fractional_seconds_precision: &Option<u64>
     ) -> Result<ExpressionPlan> {
         if leading_field.is_some() {
-            return Result::Err(ErrorCodes::SyntexException(
-                format!(
-                    "Unsupported Interval Expression with leading_field {:?}",
-                    leading_field
-                )
-            ))
+            return Result::Err(ErrorCodes::SyntexException(format!(
+                "Unsupported Interval Expression with leading_field {:?}",
+                leading_field
+            )));
         }
 
         if leading_precision.is_some() {
-            return Result::Err(ErrorCodes::SyntexException(
-                format!(
-                    "Unsupported Interval Expression with leading_precision {:?}",
-                    leading_precision
-                )
-            ))
+            return Result::Err(ErrorCodes::SyntexException(format!(
+                "Unsupported Interval Expression with leading_precision {:?}",
+                leading_precision
+            )));
         }
 
         if last_field.is_some() {
-            return Result::Err(ErrorCodes::SyntexException(
-                format!(
-                    "Unsupported Interval Expression with last_field {:?}",
-                    last_field
-                )
-            ))
+            return Result::Err(ErrorCodes::SyntexException(format!(
+                "Unsupported Interval Expression with last_field {:?}",
+                last_field
+            )));
         }
 
         if fractional_seconds_precision.is_some() {
-            return Result::Err(ErrorCodes::SyntexException(
-                format!(
-                    "Unsupported Interval Expression with fractional_seconds_precision {:?}",
-                    fractional_seconds_precision
-                )
-            ))
+            return Result::Err(ErrorCodes::SyntexException(format!(
+                "Unsupported Interval Expression with fractional_seconds_precision {:?}",
+                fractional_seconds_precision
+            )));
         }
 
         const SECONDS_PER_HOUR: f32 = 3_600_f32;
@@ -101,17 +97,26 @@ impl SQLCommon {
                 (month_part as i32, day_part as i32, milles_part)
             };
 
-        let calculate_from_part = |interval_period_str: &str, interval_type: &str|
-                                   -> Result<(i32, i32, f32)> {
+        let calculate_from_part = |interval_period_str: &str,
+                                   interval_type: &str|
+         -> Result<(i32, i32, f32)> {
             // @todo It's better to use Decimal in order to protect rounding errors
             // Wait https://github.com/apache/arrow/pull/9232
             let interval_period = match f32::from_str(interval_period_str) {
                 Ok(n) => n,
-                Err(_) => return Result::Err(ErrorCodes::SyntexException(format!("Unsupported Interval Expression with value {:?}", value)))
+                Err(_) => {
+                    return Result::Err(ErrorCodes::SyntexException(format!(
+                        "Unsupported Interval Expression with value {:?}",
+                        value
+                    )))
+                }
             };
 
             if interval_period > (i32::MAX as f32) {
-                return Result::Err(ErrorCodes::SyntexException(format!("Interval field value out of range: {:?}", value)))
+                return Result::Err(ErrorCodes::SyntexException(format!(
+                    "Interval field value out of range: {:?}",
+                    value
+                )));
             }
 
             match interval_type.to_lowercase().as_str() {
@@ -124,7 +129,12 @@ impl SQLCommon {
                 "minutes" | "minute" => Ok((0, 0, interval_period * 60_f32 * MILLIS_PER_SECOND)),
                 "seconds" | "second" => Ok((0, 0, interval_period * MILLIS_PER_SECOND)),
                 "milliseconds" | "millisecond" => Ok((0, 0, interval_period)),
-                _ => return Result::Err(ErrorCodes::SyntexException(format!("Invalid input syntax for type interval: {:?}", value)))
+                _ => {
+                    return Result::Err(ErrorCodes::SyntexException(format!(
+                        "Invalid input syntax for type interval: {:?}",
+                        value
+                    )))
+                }
             }
         };
 
@@ -148,25 +158,28 @@ impl SQLCommon {
             result_month += diff_month as i64;
 
             if result_month > (i32::MAX as i64) {
-                return Result::Err(ErrorCodes::SyntexException(
-                    format!("Interval field value out of range: {:?}", value)
-                ))
+                return Result::Err(ErrorCodes::SyntexException(format!(
+                    "Interval field value out of range: {:?}",
+                    value
+                )));
             }
 
             result_days += diff_days as i64;
 
             if result_days > (i32::MAX as i64) {
-                return Result::Err(ErrorCodes::SyntexException(
-                    format!("Interval field value out of range: {:?}", value)
-                ))
+                return Result::Err(ErrorCodes::SyntexException(format!(
+                    "Interval field value out of range: {:?}",
+                    value
+                )));
             }
 
             result_millis += diff_millis as i64;
 
             if result_millis > (i32::MAX as i64) {
-                return Result::Err(ErrorCodes::SyntexException(
-                    format!("Interval field value out of range: {:?}", value)
-                ))
+                return Result::Err(ErrorCodes::SyntexException(format!(
+                    "Interval field value out of range: {:?}",
+                    value
+                )));
             }
         }
 
@@ -182,14 +195,18 @@ impl SQLCommon {
                     "DF does not support intervals that have both a Year/Month part as well as Days/Hours/Mins/Seconds: {:?}. Hint: try breaking the interval into two parts, one with Year/Month and the other with Days/Hours/Mins/Seconds - e.g. (NOW() + INTERVAL '1 year') + INTERVAL '1 day'",
                     value
                 )
-            ))
+            ));
         }
 
         if result_month != 0 {
-            return Ok(ExpressionPlan::Literal(DataValue::IntervalYearMonth(Some(result_month as i32))));
+            return Ok(ExpressionPlan::Literal(DataValue::IntervalYearMonth(Some(
+                result_month as i32
+            ))));
         }
 
         let result: i64 = (result_days << 32) | result_millis;
-        Ok(ExpressionPlan::Literal(DataValue::IntervalDayTime(Some(result))))
+        Ok(ExpressionPlan::Literal(DataValue::IntervalDayTime(Some(
+            result
+        ))))
     }
 }

@@ -2,9 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use log::debug;
-use log::error;
-use msql_srv::*;
+use std::time::Instant;
 
 use common_arrow::arrow::datatypes::DataType;
 use common_arrow::arrow::datatypes::Field;
@@ -13,9 +11,11 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
+use log::debug;
+use log::error;
+use msql_srv::*;
 
-use crate::servers::mysql::endpoint::IMySQLEndpoint;
-use std::time::Instant;
+use crate::servers::mysql::endpoints::IMySQLEndpoint;
 
 struct MySQLOnQueryEndpoint;
 
@@ -44,18 +44,19 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
                 DataType::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
                 DataType::Date32 => Ok(ColumnType::MYSQL_TYPE_TIMESTAMP),
                 DataType::Date64 => Ok(ColumnType::MYSQL_TYPE_TIMESTAMP),
-                _ => Err(ErrorCodes::UnImplement(format!("Unsupported column type:{:?}", field.data_type())))
+                _ => Err(ErrorCodes::UnImplement(format!(
+                    "Unsupported column type:{:?}",
+                    field.data_type()
+                )))
             }
         }
 
         fn make_column_from_field(field: &Field) -> Result<Column> {
-            convert_field_type(field).map(|column_type| {
-                Column {
-                    table: "".to_string(),
-                    column: field.name().to_string(),
-                    coltype: column_type,
-                    colflags: ColumnFlags::empty(),
-                }
+            convert_field_type(field).map(|column_type| Column {
+                table: "".to_string(),
+                column: field.name().to_string(),
+                coltype: column_type,
+                colflags: ColumnFlags::empty()
             })
         }
 
@@ -99,8 +100,10 @@ type Input = anyhow::Result<Vec<DataBlock>, ErrorCodes>;
 type Output = std::io::Result<()>;
 
 // TODO: Maybe can use generic to abstract all MySQLEndpoints done function
-pub fn done<'a, W: std::io::Write>(writer: QueryResultWriter<'a, W>) -> impl FnOnce(Input) -> Output + 'a {
-    return move |res: Input| -> Output {
+pub fn done<W: std::io::Write>(
+    writer: QueryResultWriter<'_, W>
+) -> impl FnOnce(Input) -> Output + '_ {
+    move |res: Input| -> Output {
         match res {
             Err(error) => MySQLOnQueryEndpoint::err(error, writer),
             Ok(value) => {
@@ -110,5 +113,5 @@ pub fn done<'a, W: std::io::Write>(writer: QueryResultWriter<'a, W>) -> impl FnO
                 output
             }
         }
-    };
+    }
 }

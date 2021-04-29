@@ -6,7 +6,6 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_exception::{Result, ErrorCodes};
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataField;
@@ -15,6 +14,8 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::StringArray;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_functions::IFunction;
 use common_planners::ExpressionPlan;
 use common_streams::DataBlockStream;

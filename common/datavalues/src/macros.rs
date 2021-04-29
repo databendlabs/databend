@@ -8,25 +8,23 @@ macro_rules! downcast_array {
         if let Some(v) = $ARRAY.as_any().downcast_ref::<$TYPE>() {
             Result::Ok(v)
         } else {
-            Result::Err(ErrorCodes::BadDataValueType(
-                format!(
-                    "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
-                    ($ARRAY).data_type(),
-                    stringify!($TYPE)
-                )
-            ))
+            Result::Err(ErrorCodes::BadDataValueType(format!(
+                "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
+                ($ARRAY).data_type(),
+                stringify!($TYPE)
+            )))
         }
     };
 }
-
-
 
 /// Invoke a compute kernel on a pair of arrays
 macro_rules! compute_op {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
         let ll = downcast_array!($LEFT, $DT)?;
         let rr = downcast_array!($RIGHT, $DT)?;
-        Ok(Arc::new(common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCodes::from_arrow)?))
+        Ok(Arc::new(
+            common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCodes::from_arrow)?
+        ))
     }};
 }
 
@@ -36,7 +34,8 @@ macro_rules! compute_utf8_op {
         let ll = downcast_array!($LEFT, $DT)?;
         let rr = downcast_array!($RIGHT, $DT)?;
         Ok(Arc::new(
-            (paste::expr! {common_arrow::arrow::compute::[<$OP _utf8>]}(&ll, &rr)).map_err(ErrorCodes::from_arrow)?
+            (paste::expr! {common_arrow::arrow::compute::[<$OP _utf8>]}(&ll, &rr))
+                .map_err(ErrorCodes::from_arrow)?
         ))
     }};
 }
@@ -46,9 +45,9 @@ macro_rules! compute_self_defined_op {
     ($LEFT:expr, $RIGHT:expr, $OP:tt, $DT:ident) => {{
         let ll = downcast_array!($LEFT, $DT)?;
         let rr = downcast_array!($RIGHT, $DT)?;
-        Ok(Arc::new(common_arrow::arrow::compute::math_op(
-            &ll, &rr, $OP
-        ).map_err(ErrorCodes::from_arrow)?))
+        Ok(Arc::new(
+            common_arrow::arrow::compute::math_op(&ll, &rr, $OP).map_err(ErrorCodes::from_arrow)?
+        ))
     }};
 }
 
@@ -68,13 +67,11 @@ macro_rules! arrow_primitive_array_op {
             DataType::UInt64 => compute_op!($LEFT, $RIGHT, $OP, UInt64Array),
             DataType::Float32 => compute_op!($LEFT, $RIGHT, $OP, Float32Array),
             DataType::Float64 => compute_op!($LEFT, $RIGHT, $OP, Float64Array),
-            _ => Result::Err(ErrorCodes::BadDataValueType(
-                format!(
-                    "Unsupported arithmetic_compute::{} for data type: {:?}",
-                    stringify!($OP),
-                    ($LEFT).data_type(),
-                )
-            ))
+            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+                "Unsupported arithmetic_compute::{} for data type: {:?}",
+                stringify!($OP),
+                ($LEFT).data_type(),
+            )))
         }
     };
 }
@@ -95,12 +92,10 @@ macro_rules! arrow_primitive_array_self_defined_op {
             DataType::UInt64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt64Array),
             DataType::Float32 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Float32Array),
             DataType::Float64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Float64Array),
-            _ => Result::Err(ErrorCodes::BadDataValueType(
-                format!(
-                    "Unsupported arithmetic_compute::math_op for data type: {:?}",
-                    ($LEFT).data_type(),
-                )
-            ))
+            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+                "Unsupported arithmetic_compute::math_op for data type: {:?}",
+                ($LEFT).data_type(),
+            )))
         }
     };
 }
@@ -121,13 +116,11 @@ macro_rules! arrow_array_op {
             DataType::Float32 => compute_op!($LEFT, $RIGHT, $OP, Float32Array),
             DataType::Float64 => compute_op!($LEFT, $RIGHT, $OP, Float64Array),
             DataType::Utf8 => compute_utf8_op!($LEFT, $RIGHT, $OP, StringArray),
-            _ => Result::Err(ErrorCodes::BadDataValueType(
-                format!(
-                    "Unsupported arithmetic_compute::{} for data type: {:?}",
-                    stringify!($OP),
-                    ($LEFT).data_type(),
-                )
-            ))
+            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+                "Unsupported arithmetic_compute::{} for data type: {:?}",
+                stringify!($OP),
+                ($LEFT).data_type(),
+            )))
         }
     };
 }
@@ -139,8 +132,11 @@ macro_rules! compute_op_scalar {
 
         let ll = downcast_array!($LEFT, $DT)?;
         Ok(Arc::new(
-            (paste::expr! {common_arrow::arrow::compute::[<$OP _scalar>]}(&ll, $RIGHT.try_into().map_err(ErrorCodes::from_anyhow)?))
-                .map_err(ErrorCodes::from_arrow)?
+            (paste::expr! {common_arrow::arrow::compute::[<$OP _scalar>]}(
+                &ll,
+                $RIGHT.try_into().map_err(ErrorCodes::from_anyhow)?
+            ))
+            .map_err(ErrorCodes::from_arrow)?
         ))
     }};
 }
@@ -154,15 +150,14 @@ macro_rules! compute_utf8_op_scalar {
                 (paste::expr! {common_arrow::arrow::compute::[<$OP _utf8_scalar>]}(
                     &ll,
                     &string_value
-                )).map_err(ErrorCodes::from_arrow)?
+                ))
+                .map_err(ErrorCodes::from_arrow)?
             ))
         } else {
-            Result::Err(ErrorCodes::BadDataValueType(
-                format!(
-                    "compute_utf8_op_scalar failed to cast literal value {}",
-                    $RIGHT
-                )
-            ))
+            Result::Err(ErrorCodes::BadDataValueType(format!(
+                "compute_utf8_op_scalar failed to cast literal value {}",
+                $RIGHT
+            )))
         }
     }};
 }
@@ -183,12 +178,10 @@ macro_rules! arrow_array_op_scalar {
             DataType::Float32 => compute_op_scalar!($LEFT, $RIGHT, $OP, Float32Array),
             DataType::Float64 => compute_op_scalar!($LEFT, $RIGHT, $OP, Float64Array),
             DataType::Utf8 => compute_utf8_op_scalar!($LEFT, $RIGHT, $OP, StringArray),
-            other => Result::Err(ErrorCodes::BadDataValueType(
-                format!(
-                    "DataValue Error: Unsupported data type {:?}",
-                    other
-                )
-            ))
+            other => Result::Err(ErrorCodes::BadDataValueType(format!(
+                "DataValue Error: Unsupported data type {:?}",
+                other
+            )))
         };
         Ok(result?)
     }};
@@ -315,7 +308,9 @@ macro_rules! array_boolean_op {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
         let ll = downcast_array!($LEFT, $DT)?;
         let rr = downcast_array!($RIGHT, $DT)?;
-        Ok(Arc::new(common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCodes::from_arrow)?))
+        Ok(Arc::new(
+            common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCodes::from_arrow)?
+        ))
     }};
 }
 
@@ -371,7 +366,11 @@ macro_rules! build_list {
                             DataValue::$SCALAR_TY(None) => {
                                 builder.values().append_null().unwrap();
                             }
-                            _ => return Result::Err(ErrorCodes::BadDataValueType("Incompatible DataValue for list".to_string()))
+                            _ => {
+                                return Result::Err(ErrorCodes::BadDataValueType(
+                                    "Incompatible DataValue for list".to_string()
+                                ))
+                            }
                         };
                     }
                     builder.append(true).unwrap();
@@ -388,11 +387,17 @@ macro_rules! try_build_array {
         let mut builder = $VALUE_BUILDER_TY::new(len);
         for scalar_value in $VALUES {
             match scalar_value {
-                DataValue::$SCALAR_TY(Some(v)) => builder.append_value(v.clone()).map_err(ErrorCodes::from_arrow)?,
+                DataValue::$SCALAR_TY(Some(v)) => builder
+                    .append_value(v.clone())
+                    .map_err(ErrorCodes::from_arrow)?,
                 DataValue::$SCALAR_TY(None) => {
                     builder.append_null().map_err(ErrorCodes::from_arrow)?;
                 }
-                _ => return Result::Err(ErrorCodes::BadDataValueType("Incompatible DataValue for list".to_string())),
+                _ => {
+                    return Result::Err(ErrorCodes::BadDataValueType(
+                        "Incompatible DataValue for list".to_string()
+                    ))
+                }
             };
         }
         Ok(builder.finish().slice(0, len))

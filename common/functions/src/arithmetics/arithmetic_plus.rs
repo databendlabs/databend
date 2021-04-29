@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::Result;
 use common_datavalues::DataValueArithmeticOperator;
+use common_exception::Result;
 
 use crate::arithmetics::ArithmeticFunction;
 use crate::IFunction;

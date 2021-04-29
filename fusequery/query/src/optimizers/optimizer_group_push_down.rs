@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
 use common_datavalues::DataSchema;
+use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::EmptyPlan;

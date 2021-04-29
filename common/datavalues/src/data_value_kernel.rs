@@ -2,9 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::{Result, ErrorCodes};
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::datatypes::*;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 use crate::DataArrayRef;
 use crate::DataValue;
@@ -135,9 +136,10 @@ impl DataValue {
             },
             _ => {
                 // This is internal because we should have caught this before.
-                return Result::Err(ErrorCodes::BadDataValueType(
-                    format!("Unsupported the col type creating key {}", col.data_type())
-                ));
+                return Result::Err(ErrorCodes::BadDataValueType(format!(
+                    "Unsupported the col type creating key {}",
+                    col.data_type()
+                )));
             }
         }
         Ok(())
@@ -154,12 +156,10 @@ impl DataValue {
         // look up the index in the values dictionary
         let keys_col = dict_col.keys_array();
         let values_index = keys_col.value(row).to_usize().ok_or_else(|| {
-            ErrorCodes::BadDataValueType(
-                format!(
-                    "Can not convert index to usize in dictionary of type creating group by value {:?}",
-                    keys_col.data_type()
-                )
-            )
+            ErrorCodes::BadDataValueType(format!(
+                "Can not convert index to usize in dictionary of type creating group by value {:?}",
+                keys_col.data_type()
+            ))
         })?;
 
         Self::concat_row_to_one_key(&dict_col.values(), values_index, vec)
@@ -179,7 +179,10 @@ impl DataValue {
             DataType::Float32 => try_build_array!(Float32Builder, Float32, values),
             DataType::Float64 => try_build_array!(Float64Builder, Float64, values),
             DataType::Utf8 => try_build_array!(StringBuilder, Utf8, values),
-            other => Result::Err(ErrorCodes::BadDataValueType(format!("Unexpected type:{} for DataValue List", other)))
+            other => Result::Err(ErrorCodes::BadDataValueType(format!(
+                "Unexpected type:{} for DataValue List",
+                other
+            )))
         }
     }
 
@@ -262,10 +265,9 @@ impl DataValue {
                 )
             }
             DataType::List(nested_type) => {
-                let list_array = array
-                    .as_any()
-                    .downcast_ref::<ListArray>()
-                    .ok_or_else(|| ErrorCodes::LogicalError("Failed to downcast ListArray".to_string()))?;
+                let list_array = array.as_any().downcast_ref::<ListArray>().ok_or_else(|| {
+                    ErrorCodes::LogicalError("Failed to downcast ListArray".to_string())
+                })?;
                 let value = match list_array.is_null(index) {
                     true => None,
                     false => {
@@ -279,24 +281,23 @@ impl DataValue {
                 Ok(DataValue::List(value, nested_type.data_type().clone()))
             }
             DataType::Struct(_) => {
-                let strut_array = array
-                    .as_any()
-                    .downcast_ref::<StructArray>()
-                    .ok_or_else(|| ErrorCodes::LogicalError("Failed to downcast StructArray".to_string()))?;
+                let strut_array =
+                    array
+                        .as_any()
+                        .downcast_ref::<StructArray>()
+                        .ok_or_else(|| {
+                            ErrorCodes::LogicalError("Failed to downcast StructArray".to_string())
+                        })?;
                 let nested_array = strut_array.column(index);
                 let scalar_vec = (0..nested_array.len())
                     .map(|i| Self::try_from_array(&nested_array, i))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(DataValue::Struct(scalar_vec))
             }
-            other => {
-                Result::Err(ErrorCodes::BadDataValueType(
-                    format!(
-                        "DataValue Error: Can't create a scalar of array of type \"{:?}\"",
-                        other
-                    )
-                ))
-            }
+            other => Result::Err(ErrorCodes::BadDataValueType(format!(
+                "DataValue Error: Can't create a scalar of array of type \"{:?}\"",
+                other
+            )))
         }
     }
 
@@ -309,7 +310,11 @@ impl DataValue {
                     Ok(DataValue::Int64(Some(n)))
                 }
             }
-            Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>().map_err(ErrorCodes::from_parse_float)?)))
+            Err(_) => Ok(DataValue::Float64(Some(
+                literal
+                    .parse::<f64>()
+                    .map_err(ErrorCodes::from_parse_float)?
+            )))
         }
     }
 }

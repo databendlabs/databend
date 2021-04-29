@@ -6,9 +6,9 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_exception::Result;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_exception::Result;
 use common_planners::ExpressionPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -73,7 +73,7 @@ impl IProcessor for SortMergeTransform {
             _ => vec![DataBlock::merge_sort_blocks(
                 &blocks,
                 &sort_columns_descriptions,
-                self.limit,
+                self.limit
             )?]
         };
 

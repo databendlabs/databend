@@ -7,10 +7,11 @@ use std::fs::File;
 use std::task::Poll;
 
 use anyhow::Context;
-use common_exception::{Result, ErrorCodes};
 use common_arrow::arrow::csv;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use futures::Stream;
 
 use crate::sessions::FuseQueryContextRef;
@@ -44,7 +45,8 @@ impl CsvTableStream {
         let block_size = end - begin;
 
         let file = File::open(self.file.clone())
-            .with_context(|| format!("Failed to read csv file:{}", self.file.clone())).map_err(ErrorCodes::from_anyhow)?;
+            .with_context(|| format!("Failed to read csv file:{}", self.file.clone()))
+            .map_err(ErrorCodes::from_anyhow)?;
         let mut reader: csv::Reader<File> = csv::Reader::new(
             file,
             self.schema.clone(),
@@ -52,14 +54,18 @@ impl CsvTableStream {
             None,
             block_size,
             bounds,
-            None,
+            None
         );
 
-        reader.next().map(|record| {
-            record.map_err(ErrorCodes::from_arrow).and_then(|record| {
-                record.try_into()
+        reader
+            .next()
+            .map(|record| {
+                record
+                    .map_err(ErrorCodes::from_arrow)
+                    .and_then(|record| record.try_into())
             })
-        }).map(|data_block| data_block.map(|v| Some(v))).unwrap_or_else(|| Ok(None))
+            .map(|data_block| data_block.map(Some))
+            .unwrap_or_else(|| Ok(None))
     }
 }
 

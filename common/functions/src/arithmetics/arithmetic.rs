@@ -4,7 +4,6 @@
 
 use std::fmt;
 
-use common_exception::{Result, ErrorCodes};
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayArithmetic;
 use common_datavalues::DataColumnarValue;
@@ -13,6 +12,8 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 use crate::arithmetics::ArithmeticDivFunction;
 use crate::arithmetics::ArithmeticMinusFunction;
@@ -51,20 +52,16 @@ impl ArithmeticFunction {
         args: &[Box<dyn IFunction>]
     ) -> Result<Box<dyn IFunction>> {
         match args.len() {
-            2 => {
-                Ok(Box::new(ArithmeticFunction {
-                    depth: 0,
-                    op,
-                    left: args[0].clone(),
-                    right: args[1].clone(),
-                }))
-            }
-            _ => Result::Err(ErrorCodes::BadArguments(
-                format!(
-                    "Function Error: Arithmetic function {} args length must be 2",
-                    op
-                )
-            ))
+            2 => Ok(Box::new(ArithmeticFunction {
+                depth: 0,
+                op,
+                left: args[0].clone(),
+                right: args[1].clone()
+            })),
+            _ => Result::Err(ErrorCodes::BadArguments(format!(
+                "Function Error: Arithmetic function {} args length must be 2",
+                op
+            )))
         }
     }
 }
@@ -78,7 +75,7 @@ impl IFunction for ArithmeticFunction {
         common_datavalues::numerical_arithmetic_coercion(
             &self.op,
             &self.left.return_type(input_schema)?,
-            &self.right.return_type(input_schema)?,
+            &self.right.return_type(input_schema)?
         )
     }
 
@@ -128,7 +125,7 @@ impl IFunction for ArithmeticFunction {
         DataValueArithmetic::data_value_arithmetic_op(
             self.op.clone(),
             self.left.merge_result()?,
-            self.right.merge_result()?,
+            self.right.merge_result()?
         )
     }
 

@@ -2,9 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::servers::mysql::endpoint::IMySQLEndpoint;
-use msql_srv::{InitWriter, ErrorKind};
 use common_exception::ErrorCodes;
+use msql_srv::ErrorKind;
+use msql_srv::InitWriter;
+
+use crate::servers::mysql::endpoints::IMySQLEndpoint;
 
 struct MySQLOnInitEndpoint;
 
@@ -24,11 +26,11 @@ type Input = anyhow::Result<(), ErrorCodes>;
 type Output = std::io::Result<()>;
 
 // TODO: Maybe can use generic to abstract all MySQLEndpoints done function
-pub fn done<'a, W: std::io::Write>(writer: InitWriter<'a, W>) -> impl FnOnce(Input) -> Output + 'a {
-    return move |res: Input| -> Output {
+pub fn done<W: std::io::Write>(writer: InitWriter<'_, W>) -> impl FnOnce(Input) -> Output + '_ {
+    move |res: Input| -> Output {
         match res {
             Err(error) => MySQLOnInitEndpoint::err(error, writer),
             Ok(value) => MySQLOnInitEndpoint::ok(value, writer)
         }
-    };
+    }
 }

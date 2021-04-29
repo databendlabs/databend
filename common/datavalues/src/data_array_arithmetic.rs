@@ -4,10 +4,11 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow;
-use common_exception::{Result, ErrorCodes};
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
-use crate::{DataArrayRef, data_array_cast};
+use crate::data_array_cast;
+use crate::DataArrayRef;
 use crate::DataColumnarValue;
 use crate::DataType;
 use crate::DataValueArithmeticOperator;
@@ -50,7 +51,7 @@ impl DataArrayArithmetic {
         let coercion_type = super::data_type::numerical_arithmetic_coercion(
             &op,
             &left_array.data_type(),
-            &right_array.data_type(),
+            &right_array.data_type()
         )?;
         let left_array = data_array_cast(&left_array, &coercion_type)?;
         let right_array = data_array_cast(&right_array, &coercion_type)?;

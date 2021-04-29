@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::{Result, ErrorCodes};
 use common_arrow::arrow::array::UInt32Builder;
 use common_arrow::arrow::compute;
 use common_datavalues::DataArrayMerge;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 use crate::DataBlock;
 
@@ -18,7 +19,9 @@ pub struct SortColumnDescription {
 impl DataBlock {
     pub fn block_take_by_indices(raw: &DataBlock, indices: &[u32]) -> Result<DataBlock> {
         let mut batch_indices: UInt32Builder = UInt32Builder::new(0);
-        batch_indices.append_slice(indices).map_err(ErrorCodes::from_arrow)?;
+        batch_indices
+            .append_slice(indices)
+            .map_err(ErrorCodes::from_arrow)?;
         let batch_indices = batch_indices.finish();
 
         let takes = raw
@@ -32,13 +35,17 @@ impl DataBlock {
 
     pub fn concat_blocks(blocks: &[DataBlock]) -> Result<DataBlock> {
         if blocks.is_empty() {
-            return Result::Err(ErrorCodes::EmptyData("Can't concat empty blocks".to_string()));
+            return Result::Err(ErrorCodes::EmptyData(
+                "Can't concat empty blocks".to_string()
+            ));
         }
 
         let first_block = &blocks[0];
         for block in blocks.iter() {
             if block.schema().ne(first_block.schema()) {
-                return Result::Err(ErrorCodes::DataStructMissMatch("Schema not matched".to_string()));
+                return Result::Err(ErrorCodes::DataStructMissMatch(
+                    "Schema not matched".to_string()
+                ));
             }
         }
 
@@ -66,18 +73,20 @@ impl DataBlock {
                     values: block.column_by_name(&f.column_name)?.clone(),
                     options: Some(compute::SortOptions {
                         descending: !f.asc,
-                        nulls_first: f.nulls_first,
-                    }),
+                        nulls_first: f.nulls_first
+                    })
                 })
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let indices = compute::lexsort_to_indices(&order_columns, limit).map_err(ErrorCodes::from_arrow)?;
+        let indices =
+            compute::lexsort_to_indices(&order_columns, limit).map_err(ErrorCodes::from_arrow)?;
         let columns = block
             .columns()
             .iter()
             .map(|c| compute::take(c.as_ref(), &indices, None))
-            .collect::<anyhow::Result<Vec<_>, _>>().map_err(ErrorCodes::from_arrow)?;
+            .collect::<anyhow::Result<Vec<_>, _>>()
+            .map_err(ErrorCodes::from_arrow)?;
 
         Ok(DataBlock::create(block.schema().clone(), columns))
     }
@@ -139,7 +148,9 @@ impl DataBlock {
         limit: Option<usize>
     ) -> Result<DataBlock> {
         match blocks.len() {
-            0 => Result::Err(ErrorCodes::EmptyData("Can't merge empty blocks".to_string())),
+            0 => Result::Err(ErrorCodes::EmptyData(
+                "Can't merge empty blocks".to_string()
+            )),
             1 => Ok(blocks[0].clone()),
             2 => DataBlock::merge_sort_block(
                 &blocks[0],

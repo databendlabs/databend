@@ -4,10 +4,10 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
+use common_exception::Result;
 use common_planners::ExpressionPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;

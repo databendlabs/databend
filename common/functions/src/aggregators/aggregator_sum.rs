@@ -4,7 +4,6 @@
 
 use std::fmt;
 
-use common_exception::{Result, ErrorCodes};
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayAggregate;
 use common_datavalues::DataColumnarValue;
@@ -14,6 +13,8 @@ use common_datavalues::DataValue;
 use common_datavalues::DataValueAggregateOperator;
 use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 use crate::IFunction;
 
@@ -22,26 +23,25 @@ pub struct AggregatorSumFunction {
     display_name: String,
     depth: usize,
     arg: Box<dyn IFunction>,
-    state: DataValue,
+    state: DataValue
 }
 
 impl AggregatorSumFunction {
-    pub fn try_create(display_name: &str, args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(
+        display_name: &str,
+        args: &[Box<dyn IFunction>]
+    ) -> Result<Box<dyn IFunction>> {
         match args.len() {
-            1 => {
-                Ok(Box::new(AggregatorSumFunction {
-                    display_name: display_name.to_string(),
-                    depth: 0,
-                    arg: args[0].clone(),
-                    state: DataValue::Null,
-                }))
-            }
-            _ => Result::Err(ErrorCodes::BadArguments(
-                format!(
-                    "Function Error: Aggregator function {} args require single argument",
-                    display_name
-                )
-            ))
+            1 => Ok(Box::new(AggregatorSumFunction {
+                display_name: display_name.to_string(),
+                depth: 0,
+                arg: args[0].clone(),
+                state: DataValue::Null
+            })),
+            _ => Result::Err(ErrorCodes::BadArguments(format!(
+                "Function Error: Aggregator function {} args require single argument",
+                display_name
+            )))
         }
     }
 }
@@ -76,8 +76,8 @@ impl IFunction for AggregatorSumFunction {
             self.state.clone(),
             DataArrayAggregate::data_array_aggregate_op(
                 DataValueAggregateOperator::Sum,
-                val.to_array(rows)?,
-            )?,
+                val.to_array(rows)?
+            )?
         )?;
 
         Ok(())
@@ -92,7 +92,7 @@ impl IFunction for AggregatorSumFunction {
         self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
-            val,
+            val
         )?;
         Ok(())
     }

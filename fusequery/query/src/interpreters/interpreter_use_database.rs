@@ -4,13 +4,14 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
 use common_datavalues::DataSchema;
+use common_exception::Result;
 use common_planners::UseDatabasePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::{IInterpreter, InterpreterPtr};
+use crate::interpreters::IInterpreter;
+use crate::interpreters::InterpreterPtr;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct UseDatabaseInterpreter {

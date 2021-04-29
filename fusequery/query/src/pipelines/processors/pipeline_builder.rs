@@ -4,8 +4,17 @@
 
 use std::sync::Arc;
 
-use common_planners::{PlanNode, ReadDataSourcePlan, LimitPlan, SortPlan, FilterPlan, AggregatorFinalPlan, AggregatorPartialPlan, ProjectionPlan, StagePlan};
-use common_exception::{Result, ErrorCodes};
+use common_exception::ErrorCodes;
+use common_exception::Result;
+use common_planners::AggregatorFinalPlan;
+use common_planners::AggregatorPartialPlan;
+use common_planners::FilterPlan;
+use common_planners::LimitPlan;
+use common_planners::PlanNode;
+use common_planners::ProjectionPlan;
+use common_planners::ReadDataSourcePlan;
+use common_planners::SortPlan;
+use common_planners::StagePlan;
 use log::info;
 
 use crate::pipelines::processors::Pipeline;
@@ -52,21 +61,25 @@ impl PipelineBuilder {
             match node {
                 PlanNode::Select(_) => Ok(true),
                 PlanNode::Stage(plan) => self.visit_stage_plan(&mut pipeline, &plan),
-                PlanNode::Projection(plan) => PipelineBuilder::visit_projection_plan(&mut pipeline, plan),
-                PlanNode::AggregatorPartial(plan) => PipelineBuilder::visit_aggregator_partial_plan(&mut pipeline, plan),
-                PlanNode::AggregatorFinal(plan) => PipelineBuilder::visit_aggregator_final_plan(&mut pipeline, plan),
+                PlanNode::Projection(plan) => {
+                    PipelineBuilder::visit_projection_plan(&mut pipeline, plan)
+                }
+                PlanNode::AggregatorPartial(plan) => {
+                    PipelineBuilder::visit_aggregator_partial_plan(&mut pipeline, plan)
+                }
+                PlanNode::AggregatorFinal(plan) => {
+                    PipelineBuilder::visit_aggregator_final_plan(&mut pipeline, plan)
+                }
                 PlanNode::Filter(plan) => PipelineBuilder::visit_filter_plan(&mut pipeline, plan),
-                PlanNode::Sort(plan) => PipelineBuilder::visit_sort_plan(limit, &mut pipeline, plan),
+                PlanNode::Sort(plan) => {
+                    PipelineBuilder::visit_sort_plan(limit, &mut pipeline, plan)
+                }
                 PlanNode::Limit(plan) => PipelineBuilder::visit_limit_plan(&mut pipeline, plan),
                 PlanNode::ReadSource(plan) => self.visit_read_data_source_plan(&mut pipeline, plan),
-                other => {
-                    Result::Err(ErrorCodes::UnknownPlan(
-                        format!(
-                            "Build pipeline from the plan node unsupported:{:?}",
-                            other.name()
-                        )
-                    ))
-                }
+                other => Result::Err(ErrorCodes::UnknownPlan(format!(
+                    "Build pipeline from the plan node unsupported:{:?}",
+                    other.name()
+                )))
             }
         })?;
         info!("Pipeline:\n{:?}", pipeline);
@@ -89,7 +102,7 @@ impl PipelineBuilder {
                     self.ctx.clone(),
                     self.ctx.get_id()?,
                     address.clone(),
-                    remote_plan.clone(),
+                    remote_plan.clone()
                 )?;
                 pipeline.add_source(Arc::new(remote_transform))?;
             }
@@ -101,18 +114,21 @@ impl PipelineBuilder {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ProjectionTransform::try_create(
                 plan.schema.clone(),
-                plan.expr.clone(),
+                plan.expr.clone()
             )?))
         })?;
         Ok(true)
     }
 
-    fn visit_aggregator_partial_plan(pipeline: &mut Pipeline, plan: &AggregatorPartialPlan) -> Result<bool> {
+    fn visit_aggregator_partial_plan(
+        pipeline: &mut Pipeline,
+        plan: &AggregatorPartialPlan
+    ) -> Result<bool> {
         if plan.group_expr.is_empty() {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(AggregatorPartialTransform::try_create(
                     plan.schema(),
-                    plan.aggr_expr.clone(),
+                    plan.aggr_expr.clone()
                 )?))
             })?;
         } else {
@@ -120,20 +136,23 @@ impl PipelineBuilder {
                 Ok(Box::new(GroupByPartialTransform::create(
                     plan.schema(),
                     plan.aggr_expr.clone(),
-                    plan.group_expr.clone(),
+                    plan.group_expr.clone()
                 )))
             })?;
         }
         Ok(true)
     }
 
-    fn visit_aggregator_final_plan(pipeline: &mut Pipeline, plan: &AggregatorFinalPlan) -> Result<bool> {
+    fn visit_aggregator_final_plan(
+        pipeline: &mut Pipeline,
+        plan: &AggregatorFinalPlan
+    ) -> Result<bool> {
         pipeline.merge_processor()?;
         if plan.group_expr.is_empty() {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(AggregatorFinalTransform::try_create(
                     plan.schema(),
-                    plan.aggr_expr.clone(),
+                    plan.aggr_expr.clone()
                 )?))
             })?;
         } else {
@@ -141,7 +160,7 @@ impl PipelineBuilder {
                 Ok(Box::new(GroupByFinalTransform::create(
                     plan.schema(),
                     plan.aggr_expr.clone(),
-                    plan.group_expr.clone(),
+                    plan.group_expr.clone()
                 )))
             })?;
         }
@@ -157,7 +176,11 @@ impl PipelineBuilder {
         Ok(true)
     }
 
-    fn visit_sort_plan(limit: Option<usize>, pipeline: &mut Pipeline, plan: &SortPlan) -> Result<bool> {
+    fn visit_sort_plan(
+        limit: Option<usize>,
+        pipeline: &mut Pipeline,
+        plan: &SortPlan
+    ) -> Result<bool> {
         // processor 1: block ---> sort_stream
         // processor 2: block ---> sort_stream
         // processor 3: block ---> sort_stream
@@ -165,7 +188,7 @@ impl PipelineBuilder {
             Ok(Box::new(SortPartialTransform::try_create(
                 plan.schema(),
                 plan.order_by.clone(),
-                limit,
+                limit
             )?))
         })?;
 
@@ -176,7 +199,7 @@ impl PipelineBuilder {
             Ok(Box::new(SortMergeTransform::try_create(
                 plan.schema(),
                 plan.order_by.clone(),
-                limit,
+                limit
             )?))
         })?;
 
@@ -191,7 +214,7 @@ impl PipelineBuilder {
                 Ok(Box::new(SortMergeTransform::try_create(
                     plan.schema(),
                     plan.order_by.clone(),
-                    limit,
+                    limit
                 )?))
             })?;
         }
@@ -204,7 +227,11 @@ impl PipelineBuilder {
         Ok(false)
     }
 
-    fn visit_read_data_source_plan(&self, pipeline: &mut Pipeline, plan: &ReadDataSourcePlan) -> Result<bool> {
+    fn visit_read_data_source_plan(
+        &self,
+        pipeline: &mut Pipeline,
+        plan: &ReadDataSourcePlan
+    ) -> Result<bool> {
         // Bind plan partitions to context.
         self.ctx.try_set_partitions(plan.partitions.clone())?;
 
@@ -221,7 +248,7 @@ impl PipelineBuilder {
             let source = SourceTransform::try_create(
                 self.ctx.clone(),
                 plan.db.as_str(),
-                plan.table.as_str(),
+                plan.table.as_str()
             )?;
             pipeline.add_source(Arc::new(source))?;
         }

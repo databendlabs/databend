@@ -5,8 +5,8 @@
 use std::cmp::min;
 use std::sync::Arc;
 
-use common_exception::Result;
 use common_datavalues::DataSchema;
+use common_exception::Result;
 use common_planners::EmptyPlan;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
@@ -49,7 +49,9 @@ impl PlanScheduler {
 
             // Local table.
             let datasource = ctx.get_datasource();
-            if datasource.get_table(source_plan.db.as_str(), source_plan.table.as_str())?.is_local()
+            if datasource
+                .get_table(source_plan.db.as_str(), source_plan.table.as_str())?
+                .is_local()
             {
                 return Ok(vec![]);
             }

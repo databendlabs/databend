@@ -5,9 +5,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_exception::{Result, ErrorCodes};
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_functions::IFunction;
 use common_planners::ExpressionPlan;
 use common_streams::SendableDataBlockStream;

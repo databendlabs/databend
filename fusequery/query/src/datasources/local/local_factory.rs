@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+
 use crate::datasources::local::LocalDatabase;
 use crate::datasources::IDatabase;
 

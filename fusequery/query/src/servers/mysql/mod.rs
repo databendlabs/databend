@@ -4,6 +4,6 @@
 
 pub use self::mysql_handler::MySQLHandler;
 
-mod endpoint;
+mod endpoints;
 mod mysql_handler;
 mod mysql_metrics;

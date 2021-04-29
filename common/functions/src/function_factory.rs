@@ -4,7 +4,8 @@
 
 use std::sync::Arc;
 
-use common_exception::{Result, ErrorCodes};
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_infallible::RwLock;
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
@@ -36,9 +37,9 @@ lazy_static! {
 impl FunctionFactory {
     pub fn get(name: &str, args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
         let map = FACTORY.read();
-        let creator = map
-            .get(&*name.to_lowercase())
-            .ok_or_else(|| ErrorCodes::UnknownFunction(format!("Unsupported Function: {}", name)))?;
+        let creator = map.get(&*name.to_lowercase()).ok_or_else(|| {
+            ErrorCodes::UnknownFunction(format!("Unsupported Function: {}", name))
+        })?;
         (creator)(name, args)
     }
 

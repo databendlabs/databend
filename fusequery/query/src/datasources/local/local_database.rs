@@ -5,7 +5,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::{Result, ErrorCodes};
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::CreateTablePlan;
 use common_planners::TableEngineType;
@@ -41,11 +42,9 @@ impl IDatabase for LocalDatabase {
 
     fn get_table(&self, table_name: &str) -> Result<Arc<dyn ITable>> {
         let table_lock = self.tables.read();
-        let table = table_lock
-            .get(table_name)
-            .ok_or_else(|| {
-                ErrorCodes::UnknownTable(format!("DataSource Error: Unknown table: '{}'", table_name))
-            })?;
+        let table = table_lock.get(table_name).ok_or_else(|| {
+            ErrorCodes::UnknownTable(format!("DataSource Error: Unknown table: '{}'", table_name))
+        })?;
         Ok(table.clone())
     }
 
@@ -71,9 +70,10 @@ impl IDatabase for LocalDatabase {
                 NullTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
             }
             _ => {
-                return Result::Err(ErrorCodes::UnImplement(
-                    format!("Local database does not support {:?} table engine", plan.engine)
-                ));
+                return Result::Err(ErrorCodes::UnImplement(format!(
+                    "Local database does not support {:?} table engine",
+                    plan.engine
+                )));
             }
         };
 

@@ -10,9 +10,10 @@ use std::fmt;
 use std::iter::repeat;
 use std::sync::Arc;
 
-use common_exception::{Result, ErrorCodes};
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::datatypes::*;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -154,11 +155,21 @@ impl DataValue {
             DataValue::Boolean(Some(v)) => {
                 Ok(Arc::new(BooleanArray::from(vec![*v; size])) as DataArrayRef)
             }
-            DataValue::Int8(Some(v)) => Ok(Arc::new(Int8Array::from(vec![*v; size])) as DataArrayRef),
-            DataValue::Int16(Some(v)) => Ok(Arc::new(Int16Array::from(vec![*v; size])) as DataArrayRef),
-            DataValue::Int32(Some(v)) => Ok(Arc::new(Int32Array::from(vec![*v; size])) as DataArrayRef),
-            DataValue::Int64(Some(v)) => Ok(Arc::new(Int64Array::from(vec![*v; size])) as DataArrayRef),
-            DataValue::UInt8(Some(v)) => Ok(Arc::new(UInt8Array::from(vec![*v; size])) as DataArrayRef),
+            DataValue::Int8(Some(v)) => {
+                Ok(Arc::new(Int8Array::from(vec![*v; size])) as DataArrayRef)
+            }
+            DataValue::Int16(Some(v)) => {
+                Ok(Arc::new(Int16Array::from(vec![*v; size])) as DataArrayRef)
+            }
+            DataValue::Int32(Some(v)) => {
+                Ok(Arc::new(Int32Array::from(vec![*v; size])) as DataArrayRef)
+            }
+            DataValue::Int64(Some(v)) => {
+                Ok(Arc::new(Int64Array::from(vec![*v; size])) as DataArrayRef)
+            }
+            DataValue::UInt8(Some(v)) => {
+                Ok(Arc::new(UInt8Array::from(vec![*v; size])) as DataArrayRef)
+            }
             DataValue::UInt16(Some(v)) => {
                 Ok(Arc::new(UInt16Array::from(vec![*v; size])) as DataArrayRef)
             }
@@ -188,29 +199,49 @@ impl DataValue {
                 Some(value) => Ok(Arc::new(TimestampSecondArray::from_iter_values(
                     repeat(*value).take(size)
                 ))),
-                None => Ok(new_null_array(&DataType::Timestamp(TimeUnit::Second, None), size))
+                None => Ok(new_null_array(
+                    &DataType::Timestamp(TimeUnit::Second, None),
+                    size
+                ))
             },
             DataValue::TimestampMillisecond(e) => match e {
                 Some(value) => Ok(Arc::new(TimestampMillisecondArray::from_iter_values(
                     repeat(*value).take(size)
                 ))),
-                None => Ok(new_null_array(&DataType::Timestamp(TimeUnit::Millisecond, None), size))
+                None => Ok(new_null_array(
+                    &DataType::Timestamp(TimeUnit::Millisecond, None),
+                    size
+                ))
             },
             DataValue::TimestampMicrosecond(e) => match e {
-                Some(value) => Ok(Arc::new(TimestampMicrosecondArray::from_value(*value, size))),
-                None => Ok(new_null_array(&DataType::Timestamp(TimeUnit::Microsecond, None), size))
+                Some(value) => Ok(Arc::new(TimestampMicrosecondArray::from_value(
+                    *value, size
+                ))),
+                None => Ok(new_null_array(
+                    &DataType::Timestamp(TimeUnit::Microsecond, None),
+                    size
+                ))
             },
             DataValue::TimestampNanosecond(e) => match e {
                 Some(value) => Ok(Arc::new(TimestampNanosecondArray::from_value(*value, size))),
-                None => Ok(new_null_array(&DataType::Timestamp(TimeUnit::Nanosecond, None), size))
+                None => Ok(new_null_array(
+                    &DataType::Timestamp(TimeUnit::Nanosecond, None),
+                    size
+                ))
             },
             DataValue::IntervalDayTime(e) => match e {
                 Some(value) => Ok(Arc::new(IntervalDayTimeArray::from_value(*value, size))),
-                None => Ok(new_null_array(&DataType::Interval(IntervalUnit::DayTime), size))
+                None => Ok(new_null_array(
+                    &DataType::Interval(IntervalUnit::DayTime),
+                    size
+                ))
             },
             DataValue::IntervalYearMonth(e) => match e {
                 Some(value) => Ok(Arc::new(IntervalYearMonthArray::from_value(*value, size))),
-                None => Ok(new_null_array(&DataType::Interval(IntervalUnit::YearMonth), size))
+                None => Ok(new_null_array(
+                    &DataType::Interval(IntervalUnit::YearMonth),
+                    size
+                ))
             },
             DataValue::List(values, data_type) => match data_type {
                 DataType::Int8 => Ok(Arc::new(build_list!(Int8Builder, Int8, values, size))),
@@ -221,10 +252,17 @@ impl DataValue {
                 DataType::UInt16 => Ok(Arc::new(build_list!(UInt16Builder, UInt16, values, size))),
                 DataType::UInt32 => Ok(Arc::new(build_list!(UInt32Builder, UInt32, values, size))),
                 DataType::UInt64 => Ok(Arc::new(build_list!(UInt64Builder, UInt64, values, size))),
-                DataType::Float32 => Ok(Arc::new(build_list!(Float32Builder, Float32, values, size))),
-                DataType::Float64 => Ok(Arc::new(build_list!(Float64Builder, Float64, values, size))),
+                DataType::Float32 => {
+                    Ok(Arc::new(build_list!(Float32Builder, Float32, values, size)))
+                }
+                DataType::Float64 => {
+                    Ok(Arc::new(build_list!(Float64Builder, Float64, values, size)))
+                }
                 DataType::Utf8 => Ok(Arc::new(build_list!(StringBuilder, Utf8, values, size))),
-                other => Result::Err(ErrorCodes::BadDataValueType(format!("Unexpected type:{} for DataValue List", other)))
+                other => Result::Err(ErrorCodes::BadDataValueType(format!(
+                    "Unexpected type:{} for DataValue List",
+                    other
+                )))
             },
             DataValue::Struct(v) => {
                 let mut array = vec![];
@@ -234,21 +272,17 @@ impl DataValue {
                         DataField::new(
                             format!("item_{}", i).as_str(),
                             val_array.data_type().clone(),
-                            false,
+                            false
                         ),
                         val_array as DataArrayRef
                     ));
                 }
                 Ok(Arc::new(StructArray::from(array)))
             }
-            other => {
-                Result::Err(ErrorCodes::BadDataValueType(
-                    format!(
-                        "DataValue Error: DataValue to array cannot be {:?}",
-                        other
-                    )
-                ))
-            }
+            other => Result::Err(ErrorCodes::BadDataValueType(format!(
+                "DataValue Error: DataValue to array cannot be {:?}",
+                other
+            )))
         }
     }
 }
@@ -283,17 +317,19 @@ impl TryFrom<&DataType> for DataValue {
             DataType::Float32 => Ok(DataValue::Float32(None)),
             DataType::Float64 => Ok(DataValue::Float64(None)),
             DataType::Timestamp(TimeUnit::Second, _) => Ok(DataValue::TimestampSecond(None)),
-            DataType::Timestamp(TimeUnit::Millisecond, _) => Ok(DataValue::TimestampMillisecond(None)),
-            DataType::Timestamp(TimeUnit::Microsecond, _) => Ok(DataValue::TimestampMicrosecond(None)),
-            DataType::Timestamp(TimeUnit::Nanosecond, _) => Ok(DataValue::TimestampNanosecond(None)),
-            _ => {
-                Result::Err(ErrorCodes::BadDataValueType(
-                    format!(
-                        "DataValue Error: Unsupported try_from() for data type: {:?}",
-                        data_type
-                    )
-                ))
+            DataType::Timestamp(TimeUnit::Millisecond, _) => {
+                Ok(DataValue::TimestampMillisecond(None))
             }
+            DataType::Timestamp(TimeUnit::Microsecond, _) => {
+                Ok(DataValue::TimestampMicrosecond(None))
+            }
+            DataType::Timestamp(TimeUnit::Nanosecond, _) => {
+                Ok(DataValue::TimestampNanosecond(None))
+            }
+            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+                "DataValue Error: Unsupported try_from() for data type: {:?}",
+                data_type
+            )))
         }
     }
 }

@@ -4,13 +4,14 @@
 
 use std::cmp::Ordering;
 
-use common_exception::{Result, ErrorCodes};
 use common_arrow::arrow::array::build_compare;
 use common_arrow::arrow::array::make_array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::DynComparator;
 use common_arrow::arrow::array::MutableArrayData;
 use common_arrow::arrow::compute::SortOptions;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 pub struct DataArrayMerge;
 
@@ -23,12 +24,10 @@ impl DataArrayMerge {
         }
 
         if lhs.len() + rhs.len() < indices.len() || indices.is_empty() {
-            return Result::Err(ErrorCodes::BadDataArrayLength(
-                format!(
-                    "It is impossible to merge arrays with overflow indices, {}",
-                    indices.len()
-                )
-            ));
+            return Result::Err(ErrorCodes::BadDataArrayLength(format!(
+                "It is impossible to merge arrays with overflow indices, {}",
+                indices.len()
+            )));
         }
 
         let arrays = vec![lhs, rhs]

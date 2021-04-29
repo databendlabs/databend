@@ -5,6 +5,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
+use common_exception::ErrorCodes;
 use common_planners::DatabaseEngineType;
 use common_planners::ExplainType;
 use common_planners::TableEngineType;
@@ -30,7 +31,6 @@ use crate::sql::DfExplain;
 use crate::sql::DfShowSettings;
 use crate::sql::DfShowTables;
 use crate::sql::DfStatement;
-use common_exception::ErrorCodes;
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {

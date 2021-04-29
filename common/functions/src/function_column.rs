@@ -4,12 +4,13 @@
 
 use std::fmt;
 
-use common_exception::{Result, ErrorCodes};
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 use crate::IFunction;
 
@@ -37,7 +38,9 @@ impl IFunction for ColumnFunction {
         let field = if self.value == "*" {
             input_schema.field(0)
         } else {
-            input_schema.field_with_name(self.value.as_str()).map_err(ErrorCodes::from_arrow)?
+            input_schema
+                .field_with_name(self.value.as_str())
+                .map_err(ErrorCodes::from_arrow)?
         };
 
         Ok(field.data_type().clone())
@@ -47,16 +50,17 @@ impl IFunction for ColumnFunction {
         let field = if self.value == "*" {
             input_schema.field(0)
         } else {
-            input_schema.field_with_name(self.value.as_str()).map_err(ErrorCodes::from_arrow)?
+            input_schema
+                .field_with_name(self.value.as_str())
+                .map_err(ErrorCodes::from_arrow)?
         };
         Ok(field.is_nullable())
     }
 
     fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
-        block.column_by_name(self.value.as_str())
-            .map(|column| {
-                DataColumnarValue::Array(column.clone())
-            })
+        block
+            .column_by_name(self.value.as_str())
+            .map(|column| DataColumnarValue::Array(column.clone()))
     }
 
     fn accumulate(&mut self, block: &DataBlock) -> Result<()> {

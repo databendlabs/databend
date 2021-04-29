@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_exception::Result;
+
 use crate::DataArrayRef;
 use crate::DataType;
 use crate::DataValue;

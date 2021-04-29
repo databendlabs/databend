@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::CreateTablePlan;
 
@@ -12,7 +13,6 @@ use crate::datasources::system;
 use crate::datasources::IDatabase;
 use crate::datasources::ITable;
 use crate::datasources::ITableFunction;
-use common_exception::ErrorCodes;
 
 pub struct SystemDatabase {
     tables: HashMap<String, Arc<dyn ITable>>,
@@ -65,10 +65,9 @@ impl IDatabase for SystemDatabase {
     }
 
     fn get_table(&self, table_name: &str) -> Result<Arc<dyn ITable>> {
-        let table = self
-            .tables
-            .get(table_name)
-            .ok_or_else(|| ErrorCodes::UnknownTable(format!("DataSource Error: Unknown table: '{}'", table_name)))?;
+        let table = self.tables.get(table_name).ok_or_else(|| {
+            ErrorCodes::UnknownTable(format!("DataSource Error: Unknown table: '{}'", table_name))
+        })?;
         Ok(table.clone())
     }
 

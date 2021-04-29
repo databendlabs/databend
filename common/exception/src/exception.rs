@@ -4,8 +4,11 @@
 
 #![allow(non_snake_case)]
 
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::Formatter;
+
 use thiserror::Error;
-use std::fmt::{Display, Formatter, Debug};
 
 #[derive(Error)]
 pub struct ErrorCodes {
@@ -13,7 +16,7 @@ pub struct ErrorCodes {
     display_text: String,
     cause: Option<Box<dyn std::error::Error + Sync + Send>>,
     #[cfg(feature = "backtrace")]
-    backtrace: None<std::backtrace::Backtrace>,
+    backtrace: None<std::backtrace::Backtrace>
 }
 
 macro_rules! as_item {
@@ -30,7 +33,7 @@ macro_rules! build_exceptions {
                 pub fn $body(display_text: String) -> ErrorCodes {
                     ErrorCodes {
                         code:$code,
-                        display_text:display_text,
+                        display_text,
                         cause: None,
                         #[cfg(feature = "backtrace")]
                         backtrace: Some(std::backtrace::Backtrace::capture()),
@@ -77,32 +80,56 @@ pub type Result<T> = std::result::Result<T, ErrorCodes>;
 
 impl Debug for ErrorCodes {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.cause.as_ref().map(|cause| {
-            write!(f, "Code: {}, displayText = {:?}.", self.code, cause)
-        }).unwrap_or_else(|| {
-            write!(f, "Code: {}, displayText = {:?}.", self.code.clone(), self.display_text.clone())
-        })
+        self.cause
+            .as_ref()
+            .map(|cause| write!(f, "Code: {}, displayText = {:?}.", self.code, cause))
+            .unwrap_or_else(|| {
+                write!(
+                    f,
+                    "Code: {}, displayText = {:?}.",
+                    self.code.clone(),
+                    self.display_text.clone()
+                )
+            })
     }
 }
 
 impl Display for ErrorCodes {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.cause.as_ref().map(|cause| {
-            write!(f, "Code: {}, displayText = {}.", self.code, cause)
-        }).unwrap_or_else(|| {
-            write!(f, "Code: {}, displayText = {}.", self.code.clone(), self.display_text.clone())
-        })
+        self.cause
+            .as_ref()
+            .map(|cause| write!(f, "Code: {}, displayText = {}.", self.code, cause))
+            .unwrap_or_else(|| {
+                write!(
+                    f,
+                    "Code: {}, displayText = {}.",
+                    self.code.clone(),
+                    self.display_text.clone()
+                )
+            })
     }
 }
 
 #[derive(Error)]
 enum OtherErrors {
-    AnyHow { error: anyhow::Error },
-    SerdeJSON { error: serde_json::Error },
-    ArrowError { error: common_arrow::arrow::error::ArrowError },
-    ParserError { error: sqlparser::parser::ParserError },
-    ParseIntError { error: std::num::ParseIntError },
-    ParserFloatError { error: std::num::ParseFloatError }
+    AnyHow {
+        error: anyhow::Error
+    },
+    SerdeJSON {
+        error: serde_json::Error
+    },
+    ArrowError {
+        error: common_arrow::arrow::error::ArrowError
+    },
+    ParserError {
+        error: sqlparser::parser::ParserError
+    },
+    ParseIntError {
+        error: std::num::ParseIntError
+    },
+    ParserFloatError {
+        error: std::num::ParseFloatError
+    }
 }
 
 impl Display for OtherErrors {
@@ -113,7 +140,7 @@ impl Display for OtherErrors {
             OtherErrors::ArrowError { error } => write!(f, "{}", error),
             OtherErrors::ParserError { error } => write!(f, "{}", error),
             OtherErrors::ParseIntError { error } => write!(f, "{}", error),
-            OtherErrors::ParserFloatError { error } => write!(f, "{}", error),
+            OtherErrors::ParserFloatError { error } => write!(f, "{}", error)
         }
     }
 }
@@ -126,7 +153,7 @@ impl Debug for OtherErrors {
             OtherErrors::ArrowError { error } => write!(f, "{:?}", error),
             OtherErrors::ParserError { error } => write!(f, "{:?}", error),
             OtherErrors::ParseIntError { error } => write!(f, "{:?}", error),
-            OtherErrors::ParserFloatError { error } => write!(f, "{}", error),
+            OtherErrors::ParserFloatError { error } => write!(f, "{}", error)
         }
     }
 }
@@ -136,9 +163,9 @@ impl ErrorCodes {
         ErrorCodes {
             code: 1002,
             display_text: String::from(""),
-            cause: Some(Box::new(OtherErrors::AnyHow { error: error })),
+            cause: Some(Box::new(OtherErrors::AnyHow { error })),
             #[cfg(feature = "backtrace")]
-            backtrace: None,
+            backtrace: None
         }
     }
 
@@ -146,9 +173,9 @@ impl ErrorCodes {
         ErrorCodes {
             code: 1002,
             display_text: String::from(""),
-            cause: Some(Box::new(OtherErrors::ParseIntError { error: error })),
+            cause: Some(Box::new(OtherErrors::ParseIntError { error })),
             #[cfg(feature = "backtrace")]
-            backtrace: None,
+            backtrace: None
         }
     }
 
@@ -156,9 +183,9 @@ impl ErrorCodes {
         ErrorCodes {
             code: 1002,
             display_text: String::from(""),
-            cause: Some(Box::new(OtherErrors::ParserFloatError { error: error })),
+            cause: Some(Box::new(OtherErrors::ParserFloatError { error })),
             #[cfg(feature = "backtrace")]
-            backtrace: None,
+            backtrace: None
         }
     }
 
@@ -166,9 +193,9 @@ impl ErrorCodes {
         ErrorCodes {
             code: 1002,
             display_text: String::from(""),
-            cause: Some(Box::new(OtherErrors::ArrowError { error: error })),
+            cause: Some(Box::new(OtherErrors::ArrowError { error })),
             #[cfg(feature = "backtrace")]
-            backtrace: None,
+            backtrace: None
         }
     }
 
@@ -176,9 +203,9 @@ impl ErrorCodes {
         ErrorCodes {
             code: 1002,
             display_text: String::from(""),
-            cause: Some(Box::new(OtherErrors::SerdeJSON { error: error })),
+            cause: Some(Box::new(OtherErrors::SerdeJSON { error })),
             #[cfg(feature = "backtrace")]
-            backtrace: None,
+            backtrace: None
         }
     }
 
@@ -186,10 +213,9 @@ impl ErrorCodes {
         ErrorCodes {
             code: 5,
             display_text: String::from(""),
-            cause: Some(Box::new(OtherErrors::ParserError { error: error })),
+            cause: Some(Box::new(OtherErrors::ParserError { error })),
             #[cfg(feature = "backtrace")]
-            backtrace: None,
+            backtrace: None
         }
     }
 }
-

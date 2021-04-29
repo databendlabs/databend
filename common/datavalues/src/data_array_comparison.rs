@@ -4,9 +4,10 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
 use common_exception::ErrorCodes;
+use common_exception::Result;
 
+use crate::data_array_cast;
 use crate::DataArrayRef;
 use crate::DataColumnarValue;
 use crate::DataType;
@@ -23,7 +24,6 @@ use crate::UInt16Array;
 use crate::UInt32Array;
 use crate::UInt64Array;
 use crate::UInt8Array;
-use crate::data_array_cast;
 
 pub struct DataArrayComparison;
 
@@ -38,7 +38,7 @@ impl DataArrayComparison {
             (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
                 let coercion_type = super::data_type::equal_coercion(
                     &left_array.data_type(),
-                    &right_array.data_type(),
+                    &right_array.data_type()
                 )?;
                 let left_array = data_array_cast(&left_array, &coercion_type)?;
                 let right_array = data_array_cast(&right_array, &coercion_type)?;
@@ -95,7 +95,8 @@ impl DataArrayComparison {
             }
 
             (DataColumnarValue::Scalar(scalar), DataColumnarValue::Array(array)) => {
-                let coercion_type = super::data_type::equal_coercion(&array.data_type(), &scalar.data_type())?;
+                let coercion_type =
+                    super::data_type::equal_coercion(&array.data_type(), &scalar.data_type())?;
                 let left_array = data_array_cast(&scalar.to_array_with_size(1)?, &coercion_type)?;
                 let right_array = data_array_cast(&array, &coercion_type)?;
                 let scalar = DataValue::try_from_array(&left_array, 0)?;
@@ -124,10 +125,12 @@ impl DataArrayComparison {
             (DataColumnarValue::Scalar(left_scala), DataColumnarValue::Scalar(right_scalar)) => {
                 let coercion_type = super::data_type::equal_coercion(
                     &left_scala.data_type(),
-                    &right_scalar.data_type(),
+                    &right_scalar.data_type()
                 )?;
-                let left_array = data_array_cast(&left_scala.to_array_with_size(1)?, &coercion_type)?;
-                let right_array = data_array_cast(&right_scalar.to_array_with_size(1)?, &coercion_type)?;
+                let left_array =
+                    data_array_cast(&left_scala.to_array_with_size(1)?, &coercion_type)?;
+                let right_array =
+                    data_array_cast(&right_scalar.to_array_with_size(1)?, &coercion_type)?;
 
                 match op {
                     DataValueComparisonOperator::Eq => {

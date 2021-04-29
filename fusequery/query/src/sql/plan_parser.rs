@@ -5,11 +5,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::Result;
+use common_arrow::arrow::datatypes::Field;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataValue;
 use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::ExplainPlan;
@@ -35,7 +36,6 @@ use crate::sql::DfExplain;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 use crate::sql::SQLCommon;
-use common_arrow::arrow::datatypes::Field;
 
 pub struct PlanParser {
     ctx: FuseQueryContextRef
@@ -48,8 +48,14 @@ impl PlanParser {
 
     pub fn build_from_sql(&self, query: &str) -> Result<PlanNode> {
         DfParser::parse_sql(query).and_then(|statement| {
-            statement.first().map(|statement| self.statement_to_plan(&statement))
-                .unwrap_or_else(|| Result::Err(ErrorCodes::SyntexException(String::from("Only support single query"))))
+            statement
+                .first()
+                .map(|statement| self.statement_to_plan(&statement))
+                .unwrap_or_else(|| {
+                    Result::Err(ErrorCodes::SyntexException(String::from(
+                        "Only support single query"
+                    )))
+                })
         })
     }
 
@@ -57,7 +63,9 @@ impl PlanParser {
         match statement {
             DfStatement::Statement(v) => self.sql_statement_to_plan(&v),
             DfStatement::Explain(v) => self.sql_explain_to_plan(&v),
-            DfStatement::ShowDatabases(_) => self.build_from_sql("SELECT name FROM system.databases ORDER BY name"),
+            DfStatement::ShowDatabases(_) => {
+                self.build_from_sql("SELECT name FROM system.databases ORDER BY name")
+            }
             DfStatement::CreateDatabase(v) => self.sql_create_database_to_plan(&v),
             DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(&v),
             DfStatement::CreateTable(v) => self.sql_create_table_to_plan(&v),
@@ -67,9 +75,10 @@ impl PlanParser {
                 format!(
                     "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
                     self.ctx.get_current_database()
-                ).as_str()
+                )
+                .as_str()
             ),
-            DfStatement::ShowSettings(_) => self.build_from_sql("SELECT name FROM system.settings"),
+            DfStatement::ShowSettings(_) => self.build_from_sql("SELECT name FROM system.settings")
         }
     }
 
@@ -80,7 +89,10 @@ impl PlanParser {
             Statement::SetVariable {
                 variable, value, ..
             } => self.set_variable_to_plan(variable, value),
-            _ => Result::Err(ErrorCodes::SyntexException(format!("Unsupported statement {:?}", statement)))
+            _ => Result::Err(ErrorCodes::SyntexException(format!(
+                "Unsupported statement {:?}",
+                statement
+            )))
         }
     }
 
@@ -95,7 +107,9 @@ impl PlanParser {
 
     pub fn sql_create_database_to_plan(&self, create: &DfCreateDatabase) -> Result<PlanNode> {
         if create.name.0.is_empty() {
-            return Result::Err(ErrorCodes::SyntexException("Create database name is empty".to_string()));
+            return Result::Err(ErrorCodes::SyntexException(
+                "Create database name is empty".to_string()
+            ));
         }
         let create_database_name = create.name.0[0].value.clone();
 
@@ -108,7 +122,7 @@ impl PlanParser {
             if_not_exists: create.if_not_exists,
             db: create_database_name,
             engine: create.engine,
-            options,
+            options
         }))
     }
 
@@ -120,7 +134,9 @@ impl PlanParser {
     pub fn sql_create_table_to_plan(&self, create: &DfCreateTable) -> Result<PlanNode> {
         let mut db = self.ctx.get_current_database();
         if create.name.0.is_empty() {
-            return Result::Err(ErrorCodes::SyntexException("Create table name is empty".to_string()));
+            return Result::Err(ErrorCodes::SyntexException(
+                "Create table name is empty".to_string()
+            ));
         }
         let mut table = create.name.0[0].value.clone();
         if create.name.0.len() > 1 {
@@ -128,11 +144,14 @@ impl PlanParser {
             table = create.name.0[1].value.clone();
         }
 
-        let fields = create.columns.iter().map(|column| {
-            SQLCommon::make_data_type(&column.data_type).map(|data_type| {
-                DataField::new(&column.name.value, data_type, false)
+        let fields = create
+            .columns
+            .iter()
+            .map(|column| {
+                SQLCommon::make_data_type(&column.data_type)
+                    .map(|data_type| DataField::new(&column.name.value, data_type, false))
             })
-        }).collect::<Result<Vec<Field>>>()?;
+            .collect::<Result<Vec<Field>>>()?;
 
         let mut options = HashMap::new();
         for p in create.options.iter() {
@@ -163,7 +182,10 @@ impl PlanParser {
             sqlparser::ast::SetExpr::Select(s) => {
                 self.select_to_plan(s.as_ref(), &query.limit, &query.order_by)
             }
-            _ => Result::Err(ErrorCodes::UnImplement(format!("Query {} not implemented yet", query.body)))
+            _ => Result::Err(ErrorCodes::UnImplement(format!(
+                "Query {} not implemented yet",
+                query.body
+            )))
         }
     }
 
@@ -175,7 +197,9 @@ impl PlanParser {
         order_by: &[OrderByExpr]
     ) -> Result<PlanNode> {
         if select.having.is_some() {
-            return Result::Err(ErrorCodes::UnImplement("HAVING is not implemented yet".to_string()));
+            return Result::Err(ErrorCodes::UnImplement(
+                "HAVING is not implemented yet".to_string()
+            ));
         }
 
         // from.
@@ -231,7 +255,10 @@ impl PlanParser {
                 Box::new(self.sql_to_rex(&expr, schema)?)
             )),
             sqlparser::ast::SelectItem::Wildcard => Ok(ExpressionPlan::Wildcard),
-            _ => Result::Err(ErrorCodes::UnImplement(format!("SelectItem: {:?} are not supported", sql)))
+            _ => Result::Err(ErrorCodes::UnImplement(format!(
+                "SelectItem: {:?} are not supported",
+                sql
+            )))
         }
     }
 
@@ -239,7 +266,9 @@ impl PlanParser {
         match from.len() {
             0 => self.plan_with_dummy_source(),
             1 => self.plan_table_with_joins(&from[0]),
-            _ => Result::Err(ErrorCodes::SyntexException("Cannot support JOIN clause".to_string()))
+            _ => Result::Err(ErrorCodes::SyntexException(
+                "Cannot support JOIN clause".to_string()
+            ))
         }
     }
 
@@ -247,30 +276,20 @@ impl PlanParser {
         let db_name = "system";
         let table_name = "one";
 
-        self.ctx.get_table(db_name, table_name)
-            .and_then(|table| {
-                table.schema()
-                    .and_then(|ref schema| {
-                        PlanBuilder::scan(
-                            db_name,
-                            table_name,
-                            schema,
-                            None,
-                            None,
-                            None,
-                        )
-                    })
-                    .and_then(|builder| builder.build())
-                    .and_then(|dummy_scan_plan| {
-                        match dummy_scan_plan {
-                            PlanNode::Scan(ref dummy_scan_plan) => {
-                                table.read_plan(self.ctx.clone(), dummy_scan_plan)
-                                    .map(|read_plan| PlanNode::ReadSource(read_plan))
-                            },
-                            _unreachable_plan => panic!("Logical error: cannot downcast to scan plan")
-                        }
-                    })
-            })
+        self.ctx.get_table(db_name, table_name).and_then(|table| {
+            table
+                .schema()
+                .and_then(|ref schema| {
+                    PlanBuilder::scan(db_name, table_name, schema, None, None, None)
+                })
+                .and_then(|builder| builder.build())
+                .and_then(|dummy_scan_plan| match dummy_scan_plan {
+                    PlanNode::Scan(ref dummy_scan_plan) => table
+                        .read_plan(self.ctx.clone(), dummy_scan_plan)
+                        .map(PlanNode::ReadSource),
+                    _unreachable_plan => panic!("Logical error: cannot downcast to scan plan")
+                })
+        })
     }
 
     fn plan_table_with_joins(&self, t: &sqlparser::ast::TableWithJoins) -> Result<PlanNode> {
@@ -294,7 +313,9 @@ impl PlanParser {
                 // only table functions has table args
                 if !args.is_empty() {
                     if name.0.len() >= 2 {
-                        return Result::Err(ErrorCodes::BadArguments("Currently table can't have arguments".to_string()));
+                        return Result::Err(ErrorCodes::BadArguments(
+                            "Currently table can't have arguments".to_string()
+                        ));
                     }
 
                     let empty_schema = Arc::new(DataSchema::empty());
@@ -316,29 +337,31 @@ impl PlanParser {
                 }
 
                 let scan = {
-                    table.schema()
-                        .and_then(|schema| {
-                            PlanBuilder::scan(
-                                &db_name,
-                                &table_name,
-                                schema.as_ref(),
-                                None,
-                                table_args,
-                                None,
-                            ).and_then(|builder| builder.build())
-                        })
+                    table.schema().and_then(|schema| {
+                        PlanBuilder::scan(
+                            &db_name,
+                            &table_name,
+                            schema.as_ref(),
+                            None,
+                            table_args,
+                            None
+                        )
+                        .and_then(|builder| builder.build())
+                    })
                 };
 
                 scan.and_then(|scan| match scan {
-                    PlanNode::Scan(ref scan) => {
-                        table.read_plan(self.ctx.clone(), scan).map(|read_plan| PlanNode::ReadSource(read_plan))
-                    }
+                    PlanNode::Scan(ref scan) => table
+                        .read_plan(self.ctx.clone(), scan)
+                        .map(PlanNode::ReadSource),
                     _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan")
                 })
             }
             Derived { subquery, .. } => self.query_to_plan(subquery),
             NestedJoin(table_with_joins) => self.plan_table_with_joins(table_with_joins),
-            TableFunction { .. } => Result::Err(ErrorCodes::UnImplement("Unsupported table function".to_string()))
+            TableFunction { .. } => Result::Err(ErrorCodes::UnImplement(
+                "Unsupported table function".to_string()
+            ))
         }
     }
 
@@ -351,30 +374,28 @@ impl PlanParser {
         fn value_to_rex(value: &sqlparser::ast::Value) -> Result<ExpressionPlan> {
             match value {
                 sqlparser::ast::Value::Number(ref n, _) => {
-                    DataValue::try_from_literal(n)
-                        .map(|literal| ExpressionPlan::Literal(literal))
+                    DataValue::try_from_literal(n).map(ExpressionPlan::Literal)
                 }
-                sqlparser::ast::Value::SingleQuotedString(ref value) => {
-                    Ok(ExpressionPlan::Literal(DataValue::Utf8(Some(value.clone()))))
-                }
+                sqlparser::ast::Value::SingleQuotedString(ref value) => Ok(
+                    ExpressionPlan::Literal(DataValue::Utf8(Some(value.clone())))
+                ),
                 sqlparser::ast::Value::Interval {
                     value,
                     leading_field,
                     leading_precision,
                     last_field,
                     fractional_seconds_precision
-                } => {
-                    SQLCommon::make_sql_interval_to_literal(
-                        value,
-                        leading_field,
-                        leading_precision,
-                        last_field,
-                        fractional_seconds_precision,
-                    )
-                }
-                other => Result::Err(ErrorCodes::SyntexException(
-                    format!("Unsupported value expression: {}, type: {:?}", value, other)
-                ))
+                } => SQLCommon::make_sql_interval_to_literal(
+                    value,
+                    leading_field,
+                    leading_precision,
+                    last_field,
+                    fractional_seconds_precision
+                ),
+                other => Result::Err(ErrorCodes::SyntexException(format!(
+                    "Unsupported value expression: {}, type: {:?}",
+                    value, other
+                )))
             }
         }
 
@@ -385,7 +406,7 @@ impl PlanParser {
                 Ok(ExpressionPlan::BinaryExpression {
                     op: format!("{}", op),
                     left: Box::new(self.sql_to_rex(left, schema)?),
-                    right: Box::new(self.sql_to_rex(right, schema)?),
+                    right: Box::new(self.sql_to_rex(right, schema)?)
                 })
             }
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema),
@@ -416,33 +437,29 @@ impl PlanParser {
 
                 Ok(ExpressionPlan::Function {
                     op: e.name.to_string(),
-                    args,
+                    args
                 })
             }
             sqlparser::ast::Expr::Wildcard => Ok(ExpressionPlan::Wildcard),
             sqlparser::ast::Expr::TypedString { data_type, value } => {
-                SQLCommon::make_data_type(data_type).map(|data_type| {
-                    ExpressionPlan::Cast {
-                        expr: Box::new(ExpressionPlan::Literal(DataValue::Utf8(Some(value.clone())))),
-                        data_type: data_type,
-                    }
+                SQLCommon::make_data_type(data_type).map(|data_type| ExpressionPlan::Cast {
+                    expr: Box::new(ExpressionPlan::Literal(DataValue::Utf8(Some(
+                        value.clone()
+                    )))),
+                    data_type
                 })
-            },
-            sqlparser::ast::Expr::Cast { expr, data_type } => {
-                self.sql_to_rex(expr, schema).map(Box::from).and_then(|expr| {
-                    SQLCommon::make_data_type(data_type).map(|data_type| {
-                        ExpressionPlan::Cast {
-                            expr: expr,
-                            data_type: data_type,
-                        }
-                    })
-                })
-            },
-            other => {
-                Result::Err(ErrorCodes::SyntexException(
-                    format!("Unsupported expression: {}, type: {:?}", expr, other)
-                ))
             }
+            sqlparser::ast::Expr::Cast { expr, data_type } => self
+                .sql_to_rex(expr, schema)
+                .map(Box::from)
+                .and_then(|expr| {
+                    SQLCommon::make_data_type(data_type)
+                        .map(|data_type| ExpressionPlan::Cast { expr, data_type })
+                }),
+            other => Result::Err(ErrorCodes::SyntexException(format!(
+                "Unsupported expression: {}, type: {:?}",
+                expr, other
+            )))
         }
     }
 
@@ -477,14 +494,16 @@ impl PlanParser {
                             .filter(filter_expr)
                             .and_then(|builder| builder.build())
                     })
-            },
+            }
             _ => Ok(plan.clone())
         }
     }
 
     /// Wrap a plan in a projection
     fn project(&self, input: &PlanNode, expr: Vec<ExpressionPlan>) -> Result<PlanNode> {
-        PlanBuilder::from(input).project(expr).and_then(|builder| builder.build())
+        PlanBuilder::from(input)
+            .project(expr)
+            .and_then(|builder| builder.build())
     }
 
     /// Wrap a plan for an aggregate
@@ -504,8 +523,10 @@ impl PlanParser {
         // S2: Apply a final aggregator plan.
         PlanBuilder::from(&input)
             .aggregate_partial(aggr_expr.clone(), group_expr.clone())
-            // FIXME self.ctx.get_id().unwrap()
-            .and_then(|builder| builder.stage(self.ctx.get_id().unwrap(), StageState::AggregatorMerge))
+            // TODO self.ctx.get_id().unwrap()
+            .and_then(|builder| {
+                builder.stage(self.ctx.get_id().unwrap(), StageState::AggregatorMerge)
+            })
             .and_then(|builder| builder.aggregate_final(aggr_expr, group_expr))
             .and_then(|builder| builder.build())
     }
@@ -521,26 +542,32 @@ impl PlanParser {
                 Ok(ExpressionPlan::Sort {
                     expr: Box::new(self.sql_to_rex(&e.expr, &input.schema())?),
                     asc: e.asc.unwrap_or(true),
-                    nulls_first: e.nulls_first.unwrap_or(true),
+                    nulls_first: e.nulls_first.unwrap_or(true)
                 })
             })
             .collect::<Result<Vec<ExpressionPlan>>>()?;
 
-        PlanBuilder::from(&input).sort(&order_by_exprs).and_then(|builder| builder.build())
+        PlanBuilder::from(&input)
+            .sort(&order_by_exprs)
+            .and_then(|builder| builder.build())
     }
 
     /// Wrap a plan in a limit
     fn limit(&self, input: &PlanNode, limit: &Option<sqlparser::ast::Expr>) -> Result<PlanNode> {
         match *limit {
             Some(ref limit_expr) => {
-                let n = self.sql_to_rex(&limit_expr, &input.schema()).and_then(|limit_expr| {
-                    match limit_expr {
+                let n = self
+                    .sql_to_rex(&limit_expr, &input.schema())
+                    .and_then(|limit_expr| match limit_expr {
                         ExpressionPlan::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
-                        _ => Err(ErrorCodes::SyntexException("Unexpected expression for LIMIT clause".to_string()))
-                    }
-                })?;
+                        _ => Err(ErrorCodes::SyntexException(
+                            "Unexpected expression for LIMIT clause".to_string()
+                        ))
+                    })?;
 
-                PlanBuilder::from(&input).limit(n).and_then(|builder| builder.build())
+                PlanBuilder::from(&input)
+                    .limit(n)
+                    .and_then(|builder| builder.build())
             }
             _ => Ok(input.clone())
         }
