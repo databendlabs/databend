@@ -578,6 +578,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-ext"
+version = "0.1.0"
+
+[[package]]
 name = "common-flights"
 version = "0.1.0"
 dependencies = [
@@ -1154,6 +1158,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-ext",
  "common-flights",
  "common-functions",
  "common-infallible",
