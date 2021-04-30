@@ -91,7 +91,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
     }
 
     fn err(error: ErrorCodes, writer: QueryResultWriter<'a, T>) -> std::io::Result<()> {
-        error!("ResultError {:?}", error);
+        error!("OnQuery Error: {:?}", error);
         writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())
     }
 }
