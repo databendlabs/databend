@@ -87,6 +87,7 @@ mod tests {
     #[test]
     fn test_aggregate_expr_check_3() -> anyhow::Result<()> {
         use anyhow::anyhow;
+
         use crate::*;
 
         let source = Test::create().generate_source_plan_for_test(10000)?;
