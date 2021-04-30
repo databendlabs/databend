@@ -23,6 +23,7 @@ common-planners = {path = "../../common/planners"}
 common-progress = {path = "../../common/progress"}
 common-streams = {path = "../../common/streams"}
 common-exception = {path = "../../common/exception"}
+common-ext = {path= "../../common/ext"}
 
 
 # Github dependencies
@@ -50,9 +51,11 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sqlparser = "0.9"
 structopt = "0.3"
+structopt-toml = "0.4.5"
 threadpool = "1.8.1"
 tokio = { version = "1.5", features = ["macros", "rt","rt-multi-thread", "sync"] }
 tokio-stream = "0.1"
+toml = "0.5.6"
 tonic = "0.4"
 warp = "0.3.1"
 uuid = { version = "0.8", features = ["serde", "v4"] }

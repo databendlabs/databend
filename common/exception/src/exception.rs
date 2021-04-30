@@ -8,6 +8,7 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use backtrace::Backtrace;
 use thiserror::Error;
 
 #[derive(Error)]
@@ -15,8 +16,7 @@ pub struct ErrorCodes {
     code: u16,
     display_text: String,
     cause: Option<Box<dyn std::error::Error + Sync + Send>>,
-    #[cfg(feature = "backtrace")]
-    backtrace: None<std::backtrace::Backtrace>
+    backtrace: Option<Backtrace>
 }
 
 macro_rules! as_item {
@@ -35,8 +35,7 @@ macro_rules! build_exceptions {
                         code:$code,
                         display_text,
                         cause: None,
-                        #[cfg(feature = "backtrace")]
-                        backtrace: Some(std::backtrace::Backtrace::capture()),
+                        backtrace: Some(Backtrace::new()),
                     }
                 })*
             }
@@ -89,7 +88,14 @@ impl Debug for ErrorCodes {
                     "Code: {}, displayText = {:?}.",
                     self.code.clone(),
                     self.display_text.clone()
-                )
+                )?;
+                match self.backtrace.as_ref() {
+                    None => Ok(()), // no backtrace
+                    Some(backtrace) => {
+                        // TODO: Custom stack frame format for print
+                        write!(f, "\n\n{:?}", backtrace)
+                    }
+                }
             })
     }
 }
@@ -164,7 +170,6 @@ impl ErrorCodes {
             code: 1002,
             display_text: String::from(""),
             cause: Some(Box::new(OtherErrors::AnyHow { error })),
-            #[cfg(feature = "backtrace")]
             backtrace: None
         }
     }
@@ -174,7 +179,6 @@ impl ErrorCodes {
             code: 1002,
             display_text: String::from(""),
             cause: Some(Box::new(OtherErrors::ParseIntError { error })),
-            #[cfg(feature = "backtrace")]
             backtrace: None
         }
     }
@@ -184,7 +188,6 @@ impl ErrorCodes {
             code: 1002,
             display_text: String::from(""),
             cause: Some(Box::new(OtherErrors::ParserFloatError { error })),
-            #[cfg(feature = "backtrace")]
             backtrace: None
         }
     }
@@ -194,7 +197,6 @@ impl ErrorCodes {
             code: 1002,
             display_text: String::from(""),
             cause: Some(Box::new(OtherErrors::ArrowError { error })),
-            #[cfg(feature = "backtrace")]
             backtrace: None
         }
     }
@@ -204,7 +206,6 @@ impl ErrorCodes {
             code: 1002,
             display_text: String::from(""),
             cause: Some(Box::new(OtherErrors::SerdeJSON { error })),
-            #[cfg(feature = "backtrace")]
             backtrace: None
         }
     }
@@ -214,7 +215,6 @@ impl ErrorCodes {
             code: 5,
             display_text: String::from(""),
             cause: Some(Box::new(OtherErrors::ParserError { error })),
-            #[cfg(feature = "backtrace")]
             backtrace: None
         }
     }

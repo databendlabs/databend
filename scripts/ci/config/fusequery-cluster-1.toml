@@ -1,0 +1,24 @@
+# Usage:
+# fuse-query -c fusequery_config_spec.toml
+
+# Log level.
+log_level = "ERROR"
+
+# FuseQuery rpc address.
+# For flight rpc.
+rpc_api_address = "0.0.0.0:9091"
+
+# FuseQuery http address.
+# For admin RESET API.
+http_api_address = "0.0.0.0:8081"
+
+# FuseQuery metrics RESET API.
+metric_api_address = "0.0.0.0:7071"
+
+# MySQL Handler.
+mysql_handler_host = "0.0.0.0"
+mysql_handler_port = 3307
+
+# ClickHouse Handler.
+clickhouse_handler_host = "0.0.0.0"
+clickhouse_handler_port = 9001

@@ -14,7 +14,16 @@ use log::info;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let conf = Config::create_from_args();
+    // First load configs from args.
+    let mut conf = Config::load_from_args();
+
+    // If config file is not empty: -c xx.toml
+    // Reload configs from the file.
+    if !conf.config_file.is_empty() {
+        info!("Config reload from {:?}", conf.config_file);
+        conf = Config::load_from_toml(conf.config_file.as_str())?;
+    }
+
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or(conf.log_level.to_lowercase().as_str())
     )

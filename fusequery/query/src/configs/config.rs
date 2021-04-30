@@ -2,14 +2,18 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use structopt::StructOpt;
+use structopt_toml::StructOptToml;
 
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[serde(default)]
 pub struct Config {
     #[structopt(env = "FUSE_QUERY_VERSION", default_value = "Unknown")]
     pub version: String,
 
-    #[structopt(long, env = "FUSE_QUERY_LOG_LEVEL", default_value = "info")]
+    #[structopt(long, env = "FUSE_QUERY_LOG_LEVEL", default_value = "INFO")]
     pub log_level: String,
 
     #[structopt(long, env = "FUSE_QUERY_NUM_CPUS", default_value = "0")]
@@ -81,7 +85,10 @@ pub struct Config {
     pub store_api_username: String,
 
     #[structopt(long, env = "STORE_API_PASSWORD", default_value = "root")]
-    pub store_api_password: String
+    pub store_api_password: String,
+
+    #[structopt(long, short = "c", env = "CONFIG_FILE", default_value = "")]
+    pub config_file: String
 }
 
 impl Config {
@@ -102,17 +109,31 @@ impl Config {
             metric_api_address: "127.0.0.1:7070".to_string(),
             store_api_address: "127.0.0.1:9191".to_string(),
             store_api_username: "root".to_string(),
-            store_api_password: "root".to_string()
+            store_api_password: "root".to_string(),
+            config_file: "".to_string()
         }
     }
 
-    /// Create configs from args.
-    pub fn create_from_args() -> Self {
+    /// Load configs from args.
+    pub fn load_from_args() -> Self {
         let mut cfg = Config::from_args();
         if cfg.num_cpus == 0 {
             cfg.num_cpus = num_cpus::get() as u64;
         }
         cfg.version = include_str!(concat!(env!("OUT_DIR"), "/version-info.txt")).to_string();
         cfg
+    }
+
+    /// Load configs from toml file.
+    pub fn load_from_toml(file: &str) -> Result<Self> {
+        let context = std::fs::read_to_string(file)
+            .map_err(|e| ErrorCodes::CannotReadFile(format!("File: {}, err: {:?}", file, e)))?;
+        let mut cfg = Config::from_args_with_toml(context.as_str())
+            .map_err(|e| ErrorCodes::BadArguments(format!("{:?}", e)))?;
+        if cfg.num_cpus == 0 {
+            cfg.num_cpus = num_cpus::get() as u64;
+        }
+        cfg.version = include_str!(concat!(env!("OUT_DIR"), "/version-info.txt")).to_string();
+        Ok(cfg)
     }
 }

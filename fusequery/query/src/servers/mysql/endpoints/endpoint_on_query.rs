@@ -96,7 +96,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
     }
 }
 
-type Input = anyhow::Result<Vec<DataBlock>, ErrorCodes>;
+type Input = Result<Vec<DataBlock>>;
 type Output = std::io::Result<()>;
 
 // TODO: Maybe can use generic to abstract all MySQLEndpoints done function
