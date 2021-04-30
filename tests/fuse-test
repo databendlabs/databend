@@ -197,7 +197,7 @@ def run_tests_array(all_tests_with_params):
                     status += MSG_SKIPPED + " - " + message + "\n"
                 else:
                     file_suffix = ('.' + str(os.getpid())) if is_concurrent and args.test_runs > 1 else ''
-                    reference_file = os.path.join(suite_dir, name) + '.reference'
+                    result_file = os.path.join(suite_dir, name) + '.result'
                     stdout_file = os.path.join(suite_tmp_dir, name) + file_suffix + '.stdout'
                     stderr_file = os.path.join(suite_tmp_dir, name) + file_suffix + '.stderr'
 
@@ -262,19 +262,19 @@ def run_tests_array(all_tests_with_params):
                             status += print_test_time(total_time)
                             status += " - having exception:\n{}\n".format(
                                 '\n'.join(stdout.split('\n')[:100]))
-                        elif not os.path.isfile(reference_file):
+                        elif not os.path.isfile(result_file):
                             status += MSG_UNKNOWN
                             status += print_test_time(total_time)
-                            status += " - no reference file\n"
+                            status += " - no result file\n"
                         else:
-                            result_is_different = subprocess.call(['diff', '-q', reference_file, stdout_file], stdout=PIPE)
+                            result_is_different = subprocess.call(['diff', '-q', result_file, stdout_file], stdout=PIPE)
 
                             if result_is_different:
-                                diff = Popen(['diff', '-U', str(args.unified), reference_file, stdout_file], stdout=PIPE, universal_newlines=True).communicate()[0]
+                                diff = Popen(['diff', '-U', str(args.unified), result_file, stdout_file], stdout=PIPE, universal_newlines=True).communicate()[0]
                                 failures += 1
                                 status += MSG_FAIL
                                 status += print_test_time(total_time)
-                                status += " - result differs with reference:\n{}\n".format(diff)
+                                status += " - result differs with:\n{}\n".format(diff)
                             else:
                                 passed_total += 1
                                 failures_chain = 0
@@ -419,7 +419,8 @@ def main(args):
 
 
 def get_additional_client_options(args):
-    return ''
+    # For MySQL client with header and table format
+    return ' -v -t '
 
 
 def get_additional_client_options_url(args):

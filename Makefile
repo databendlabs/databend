@@ -1,4 +1,4 @@
-HUB ?= datafuselabs
+HUB ?= datafusedev
 TAG ?= latest
 # Setup dev toolchain
 setup:

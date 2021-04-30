@@ -1,1 +1,0 @@
-AggregatorFinal: groupBy=[[]], aggr=[[mIn([number])]]\n  RedistributeStage[state: AggregatorMerge, id: 0]\n    AggregatorPartial: groupBy=[[]], aggr=[[mIn([number])]]\n      ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]
