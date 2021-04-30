@@ -5,7 +5,6 @@
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Node {
     pub name: String,
-    pub cpus: usize,
     // Node priority is in [0,10]
     // larger value means higher priority
     pub priority: u8,
