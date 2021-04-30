@@ -33,7 +33,6 @@ mod tests {
 
     #[test]
     fn test_aggregate_expr_check_1() -> anyhow::Result<()> {
-
         use anyhow::anyhow;
         use pretty_assertions::assert_eq;
 
@@ -51,6 +50,35 @@ mod tests {
                 println!("error: {}", e);
                 let actual = format!("{}", e);
                 let expect = "Code: 1000, displayText = Expression (number + 1) is not an aggregate function..";
+                assert_eq!(expect, actual);
+                Ok(())
+            }
+            Ok(_p) => Err(anyhow!("Error: we expect a failure."))
+        }
+    }
+
+    #[test]
+    fn test_aggregate_expr_check_2() -> anyhow::Result<()> {
+        use anyhow::anyhow;
+        use pretty_assertions::assert_eq;
+
+        use crate::*;
+
+        let source = Test::create().generate_source_plan_for_test(10000)?;
+
+        // select sum(number) as a, number % 3 group by  number % 4
+        let plan = PlanBuilder::from(&source).aggregate_partial(
+            vec![
+                sum(col("number")).alias("a"),
+                modular(col("number"), lit(3)),
+            ],
+            vec![modular(col("a"), lit(4))]
+        );
+        match plan {
+            Err(e) => {
+                println!("error: {}", e);
+                let actual = format!("{}", e);
+                let expect = "Code: 1000, displayText = Expression (number % 3) is not an aggregate function..";
                 assert_eq!(expect, actual);
                 Ok(())
             }
