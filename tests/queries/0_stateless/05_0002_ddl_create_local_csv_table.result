@@ -1,0 +1,16 @@
+--------------
+create table default.test_csv (id int,name varchar(255),rank int) Engine = CSV location = 'tests/data/sample.csv'
+--------------
+
+--------------
+select avg(rank), max(id), name from default.test_csv group by name order by name desc
+--------------
+
++-----------+---------+-------------+
+| avg(rank) | max(id) | name        |
++-----------+---------+-------------+
+|      62.5 |       5 | 'Shenzhen'  |
+|        80 |       2 | 'Shanghai'  |
+|        60 |       3 | 'Guangzhou' |
+|      99.5 |       6 | 'Beijing'   |
++-----------+---------+-------------+
