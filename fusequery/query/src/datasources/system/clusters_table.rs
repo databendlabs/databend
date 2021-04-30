@@ -11,7 +11,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::StringArray;
-use common_datavalues::UInt32Array;
+use common_datavalues::UInt8Array;
 use common_exception::Result;
 use common_planners::Partition;
 use common_planners::ReadDataSourcePlan;
@@ -33,7 +33,7 @@ impl ClustersTable {
             schema: Arc::new(DataSchema::new(vec![
                 DataField::new("name", DataType::Utf8, false),
                 DataField::new("address", DataType::Utf8, false),
-                DataField::new("cpus", DataType::Int32, false),
+                DataField::new("priority", DataType::UInt8, false),
             ]))
         }
     }
@@ -79,11 +79,11 @@ impl ITable for ClustersTable {
         let nodes = ctx.try_get_cluster()?.get_nodes()?;
         let names: Vec<&str> = nodes.iter().map(|x| x.name.as_str()).collect();
         let addresses: Vec<&str> = nodes.iter().map(|x| x.address.as_str()).collect();
-        let cpus: Vec<u32> = nodes.iter().map(|x| x.cpus as u32).collect();
+        let priorities: Vec<u8> = nodes.iter().map(|x| x.priority).collect();
         let block = DataBlock::create(self.schema.clone(), vec![
             Arc::new(StringArray::from(names)),
             Arc::new(StringArray::from(addresses)),
-            Arc::new(UInt32Array::from(cpus)),
+            Arc::new(UInt8Array::from(priorities)),
         ]);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),

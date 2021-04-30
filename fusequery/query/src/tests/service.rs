@@ -40,7 +40,6 @@ pub async fn try_create_context_with_nodes(nums: usize) -> Result<FuseQueryConte
     for (i, addr) in addrs.iter().enumerate() {
         ctx.try_get_cluster()?.add_node(&Node {
             name: format!("node{}", i),
-            cpus: 4,
             priority: 10,
             address: addr.clone(),
             local: false
@@ -62,7 +61,6 @@ pub async fn try_create_context_with_nodes_and_priority(
     for (i, addr) in addrs.iter().enumerate() {
         ctx.try_get_cluster()?.add_node(&Node {
             name: format!("node{}", i),
-            cpus: 4,
             priority: p[i],
             address: addr.clone(),
             local: false

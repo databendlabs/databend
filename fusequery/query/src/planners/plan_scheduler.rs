@@ -97,8 +97,8 @@ impl PlanScheduler {
                     );
 
                     info!(
-                        "Executor[addr: {:?}, cpus:{:?}, priority [{:?}] assigned [{:?}] partitions",
-                        executor.address, executor.cpus, executor.priority, chunk_size
+                        "Executor[addr: {:?}, priority [{:?}] assigned [{:?}] partitions",
+                        executor.address, executor.priority, chunk_size
                     );
                     index += 1;
                 } else {

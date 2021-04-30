@@ -40,7 +40,6 @@ impl Cluster {
     pub fn add_node(&self, n: &Node) -> Result<()> {
         let mut node = Node {
             name: n.name.clone(),
-            cpus: n.cpus,
             // To set priority when adding node to the cluster
             // We need to add a key-value in the json input,
             // such as {... , "priority":10, ...}.

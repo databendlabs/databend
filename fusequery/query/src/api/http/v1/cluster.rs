@@ -9,7 +9,6 @@ use crate::clusters::ClusterRef;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct ClusterNodeRequest {
     pub name: String,
-    pub cpus: usize,
     // Priority is in [0, 10]
     // Larger value means higher
     // priority
@@ -91,7 +90,6 @@ mod handlers {
         cluster
             .add_node(&Node {
                 name: req.name,
-                cpus: req.cpus,
                 priority: req.priority,
                 address: req.address,
                 local: false
