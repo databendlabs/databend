@@ -10,7 +10,7 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 
-use crate::api::rpc::FlightClient;
+use crate::api::FlightClient;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
 use crate::sessions::FuseQueryContextRef;

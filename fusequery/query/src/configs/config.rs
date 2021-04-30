@@ -64,6 +64,9 @@ pub struct Config {
     )]
     pub rpc_api_address: String,
 
+    #[structopt(long, default_value = "30")]
+    pub rpc_server_timeout_second: u64,
+
     #[structopt(
         long,
         env = "FUSE_QUERY_HTTP_API_ADDRESS",
@@ -105,6 +108,7 @@ impl Config {
             clickhouse_handler_port: 9000,
             clickhouse_handler_thread_num: 256,
             rpc_api_address: "127.0.0.1:9090".to_string(),
+            rpc_server_timeout_second: 30,
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
             store_api_address: "127.0.0.1:9191".to_string(),

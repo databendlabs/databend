@@ -26,6 +26,18 @@ pub async fn try_start_service(nums: usize) -> Result<Vec<String>> {
     Ok(results)
 }
 
+pub async fn try_start_service_with_config(conf: &Config, nums: usize) -> Result<Vec<String>> {
+    let mut results = vec![];
+
+    for _ in 0..nums {
+        let (addr, _) = start_one_service_with_config(conf).await?;
+        results.push(addr.clone());
+    }
+    tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+
+    Ok(results)
+}
+
 // Start service and return the session manager for create his own contexts.
 pub async fn try_start_service_with_session_mgr() -> Result<(String, SessionRef)> {
     let (addr, mgr) = start_one_service().await?;
@@ -69,13 +81,12 @@ pub async fn try_create_context_with_nodes_and_priority(
     Ok(ctx)
 }
 
-// Start one random service and get the session manager.
-async fn start_one_service() -> Result<(String, SessionRef)> {
+async fn start_one_service_with_config(conf: &Config) -> Result<(String, SessionRef)> {
     let mut rng = rand::thread_rng();
     let port: u32 = rng.gen_range(10000..11000);
     let addr = format!("127.0.0.1:{}", port);
 
-    let mut conf = Config::default();
+    let mut conf = conf.clone();
     conf.rpc_api_address = addr.clone();
 
     let cluster = Cluster::create(conf.clone());
@@ -86,4 +97,9 @@ async fn start_one_service() -> Result<(String, SessionRef)> {
         Ok::<(), anyhow::Error>(())
     });
     Ok((addr, session_manager))
+}
+
+// Start one random service and get the session manager.
+async fn start_one_service() -> Result<(String, SessionRef)> {
+    start_one_service_with_config(&Config::default()).await
 }

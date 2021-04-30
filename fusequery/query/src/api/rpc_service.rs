@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::time::Duration;
+
 use anyhow::anyhow;
 use anyhow::Result;
 use tonic::transport::Server;
@@ -37,6 +39,7 @@ impl RpcService {
         );
 
         Server::builder()
+            .timeout(Duration::from_secs(self.conf.rpc_server_timeout_second))
             .add_service(flight_srv.make_server())
             .serve(addr)
             .await
