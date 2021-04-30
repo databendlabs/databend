@@ -7,3 +7,15 @@ SELECT number%3 as c1, number%2 as c2 FROM numbers_mt(10000) where number > 2 gr
 1	1
 2	0
 2	1
+GROUP BY Alias-1
+0
+0
+0
+1
+1
+2
+2
+GROUP BY Alias-2
+0
+1
+2
