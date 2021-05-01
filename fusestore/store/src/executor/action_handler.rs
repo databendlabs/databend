@@ -10,13 +10,13 @@ use std::sync::Mutex;
 use common_arrow::arrow::datatypes::Schema;
 use common_arrow::arrow_flight;
 use common_arrow::arrow_flight::FlightData;
-use common_flights::store_do_action::CreateDatabaseActionResult;
-use common_flights::store_do_action::StoreDoAction;
 use common_flights::CreateDatabaseAction;
+use common_flights::CreateDatabaseActionResult;
 use common_flights::CreateTableAction;
 use common_flights::CreateTableActionResult;
 use common_flights::GetTableAction;
 use common_flights::GetTableActionResult;
+use common_flights::StoreDoAction;
 use common_flights::StoreDoActionResult;
 #[allow(unused_imports)]
 use log::error;

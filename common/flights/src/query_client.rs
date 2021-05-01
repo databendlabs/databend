@@ -5,6 +5,7 @@
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::bail;
 use anyhow::Result;
@@ -17,10 +18,6 @@ use common_arrow::arrow_flight::FlightData;
 use common_arrow::arrow_flight::Ticket;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCodes;
-use common_flights::query_do_action::FetchPartitionAction;
-use common_flights::query_do_action::QueryDoAction;
-use common_flights::query_do_get::ExecutePlanAction;
-use common_flights::query_do_get::QueryDoGet;
 use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
@@ -28,14 +25,28 @@ use tokio_stream::StreamExt;
 use tonic::Request;
 use tonic::Status;
 
-pub struct FlightClient {
+use crate::query_do_action::FetchPartitionAction;
+use crate::query_do_action::QueryDoAction;
+use crate::query_do_get::ExecutePlanAction;
+use crate::query_do_get::QueryDoGet;
+
+pub struct QueryClient {
+    // In seconds.
+    timeout_second: u64,
     client: FlightServiceClient<tonic::transport::channel::Channel>
 }
 
-impl FlightClient {
+impl QueryClient {
     pub async fn try_create(addr: String) -> Result<Self> {
         let client = FlightServiceClient::connect(format!("http://{}", addr)).await?;
-        Ok(Self { client })
+        Ok(Self {
+            timeout_second: 60,
+            client
+        })
+    }
+
+    pub fn set_timeout(&mut self, timeout_sec: u64) {
+        self.timeout_second = timeout_sec;
     }
 
     /// Execute the plan in the remote action and get the block stream.
@@ -61,7 +72,9 @@ impl FlightClient {
 
     // Execute do_get.
     async fn do_get(&mut self, action: &QueryDoGet) -> Result<SendableDataBlockStream> {
-        let request: Request<Ticket> = action.try_into()?;
+        let mut request: Request<Ticket> = action.try_into()?;
+        request.set_timeout(Duration::from_secs(self.timeout_second));
+
         let mut stream = self.client.do_get(request).await?.into_inner();
         match stream.message().await? {
             Some(flight_data) => {
@@ -90,7 +103,9 @@ impl FlightClient {
 
     // Execute do_action.
     async fn do_action(&mut self, action: &QueryDoAction) -> Result<Vec<u8>> {
-        let request: Request<Action> = action.try_into()?;
+        let mut request: Request<Action> = action.try_into()?;
+        request.set_timeout(Duration::from_secs(self.timeout_second));
+
         let mut stream = self.client.do_action(request).await?.into_inner();
         match stream.message().await? {
             None => {

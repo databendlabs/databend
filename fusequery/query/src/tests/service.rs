@@ -76,7 +76,7 @@ async fn start_one_service() -> Result<(String, SessionRef)> {
     let addr = format!("127.0.0.1:{}", port);
 
     let mut conf = Config::default();
-    conf.rpc_api_address = addr.clone();
+    conf.flight_api_address = addr.clone();
 
     let cluster = Cluster::create(conf.clone());
     let session_manager = Session::create();

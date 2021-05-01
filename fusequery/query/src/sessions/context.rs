@@ -160,7 +160,8 @@ impl FuseQueryContext {
 
     apply_macros! { apply_getter_setter_settings, apply_initial_settings, apply_update_settings,
         ("max_threads", u64, num_cpus::get() as u64, "The maximum number of threads to execute the request. By default, it is determined automatically.".to_string()),
-        ("max_block_size", u64, 10000, "Maximum block size for reading".to_string())
+        ("max_block_size", u64, 10000, "Maximum block size for reading".to_string()),
+        ("flight_client_timeout", u64, 60, "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds".to_string())
     }
 }
 

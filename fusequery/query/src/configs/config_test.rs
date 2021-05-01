@@ -20,7 +20,7 @@ fn test_config() -> common_exception::Result<()> {
             clickhouse_handler_host: "127.0.0.1".to_string(),
             clickhouse_handler_port: 9000,
             clickhouse_handler_thread_num: 256,
-            rpc_api_address: "127.0.0.1:9090".to_string(),
+            flight_api_address: "127.0.0.1:9090".to_string(),
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
             store_api_address: "127.0.0.1:9191".to_string(),
