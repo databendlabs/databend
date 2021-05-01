@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_exception::ErrorCodes;
+use log::error;
 use msql_srv::ErrorKind;
 use msql_srv::InitWriter;
 
@@ -18,6 +19,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<InitWriter<'a, T>> for MySQLOnInitEnd
     }
 
     fn err(error: ErrorCodes, writer: InitWriter<'a, T>) -> std::io::Result<()> {
+        error!("OnInit Error: {}", error);
         writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())
     }
 }
