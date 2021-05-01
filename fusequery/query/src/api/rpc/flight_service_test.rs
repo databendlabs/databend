@@ -20,7 +20,8 @@ async fn test_flight_execute() -> anyhow::Result<()> {
     ))
     .build()?;
 
-    let mut client = FlightClient::try_create(addr.to_string()).await?;
+    let timeout = 30;
+    let mut client = FlightClient::try_create(timeout, addr.to_string()).await?;
 
     let stream = client
         .execute_remote_plan_action("xx".to_string(), &plan)
@@ -62,11 +63,38 @@ async fn test_flight_fetch_partition_action() -> anyhow::Result<()> {
     let _pipeline = PipelineBuilder::create(ctx.clone(), plan).build()?;
 
     // 3. Fetch the partitions from the context by uuid.
-    let mut client = FlightClient::try_create(addr.to_string()).await?;
+    let timeout = 30;
+    let mut client = FlightClient::try_create(timeout, addr.to_string()).await?;
     let actual = client.fetch_partition_action(ctx.get_id()?, 1).await?;
 
     // 4. Check.
     assert_eq!(1, actual.len());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_flight_client_timeout() -> anyhow::Result<()> {
+    use pretty_assertions::assert_eq;
+
+    use crate::api::rpc::*;
+    use crate::pipelines::processors::PipelineBuilder;
+    use crate::sql::PlanParser;
+
+    // 1. Service starts.
+    let (addr, session_mgr) = crate::tests::try_start_service_with_session_mgr().await?;
+    let ctx = session_mgr.try_create_context()?;
+
+    // 2. Make some partitions for the current context.
+    let plan = PlanParser::create(ctx.clone()).build_from_sql("select * from numbers_mt(80000)")?;
+    let _pipeline = PipelineBuilder::create(ctx.clone(), plan).build()?;
+
+    // 3. Fetch the partitions from the context by uuid.
+    let timeout = 0;
+    let mut client = FlightClient::try_create(timeout, addr.to_string()).await?;
+    let actual = client.fetch_partition_action(ctx.get_id()?, 1).await;
+    let expect = "Err(status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} })";
+    assert_eq!(expect, format!("{:?}", actual));
 
     Ok(())
 }

@@ -5,6 +5,7 @@
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::bail;
 use anyhow::Result;
@@ -29,13 +30,17 @@ use tonic::Request;
 use tonic::Status;
 
 pub struct FlightClient {
+    timeout_second: u64,
     client: FlightServiceClient<tonic::transport::channel::Channel>
 }
 
 impl FlightClient {
-    pub async fn try_create(addr: String) -> Result<Self> {
+    pub async fn try_create(timeout_second: u64, addr: String) -> Result<Self> {
         let client = FlightServiceClient::connect(format!("http://{}", addr)).await?;
-        Ok(Self { client })
+        Ok(Self {
+            timeout_second,
+            client
+        })
     }
 
     /// Execute the plan in the remote action and get the block stream.
@@ -61,7 +66,9 @@ impl FlightClient {
 
     // Execute do_get.
     async fn do_get(&mut self, action: &QueryDoGet) -> Result<SendableDataBlockStream> {
-        let request: Request<Ticket> = action.try_into()?;
+        let mut request: Request<Ticket> = action.try_into()?;
+        request.set_timeout(Duration::from_secs(self.timeout_second));
+
         let mut stream = self.client.do_get(request).await?.into_inner();
         match stream.message().await? {
             Some(flight_data) => {
@@ -90,7 +97,9 @@ impl FlightClient {
 
     // Execute do_action.
     async fn do_action(&mut self, action: &QueryDoAction) -> Result<Vec<u8>> {
-        let request: Request<Action> = action.try_into()?;
+        let mut request: Request<Action> = action.try_into()?;
+        request.set_timeout(Duration::from_secs(self.timeout_second));
+
         let mut stream = self.client.do_action(request).await?.into_inner();
         match stream.message().await? {
             None => {

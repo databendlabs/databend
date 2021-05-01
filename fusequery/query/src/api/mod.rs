@@ -4,9 +4,6 @@
 
 // The api module only used for internal communication, such as GRPC between cluster and the managed HTTP REST API.
 
-#[cfg(test)]
-mod rpc_service_test;
-
 mod http;
 mod http_service;
 mod rpc;

@@ -114,7 +114,7 @@ impl Flight for FlightService {
 
                 info!(
                     "Executor[{:?}] received action, job_id: {:?}",
-                    self.conf.rpc_api_address, action.job_id
+                    self.conf.flight_api_address, action.job_id
                 );
 
                 // Create the context.

@@ -85,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // RPC API service.
     {
         let srv = RpcService::create(conf.clone(), cluster.clone(), session_manager.clone());
-        info!("RPC API server listening on {}", conf.rpc_api_address);
+        info!("RPC API server listening on {}", conf.flight_api_address);
         srv.make_server().await.expect("RPC service error");
     }
 

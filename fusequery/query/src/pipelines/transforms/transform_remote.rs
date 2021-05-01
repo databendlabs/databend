@@ -61,20 +61,28 @@ impl IProcessor for RemoteTransform {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         async fn execute_impl(
+            ctx: FuseQueryContextRef,
             remote_addr: &str,
             job_id: &str,
             plan: &PlanNode
         ) -> anyhow::Result<SendableDataBlockStream> {
-            let mut client = FlightClient::try_create(remote_addr.to_string().clone()).await?;
+            let timeout = ctx.get_flight_client_timeout()?;
+            let mut client =
+                FlightClient::try_create(timeout, remote_addr.to_string().clone()).await?;
             client
                 .execute_remote_plan_action(job_id.to_string().clone(), plan)
                 .await
         }
 
         Ok(Box::pin(
-            execute_impl(&self.remote_addr, &self.job_id, &self.plan)
-                .await
-                .map_err(ErrorCodes::from_anyhow)?
+            execute_impl(
+                self.ctx.clone(),
+                &self.remote_addr,
+                &self.job_id,
+                &self.plan
+            )
+            .await
+            .map_err(ErrorCodes::from_anyhow)?
         ))
     }
 }
