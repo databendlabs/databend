@@ -48,7 +48,7 @@ impl Cluster {
             address: n.address.clone(),
             local: false
         };
-        if node.address == self.cfg.rpc_api_address {
+        if node.address == self.cfg.flight_api_address {
             node.local = true;
         }
         self.nodes.lock().insert(node.name.clone(), node);

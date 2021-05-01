@@ -6,7 +6,7 @@
 
 mod http;
 mod http_service;
-pub mod rpc;
+mod rpc;
 mod rpc_service;
 
 pub use http_service::HttpService;

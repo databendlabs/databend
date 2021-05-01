@@ -27,7 +27,10 @@ impl RpcService {
     }
 
     pub async fn make_server(&self) -> Result<()> {
-        let addr = self.conf.rpc_api_address.parse::<std::net::SocketAddr>()?;
+        let addr = self
+            .conf
+            .flight_api_address
+            .parse::<std::net::SocketAddr>()?;
 
         // Flight service:
         let flight_srv = FlightService::create(

@@ -22,8 +22,8 @@ use common_arrow::arrow_flight::PutResult;
 use common_arrow::arrow_flight::SchemaResult;
 use common_arrow::arrow_flight::Ticket;
 use common_arrow::arrow_flight::{self};
-use common_flights::query_do_action::QueryDoAction;
-use common_flights::query_do_get::QueryDoGet;
+use common_flights::QueryDoAction;
+use common_flights::QueryDoGet;
 use futures::Stream;
 use futures::StreamExt;
 use log::info;
@@ -114,7 +114,7 @@ impl Flight for FlightService {
 
                 info!(
                     "Executor[{:?}] received action, job_id: {:?}",
-                    self.conf.rpc_api_address, action.job_id
+                    self.conf.flight_api_address, action.job_id
                 );
 
                 // Create the context.
