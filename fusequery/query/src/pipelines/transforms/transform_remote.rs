@@ -66,9 +66,8 @@ impl IProcessor for RemoteTransform {
             job_id: &str,
             plan: &PlanNode
         ) -> anyhow::Result<SendableDataBlockStream> {
-            let timeout = ctx.get_flight_client_timeout()?;
-            let mut client =
-                FlightClient::try_create(timeout, remote_addr.to_string().clone()).await?;
+            let mut client = FlightClient::try_create(remote_addr.to_string().clone()).await?;
+            client.set_timeout(ctx.get_flight_client_timeout()?);
             client
                 .execute_remote_plan_action(job_id.to_string().clone(), plan)
                 .await

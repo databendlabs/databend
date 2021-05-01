@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::convert::TryInto;
+use std::time::Duration;
 
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::Action;
@@ -31,6 +32,7 @@ use crate::GetTableActionResult;
 #[derive(Clone)]
 pub struct StoreClient {
     token: Vec<u8>,
+    timeout_second: u64,
     client: FlightServiceClient<tonic::transport::channel::Channel>
 }
 
@@ -39,10 +41,15 @@ impl StoreClient {
         let client = FlightServiceClient::connect(format!("http://{}", addr)).await?;
         let mut rx = Self {
             token: vec![],
+            timeout_second: 60,
             client
         };
         rx.handshake(username, password).await?;
         Ok(rx)
+    }
+
+    pub fn set_timeout(&mut self, timeout_sec: u64) {
+        self.timeout_second = timeout_sec;
     }
 
     /// Create database call.
@@ -97,13 +104,15 @@ impl StoreClient {
         let mut payload = vec![];
         auth.encode(&mut payload)?;
 
-        let req = stream::once(async {
+        let mut req = Request::new(stream::once(async {
             HandshakeRequest {
                 payload,
                 ..HandshakeRequest::default()
             }
-        });
-        let rx = self.client.handshake(Request::new(req)).await?;
+        }));
+        req.set_timeout(Duration::from_secs(self.timeout_second));
+
+        let rx = self.client.handshake(req).await?;
         let mut rx = rx.into_inner();
 
         let resp = rx.next().await.expect("Must respond from handshake")?;
@@ -115,8 +124,10 @@ impl StoreClient {
     /// Execute do_action.
     async fn do_action(&mut self, action: &StoreDoAction) -> anyhow::Result<StoreDoActionResult> {
         // TODO: an action can always be able to serialize, or it is a bug.
-        let mut request: Request<Action> = action.try_into().unwrap();
-        let metadata = request.metadata_mut();
+        let mut req: Request<Action> = action.try_into()?;
+        req.set_timeout(Duration::from_secs(self.timeout_second));
+
+        let metadata = req.metadata_mut();
         metadata.insert_bin(
             "auth-token-bin",
             MetadataValue::from_bytes(&self.token.clone())
@@ -124,7 +135,7 @@ impl StoreClient {
 
         let mut stream = self
             .client
-            .do_action(request)
+            .do_action(req)
             .await
             .map_err(status_err)?
             .into_inner();

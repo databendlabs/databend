@@ -30,17 +30,22 @@ use tonic::Request;
 use tonic::Status;
 
 pub struct FlightClient {
+    // In seconds.
     timeout_second: u64,
     client: FlightServiceClient<tonic::transport::channel::Channel>
 }
 
 impl FlightClient {
-    pub async fn try_create(timeout_second: u64, addr: String) -> Result<Self> {
+    pub async fn try_create(addr: String) -> Result<Self> {
         let client = FlightServiceClient::connect(format!("http://{}", addr)).await?;
         Ok(Self {
-            timeout_second,
+            timeout_second: 60,
             client
         })
+    }
+
+    pub fn set_timeout(&mut self, timeout_sec: u64) {
+        self.timeout_second = timeout_sec;
     }
 
     /// Execute the plan in the remote action and get the block stream.

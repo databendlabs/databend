@@ -20,8 +20,7 @@ async fn test_flight_execute() -> anyhow::Result<()> {
     ))
     .build()?;
 
-    let timeout = 30;
-    let mut client = FlightClient::try_create(timeout, addr.to_string()).await?;
+    let mut client = FlightClient::try_create(addr.to_string()).await?;
 
     let stream = client
         .execute_remote_plan_action("xx".to_string(), &plan)
@@ -63,8 +62,7 @@ async fn test_flight_fetch_partition_action() -> anyhow::Result<()> {
     let _pipeline = PipelineBuilder::create(ctx.clone(), plan).build()?;
 
     // 3. Fetch the partitions from the context by uuid.
-    let timeout = 30;
-    let mut client = FlightClient::try_create(timeout, addr.to_string()).await?;
+    let mut client = FlightClient::try_create(addr.to_string()).await?;
     let actual = client.fetch_partition_action(ctx.get_id()?, 1).await?;
 
     // 4. Check.
@@ -90,8 +88,8 @@ async fn test_flight_client_timeout() -> anyhow::Result<()> {
     let _pipeline = PipelineBuilder::create(ctx.clone(), plan).build()?;
 
     // 3. Fetch the partitions from the context by uuid.
-    let timeout = 0;
-    let mut client = FlightClient::try_create(timeout, addr.to_string()).await?;
+    let mut client = FlightClient::try_create(addr.to_string()).await?;
+    client.set_timeout(0);
     let actual = client.fetch_partition_action(ctx.get_id()?, 1).await;
     let expect = "Err(status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} })";
     assert_eq!(expect, format!("{:?}", actual));
