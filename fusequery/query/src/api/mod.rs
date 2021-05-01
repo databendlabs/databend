@@ -10,5 +10,4 @@ mod rpc;
 mod rpc_service;
 
 pub use http_service::HttpService;
-pub use rpc::FlightClient;
 pub use rpc_service::RpcService;

@@ -18,10 +18,6 @@ use common_arrow::arrow_flight::FlightData;
 use common_arrow::arrow_flight::Ticket;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCodes;
-use common_flights::query_do_action::FetchPartitionAction;
-use common_flights::query_do_action::QueryDoAction;
-use common_flights::query_do_get::ExecutePlanAction;
-use common_flights::query_do_get::QueryDoGet;
 use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
@@ -29,13 +25,18 @@ use tokio_stream::StreamExt;
 use tonic::Request;
 use tonic::Status;
 
-pub struct FlightClient {
+use crate::query_do_action::FetchPartitionAction;
+use crate::query_do_action::QueryDoAction;
+use crate::query_do_get::ExecutePlanAction;
+use crate::query_do_get::QueryDoGet;
+
+pub struct QueryClient {
     // In seconds.
     timeout_second: u64,
     client: FlightServiceClient<tonic::transport::channel::Channel>
 }
 
-impl FlightClient {
+impl QueryClient {
     pub async fn try_create(addr: String) -> Result<Self> {
         let client = FlightServiceClient::connect(format!("http://{}", addr)).await?;
         Ok(Self {

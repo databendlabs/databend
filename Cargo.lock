@@ -590,7 +590,9 @@ dependencies = [
  "anyhow",
  "common-arrow",
  "common-datavalues",
+ "common-exception",
  "common-planners",
+ "common-streams",
  "futures",
  "jwt-simple",
  "log",
@@ -598,6 +600,7 @@ dependencies = [
  "prost",
  "serde",
  "serde_json",
+ "tokio-stream",
  "tonic",
  "tonic-build",
 ]

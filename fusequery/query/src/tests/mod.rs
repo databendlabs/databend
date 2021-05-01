@@ -14,5 +14,4 @@ pub use number::NumberTestData;
 pub use service::try_create_context_with_nodes;
 pub use service::try_create_context_with_nodes_and_priority;
 pub use service::try_start_service;
-pub use service::try_start_service_with_config;
 pub use service::try_start_service_with_session_mgr;

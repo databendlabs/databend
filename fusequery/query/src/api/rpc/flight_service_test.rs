@@ -4,11 +4,10 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_execute() -> anyhow::Result<()> {
+    use common_flights::*;
     use common_planners::*;
     use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
-
-    use crate::api::rpc::*;
 
     // Test service starts.
     let addr = crate::tests::try_start_service(1).await?[0].clone();
@@ -20,7 +19,7 @@ async fn test_flight_execute() -> anyhow::Result<()> {
     ))
     .build()?;
 
-    let mut client = FlightClient::try_create(addr.to_string()).await?;
+    let mut client = QueryClient::try_create(addr.to_string()).await?;
 
     let stream = client
         .execute_remote_plan_action("xx".to_string(), &plan)
@@ -47,9 +46,9 @@ async fn test_flight_execute() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_fetch_partition_action() -> anyhow::Result<()> {
+    use common_flights::*;
     use pretty_assertions::assert_eq;
 
-    use crate::api::rpc::*;
     use crate::pipelines::processors::PipelineBuilder;
     use crate::sql::PlanParser;
 
@@ -62,7 +61,7 @@ async fn test_flight_fetch_partition_action() -> anyhow::Result<()> {
     let _pipeline = PipelineBuilder::create(ctx.clone(), plan).build()?;
 
     // 3. Fetch the partitions from the context by uuid.
-    let mut client = FlightClient::try_create(addr.to_string()).await?;
+    let mut client = QueryClient::try_create(addr.to_string()).await?;
     let actual = client.fetch_partition_action(ctx.get_id()?, 1).await?;
 
     // 4. Check.
@@ -73,9 +72,9 @@ async fn test_flight_fetch_partition_action() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_flight_client_timeout() -> anyhow::Result<()> {
+    use common_flights::*;
     use pretty_assertions::assert_eq;
 
-    use crate::api::rpc::*;
     use crate::pipelines::processors::PipelineBuilder;
     use crate::sql::PlanParser;
 
@@ -88,7 +87,7 @@ async fn test_flight_client_timeout() -> anyhow::Result<()> {
     let _pipeline = PipelineBuilder::create(ctx.clone(), plan).build()?;
 
     // 3. Fetch the partitions from the context by uuid.
-    let mut client = FlightClient::try_create(addr.to_string()).await?;
+    let mut client = QueryClient::try_create(addr.to_string()).await?;
     client.set_timeout(0);
     let actual = client.fetch_partition_action(ctx.get_id()?, 1).await;
     let expect = "Err(status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} })";
