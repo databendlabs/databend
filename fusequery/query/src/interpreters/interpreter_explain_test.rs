@@ -13,9 +13,9 @@ async fn test_explain_interpreter() -> anyhow::Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
 
-    if let PlanNode::Explain(plan) = PlanParser::create(ctx.clone())
-        .build_from_sql("explain select number from numbers_mt(10) where (number+1)=4")?
-    {
+    if let PlanNode::Explain(plan) = PlanParser::create(ctx.clone()).build_from_sql(
+        "explain select number from numbers_mt(10) where (number+1)=4 having (number+1)=4"
+    )? {
         let executor = ExplainInterpreter::try_create(ctx, plan)?;
         assert_eq!(executor.name(), "ExplainInterpreter");
 
@@ -29,8 +29,9 @@ async fn test_explain_interpreter() -> anyhow::Result<()> {
             "| explain                                                                                                             |",
             "+---------------------------------------------------------------------------------------------------------------------+",
             "| Projection: number:UInt64                                                                                           |",
-            "|   Filter: ((number + 1) = 4)                                                                                        |",
-            "|     ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80] |",
+            "|   Having: ((number + 1) = 4)                                                                                        |",
+            "|     Filter: ((number + 1) = 4)                                                                                        |",
+            "|       ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80] |",
             "+---------------------------------------------------------------------------------------------------------------------+",
         ];
         crate::assert_blocks_sorted_eq!(expected, result.as_slice());
