@@ -6,7 +6,7 @@ log_level = "ERROR"
 
 # FuseQuery rpc address.
 # For flight rpc.
-rpc_api_address = "0.0.0.0:9092"
+flight_api_address = "0.0.0.0:9092"
 
 # FuseQuery http address.
 # For admin RESET API.
