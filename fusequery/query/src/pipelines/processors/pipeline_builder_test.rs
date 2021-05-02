@@ -16,7 +16,7 @@ async fn test_local_pipeline_build() -> anyhow::Result<()> {
     )?;
     let pipeline = PipelineBuilder::create(ctx, plan).build()?;
     let expect = "LimitTransform × 1 processor\
-    \n  HavingTransform × 1 processor\
+    \n  FilterTransform × 1 processor\
     \n    AggregatorFinalTransform × 1 processor\
     \n      Merge (AggregatorPartialTransform × 8 processors) to (AggregatorFinalTransform × 1)\
     \n        AggregatorPartialTransform × 8 processors\

@@ -24,7 +24,6 @@ use crate::pipelines::transforms::AggregatorPartialTransform;
 use crate::pipelines::transforms::FilterTransform;
 use crate::pipelines::transforms::GroupByFinalTransform;
 use crate::pipelines::transforms::GroupByPartialTransform;
-use crate::pipelines::transforms::HavingTransform;
 use crate::pipelines::transforms::LimitTransform;
 use crate::pipelines::transforms::ProjectionTransform;
 use crate::pipelines::transforms::RemoteTransform;
@@ -173,7 +172,8 @@ impl PipelineBuilder {
     fn visit_filter_plan(pipeline: &mut Pipeline, plan: &FilterPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
-                plan.predicate.clone()
+                plan.predicate.clone(),
+                false
             )?))
         })?;
         Ok(true)
@@ -181,8 +181,9 @@ impl PipelineBuilder {
 
     fn visit_having_plan(pipeline: &mut Pipeline, plan: &HavingPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
-            Ok(Box::new(HavingTransform::try_create(
-                plan.predicate.clone()
+            Ok(Box::new(FilterTransform::try_create(
+                plan.predicate.clone(),
+                true
             )?))
         })?;
         Ok(true)
