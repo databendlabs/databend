@@ -196,8 +196,6 @@ impl PlanParser {
         limit: &Option<sqlparser::ast::Expr>,
         order_by: &[OrderByExpr]
     ) -> Result<PlanNode> {
-
-
         // from.
         let plan = self.plan_tables_with_joins(&select.from)?;
 

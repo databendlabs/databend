@@ -44,7 +44,7 @@ pub enum PlanNode {
     CreateTable(CreateTablePlan),
     CreateDatabase(CreateDatabasePlan),
     UseDatabase(UseDatabasePlan),
-    SetVariable(SettingPlan),
+    SetVariable(SettingPlan)
 }
 
 impl PlanNode {

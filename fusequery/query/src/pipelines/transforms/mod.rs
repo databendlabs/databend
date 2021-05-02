@@ -15,6 +15,8 @@ mod transform_groupby_final_test;
 #[cfg(test)]
 mod transform_groupby_partial_test;
 #[cfg(test)]
+mod transform_having_test;
+#[cfg(test)]
 mod transform_limit_test;
 #[cfg(test)]
 mod transform_projection_test;
@@ -29,9 +31,9 @@ mod transform_aggregator_final;
 mod transform_aggregator_partial;
 mod transform_expression;
 mod transform_filter;
-mod transform_having;
 mod transform_groupby_final;
 mod transform_groupby_partial;
+mod transform_having;
 mod transform_limit;
 mod transform_projection;
 mod transform_remote;
@@ -43,9 +45,9 @@ pub use transform_aggregator_final::AggregatorFinalTransform;
 pub use transform_aggregator_partial::AggregatorPartialTransform;
 pub use transform_expression::ExpressionTransform;
 pub use transform_filter::FilterTransform;
-pub use transform_having::HavingTransform;
 pub use transform_groupby_final::GroupByFinalTransform;
 pub use transform_groupby_partial::GroupByPartialTransform;
+pub use transform_having::HavingTransform;
 pub use transform_limit::LimitTransform;
 pub use transform_projection::ProjectionTransform;
 pub use transform_remote::RemoteTransform;
