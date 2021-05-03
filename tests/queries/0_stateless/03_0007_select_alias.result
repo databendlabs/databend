@@ -1,0 +1,11 @@
+--------------
+SELECT (number+1) as c1, (number+2) as c2, max(number) as c3 FROM numbers_mt(10) where c2<10 group by c1%3 having c3>1 order by c1 desc, c2 asc
+--------------
+
++------+------+------+
+| c1   | c2   | c3   |
++------+------+------+
+|    3 |    4 |    5 |
+|    2 |    3 |    7 |
+|    1 |    2 |    6 |
++------+------+------+

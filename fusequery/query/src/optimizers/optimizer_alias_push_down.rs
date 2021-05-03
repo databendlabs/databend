@@ -9,23 +9,24 @@ use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::EmptyPlan;
+use common_planners::FilterPlan;
 use common_planners::PlanNode;
 
 use crate::optimizers::IOptimizer;
 use crate::optimizers::OptimizerCommon;
 use crate::sessions::FuseQueryContextRef;
 
-pub struct GroupByPushDownOptimizer {}
+pub struct AliasPushDownOptimizer;
 
-impl GroupByPushDownOptimizer {
+impl AliasPushDownOptimizer {
     pub fn create(_ctx: FuseQueryContextRef) -> Self {
-        GroupByPushDownOptimizer {}
+        AliasPushDownOptimizer {}
     }
 }
 
-impl IOptimizer for GroupByPushDownOptimizer {
+impl IOptimizer for AliasPushDownOptimizer {
     fn name(&self) -> &str {
-        "GroupByPushDown"
+        "FilterPushDown"
     }
 
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
@@ -36,6 +37,16 @@ impl IOptimizer for GroupByPushDownOptimizer {
         let projection_map = OptimizerCommon::projection_to_map(plan)?;
         plan.walk_postorder(|node| -> Result<bool> {
             match node {
+                PlanNode::Filter(plan) => {
+                    let rewritten_expr =
+                        OptimizerCommon::rewrite_alias_expr(&projection_map, &plan.predicate)?;
+                    let mut new_node = PlanNode::Filter(FilterPlan {
+                        predicate: rewritten_expr,
+                        input: rewritten_node.input()
+                    });
+                    new_node.set_input(&rewritten_node)?;
+                    rewritten_node = new_node;
+                }
                 PlanNode::AggregatorPartial(plan) => {
                     let aggr_expr =
                         OptimizerCommon::rewrite_alias_exprs(&projection_map, &plan.aggr_expr)?;

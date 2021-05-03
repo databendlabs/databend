@@ -5,8 +5,7 @@
 use common_exception::Result;
 use common_planners::PlanNode;
 
-use crate::optimizers::FilterPushDownOptimizer;
-use crate::optimizers::GroupByPushDownOptimizer;
+use crate::optimizers::AliasPushDownOptimizer;
 use crate::optimizers::LimitPushDownOptimizer;
 use crate::optimizers::ProjectionPushDownOptimizer;
 use crate::sessions::FuseQueryContextRef;
@@ -23,8 +22,7 @@ pub struct Optimizer {
 impl Optimizer {
     pub fn create(ctx: FuseQueryContextRef) -> Self {
         let optimizers: Vec<Box<dyn IOptimizer>> = vec![
-            Box::new(FilterPushDownOptimizer::create(ctx.clone())),
-            Box::new(GroupByPushDownOptimizer::create(ctx.clone())),
+            Box::new(AliasPushDownOptimizer::create(ctx.clone())),
             Box::new(LimitPushDownOptimizer::create(ctx.clone())),
             Box::new(ProjectionPushDownOptimizer::create(ctx)),
         ];

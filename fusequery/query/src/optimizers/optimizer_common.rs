@@ -90,18 +90,18 @@ impl OptimizerCommon {
 
     /// replaces expression columns by its name on the projection.
     pub fn rewrite_alias_expr(
-        expr: &ExpressionPlan,
-        projection: &HashMap<String, ExpressionPlan>
+        projection_map: &HashMap<String, ExpressionPlan>,
+        expr: &ExpressionPlan
     ) -> Result<ExpressionPlan> {
         let expressions = Self::expression_plan_children(expr)?;
 
         let expressions = expressions
             .iter()
-            .map(|e| Self::rewrite_alias_expr(e, &projection))
+            .map(|e| Self::rewrite_alias_expr(projection_map, e))
             .collect::<Result<Vec<_>>>()?;
 
         if let ExpressionPlan::Column(name) = expr {
-            if let Some(expr) = projection.get(name) {
+            if let Some(expr) = projection_map.get(name) {
                 return Ok(expr.clone());
             }
         }
@@ -115,7 +115,7 @@ impl OptimizerCommon {
     ) -> Result<Vec<ExpressionPlan>> {
         exprs
             .iter()
-            .map(|x| Self::rewrite_alias_expr(x, projection_map))
+            .map(|e| Self::rewrite_alias_expr(projection_map, e))
             .collect::<Result<Vec<_>>>()
     }
 }
