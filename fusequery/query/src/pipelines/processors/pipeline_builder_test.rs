@@ -12,15 +12,16 @@ async fn test_local_pipeline_build() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let plan = PlanParser::create(ctx.clone()).build_from_sql(
-        "select sum(number+1)+2 as sumx from numbers_mt(80000) where (number+1)=4 limit 1"
+        "select sum(number+1)+2 as sumx from numbers_mt(80000) where (number+1)=4 having (number+1)=4 limit 1"
     )?;
     let pipeline = PipelineBuilder::create(ctx, plan).build()?;
     let expect = "LimitTransform × 1 processor\
-    \n  AggregatorFinalTransform × 1 processor\
-    \n    Merge (AggregatorPartialTransform × 8 processors) to (AggregatorFinalTransform × 1)\
-    \n      AggregatorPartialTransform × 8 processors\
-    \n        FilterTransform × 8 processors\
-    \n          SourceTransform × 8 processors";
+    \n  FilterTransform × 1 processor\
+    \n    AggregatorFinalTransform × 1 processor\
+    \n      Merge (AggregatorPartialTransform × 8 processors) to (AggregatorFinalTransform × 1)\
+    \n        AggregatorPartialTransform × 8 processors\
+    \n          FilterTransform × 8 processors\
+    \n            SourceTransform × 8 processors";
     let actual = format!("{:?}", pipeline);
     assert_eq!(expect, actual);
     Ok(())

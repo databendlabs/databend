@@ -72,6 +72,10 @@ impl PlanNode {
                             write!(f, "Filter: {:?}", plan.predicate)?;
                             Ok(true)
                         }
+                        PlanNode::Having(plan) => {
+                            write!(f, "Having: {:?}", plan.predicate)?;
+                            Ok(true)
+                        }
                         PlanNode::Sort(plan) => {
                             write!(f, "Sort: ")?;
                             for i in 0..plan.order_by.len() {

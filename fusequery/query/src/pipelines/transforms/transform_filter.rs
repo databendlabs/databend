@@ -25,9 +25,9 @@ pub struct FilterTransform {
 }
 
 impl FilterTransform {
-    pub fn try_create(predicate: ExpressionPlan) -> Result<Self> {
+    pub fn try_create(predicate: ExpressionPlan, having: bool) -> Result<Self> {
         let func = predicate.to_function()?;
-        if func.is_aggregator() {
+        if !having && func.is_aggregator() {
             return Result::Err(ErrorCodes::SyntexException(format!(
                 "Aggregate function {:?} is found in WHERE in query",
                 predicate

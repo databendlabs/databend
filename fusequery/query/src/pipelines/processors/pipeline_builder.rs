@@ -9,6 +9,7 @@ use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::FilterPlan;
+use common_planners::HavingPlan;
 use common_planners::LimitPlan;
 use common_planners::PlanNode;
 use common_planners::ProjectionPlan;
@@ -71,6 +72,7 @@ impl PipelineBuilder {
                     PipelineBuilder::visit_aggregator_final_plan(&mut pipeline, plan)
                 }
                 PlanNode::Filter(plan) => PipelineBuilder::visit_filter_plan(&mut pipeline, plan),
+                PlanNode::Having(plan) => PipelineBuilder::visit_having_plan(&mut pipeline, plan),
                 PlanNode::Sort(plan) => {
                     PipelineBuilder::visit_sort_plan(limit, &mut pipeline, plan)
                 }
@@ -170,7 +172,18 @@ impl PipelineBuilder {
     fn visit_filter_plan(pipeline: &mut Pipeline, plan: &FilterPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
-                plan.predicate.clone()
+                plan.predicate.clone(),
+                false
+            )?))
+        })?;
+        Ok(true)
+    }
+
+    fn visit_having_plan(pipeline: &mut Pipeline, plan: &HavingPlan) -> Result<bool> {
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(FilterTransform::try_create(
+                plan.predicate.clone(),
+                true
             )?))
         })?;
         Ok(true)

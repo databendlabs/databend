@@ -11,6 +11,8 @@ mod plan_expression_test;
 #[cfg(test)]
 mod plan_filter_test;
 #[cfg(test)]
+mod plan_having_test;
+#[cfg(test)]
 mod plan_limit_test;
 #[cfg(test)]
 mod plan_projection_test;
@@ -40,6 +42,7 @@ mod plan_expression_function;
 mod plan_expression_literal;
 mod plan_expression_sort;
 mod plan_filter;
+mod plan_having;
 mod plan_limit;
 mod plan_node;
 mod plan_partition;
@@ -77,6 +80,7 @@ pub use crate::plan_expression_function::sum;
 pub use crate::plan_expression_literal::lit;
 pub use crate::plan_expression_sort::sort;
 pub use crate::plan_filter::FilterPlan;
+pub use crate::plan_having::HavingPlan;
 pub use crate::plan_limit::LimitPlan;
 pub use crate::plan_node::PlanNode;
 pub use crate::plan_partition::Partition;

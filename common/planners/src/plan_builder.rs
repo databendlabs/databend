@@ -18,6 +18,7 @@ use crate::ExplainPlan;
 use crate::ExplainType;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
+use crate::HavingPlan;
 use crate::LimitPlan;
 use crate::PlanNode;
 use crate::PlanRewriter;
@@ -220,6 +221,14 @@ impl PlanBuilder {
     /// Apply a filter
     pub fn filter(&self, expr: ExpressionPlan) -> Result<Self> {
         Ok(Self::from(&PlanNode::Filter(FilterPlan {
+            predicate: expr,
+            input: Arc::new(self.plan.clone())
+        })))
+    }
+
+    /// Apply a having
+    pub fn having(&self, expr: ExpressionPlan) -> Result<Self> {
+        Ok(Self::from(&PlanNode::Having(HavingPlan {
             predicate: expr,
             input: Arc::new(self.plan.clone())
         })))
