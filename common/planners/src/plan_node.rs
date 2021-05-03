@@ -15,6 +15,7 @@ use crate::CreateTablePlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::FilterPlan;
+use crate::HavingPlan;
 use crate::LimitPlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
@@ -33,6 +34,7 @@ pub enum PlanNode {
     AggregatorPartial(AggregatorPartialPlan),
     AggregatorFinal(AggregatorFinalPlan),
     Filter(FilterPlan),
+    Having(HavingPlan),
     Sort(SortPlan),
     Limit(LimitPlan),
     Scan(ScanPlan),
@@ -56,6 +58,7 @@ impl PlanNode {
             PlanNode::AggregatorPartial(v) => v.schema(),
             PlanNode::AggregatorFinal(v) => v.schema(),
             PlanNode::Filter(v) => v.schema(),
+            PlanNode::Having(v) => v.schema(),
             PlanNode::Limit(v) => v.schema(),
             PlanNode::ReadSource(v) => v.schema(),
             PlanNode::Select(v) => v.schema(),
@@ -77,6 +80,7 @@ impl PlanNode {
             PlanNode::AggregatorPartial(_) => "AggregatorPartialPlan",
             PlanNode::AggregatorFinal(_) => "AggregatorFinalPlan",
             PlanNode::Filter(_) => "FilterPlan",
+            PlanNode::Having(_) => "HavingPlan",
             PlanNode::Limit(_) => "LimitPlan",
             PlanNode::ReadSource(_) => "ReadSourcePlan",
             PlanNode::Select(_) => "SelectPlan",
@@ -96,6 +100,7 @@ impl PlanNode {
             PlanNode::AggregatorPartial(v) => v.input(),
             PlanNode::AggregatorFinal(v) => v.input(),
             PlanNode::Filter(v) => v.input(),
+            PlanNode::Having(v) => v.input(),
             PlanNode::Limit(v) => v.input(),
             PlanNode::Explain(v) => v.input(),
             PlanNode::Select(v) => v.input(),
@@ -114,6 +119,7 @@ impl PlanNode {
             PlanNode::AggregatorPartial(v) => v.set_input(node),
             PlanNode::AggregatorFinal(v) => v.set_input(node),
             PlanNode::Filter(v) => v.set_input(node),
+            PlanNode::Having(v) => v.set_input(node),
             PlanNode::Limit(v) => v.set_input(node),
             PlanNode::Explain(v) => v.set_input(node),
             PlanNode::Select(v) => v.set_input(node),

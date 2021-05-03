@@ -196,12 +196,6 @@ impl PlanParser {
         limit: &Option<sqlparser::ast::Expr>,
         order_by: &[OrderByExpr]
     ) -> Result<PlanNode> {
-        if select.having.is_some() {
-            return Result::Err(ErrorCodes::UnImplement(
-                "HAVING is not implemented yet".to_string()
-            ));
-        }
-
         // from.
         let plan = self.plan_tables_with_joins(&select.from)?;
 
@@ -233,6 +227,9 @@ impl PlanParser {
             self.sort(&plan, order_by)
                 .and_then(|plan| self.project(&plan, projection_expr))?
         };
+
+        // having.
+        let plan = self.having(&plan, &select.having)?;
 
         // limit.
         let plan = self.limit(&plan, limit)?;
@@ -492,6 +489,25 @@ impl PlanParser {
                     .and_then(|filter_expr| {
                         PlanBuilder::from(&plan)
                             .filter(filter_expr)
+                            .and_then(|builder| builder.build())
+                    })
+            }
+            _ => Ok(plan.clone())
+        }
+    }
+
+    /// Apply a having to the plan
+    fn having(
+        &self,
+        plan: &PlanNode,
+        predicate: &Option<sqlparser::ast::Expr>
+    ) -> Result<PlanNode> {
+        match *predicate {
+            Some(ref predicate_expr) => {
+                self.sql_to_rex(predicate_expr, &plan.schema())
+                    .and_then(|filter_expr| {
+                        PlanBuilder::from(&plan)
+                            .having(filter_expr)
                             .and_then(|builder| builder.build())
                     })
             }

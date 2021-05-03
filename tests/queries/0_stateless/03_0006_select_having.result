@@ -1,0 +1,40 @@
+--------------
+SELECT * FROM numbers_mt (3) having number > 5
+--------------
+
+--------------
+SELECT * FROM numbers_mt (3) having number > 1
+--------------
+
++--------+
+| number |
++--------+
+|      2 |
++--------+
+--------------
+SELECT * FROM numbers_mt (3) having 1=2
+--------------
+
+--------------
+SELECT MAX(number) AS max FROM numbers_mt(10) GROUP BY number%3 HAVING max>8
+--------------
+
++------+
+| max  |
++------+
+|    9 |
++------+
+--------------
+SELECT MAX(number) AS max FROM numbers_mt(10) GROUP BY number%3 HAVING max>7 ORDER BY max
+--------------
+
++------+
+| max  |
++------+
+|    8 |
+|    9 |
++------+
+--------------
+SELECT MAX(number) AS max FROM numbers_mt(10) GROUP BY number%3 HAVING max<7
+--------------
+
