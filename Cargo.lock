@@ -490,7 +490,7 @@ dependencies = [
 [[package]]
 name = "clickhouse-rs-cityhash-sys"
 version = "0.1.2"
-source = "git+https://github.com/sundy-li/clickhouse-svr?rev=11ea7de#11ea7de5ae8422170d836ae9ff0fb14289884673"
+source = "git+https://github.com/sundy-li/clickhouse-svr?rev=57ba11b#57ba11b62bb938a48e19ec167cb206651c59352b"
 dependencies = [
  "cc",
 ]
@@ -498,9 +498,8 @@ dependencies = [
 [[package]]
 name = "clickhouse-srv"
 version = "0.1.0"
-source = "git+https://github.com/sundy-li/clickhouse-svr?rev=11ea7de#11ea7de5ae8422170d836ae9ff0fb14289884673"
+source = "git+https://github.com/sundy-li/clickhouse-svr?rev=57ba11b#57ba11b62bb938a48e19ec167cb206651c59352b"
 dependencies = [
- "anyhow",
  "async-trait",
  "bitflags",
  "byteorder",
@@ -1176,7 +1175,6 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-ext",
  "common-flights",
  "common-functions",
  "common-infallible",

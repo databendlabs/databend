@@ -3,14 +3,23 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::borrow::Cow;
+use std::net;
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
 
 use anyhow::bail;
-use anyhow::Result;
+use clickhouse_srv::connection::Connection;
 use clickhouse_srv::*;
+use common_exception::Result;
+use common_ext::ResultExt;
+use common_ext::ResultTupleExt;
+use log::debug;
 use log::error;
 use log::info;
+use metrics::histogram;
 use tokio::net::TcpListener;
+use tokio_stream::StreamExt;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
@@ -28,42 +37,58 @@ impl Session {
     pub fn create(ctx: FuseQueryContextRef) -> Self {
         Session { ctx }
     }
-
-    async fn execute_fuse_query(&self, state: &QueryState) -> Result<QueryResponse> {
-        self.ctx.reset()?;
-        let plan = PlanParser::create(self.ctx.clone()).build_from_sql(&state.query);
-        match plan {
-            Ok(v) => match InterpreterFactory::get(self.ctx.clone(), v) {
-                Ok(executor) => {
-                    let stream = executor.execute().await?;
-                    let input_stream = Box::pin(ClickHouseStream::create(stream));
-                    return Ok(QueryResponse { input_stream });
-                }
-                Err(e) => {
-                    error!("Execute error: {:?}", e);
-                    bail!("Execute error: {:?}", e)
-                }
-            },
-            Err(e) => {
-                error!("Execute error: {:?}", e);
-                bail!("Execute error: {:?}", e)
-            }
-        }
-    }
 }
 
 #[async_trait::async_trait]
 impl ClickHouseSession for Session {
     async fn execute_query(
         &self,
-        state: &QueryState
-    ) -> clickhouse_srv::errors::Result<QueryResponse> {
-        match self.execute_fuse_query(state).await {
-            Err(e) => Err(clickhouse_srv::errors::Error::Other(Cow::from(
-                e.to_string()
-            ))),
-            Ok(v) => Ok(v)
+        ctx: &mut CHContext,
+        connection: &mut Connection
+    ) -> clickhouse_srv::errors::Result<()> {
+        self.ctx.reset()?;
+        let start = Instant::now();
+        let mut last_progress_send = Instant::now();
+
+        let mut stream = PlanParser::create(self.ctx.clone())
+            .build_from_sql(&ctx.state.query)
+            .and_then(|built_plan| InterpreterFactory::get(self.ctx.clone(), built_plan))
+            .and_then(|interpreter| interpreter.execute())
+            .and_then(|stream| Ok(ClickHouseStream::create(stream)));
+
+        match stream {
+            Ok(mut stream) => {
+                while let Some(block) = stream.next().await {
+                    connection.write_block(block?).await?;
+                    if last_progress_send.elapsed() >= Duration::from_millis(10) {
+                        let progress = self.get_progress();
+                        connection
+                            .write_progress(progress, ctx.client_revision)
+                            .await?;
+
+                        last_progress_send = Instant::now();
+                    }
+                }
+            },
+            Err(e) => {
+
+            },
         }
+
+        histogram!(
+            super::clickhouse_metrics::METRIC_CLICKHOUSE_PROCESSOR_REQUEST_DURATION,
+            start.elapsed()
+        );
+        Ok(())
+
+        // Ok(())
+        //
+        // match self.execute_fuse_query(ctx, connection) {
+        //     Err(e) => Err(clickhouse_srv::errors::Error::Other(Cow::from(
+        //         e.to_string()
+        //     ))),
+        //     _ => Ok(())
+        // }
     }
 
     fn dbms_name(&self) -> &str {
@@ -121,12 +146,11 @@ impl ClickHouseHandler {
         }
     }
 
-    pub async fn start(&self) -> Result<()> {
+    pub async fn start(&self) -> anyhow::Result<()> {
         let listener = TcpListener::bind(format!(
             "{}:{}",
             self.conf.clickhouse_handler_host, self.conf.clickhouse_handler_port
-        ))
-        .await?;
+        )).await?;
 
         loop {
             // Asynchronously wait for an inbound TcpStream.
