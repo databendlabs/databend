@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#[cfg(test)]
+mod function_column_test;
+
 mod aggregators;
 mod arithmetics;
 mod comparisons;

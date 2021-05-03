@@ -15,7 +15,7 @@ fn test_limit_push_down_optimizer() -> anyhow::Result<()> {
         "select (number+1) as c1, number as c2 from numbers_mt(10000) where (c1+c2+1)=1 limit 10"
     )?;
 
-    let mut limit_push_down = FilterPushDownOptimizer::create(ctx);
+    let mut limit_push_down = AliasPushDownOptimizer::create(ctx);
     let optimized = limit_push_down.optimize(&plan)?;
     let expect = "\
     Limit: 10\
