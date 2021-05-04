@@ -150,7 +150,7 @@ fn test_rewriter_plan() -> anyhow::Result<()> {
     ];
 
     for t in tests {
-        let result = PlanRewriter::exprs_extract_aliases(t.exprs);
+        let result = PlanRewriter::exprs_extract_projection_aliases(t.exprs);
         match &result {
             Ok(v) => assert_eq!(t.expect_str, format!("{:?}", v), "in test_case {}", t.name),
             Err(e) => assert_eq!(t.error_msg, e.to_string(), "in test_case {}", t.name)

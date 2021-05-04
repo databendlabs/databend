@@ -21,7 +21,13 @@ struct QueryAliasData {
 
 impl PlanRewriter {
     /// Recursively extract the aliases in exprs
-    pub fn exprs_extract_aliases(exprs: Vec<ExpressionPlan>) -> Result<Vec<ExpressionPlan>> {
+    ///
+    /// SELECT (x+1) as y, y*y FROM ..
+    /// ->
+    /// SELECT (x+1) as y, (x+1)*(x+1) FROM ..
+    pub fn exprs_extract_projection_aliases(
+        exprs: Vec<ExpressionPlan>
+    ) -> Result<Vec<ExpressionPlan>> {
         let mut mp = HashMap::new();
         PlanRewriter::exprs_to_map(&exprs, &mut mp)?;
 
@@ -137,26 +143,15 @@ impl PlanRewriter {
 
                 Ok(ExpressionPlan::Alias(alias.clone(), Box::new(new_expr)))
             }
-
-            ExpressionPlan::Sort {
-                expr,
-                asc,
-                nulls_first
-            } => {
-                let new_expr = PlanRewriter::expr_rewrite_alias(expr, data)?;
-                Ok(ExpressionPlan::Sort {
-                    expr: Box::new(new_expr),
-                    asc: *asc,
-                    nulls_first: *nulls_first
-                })
-            }
-            ExpressionPlan::Wildcard | ExpressionPlan::Literal(_) => Ok(expr.clone()),
             ExpressionPlan::Cast { expr, data_type } => {
                 let new_expr = PlanRewriter::expr_rewrite_alias(expr, data)?;
                 Ok(ExpressionPlan::Cast {
                     expr: Box::new(new_expr),
                     data_type: data_type.clone()
                 })
+            }
+            ExpressionPlan::Wildcard | ExpressionPlan::Literal(_) | ExpressionPlan::Sort { .. } => {
+                Ok(expr.clone())
             }
         }
     }
