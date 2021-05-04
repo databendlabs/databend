@@ -11,17 +11,27 @@ use prost::Message;
 use tonic::Request;
 
 use crate::protobuf::FlightQueryRequest;
+use common_planners::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct FetchPartitionAction {
     pub uuid: String,
-    pub nums: u32
+    pub nums: u32,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct ExecutePlanWithShuffleAction {
+    pub query_id: String,
+    pub stage_id: String,
+    pub plan: PlanNode,
+    pub shuffle_to: Vec<String>,
 }
 
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum QueryDoAction {
-    FetchPartition(FetchPartitionAction)
+    FetchPartition(FetchPartitionAction),
+    ExecutePlanWithShuffle(ExecutePlanWithShuffleAction),
 }
 
 /// Try convert tonic::Request<Action> to DoActionAction.

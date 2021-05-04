@@ -8,6 +8,7 @@ mod macros;
 mod context;
 mod number;
 mod service;
+mod service_new;
 
 pub use context::try_create_context;
 pub use number::NumberTestData;

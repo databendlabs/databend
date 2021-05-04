@@ -17,6 +17,7 @@ pub use flight_token::FlightClaim;
 pub use flight_token::FlightToken;
 pub use query_client::QueryClient;
 pub use query_do_action::QueryDoAction;
+pub use query_do_action::ExecutePlanWithShuffleAction;
 pub use query_do_get::ExecutePlanAction;
 pub use query_do_get::QueryDoGet;
 pub use store_client::StoreClient;

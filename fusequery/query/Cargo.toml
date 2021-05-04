@@ -58,6 +58,7 @@ tokio-stream = "0.1"
 toml = "0.5.6"
 tonic = "0.4"
 warp = "0.3.1"
+byteorder = "1.4.3"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 
 [dev-dependencies]
