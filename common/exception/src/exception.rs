@@ -70,6 +70,8 @@ build_exceptions! {
     CannotReadFile(23),
     ParquetError(24),
     UnknownTable(25),
+    StageExists(26),
+    NotFoundStream(27),
 
     UnknownException(1000),
     TokioError(1001)

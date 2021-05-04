@@ -232,6 +232,7 @@ impl Flight for FlightService {
                 };
                 Ok(Response::new(Box::pin(stream) as Self::DoActionStream))
             }
+            _ => Err(Status::unimplemented(""))
         }
     }
 

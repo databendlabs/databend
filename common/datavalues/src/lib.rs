@@ -37,6 +37,7 @@ mod data_value_aggregate;
 mod data_value_arithmetic;
 mod data_value_kernel;
 mod data_value_operator;
+mod data_array_split;
 
 pub use crate::data_array::*;
 pub use crate::data_array_aggregate::DataArrayAggregate;

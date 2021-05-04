@@ -1,3 +1,4 @@
+#![feature(result_contains_err)]
 // Copyright 2020 The VectorQuery Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
