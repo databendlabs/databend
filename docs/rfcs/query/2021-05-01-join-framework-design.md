@@ -16,7 +16,7 @@ Generally, join can be categorized as following types by semantic:
 
 Besides, `IN`, `EXISTS`, `NOT IN`, `NOT EXISTS` expressions can be implemented by **semi-join** and **anti-join**(known as subquery).
 
-There are kinds of join algorithms:
+There are three kinds of common join algorithms:
 
 - Nested-loop join
 - Hash join
@@ -71,7 +71,7 @@ To implement join, we have several parts of work to be done:
 
 - Support parse join statement into logical plan
 - Support bind column reference for joined tables
-- Support join reorder and join implementation choosing optimization
+- Support some basic heuristic optimization(e.g. outer join elimination, subquery elimination) and join reorder with choosing implementation
 - Support some join algorithms(local execution for now but design for distributed execution)
 
 ### Parser & Planner
@@ -118,6 +118,10 @@ Following bnf definition is a simplified ANSI-SQL specification of `FROM` clause
 
 <join column list> ::= <column name list>
 ```
+
+`<table reference>` concated with `<comma>` are cross joined. And it's possible to find some conjunctions in `WHERE` clause as their join conditions, that is rewriting cross join into inner join.
+
+There are many queries organized in this way that doesn't explicitly specify join condition, for example TPCH query set.
 
 `sqlparser` library can parse a SQL string into AST. Joins are organized as a tree structure.
 
