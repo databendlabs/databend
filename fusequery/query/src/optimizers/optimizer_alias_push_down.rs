@@ -11,9 +11,9 @@ use common_planners::AggregatorPartialPlan;
 use common_planners::EmptyPlan;
 use common_planners::FilterPlan;
 use common_planners::PlanNode;
+use common_planners::PlanRewriter;
 
 use crate::optimizers::IOptimizer;
-use crate::optimizers::OptimizerCommon;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct AliasPushDownOptimizer;
@@ -34,12 +34,12 @@ impl IOptimizer for AliasPushDownOptimizer {
             schema: Arc::new(DataSchema::empty())
         });
 
-        let projection_map = OptimizerCommon::projection_to_map(plan)?;
+        let projection_map = PlanRewriter::projection_to_map(plan)?;
         plan.walk_postorder(|node| -> Result<bool> {
             match node {
                 PlanNode::Filter(plan) => {
                     let rewritten_expr =
-                        OptimizerCommon::rewrite_alias_expr(&projection_map, &plan.predicate)?;
+                        PlanRewriter::rewrite_alias_expr(&projection_map, &plan.predicate)?;
                     let mut new_node = PlanNode::Filter(FilterPlan {
                         predicate: rewritten_expr,
                         input: rewritten_node.input()
@@ -49,9 +49,9 @@ impl IOptimizer for AliasPushDownOptimizer {
                 }
                 PlanNode::AggregatorPartial(plan) => {
                     let aggr_expr =
-                        OptimizerCommon::rewrite_alias_exprs(&projection_map, &plan.aggr_expr)?;
+                        PlanRewriter::rewrite_alias_exprs(&projection_map, &plan.aggr_expr)?;
                     let group_expr =
-                        OptimizerCommon::rewrite_alias_exprs(&projection_map, &plan.group_expr)?;
+                        PlanRewriter::rewrite_alias_exprs(&projection_map, &plan.group_expr)?;
                     let mut new_node = PlanNode::AggregatorPartial(AggregatorPartialPlan {
                         group_expr,
                         aggr_expr,
@@ -62,9 +62,9 @@ impl IOptimizer for AliasPushDownOptimizer {
                 }
                 PlanNode::AggregatorFinal(plan) => {
                     let aggr_expr =
-                        OptimizerCommon::rewrite_alias_exprs(&projection_map, &plan.aggr_expr)?;
+                        PlanRewriter::rewrite_alias_exprs(&projection_map, &plan.aggr_expr)?;
                     let group_expr =
-                        OptimizerCommon::rewrite_alias_exprs(&projection_map, &plan.group_expr)?;
+                        PlanRewriter::rewrite_alias_exprs(&projection_map, &plan.group_expr)?;
                     let mut new_node = PlanNode::AggregatorFinal(AggregatorFinalPlan {
                         group_expr,
                         aggr_expr,

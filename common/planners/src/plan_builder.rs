@@ -77,7 +77,7 @@ impl PlanBuilder {
 
     /// Apply a projection.
     pub fn project(&self, exprs: Vec<ExpressionPlan>) -> Result<Self> {
-        let exprs = PlanRewriter::exprs_extract_aliases(exprs)?;
+        let exprs = PlanRewriter::rewrite_projection_aliases(exprs)?;
         let input_schema = self.plan.schema();
 
         let mut projection_exprs = vec![];
