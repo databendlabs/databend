@@ -72,22 +72,29 @@ impl IProcessor for ExpressionTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        let funcs = self.funcs.clone();
         let projected_schema = self.schema.clone();
-        let funcs_clone = self.funcs.clone();
-
         let input_stream = self.input.execute().await?;
-        let stream = input_stream.filter_map(move |v| {
-            let block = v.ok()?;
+
+        let executor = |schema: DataSchemaRef,
+                        funcs: &[Box<dyn IFunction>],
+                        block: Result<DataBlock>|
+         -> Result<DataBlock> {
+            let block = block?;
             let rows = block.num_rows();
 
-            let mut column_values = Vec::with_capacity(funcs_clone.len());
-            for func in &funcs_clone {
-                column_values.push(func.eval(&block).ok()?.to_array(rows).ok()?);
+            let mut columns = Vec::with_capacity(funcs.len());
+            for func in funcs {
+                columns.push(func.eval(&block)?.to_array(rows)?);
             }
-            let block = DataBlock::create(projected_schema.clone(), column_values);
-            Some(Ok(block))
-        });
+            Ok(DataBlock::create(schema, columns))
+        };
 
+        let stream = input_stream.filter_map(move |v| {
+            executor(projected_schema.clone(), funcs.as_slice(), v)
+                .map(Some)
+                .transpose()
+        });
         Ok(Box::pin(stream))
     }
 }

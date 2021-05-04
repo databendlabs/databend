@@ -59,3 +59,31 @@ async fn test_transform_expression() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_transform_expression_error() -> anyhow::Result<()> {
+    use std::sync::Arc;
+
+    use common_planners::*;
+    use pretty_assertions::assert_eq;
+
+    use crate::pipelines::processors::*;
+
+    let ctx = crate::tests::try_create_context()?;
+    let test_source = crate::tests::NumberTestData::create(ctx.clone());
+
+    let mut pipeline = Pipeline::create();
+    let source = test_source.number_source_transform_for_test(8)?;
+    pipeline.add_source(Arc::new(source))?;
+
+    let result = PlanBuilder::create(test_source.number_schema_for_test()?).project(vec![
+        col("xnumber"),
+        col("number"),
+        add(col("number"), lit(1u8)),
+    ]);
+    let actual = format!("{:?}", result.err());
+    let expect = "Some(Code: 1002, displayText = InvalidArgumentError(\"Unable to get field named \\\"xnumber\\\". Valid fields: [\\\"number\\\"]\").)";
+    assert_eq!(expect, actual);
+
+    Ok(())
+}

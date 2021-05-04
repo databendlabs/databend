@@ -65,8 +65,8 @@ impl IProcessor for FilterTransform {
         let func = self.func.clone();
         let input_stream = self.input.execute().await?;
 
-        let executor = |func: Box<dyn IFunction>, result: Result<DataBlock>| -> Result<DataBlock> {
-            let block = result?;
+        let executor = |func: Box<dyn IFunction>, block: Result<DataBlock>| -> Result<DataBlock> {
+            let block = block?;
             let rows = block.num_rows();
             let filter_fn = func.clone();
 
