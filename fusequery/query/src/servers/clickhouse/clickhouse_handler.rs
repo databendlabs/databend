@@ -9,7 +9,8 @@ use std::time::Instant;
 
 use clickhouse_srv::connection::Connection;
 use clickhouse_srv::*;
-use common_exception::{Result, ErrorCodes};
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use log::info;
 use metrics::histogram;
 use tokio::net::TcpListener;
@@ -33,18 +34,16 @@ impl Session {
     }
 }
 
-
 pub fn to_clickhouse_err(res: ErrorCodes) -> clickhouse_srv::errors::Error {
     clickhouse_srv::errors::Error::Other(Cow::from(res.to_string()))
 }
-
 
 #[async_trait::async_trait]
 impl ClickHouseSession for Session {
     async fn execute_query(
         &self,
         ctx: &mut CHContext,
-        connection: &mut Connection,
+        connection: &mut Connection
     ) -> clickhouse_srv::errors::Result<()> {
         self.ctx.reset().map_err(to_clickhouse_err)?;
         let start = Instant::now();
@@ -55,12 +54,16 @@ impl ClickHouseSession for Session {
             .and_then(|built_plan| InterpreterFactory::get(self.ctx.clone(), built_plan))
             .map_err(to_clickhouse_err)?;
 
-        let mut clickhouse_stream = interpreter.execute().await
-            .and_then(|stream| Ok(ClickHouseStream::create(stream)))
+        let mut clickhouse_stream = interpreter
+            .execute()
+            .await
+            .map(|stream| ClickHouseStream::create(stream))
             .map_err(to_clickhouse_err)?;
 
         while let Some(block) = clickhouse_stream.next().await {
-            connection.write_block(block.map_err(to_clickhouse_err)?).await?;
+            connection
+                .write_block(block.map_err(to_clickhouse_err)?)
+                .await?;
             if last_progress_send.elapsed() >= Duration::from_millis(10) {
                 let progress = self.get_progress();
                 connection
@@ -118,7 +121,7 @@ impl ClickHouseSession for Session {
         clickhouse_srv::types::Progress {
             rows: values.read_rows as u64,
             bytes: values.read_bytes as u64,
-            total_rows: 0,
+            total_rows: 0
         }
     }
 }
@@ -126,7 +129,7 @@ impl ClickHouseSession for Session {
 pub struct ClickHouseHandler {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionRef,
+    session_manager: SessionRef
 }
 
 impl ClickHouseHandler {
@@ -134,7 +137,7 @@ impl ClickHouseHandler {
         Self {
             conf,
             cluster,
-            session_manager,
+            session_manager
         }
     }
 
@@ -142,7 +145,8 @@ impl ClickHouseHandler {
         let listener = TcpListener::bind(format!(
             "{}:{}",
             self.conf.clickhouse_handler_host, self.conf.clickhouse_handler_port
-        )).await?;
+        ))
+        .await?;
 
         loop {
             // Asynchronously wait for an inbound TcpStream.
@@ -156,8 +160,8 @@ impl ClickHouseHandler {
             // Spawn our handler to be run asynchronously.
             tokio::spawn(async move {
                 if let Err(e) =
-                ClickHouseServer::run_on_stream(Arc::new(Session::create(ctx.clone())), stream)
-                    .await
+                    ClickHouseServer::run_on_stream(Arc::new(Session::create(ctx.clone())), stream)
+                        .await
                 {
                     info!("Error: {:?}", e);
                 }
