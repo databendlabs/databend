@@ -26,7 +26,7 @@ common-exception = {path = "../../common/exception"}
 common-ext = {path= "../../common/ext"}
 
 # Github dependencies
-clickhouse-srv = { git = "https://github.com/sundy-li/clickhouse-svr", rev = "a3b7251" }
+clickhouse-srv = { git = "https://github.com/sundy-li/clickhouse-svr", rev = "90041b9" }
 
 # Crates.io dependencies
 ahash = "0.7.2"
