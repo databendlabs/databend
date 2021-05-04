@@ -55,10 +55,6 @@ impl ClickHouseSession for Session {
             .and_then(|built_plan| InterpreterFactory::get(self.ctx.clone(), built_plan))
             .map_err(to_clickhouse_err)?;
 
-        if interpreter.name() != "SelectInterpreter" {
-            return Ok(())
-        }
-
         let mut clickhouse_stream = interpreter.execute().await
             .and_then(|stream| Ok(ClickHouseStream::create(stream)))
             .map_err(to_clickhouse_err)?;
@@ -74,6 +70,11 @@ impl ClickHouseSession for Session {
                 last_progress_send = Instant::now();
             }
         }
+
+        let progress = self.get_progress();
+        connection
+            .write_progress(progress, ctx.client_revision)
+            .await?;
 
         histogram!(
             super::clickhouse_metrics::METRIC_CLICKHOUSE_PROCESSOR_REQUEST_DURATION,

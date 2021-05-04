@@ -70,6 +70,7 @@ impl FuseQueryContext {
 
     /// ctx.reset will reset the necessary variables in the session
     pub fn reset(&self) -> Result<()> {
+        self.progress.write().reset();
         self.statistics.write().clear();
         self.partition_queue.write().clear();
         Ok(())
