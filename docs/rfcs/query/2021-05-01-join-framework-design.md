@@ -370,3 +370,61 @@ Hash join is effective if one of the joined table is small and the other one is 
 Sort-merge join is effective if inputs are sorted, while this is rarely happened.
 
 The comparison above is much biased, in fact it can hardly say that which algorithm is better. IMO, we can implement hash join and nested-loop join first since they are more common.
+
+Since we don't have infrastructure(planner, optimizer) for choosing join algorithm for now, I suggest to only implement block nested-loop join at present so we can build a complete prototype.
+
+We'are going to introduce a vectorized block nested-loop join algorithm.
+
+Pseudo code of naive nested-loop join has been introduced in [Background](#Background) section. As we know, nested-loop join will fetch only one row from outer table in each loop, which doen't have good locality. Block nested-loop join is a nested-loop join that will fetch a block of data in each loop. Here we introduce the naive block nested-loop join.
+
+```
+// R⋈S
+var innerTable = R
+var outerTable = S
+var result
+
+for s <- outerTable.fetchBlock():
+    for r <- innerTable.fetchBlock():
+        buffer = conditionEvalBlock(s, r)
+        for row <- buffer:
+            insert(result, row)
+```
+
+In vetorized execution, we can use a bit map to indicate whether a row should be return to result set or not. Then we can materialize the result later.
+
+For example, assume we have following SQL query:
+
+```SQL
+CREATE TABLE t(a int, b int);
+CREATE TABLE t1(b int, c int);
+-- insert some rows
+SELECT a, b, c FROM t INNER JOIN t1 ON t.b = t1.b;
+```
+
+The execution plan of this query should look like:
+
+```
+Join (t.b = t1.b)
+    -> TableScan t
+    -> TableScan t1
+```
+
+If we use the vectorized block nested-loop join algorithm introduced above, the pseudo code should look like:
+
+```
+var leftChild: BlockStream = scan(t)
+var rightChild: BlockStream = scan(t1)
+var condition: Expression = equal(column(t.b), column(t1.b))
+var result
+
+for l <- leftChild:
+    for r <- rightChild:
+        buffer = mergeBlock(l, r)
+        var bitMap: Array[boolean] = condition.eval(buffer)
+        buffer.insertColumn(bitMap)
+        result.insertBlock(buffer)
+
+materialize(result)
+```
+
+In fuse-query, we can add a `NestedLoopJoinTransform` to implement vectorized block nested-loop join.
