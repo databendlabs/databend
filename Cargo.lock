@@ -102,7 +102,6 @@ dependencies = [
  "lazy_static",
  "lexical-core",
  "num 0.3.1",
- "prettytable-rs",
  "rand 0.7.3",
  "regex",
  "serde",
@@ -560,6 +559,7 @@ dependencies = [
  "common-arrow",
  "common-datavalues",
  "common-exception",
+ "prettytable-rs",
 ]
 
 [[package]]

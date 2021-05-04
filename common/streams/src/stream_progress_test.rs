@@ -43,7 +43,7 @@ async fn test_progress_stream() -> anyhow::Result<()> {
         "+---+", "| a |", "+---+", "| 1 |", "| 1 |", "| 1 |", "| 2 |", "| 2 |", "| 2 |", "| 3 |",
         "| 3 |", "| 3 |", "+---+",
     ];
-    common_datablocks::assert_blocks_sorted_eq!(expected, result.as_slice());
+    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
     Ok(())
 }

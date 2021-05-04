@@ -51,7 +51,7 @@ async fn test_number_table() -> anyhow::Result<()> {
         "| 7      |",
         "+--------+",
     ];
-    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
     Ok(())
 }

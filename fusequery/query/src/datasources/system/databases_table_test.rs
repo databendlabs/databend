@@ -29,7 +29,7 @@ async fn test_tables_table() -> anyhow::Result<()> {
         "| system   |",
         "+----------+",
     ];
-    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
     Ok(())
 }

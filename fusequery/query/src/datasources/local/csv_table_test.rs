@@ -66,7 +66,7 @@ async fn test_csv_table() -> anyhow::Result<()> {
         "| 6       |",
         "+---------+",
     ];
-    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
     Ok(())
 }

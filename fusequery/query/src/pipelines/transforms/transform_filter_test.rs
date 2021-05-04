@@ -46,7 +46,7 @@ async fn test_transform_filter() -> anyhow::Result<()> {
         "| 2021   |",
         "+--------+",
     ];
-    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
     Ok(())
 }
