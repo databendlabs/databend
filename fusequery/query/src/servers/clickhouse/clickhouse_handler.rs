@@ -3,19 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::borrow::Cow;
-use std::net;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use anyhow::bail;
 use clickhouse_srv::connection::Connection;
 use clickhouse_srv::*;
-use common_exception::Result;
-use common_ext::ResultExt;
-use common_ext::ResultTupleExt;
-use log::debug;
-use log::error;
+use common_exception::{Result, ErrorCodes};
 use log::info;
 use metrics::histogram;
 use tokio::net::TcpListener;
@@ -39,40 +33,46 @@ impl Session {
     }
 }
 
+
+pub fn to_clickhouse_err(res: ErrorCodes) -> clickhouse_srv::errors::Error {
+    clickhouse_srv::errors::Error::Other(Cow::from(res.to_string()))
+}
+
+
 #[async_trait::async_trait]
 impl ClickHouseSession for Session {
     async fn execute_query(
         &self,
         ctx: &mut CHContext,
-        connection: &mut Connection
+        connection: &mut Connection,
     ) -> clickhouse_srv::errors::Result<()> {
-        self.ctx.reset()?;
+        self.ctx.reset().map_err(to_clickhouse_err)?;
         let start = Instant::now();
         let mut last_progress_send = Instant::now();
 
-        let mut stream = PlanParser::create(self.ctx.clone())
+        let interpreter = PlanParser::create(self.ctx.clone())
             .build_from_sql(&ctx.state.query)
             .and_then(|built_plan| InterpreterFactory::get(self.ctx.clone(), built_plan))
-            .and_then(|interpreter| interpreter.execute())
-            .and_then(|stream| Ok(ClickHouseStream::create(stream)));
+            .map_err(to_clickhouse_err)?;
 
-        match stream {
-            Ok(mut stream) => {
-                while let Some(block) = stream.next().await {
-                    connection.write_block(block?).await?;
-                    if last_progress_send.elapsed() >= Duration::from_millis(10) {
-                        let progress = self.get_progress();
-                        connection
-                            .write_progress(progress, ctx.client_revision)
-                            .await?;
+        if interpreter.name() != "SelectInterpreter" {
+            return Ok(())
+        }
 
-                        last_progress_send = Instant::now();
-                    }
-                }
-            },
-            Err(e) => {
+        let mut clickhouse_stream = interpreter.execute().await
+            .and_then(|stream| Ok(ClickHouseStream::create(stream)))
+            .map_err(to_clickhouse_err)?;
 
-            },
+        while let Some(block) = clickhouse_stream.next().await {
+            connection.write_block(block.map_err(to_clickhouse_err)?).await?;
+            if last_progress_send.elapsed() >= Duration::from_millis(10) {
+                let progress = self.get_progress();
+                connection
+                    .write_progress(progress, ctx.client_revision)
+                    .await?;
+
+                last_progress_send = Instant::now();
+            }
         }
 
         histogram!(
@@ -80,15 +80,6 @@ impl ClickHouseSession for Session {
             start.elapsed()
         );
         Ok(())
-
-        // Ok(())
-        //
-        // match self.execute_fuse_query(ctx, connection) {
-        //     Err(e) => Err(clickhouse_srv::errors::Error::Other(Cow::from(
-        //         e.to_string()
-        //     ))),
-        //     _ => Ok(())
-        // }
     }
 
     fn dbms_name(&self) -> &str {
@@ -126,7 +117,7 @@ impl ClickHouseSession for Session {
         clickhouse_srv::types::Progress {
             rows: values.read_rows as u64,
             bytes: values.read_bytes as u64,
-            total_rows: 0
+            total_rows: 0,
         }
     }
 }
@@ -134,7 +125,7 @@ impl ClickHouseSession for Session {
 pub struct ClickHouseHandler {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionRef
+    session_manager: SessionRef,
 }
 
 impl ClickHouseHandler {
@@ -142,7 +133,7 @@ impl ClickHouseHandler {
         Self {
             conf,
             cluster,
-            session_manager
+            session_manager,
         }
     }
 
@@ -164,8 +155,8 @@ impl ClickHouseHandler {
             // Spawn our handler to be run asynchronously.
             tokio::spawn(async move {
                 if let Err(e) =
-                    ClickHouseServer::run_on_stream(Arc::new(Session::create(ctx.clone())), stream)
-                        .await
+                ClickHouseServer::run_on_stream(Arc::new(Session::create(ctx.clone())), stream)
+                    .await
                 {
                     info!("Error: {:?}", e);
                 }

@@ -1175,6 +1175,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-ext",
  "common-flights",
  "common-functions",
  "common-infallible",

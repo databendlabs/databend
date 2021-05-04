@@ -23,7 +23,7 @@ common-planners = {path = "../../common/planners"}
 common-progress = {path = "../../common/progress"}
 common-streams = {path = "../../common/streams"}
 common-exception = {path = "../../common/exception"}
-
+common-ext = {path= "../../common/ext"}
 
 # Github dependencies
 clickhouse-srv = { git = "https://github.com/sundy-li/clickhouse-svr", rev = "57ba11b" }

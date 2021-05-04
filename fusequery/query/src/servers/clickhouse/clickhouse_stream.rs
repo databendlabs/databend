@@ -6,13 +6,13 @@ use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 
-use anyhow::bail;
+use anyhow::anyhow;
 use clickhouse_srv::types::Block as ClickHouseBlock;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::datatypes::*;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
-use common_exception::Result;
+use common_exception::{Result, ErrorCodes};
 use common_streams::SendableDataBlockStream;
 use futures::stream::Stream;
 use futures::StreamExt;
@@ -98,7 +98,7 @@ impl ClickHouseStream {
                     result = result.column(name, data);
                 }
 
-                _ => bail!("Unsupported column type:{:?}", column.data_type())
+                _ => return Err(ErrorCodes::from_anyhow(anyhow!("Unsupported column type:{:?}", column.data_type())))
             }
         }
         Ok(result)
@@ -118,7 +118,7 @@ impl Stream for ClickHouseStream {
 }
 
 fn build_primitive_column<T>(values: &DataArrayRef) -> Result<Vec<Option<T::Native>>>
-where T: ArrowPrimitiveType {
+    where T: ArrowPrimitiveType {
     let values = as_primitive_array::<T>(values);
 
     Ok(match values.null_count() {
