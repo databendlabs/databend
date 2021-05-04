@@ -31,7 +31,7 @@ fn test_data_block_kernel_take() -> anyhow::Result<()> {
         "| 3 | b3 |",
         "+---+----+",
     ];
-    crate::assert_blocks_eq!(expected, vec![take]);
+    crate::assert_blocks_eq(expected, &[take]);
 
     Ok(())
 }
@@ -82,7 +82,7 @@ fn test_data_block_kernel_concat() -> anyhow::Result<()> {
         "| 9 | b3 |",
         "+---+----+",
     ];
-    crate::assert_blocks_eq!(expected, vec![results]);
+    crate::assert_blocks_eq(expected, &[results]);
     Ok(())
 }
 
@@ -123,7 +123,7 @@ fn test_data_block_sort() -> anyhow::Result<()> {
             "| 3 | b3 |",
             "+---+----+",
         ];
-        crate::assert_blocks_eq!(expected, vec![results]);
+        crate::assert_blocks_eq(expected, &[results]);
     }
 
     {
@@ -144,7 +144,7 @@ fn test_data_block_sort() -> anyhow::Result<()> {
             "| 4 | b2 |",
             "+---+----+",
         ];
-        crate::assert_blocks_eq!(expected, vec![results]);
+        crate::assert_blocks_eq(expected, &[results]);
     }
     Ok(())
 }

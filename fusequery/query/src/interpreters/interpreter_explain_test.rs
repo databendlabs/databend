@@ -34,7 +34,7 @@ async fn test_explain_interpreter() -> anyhow::Result<()> {
             "|       ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80] |",
             "+-----------------------------------------------------------------------------------------------------------------------+",
         ];
-        crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     } else {
         assert!(false)
     }

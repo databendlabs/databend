@@ -68,7 +68,7 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
         "| 166835               | 499.5       | 0                 |",
         "+----------------------+-------------+-------------------+",
     ];
-    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
     Ok(())
 }

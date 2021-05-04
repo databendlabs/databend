@@ -16,3 +16,4 @@ common-exception = {path = "../exception"}
 
 # Crates.io dependencies
 anyhow = "1.0.40"
+prettytable-rs = { version = "0.8.0"}
