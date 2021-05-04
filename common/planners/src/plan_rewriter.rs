@@ -9,6 +9,7 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::ExpressionPlan;
+use crate::PlanNode;
 
 pub struct PlanRewriter {}
 
@@ -20,16 +21,14 @@ struct QueryAliasData {
 }
 
 impl PlanRewriter {
-    /// Recursively extract the aliases in exprs
+    /// Recursively extract the aliases in projection exprs
     ///
     /// SELECT (x+1) as y, y*y FROM ..
     /// ->
     /// SELECT (x+1) as y, (x+1)*(x+1) FROM ..
-    pub fn exprs_extract_projection_aliases(
-        exprs: Vec<ExpressionPlan>
-    ) -> Result<Vec<ExpressionPlan>> {
+    pub fn rewrite_projection_aliases(exprs: Vec<ExpressionPlan>) -> Result<Vec<ExpressionPlan>> {
         let mut mp = HashMap::new();
-        PlanRewriter::exprs_to_map(&exprs, &mut mp)?;
+        PlanRewriter::alias_exprs_to_map(&exprs, &mut mp)?;
 
         let mut data = QueryAliasData {
             aliases: mp,
@@ -43,7 +42,7 @@ impl PlanRewriter {
             .collect()
     }
 
-    fn exprs_to_map(
+    fn alias_exprs_to_map(
         exprs: &[ExpressionPlan],
         mp: &mut HashMap<String, ExpressionPlan>
     ) -> Result<()> {
@@ -153,6 +152,117 @@ impl PlanRewriter {
             ExpressionPlan::Wildcard | ExpressionPlan::Literal(_) | ExpressionPlan::Sort { .. } => {
                 Ok(expr.clone())
             }
+        }
+    }
+
+    /// replaces expression columns by its name on the projection.
+    /// SELECT a as b ... where b>1
+    /// ->
+    /// SELECT a as b ... where a>1
+    pub fn rewrite_alias_expr(
+        projection_map: &HashMap<String, ExpressionPlan>,
+        expr: &ExpressionPlan
+    ) -> Result<ExpressionPlan> {
+        let expressions = Self::expression_plan_children(expr)?;
+
+        let expressions = expressions
+            .iter()
+            .map(|e| Self::rewrite_alias_expr(projection_map, e))
+            .collect::<Result<Vec<_>>>()?;
+
+        if let ExpressionPlan::Column(name) = expr {
+            if let Some(expr) = projection_map.get(name) {
+                return Ok(expr.clone());
+            }
+        }
+        Ok(Self::rebuild_from_exprs(&expr, &expressions))
+    }
+
+    /// replaces expressions columns by its name on the projection.
+    pub fn rewrite_alias_exprs(
+        projection_map: &HashMap<String, ExpressionPlan>,
+        exprs: &[ExpressionPlan]
+    ) -> Result<Vec<ExpressionPlan>> {
+        exprs
+            .iter()
+            .map(|e| Self::rewrite_alias_expr(projection_map, e))
+            .collect::<Result<Vec<_>>>()
+    }
+
+    /// Collect all unique fields to a map.
+    pub fn projection_to_map(plan: &PlanNode) -> Result<HashMap<String, ExpressionPlan>> {
+        let mut map = HashMap::new();
+        Self::projections_to_map(plan, &mut map)?;
+        Ok(map)
+    }
+
+    /// Get the expression children.
+    pub fn expression_plan_children(expr: &ExpressionPlan) -> Result<Vec<ExpressionPlan>> {
+        Ok(match expr {
+            ExpressionPlan::Alias(_, expr) => vec![expr.as_ref().clone()],
+            ExpressionPlan::Column(_) => vec![],
+            ExpressionPlan::Literal(_) => vec![],
+            ExpressionPlan::BinaryExpression { left, right, .. } => {
+                vec![left.as_ref().clone(), right.as_ref().clone()]
+            }
+            ExpressionPlan::Function { args, .. } => args.clone(),
+            ExpressionPlan::Wildcard => vec![],
+            ExpressionPlan::Sort { expr, .. } => vec![expr.as_ref().clone()],
+            ExpressionPlan::Cast { expr, .. } => vec![expr.as_ref().clone()]
+        })
+    }
+
+    /// Collect all unique fields to a map.
+    fn projections_to_map(
+        plan: &PlanNode,
+        map: &mut HashMap<String, ExpressionPlan>
+    ) -> Result<()> {
+        match plan {
+            PlanNode::Projection(v) => {
+                v.schema.fields().iter().enumerate().for_each(|(i, field)| {
+                    let expr = match &v.expr[i] {
+                        ExpressionPlan::Alias(_alias, plan) => plan.as_ref().clone(),
+                        other => other.clone()
+                    };
+                    map.insert(field.name().clone(), expr);
+                })
+            }
+            // Aggregator aggr_expr is the projection
+            PlanNode::AggregatorPartial(v) => {
+                for expr in &v.aggr_expr {
+                    let field = expr.to_data_field(&v.input.schema())?;
+                    map.insert(field.name().clone(), expr.clone());
+                }
+            }
+            // Aggregator aggr_expr is the projection
+            PlanNode::AggregatorFinal(v) => {
+                for expr in &v.aggr_expr {
+                    let field = expr.to_data_field(&v.input.schema())?;
+                    map.insert(field.name().clone(), expr.clone());
+                }
+            }
+            other => Self::projections_to_map(other.input().as_ref(), map)?
+        }
+        Ok(())
+    }
+
+    fn rebuild_from_exprs(expr: &ExpressionPlan, expressions: &[ExpressionPlan]) -> ExpressionPlan {
+        match expr {
+            ExpressionPlan::Alias(alias, _) => {
+                ExpressionPlan::Alias(alias.clone(), Box::from(expressions[0].clone()))
+            }
+            ExpressionPlan::Column(_) => expr.clone(),
+            ExpressionPlan::Literal(_) => expr.clone(),
+            ExpressionPlan::BinaryExpression { op, .. } => ExpressionPlan::BinaryExpression {
+                left: Box::new(expressions[0].clone()),
+                op: op.clone(),
+                right: Box::new(expressions[1].clone())
+            },
+            ExpressionPlan::Function { op, .. } => ExpressionPlan::Function {
+                op: op.clone(),
+                args: expressions.to_vec()
+            },
+            other => other.clone()
         }
     }
 }
