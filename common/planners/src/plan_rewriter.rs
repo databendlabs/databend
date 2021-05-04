@@ -189,7 +189,7 @@ impl PlanRewriter {
             .collect::<Result<Vec<_>>>()
     }
 
-    /// Collect all unique fields to a map.
+    /// Collect all unique projection fields to a map.
     pub fn projection_to_map(plan: &PlanNode) -> Result<HashMap<String, ExpressionPlan>> {
         let mut map = HashMap::new();
         Self::projections_to_map(plan, &mut map)?;
@@ -212,7 +212,7 @@ impl PlanRewriter {
         })
     }
 
-    /// Collect all unique fields to a map.
+    /// Collect all unique projection fields to a map.
     fn projections_to_map(
         plan: &PlanNode,
         map: &mut HashMap<String, ExpressionPlan>
