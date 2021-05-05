@@ -15,11 +15,11 @@ mod tests {
 
         let plan = PlanNode::Projection(ProjectionPlan {
             expr: vec![col("a"), col("b"), col("c")],
-            schema: Arc::new(DataSchema::new(vec![
+            schema: DataSchemaRefExt::create_with_metadata(vec![
                 DataField::new("a", DataType::Utf8, false),
                 DataField::new("b", DataType::Utf8, false),
                 DataField::new("c", DataType::Utf8, false),
-            ])),
+            ]),
             input: Arc::from(PlanBuilder::empty().build()?)
         });
 
@@ -72,11 +72,11 @@ mod tests {
         let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
             db: "system".to_string(),
             table: "test".to_string(),
-            schema: Arc::new(DataSchema::new(vec![
+            schema: DataSchemaRefExt::create_with_metadata(vec![
                 DataField::new("a", DataType::Utf8, false),
                 DataField::new("b", DataType::Utf8, false),
                 DataField::new("c", DataType::Utf8, false),
-            ])),
+            ]),
             partitions: Test::generate_partitions(8, total as u64),
             statistics: statistics.clone(),
             description: format!(
@@ -93,11 +93,11 @@ mod tests {
 
         let plan = PlanNode::Projection(ProjectionPlan {
             expr: vec![col("a")],
-            schema: Arc::new(DataSchema::new(vec![DataField::new(
+            schema: DataSchemaRefExt::create_with_metadata(vec![DataField::new(
                 "a",
                 DataType::Utf8,
                 false
-            )])),
+            )]),
             input: Arc::from(filter_plan)
         });
 
@@ -127,7 +127,7 @@ mod tests {
         let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
             db: "system".to_string(),
             table: "test".to_string(),
-            schema: Arc::new(DataSchema::new(vec![
+            schema: DataSchemaRefExt::create_with_metadata(vec![
                 DataField::new("a", DataType::Utf8, false),
                 DataField::new("b", DataType::Utf8, false),
                 DataField::new("c", DataType::Utf8, false),
@@ -135,7 +135,7 @@ mod tests {
                 DataField::new("e", DataType::Utf8, false),
                 DataField::new("f", DataType::Utf8, false),
                 DataField::new("g", DataType::Utf8, false),
-            ])),
+            ]),
             partitions: Test::generate_partitions(8, total as u64),
             statistics: statistics.clone(),
             description: format!(

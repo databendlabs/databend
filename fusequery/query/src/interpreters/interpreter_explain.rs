@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::StringArray;
 use common_exception::Result;
@@ -40,11 +40,11 @@ impl IInterpreter for ExplainInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let schema = Arc::new(DataSchema::new(vec![DataField::new(
+        let schema = DataSchemaRefExt::create_with_metadata(vec![DataField::new(
             "explain",
             DataType::Utf8,
             false
-        )]));
+        )]);
 
         let plan = Optimizer::create(self.ctx.clone()).optimize(&self.explain.input)?;
         let result = match self.explain.typ {

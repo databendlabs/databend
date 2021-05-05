@@ -10,10 +10,10 @@ fn test_data_block_kernel_take() -> anyhow::Result<()> {
 
     use crate::*;
 
-    let schema = Arc::new(DataSchema::new(vec![
+    let schema = DataSchemaRefExt::create_with_metadata(vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Utf8, false),
-    ]));
+    ]);
 
     let raw = DataBlock::create(schema.clone(), vec![
         Arc::new(Int64Array::from(vec![1, 2, 3])),
@@ -44,10 +44,10 @@ fn test_data_block_kernel_concat() -> anyhow::Result<()> {
 
     use crate::*;
 
-    let schema = Arc::new(DataSchema::new(vec![
+    let schema = DataSchemaRefExt::create_with_metadata(vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Utf8, false),
-    ]));
+    ]);
 
     let blocks = vec![
         DataBlock::create(schema.clone(), vec![
@@ -95,10 +95,10 @@ fn test_data_block_sort() -> anyhow::Result<()> {
     use crate::data_block_kernel::SortColumnDescription;
     use crate::*;
 
-    let schema = Arc::new(DataSchema::new(vec![
+    let schema = DataSchemaRefExt::create_with_metadata(vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Utf8, false),
-    ]));
+    ]);
 
     let raw = DataBlock::create(schema.clone(), vec![
         Arc::new(Int64Array::from(vec![6, 4, 3, 2, 1, 7])),

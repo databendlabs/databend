@@ -4,8 +4,6 @@
 
 #[tokio::test]
 async fn test_number_table() -> anyhow::Result<()> {
-    use std::sync::Arc;
-
     use common_datavalues::*;
     use common_planners::*;
     use futures::TryStreamExt;
@@ -18,14 +16,14 @@ async fn test_number_table() -> anyhow::Result<()> {
 
     let scan = &ScanPlan {
         schema_name: "scan_test".to_string(),
-        table_schema: Arc::new(DataSchema::new(vec![])),
+        table_schema: DataSchemaRefExt::create_with_metadata(vec![]),
         table_args: Some(ExpressionPlan::Literal(DataValue::UInt64(Some(8)))),
         projection: None,
-        projected_schema: Arc::new(DataSchema::new(vec![DataField::new(
+        projected_schema: DataSchemaRefExt::create_with_metadata(vec![DataField::new(
             "number",
             DataType::UInt64,
             false
-        )])),
+        )]),
         filters: vec![],
         limit: None
     };

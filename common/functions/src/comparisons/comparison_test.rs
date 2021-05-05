@@ -26,10 +26,10 @@ fn test_comparison_function() -> Result<()> {
         func: Box<dyn IFunction>
     }
 
-    let schema = Arc::new(DataSchema::new(vec![
+    let schema = DataSchemaRefExt::create_with_metadata(vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Int64, false),
-    ]));
+    ]);
 
     let field_a = ColumnFunction::try_create("a").unwrap();
     let field_b = ColumnFunction::try_create("b").unwrap();

@@ -13,11 +13,8 @@ async fn test_progress_stream() -> anyhow::Result<()> {
 
     use crate::*;
 
-    let schema = Arc::new(DataSchema::new(vec![DataField::new(
-        "a",
-        DataType::Int64,
-        false
-    )]));
+    let schema =
+        DataSchemaRefExt::create_with_metadata(vec![DataField::new("a", DataType::Int64, false)]);
 
     let block = DataBlock::create(schema.clone(), vec![Arc::new(Int64Array::from(vec![
         1, 2, 3,

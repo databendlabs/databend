@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use common_arrow::arrow::error::Result as ArrowResult;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
@@ -90,7 +90,7 @@ fn get_projected_schema(
     for i in &projection {
         projected_fields.push(schema.fields()[*i].clone());
     }
-    Ok(Arc::new(DataSchema::new(projected_fields)))
+    Ok(DataSchemaRefExt::create_with_metadata(projected_fields))
 }
 
 fn optimize_plan(
