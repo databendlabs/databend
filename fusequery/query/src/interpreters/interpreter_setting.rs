@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
 use common_planners::SettingPlan;
@@ -45,11 +45,11 @@ impl IInterpreter for SettingInterpreter {
             }
         }
 
-        let schema = Arc::new(DataSchema::new(vec![DataField::new(
+        let schema = DataSchemaRefExt::create_with_metadata(vec![DataField::new(
             "set",
             DataType::Utf8,
             false
-        )]));
+        )]);
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
     }
 }

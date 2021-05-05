@@ -14,7 +14,8 @@ async fn test_null_table() -> anyhow::Result<()> {
     let table = NullTable::try_create(
         "default".into(),
         "a".into(),
-        DataSchema::new(vec![DataField::new("a", DataType::UInt64, false)]).into(),
+        DataSchemaRefExt::create_with_metadata(vec![DataField::new("a", DataType::UInt64, false)])
+            .into(),
         TableOptions::default()
     )?;
     table.read_plan(ctx.clone(), &ScanPlan::empty())?;

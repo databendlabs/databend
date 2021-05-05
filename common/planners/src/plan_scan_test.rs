@@ -4,8 +4,6 @@
 
 #[test]
 fn test_scan_plan() -> anyhow::Result<()> {
-    use std::sync::Arc;
-
     use common_datavalues::*;
     use pretty_assertions::assert_eq;
 
@@ -13,18 +11,18 @@ fn test_scan_plan() -> anyhow::Result<()> {
 
     let scan = PlanNode::Scan(ScanPlan {
         schema_name: "scan_test".to_string(),
-        table_schema: Arc::new(DataSchema::new(vec![DataField::new(
+        table_schema: DataSchemaRefExt::create_with_metadata(vec![DataField::new(
             "a",
             DataType::Utf8,
             false
-        )])),
+        )]),
         table_args: None,
         projection: None,
-        projected_schema: Arc::new(DataSchema::new(vec![DataField::new(
+        projected_schema: DataSchemaRefExt::create_with_metadata(vec![DataField::new(
             "a",
             DataType::Utf8,
             false
-        )])),
+        )]),
         filters: vec![],
         limit: None
     });

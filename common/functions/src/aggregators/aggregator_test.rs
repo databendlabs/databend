@@ -29,10 +29,10 @@ fn test_aggregator_function() -> Result<()> {
         func: Box<dyn IFunction>
     }
 
-    let schema = Arc::new(DataSchema::new(vec![
+    let schema = DataSchemaRefExt::create_with_metadata(vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Int64, false),
-    ]));
+    ]);
     let block = DataBlock::create(schema.clone(), vec![
         Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
         Arc::new(Int64Array::from(vec![1, 2, 3, 4])),

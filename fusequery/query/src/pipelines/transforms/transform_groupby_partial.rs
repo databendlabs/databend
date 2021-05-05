@@ -12,8 +12,8 @@ use common_arrow::arrow::array::StringBuilder;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCodes;
@@ -223,7 +223,7 @@ impl IProcessor for GroupByPartialTransform {
         }
         columns.push(Arc::new(group_key_builder.finish()));
 
-        let schema = Arc::new(DataSchema::new(fields));
+        let schema = DataSchemaRefExt::create_with_metadata(fields);
         let block = DataBlock::create(schema, columns);
 
         Ok(Box::pin(DataBlockStream::create(

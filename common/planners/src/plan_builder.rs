@@ -7,6 +7,7 @@ use std::sync::Arc;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 
 use crate::col;
@@ -94,7 +95,7 @@ impl PlanBuilder {
         Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
             input: Arc::new(self.plan.clone()),
             expr: projection_exprs,
-            schema: Arc::new(DataSchema::new(fields))
+            schema: DataSchemaRefExt::create_with_metadata(fields)
         })))
     }
 
@@ -119,7 +120,7 @@ impl PlanBuilder {
                 input: Arc::new(self.plan.clone()),
                 aggr_expr,
                 group_expr,
-                schema: Arc::new(DataSchema::new(aggr_projection_fields))
+                schema: DataSchemaRefExt::create_with_metadata(aggr_projection_fields)
             }))
         })
     }
@@ -152,9 +153,13 @@ impl PlanBuilder {
         limit: Option<usize>
     ) -> Result<Self> {
         let table_schema = DataSchemaRef::new(table_schema.clone());
-        let projected_schema = projection
+        let projected_schema = projection.clone().map(|p| {
+            DataSchemaRefExt::create_with_metadata(
+                p.iter().map(|i| table_schema.field(*i).clone()).collect()
+            )
+            .as_ref()
             .clone()
-            .map(|p| DataSchema::new(p.iter().map(|i| table_schema.field(*i).clone()).collect()));
+        });
         let projected_schema = match projected_schema {
             None => table_schema.clone(),
             Some(v) => Arc::new(v)
