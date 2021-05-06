@@ -28,11 +28,11 @@ impl Progress {
         }
     }
 
-    pub fn add_rows(&mut self, rows: usize) {
+    pub fn add_rows(&self, rows: usize) {
         self.read_rows.fetch_add(rows as u64, Ordering::Relaxed);
     }
 
-    pub fn add_bytes(&mut self, bytes: usize) {
+    pub fn add_bytes(&self, bytes: usize) {
         self.read_bytes.fetch_add(bytes as u64, Ordering::Relaxed);
     }
 
@@ -45,9 +45,9 @@ impl Progress {
         }
     }
 
-    pub fn reset(&mut self) {
-        self.read_rows = AtomicU64::new(0);
-        self.read_bytes = AtomicU64::new(0);
+    pub fn reset(&self) {
+        self.read_rows.store(0, Ordering::Relaxed);
+        self.read_bytes.store(0, Ordering::Relaxed);
     }
 
     // Placeholder for default callback init.

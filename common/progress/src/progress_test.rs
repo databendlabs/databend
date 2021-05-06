@@ -6,7 +6,7 @@
 fn test_progress() -> anyhow::Result<()> {
     use crate::*;
 
-    let mut progress = Progress::create();
+    let progress = Progress::create();
     progress.add_rows(2);
     progress.add_bytes(10);
 
