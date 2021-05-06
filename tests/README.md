@@ -1,8 +1,6 @@
 # Tests
 
-## Stateless Tests
-
-Stateless Test is functional test.
+## Suites Tests
 
 It uses MySQL client and get the result for checking.
 

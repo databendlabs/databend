@@ -316,7 +316,7 @@ def main(args):
     global SERVER_DIED
     global exit_code
 
-    base_dir = os.path.abspath(args.queries)
+    base_dir = os.path.abspath(args.suites)
     tmp_dir = os.path.abspath(args.tmp)
 
     os.environ.setdefault("FUSE_QUERY_BINARY", args.binary)
@@ -427,7 +427,7 @@ def get_additional_client_options_url(args):
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='fuse-query functional tests')
-    parser.add_argument('-q', '--queries', help='Path to queries dir')
+    parser.add_argument('-q', '--suites', help='Path to suites dir')
     parser.add_argument('-b', '--binary', default='fuse-query', help='Path to fuse-query binary or name of binary in PATH')
     parser.add_argument('-c', '--client', default='mysql -uroot -h127.0.0.1 -P3307 -s ', help='Client program')
     parser.add_argument('-opt', '--options', default=' -v -t --force ', help="Client program options")
@@ -447,14 +447,14 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if args.queries is None and os.path.isdir('queries'):
-        args.queries = 'queries'
-    if args.queries is None:
-        print("Failed to detect path to the queries directory. Please specify it with '--queries' option.")
+    if args.suites is None and os.path.isdir('suites'):
+        args.suites = 'suites'
+    if args.suites is None:
+        print("Failed to detect path to the suites directory. Please specify it with '--suites' option.")
         exit(1)
 
     if args.tmp is None:
-        args.tmp = args.queries
+        args.tmp = args.suites
 
     args.client_with_database = args.client
     if not args.database:
