@@ -18,6 +18,7 @@ use std::sync::Arc;
 use tokio_stream::StreamExt;
 use std::convert::TryInto;
 use tonic::Status;
+use tokio::sync::mpsc::error::SendError;
 
 pub struct PrepareStageInfo(String, String, PlanNode, Vec<String>);
 
@@ -32,7 +33,8 @@ pub struct QueryInfo {
 
 pub struct FlightStreamInfo {
     schema: DataSchemaRef,
-    receiver: Receiver<Result<FlightData>>,
+    stream_data_receiver: Receiver<Result<FlightData>>,
+    launcher_sender: Sender<()>,
 }
 
 pub struct DispatcherState {
@@ -53,27 +55,32 @@ pub struct FlightDispatcher {
 impl FlightDispatcher {
     pub fn run(&self) -> Sender<Request> {
         let state = self.state.clone();
-        let (sender, mut receive) = channel::<Request>(100);
-        tokio::spawn(async move {
-            let mut dispatcher_state = DispatcherState::create();
-            while let Some(request) = receive.recv().await {
-                match request {
-                    Request::GetStream(id, receiver) => {
-                        match dispatcher_state.streams.remove(&id) {
-                            Some(stream_info) => receiver.send(Ok(stream_info.receiver)).await,
-                            None => receiver.send(Err(ErrorCodes::NotFoundStream(format!("Stream {} is not found", id)))).await,
-                        };
-                    }
-                    Request::PrepareStage(info, response_sender) => {
-                        let mut pipeline = Self::create_plan_pipeline(&*state, &info.2);
-                        response_sender.send(Self::prepare_stage(&mut dispatcher_state, &info, pipeline)).await;
-                    }
-                }
-            }
-            // TODO: shutdown
-        });
-
+        let (sender, mut receiver) = channel::<Request>(100);
+        tokio::spawn(async move { Self::dispatch(state.clone(), receiver).await });
         sender.clone()
+    }
+
+    #[inline(always)]
+    async fn dispatch(state: Arc<ServerState>, mut receiver: Receiver<Request>) {
+        let mut dispatcher_state = DispatcherState::create();
+        while let Some(request) = receiver.recv().await {
+            match request {
+                Request::GetStream(id, stream_receiver) => {
+                    match dispatcher_state.streams.remove(&id) {
+                        Some(stream_info) => {
+                            stream_info.launcher_sender.send(()).await;
+                            stream_receiver.send(Ok(stream_info.stream_data_receiver)).await;
+                        },
+                        None => stream_receiver.send(Err(ErrorCodes::NotFoundStream(format!("Stream {} is not found", id)))).await,
+                    };
+                }
+                Request::PrepareStage(info, response_sender) => {
+                    let mut pipeline = Self::create_plan_pipeline(&*state, &info.2);
+                    response_sender.send(Self::prepare_stage(&mut dispatcher_state, &info, pipeline)).await;
+                }
+            };
+        }
+        // TODO: shutdown
     }
 
     fn prepare_stage(state: &mut DispatcherState, info: &PrepareStageInfo, mut pipeline: Result<Pipeline>) -> Result<()> {
@@ -92,20 +99,21 @@ impl FlightDispatcher {
             };
         }
 
-        let mut senders = vec![];
+        let (launcher_sender, mut launcher_receiver) = channel(info.3.len());
+        let mut streams_data_sender = vec![];
         for stream_name in &info.3 {
             let stream_full_name = format!("{}/{}/{}", info.0, info.1, stream_name);
-            let (sender, stream_info) = FlightStreamInfo::create(&info.2.schema());
+            let (sender, stream_info) = FlightStreamInfo::create(&info.2.schema(), &launcher_sender);
+            streams_data_sender.push(sender);
             state.streams.insert(stream_full_name, stream_info);
-            senders.push(sender);
         }
 
         let query_info = state.queries.get_mut(&info.0).expect("No exists query info");
 
         query_info.runtime.spawn(async move {
-            // let _ = receiver.recv().await;
+            let _ = launcher_receiver.recv().await;
 
-            let _ = Self::receive_data_and_push(pipeline, senders).await;
+            let _ = Self::receive_data_and_push(pipeline, streams_data_sender).await;
 
             // for stream_data_sender in streams_data_sender {
             //     stream_data_sender.send(last_result.clone()).await;
@@ -194,11 +202,12 @@ impl DispatcherState {
 }
 
 impl FlightStreamInfo {
-    pub fn create(schema: &SchemaRef) -> (Sender<Result<FlightData>>, FlightStreamInfo) {
+    pub fn create(schema: &SchemaRef, launcher_sender: &Sender<()>) -> (Sender<Result<FlightData>>, FlightStreamInfo) {
         let (sender, mut receive) = channel(100);
         (sender, FlightStreamInfo {
             schema: schema.clone(),
-            receiver: receive,
+            stream_data_receiver: receive,
+            launcher_sender: launcher_sender.clone(),
         })
     }
 }
