@@ -418,8 +418,7 @@ def main(args):
 
 
 def get_additional_client_options(args):
-    # For MySQL client with header and table format
-    return ' -v -t --force '
+    return args.options
 
 
 def get_additional_client_options_url(args):
@@ -431,6 +430,7 @@ if __name__ == '__main__':
     parser.add_argument('-q', '--queries', help='Path to queries dir')
     parser.add_argument('-b', '--binary', default='fuse-query', help='Path to fuse-query binary or name of binary in PATH')
     parser.add_argument('-c', '--client', default='mysql -uroot -h127.0.0.1 -P3307 -s ', help='Client program')
+    parser.add_argument('-opt', '--options', default=' -v -t --force ', help="Client program options")
     parser.add_argument('--tmp', help='Path to tmp dir')
     parser.add_argument('-t', '--timeout', type=int, default=600, help='Timeout for each test case in seconds')
     parser.add_argument('test', nargs='*', help='Optional test case name regex')
