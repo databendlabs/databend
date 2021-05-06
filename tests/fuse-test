@@ -59,7 +59,7 @@ def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_fi
         'stderr': stderr_file,
     }
 
-    pattern = '{test} > {stdout} 2> {stderr}'
+    pattern = '{test} > {stdout} 2>&1'
 
     if ext == '.sql':
         pattern = "{client} {options} < " + pattern
@@ -76,7 +76,6 @@ def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_fi
 
     # Normalize randomized database names in stdout, stderr files.
     os.system("LC_ALL=C sed -i -e 's/{test_db}/default/g' {file}".format(test_db=args.database, file=stdout_file))
-    os.system("LC_ALL=C sed -i -e 's/{test_db}/default/g' {file}".format(test_db=args.database, file=stderr_file))
 
     stdout = open(stdout_file, 'rb').read() if os.path.exists(stdout_file) else b''
     stdout = str(stdout, errors='replace', encoding='utf-8')
@@ -420,7 +419,7 @@ def main(args):
 
 def get_additional_client_options(args):
     # For MySQL client with header and table format
-    return ' -v -t '
+    return ' -v -t --force '
 
 
 def get_additional_client_options_url(args):
