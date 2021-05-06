@@ -69,7 +69,7 @@ impl FlightDispatcher {
                     match dispatcher_state.streams.remove(&id) {
                         Some(stream_info) => {
                             stream_info.launcher_sender.send(()).await;
-                            stream_receiver.send(Ok(stream_info.stream_data_receiver)).await;
+                            stream_receiver.send(Ok(stream_info.stream_data_receiver)).await
                         },
                         None => stream_receiver.send(Err(ErrorCodes::NotFoundStream(format!("Stream {} is not found", id)))).await,
                     };
