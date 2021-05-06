@@ -6,7 +6,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 /// Progress callback is called with progress about the stream read progress.
-pub type ProgressCallback = Box<dyn FnMut(&Progress) + Send + Sync + 'static>;
+pub type ProgressCallback = Box<dyn FnMut(&ProgressValues) + Send + Sync + 'static>;
 
 #[derive(Debug)]
 pub struct ProgressValues {

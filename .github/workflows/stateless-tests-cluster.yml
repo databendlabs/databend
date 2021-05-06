@@ -22,4 +22,4 @@ jobs:
           scripts/ci/fusequery-cluster-3-nodes.sh
           echo "Starting fuse-test"
           cd tests
-          ./fuse-test
+          ./fuse-test '^0[^4]_'

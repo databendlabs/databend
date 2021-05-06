@@ -490,7 +490,7 @@ dependencies = [
 [[package]]
 name = "clickhouse-rs-cityhash-sys"
 version = "0.1.2"
-source = "git+https://github.com/sundy-li/clickhouse-svr?rev=29765fc#29765fc200742794512388c90b309fdde661e51c"
+source = "git+https://github.com/sundy-li/clickhouse-svr?rev=90041b9#90041b90e4fa879c96837cecaae2f0e4ae2fe46d"
 dependencies = [
  "cc",
 ]
@@ -498,16 +498,20 @@ dependencies = [
 [[package]]
 name = "clickhouse-srv"
 version = "0.1.0"
-source = "git+https://github.com/sundy-li/clickhouse-svr?rev=29765fc#29765fc200742794512388c90b309fdde661e51c"
+source = "git+https://github.com/sundy-li/clickhouse-svr?rev=90041b9#90041b90e4fa879c96837cecaae2f0e4ae2fe46d"
 dependencies = [
  "async-trait",
  "bitflags",
  "byteorder",
+ "bytes 1.0.1",
  "chrono",
  "chrono-tz",
  "clickhouse-rs-cityhash-sys",
  "combine",
  "futures",
+ "futures-core",
+ "futures-sink",
+ "futures-util",
  "hostname",
  "lazy_static",
  "log",
@@ -516,6 +520,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "url",
  "uuid",
 ]
@@ -3503,9 +3508,11 @@ checksum = "940a12c99365c31ea8dd9ba04ec1be183ffe4920102bb7122c2f515437601e8e"
 dependencies = [
  "bytes 1.0.1",
  "futures-core",
+ "futures-io",
  "futures-sink",
  "log",
  "pin-project-lite",
+ "slab",
  "tokio",
 ]
 

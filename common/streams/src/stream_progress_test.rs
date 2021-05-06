@@ -27,10 +27,11 @@ async fn test_progress_stream() -> anyhow::Result<()> {
     ]);
 
     let mut all_rows = 0;
-    let progress = Box::new(move |progress: &Progress| {
-        all_rows += progress.get_values().read_rows;
+    let progress = Box::new(move |value: &ProgressValues| {
+        all_rows += value.read_rows;
         println!("{}", all_rows);
     });
+
     let stream = ProgressStream::try_create(Box::pin(input), progress)?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
