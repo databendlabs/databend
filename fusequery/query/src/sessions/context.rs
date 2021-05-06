@@ -35,7 +35,7 @@ pub struct FuseQueryContext {
     partition_queue: Arc<RwLock<VecDeque<Partition>>>,
     current_database: Arc<RwLock<String>>,
 
-    progress: Arc<RwLock<Progress>>
+    progress: Arc<Progress>
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
@@ -51,7 +51,7 @@ impl FuseQueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             current_database: Arc::new(RwLock::new(String::from("default"))),
-            progress: Arc::new(RwLock::new(Progress::create()))
+            progress: Arc::new(Progress::create())
         };
 
         ctx.initial_settings()?;
@@ -70,7 +70,7 @@ impl FuseQueryContext {
 
     /// ctx.reset will reset the necessary variables in the session
     pub fn reset(&self) -> Result<()> {
-        self.progress.write().reset();
+        self.progress.reset();
         self.statistics.write().clear();
         self.partition_queue.write().clear();
         Ok(())
@@ -82,13 +82,13 @@ impl FuseQueryContext {
     pub fn progress_callback(&self) -> Result<ProgressCallback> {
         let current_progress = self.progress.clone();
         Ok(Box::new(move |value: &ProgressValues| {
-            current_progress.write().add_rows(value.read_rows);
-            current_progress.write().add_bytes(value.read_bytes);
+            current_progress.add_rows(value.read_rows);
+            current_progress.add_bytes(value.read_bytes);
         }))
     }
 
     pub fn get_progress_value(&self) -> ProgressValues {
-        self.progress.as_ref().read().get_values()
+        self.progress.as_ref().get_values()
     }
 
     // Steal n partitions from the partition pool by the pipeline worker.
