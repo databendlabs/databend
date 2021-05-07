@@ -4,13 +4,7 @@
 
 #[cfg(test)]
 mod cast_test;
-#[cfg(test)]
-mod substring_test;
 
 mod cast;
-mod expressions;
-mod substring;
 
 pub use cast::CastFunction;
-pub use expressions::ExpressionFunction;
-pub use substring::SubstringFunction;

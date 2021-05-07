@@ -4,6 +4,8 @@
 
 use common_exception::Result;
 
+use crate::udfs::SubstringFunction;
+
 #[test]
 fn test_substring_function() -> Result<()> {
     use std::sync::Arc;
