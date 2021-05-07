@@ -99,8 +99,8 @@ impl FlightDispatcher {
             };
         }
 
-        let (launcher_sender, mut launcher_receiver) = channel(info.3.len());
         let mut streams_data_sender = vec![];
+        let (launcher_sender, mut launcher_receiver) = channel(info.3.len());
         for stream_name in &info.3 {
             let stream_full_name = format!("{}/{}/{}", info.0, info.1, stream_name);
             let (sender, stream_info) = FlightStreamInfo::create(&info.2.schema(), &launcher_sender);
