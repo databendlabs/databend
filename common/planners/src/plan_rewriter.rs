@@ -110,7 +110,7 @@ impl PlanRewriter {
                 })
             }
 
-            ExpressionPlan::Function { op, args } => {
+            ExpressionPlan::Function { name, args } => {
                 let new_args: Result<Vec<ExpressionPlan>> = args
                     .iter()
                     .map(|v| PlanRewriter::expr_rewrite_alias(v, data))
@@ -118,7 +118,7 @@ impl PlanRewriter {
 
                 match new_args {
                     Ok(v) => Ok(ExpressionPlan::Function {
-                        op: op.clone(),
+                        name: name.clone(),
                         args: v
                     }),
                     Err(v) => Err(v)
@@ -258,8 +258,8 @@ impl PlanRewriter {
                 op: op.clone(),
                 right: Box::new(expressions[1].clone())
             },
-            ExpressionPlan::Function { op, .. } => ExpressionPlan::Function {
-                op: op.clone(),
+            ExpressionPlan::Function { name, .. } => ExpressionPlan::Function {
+                name: name.clone(),
                 args: expressions.to_vec()
             },
             other => other.clone()

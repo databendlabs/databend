@@ -26,7 +26,7 @@ pub fn modular(left: ExpressionPlan, right: ExpressionPlan) -> ExpressionPlan {
 /// sum() aggregate function.
 pub fn sum(other: ExpressionPlan) -> ExpressionPlan {
     ExpressionPlan::Function {
-        op: "sum".to_string(),
+        name: "sum".to_string(),
         args: vec![other]
     }
 }
@@ -34,7 +34,7 @@ pub fn sum(other: ExpressionPlan) -> ExpressionPlan {
 /// avg() aggregate function.
 pub fn avg(other: ExpressionPlan) -> ExpressionPlan {
     ExpressionPlan::Function {
-        op: "avg".to_string(),
+        name: "avg".to_string(),
         args: vec![other]
     }
 }

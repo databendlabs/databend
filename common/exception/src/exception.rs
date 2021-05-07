@@ -70,6 +70,7 @@ build_exceptions! {
     CannotReadFile(23),
     ParquetError(24),
     UnknownTable(25),
+    IllegalAggregation(26),
 
     UnknownException(1000),
     TokioError(1001)

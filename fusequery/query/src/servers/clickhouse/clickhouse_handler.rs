@@ -23,6 +23,7 @@ use crate::servers::clickhouse::ClickHouseStream;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
+use clickhouse_srv::errors::ServerError;
 
 struct Session {
     ctx: FuseQueryContextRef
@@ -35,7 +36,12 @@ impl Session {
 }
 
 pub fn to_clickhouse_err(res: ErrorCodes) -> clickhouse_srv::errors::Error {
-    clickhouse_srv::errors::Error::Other(Cow::from(res.to_string()))
+    clickhouse_srv::errors::Error::Server(ServerError {
+        code: res,
+        name: "".to_string(),
+        message: "".to_string(),
+        stack_trace: "".to_string()
+    })
 }
 
 #[async_trait::async_trait]

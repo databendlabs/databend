@@ -433,7 +433,7 @@ impl PlanParser {
                 }
 
                 Ok(ExpressionPlan::Function {
-                    op: e.name.to_string(),
+                    name: e.name.to_string(),
                     args
                 })
             }

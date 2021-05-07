@@ -8,6 +8,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_functions::AliasFunction;
 use common_functions::CastFunction;
@@ -32,7 +33,7 @@ pub enum ExpressionPlan {
     },
     /// Functions with a set of arguments.
     Function {
-        op: String,
+        name: String,
         args: Vec<ExpressionPlan>
     },
 
@@ -69,14 +70,24 @@ impl ExpressionPlan {
                 func.set_depth(depth);
                 Ok(func)
             }
-            ExpressionPlan::Function { op, args } => {
+            ExpressionPlan::Function { name, args } => {
                 let mut funcs = Vec::with_capacity(args.len());
                 for arg in args {
                     let mut func = arg.to_function_with_depth(depth + 1)?;
                     func.set_depth(depth);
                     funcs.push(func);
                 }
-                let mut func = FunctionFactory::get(op, &funcs)?;
+                let mut func = FunctionFactory::get(name, &funcs)?;
+
+                if func.is_aggregator() {
+                    if funcs.iter().any(|f| f.is_aggregator()) {
+                        return Result::Err(ErrorCodes::IllegalAggregation(format!(
+                            "Aggregate function {:?} is found to have another aggregate function as argument",
+                            func.name()
+                        )));
+                    }
+                }
+
                 func.set_depth(depth);
                 Ok(func)
             }
@@ -122,7 +133,7 @@ impl fmt::Debug for ExpressionPlan {
             ExpressionPlan::BinaryExpression { left, op, right } => {
                 write!(f, "({:?} {} {:?})", left, op, right,)
             }
-            ExpressionPlan::Function { op, args } => write!(f, "{}({:?})", op, args),
+            ExpressionPlan::Function { name, args } => write!(f, "{}({:?})", name, args),
             ExpressionPlan::Sort { expr, .. } => write!(f, "{:?}", expr),
             ExpressionPlan::Wildcard => write!(f, "*"),
             ExpressionPlan::Cast { expr, data_type } => {
