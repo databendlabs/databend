@@ -1,0 +1,3 @@
+SELECT 1;
+SELECT x;
+SELECT 'a';

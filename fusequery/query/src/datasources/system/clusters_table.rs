@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::StringArray;
 use common_datavalues::UInt8Array;
@@ -30,11 +30,11 @@ pub struct ClustersTable {
 impl ClustersTable {
     pub fn create() -> Self {
         ClustersTable {
-            schema: Arc::new(DataSchema::new(vec![
+            schema: DataSchemaRefExt::create(vec![
                 DataField::new("name", DataType::Utf8, false),
                 DataField::new("address", DataType::Utf8, false),
                 DataField::new("priority", DataType::UInt8, false),
-            ]))
+            ])
         }
     }
 }

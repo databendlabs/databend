@@ -3,10 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use pretty_assertions::assert_eq;
 
@@ -18,11 +17,7 @@ use crate::TableEngineType;
 fn test_plan_display_indent() -> anyhow::Result<()> {
     // TODO test other plan type
 
-    let schema = Arc::new(DataSchema::new(vec![DataField::new(
-        "a",
-        DataType::Int64,
-        false
-    )]));
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
 
     let mut options = HashMap::new();
     options.insert("opt_foo".to_string(), "opt_bar".to_string());

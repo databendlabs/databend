@@ -10,11 +10,7 @@ fn test_data_block() -> anyhow::Result<()> {
 
     use crate::DataBlock;
 
-    let schema = Arc::new(DataSchema::new(vec![DataField::new(
-        "a",
-        DataType::Int64,
-        false
-    )]));
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
 
     let block = DataBlock::create(schema.clone(), vec![Arc::new(Int64Array::from(vec![
         1, 2, 3,

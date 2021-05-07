@@ -39,7 +39,7 @@ async fn test_flight_execute() -> anyhow::Result<()> {
         "| 4      |",
         "+--------+",
     ];
-    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
     Ok(())
 }

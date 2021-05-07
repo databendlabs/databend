@@ -1,0 +1,23 @@
+--------------
+SELECT 1
+--------------
+
++------+
+| 1    |
++------+
+|    1 |
++------+
+--------------
+SELECT x
+--------------
+
+ERROR 1105 (HY000) at line 2: Code: 1002, displayText = Invalid argument error: Unable to get field named "x". Valid fields: ["dummy"].
+--------------
+SELECT 'a'
+--------------
+
++------+
+| a    |
++------+
+| a    |
++------+

@@ -14,6 +14,8 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
+use crate::pretty_format_blocks;
+
 #[derive(Clone)]
 pub struct DataBlock {
     schema: DataSchemaRef,
@@ -102,12 +104,7 @@ impl TryInto<DataBlock> for arrow::record_batch::RecordBatch {
 
 impl fmt::Debug for DataBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let batch = self
-            .clone()
-            .try_into()
-            .expect("Try convert data_block to batch_record error");
-        let formatted = common_arrow::arrow::util::pretty::pretty_format_batches(&[batch])
-            .expect("Pretty format batches error");
+        let formatted = pretty_format_blocks(&[self.clone()]).expect("Pretty format batches error");
         let lines: Vec<&str> = formatted.trim().lines().collect();
         write!(f, "\n{:#?}\n", lines)
     }

@@ -3,24 +3,24 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use common_arrow::arrow::error::Result as ArrowResult;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::PlanNode;
+use common_planners::PlanRewriter;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SortPlan;
 
 use crate::optimizers::IOptimizer;
-use crate::optimizers::OptimizerCommon;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ProjectionPushDownOptimizer {}
@@ -34,7 +34,7 @@ impl ProjectionPushDownOptimizer {
 // Recursively walk an expression tree, collecting the unique set of column names
 // referenced in the expression
 fn expr_to_column_names(expr: &ExpressionPlan, accum: &mut HashSet<String>) -> Result<()> {
-    let expressions = OptimizerCommon::expression_plan_children(expr)?;
+    let expressions = PlanRewriter::expression_plan_children(expr)?;
 
     let _expressions = expressions
         .iter()
@@ -90,7 +90,7 @@ fn get_projected_schema(
     for i in &projection {
         projected_fields.push(schema.fields()[*i].clone());
     }
-    Ok(Arc::new(DataSchema::new(projected_fields)))
+    Ok(DataSchemaRefExt::create(projected_fields))
 }
 
 fn optimize_plan(

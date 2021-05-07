@@ -24,10 +24,10 @@ fn test_udf_example_function() -> anyhow::Result<()> {
         func: Box<dyn IFunction>
     }
 
-    let schema = Arc::new(DataSchema::new(vec![
+    let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::Boolean, false),
         DataField::new("b", DataType::Boolean, false),
-    ]));
+    ]);
 
     let field_a = ColumnFunction::try_create("a").unwrap();
     let field_b = ColumnFunction::try_create("b").unwrap();

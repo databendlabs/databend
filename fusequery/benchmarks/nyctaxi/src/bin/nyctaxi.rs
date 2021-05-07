@@ -4,12 +4,11 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Instant;
 
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_planners::CreateTablePlan;
 use common_planners::TableEngineType;
@@ -96,7 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn nyctaxi_schema() -> DataSchemaRef {
-    Arc::new(DataSchema::new(vec![
+    DataSchemaRefExt::create(vec![
         DataField::new("VendorID", DataType::Utf8, true),
         DataField::new("tpep_pickup_datetime", DataType::Utf8, true),
         DataField::new("tpep_dropoff_datetime", DataType::Utf8, true),
@@ -114,5 +113,5 @@ fn nyctaxi_schema() -> DataSchemaRef {
         DataField::new("tolls_amount", DataType::Float64, true),
         DataField::new("improvement_surcharge", DataType::Float64, true),
         DataField::new("total_amount", DataType::Float64, true),
-    ]))
+    ])
 }

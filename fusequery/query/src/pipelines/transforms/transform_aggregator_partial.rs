@@ -9,8 +9,8 @@ use std::time::Instant;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::StringArray;
@@ -95,7 +95,7 @@ impl IProcessor for AggregatorPartialTransform {
             columns.push(col);
         }
 
-        let schema = Arc::new(DataSchema::new(fields));
+        let schema = DataSchemaRefExt::create(fields);
         let block = DataBlock::create(schema, columns);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),

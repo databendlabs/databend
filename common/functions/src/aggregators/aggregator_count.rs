@@ -5,7 +5,6 @@
 use std::fmt;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -54,10 +53,6 @@ impl IFunction for AggregatorCountFunction {
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
-    }
-
-    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
-        self.arg.eval(block)
     }
 
     fn set_depth(&mut self, depth: usize) {

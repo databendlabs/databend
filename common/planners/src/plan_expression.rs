@@ -16,7 +16,7 @@ use common_functions::FunctionFactory;
 use common_functions::IFunction;
 use common_functions::LiteralFunction;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum ExpressionPlan {
     /// An expression with a alias name.
     Alias(String, Box<ExpressionPlan>),

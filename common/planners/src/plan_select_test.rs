@@ -11,11 +11,7 @@ fn test_select_wildcard_plan() -> anyhow::Result<()> {
 
     use crate::*;
 
-    let schema = Arc::new(DataSchema::new(vec![DataField::new(
-        "a",
-        DataType::Utf8,
-        false
-    )]));
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]);
     let plan = PlanBuilder::create(schema)
         .project(vec![col("a")])?
         .build()?;

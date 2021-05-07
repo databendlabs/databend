@@ -25,7 +25,7 @@ async fn test_select_interpreter() -> anyhow::Result<()> {
         assert_eq!(block.num_columns(), 1);
 
         let expected = vec!["++", "||", "++", "++"];
-        crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     } else {
         assert!(false)
     }
@@ -48,7 +48,7 @@ async fn test_select_interpreter() -> anyhow::Result<()> {
             "| 2          | 4          | 9              | 16             |",
             "+------------+------------+----------------+----------------+",
         ];
-        crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 
     Ok(())

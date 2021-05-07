@@ -70,6 +70,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
         fn build_runtime(max_threads: u64) -> Result<Runtime> {
             tokio::runtime::Builder::new_multi_thread()
                 .enable_io()
+                .enable_time()
                 .worker_threads(max_threads as usize)
                 .build()
                 .map_err(|tokio_error| ErrorCodes::TokioError(format!("{}", tokio_error)))

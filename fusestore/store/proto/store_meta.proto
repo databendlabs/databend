@@ -63,8 +63,16 @@ message GetReply {
   string value = 3;
 }
 
+message RaftMes { bytes data = 1; }
+
 service MetaService {
 
   rpc Set(SetReq) returns (SetReply) {}
   rpc Get(GetReq) returns (GetReply) {}
+
+  // raft RPC
+
+  rpc AppendEntries(RaftMes) returns (RaftMes);
+  rpc InstallSnapshot(RaftMes) returns (RaftMes);
+  rpc vote(RaftMes) returns (RaftMes);
 }

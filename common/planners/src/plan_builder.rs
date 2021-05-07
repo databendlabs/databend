@@ -7,8 +7,9 @@ use std::sync::Arc;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
+use common_exception::ErrorCodes;
 
 use crate::col;
 use crate::AggregatorFinalPlan;
@@ -101,7 +102,7 @@ impl PlanBuilder {
 
     /// Apply a projection.
     pub fn project(&self, exprs: Vec<ExpressionPlan>) -> Result<Self> {
-        let exprs = PlanRewriter::exprs_extract_aliases(exprs)?;
+        let exprs = PlanRewriter::rewrite_projection_aliases(exprs)?;
         let input_schema = self.plan.schema();
 
         let mut projection_exprs = vec![];
@@ -118,7 +119,7 @@ impl PlanBuilder {
         Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
             input: Arc::new(self.plan.clone()),
             expr: projection_exprs,
-            schema: Arc::new(DataSchema::new(fields))
+            schema: DataSchemaRefExt::create(fields)
         })))
     }
 
@@ -166,7 +167,7 @@ impl PlanBuilder {
                 input: Arc::new(self.plan.clone()),
                 aggr_expr,
                 group_expr,
-                schema: Arc::new(DataSchema::new(aggr_projection_fields))
+                schema: DataSchemaRefExt::create(aggr_projection_fields)
             }))
         })
     }
@@ -199,9 +200,11 @@ impl PlanBuilder {
         limit: Option<usize>
     ) -> Result<Self> {
         let table_schema = DataSchemaRef::new(table_schema.clone());
-        let projected_schema = projection
-            .clone()
-            .map(|p| DataSchema::new(p.iter().map(|i| table_schema.field(*i).clone()).collect()));
+        let projected_schema = projection.clone().map(|p| {
+            DataSchemaRefExt::create(p.iter().map(|i| table_schema.field(*i).clone()).collect())
+                .as_ref()
+                .clone()
+        });
         let projected_schema = match projected_schema {
             None => table_schema.clone(),
             Some(v) => Arc::new(v)

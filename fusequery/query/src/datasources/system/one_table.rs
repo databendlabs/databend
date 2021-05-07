@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::UInt8Array;
 use common_exception::Result;
@@ -29,11 +29,7 @@ pub struct OneTable {
 impl OneTable {
     pub fn create() -> Self {
         OneTable {
-            schema: Arc::new(DataSchema::new(vec![DataField::new(
-                "dummy",
-                DataType::UInt8,
-                false
-            )]))
+            schema: DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8, false)])
         }
     }
 }

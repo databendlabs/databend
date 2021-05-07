@@ -24,11 +24,7 @@ fn test_to_type_name_function() -> anyhow::Result<()> {
         func: Box<dyn IFunction>
     }
 
-    let schema = Arc::new(DataSchema::new(vec![DataField::new(
-        "a",
-        DataType::Boolean,
-        false
-    )]));
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Boolean, false)]);
 
     let field_a = ColumnFunction::try_create("a")?;
 

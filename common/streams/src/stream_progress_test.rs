@@ -13,11 +13,7 @@ async fn test_progress_stream() -> anyhow::Result<()> {
 
     use crate::*;
 
-    let schema = Arc::new(DataSchema::new(vec![DataField::new(
-        "a",
-        DataType::Int64,
-        false
-    )]));
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
 
     let block = DataBlock::create(schema.clone(), vec![Arc::new(Int64Array::from(vec![
         1, 2, 3,
@@ -30,10 +26,11 @@ async fn test_progress_stream() -> anyhow::Result<()> {
     ]);
 
     let mut all_rows = 0;
-    let progress = Box::new(move |progress: &Progress| {
-        all_rows += progress.get_values().read_rows;
+    let progress = Box::new(move |value: &ProgressValues| {
+        all_rows += value.read_rows;
         println!("{}", all_rows);
     });
+
     let stream = ProgressStream::try_create(Box::pin(input), progress)?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
@@ -43,7 +40,7 @@ async fn test_progress_stream() -> anyhow::Result<()> {
         "+---+", "| a |", "+---+", "| 1 |", "| 1 |", "| 1 |", "| 2 |", "| 2 |", "| 2 |", "| 3 |",
         "| 3 |", "| 3 |", "+---+",
     ];
-    common_datablocks::assert_blocks_sorted_eq!(expected, result.as_slice());
+    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
     Ok(())
 }
