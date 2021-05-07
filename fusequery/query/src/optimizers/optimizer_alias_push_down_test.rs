@@ -46,8 +46,8 @@ fn test_filter_alias_push_down_optimizer() -> anyhow::Result<()> {
             name:"order-by-alias-push-down-now-work",
             query: "select (number+1) as c1, (number%3+1) as c2 from numbers_mt(10) order by c2",
             expect: "\
-            Projection: (number + 1) as c1:UInt64, ((number % 3) + 1) as c2:UInt64\
-            \n  Sort: c2:UInt64\
+            Sort: c2:UInt64\
+            \n  Projection: (number + 1) as c1:UInt64, ((number % 3) + 1) as c2:UInt64\
             \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
         },
     ];

@@ -22,6 +22,11 @@ use crate::pipelines::processors::IProcessor;
 // For example: hits * 2 + 3.
 // ExpressionTransform normally used for transform internal, such as ProjectionTransform.
 // Aims to transform a block to another format, such as add one column.
+//
+// Another example:
+// SELECT (number+1) as c1, number as c2 from numbers_mt(10) ORDER BY c1,c2;
+// Expression transform will make two fields on the base field: number:
+// c1, c2
 pub struct ExpressionTransform {
     funcs: Vec<Box<dyn IFunction>>,
     schema: DataSchemaRef,

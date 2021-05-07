@@ -9,3 +9,21 @@ SELECT number, number + 3 FROM numbers_mt (1000) where number > 5 order by numbe
 |    998 |            1001 |
 |    997 |            1000 |
 +--------+-----------------+
+--------------
+SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1 desc, c2 asc
+--------------
+
++------+------+
+| c1   | c2   |
++------+------+
+|    2 |    0 |
+|    2 |    0 |
+|    2 |    1 |
+|    1 |    0 |
+|    1 |    1 |
+|    1 |    1 |
+|    0 |    0 |
+|    0 |    0 |
+|    0 |    1 |
+|    0 |    1 |
++------+------+

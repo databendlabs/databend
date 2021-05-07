@@ -218,20 +218,21 @@ impl PlanParser {
                 res.and_then(|res| item.map(|item| res || item))
             });
 
+        // Projection.
         let plan = if !select.group_by.is_empty() || has_aggregator? {
-            // Put order after the aggregation projection.
-            self.aggregate(&plan, projection_expr, &select.group_by)
-                .and_then(|plan| self.sort(&plan, order_by))?
+            self.aggregate(&plan, projection_expr, &select.group_by)?
         } else {
-            // Put order front of projection.
-            self.sort(&plan, order_by)
-                .and_then(|plan| self.project(&plan, projection_expr))?
+            self.project(&plan, projection_expr)?
         };
 
-        // having.
+        // Sort.
+        // Fixme: select a from xx order by b
+        let plan = self.sort(&plan, order_by)?;
+
+        // Having.
         let plan = self.having(&plan, &select.having)?;
 
-        // limit.
+        // Limit.
         let plan = self.limit(&plan, limit)?;
 
         Ok(PlanNode::Select(SelectPlan {

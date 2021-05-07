@@ -82,11 +82,12 @@ impl PlanNode {
                                 if i > 0 {
                                     write!(f, ", ")?;
                                 }
+                                let expr = plan.order_by[i].clone();
                                 write!(
                                     f,
                                     "{:?}:{:?}",
-                                    plan.order_by[i],
-                                    plan.schema().fields()[i].data_type()
+                                    expr,
+                                    expr.to_data_field(&plan.schema()).unwrap().data_type()
                                 )?;
                             }
                             Ok(true)
