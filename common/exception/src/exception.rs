@@ -118,15 +118,13 @@ impl Display for ErrorCodes {
 
 #[derive(Error)]
 enum OtherErrors {
-    AnyHow {
-        error: anyhow::Error
-    }
+    AnyHow { error: anyhow::Error }
 }
 
 impl Display for OtherErrors {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            OtherErrors::AnyHow { error } => write!(f, "{}", error),
+            OtherErrors::AnyHow { error } => write!(f, "{}", error)
         }
     }
 }
@@ -134,7 +132,7 @@ impl Display for OtherErrors {
 impl Debug for OtherErrors {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            OtherErrors::AnyHow { error } => write!(f, "{:?}", error),
+            OtherErrors::AnyHow { error } => write!(f, "{:?}", error)
         }
     }
 }
@@ -154,7 +152,7 @@ impl ErrorCodes {
             code: 1002,
             display_text: format!("{}", error),
             cause: None,
-            backtrace: Some(Backtrace::new()),
+            backtrace: Some(Backtrace::new())
         }
     }
 
@@ -163,7 +161,7 @@ impl ErrorCodes {
             code: 1002,
             display_text: format!("{}", error),
             cause: None,
-            backtrace: Some(Backtrace::new()),
+            backtrace: Some(Backtrace::new())
         }
     }
 
@@ -172,7 +170,7 @@ impl ErrorCodes {
             code: 1002,
             display_text: format!("{}", error),
             cause: None,
-            backtrace: Some(Backtrace::new()),
+            backtrace: Some(Backtrace::new())
         }
     }
 
@@ -181,7 +179,7 @@ impl ErrorCodes {
             code: 1002,
             display_text: format!("{}", error),
             cause: None,
-            backtrace: Some(Backtrace::new()),
+            backtrace: Some(Backtrace::new())
         }
     }
 
@@ -190,7 +188,7 @@ impl ErrorCodes {
             code: 1002,
             display_text: format!("{}", error),
             cause: None,
-            backtrace: Some(Backtrace::new()),
+            backtrace: Some(Backtrace::new())
         }
     }
 }
