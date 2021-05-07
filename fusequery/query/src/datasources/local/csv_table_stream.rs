@@ -39,8 +39,8 @@ impl CsvTableStream {
 
         let part = partitions[0].clone();
         let names: Vec<_> = part.name.split('-').collect();
-        let begin: usize = names[1].parse().map_err(ErrorCodes::from_parse)?;
-        let end: usize = names[2].parse().map_err(ErrorCodes::from_parse)?;
+        let begin: usize = names[1].parse().map_err(ErrorCodes::from_parse_int)?;
+        let end: usize = names[2].parse().map_err(ErrorCodes::from_parse_int)?;
         let bounds = Some((begin, end));
         let block_size = end - begin;
 

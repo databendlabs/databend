@@ -27,8 +27,8 @@ fn test_column_function() -> anyhow::Result<()> {
     {
         let col = ColumnFunction::try_create("xx")?;
         let actual = col.eval(&block);
-        let expect = "Err(Code: 1002, displayText = InvalidArgumentError(\"Unable to get field named \\\"xx\\\". Valid fields: [\\\"a\\\"]\").)";
-        assert_eq!(expect, format!("{:?}", actual));
+        let expect = "Code: 1002, displayText = Invalid argument error: Unable to get field named \"xx\". Valid fields: [\"a\"].";
+        assert_eq!(expect, format!("{}", actual.err().unwrap()));
     }
 
     Ok(())
