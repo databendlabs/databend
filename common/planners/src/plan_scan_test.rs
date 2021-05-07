@@ -11,14 +11,10 @@ fn test_scan_plan() -> anyhow::Result<()> {
 
     let scan = PlanNode::Scan(ScanPlan {
         schema_name: "scan_test".to_string(),
-        table_schema: DataSchemaRefExt::create_with_metadata(vec![DataField::new(
-            "a",
-            DataType::Utf8,
-            false
-        )]),
+        table_schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
         table_args: None,
         projection: None,
-        projected_schema: DataSchemaRefExt::create_with_metadata(vec![DataField::new(
+        projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "a",
             DataType::Utf8,
             false

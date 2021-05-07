@@ -29,7 +29,7 @@ pub struct TablesTable {
 impl TablesTable {
     pub fn create() -> Self {
         TablesTable {
-            schema: DataSchemaRefExt::create_with_metadata(vec![
+            schema: DataSchemaRefExt::create(vec![
                 DataField::new("database", DataType::Utf8, false),
                 DataField::new("name", DataType::Utf8, false),
                 DataField::new("engine", DataType::Utf8, false),

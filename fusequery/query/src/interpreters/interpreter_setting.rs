@@ -45,11 +45,7 @@ impl IInterpreter for SettingInterpreter {
             }
         }
 
-        let schema = DataSchemaRefExt::create_with_metadata(vec![DataField::new(
-            "set",
-            DataType::Utf8,
-            false
-        )]);
+        let schema = DataSchemaRefExt::create(vec![DataField::new("set", DataType::Utf8, false)]);
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
     }
 }

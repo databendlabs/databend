@@ -29,11 +29,7 @@ pub struct OneTable {
 impl OneTable {
     pub fn create() -> Self {
         OneTable {
-            schema: DataSchemaRefExt::create_with_metadata(vec![DataField::new(
-                "dummy",
-                DataType::UInt8,
-                false
-            )])
+            schema: DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8, false)])
         }
     }
 }

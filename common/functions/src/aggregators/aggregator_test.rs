@@ -29,7 +29,7 @@ fn test_aggregator_function() -> Result<()> {
         func: Box<dyn IFunction>
     }
 
-    let schema = DataSchemaRefExt::create_with_metadata(vec![
+    let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Int64, false),
     ]);

@@ -91,7 +91,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "arrow"
 version = "4.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow-rs?rev=c3fe3bab9905739fdda75301dab07a18c91731bd#c3fe3bab9905739fdda75301dab07a18c91731bd"
+source = "git+https://github.com/apache/arrow-rs?rev=a870b24#a870b24bd4eb76d3e0e5c718c9956a7dcdee52fd"
 dependencies = [
  "cfg_aliases",
  "chrono",
@@ -101,6 +101,7 @@ dependencies = [
  "indexmap",
  "lazy_static",
  "lexical-core",
+ "multiversion",
  "num 0.3.1",
  "rand 0.7.3",
  "regex",
@@ -112,7 +113,7 @@ dependencies = [
 [[package]]
 name = "arrow-flight"
 version = "4.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow-rs?rev=c3fe3bab9905739fdda75301dab07a18c91731bd#c3fe3bab9905739fdda75301dab07a18c91731bd"
+source = "git+https://github.com/apache/arrow-rs?rev=a870b24#a870b24bd4eb76d3e0e5c718c9956a7dcdee52fd"
 dependencies = [
  "arrow",
  "bytes 1.0.1",
@@ -2005,6 +2006,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "multiversion"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "025c962a3dd3cc5e0e520aa9c612201d127dcdf28616974961a649dca64f5373"
+dependencies = [
+ "multiversion-macros",
+]
+
+[[package]]
+name = "multiversion-macros"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8a3e2bde382ebf960c1f3e79689fa5941625fe9bf694a1cb64af3e85faff3af"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "mysql_common"
 version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2312,7 +2333,7 @@ dependencies = [
 [[package]]
 name = "parquet"
 version = "4.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow-rs?rev=c3fe3bab9905739fdda75301dab07a18c91731bd#c3fe3bab9905739fdda75301dab07a18c91731bd"
+source = "git+https://github.com/apache/arrow-rs?rev=a870b24#a870b24bd4eb76d3e0e5c718c9956a7dcdee52fd"
 dependencies = [
  "arrow",
  "base64 0.12.3",

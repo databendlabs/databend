@@ -15,7 +15,7 @@ mod tests {
 
         let plan = PlanNode::Projection(ProjectionPlan {
             expr: vec![col("a"), col("b"), col("c")],
-            schema: DataSchemaRefExt::create_with_metadata(vec![
+            schema: DataSchemaRefExt::create(vec![
                 DataField::new("a", DataType::Utf8, false),
                 DataField::new("b", DataType::Utf8, false),
                 DataField::new("c", DataType::Utf8, false),
@@ -72,7 +72,7 @@ mod tests {
         let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
             db: "system".to_string(),
             table: "test".to_string(),
-            schema: DataSchemaRefExt::create_with_metadata(vec![
+            schema: DataSchemaRefExt::create(vec![
                 DataField::new("a", DataType::Utf8, false),
                 DataField::new("b", DataType::Utf8, false),
                 DataField::new("c", DataType::Utf8, false),
@@ -93,11 +93,7 @@ mod tests {
 
         let plan = PlanNode::Projection(ProjectionPlan {
             expr: vec![col("a")],
-            schema: DataSchemaRefExt::create_with_metadata(vec![DataField::new(
-                "a",
-                DataType::Utf8,
-                false
-            )]),
+            schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
             input: Arc::from(filter_plan)
         });
 
@@ -127,7 +123,7 @@ mod tests {
         let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
             db: "system".to_string(),
             table: "test".to_string(),
-            schema: DataSchemaRefExt::create_with_metadata(vec![
+            schema: DataSchemaRefExt::create(vec![
                 DataField::new("a", DataType::Utf8, false),
                 DataField::new("b", DataType::Utf8, false),
                 DataField::new("c", DataType::Utf8, false),

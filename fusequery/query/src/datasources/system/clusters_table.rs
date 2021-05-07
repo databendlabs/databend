@@ -30,7 +30,7 @@ pub struct ClustersTable {
 impl ClustersTable {
     pub fn create() -> Self {
         ClustersTable {
-            schema: DataSchemaRefExt::create_with_metadata(vec![
+            schema: DataSchemaRefExt::create(vec![
                 DataField::new("name", DataType::Utf8, false),
                 DataField::new("address", DataType::Utf8, false),
                 DataField::new("priority", DataType::UInt8, false),

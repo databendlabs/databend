@@ -34,7 +34,7 @@ impl NumbersTable {
     pub fn create(table: &'static str) -> Self {
         NumbersTable {
             table,
-            schema: DataSchemaRefExt::create_with_metadata(vec![DataField::new(
+            schema: DataSchemaRefExt::create(vec![DataField::new(
                 "number",
                 DataType::UInt64,
                 false

@@ -30,7 +30,7 @@ pub struct SettingsTable {
 impl SettingsTable {
     pub fn create() -> Self {
         SettingsTable {
-            schema: DataSchemaRefExt::create_with_metadata(vec![
+            schema: DataSchemaRefExt::create(vec![
                 DataField::new("name", DataType::Utf8, false),
                 DataField::new("value", DataType::Utf8, false),
                 DataField::new("default_value", DataType::Utf8, false),

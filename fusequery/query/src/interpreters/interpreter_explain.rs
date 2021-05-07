@@ -40,11 +40,8 @@ impl IInterpreter for ExplainInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let schema = DataSchemaRefExt::create_with_metadata(vec![DataField::new(
-            "explain",
-            DataType::Utf8,
-            false
-        )]);
+        let schema =
+            DataSchemaRefExt::create(vec![DataField::new("explain", DataType::Utf8, false)]);
 
         let plan = Optimizer::create(self.ctx.clone()).optimize(&self.explain.input)?;
         let result = match self.explain.typ {

@@ -95,7 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn nyctaxi_schema() -> DataSchemaRef {
-    DataSchemaRefExt::create_with_metadata(vec![
+    DataSchemaRefExt::create(vec![
         DataField::new("VendorID", DataType::Utf8, true),
         DataField::new("tpep_pickup_datetime", DataType::Utf8, true),
         DataField::new("tpep_dropoff_datetime", DataType::Utf8, true),
