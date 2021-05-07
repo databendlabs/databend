@@ -1,4 +1,4 @@
-name: Stateless Tests(Standalone)
+name: Performance Tests(Standalone)
 on: [push, pull_request]
 
 env:
@@ -16,10 +16,10 @@ jobs:
           override: true
       - name: Build
         run: cargo build --verbose
-      - name: Run Stateless Tests with Standalone mode
+      - name: Run Performance Tests with Standalone mode
         run: |
           echo "Starting Standalone fuse-query"
           scripts/ci/fusequery-standalone.sh
-          echo "Starting fuse-test"
+          echo "Starting performance test"
           cd tests
-          ./fuse-test --skip-dir '1_performance'
+          ./fuse-test --run-dir '1_performance'

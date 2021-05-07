@@ -1,0 +1,1 @@
+SELECT max(number) as max,sum(number) as sum FROM numbers_mt(1000000000) GROUP BY number % 3, number % 4, number % 5 ORDER BY max;

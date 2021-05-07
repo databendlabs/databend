@@ -344,6 +344,12 @@ def main(args):
         if SERVER_DIED:
             break
 
+        if args.skip_dir and any(s in suite for s in args.skip_dir):
+            continue
+
+        if args.run_dir and not any(s in suite for s in args.run_dir):
+            continue
+
         suite_dir = os.path.join(base_dir, suite)
         suite_re_obj = re.search('^[0-9]+_(.*)$', suite)
         if not suite_re_obj: #skip .gitignore and so on
@@ -443,6 +449,8 @@ if __name__ == '__main__':
     parser.add_argument('--parallel', default='1/1', help='One parallel test run number/total')
     parser.add_argument('-j', '--jobs', default=1, nargs='?', type=int, help='Run all tests in parallel')
     parser.add_argument('--skip', nargs='+', help="Skip these tests")
+    parser.add_argument('--skip-dir', nargs='+', help="Skip all these tests in the dir")
+    parser.add_argument('--run-dir', nargs='+', help="Only run these tests in the dir")
     parser.add_argument('--stop', action='store_true', default=None, dest='stop', help='Stop on network errors')
 
     args = parser.parse_args()
