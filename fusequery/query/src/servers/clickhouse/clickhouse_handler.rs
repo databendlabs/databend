@@ -2,12 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
 use clickhouse_srv::connection::Connection;
+use clickhouse_srv::errors::ServerError;
 use clickhouse_srv::*;
 use common_exception::ErrorCodes;
 use common_exception::Result;
@@ -23,7 +23,6 @@ use crate::servers::clickhouse::ClickHouseStream;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
-use clickhouse_srv::errors::ServerError;
 
 struct Session {
     ctx: FuseQueryContextRef
@@ -37,10 +36,10 @@ impl Session {
 
 pub fn to_clickhouse_err(res: ErrorCodes) -> clickhouse_srv::errors::Error {
     clickhouse_srv::errors::Error::Server(ServerError {
-        code: res,
+        code: res.code(),
         name: "".to_string(),
-        message: "".to_string(),
-        stack_trace: "".to_string()
+        message: res.message(),
+        stack_trace: res.backtrace(),
     })
 }
 

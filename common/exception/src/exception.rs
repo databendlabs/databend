@@ -13,7 +13,7 @@ use thiserror::Error;
 
 #[derive(Error)]
 pub struct ErrorCodes {
-    code: u16,
+    code: u32,
     display_text: String,
     cause: Option<Box<dyn std::error::Error + Sync + Send>>,
     backtrace: Option<Backtrace>
@@ -78,42 +78,53 @@ build_exceptions! {
 
 pub type Result<T> = std::result::Result<T, ErrorCodes>;
 
-impl Debug for ErrorCodes {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl ErrorCodes {
+    pub fn code(&self) -> u32 {
+        self.code
+    }
+
+    pub fn message(&self) -> String {
         self.cause
             .as_ref()
-            .map(|cause| write!(f, "Code: {}, displayText = {:?}.", self.code, cause))
-            .unwrap_or_else(|| {
-                write!(
-                    f,
-                    "Code: {}, displayText = {:?}.",
-                    self.code.clone(),
-                    self.display_text.clone()
-                )?;
-                match self.backtrace.as_ref() {
-                    None => Ok(()), // no backtrace
-                    Some(backtrace) => {
-                        // TODO: Custom stack frame format for print
-                        write!(f, "\n\n{:?}", backtrace)
-                    }
-                }
-            })
+            .map(|cause| format!("{:?}", cause))
+            .unwrap_or_else(|| self.display_text.clone())
+    }
+
+    pub fn backtrace(&self) -> String {
+        return match self.backtrace.as_ref() {
+            None => "".to_string(), // no backtrace
+            Some(backtrace) => format!("{:?}", backtrace)
+        };
+    }
+}
+
+impl Debug for ErrorCodes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Code: {}, displayText = {}.",
+            self.code(),
+            self.message(),
+        )?;
+
+        match self.backtrace.as_ref() {
+            None => Ok(()), // no backtrace
+            Some(backtrace) => {
+                // TODO: Custom stack frame format for print
+                write!(f, "\n\n{:?}", backtrace)
+            }
+        }
     }
 }
 
 impl Display for ErrorCodes {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.cause
-            .as_ref()
-            .map(|cause| write!(f, "Code: {}, displayText = {}.", self.code, cause))
-            .unwrap_or_else(|| {
-                write!(
-                    f,
-                    "Code: {}, displayText = {}.",
-                    self.code.clone(),
-                    self.display_text.clone()
-                )
-            })
+        write!(
+            f,
+            "Code: {}, displayText = {}.",
+            self.code(),
+            self.message(),
+        )
     }
 }
 

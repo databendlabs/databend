@@ -82,7 +82,7 @@ impl ExpressionPlan {
                 if func.is_aggregator() {
                     if funcs.iter().any(|f| f.is_aggregator()) {
                         return Result::Err(ErrorCodes::IllegalAggregation(format!(
-                            "Aggregate function {:?} is found to have another aggregate function as argument",
+                            "Aggregate function '{}' is found to have another aggregate function as argument",
                             func.name()
                         )));
                     }
