@@ -39,7 +39,7 @@ pub fn to_clickhouse_err(res: ErrorCodes) -> clickhouse_srv::errors::Error {
         code: res.code(),
         name: "".to_string(),
         message: res.message(),
-        stack_trace: res.backtrace(),
+        stack_trace: res.backtrace()
     })
 }
 
