@@ -18,6 +18,7 @@ mod logics;
 mod udfs;
 
 pub use crate::expressions::CastFunction;
+pub use crate::expressions::SubstringFunction;
 pub use crate::function::IFunction;
 pub use crate::function_alias::AliasFunction;
 pub use crate::function_column::ColumnFunction;

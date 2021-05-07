@@ -4,6 +4,8 @@
 
 #[cfg(test)]
 mod cast_test;
+#[cfg(test)]
+mod substring_test;
 
 mod cast;
 mod expressions;
