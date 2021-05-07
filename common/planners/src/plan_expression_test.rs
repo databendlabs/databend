@@ -32,3 +32,17 @@ fn test_expression_plan() -> anyhow::Result<()> {
     assert_eq!(expect, actual);
     Ok(())
 }
+
+#[test]
+fn test_agg_in_agg() -> anyhow::Result<()> {
+    use pretty_assertions::assert_eq;
+
+    use crate::*;
+
+    let agg = sum(sum(col("number")));
+    match agg.to_function() {
+        Ok(_) => std::panic!("logic error"),
+        Err(v) => assert_eq!("Aggregate function 'AggregatorSumFunction' is found to have another aggregate function as argument".to_string(), v.message())
+    }
+    Ok(())
+}
