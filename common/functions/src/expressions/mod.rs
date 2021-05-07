@@ -6,5 +6,9 @@
 mod cast_test;
 
 mod cast;
+mod expressions;
+mod substring;
 
 pub use cast::CastFunction;
+pub use expressions::ExpressionFunction;
+pub use substring::SubstringFunction;

@@ -38,6 +38,14 @@ pub fn avg(other: ExpressionPlan) -> ExpressionPlan {
         args: vec![other]
     }
 }
+//
+// /// substring() aggregate function.
+// pub fn substring(expr: ExpressionPlan, from: ExpressionPlan, to: ExpressionPlan) -> ExpressionPlan {
+//     ExpressionPlan::Function {
+//         op: "substring".to_string(),
+//         args: vec![expr, from, to]
+//     }
+// }
 
 impl ExpressionPlan {
     // And.

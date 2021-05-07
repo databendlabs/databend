@@ -453,6 +453,30 @@ impl PlanParser {
                     SQLCommon::make_data_type(data_type)
                         .map(|data_type| ExpressionPlan::Cast { expr, data_type })
                 }),
+            sqlparser::ast::Expr::Substring {
+                expr,
+                substring_from,
+                substring_for
+            } => {
+                let mut args = Vec::with_capacity(3);
+                args.push(self.sql_to_rex(expr, schema)?);
+                if let Some(from) = substring_from {
+                    args.push(self.sql_to_rex(from, schema)?);
+                } else {
+                    args.push(ExpressionPlan::Literal(DataValue::Int64(Some(1))));
+                }
+
+                if let Some(len) = substring_for {
+                    args.push(self.sql_to_rex(len, schema)?);
+                } else {
+                    args.push(ExpressionPlan::Literal(DataValue::UInt64(None)));
+                }
+
+                Ok(ExpressionPlan::Function {
+                    op: "substring".to_string(),
+                    args
+                })
+            }
             other => Result::Err(ErrorCodes::SyntexException(format!(
                 "Unsupported expression: {}, type: {:?}",
                 expr, other
