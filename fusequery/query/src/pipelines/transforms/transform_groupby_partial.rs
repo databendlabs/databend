@@ -223,7 +223,7 @@ impl IProcessor for GroupByPartialTransform {
         }
         columns.push(Arc::new(group_key_builder.finish()));
 
-        let schema = DataSchemaRefExt::create_with_metadata(fields);
+        let schema = DataSchemaRefExt::create(fields);
         let block = DataBlock::create(schema, columns);
 
         Ok(Box::pin(DataBlockStream::create(

@@ -33,11 +33,7 @@ fn test_cast_function() -> Result<()> {
             display: "CAST(a)",
             nullable: false,
             block: DataBlock::create(
-                DataSchemaRefExt::create_with_metadata(vec![DataField::new(
-                    "a",
-                    DataType::Int64,
-                    false
-                )]),
+                DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]),
                 vec![Arc::new(Int64Array::from(vec![4, 3, 2, 4]))]
             ),
             func: CastFunction::create(field_a.clone(), DataType::Int8),
@@ -49,11 +45,7 @@ fn test_cast_function() -> Result<()> {
             display: "CAST(a)",
             nullable: false,
             block: DataBlock::create(
-                DataSchemaRefExt::create_with_metadata(vec![DataField::new(
-                    "a",
-                    DataType::Utf8,
-                    false
-                )]),
+                DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
                 vec![Arc::new(StringArray::from(vec!["20210305", "20211024"]))]
             ),
             func: CastFunction::create(field_a.clone(), DataType::Int32),

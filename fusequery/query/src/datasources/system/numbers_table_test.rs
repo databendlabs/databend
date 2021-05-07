@@ -16,10 +16,10 @@ async fn test_number_table() -> anyhow::Result<()> {
 
     let scan = &ScanPlan {
         schema_name: "scan_test".to_string(),
-        table_schema: DataSchemaRefExt::create_with_metadata(vec![]),
+        table_schema: DataSchemaRefExt::create(vec![]),
         table_args: Some(ExpressionPlan::Literal(DataValue::UInt64(Some(8)))),
         projection: None,
-        projected_schema: DataSchemaRefExt::create_with_metadata(vec![DataField::new(
+        projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "number",
             DataType::UInt64,
             false

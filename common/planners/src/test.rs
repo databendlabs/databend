@@ -21,11 +21,8 @@ impl Test {
     }
 
     pub fn generate_source_plan_for_test(&self, total: usize) -> Result<PlanNode> {
-        let schema = DataSchemaRefExt::create_with_metadata(vec![DataField::new(
-            "number",
-            DataType::UInt64,
-            false
-        )]);
+        let schema =
+            DataSchemaRefExt::create(vec![DataField::new("number", DataType::UInt64, false)]);
 
         let statistics = Statistics {
             read_rows: total,

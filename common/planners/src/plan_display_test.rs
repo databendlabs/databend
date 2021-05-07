@@ -17,8 +17,7 @@ use crate::TableEngineType;
 fn test_plan_display_indent() -> anyhow::Result<()> {
     // TODO test other plan type
 
-    let schema =
-        DataSchemaRefExt::create_with_metadata(vec![DataField::new("a", DataType::Int64, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
 
     let mut options = HashMap::new();
     options.insert("opt_foo".to_string(), "opt_bar".to_string());

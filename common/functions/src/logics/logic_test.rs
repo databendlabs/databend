@@ -25,7 +25,7 @@ fn test_logic_function() -> anyhow::Result<()> {
         func: Box<dyn IFunction>
     }
 
-    let schema = DataSchemaRefExt::create_with_metadata(vec![
+    let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::Boolean, false),
         DataField::new("b", DataType::Boolean, false),
     ]);

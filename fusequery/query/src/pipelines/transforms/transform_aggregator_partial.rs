@@ -95,7 +95,7 @@ impl IProcessor for AggregatorPartialTransform {
             columns.push(col);
         }
 
-        let schema = DataSchemaRefExt::create_with_metadata(fields);
+        let schema = DataSchemaRefExt::create(fields);
         let block = DataBlock::create(schema, columns);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),

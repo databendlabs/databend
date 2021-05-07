@@ -30,11 +30,7 @@ pub struct FunctionsTable {
 impl FunctionsTable {
     pub fn create() -> Self {
         FunctionsTable {
-            schema: DataSchemaRefExt::create_with_metadata(vec![DataField::new(
-                "name",
-                DataType::Utf8,
-                false
-            )])
+            schema: DataSchemaRefExt::create(vec![DataField::new("name", DataType::Utf8, false)])
         }
     }
 }

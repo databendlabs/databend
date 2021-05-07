@@ -24,8 +24,7 @@ fn test_to_type_name_function() -> anyhow::Result<()> {
         func: Box<dyn IFunction>
     }
 
-    let schema =
-        DataSchemaRefExt::create_with_metadata(vec![DataField::new("a", DataType::Boolean, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Boolean, false)]);
 
     let field_a = ColumnFunction::try_create("a")?;
 

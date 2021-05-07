@@ -95,7 +95,7 @@ impl PlanBuilder {
         Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
             input: Arc::new(self.plan.clone()),
             expr: projection_exprs,
-            schema: DataSchemaRefExt::create_with_metadata(fields)
+            schema: DataSchemaRefExt::create(fields)
         })))
     }
 
@@ -120,7 +120,7 @@ impl PlanBuilder {
                 input: Arc::new(self.plan.clone()),
                 aggr_expr,
                 group_expr,
-                schema: DataSchemaRefExt::create_with_metadata(aggr_projection_fields)
+                schema: DataSchemaRefExt::create(aggr_projection_fields)
             }))
         })
     }
@@ -154,11 +154,9 @@ impl PlanBuilder {
     ) -> Result<Self> {
         let table_schema = DataSchemaRef::new(table_schema.clone());
         let projected_schema = projection.clone().map(|p| {
-            DataSchemaRefExt::create_with_metadata(
-                p.iter().map(|i| table_schema.field(*i).clone()).collect()
-            )
-            .as_ref()
-            .clone()
+            DataSchemaRefExt::create(p.iter().map(|i| table_schema.field(*i).clone()).collect())
+                .as_ref()
+                .clone()
         });
         let projected_schema = match projected_schema {
             None => table_schema.clone(),

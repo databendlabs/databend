@@ -90,7 +90,7 @@ fn get_projected_schema(
     for i in &projection {
         projected_fields.push(schema.fields()[*i].clone());
     }
-    Ok(DataSchemaRefExt::create_with_metadata(projected_fields))
+    Ok(DataSchemaRefExt::create(projected_fields))
 }
 
 fn optimize_plan(
