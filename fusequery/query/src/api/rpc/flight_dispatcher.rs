@@ -131,15 +131,6 @@ impl FlightDispatcher {
                 ctx.set_max_threads(state.conf.num_cpus);
                 PipelineBuilder::create(ctx.clone(), plan.clone()).build()
             })
-
-        // let cluster = self.cluster.clone();
-        // let session_manager = self.session_manager.clone();
-
-
-        // info!("Executor[{:?}] received action, job_id: {:?}", self.conf.flight_api_address, action.job_id);
-
-
-        // Pipeline.
     }
 
     // We need to always use the inline function to ensure that async/await state machine is simple enough
@@ -160,7 +151,7 @@ impl FlightDispatcher {
                 let (dicts, values) = flight_data_from_arrow_batch(&record_batch, &options);
                 let normalized_flight_data = dicts.into_iter().chain(std::iter::once(values));
                 for flight_data in normalized_flight_data {
-                    senders[0].send(Ok(flight_data));
+                    senders[0].send(Ok(flight_data)).await;
                 }
             }
         } else {
@@ -173,7 +164,7 @@ impl FlightDispatcher {
                 let normalized_flight_data = dicts.into_iter().chain(std::iter::once(values));
                 for flight_data in normalized_flight_data {
                     // TODO: push to sender
-                    senders[0].send(Ok(flight_data));
+                    senders[0].send(Ok(flight_data)).await;
                 }
             }
         }
@@ -181,7 +172,7 @@ impl FlightDispatcher {
         Ok(())
     }
 
-    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionRef) -> FlightDispatcher {
+    pub fn new(conf: Config, cluster: ClusterRef, session_manager: SessionRef) -> FlightDispatcher {
         FlightDispatcher {
             state: Arc::new(ServerState {
                 conf: conf,

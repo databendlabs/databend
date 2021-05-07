@@ -56,7 +56,7 @@ fn create_dispatcher() -> (FlightDispatcher, Sender<Request>) {
     let conf = Config::default();
     let sessions = Session::create();
     let cluster = Cluster::create(conf.clone());
-    let dispatcher = FlightDispatcher::create(conf, cluster, sessions);
+    let dispatcher = FlightDispatcher::new(conf, cluster, sessions);
     let sender = dispatcher.run();
     (dispatcher, sender)
 }
