@@ -75,12 +75,28 @@ impl DataBlock {
         &self.columns
     }
 
-    pub fn column_by_name(&self, name: &str) -> Result<&DataArrayRef> {
+    pub fn try_column_by_name(&self, name: &str) -> Result<&DataArrayRef> {
         if name == "*" {
             Ok(&self.columns[0])
         } else {
             let idx = self.schema.index_of(name).map_err(ErrorCodes::from_arrow)?;
             Ok(&self.columns[idx])
+        }
+    }
+
+    pub fn column_by_name(&self, name: &str) -> Option<&DataArrayRef> {
+        if self.is_empty() {
+            return None;
+        }
+
+        if name == "*" {
+            return Some(&self.columns[0]);
+        };
+
+        if let Ok(idx) = self.schema.index_of(name) {
+            Some(&self.columns[idx])
+        } else {
+            None
         }
     }
 }

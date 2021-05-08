@@ -19,7 +19,7 @@ fn test_data_block() -> anyhow::Result<()> {
 
     assert_eq!(3, block.num_rows());
     assert_eq!(1, block.num_columns());
-    assert_eq!(3, block.column_by_name("a")?.len());
+    assert_eq!(3, block.try_column_by_name("a")?.len());
     assert_eq!(3, block.column(0).len());
 
     Ok(())

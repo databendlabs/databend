@@ -226,7 +226,6 @@ impl PlanParser {
         };
 
         // Sort.
-        // Fixme: select a from xx order by b
         let plan = self.sort(&plan, order_by)?;
 
         // Having.

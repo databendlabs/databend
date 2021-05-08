@@ -21,6 +21,7 @@ use log::info;
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::transforms::AggregatorFinalTransform;
 use crate::pipelines::transforms::AggregatorPartialTransform;
+use crate::pipelines::transforms::ExpressionTransform;
 use crate::pipelines::transforms::FilterTransform;
 use crate::pipelines::transforms::GroupByFinalTransform;
 use crate::pipelines::transforms::GroupByPartialTransform;
@@ -113,10 +114,17 @@ impl PipelineBuilder {
     }
 
     fn visit_projection_plan(pipeline: &mut Pipeline, plan: &ProjectionPlan) -> Result<bool> {
+        // Add Expression processor for projection expression transform.
         pipeline.add_simple_transform(|| {
-            Ok(Box::new(ProjectionTransform::try_create(
+            Ok(Box::new(ExpressionTransform::try_create(
                 plan.schema.clone(),
                 plan.expr.clone()
+            )?))
+        })?;
+        // Add Projection processor for projection pruning.
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(ProjectionTransform::try_create(
+                plan.schema.clone()
             )?))
         })?;
         Ok(true)

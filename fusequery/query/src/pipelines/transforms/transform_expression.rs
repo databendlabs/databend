@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -40,11 +39,6 @@ impl ExpressionTransform {
         let mut fields = schema.fields().clone();
         let mut funcs = vec![];
 
-        let mut map = HashMap::new();
-        for field in &fields {
-            map.insert(field.name().clone(), true);
-        }
-
         for expr in &exprs {
             let func = expr.to_function()?;
             if func.is_aggregator() {
@@ -55,12 +49,12 @@ impl ExpressionTransform {
                     )
                 ));
             }
+            funcs.push(func);
 
-            // Merge field.
+            // Merge fields.
             let field = expr.to_data_field(&schema)?;
-            if !map.contains_key(field.name()) {
+            if !fields.iter().any(|x| x.name() == field.name()) {
                 fields.push(field);
-                funcs.push(func);
             }
         }
 
@@ -94,7 +88,7 @@ impl IProcessor for ExpressionTransform {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let funcs = self.funcs.clone();
-        let projected_schema = self.schema.clone();
+        let schema = self.schema.clone();
         let input_stream = self.input.execute().await?;
 
         let executor = |schema: DataSchemaRef,
@@ -106,13 +100,18 @@ impl IProcessor for ExpressionTransform {
 
             let mut columns = Vec::with_capacity(funcs.len());
             for func in funcs {
-                columns.push(func.eval(&block)?.to_array(rows)?);
+                // Check if the column is already have in the input block.
+                if let Some(col) = block.column_by_name(format!("{}", func).as_str()) {
+                    columns.push(col.clone());
+                } else {
+                    columns.push(func.eval(&block)?.to_array(rows)?);
+                }
             }
             Ok(DataBlock::create(schema, columns))
         };
 
         let stream = input_stream.filter_map(move |v| {
-            executor(projected_schema.clone(), funcs.as_slice(), v)
+            executor(schema.clone(), funcs.as_slice(), v)
                 .map(Some)
                 .transpose()
         });
