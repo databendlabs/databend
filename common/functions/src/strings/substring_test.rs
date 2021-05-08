@@ -4,7 +4,10 @@
 
 use common_exception::Result;
 
-use crate::udfs::SubstringFunction;
+use crate::strings::SubstringFunction;
+use crate::ColumnFunction;
+use crate::IFunction;
+use crate::LiteralFunction;
 
 #[test]
 fn test_substring_function() -> Result<()> {
@@ -13,8 +16,6 @@ fn test_substring_function() -> Result<()> {
     use common_datablocks::*;
     use common_datavalues::*;
     use pretty_assertions::assert_eq;
-
-    use crate::*;
 
     #[allow(dead_code)]
     struct Test {
