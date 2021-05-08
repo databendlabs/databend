@@ -70,6 +70,27 @@ impl fmt::Display for Cmd {
     }
 }
 
+/// RaftTxId is the enssential info to identify an write operation to raft.
+/// Logs with the same RaftTxId are considered the same and only the first of them will be applied.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct RaftTxId {
+    /// The ID of the client which has sent the request.
+    pub client: String,
+    /// The serial number of this request.
+    /// TODO(xp): a client msut generate consistent `client` and globally unique serial.
+    /// TODO(xp): in this impl the state machine records only one serial, which implies serial must be monotonic incremental for every client.
+    pub serial: u64
+}
+
+impl RaftTxId {
+    pub fn new(client: &str, serial: u64) -> Self {
+        Self {
+            client: client.to_string(),
+            serial
+        }
+    }
+}
+
 /// The application data request type which the `MemStore` works with.
 ///
 /// The client and the serial together provides external consistency:
@@ -77,11 +98,9 @@ impl fmt::Display for Cmd {
 /// "client" and "serial", thus the raft engine is able to distinguish if a request is duplicated.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ClientRequest {
-    /// The ID of the client which has sent the request.
-    pub client: String,
-    /// The serial number of this request.
-    /// TODO(xp): a client msut generate consistent `client` and globally unique serial.
-    pub serial: u64,
+    /// When not None, it is used to filter out duplicated logs, which are caused by retries by client.
+    pub txid: Option<RaftTxId>,
+
     /// The action a client want to take.
     pub cmd: Cmd
 }
@@ -125,13 +144,12 @@ pub struct MemStoreStateMachine {
     pub last_applied_log: u64,
     /// A mapping of client IDs to their state info:
     /// (serial, ClientResponse)
-    /// TODO(xp): (serial, ClientResponse)?
     pub client_serial_responses: HashMap<String, (u64, ClientResponse)>,
     pub kvs: HashMap<String, String>
 }
 
 impl MemStoreStateMachine {
-    /// apply an log entry to state machine.
+    /// Apply an log entry to state machine.
     ///
     /// For an `Add` command, if the specified key presents, the returned ClientResponse set result
     /// to None and prev to the previous value.
@@ -139,15 +157,17 @@ impl MemStoreStateMachine {
     /// For an `Set` command, it always succeeds. and returns the previous value and the value
     /// client specified.
     ///
-    /// If a duplicated log entry is detected by checking data.client and data.serial, no update
-    /// will be made and the previous resp is returned.  In this way a client is able to re-send a
+    /// If a duplicated log entry is detected by checking data.txid, no update
+    /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
     pub fn apply(&mut self, index: u64, data: &ClientRequest) -> Result<ClientResponse> {
         self.last_applied_log = index;
 
-        if let Some((serial, resp)) = self.client_serial_responses.get(&data.client) {
-            if serial == &data.serial {
-                return Ok(resp.clone());
+        if let Some(ref txid) = data.txid {
+            if let Some((serial, resp)) = self.client_serial_responses.get(&txid.client) {
+                if serial == &txid.serial {
+                    return Ok(resp.clone());
+                }
             }
         }
 
@@ -169,8 +189,11 @@ impl MemStoreStateMachine {
         };
 
         let resp = ClientResponse { prev, result: rst };
-        self.client_serial_responses
-            .insert(data.client.clone(), (data.serial, resp.clone()));
+
+        if let Some(ref txid) = data.txid {
+            self.client_serial_responses
+                .insert(txid.client.clone(), (txid.serial, resp.clone()));
+        }
         Ok(resp)
     }
 }
@@ -691,7 +714,11 @@ impl MetaNode {
         tracing::info!("booted, rst: {:?}", rst);
 
         let key = self.sto.node_key(self.sto.id);
-        let _resp = self.local_set(key, addr).await.expect("fail to add myself");
+        // TODO: use txid?
+        let _resp = self
+            .local_set(key, addr, true, None)
+            .await
+            .expect("fail to add myself");
         Ok(())
     }
 
@@ -726,15 +753,26 @@ impl MetaNode {
 
     /// Write a meta record through local raft node.
     /// It works only when this node is the leader.
+    ///
+    /// `if_absent=True` indicates an `Add` operation, otherwise a `Set` operation.
+    /// If `txid` is not None, it is used to filter out duplicated log entries, which are maybe caused by client retries.
+    /// If `txid` is None, a log will always be applied.
     #[tracing::instrument(level = "info", skip(self))]
-    pub async fn local_set(&self, key: String, value: String) -> anyhow::Result<String> {
+    pub async fn local_set(
+        &self,
+        key: String,
+        value: String,
+        if_absent: bool,
+        txid: Option<RaftTxId>
+    ) -> anyhow::Result<String> {
+        let cmd = if if_absent {
+            Cmd::Add { key, value }
+        } else {
+            Cmd::Set { key, value }
+        };
         let write_rst = self
             .raft
-            .client_write(ClientWriteRequest::new(ClientRequest {
-                client: key.clone(),
-                serial: 0,
-                cmd: Cmd::Set { key, value }
-            }))
+            .client_write(ClientWriteRequest::new(ClientRequest { txid, cmd: cmd }))
             .await;
 
         tracing::info!("raft.client_write rst: {:?}", write_rst);
