@@ -34,6 +34,7 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
     use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
 
+    use crate::optimizers::Optimizer;
     use crate::pipelines::processors::*;
     use crate::sql::*;
 
@@ -131,6 +132,7 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
     for test in tests {
         let plan = PlanParser::create(ctx.clone()).build_from_sql(test.query)?;
+        let plan = Optimizer::create(ctx.clone()).optimize(&plan)?;
         let mut pipeline = PipelineBuilder::create(ctx.clone(), plan).build()?;
         let actual_explain = format!("{:?}", pipeline);
         assert_eq!(test.explain, actual_explain);
