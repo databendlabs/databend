@@ -9,6 +9,7 @@ use common_datavalues::DataArrayComparison;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
+use common_datavalues::DataValue;
 use common_datavalues::DataValueComparisonOperator;
 use common_exception::ErrorCodes;
 use common_exception::Result;
@@ -79,13 +80,17 @@ impl IFunction for ComparisonFunction {
     }
 
     fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
-        Ok(DataColumnarValue::Array(
-            DataArrayComparison::data_array_comparison_op(
-                self.op.clone(),
-                &self.left.eval(block)?,
-                &self.right.eval(block)?
-            )?
-        ))
+        let left = &self.left.eval(block)?;
+        let right = &self.right.eval(block)?;
+        let result = DataArrayComparison::data_array_comparison_op(self.op.clone(), left, right)?;
+
+        match (left, right) {
+            (DataColumnarValue::Scalar(_), DataColumnarValue::Scalar(_)) => {
+                let data_value = DataValue::try_from_array(&result, 0)?;
+                Ok(DataColumnarValue::Scalar(data_value))
+            }
+            _ => Ok(DataColumnarValue::Array(result))
+        }
     }
 
     fn set_depth(&mut self, depth: usize) {
