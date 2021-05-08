@@ -14,6 +14,7 @@ pub use meta::Slot;
 pub use meta_service_impl::MetaServiceImpl;
 pub use raftmeta::ClientRequest;
 pub use raftmeta::ClientResponse;
+pub use raftmeta::Cmd;
 pub use raftmeta::MemStore;
 pub use raftmeta::MemStoreStateMachine;
 pub use raftmeta::MetaNode;

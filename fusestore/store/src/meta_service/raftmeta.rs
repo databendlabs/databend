@@ -5,6 +5,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt;
 use std::io::Cursor;
 use std::sync::Arc;
 
@@ -46,26 +47,49 @@ use crate::meta_service::RaftMes;
 const ERR_INCONSISTENT_LOG: &str =
     "a query was received which was expecting data to be in place which does not exist in the log";
 
+/// Cmd is an action a client wants to take.
+/// A Cmd is committed by raft leader before being applied.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum Cmd {
+    // AKA put-if-absent. add a key-value record only when key is absent.
+    Add { key: String, value: String },
+    // Override the record with key.
+    Set { key: String, value: String }
+}
+
+impl fmt::Display for Cmd {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Cmd::Add { key, value } => {
+                write!(f, "add:{}={}", key, value)
+            }
+            Cmd::Set { key, value } => {
+                write!(f, "set:{}={}", key, value)
+            }
+        }
+    }
+}
+
 /// The application data request type which the `MemStore` works with.
 ///
-/// Conceptually, for demo purposes, this represents an update to a client's status info,
-/// returning the previously recorded status.
+/// The client and the serial together provides external consistency:
+/// If a client failed to recv the response, it  re-send another ClientRequest with the same
+/// "client" and "serial", thus the raft engine is able to distinguish if a request is duplicated.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ClientRequest {
     /// The ID of the client which has sent the request.
     pub client: String,
     /// The serial number of this request.
+    /// TODO(xp): a client msut generate consistent `client` and globally unique serial.
     pub serial: u64,
-    /// A string describing the status of the client. For a real application, this should probably
-    /// be an enum representing all of the various types of requests / operations which a client
-    /// can perform.
-    pub status: String
+    /// The action a client want to take.
+    pub cmd: Cmd
 }
 
 impl AppData for ClientRequest {}
 
 /// The application data response type which the `MemStore` works with.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ClientResponse {
     // The value before applying a ClientRequest.
     pub prev: Option<String>,
@@ -99,13 +123,62 @@ pub struct MemStoreSnapshot {
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct MemStoreStateMachine {
     pub last_applied_log: u64,
-    /// A mapping of client IDs to their state info.
-    pub client_serial_responses: HashMap<String, (u64, Option<String>)>,
-    /// The current status of a client by ID.
-    pub client_status: HashMap<String, String>
+    /// A mapping of client IDs to their state info:
+    /// (serial, ClientResponse)
+    /// TODO(xp): (serial, ClientResponse)?
+    pub client_serial_responses: HashMap<String, (u64, ClientResponse)>,
+    pub kvs: HashMap<String, String>
+}
+
+impl MemStoreStateMachine {
+    /// apply an log entry to state machine.
+    ///
+    /// For an `Add` command, if the specified key presents, the returned ClientResponse set result
+    /// to None and prev to the previous value.
+    ///
+    /// For an `Set` command, it always succeeds. and returns the previous value and the value
+    /// client specified.
+    ///
+    /// If a duplicated log entry is detected by checking data.client and data.serial, no update
+    /// will be made and the previous resp is returned.  In this way a client is able to re-send a
+    /// command safely in case of network failure etc.
+    pub fn apply(&mut self, index: u64, data: &ClientRequest) -> Result<ClientResponse> {
+        self.last_applied_log = index;
+
+        if let Some((serial, resp)) = self.client_serial_responses.get(&data.client) {
+            if serial == &data.serial {
+                return Ok(resp.clone());
+            }
+        }
+
+        let (prev, rst): (Option<String>, Option<String>) = match data.cmd {
+            Cmd::Add { ref key, ref value } => {
+                if self.kvs.contains_key(key) {
+                    let prev = self.kvs.get(key);
+                    (prev.cloned(), None)
+                } else {
+                    let prev = self.kvs.insert(key.clone(), value.clone());
+                    (prev, Some(value.clone()))
+                }
+            }
+
+            Cmd::Set { ref key, ref value } => {
+                let prev = self.kvs.insert(key.clone(), value.clone());
+                (prev, Some(value.clone()))
+            }
+        };
+
+        let resp = ClientResponse { prev, result: rst };
+        self.client_serial_responses
+            .insert(data.client.clone(), (data.serial, resp.clone()));
+        Ok(resp)
+    }
 }
 
 /// An in-memory storage system implementing the `async_raft::RaftStorage` trait.
+///
+/// TODO: support at least 3 data set: nodes in cluster, block distribution and dfs-file metas.
+///       See: meta::Meta
 pub struct MemStore {
     /// The ID of the Raft node for which this memory storage instances is configured.
     id: NodeId,
@@ -284,42 +357,14 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
         data: &ClientRequest
     ) -> Result<ClientResponse> {
         let mut sm = self.sm.write().await;
-        sm.last_applied_log = *index;
-        if let Some((serial, res)) = sm.client_serial_responses.get(&data.client) {
-            if serial == &data.serial {
-                return Ok(ClientResponse {
-                    // TODO client_serial_responses save prev and result?
-                    prev: None,
-                    result: res.clone()
-                });
-            }
-        }
-        let previous = sm
-            .client_status
-            .insert(data.client.clone(), data.status.clone());
-        sm.client_serial_responses
-            .insert(data.client.clone(), (data.serial, previous.clone()));
-        Ok(ClientResponse {
-            prev: previous,
-            result: Some(data.status.clone())
-        })
+        sm.apply(*index, data)
     }
 
     #[tracing::instrument(level = "info", skip(self, entries))]
     async fn replicate_to_state_machine(&self, entries: &[(&u64, &ClientRequest)]) -> Result<()> {
         let mut sm = self.sm.write().await;
         for (index, data) in entries {
-            sm.last_applied_log = **index;
-            if let Some((serial, _)) = sm.client_serial_responses.get(&data.client) {
-                if serial == &data.serial {
-                    continue;
-                }
-            }
-            let previous = sm
-                .client_status
-                .insert(data.client.clone(), data.status.clone());
-            sm.client_serial_responses
-                .insert(data.client.clone(), (data.serial, previous.clone()));
+            sm.apply(**index, data)?;
         }
         Ok(())
     }
@@ -560,7 +605,7 @@ impl MemStore {
         let ns = self.sm.read().await;
 
         let addr = ns
-            .client_status
+            .kvs
             .get(&key)
             .ok_or_else(|| anyhow::anyhow!("node not found: {:}", key))?;
         Ok(addr.clone())
@@ -579,7 +624,7 @@ impl MemStore {
         for i in 0..100 {
             let key = self.node_key(i);
             // it has been added into this cluster and is not a voter.
-            if sm.client_status.contains_key(&key) && !ms.contains(&i) {
+            if sm.kvs.contains_key(&key) && !ms.contains(&i) {
                 rst.insert(i);
             }
         }
@@ -673,7 +718,7 @@ impl MetaNode {
 
         let sm = self.sto.sm.read().await;
         let v = sm
-            .client_status
+            .kvs
             .get(&key)
             .ok_or_else(|| anyhow::anyhow!("meta data key not found: {:}", key))?;
         Ok(v.clone())
@@ -686,9 +731,9 @@ impl MetaNode {
         let write_rst = self
             .raft
             .client_write(ClientWriteRequest::new(ClientRequest {
-                client: key,
+                client: key.clone(),
                 serial: 0,
-                status: value
+                cmd: Cmd::Set { key, value }
             }))
             .await;
 
