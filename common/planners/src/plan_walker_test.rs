@@ -26,6 +26,7 @@ fn test_plan_walker() -> std::result::Result<(), Box<dyn std::error::Error>> {
         )?;
 
         let expect = vec![
+            "ExpressionPlan".to_string(),
             "AggregatorFinalPlan".to_string(),
             "AggregatorPartialPlan".to_string(),
             "ReadSourcePlan".to_string(),
@@ -47,6 +48,7 @@ fn test_plan_walker() -> std::result::Result<(), Box<dyn std::error::Error>> {
             "ReadSourcePlan".to_string(),
             "AggregatorPartialPlan".to_string(),
             "AggregatorFinalPlan".to_string(),
+            "ExpressionPlan".to_string(),
         ];
         assert_eq!(expect, actual);
     }

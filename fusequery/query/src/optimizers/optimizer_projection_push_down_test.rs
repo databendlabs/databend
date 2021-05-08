@@ -159,12 +159,13 @@ mod tests {
 
         let expect = "\
         Projection: a:Utf8\
-        \n  Filter: (b = 10)\
-        \n    AggregatorPartial: groupBy=[[a, c]], aggr=[[]]\
-        \n      Filter: (d < 10)\
-        \n        Sort: e:Utf8\
-        \n          Limit: 10\
-        \n            ReadDataSource: scan partitions: [8], scan schema: [a:Utf8, b:Utf8, c:Utf8, d:Utf8, e:Utf8], statistics: [read_rows: 10000, read_bytes: 80000]";
+        \n  Expression: a:Utf8 (Before Projection)\
+        \n    Filter: (b = 10)\
+        \n      AggregatorPartial: groupBy=[[a, c]], aggr=[[]]\
+        \n        Filter: (d < 10)\
+        \n          Sort: e:Utf8\
+        \n            Limit: 10\
+        \n              ReadDataSource: scan partitions: [8], scan schema: [a:Utf8, b:Utf8, c:Utf8, d:Utf8, e:Utf8], statistics: [read_rows: 10000, read_bytes: 80000]";
 
         let actual = format!("{:?}", optimized);
         assert_eq!(expect, actual);

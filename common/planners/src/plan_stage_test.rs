@@ -21,11 +21,13 @@ fn test_stage_plan() -> anyhow::Result<()> {
         typ: ExplainType::Syntax,
         input: Arc::new(plan)
     });
-    let expect = "Projection: sumx:UInt64\
-    \n  AggregatorFinal: groupBy=[[]], aggr=[[sum([number]) as sumx]]\
-    \n    RedistributeStage[state: AggregatorMerge, id: 0]\
-    \n      AggregatorPartial: groupBy=[[]], aggr=[[sum([number]) as sumx]]\
-    \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
+    let expect = "\
+    Projection: sumx:UInt64\
+    \n  Expression: sumx:UInt64 (Before Projection)\
+    \n    AggregatorFinal: groupBy=[[]], aggr=[[sum([number]) as sumx]]\
+    \n      RedistributeStage[state: AggregatorMerge, id: 0]\
+    \n        AggregatorPartial: groupBy=[[]], aggr=[[sum([number]) as sumx]]\
+    \n          ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
     let actual = format!("{:?}", explain);
     assert_eq!(expect, actual);
     Ok(())

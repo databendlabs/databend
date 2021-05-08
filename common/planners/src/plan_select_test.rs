@@ -18,7 +18,9 @@ fn test_select_wildcard_plan() -> anyhow::Result<()> {
     let select = PlanNode::Select(SelectPlan {
         input: Arc::new(plan)
     });
-    let expect = "Projection: a:Utf8";
+    let expect = "\
+    Projection: a:Utf8\
+    \n  Expression: a:Utf8 (Before Projection)";
     let actual = format!("{:?}", select);
     assert_eq!(expect, actual);
     Ok(())

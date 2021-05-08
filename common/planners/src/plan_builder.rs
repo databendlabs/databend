@@ -17,6 +17,7 @@ use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::ExplainType;
 use crate::ExpressionPlan;
+use crate::ExpressionPlan1;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::LimitPlan;
@@ -80,11 +81,11 @@ impl PlanBuilder {
     pub fn expression(&self, exprs: Vec<ExpressionPlan>, desc: &str) -> Result<Self> {
         let input_schema = self.plan.schema();
 
-        Ok(Self::from(&PlanNode::Expression(ExpressionPlan {
+        Ok(Self::from(&PlanNode::Expression(ExpressionPlan1 {
             input: Arc::new(self.plan.clone()),
             exprs,
             schema: input_schema,
-            desc
+            desc: desc.to_string()
         })))
     }
 
@@ -104,11 +105,11 @@ impl PlanBuilder {
         });
 
         // Add expression before projection.
-        self.expression(projection_exprs.clone(), "Expression Before Projection")?;
+        let builder = self.expression(projection_exprs.clone(), "Before Projection")?;
 
-        let fields = self.exprs_to_fields(&projection_exprs, &input_schema)?;
+        let fields = builder.exprs_to_fields(&projection_exprs, &input_schema)?;
         Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
-            input: Arc::new(self.plan.clone()),
+            input: Arc::new(builder.plan),
             expr: projection_exprs,
             schema: DataSchemaRefExt::create(fields)
         })))

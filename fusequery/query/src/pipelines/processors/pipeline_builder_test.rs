@@ -56,6 +56,7 @@ async fn test_distributed_pipeline_build() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_local_pipeline_builds() -> anyhow::Result<()> {
+    use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
 
     use crate::pipelines::processors::*;
@@ -63,27 +64,106 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
 
     struct Test {
         query: &'static str,
-        expect: &'static str
+        explain: &'static str,
+        block: Vec<&'static str>
     }
 
-    let tests = vec![Test {
-        query: "select number as c1, number as c2 from numbers_mt(80000)",
-        expect: "\
-        LimitTransform × 1 processor\
-        \n  FilterTransform × 1 processor\
-        \n    AggregatorFinalTransform × 1 processor\
-        \n      Merge (AggregatorPartialTransform × 8 processors) to (AggregatorFinalTransform × 1)\
-        \n        AggregatorPartialTransform × 8 processors\
-        \n          FilterTransform × 8 processors\
-        \n            SourceTransform × 8 processors"
-    }];
+    let tests = vec![
+        Test {
+            query: "select number as c1, number as c2 from numbers_mt(10) order by c1 desc",
+            explain: "\
+            SortMergeTransform × 1 processor\
+            \n  Merge (SortMergeTransform × 8 processors) to (SortMergeTransform × 1)\
+            \n    SortMergeTransform × 8 processors\
+            \n      SortPartialTransform × 8 processors\
+            \n        ProjectionTransform × 8 processors\
+            \n          ExpressionTransform × 8 processors\
+            \n            SourceTransform × 8 processors",
+            block: vec![
+                "+----+----+",
+                "| c1 | c2 |",
+                "+----+----+",
+                "| 9  | 9  |",
+                "| 8  | 8  |",
+                "| 7  | 7  |",
+                "| 6  | 6  |",
+                "| 5  | 5  |",
+                "| 4  | 4  |",
+                "| 3  | 3  |",
+                "| 2  | 2  |",
+                "| 1  | 1  |",
+                "| 0  | 0  |",
+                "+----+----+",
+            ]
+        },
+        Test {
+            query: "select number as c1, number as c2 from numbers_mt(10) order by c1 desc, c2 asc",
+            explain: "\
+            SortMergeTransform × 1 processor\
+            \n  Merge (SortMergeTransform × 8 processors) to (SortMergeTransform × 1)\
+            \n    SortMergeTransform × 8 processors\
+            \n      SortPartialTransform × 8 processors\
+            \n        ProjectionTransform × 8 processors\
+            \n          ExpressionTransform × 8 processors\
+            \n            SourceTransform × 8 processors",
+            block: vec![
+                "+----+----+",
+                "| c1 | c2 |",
+                "+----+----+",
+                "| 9  | 9  |",
+                "| 8  | 8  |",
+                "| 7  | 7  |",
+                "| 6  | 6  |",
+                "| 5  | 5  |",
+                "| 4  | 4  |",
+                "| 3  | 3  |",
+                "| 2  | 2  |",
+                "| 1  | 1  |",
+                "| 0  | 0  |",
+                "+----+----+",
+            ]
+        },
+        Test {
+            query:
+                "select number as c1, (number+1) as c2 from numbers_mt(10) order by c1 desc, c2 asc",
+            explain: "\
+            SortMergeTransform × 1 processor\
+            \n  Merge (SortMergeTransform × 8 processors) to (SortMergeTransform × 1)\
+            \n    SortMergeTransform × 8 processors\
+            \n      SortPartialTransform × 8 processors\
+            \n        ProjectionTransform × 8 processors\
+            \n          ExpressionTransform × 8 processors\
+            \n            SourceTransform × 8 processors",
+            block: vec![
+                "+----+----+",
+                "| c1 | c2 |",
+                "+----+----+",
+                "| 9  | 10 |",
+                "| 8  | 9  |",
+                "| 7  | 8  |",
+                "| 6  | 7  |",
+                "| 5  | 6  |",
+                "| 4  | 5  |",
+                "| 3  | 4  |",
+                "| 2  | 3  |",
+                "| 1  | 2  |",
+                "| 0  | 1  |",
+                "+----+----+",
+            ]
+        },
+    ];
 
     let ctx = crate::tests::try_create_context()?;
     for test in tests {
         let plan = PlanParser::create(ctx.clone()).build_from_sql(test.query)?;
-        let pipeline = PipelineBuilder::create(ctx.clone(), plan).build()?;
-        let actual = format!("{:?}", pipeline);
-        assert_eq!(test.expect, actual);
+        let mut pipeline = PipelineBuilder::create(ctx.clone(), plan).build()?;
+        let actual_explain = format!("{:?}", pipeline);
+        assert_eq!(test.explain, actual_explain);
+
+        let stream = pipeline.execute().await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+
+        common_datablocks::assert_blocks_eq(test.block, result.as_slice());
     }
     Ok(())
 }

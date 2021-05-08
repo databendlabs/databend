@@ -52,6 +52,22 @@ impl PlanNode {
                             }
                             Ok(true)
                         }
+                        PlanNode::Expression(plan) => {
+                            write!(f, "Expression: ")?;
+                            for i in 0..plan.exprs.len() {
+                                if i > 0 {
+                                    write!(f, ", ")?;
+                                }
+                                write!(
+                                    f,
+                                    "{:?}:{:?}",
+                                    plan.exprs[i],
+                                    plan.exprs[i].to_data_field(&plan.schema()).unwrap().data_type(),
+                                )?;
+                            }
+                            write!(f, " ({})", plan.desc)?;
+                            Ok(true)
+                        }
                         PlanNode::AggregatorPartial(plan) => {
                             write!(
                                 f,

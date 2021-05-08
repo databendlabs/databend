@@ -15,10 +15,10 @@ pub struct ExpressionPlan1 {
     pub exprs: Vec<ExpressionPlan>,
     pub schema: DataSchemaRef,
     pub input: Arc<PlanNode>,
-    pub desc: &'static str
+    pub desc: String
 }
 
-impl ProjectionPlan1 {
+impl ExpressionPlan1 {
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
     }
