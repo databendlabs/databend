@@ -53,3 +53,37 @@ async fn test_distributed_pipeline_build() -> anyhow::Result<()> {
     assert_eq!(expect, actual);
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_local_pipeline_builds() -> anyhow::Result<()> {
+    use pretty_assertions::assert_eq;
+
+    use crate::pipelines::processors::*;
+    use crate::sql::*;
+
+    struct Test {
+        query: &'static str,
+        expect: &'static str
+    }
+
+    let tests = vec![Test {
+        query: "select number as c1, number as c2 from numbers_mt(80000)",
+        expect: "\
+        LimitTransform × 1 processor\
+        \n  FilterTransform × 1 processor\
+        \n    AggregatorFinalTransform × 1 processor\
+        \n      Merge (AggregatorPartialTransform × 8 processors) to (AggregatorFinalTransform × 1)\
+        \n        AggregatorPartialTransform × 8 processors\
+        \n          FilterTransform × 8 processors\
+        \n            SourceTransform × 8 processors"
+    }];
+
+    let ctx = crate::tests::try_create_context()?;
+    for test in tests {
+        let plan = PlanParser::create(ctx.clone()).build_from_sql(test.query)?;
+        let pipeline = PipelineBuilder::create(ctx.clone(), plan).build()?;
+        let actual = format!("{:?}", pipeline);
+        assert_eq!(test.expect, actual);
+    }
+    Ok(())
+}

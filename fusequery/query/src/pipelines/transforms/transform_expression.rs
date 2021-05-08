@@ -98,13 +98,13 @@ impl IProcessor for ExpressionTransform {
             let block = block?;
             let rows = block.num_rows();
 
-            let mut columns = Vec::with_capacity(funcs.len());
+            let mut columns = Vec::from(block.columns());
             for func in funcs {
-                // Check if the column is already have in the input block.
-                if let Some(col) = block.column_by_name(format!("{}", func).as_str()) {
-                    columns.push(col.clone());
-                } else {
-                    columns.push(func.eval(&block)?.to_array(rows)?);
+                match block.column_by_name(format!("{}", func).as_str()) {
+                    None => {
+                        columns.push(func.eval(&block)?.to_array(rows)?);
+                    }
+                    Some(_) => {}
                 }
             }
             Ok(DataBlock::create(schema, columns))

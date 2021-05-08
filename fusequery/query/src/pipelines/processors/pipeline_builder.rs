@@ -8,6 +8,7 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
+use common_planners::ExpressionPlan1;
 use common_planners::FilterPlan;
 use common_planners::HavingPlan;
 use common_planners::LimitPlan;
@@ -63,6 +64,9 @@ impl PipelineBuilder {
             match node {
                 PlanNode::Select(_) => Ok(true),
                 PlanNode::Stage(plan) => self.visit_stage_plan(&mut pipeline, &plan),
+                PlanNode::Expression(plan) => {
+                    PipelineBuilder::visit_expression_plan(&mut pipeline, plan)
+                }
                 PlanNode::Projection(plan) => {
                     PipelineBuilder::visit_projection_plan(&mut pipeline, plan)
                 }
@@ -113,15 +117,17 @@ impl PipelineBuilder {
         Ok(true)
     }
 
-    fn visit_projection_plan(pipeline: &mut Pipeline, plan: &ProjectionPlan) -> Result<bool> {
-        // Add Expression processor for projection expression transform.
+    fn visit_expression_plan(pipeline: &mut Pipeline, plan: &ExpressionPlan1) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ExpressionTransform::try_create(
                 plan.schema.clone(),
-                plan.expr.clone()
+                plan.exprs.clone()
             )?))
         })?;
-        // Add Projection processor for projection pruning.
+        Ok(true)
+    }
+
+    fn visit_projection_plan(pipeline: &mut Pipeline, plan: &ProjectionPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ProjectionTransform::try_create(
                 plan.schema.clone()
