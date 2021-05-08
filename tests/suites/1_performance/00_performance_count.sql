@@ -1,1 +1,1 @@
-SELECT count(number) from numbers_mt(1000000000);
+SELECT count(number) from numbers_mt(100000000000);
