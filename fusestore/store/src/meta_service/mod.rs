@@ -19,6 +19,7 @@ pub use raftmeta::MemStore;
 pub use raftmeta::MemStoreStateMachine;
 pub use raftmeta::MetaNode;
 pub use raftmeta::Network;
+pub use raftmeta::RaftTxId;
 pub use raftmeta::ShutdownError;
 
 pub use crate::protobuf::meta_service_client::MetaServiceClient;

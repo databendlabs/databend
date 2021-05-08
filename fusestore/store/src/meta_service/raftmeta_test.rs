@@ -16,17 +16,24 @@ use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::MetaServiceServer;
+use crate::meta_service::RaftTxId;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_add() -> anyhow::Result<()> {
     crate::tests::init_tracing();
 
     let mut sm = MemStoreStateMachine::default();
-    let cases: Vec<(&str, &str, u64, &str, &str, Option<String>, Option<String>)> = vec![
+    let cases: Vec<(
+        &str,
+        Option<RaftTxId>,
+        &str,
+        &str,
+        Option<String>,
+        Option<String>
+    )> = vec![
         (
             "add on none",
-            "foo",
-            1,
+            Some(RaftTxId::new("foo", 1)),
             "k1",
             "v1",
             None,
@@ -34,8 +41,7 @@ async fn test_state_machine_apply_add() -> anyhow::Result<()> {
         ),
         (
             "add on existent",
-            "foo",
-            2,
+            Some(RaftTxId::new("foo", 2)),
             "k1",
             "v2",
             Some("v1".to_string()),
@@ -43,8 +49,7 @@ async fn test_state_machine_apply_add() -> anyhow::Result<()> {
         ),
         (
             "dup set with same serial, even with diff key, got the previous result",
-            "foo",
-            2,
+            Some(RaftTxId::new("foo", 2)),
             "k2",
             "v3",
             Some("v1".to_string()),
@@ -52,18 +57,17 @@ async fn test_state_machine_apply_add() -> anyhow::Result<()> {
         ),
         (
             "diff client, same serial",
-            "bar",
-            2,
+            Some(RaftTxId::new("bar", 2)),
             "k2",
             "v3",
             None,
             Some("v3".to_string())
         ),
+        ("no txid", None, "k3", "v4", None, Some("v4".to_string())),
     ];
-    for (name, client, serial, k, v, want_prev, want_result) in cases.iter() {
+    for (name, txid, k, v, want_prev, want_result) in cases.iter() {
         let resp = sm.apply(5, &ClientRequest {
-            client: client.to_string(),
-            serial: *serial,
+            txid: txid.clone(),
             cmd: Cmd::Add {
                 key: k.to_string(),
                 value: v.to_string()
@@ -88,11 +92,17 @@ async fn test_state_machine_apply_set() -> anyhow::Result<()> {
     crate::tests::init_tracing();
 
     let mut sm = MemStoreStateMachine::default();
-    let cases: Vec<(&str, &str, u64, &str, &str, Option<String>, Option<String>)> = vec![
+    let cases: Vec<(
+        &str,
+        Option<RaftTxId>,
+        &str,
+        &str,
+        Option<String>,
+        Option<String>
+    )> = vec![
         (
             "set on none",
-            "foo",
-            1,
+            Some(RaftTxId::new("foo", 1)),
             "k1",
             "v1",
             None,
@@ -100,8 +110,7 @@ async fn test_state_machine_apply_set() -> anyhow::Result<()> {
         ),
         (
             "set on existent",
-            "foo",
-            2,
+            Some(RaftTxId::new("foo", 2)),
             "k1",
             "v2",
             Some("v1".to_string()),
@@ -109,8 +118,7 @@ async fn test_state_machine_apply_set() -> anyhow::Result<()> {
         ),
         (
             "dup set with same serial, even with diff key, got the previous result",
-            "foo",
-            2,
+            Some(RaftTxId::new("foo", 2)),
             "k2",
             "v3",
             Some("v1".to_string()),
@@ -118,18 +126,24 @@ async fn test_state_machine_apply_set() -> anyhow::Result<()> {
         ),
         (
             "diff client, same serial",
-            "bar",
-            2,
+            Some(RaftTxId::new("bar", 2)),
             "k2",
             "v3",
             None,
             Some("v3".to_string())
         ),
+        (
+            "no txid",
+            None,
+            "k2",
+            "v4",
+            Some("v3".to_string()),
+            Some("v4".to_string())
+        ),
     ];
-    for (name, client, serial, k, v, want_prev, want_result) in cases.iter() {
+    for (name, txid, k, v, want_prev, want_result) in cases.iter() {
         let resp = sm.apply(5, &ClientRequest {
-            client: client.to_string(),
-            serial: *serial,
+            txid: txid.clone(),
             cmd: Cmd::Set {
                 key: k.to_string(),
                 value: v.to_string()
@@ -222,7 +236,7 @@ async fn test_meta_node_add_non_voter() -> anyhow::Result<()> {
     {
         // add node-1 to cluster as non-voter
         let key = mn0.sto.node_key(nid1);
-        let resp = mn0.local_set(key, addr1.clone()).await;
+        let resp = mn0.local_set(key, addr1.clone(), false, None).await;
         assert_eq!(addr1, resp.unwrap());
     }
 

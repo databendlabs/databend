@@ -17,6 +17,7 @@ use crate::meta_service::SetReq;
 
 pub struct MetaServiceImpl {
     pub meta_node: Arc<MetaNode>,
+    // TODO(xp): move metadata into meta_node.
     pub metadata: Arc<Mutex<Meta>>
 }
 
