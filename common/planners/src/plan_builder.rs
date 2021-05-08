@@ -78,12 +78,12 @@ impl PlanBuilder {
     }
 
     /// Apply a expression.
-    pub fn expression(&self, exprs: Vec<ExpressionPlan>, desc: &str) -> Result<Self> {
+    pub fn expression(&self, exprs: &[ExpressionPlan], desc: &str) -> Result<Self> {
         let input_schema = self.plan.schema();
 
         Ok(Self::from(&PlanNode::Expression(ExpressionPlan1 {
             input: Arc::new(self.plan.clone()),
-            exprs,
+            exprs: Vec::from(exprs),
             schema: input_schema,
             desc: desc.to_string()
         })))
@@ -104,12 +104,9 @@ impl PlanBuilder {
             _ => projection_exprs.push(v.clone())
         });
 
-        // Add expression before projection.
-        let builder = self.expression(projection_exprs.clone(), "Before Projection")?;
-
-        let fields = builder.exprs_to_fields(&projection_exprs, &input_schema)?;
+        let fields = self.exprs_to_fields(&projection_exprs, &input_schema)?;
         Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
-            input: Arc::new(builder.plan),
+            input: Arc::new(self.plan.clone()),
             expr: projection_exprs,
             schema: DataSchemaRefExt::create(fields)
         })))

@@ -203,14 +203,14 @@ impl PlanParser {
         let plan = self.filter(&plan, &select.selection)?;
 
         // projection.
-        let projection_expr: Vec<ExpressionPlan> = select
+        let projection_exprs: Vec<ExpressionPlan> = select
             .projection
             .iter()
             .map(|e| self.sql_select_to_rex(&e, &plan.schema()))
             .collect::<Result<Vec<ExpressionPlan>>>()?;
 
         // Aggregator check.
-        let has_aggregator = (&projection_expr)
+        let has_aggregator = (&projection_exprs)
             .iter()
             .map(|expr| expr.has_aggregator())
             .fold(Ok(false), |res, item| {
@@ -220,9 +220,12 @@ impl PlanParser {
 
         // Projection.
         let plan = if !select.group_by.is_empty() || has_aggregator? {
-            self.aggregate(&plan, projection_expr, &select.group_by)?
+            self.aggregate(&plan, projection_exprs, &select.group_by)?
         } else {
-            self.project(&plan, projection_expr)?
+            let plan = PlanBuilder::from(&plan)
+                .expression(&projection_exprs, "Before Projection")
+                .and_then(|builder| builder.build())?;
+            self.project(&plan, projection_exprs)?
         };
 
         // Sort.

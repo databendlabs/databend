@@ -22,7 +22,7 @@ async fn test_transform_expression() -> anyhow::Result<()> {
 
     if let PlanNode::Expression(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
         .expression(
-            vec![col("number"), col("number"), add(col("number"), lit(1u8))],
+            &[col("number"), col("number"), add(col("number"), lit(1u8))],
             ""
         )?
         .build()?

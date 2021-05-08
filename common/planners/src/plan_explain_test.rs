@@ -24,8 +24,7 @@ fn test_explain_plan() -> anyhow::Result<()> {
     Having: ((number + 1) = 4)\
     \n  Filter: ((number + 1) = 4)\
     \n    Projection: number as c1:UInt64, number as c2:UInt64\
-    \n      Expression: number as c1:UInt64, number as c2:UInt64 (Before Projection)\
-    \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
+    \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
     let actual = format!("{:?}", explain);
     assert_eq!(expect, actual);
     Ok(())
