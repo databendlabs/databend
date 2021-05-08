@@ -7,11 +7,147 @@ use async_raft::State;
 use pretty_assertions::assert_eq;
 use tokio::sync::watch::Receiver;
 
+use crate::meta_service::ClientRequest;
+use crate::meta_service::ClientResponse;
+use crate::meta_service::Cmd;
 use crate::meta_service::GetReq;
+use crate::meta_service::MemStoreStateMachine;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::MetaServiceServer;
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_state_machine_apply_add() -> anyhow::Result<()> {
+    crate::tests::init_tracing();
+
+    let mut sm = MemStoreStateMachine::default();
+    let cases: Vec<(&str, &str, u64, &str, &str, Option<String>, Option<String>)> = vec![
+        (
+            "add on none",
+            "foo",
+            1,
+            "k1",
+            "v1",
+            None,
+            Some("v1".to_string())
+        ),
+        (
+            "add on existent",
+            "foo",
+            2,
+            "k1",
+            "v2",
+            Some("v1".to_string()),
+            None
+        ),
+        (
+            "dup set with same serial, even with diff key, got the previous result",
+            "foo",
+            2,
+            "k2",
+            "v3",
+            Some("v1".to_string()),
+            None
+        ),
+        (
+            "diff client, same serial",
+            "bar",
+            2,
+            "k2",
+            "v3",
+            None,
+            Some("v3".to_string())
+        ),
+    ];
+    for (name, client, serial, k, v, want_prev, want_result) in cases.iter() {
+        let resp = sm.apply(5, &ClientRequest {
+            client: client.to_string(),
+            serial: *serial,
+            cmd: Cmd::Add {
+                key: k.to_string(),
+                value: v.to_string()
+            }
+        });
+        assert_eq!(
+            ClientResponse {
+                prev: want_prev.clone(),
+                result: want_result.clone()
+            },
+            resp.unwrap(),
+            "{}",
+            name
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_state_machine_apply_set() -> anyhow::Result<()> {
+    crate::tests::init_tracing();
+
+    let mut sm = MemStoreStateMachine::default();
+    let cases: Vec<(&str, &str, u64, &str, &str, Option<String>, Option<String>)> = vec![
+        (
+            "set on none",
+            "foo",
+            1,
+            "k1",
+            "v1",
+            None,
+            Some("v1".to_string())
+        ),
+        (
+            "set on existent",
+            "foo",
+            2,
+            "k1",
+            "v2",
+            Some("v1".to_string()),
+            Some("v2".to_string())
+        ),
+        (
+            "dup set with same serial, even with diff key, got the previous result",
+            "foo",
+            2,
+            "k2",
+            "v3",
+            Some("v1".to_string()),
+            Some("v2".to_string())
+        ),
+        (
+            "diff client, same serial",
+            "bar",
+            2,
+            "k2",
+            "v3",
+            None,
+            Some("v3".to_string())
+        ),
+    ];
+    for (name, client, serial, k, v, want_prev, want_result) in cases.iter() {
+        let resp = sm.apply(5, &ClientRequest {
+            client: client.to_string(),
+            serial: *serial,
+            cmd: Cmd::Set {
+                key: k.to_string(),
+                value: v.to_string()
+            }
+        });
+        assert_eq!(
+            ClientResponse {
+                prev: want_prev.clone(),
+                result: want_result.clone()
+            },
+            resp.unwrap(),
+            "{}",
+            name
+        );
+    }
+
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_node_boot() -> anyhow::Result<()> {

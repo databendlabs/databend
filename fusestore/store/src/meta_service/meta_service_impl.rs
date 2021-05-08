@@ -44,6 +44,7 @@ impl MetaService for MetaServiceImpl {
         m.keys.insert(req.key, req.value);
         return Ok(tonic::Response::new(SetReply { ok: true }));
     }
+
     #[tracing::instrument(level = "info", skip(self))]
     async fn get(
         &self,
