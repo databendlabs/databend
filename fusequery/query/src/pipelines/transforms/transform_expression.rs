@@ -3,10 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_functions::IFunction;
@@ -35,7 +37,14 @@ pub struct ExpressionTransform {
 
 impl ExpressionTransform {
     pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> Result<Self> {
-        let mut funcs = Vec::with_capacity(exprs.len());
+        let mut fields = schema.fields().clone();
+        let mut funcs = vec![];
+
+        let mut map = HashMap::new();
+        for field in &fields {
+            map.insert(field.name().clone(), true);
+        }
+
         for expr in &exprs {
             let func = expr.to_function()?;
             if func.is_aggregator() {
@@ -46,9 +55,16 @@ impl ExpressionTransform {
                     )
                 ));
             }
-            funcs.push(func);
+
+            // Merge field.
+            let field = expr.to_data_field(&schema)?;
+            if !map.contains_key(field.name()) {
+                fields.push(field);
+                funcs.push(func);
+            }
         }
 
+        let schema = DataSchemaRefExt::create(fields);
         Ok(ExpressionTransform {
             funcs,
             schema,
