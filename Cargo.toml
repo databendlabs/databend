@@ -29,3 +29,6 @@ debug = true
 
 [profile.bench]
 debug = true
+
+[profile.dev]
+split-debuginfo = "unpacked"

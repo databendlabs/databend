@@ -64,7 +64,7 @@ impl ClickHouseSession for Session {
             .and_then(|built_plan| InterpreterFactory::get(self.ctx.clone(), built_plan))
             .map_err(to_clickhouse_err)?;
 
-        let mut interval_stream = IntervalStream::new(time::interval(Duration::from_millis(10)));
+        let mut interval_stream = IntervalStream::new(time::interval(Duration::from_millis(30)));
         let (tx, mut rx) = mpsc::channel(20);
         let cancel = Arc::new(AtomicBool::new(false));
 
@@ -73,9 +73,8 @@ impl ClickHouseSession for Session {
 
         tokio::spawn(async move {
             while !cancel.load(Ordering::Relaxed) {
-                if let _ = interval_stream.next().await {
-                    let _ = tx.send(BlockItem::ProgressTicker).await;
-                }
+                let _ = interval_stream.next().await;
+                let _ = tx.send(BlockItem::ProgressTicker).await;
             }
         });
 
