@@ -50,6 +50,15 @@ impl Progress {
         self.read_bytes.store(0, Ordering::Relaxed);
     }
 
+    pub fn get_and_reset(&self) -> ProgressValues {
+        let read_rows = self.read_rows.fetch_and(0, Ordering::Relaxed) as usize;
+        let read_bytes = self.read_bytes.fetch_and(0, Ordering::Relaxed) as usize;
+        ProgressValues {
+            read_rows,
+            read_bytes
+        }
+    }
+
     // Placeholder for default callback init.
     pub fn default_callback(_: &Progress) {}
 }

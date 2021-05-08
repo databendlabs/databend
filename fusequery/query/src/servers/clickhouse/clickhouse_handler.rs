@@ -14,6 +14,8 @@ use common_exception::Result;
 use log::info;
 use metrics::histogram;
 use tokio::net::TcpListener;
+use tokio::time;
+use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::StreamExt;
 
 use crate::clusters::ClusterRef;
@@ -47,7 +49,6 @@ impl ClickHouseSession for Session {
     ) -> clickhouse_srv::errors::Result<()> {
         self.ctx.reset().map_err(to_clickhouse_err)?;
         let start = Instant::now();
-        let mut last_progress_send = Instant::now();
 
         let interpreter = PlanParser::create(self.ctx.clone())
             .build_from_sql(&ctx.state.query)
@@ -60,17 +61,27 @@ impl ClickHouseSession for Session {
             .map(|stream| ClickHouseStream::create(stream))
             .map_err(to_clickhouse_err)?;
 
-        while let Some(block) = clickhouse_stream.next().await {
-            connection
-                .write_block(block.map_err(to_clickhouse_err)?)
-                .await?;
-            if last_progress_send.elapsed() >= Duration::from_millis(10) {
-                let progress = self.get_progress();
-                connection
-                    .write_progress(progress, ctx.client_revision)
-                    .await?;
+        let mut interval_stream = IntervalStream::new(time::interval(Duration::from_millis(10)));
 
-                last_progress_send = Instant::now();
+        loop {
+            tokio::select! {
+               _ = interval_stream.next() => {
+                   let progress = self.get_progress();
+                   connection
+                   .write_progress(progress, ctx.client_revision)
+                   .await?;
+               }
+
+                block = clickhouse_stream.next() => {
+                    if let Some(block) = block {
+                        connection
+                        .write_block(block.map_err(to_clickhouse_err)?)
+                        .await?;
+                    } else {
+                        break;
+                    }
+               },
+
             }
         }
 
@@ -116,7 +127,7 @@ impl ClickHouseSession for Session {
     }
 
     fn get_progress(&self) -> clickhouse_srv::types::Progress {
-        let values = self.ctx.get_progress_value();
+        let values = self.ctx.get_and_reset_progress_value();
         info!("got new progress values {:?}", values);
         clickhouse_srv::types::Progress {
             rows: values.read_rows as u64,

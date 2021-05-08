@@ -91,6 +91,10 @@ impl FuseQueryContext {
         self.progress.as_ref().get_values()
     }
 
+    pub fn get_and_reset_progress_value(&self) -> ProgressValues {
+        self.progress.as_ref().get_and_reset()
+    }
+
     // Steal n partitions from the partition pool by the pipeline worker.
     // This also can steal the partitions from distributed node.
     pub fn try_get_partitions(&self, num: usize) -> Result<Partitions> {
