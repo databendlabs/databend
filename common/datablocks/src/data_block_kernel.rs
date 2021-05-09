@@ -70,7 +70,7 @@ impl DataBlock {
             .iter()
             .map(|f| {
                 Ok(compute::SortColumn {
-                    values: block.column_by_name(&f.column_name)?.clone(),
+                    values: block.try_column_by_name(&f.column_name)?.clone(),
                     options: Some(compute::SortOptions {
                         descending: !f.asc,
                         nulls_first: f.nulls_first
@@ -109,7 +109,7 @@ impl DataBlock {
         for block in [lhs, rhs].iter() {
             let columns = sort_columns_descriptions
                 .iter()
-                .map(|f| Ok(block.column_by_name(&f.column_name)?.clone()))
+                .map(|f| Ok(block.try_column_by_name(&f.column_name)?.clone()))
                 .collect::<Result<Vec<_>>>()?;
             sort_arrays.push(columns);
         }

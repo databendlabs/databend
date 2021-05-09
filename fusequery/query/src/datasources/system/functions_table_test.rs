@@ -48,6 +48,7 @@ async fn test_functions_table() -> anyhow::Result<()> {
         "| multiply   |",
         "| or         |",
         "| plus       |",
+        "| substring  |",
         "| sum        |",
         "| totypename |",
         "+------------+",

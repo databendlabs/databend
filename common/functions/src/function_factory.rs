@@ -14,6 +14,7 @@ use crate::aggregators::AggregatorFunction;
 use crate::arithmetics::ArithmeticFunction;
 use crate::comparisons::ComparisonFunction;
 use crate::logics::LogicFunction;
+use crate::strings::StringFunction;
 use crate::udfs::UdfFunction;
 use crate::IFunction;
 
@@ -29,6 +30,7 @@ lazy_static! {
         ArithmeticFunction::register(map.clone()).unwrap();
         ComparisonFunction::register(map.clone()).unwrap();
         LogicFunction::register(map.clone()).unwrap();
+        StringFunction::register(map.clone()).unwrap();
         UdfFunction::register(map.clone()).unwrap();
         map
     };

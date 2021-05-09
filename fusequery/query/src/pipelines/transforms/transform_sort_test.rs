@@ -22,15 +22,15 @@ async fn test_transform_sort() -> anyhow::Result<()> {
     let a = test_source.number_source_transform_for_test(8)?;
     pipeline.add_source(Arc::new(a))?;
 
-    let sort_expression = vec![sort("number", false, false)];
+    let sort_expression = &[sort("number", false, false)];
     let plan = PlanBuilder::create(test_source.number_schema_for_test()?)
-        .sort(&sort_expression)?
+        .sort(sort_expression)?
         .build()?;
 
     pipeline.add_simple_transform(|| {
         Ok(Box::new(SortPartialTransform::try_create(
             plan.schema().clone(),
-            sort_expression.clone(),
+            sort_expression.to_vec(),
             None
         )?))
     })?;
@@ -38,7 +38,7 @@ async fn test_transform_sort() -> anyhow::Result<()> {
     pipeline.add_simple_transform(|| {
         Ok(Box::new(SortMergeTransform::try_create(
             plan.schema().clone(),
-            sort_expression.clone(),
+            sort_expression.to_vec(),
             None
         )?))
     })?;
@@ -48,7 +48,7 @@ async fn test_transform_sort() -> anyhow::Result<()> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(SortMergeTransform::try_create(
                 plan.schema().clone(),
-                sort_expression.clone(),
+                sort_expression.to_vec(),
                 None
             )?))
         })?;

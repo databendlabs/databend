@@ -20,18 +20,17 @@ async fn test_transform_expression() -> anyhow::Result<()> {
     let source = test_source.number_source_transform_for_test(8)?;
     pipeline.add_source(Arc::new(source))?;
 
-    if let PlanNode::Projection(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
-        .project(vec![
-            col("number"),
-            col("number"),
-            add(col("number"), lit(1u8)),
-        ])?
+    if let PlanNode::Expression(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
+        .expression(
+            &[col("number"), col("number"), add(col("number"), lit(1u8))],
+            ""
+        )?
         .build()?
     {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ExpressionTransform::try_create(
                 plan.schema.clone(),
-                plan.expr.clone()
+                plan.exprs.clone()
             )?))
         })?;
     }
@@ -39,21 +38,21 @@ async fn test_transform_expression() -> anyhow::Result<()> {
     let stream = pipeline.execute().await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 3);
+    assert_eq!(block.num_columns(), 2);
 
     let expected = vec![
-        "+--------+--------+-----------------+",
-        "| number | number | plus(number, 1) |",
-        "+--------+--------+-----------------+",
-        "| 7      | 7      | 8               |",
-        "| 6      | 6      | 7               |",
-        "| 5      | 5      | 6               |",
-        "| 4      | 4      | 5               |",
-        "| 3      | 3      | 4               |",
-        "| 2      | 2      | 3               |",
-        "| 1      | 1      | 2               |",
-        "| 0      | 0      | 1               |",
-        "+--------+--------+-----------------+",
+        "+--------+-----------------+",
+        "| number | plus(number, 1) |",
+        "+--------+-----------------+",
+        "| 0      | 1               |",
+        "| 1      | 2               |",
+        "| 2      | 3               |",
+        "| 3      | 4               |",
+        "| 4      | 5               |",
+        "| 5      | 6               |",
+        "| 6      | 7               |",
+        "| 7      | 8               |",
+        "+--------+-----------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
@@ -76,10 +75,10 @@ async fn test_transform_expression_error() -> anyhow::Result<()> {
     let source = test_source.number_source_transform_for_test(8)?;
     pipeline.add_source(Arc::new(source))?;
 
-    let result = PlanBuilder::create(test_source.number_schema_for_test()?).project(vec![
+    let result = PlanBuilder::create(test_source.number_schema_for_test()?).project(&[
         col("xnumber"),
         col("number"),
-        add(col("number"), lit(1u8)),
+        add(col("number"), lit(1u8))
     ]);
     let actual = format!("{}", result.err().unwrap());
     let expect = "Code: 1002, displayText = Invalid argument error: Unable to get field named \"xnumber\". Valid fields: [\"number\"].";

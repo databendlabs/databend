@@ -45,6 +45,33 @@ async fn test_flight_execute() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_empty_source() -> anyhow::Result<()> {
+    use common_flights::*;
+    use common_planners::*;
+    use futures::TryStreamExt;
+    use pretty_assertions::assert_eq;
+
+    // Test service starts.
+    let addr = crate::tests::try_start_service(1).await?[0].clone();
+
+    let ctx = crate::tests::try_create_context()?;
+    let test_source = crate::tests::NumberTestData::create(ctx.clone());
+    let plan = PlanBuilder::from(&PlanNode::ReadSource(
+        test_source.number_read_source_plan_for_test(0)?
+    ))
+    .build()?;
+
+    let mut client = QueryClient::try_create(addr.to_string()).await?;
+
+    let stream = client
+        .execute_remote_plan_action("xx".to_string(), &plan)
+        .await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    assert_eq!(result.len(), 0);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_fetch_partition_action() -> anyhow::Result<()> {
     use common_flights::*;
     use pretty_assertions::assert_eq;

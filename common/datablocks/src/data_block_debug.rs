@@ -13,23 +13,36 @@ use prettytable::Table;
 use crate::DataBlock;
 
 ///! Create a visual representation of record batches
-pub(crate) fn pretty_format_blocks(results: &[DataBlock]) -> Result<String> {
+pub fn pretty_format_blocks(results: &[DataBlock]) -> Result<String> {
     Ok(create_table(results)?.to_string())
 }
 
 pub fn assert_blocks_eq(expect: Vec<&str>, blocks: &[DataBlock]) {
+    assert_blocks_eq_with_name("", expect, blocks)
+}
+
+/// Assert with order sensitive.
+/// ['a', 'b'] not equals ['b', 'a']
+pub fn assert_blocks_eq_with_name(test_name: &str, expect: Vec<&str>, blocks: &[DataBlock]) {
     let expected_lines: Vec<String> = expect.iter().map(|&s| s.into()).collect();
     let formatted = pretty_format_blocks(&blocks).unwrap();
     let actual_lines: Vec<&str> = formatted.trim().lines().collect();
 
     assert_eq!(
         expected_lines, actual_lines,
-        "\n\nexpected:\n\n{:#?}\nactual:\n\n{:#?}\n\n",
-        expected_lines, actual_lines
+        "{:#?}\n\nexpected:\n\n{:#?}\nactual:\n\n{:#?}\n\n",
+        test_name, expected_lines, actual_lines
     );
 }
 
+/// Sorted assert.
 pub fn assert_blocks_sorted_eq(expect: Vec<&str>, blocks: &[DataBlock]) {
+    assert_blocks_sorted_eq_with_name("", expect, blocks)
+}
+
+/// Assert with order insensitive.
+/// ['a', 'b'] equals ['b', 'a']
+pub fn assert_blocks_sorted_eq_with_name(test_name: &str, expect: Vec<&str>, blocks: &[DataBlock]) {
     let mut expected_lines: Vec<String> = expect.iter().map(|&s| s.into()).collect();
 
     // sort except for header + footer
@@ -49,8 +62,8 @@ pub fn assert_blocks_sorted_eq(expect: Vec<&str>, blocks: &[DataBlock]) {
 
     assert_eq!(
         expected_lines, actual_lines,
-        "\n\nexpected:\n\n{:#?}\nactual:\n\n{:#?}\n\n",
-        expected_lines, actual_lines
+        "{:#?}\n\nexpected:\n\n{:#?}\nactual:\n\n{:#?}\n\n",
+        test_name, expected_lines, actual_lines
     );
 }
 

@@ -14,6 +14,7 @@ use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
+use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::LimitPlan;
@@ -31,6 +32,7 @@ pub enum PlanNode {
     Empty(EmptyPlan),
     Stage(StagePlan),
     Projection(ProjectionPlan),
+    Expression(ExpressionPlan),
     AggregatorPartial(AggregatorPartialPlan),
     AggregatorFinal(AggregatorFinalPlan),
     Filter(FilterPlan),
@@ -55,6 +57,7 @@ impl PlanNode {
             PlanNode::Stage(v) => v.schema(),
             PlanNode::Scan(v) => v.schema(),
             PlanNode::Projection(v) => v.schema(),
+            PlanNode::Expression(v) => v.schema(),
             PlanNode::AggregatorPartial(v) => v.schema(),
             PlanNode::AggregatorFinal(v) => v.schema(),
             PlanNode::Filter(v) => v.schema(),
@@ -77,6 +80,7 @@ impl PlanNode {
             PlanNode::Stage(_) => "StagePlan",
             PlanNode::Scan(_) => "ScanPlan",
             PlanNode::Projection(_) => "ProjectionPlan",
+            PlanNode::Expression(_) => "ExpressionPlan",
             PlanNode::AggregatorPartial(_) => "AggregatorPartialPlan",
             PlanNode::AggregatorFinal(_) => "AggregatorFinalPlan",
             PlanNode::Filter(_) => "FilterPlan",
@@ -97,6 +101,7 @@ impl PlanNode {
         match self {
             PlanNode::Stage(v) => v.input(),
             PlanNode::Projection(v) => v.input(),
+            PlanNode::Expression(v) => v.input(),
             PlanNode::AggregatorPartial(v) => v.input(),
             PlanNode::AggregatorFinal(v) => v.input(),
             PlanNode::Filter(v) => v.input(),
@@ -116,6 +121,7 @@ impl PlanNode {
         match self {
             PlanNode::Stage(v) => v.set_input(node),
             PlanNode::Projection(v) => v.set_input(node),
+            PlanNode::Expression(v) => v.set_input(node),
             PlanNode::AggregatorPartial(v) => v.set_input(node),
             PlanNode::AggregatorFinal(v) => v.set_input(node),
             PlanNode::Filter(v) => v.set_input(node),

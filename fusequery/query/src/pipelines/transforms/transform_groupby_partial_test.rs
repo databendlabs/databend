@@ -25,7 +25,7 @@ async fn test_transform_partial_groupby() -> anyhow::Result<()> {
     ];
     let group_exprs = vec![modular(col("number"), lit(3u64))];
     let aggr_partial = PlanBuilder::create(test_source.number_schema_for_test()?)
-        .aggregate_partial(aggr_exprs.clone(), group_exprs.clone())?
+        .aggregate_partial(&aggr_exprs, &group_exprs)?
         .build()?;
 
     // Pipeline.

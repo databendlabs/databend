@@ -4,21 +4,21 @@
 
 use common_datavalues::DataValue;
 
-use crate::ExpressionPlan;
+use crate::ExpressionAction;
 
 pub trait ILiteral {
-    fn to_literal(&self) -> ExpressionPlan;
+    fn to_literal(&self) -> ExpressionAction;
 }
 
 impl ILiteral for &str {
-    fn to_literal(&self) -> ExpressionPlan {
-        ExpressionPlan::Literal(DataValue::Utf8(Some(self.to_string())))
+    fn to_literal(&self) -> ExpressionAction {
+        ExpressionAction::Literal(DataValue::Utf8(Some(self.to_string())))
     }
 }
 
 impl ILiteral for String {
-    fn to_literal(&self) -> ExpressionPlan {
-        ExpressionPlan::Literal(DataValue::Utf8(Some(self.clone())))
+    fn to_literal(&self) -> ExpressionAction {
+        ExpressionAction::Literal(DataValue::Utf8(Some(self.clone())))
     }
 }
 
@@ -26,8 +26,8 @@ macro_rules! make_literal {
     ($TYPE:ty, $SCALAR:ident) => {
         #[allow(missing_docs)]
         impl ILiteral for $TYPE {
-            fn to_literal(&self) -> ExpressionPlan {
-                ExpressionPlan::Literal(DataValue::$SCALAR(Some(self.clone())))
+            fn to_literal(&self) -> ExpressionAction {
+                ExpressionAction::Literal(DataValue::$SCALAR(Some(self.clone())))
             }
         }
     };
@@ -45,6 +45,6 @@ make_literal!(u16, UInt16);
 make_literal!(u32, UInt32);
 make_literal!(u64, UInt64);
 
-pub fn lit<T: ILiteral>(n: T) -> ExpressionPlan {
+pub fn lit<T: ILiteral>(n: T) -> ExpressionAction {
     n.to_literal()
 }
