@@ -181,7 +181,6 @@ impl Flight for FlightService {
                             &options
                         );
                         sender.send(Ok(schema_flight_data)).await.ok();
-                        has_send = true;
                     }
 
                     // Cost.
