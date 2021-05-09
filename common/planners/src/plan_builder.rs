@@ -77,14 +77,23 @@ impl PlanBuilder {
         })))
     }
 
-    /// Apply a expression.
+    /// Apply a expression and merge the fields with exprs.
     pub fn expression(&self, exprs: &[ExpressionPlan], desc: &str) -> Result<Self> {
         let input_schema = self.plan.schema();
+
+        // Merge fields.
+        let mut merged = input_schema.fields().clone();
+        let fields = self.exprs_to_fields(&exprs, &input_schema)?;
+        for field in fields {
+            if !merged.iter().any(|x| x.name() == field.name()) {
+                merged.push(field);
+            }
+        }
 
         Ok(Self::from(&PlanNode::Expression(ExpressionPlan1 {
             input: Arc::new(self.plan.clone()),
             exprs: Vec::from(exprs),
-            schema: input_schema,
+            schema: DataSchemaRefExt::create(merged),
             desc: desc.to_string()
         })))
     }

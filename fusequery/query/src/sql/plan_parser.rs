@@ -196,17 +196,29 @@ impl PlanParser {
         limit: &Option<sqlparser::ast::Expr>,
         order_by: &[OrderByExpr]
     ) -> Result<PlanNode> {
-        // from.
+        // From.
         let plan = self.plan_tables_with_joins(&select.from)?;
 
-        // filter (also known as selection) first
+        // Filter (also known as selection) first
         let plan = self.filter(&plan, &select.selection)?;
 
-        // projection.
+        // Projection expressions.
         let projection_exprs: Vec<ExpressionPlan> = select
             .projection
             .iter()
             .map(|e| self.sql_select_to_rex(&e, &plan.schema()))
+            .collect::<Result<Vec<ExpressionPlan>>>()?;
+
+        // OrderBy expressions.
+        let order_by_exprs: Vec<ExpressionPlan> = order_by
+            .iter()
+            .map(|e| -> Result<ExpressionPlan> {
+                Ok(ExpressionPlan::Sort {
+                    expr: Box::new(self.sql_to_rex(&e.expr, &plan.schema())?),
+                    asc: e.asc.unwrap_or(true),
+                    nulls_first: e.nulls_first.unwrap_or(true)
+                })
+            })
             .collect::<Result<Vec<ExpressionPlan>>>()?;
 
         // Aggregator check.
@@ -220,14 +232,14 @@ impl PlanParser {
 
         // Projection.
         let plan = if !select.group_by.is_empty() || has_aggregator? {
-            let plan = self.aggregate(&plan, projection_exprs, &select.group_by)?;
-            self.sort(&plan, order_by)?
+            self.aggregate(&plan, projection_exprs, &select.group_by)
+                .and_then(|input| self.sort(&input, order_by))?
         } else {
-            let plan = self.sort(&plan, order_by)?;
-            self.project(&plan, projection_exprs)?
+            self.expression(&plan, &projection_exprs, "Before Projection")
+                .and_then(|input| self.expression(&input, &order_by_exprs, "Before OrderBy"))
+                .and_then(|input| self.sort(&input, order_by))
+                .and_then(|input| self.project(&input, projection_exprs))?
         };
-
-        // Sort.
 
         // Having.
         let plan = self.having(&plan, &select.having)?;
@@ -518,10 +530,7 @@ impl PlanParser {
 
     /// Wrap a plan in a projection
     fn project(&self, input: &PlanNode, expr: Vec<ExpressionPlan>) -> Result<PlanNode> {
-        let plan = PlanBuilder::from(&input)
-            .expression(&expr, "Before Projection")
-            .and_then(|builder| builder.build())?;
-        PlanBuilder::from(&plan)
+        PlanBuilder::from(&input)
             .project(expr)
             .and_then(|builder| builder.build())
     }
@@ -567,11 +576,7 @@ impl PlanParser {
             })
             .collect::<Result<Vec<ExpressionPlan>>>()?;
 
-        let plan = PlanBuilder::from(&input)
-            .expression(&order_by_exprs, "Before OrderBy")
-            .and_then(|builder| builder.build())?;
-
-        PlanBuilder::from(&plan)
+        PlanBuilder::from(&input)
             .sort(&order_by_exprs)
             .and_then(|builder| builder.build())
     }
@@ -595,5 +600,21 @@ impl PlanParser {
             }
             _ => Ok(input.clone())
         }
+    }
+
+    /// Apply a expression against exprs.
+    fn expression(
+        &self,
+        input: &PlanNode,
+        exprs: &[ExpressionPlan],
+        desc: &str
+    ) -> Result<PlanNode> {
+        if exprs.is_empty() {
+            return Ok(input.clone());
+        }
+
+        PlanBuilder::from(&input)
+            .expression(&exprs, desc)
+            .and_then(|builder| builder.build())
     }
 }

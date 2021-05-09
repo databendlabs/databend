@@ -34,27 +34,39 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
     use futures::TryStreamExt;
     use pretty_assertions::assert_eq;
 
-    use crate::optimizers::Optimizer;
     use crate::pipelines::processors::*;
     use crate::sql::*;
 
     struct Test {
+        name: &'static str,
         query: &'static str,
-        explain: &'static str,
+        plan: &'static str,
+        pipeline: &'static str,
         block: Vec<&'static str>
     }
 
     let tests = vec![
         Test {
+            name: "select-alias-pass",
             query: "select number as c1, number as c2 from numbers_mt(10) order by c1 desc",
-            explain: "\
-            SortMergeTransform × 1 processor\
-            \n  Merge (SortMergeTransform × 8 processors) to (SortMergeTransform × 1)\
-            \n    SortMergeTransform × 8 processors\
-            \n      SortPartialTransform × 8 processors\
-            \n        ProjectionTransform × 8 processors\
+
+            plan: "\
+            Projection: number as c1:UInt64, number as c2:UInt64\
+            \n  Sort: c1:UInt64\
+            \n    Expression: c1:UInt64 (Before OrderBy)\
+            \n      Expression: number as c1:UInt64, number as c2:UInt64 (Before Projection)\
+            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+
+            pipeline: "\
+            ProjectionTransform × 1 processor\
+            \n  SortMergeTransform × 1 processor\
+            \n    Merge (SortMergeTransform × 8 processors) to (SortMergeTransform × 1)\
+            \n      SortMergeTransform × 8 processors\
+            \n        SortPartialTransform × 8 processors\
             \n          ExpressionTransform × 8 processors\
-            \n            SourceTransform × 8 processors",
+            \n            ExpressionTransform × 8 processors\
+            \n              SourceTransform × 8 processors",
+
             block: vec![
                 "+----+----+",
                 "| c1 | c2 |",
@@ -73,15 +85,25 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
             ]
         },
         Test {
+            name: "select-order-by-alias-pass",
             query: "select number as c1, number as c2 from numbers_mt(10) order by c1 desc, c2 asc",
-            explain: "\
-            SortMergeTransform × 1 processor\
-            \n  Merge (SortMergeTransform × 8 processors) to (SortMergeTransform × 1)\
-            \n    SortMergeTransform × 8 processors\
-            \n      SortPartialTransform × 8 processors\
-            \n        ProjectionTransform × 8 processors\
+
+            plan: "\
+            Projection: number as c1:UInt64, number as c2:UInt64\
+            \n  Sort: c1:UInt64, c2:UInt64\
+            \n    Expression: c1:UInt64, c2:UInt64 (Before OrderBy)\
+            \n      Expression: number as c1:UInt64, number as c2:UInt64 (Before Projection)\
+            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+
+            pipeline: "\
+            ProjectionTransform × 1 processor\
+            \n  SortMergeTransform × 1 processor\
+            \n    Merge (SortMergeTransform × 8 processors) to (SortMergeTransform × 1)\
+            \n      SortMergeTransform × 8 processors\
+            \n        SortPartialTransform × 8 processors\
             \n          ExpressionTransform × 8 processors\
-            \n            SourceTransform × 8 processors",
+            \n            ExpressionTransform × 8 processors\n              SourceTransform × 8 processors",
+
             block: vec![
                 "+----+----+",
                 "| c1 | c2 |",
@@ -100,16 +122,27 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
             ]
         },
         Test {
+            name: "select-order-by-alias-expression-pass",
             query:
                 "select number as c1, (number+1) as c2 from numbers_mt(10) order by c1 desc, c2 asc",
-            explain: "\
-            SortMergeTransform × 1 processor\
-            \n  Merge (SortMergeTransform × 8 processors) to (SortMergeTransform × 1)\
-            \n    SortMergeTransform × 8 processors\
-            \n      SortPartialTransform × 8 processors\
-            \n        ProjectionTransform × 8 processors\
+
+            plan: "\
+            Projection: number as c1:UInt64, (number + 1) as c2:UInt64\
+            \n  Sort: c1:UInt64, c2:UInt64\
+            \n    Expression: c1:UInt64, c2:UInt64 (Before OrderBy)\
+            \n      Expression: number as c1:UInt64, (number + 1) as c2:UInt64 (Before Projection)\
+            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+
+            pipeline: "\
+            ProjectionTransform × 1 processor\
+            \n  SortMergeTransform × 1 processor\
+            \n    Merge (SortMergeTransform × 8 processors) to (SortMergeTransform × 1)\
+            \n      SortMergeTransform × 8 processors\
+            \n        SortPartialTransform × 8 processors\
             \n          ExpressionTransform × 8 processors\
-            \n            SourceTransform × 8 processors",
+            \n            ExpressionTransform × 8 processors\
+            \n              SourceTransform × 8 processors",
+
             block: vec![
                 "+----+----+",
                 "| c1 | c2 |",
@@ -131,16 +164,20 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
     for test in tests {
+        // Plan build check.
         let plan = PlanParser::create(ctx.clone()).build_from_sql(test.query)?;
-        let plan = Optimizer::create(ctx.clone()).optimize(&plan)?;
-        let mut pipeline = PipelineBuilder::create(ctx.clone(), plan).build()?;
-        let actual_explain = format!("{:?}", pipeline);
-        assert_eq!(test.explain, actual_explain);
+        let actual_plan = format!("{:?}", plan);
+        assert_eq!(test.plan, actual_plan, "{:#?}", test.name);
 
+        // Pipeline build check.
+        let mut pipeline = PipelineBuilder::create(ctx.clone(), plan).build()?;
+        let actual_pipeline = format!("{:?}", pipeline);
+        assert_eq!(test.pipeline, actual_pipeline, "{:#?}", test.name);
+
+        // Result check.
         let stream = pipeline.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
-
-        common_datablocks::assert_blocks_eq(test.block, result.as_slice());
+        common_datablocks::assert_blocks_eq_with_name(test.name, test.block, result.as_slice());
     }
     Ok(())
 }
