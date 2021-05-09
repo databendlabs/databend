@@ -41,7 +41,7 @@ fn test_plan_builds() -> anyhow::Result<()> {
                 .expression(&[col("number"), col("number").alias("c1")], "desc")?
                 .build()),
             expect:"\
-            Expression: number:UInt64, c1:UInt64 (desc)\
+            Expression: number:UInt64, number as c1:UInt64 (desc)\
             \n  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
         },
         TestCase {
@@ -50,8 +50,8 @@ fn test_plan_builds() -> anyhow::Result<()> {
                 .expression(&[col("number"), col("number").alias("c1")], "")?
                 .expression(&[col("number"), col("number").alias("c2")], "")?
                 .build()),
-            expect:"Expression: number:UInt64, c1:UInt64, c2:UInt64 ()\
-            \n  Expression: number:UInt64, c1:UInt64 ()\
+            expect:"Expression: number:UInt64, number as c2:UInt64 ()\
+            \n  Expression: number:UInt64, number as c1:UInt64 ()\
             \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
         },
         TestCase {
@@ -62,7 +62,7 @@ fn test_plan_builds() -> anyhow::Result<()> {
                 .build()),
             expect:"\
             Projection: c1:UInt64\
-            \n  Expression: number:UInt64, c1:UInt64 (Before Projection)\
+            \n  Expression: number:UInt64, number as c1:UInt64 (Before Projection)\
             \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
         },
         TestCase {
@@ -74,7 +74,7 @@ fn test_plan_builds() -> anyhow::Result<()> {
                 .build()),
             expect:"\
             Projection: c1:UInt64\
-            \n  Expression: number:UInt64, c1:UInt64 (Before Projection)\
+            \n  Expression: number:UInt64, number as c1:UInt64 (Before Projection)\
             \n    Filter: (c1 = 1)\
             \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
         },

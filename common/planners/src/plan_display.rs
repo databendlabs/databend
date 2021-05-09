@@ -54,16 +54,15 @@ impl PlanNode {
                         }
                         PlanNode::Expression(plan) => {
                             write!(f, "Expression: ")?;
-                            let fields = plan.schema.fields();
-                            for (i, field) in fields.iter().enumerate() {
+                            for i in 0..plan.exprs.len() {
                                 if i > 0 {
                                     write!(f, ", ")?;
                                 }
                                 write!(
                                     f,
-                                    "{:#}:{:#?}",
-                                    field.name(),
-                                    field.data_type(),
+                                    "{:?}:{:?}",
+                                    plan.exprs[i],
+                                    plan.schema().fields()[i].data_type()
                                 )?;
                             }
                             write!(f, " ({})", plan.desc)?;

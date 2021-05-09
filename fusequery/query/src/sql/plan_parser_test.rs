@@ -19,13 +19,13 @@ fn test_plan_parser() -> anyhow::Result<()> {
         Test {
         name: "cast-passed",
         sql: "select cast('1' as int)",
-        expect: "Projection: cast(1 as Int32):Int32\n  Expression: dummy:UInt8, CAST(1):Int32 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
+        expect: "Projection: cast(1 as Int32):Int32\n  Expression: cast(1 as Int32):UInt8 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
         error: "",
     },
         Test {
         name: "database-passed",
         sql: "select database()",
-        expect: "Projection: database([default]):Utf8\n  Expression: dummy:UInt8, database():Utf8 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
+        expect: "Projection: database([default]):Utf8\n  Expression: database([default]):UInt8 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
         error: "",
         },
         Test {
@@ -37,7 +37,7 @@ fn test_plan_parser() -> anyhow::Result<()> {
         Test {
             name: "interval-passed",
             sql: "SELECT INTERVAL '1 year', INTERVAL '1 month', INTERVAL '1 day', INTERVAL '1 hour', INTERVAL '1 minute', INTERVAL '1 second'",
-            expect: "Projection: 12:Interval(YearMonth), 1:Interval(YearMonth), 4294967296:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime)\n  Expression: dummy:UInt8, IntervalYearMonth(\"12\"):Interval(\n    YearMonth,\n), IntervalYearMonth(\"1\"):Interval(\n    YearMonth,\n), IntervalDayTime(\"4294967296\"):Interval(\n    DayTime,\n), IntervalDayTime(\"3600000\"):Interval(\n    DayTime,\n), IntervalDayTime(\"60000\"):Interval(\n    DayTime,\n), IntervalDayTime(\"1000\"):Interval(\n    DayTime,\n) (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
+            expect: "Projection: 12:Interval(YearMonth), 1:Interval(YearMonth), 4294967296:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime)\n  Expression: 12:UInt8, 1:Interval(YearMonth), 4294967296:Interval(YearMonth), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime) (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
             error: ""
         },
         Test {
