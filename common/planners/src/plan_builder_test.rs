@@ -18,6 +18,28 @@ fn test_plan_builds() -> anyhow::Result<()> {
     let source = Test::create().generate_source_plan_for_test(10000)?;
     let tests = vec![
         TestCase {
+            name: "field(*)-pass",
+            plan: (PlanBuilder::from(&source)
+                .expression(&[ExpressionPlan::Wildcard], "")?
+                .project(&[col("number")])?
+                .build()),
+            expect: "\
+            Projection: number:UInt64\
+            \n  Expression: *:UInt64 ()\
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
+        },
+        TestCase {
+            name: "constant-alias-pass",
+            plan: (PlanBuilder::from(&source)
+                .expression(&[add(lit(4), lit(5)).alias("4_5"), add(col("4_5"), lit(2))], "")?
+                .project(&[col("4_5")])?
+                .build()),
+            expect: "\
+            Projection: 4_5:Int64\
+            \n  Expression: (4 + 5) as 4_5:UInt64, ((4 + 5) + 2):Int64 ()\
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
+        },
+        TestCase {
             name: "projection-simple-pass",
             plan: (PlanBuilder::from(&source)
                 .project(&[col("number")])?
