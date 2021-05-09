@@ -13,7 +13,7 @@ use prettytable::Table;
 use crate::DataBlock;
 
 ///! Create a visual representation of record batches
-pub(crate) fn pretty_format_blocks(results: &[DataBlock]) -> Result<String> {
+pub fn pretty_format_blocks(results: &[DataBlock]) -> Result<String> {
     Ok(create_table(results)?.to_string())
 }
 
