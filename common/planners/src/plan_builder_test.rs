@@ -20,7 +20,7 @@ fn test_plan_builds() -> anyhow::Result<()> {
         TestCase {
             name: "field(*)-pass",
             plan: (PlanBuilder::from(&source)
-                .expression(&[ExpressionPlan::Wildcard], "")?
+                .expression(&[ExpressionAction::Wildcard], "")?
                 .project(&[col("number")])?
                 .build()),
             expect: "\

@@ -7,13 +7,13 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 
-use crate::ExpressionPlan;
+use crate::ExpressionAction;
 use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct AggregatorFinalPlan {
-    pub aggr_expr: Vec<ExpressionPlan>,
-    pub group_expr: Vec<ExpressionPlan>,
+    pub aggr_expr: Vec<ExpressionAction>,
+    pub group_expr: Vec<ExpressionAction>,
     pub schema: DataSchemaRef,
     pub input: Arc<PlanNode>
 }

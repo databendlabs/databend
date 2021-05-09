@@ -7,7 +7,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
-use crate::ExpressionPlan;
+use crate::ExpressionAction;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ScanPlan {
@@ -15,13 +15,13 @@ pub struct ScanPlan {
     pub schema_name: String,
     /// The schema of the source data
     pub table_schema: DataSchemaRef,
-    pub table_args: Option<ExpressionPlan>,
+    pub table_args: Option<ExpressionAction>,
     /// Optional column indices to use as a projection
     pub projection: Option<Vec<usize>>,
     /// The schema description of the output
     pub projected_schema: DataSchemaRef,
     /// Optional filter expression plan
-    pub filters: Vec<ExpressionPlan>,
+    pub filters: Vec<ExpressionAction>,
     /// Optional limit to skip read
     pub limit: Option<usize>
 }

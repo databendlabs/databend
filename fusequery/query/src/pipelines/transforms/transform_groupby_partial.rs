@@ -20,7 +20,7 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_functions::IFunction;
 use common_infallible::RwLock;
-use common_planners::ExpressionPlan;
+use common_planners::ExpressionAction;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
@@ -34,8 +34,8 @@ type GroupIndicesTable = HashMap<Vec<u8>, Vec<u32>, ahash::RandomState>;
 type GroupFuncTable = RwLock<HashMap<Vec<u8>, Vec<Box<dyn IFunction>>, ahash::RandomState>>;
 
 pub struct GroupByPartialTransform {
-    aggr_exprs: Vec<ExpressionPlan>,
-    group_exprs: Vec<ExpressionPlan>,
+    aggr_exprs: Vec<ExpressionAction>,
+    group_exprs: Vec<ExpressionAction>,
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>,
     groups: GroupFuncTable
@@ -44,8 +44,8 @@ pub struct GroupByPartialTransform {
 impl GroupByPartialTransform {
     pub fn create(
         schema: DataSchemaRef,
-        aggr_exprs: Vec<ExpressionPlan>,
-        group_exprs: Vec<ExpressionPlan>
+        aggr_exprs: Vec<ExpressionAction>,
+        group_exprs: Vec<ExpressionAction>
     ) -> Self {
         Self {
             aggr_exprs,

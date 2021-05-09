@@ -13,7 +13,7 @@ fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
     #[allow(dead_code)]
     struct RewriteTest {
         name: &'static str,
-        exprs: Vec<ExpressionPlan>,
+        exprs: Vec<ExpressionAction>,
         expect_str: &'static str,
         error_msg: &'static str
     }
@@ -22,21 +22,21 @@ fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
         RewriteTest{
             name : "Cyclic",
             exprs: vec![
-                    Box::new(ExpressionPlan::Function {
+                    Box::new(ExpressionAction::Function {
                         op: "plus".to_string(),
                         args: vec![
                             lit(1i32),
                             col("z")
                         ],
                     }).alias("x"),
-                    Box::new(ExpressionPlan::Function {
+                    Box::new(ExpressionAction::Function {
                         op: "plus".to_string(),
                         args: vec![
                             lit(1i32),
                             col("x")
                         ],
                     }).alias("y"),
-                    Box::new(ExpressionPlan::Function {
+                    Box::new(ExpressionAction::Function {
                         op: "plus".to_string(),
                         args: vec![
                             lit(1i32),
@@ -51,14 +51,14 @@ fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
         RewriteTest{
             name : "Duplicate aliases",
             exprs: vec![
-                    Box::new(ExpressionPlan::Function {
+                    Box::new(ExpressionAction::Function {
                         op: "plus".to_string(),
                         args: vec![
                             lit(1i32),
                             col("z")
                         ],
                     }).alias("x"),
-                    Box::new(ExpressionPlan::Function {
+                    Box::new(ExpressionAction::Function {
                         op: "plus".to_string(),
                         args: vec![
                             lit(1i32),
@@ -74,14 +74,14 @@ fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
             name: "normal",
             exprs: vec![
                 col("x"),
-                Box::new(ExpressionPlan::Function {
+                Box::new(ExpressionAction::Function {
                         op: "add".to_string(),
                         args: vec![
                             lit(1i32),
                             col("x")
                         ],
                     }).alias("y"),
-                ExpressionPlan::Function {
+                ExpressionAction::Function {
                     op: "multiply".to_string(),
                     args: vec![
                         col("y"),
@@ -96,21 +96,21 @@ fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
         RewriteTest{
             name: "normal2",
             exprs: vec![
-                    Box::new(ExpressionPlan::Function {
+                Box::new(ExpressionAction::Function {
                         op: "add".to_string(),
                         args: vec![
                             lit(1i32),
                             lit(1i64),
                         ],
                     }).alias("x"),
-                    Box::new(ExpressionPlan::Function {
+                Box::new(ExpressionAction::Function {
                         op: "add".to_string(),
                         args: vec![
                             lit(1i32),
                             col("x")
                         ],
                     }).alias("y"),
-                ExpressionPlan::Function {
+                ExpressionAction::Function {
                     op: "multiply".to_string(),
                     args: vec![
                         col("x"),
@@ -124,21 +124,21 @@ fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
         RewriteTest{
             name: "x+1->x",
             exprs: vec![
-                Box::new(ExpressionPlan::Function {
+                Box::new(ExpressionAction::Function {
                     op: "add".to_string(),
                     args: vec![
                         col("x"),
                         lit(1i64),
                     ],
                 }).alias("x"),
-                Box::new(ExpressionPlan::Function {
+                Box::new(ExpressionAction::Function {
                     op: "add".to_string(),
                     args: vec![
                         lit(1i32),
                         col("x")
                     ],
                 }).alias("y"),
-                ExpressionPlan::Function {
+                ExpressionAction::Function {
                     op: "multiply".to_string(),
                     args: vec![
                         col("x"),
@@ -179,12 +179,12 @@ fn test_rewrite_expressions_plan() -> anyhow::Result<()> {
     expect.insert("y".to_string(), col("number"));
     assert_eq!(expect, actual);
 
-    let exprs = vec![ExpressionPlan::Function {
+    let exprs = vec![ExpressionAction::Function {
         op: "multiply".to_string(),
         args: vec![col("x"), col("y")]
     }];
 
-    let expect_plan = ExpressionPlan::Function {
+    let expect_plan = ExpressionAction::Function {
         op: "multiply".to_string(),
         args: vec![col("number"), col("number")]
     };

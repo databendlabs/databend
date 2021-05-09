@@ -7,13 +7,13 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 
-use crate::ExpressionPlan;
+use crate::ExpressionAction;
 use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct SortPlan {
     /// The expression to sort on
-    pub order_by: Vec<ExpressionPlan>,
+    pub order_by: Vec<ExpressionAction>,
     /// The logical plan
     pub input: Arc<PlanNode>
 }

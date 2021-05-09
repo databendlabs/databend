@@ -10,7 +10,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_functions::IFunction;
-use common_planners::ExpressionPlan;
+use common_planners::ExpressionAction;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
@@ -40,7 +40,7 @@ pub struct ExpressionTransform {
 }
 
 impl ExpressionTransform {
-    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> Result<Self> {
+    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionAction>) -> Result<Self> {
         let mut funcs = vec![];
 
         for expr in &exprs {

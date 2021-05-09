@@ -7,13 +7,13 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 
-use crate::ExpressionPlan;
+use crate::ExpressionAction;
 use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct FilterPlan {
     /// The predicate expression, which must have Boolean type.
-    pub predicate: ExpressionPlan,
+    pub predicate: ExpressionAction,
     /// The incoming logical plan
     pub input: Arc<PlanNode>
 }
