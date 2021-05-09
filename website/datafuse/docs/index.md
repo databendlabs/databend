@@ -1,4 +1,4 @@
 ---
 template: overrides/home.html
-title: Material for MkDocsx
+title: Material for MkDocs
 ---

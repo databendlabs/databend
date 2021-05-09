@@ -22,17 +22,15 @@
 site_name: Datafuse
 site_url: https://datafuse.dev
 site_author: DatafuseLabs
-site_subtitle: >-
-  A Modern Real-Time Data Processing & Analytics DBMS with Cloud-Native Architecture
 site_description: >-
 
 # Repository
 repo_name: datafuselabs/datafuse
 repo_url: https://github.com/datafuselabs/datafuse
-edit_uri: ""
+edit_uri: "https://github.com/datafuselabs/datafuse/website/datafuse/docs"
 
 # Copyright
-copyright: Copyright &copy; 2016 - 2021 Martin Donath
+copyright: Copyright &copy; 2020 - 2021 DatafuseLabs
 
 # Configuration
 theme:
@@ -99,17 +97,7 @@ plugins:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/squidfunk
-    - icon: fontawesome/brands/gitter
-      link: https://gitter.im/squidfunk/mkdocs-material
-    - icon: fontawesome/brands/docker
-      link: https://hub.docker.com/r/squidfunk/mkdocs-material/
-    - icon: fontawesome/brands/twitter
-      link: https://twitter.com/squidfunk
-    - icon: fontawesome/brands/linkedin
-      link: https://linkedin.com/in/squidfunk/
-    - icon: fontawesome/brands/instagram
-      link: https://instagram.com/squidfunk
+      link: https://github.com/datafuselabs
 
 # Extensions
 markdown_extensions:
@@ -154,53 +142,6 @@ markdown_extensions:
 # Page tree
 nav:
   - Home: index.md
-  - Getting startxed:
-    - Installation: getting-started.md
-    - Creating your site: creating-your-site.md
-    - Publishing your site: publishing-your-site.md
-    - Customization: customization.md
-    - Troubleshooting: troubleshooting.md
-    - Data privacy: data-privacy.md
-    - License: license.md
-    - Releases:
-      - Changelog: changelog.md
-      - Upgrade guide: upgrading.md
-      - Deprecations: deprecations.md
-  - Setup:
-    - Changing the colors: setup/changing-the-colors.md
-    - Changing the fonts: setup/changing-the-fonts.md
-    - Changing the language: setup/changing-the-language.md
-    - Changing the logo and icons: setup/changing-the-logo-and-icons.md
-    - Setting up navigation: setup/setting-up-navigation.md
-    - Setting up site search: setup/setting-up-site-search.md
-    - Setting up site analytics: setup/setting-up-site-analytics.md
-    - Setting up tags: setup/setting-up-tags.md
-    - Setting up versioning: setup/setting-up-versioning.md
-    - Setting up the header: setup/setting-up-the-header.md
-    - Setting up the footer: setup/setting-up-the-footer.md
-    - Adding a git repository: setup/adding-a-git-repository.md
-    - Adding a comment system: setup/adding-a-comment-system.md
-  - Reference:
-    - Abbreviations: reference/abbreviations.md
-    - Admonitions: reference/admonitions.md
-    - Buttons: reference/buttons.md
-    - Code blocks: reference/code-blocks.md
-    - Content tabs: reference/content-tabs.md
-    - Data tables: reference/data-tables.md
-    - Diagrams: reference/diagrams.md
-    - Footnotes: reference/footnotes.md
-    - Formatting: reference/formatting.md
-    - Icons + Emojis: reference/icons-emojis.md
-    - Images: reference/images.md
-    - Lists: reference/lists.md
-    - MathJax: reference/mathjax.md
-    - Meta tags: reference/meta-tags.md
-    - Variables: reference/variables.md
-  - Insiders:
-    - Sponsorship: insiders/index.md
-    - Getting started:
-      - Installation: insiders/getting-started.md
-      - Changelog: insiders/changelog.md
 
 # Google Analytics
 google_analytics:
