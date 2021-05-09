@@ -7,7 +7,6 @@ use std::collections::HashSet;
 
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use itertools::concat;
 
 use crate::ExpressionPlan;
 use crate::PlanNode;
@@ -220,9 +219,10 @@ impl PlanRewriter {
             ExpressionPlan::Column(_) => vec![expr.clone()],
             ExpressionPlan::Literal(_) => vec![],
             ExpressionPlan::BinaryExpression { left, right, .. } => {
-                let l = Self::expression_plan_columns(left)?;
-                let r = Self::expression_plan_columns(right)?;
-                concat(vec![l, r])
+                let mut l = Self::expression_plan_columns(left)?;
+                let mut r = Self::expression_plan_columns(right)?;
+                l.append(&mut r);
+                l
             }
             ExpressionPlan::Function { args, .. } => {
                 let mut v = vec![];

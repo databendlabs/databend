@@ -57,7 +57,7 @@ pub fn aggr_group_expr_eq(
             }
         }
         _ => {
-            let aggr_str = String::from(format!("{:?}", aggr).as_str());
+            let aggr_str = format!("{:?}", aggr);
             if group_by_names.contains(&aggr_str) {
                 return Ok(true);
             } else {

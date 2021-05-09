@@ -32,77 +32,83 @@ mod tests {
     }
 
     #[test]
-    fn test_aggregate_expr_check_1() -> anyhow::Result<()> {
+    fn test_aggregate_expr_check() -> anyhow::Result<()> {
         use anyhow::anyhow;
+        use common_exception::ErrorCodes;
         use pretty_assertions::assert_eq;
 
         use crate::*;
 
+        struct TestCase {
+            name: &'static str,
+            plan: Result<PlanBuilder, ErrorCodes>,
+            expect_error: bool,
+            expect: &'static str
+        }
+
         let source = Test::create().generate_source_plan_for_test(10000)?;
 
-        // select sum(number) as a, number+1 group by a
-        let plan = PlanBuilder::from(&source).aggregate_partial(
-            vec![sum(col("number")).alias("a"), add(col("number"), lit(1))],
-            vec![col("a")]
-        );
-        match plan {
-            Err(e) => {
-                let actual = format!("{}", e);
-                let expect = "Code: 26, displayText = Expression (number + 1) is not an aggregate function..";
-                assert_eq!(expect, actual);
-                Ok(())
+        let tests = vec![
+            TestCase {
+                name: "aggr-expr-check-with-alias",
+                plan: (PlanBuilder::from(&source).aggregate_partial(
+                    vec![sum(col("number")).alias("a"), add(col("number"), lit(1))],
+                    vec![col("a")]
+                )),
+                expect_error: true,
+                expect:
+                    "Code: 26, displayText = Expression (number + 1) is not an aggregate function.."
+            },
+            TestCase {
+                name: "aggr-expr-not-in-group-by",
+                plan: (PlanBuilder::from(&source).aggregate_partial(
+                    vec![
+                        sum(col("number")).alias("a"),
+                        modular(col("number"), lit(3)),
+                    ],
+                    vec![modular(col("a"), lit(4))]
+                )),
+                expect_error: true,
+                expect:
+                    "Code: 26, displayText = Expression (number % 3) is not an aggregate function.."
+            },
+            TestCase {
+                name: "aggr-expr-valid",
+                plan: (PlanBuilder::from(&source).aggregate_partial(
+                    vec![
+                        sum(col("number")).alias("a"),
+                        avg(modular(col("number"), lit(3))),
+                    ],
+                    vec![modular(col("a"), lit(4))]
+                )),
+                expect_error: false,
+                expect: "AggregatorPartial: groupBy=[[(a % 4)]], aggr=[[sum([number]) as a, avg([(number % 3)])]]\
+                         \n  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
+            },
+        ];
+
+        for test in tests {
+            println!("name: {}", test.name);
+            match test.plan {
+                Err(e) => {
+                    if test.expect_error {
+                        let actual = format!("{}", e);
+                        assert_eq!(test.expect, actual);
+                    } else {
+                        return Err(anyhow!("Error: we expect a failure."));
+                    }
+                }
+                Ok(p) => {
+                    if !test.expect_error {
+                        println!("p: {:?}", p.build()?);
+                        let actual = format!("{:?}", p.build()?);
+                        assert_eq!(test.expect, actual);
+                    } else {
+                        return Err(anyhow!("Error: we expect a failure."));
+                    }
+                }
             }
-            Ok(_p) => Err(anyhow!("Error: we expect a failure."))
         }
-    }
-
-    #[test]
-    fn test_aggregate_expr_check_2() -> anyhow::Result<()> {
-        use anyhow::anyhow;
-        use pretty_assertions::assert_eq;
-
-        use crate::*;
-
-        let source = Test::create().generate_source_plan_for_test(10000)?;
-
-        // select sum(number) as a, number % 3 group by  number % 4
-        let plan = PlanBuilder::from(&source).aggregate_partial(
-            vec![
-                sum(col("number")).alias("a"),
-                modular(col("number"), lit(3)),
-            ],
-            vec![modular(col("a"), lit(4))]
-        );
-        match plan {
-            Err(e) => {
-                let actual = format!("{}", e);
-                let expect = "Code: 26, displayText = Expression (number % 3) is not an aggregate function..";
-                assert_eq!(expect, actual);
-                Ok(())
-            }
-            Ok(_p) => Err(anyhow!("Error: we expect a failure."))
-        }
-    }
-
-    #[test]
-    fn test_aggregate_expr_check_3() -> anyhow::Result<()> {
-        use anyhow::anyhow;
-
-        use crate::*;
-
-        let source = Test::create().generate_source_plan_for_test(10000)?;
-
-        // select sum(number) as a, avg(number % 3) group by number % 4
-        let plan = PlanBuilder::from(&source).aggregate_partial(
-            vec![
-                sum(col("number")).alias("a"),
-                avg(modular(col("number"), lit(3))),
-            ],
-            vec![modular(col("a"), lit(4))]
-        );
-        match plan {
-            Err(_e) => Err(anyhow!("Error: we  do expect a failure.")),
-            Ok(_p) => Ok(())
-        }
+        Ok(())
     }
 }
