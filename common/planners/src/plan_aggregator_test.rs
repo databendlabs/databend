@@ -48,7 +48,7 @@ mod tests {
         match plan {
             Err(e) => {
                 let actual = format!("{}", e);
-                let expect = "Code: 1000, displayText = Expression (number + 1) is not an aggregate function..";
+                let expect = "Code: 26, displayText = Expression (number + 1) is not an aggregate function..";
                 assert_eq!(expect, actual);
                 Ok(())
             }
@@ -76,7 +76,7 @@ mod tests {
         match plan {
             Err(e) => {
                 let actual = format!("{}", e);
-                let expect = "Code: 1000, displayText = Expression (number % 3) is not an aggregate function..";
+                let expect = "Code: 26, displayText = Expression (number % 3) is not an aggregate function..";
                 assert_eq!(expect, actual);
                 Ok(())
             }

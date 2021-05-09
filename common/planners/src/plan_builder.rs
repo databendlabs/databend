@@ -2,14 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
-use common_exception::Result;
 use common_exception::ErrorCodes;
+use common_exception::Result;
 
 use crate::col;
 use crate::AggregatorFinalPlan;
@@ -44,22 +45,33 @@ pub struct PlanBuilder {
 // Case3: group and aggr are exactly the same expression
 pub fn aggr_group_expr_eq(
     aggr: &ExpressionPlan,
-    group: &ExpressionPlan,
+    group_by_names: &HashSet<String>,
     input_schema: &DataSchemaRef
 ) -> Result<bool> {
-    let column_name = aggr.to_data_field(input_schema)?.name().clone();
-    if let ExpressionPlan::Column(grp_name) = group {
-        if column_name.eq(grp_name) {
-            return Ok(true);
+    match aggr {
+        ExpressionPlan::Alias(alias, plan) => {
+            if group_by_names.contains(alias) {
+                return Ok(true);
+            } else {
+                return aggr_group_expr_eq(plan, group_by_names, input_schema);
+            }
         }
-    } else if let ExpressionPlan::Alias(_alias, plan) = aggr {
-        return aggr_group_expr_eq(plan, group, input_schema);
-    } else if String::from(format!("{:?}", group).as_str())
-        .eq(&String::from(format!("{:?}", aggr).as_str()))
-    {
-        return Ok(true);
-    }
-    return Ok(false);
+        _ => {
+            let aggr_str = String::from(format!("{:?}", aggr).as_str());
+            if group_by_names.contains(&aggr_str) {
+                return Ok(true);
+            } else {
+                let columns = PlanRewriter::expression_plan_columns(aggr)?;
+                for col in columns {
+                    let cn = col.to_data_field(input_schema)?.name().clone();
+                    if !group_by_names.contains(&cn) {
+                        return Ok(false);
+                    }
+                }
+            }
+        }
+    };
+    return Ok(true);
 }
 
 impl PlanBuilder {
@@ -88,6 +100,18 @@ impl PlanBuilder {
             .iter()
             .map(|expr| expr.to_data_field(input_schema))
             .collect::<Result<_>>()
+    }
+
+    pub fn exprs_to_names(
+        &self,
+        exprs: &[ExpressionPlan],
+        names: &mut HashSet<String>
+    ) -> Result<()> {
+        for expr in exprs {
+            let name = String::from(format!("{:?}", expr).as_str());
+            names.insert(name.clone());
+        }
+        Ok(())
     }
 
     /// Apply a stage.
@@ -133,23 +157,19 @@ impl PlanBuilder {
         let aggr_projection_fields = self.exprs_to_fields(&aggr_expr, &input_schema)?;
 
         // Aggregator check.
-        for e_aggr in &aggr_expr {
+        let mut group_by_names = HashSet::new();
+        self.exprs_to_names(&group_expr, &mut group_by_names)?;
+        for aggr in &aggr_expr {
             // do not check literal expressions
-            if let ExpressionPlan::Literal(_) = e_aggr {
+            if let ExpressionPlan::Literal(_) = aggr {
                 continue;
-            } else if !e_aggr.has_aggregator()? {
-                let mut in_group_by = false;
-                // Check if e_aggr is in group-by's list
-                for e_group in &group_expr {
-                    if aggr_group_expr_eq(&e_aggr, &e_group, &input_schema)? {
-                        in_group_by = true;
-                        break;
-                    }
-                }
+            } else if !aggr.has_aggregator()? {
+                // Check if aggr is in group-by's list
+                let in_group_by = aggr_group_expr_eq(&aggr, &group_by_names, &input_schema)?;
                 if !in_group_by {
-                    return Result::Err(ErrorCodes::UnknownException(format!(
+                    return Result::Err(ErrorCodes::IllegalAggregateExp(format!(
                         "Expression {:?} is not an aggregate function.",
-                        e_aggr
+                        aggr
                     )));
                 }
             }

@@ -666,6 +666,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "itertools 0.10.0",
  "pretty_assertions",
  "serde",
 ]

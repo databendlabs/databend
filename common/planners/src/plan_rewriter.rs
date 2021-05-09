@@ -7,6 +7,7 @@ use std::collections::HashSet;
 
 use common_exception::ErrorCodes;
 use common_exception::Result;
+use itertools::concat;
 
 use crate::ExpressionPlan;
 use crate::PlanNode;
@@ -209,6 +210,31 @@ impl PlanRewriter {
             ExpressionPlan::Wildcard => vec![],
             ExpressionPlan::Sort { expr, .. } => vec![expr.as_ref().clone()],
             ExpressionPlan::Cast { expr, .. } => vec![expr.as_ref().clone()]
+        })
+    }
+
+    /// Get the leaves of an expression.
+    pub fn expression_plan_columns(expr: &ExpressionPlan) -> Result<Vec<ExpressionPlan>> {
+        Ok(match expr {
+            ExpressionPlan::Alias(_, expr) => Self::expression_plan_columns(expr)?,
+            ExpressionPlan::Column(_) => vec![expr.clone()],
+            ExpressionPlan::Literal(_) => vec![],
+            ExpressionPlan::BinaryExpression { left, right, .. } => {
+                let l = Self::expression_plan_columns(left)?;
+                let r = Self::expression_plan_columns(right)?;
+                concat(vec![l, r])
+            }
+            ExpressionPlan::Function { args, .. } => {
+                let mut v = vec![];
+                for arg in args {
+                    let mut col = Self::expression_plan_columns(arg)?;
+                    v.append(&mut col);
+                }
+                v
+            }
+            ExpressionPlan::Wildcard => vec![],
+            ExpressionPlan::Sort { expr, .. } => Self::expression_plan_columns(expr)?,
+            ExpressionPlan::Cast { expr, .. } => Self::expression_plan_columns(expr)?
         })
     }
 

@@ -15,6 +15,7 @@ common-exception = {path = "../exception"}
 # Github dependencies
 
 # Crates.io dependencies
+itertools = "0.10.0"
 anyhow = "1.0.40"
 serde = { version = "1.0", features = ["derive"] }
 
