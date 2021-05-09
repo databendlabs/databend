@@ -45,12 +45,12 @@ pub struct PlanBuilder {
 // Case2: aggr is an alias, unfold aggr
 // Case3: group and aggr are exactly the same expression
 pub fn aggr_group_expr_eq(
-    aggr: &ExpressionPlan,
+    aggr: &ExpressionAction,
     group_by_names: &HashSet<String>,
     input_schema: &DataSchemaRef
 ) -> Result<bool> {
     match aggr {
-        ExpressionPlan::Alias(alias, plan) => {
+        ExpressionAction::Alias(alias, plan) => {
             if group_by_names.contains(alias) {
                 return Ok(true);
             } else {
@@ -105,7 +105,7 @@ impl PlanBuilder {
 
     pub fn exprs_to_names(
         &self,
-        exprs: &[ExpressionPlan],
+        exprs: &[ExpressionAction],
         names: &mut HashSet<String>
     ) -> Result<()> {
         for expr in exprs {
@@ -194,9 +194,9 @@ impl PlanBuilder {
         // Aggregator check.
         let mut group_by_names = HashSet::new();
         self.exprs_to_names(&group_expr, &mut group_by_names)?;
-        for aggr in &aggr_expr {
+        for aggr in aggr_expr {
             // do not check literal expressions
-            if let ExpressionPlan::Literal(_) = aggr {
+            if let ExpressionAction::Literal(_) = aggr {
                 continue;
             } else if !aggr.has_aggregator()? {
                 // Check if aggr is in group-by's list

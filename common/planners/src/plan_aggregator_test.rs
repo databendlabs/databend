@@ -53,8 +53,8 @@ mod tests {
             TestCase {
                 name: "aggr-expr-check-with-alias",
                 plan: (PlanBuilder::from(&source).aggregate_partial(
-                    vec![sum(col("number")).alias("a"), add(col("number"), lit(1))],
-                    vec![col("a")]
+                    &vec![sum(col("number")).alias("a"), add(col("number"), lit(1))],
+                    &vec![col("a")]
                 )),
                 expect_error: true,
                 expect:
@@ -63,11 +63,11 @@ mod tests {
             TestCase {
                 name: "aggr-expr-not-in-group-by",
                 plan: (PlanBuilder::from(&source).aggregate_partial(
-                    vec![
+                    &vec![
                         sum(col("number")).alias("a"),
                         modular(col("number"), lit(3)),
                     ],
-                    vec![modular(col("a"), lit(4))]
+                    &vec![modular(col("a"), lit(4))]
                 )),
                 expect_error: true,
                 expect:
@@ -76,11 +76,11 @@ mod tests {
             TestCase {
                 name: "aggr-expr-valid",
                 plan: (PlanBuilder::from(&source).aggregate_partial(
-                    vec![
+                    &vec![
                         sum(col("number")).alias("a"),
                         avg(modular(col("number"), lit(3))),
                     ],
-                    vec![modular(col("a"), lit(4))]
+                    &vec![modular(col("a"), lit(4))]
                 )),
                 expect_error: false,
                 expect: "AggregatorPartial: groupBy=[[(a % 4)]], aggr=[[sum([number]) as a, avg([(number % 3)])]]\
