@@ -85,10 +85,7 @@ impl PlanBuilder {
         let mut merged = input_schema.fields().clone();
         let fields = self.exprs_to_fields(&exprs, &input_schema)?;
         for field in fields {
-            if !merged
-                .iter()
-                .any(|x| x.name() == "*" || x.name() == field.name())
-            {
+            if !merged.iter().any(|x| x.name() == field.name()) && field.name() != "*" {
                 merged.push(field);
             }
         }
