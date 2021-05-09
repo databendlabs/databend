@@ -15,6 +15,7 @@ mod function_column;
 mod function_factory;
 mod function_literal;
 mod logics;
+mod strings;
 mod udfs;
 
 pub use crate::expressions::CastFunction;

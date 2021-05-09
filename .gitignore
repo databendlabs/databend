@@ -19,6 +19,9 @@ perf.*
 *.stdout
 *.out
 *.swp
+# for tests in mac
+*.stderr-e
+*.stdout-e
 
 # python
 venv/
