@@ -480,16 +480,16 @@ impl PlanParser {
                 if let Some(from) = substring_from {
                     args.push(self.sql_to_rex(from, schema)?);
                 } else {
-                    args.push(ExpressionPlan::Literal(DataValue::Int64(Some(1))));
+                    args.push(ExpressionAction::Literal(DataValue::Int64(Some(1))));
                 }
 
                 if let Some(len) = substring_for {
                     args.push(self.sql_to_rex(len, schema)?);
                 } else {
-                    args.push(ExpressionPlan::Literal(DataValue::UInt64(None)));
+                    args.push(ExpressionAction::Literal(DataValue::UInt64(None)));
                 }
 
-                Ok(ExpressionPlan::Function {
+                Ok(ExpressionAction::Function {
                     op: "substring".to_string(),
                     args
                 })
