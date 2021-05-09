@@ -1,4 +1,8 @@
 --------------
+SELECT max(number) from numbers_mt(0) group by number % 4
+--------------
+
+--------------
 SELECT max(number) FROM numbers_mt (10) where number > 99999999998 GROUP BY number%3
 --------------
 
