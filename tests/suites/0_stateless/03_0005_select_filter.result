@@ -1,4 +1,8 @@
 --------------
+set max_threads = 16
+--------------
+
+--------------
 SELECT * FROM numbers_mt (3) where number > 5
 --------------
 
