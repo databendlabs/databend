@@ -8,5 +8,5 @@ EXPLAIN select (number+1) as c1, number as c2 from numbers_mt(10000) where (c1+c
 SELECT 'group by push down: push alias to group by';
 EXPLAIN select (number+1) as c1, (number%3+1) as c2 from numbers_mt(10000) group by c2;
 
-SELECT 'projection push down: push (name and value) to readdatasource';
+SELECT 'projection push down: push (name and value) to read datasource';
 EXPLAIN select name from system.settings where value > 10;
