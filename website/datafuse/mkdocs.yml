@@ -19,17 +19,16 @@
 # IN THE SOFTWARE.
 
 # Project information
-site_name: Material for MkDocs
-site_url: https://squidfunk.github.io/mkdocs-material/
-site_author: Martin Donath
+site_name: Datafuse
+site_url: https://datafuse.dev
+site_author: DatafuseLabs
+site_subtitle: >-
+  A Modern Real-Time Data Processing & Analytics DBMS with Cloud-Native Architecture
 site_description: >-
-  Create a branded static site from a set of Markdown files to host the
-  documentation of your Open Source or commercial project – customizable,
-  searchable, mobile-friendly, 40+ languages
 
 # Repository
-repo_name: squidfunk/mkdocs-material
-repo_url: https://github.com/squidfunk/mkdocs-material
+repo_name: datafuselabs/datafuse
+repo_url: https://github.com/datafuselabs/datafuse
 edit_uri: ""
 
 # Copyright
@@ -155,7 +154,7 @@ markdown_extensions:
 # Page tree
 nav:
   - Home: index.md
-  - Getting started:
+  - Getting startxed:
     - Installation: getting-started.md
     - Creating your site: creating-your-site.md
     - Publishing your site: publishing-your-site.md
