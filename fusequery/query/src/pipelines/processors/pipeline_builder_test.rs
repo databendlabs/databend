@@ -53,8 +53,8 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
             plan: "\
             Projection: number as c1:UInt64, number as c2:UInt64\
             \n  Sort: c1:UInt64\
-            \n    Expression: c1:UInt64 (Before OrderBy)\
-            \n      Expression: number as c1:UInt64, number as c2:UInt64 (Before Projection)\
+            \n    Expression: number:UInt64, c1:UInt64, c2:UInt64 (Before OrderBy)\
+            \n      Expression: number:UInt64, c1:UInt64, c2:UInt64 (Before Projection)\
             \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
 
             pipeline: "\
@@ -91,8 +91,8 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
             plan: "\
             Projection: number as c1:UInt64, number as c2:UInt64\
             \n  Sort: c1:UInt64, c2:UInt64\
-            \n    Expression: c1:UInt64, c2:UInt64 (Before OrderBy)\
-            \n      Expression: number as c1:UInt64, number as c2:UInt64 (Before Projection)\
+            \n    Expression: number:UInt64, c1:UInt64, c2:UInt64 (Before OrderBy)\
+            \n      Expression: number:UInt64, c1:UInt64, c2:UInt64 (Before Projection)\
             \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
 
             pipeline: "\
@@ -129,8 +129,8 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
             plan: "\
             Projection: number as c1:UInt64, (number + 1) as c2:UInt64\
             \n  Sort: c1:UInt64, c2:UInt64\
-            \n    Expression: c1:UInt64, c2:UInt64 (Before OrderBy)\
-            \n      Expression: number as c1:UInt64, (number + 1) as c2:UInt64 (Before Projection)\
+            \n    Expression: number:UInt64, c1:UInt64, c2:UInt64 (Before OrderBy)\
+            \n      Expression: number:UInt64, c1:UInt64, c2:UInt64 (Before Projection)\
             \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
 
             pipeline: "\

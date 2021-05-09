@@ -20,8 +20,7 @@ fn test_limit_push_down_optimizer() -> anyhow::Result<()> {
     let expect = "\
     Limit: 10\
     \n  Projection: (number + 1) as c1:UInt64, number as c2:UInt64\
-    \n    Expression: (number + 1) as c1:UInt64, number as c2:UInt64 (Before Projection)\
-    \n      Filter: ((((number + 1) + number) + 1) = 1)\
+    \n    Expression: number:UInt64, c1:UInt64, c2:UInt64 (Before Projection)\n      Filter: ((((number + 1) + number) + 1) = 1)\
     \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);

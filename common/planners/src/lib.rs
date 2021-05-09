@@ -5,6 +5,8 @@
 #[cfg(test)]
 mod plan_aggregator_test;
 #[cfg(test)]
+mod plan_builder_test;
+#[cfg(test)]
 mod plan_display_test;
 #[cfg(test)]
 mod plan_expression_test;

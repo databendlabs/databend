@@ -22,7 +22,7 @@ fn test_filter_alias_push_down_optimizer() -> anyhow::Result<()> {
             query: "select (number+1) as c1, number as c2 from numbers_mt(10000) where (c1+c2+1)=1",
             expect:"\
             Projection: (number + 1) as c1:UInt64, number as c2:UInt64\
-            \n  Expression: (number + 1) as c1:UInt64, number as c2:UInt64 (Before Projection)\
+            \n  Expression: number:UInt64, c1:UInt64, c2:UInt64 (Before Projection)\
             \n    Filter: ((((number + 1) + number) + 1) = 1)\
             \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
         },
@@ -41,7 +41,7 @@ fn test_filter_alias_push_down_optimizer() -> anyhow::Result<()> {
             expect: "\
             Having: (c1 > 10)\
             \n  Projection: (number + 1) as c1:UInt64, ((number % 3) + 1) as c2:UInt64\
-            \n    Expression: (number + 1) as c1:UInt64, ((number % 3) + 1) as c2:UInt64 (Before Projection)\
+            \n    Expression: number:UInt64, c1:UInt64, c2:UInt64 (Before Projection)\
             \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
         },
         Test {
@@ -50,9 +50,9 @@ fn test_filter_alias_push_down_optimizer() -> anyhow::Result<()> {
             expect: "\
             Projection: (number + 1) as c1:UInt64, ((number % 3) + 1) as c2:UInt64\
             \n  Sort: c2:UInt64\
-            \n    Expression: c2:UInt64 (Before OrderBy)\
-            \n      Expression: (number + 1) as c1:UInt64, ((number % 3) + 1) as c2:UInt64 (Before Projection)\
-            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]" 
+            \n    Expression: number:UInt64, c1:UInt64, c2:UInt64 (Before OrderBy)\
+            \n      Expression: number:UInt64, c1:UInt64, c2:UInt64 (Before Projection)\
+            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]"
         },
     ];
 
