@@ -176,7 +176,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     let resp = mn.boot(addr.clone()).await;
     assert!(resp.is_ok());
 
-    let got = mn.get(mn.sto.node_key(0)).await;
+    let got = mn.local_get(mn.sto.node_key(0)).await;
     assert_eq!(addr, got.unwrap());
     Ok(())
 }
@@ -223,7 +223,7 @@ async fn test_meta_node_add_non_voter() -> anyhow::Result<()> {
         let resp = mn0.boot(addr0.clone()).await;
         assert!(resp.is_ok());
 
-        let got = mn0.get(mn0.sto.node_key(nid0)).await;
+        let got = mn0.local_get(mn0.sto.node_key(nid0)).await;
         assert_eq!(addr0, got.unwrap(), "nid1 is added");
 
         wait_for("nid0 to be leader", &mut mrx0, |x| x.state == State::Leader).await;
@@ -236,8 +236,16 @@ async fn test_meta_node_add_non_voter() -> anyhow::Result<()> {
     {
         // add node-1 to cluster as non-voter
         let key = mn0.sto.node_key(nid1);
-        let resp = mn0.local_set(key, addr1.clone(), false, None).await;
-        assert_eq!(addr1, resp.unwrap());
+        let resp = mn0
+            .local_set(ClientRequest {
+                txid: None,
+                cmd: Cmd::Set {
+                    key: key,
+                    value: addr1.clone()
+                }
+            })
+            .await;
+        assert_eq!(addr1, resp.unwrap().result.unwrap());
     }
 
     wait_for("nid1 current_leader==0", &mut mrx1, |x| {

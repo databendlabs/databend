@@ -28,8 +28,6 @@ pub use crate::protobuf::meta_service_server::MetaServiceServer;
 pub use crate::protobuf::GetReply;
 pub use crate::protobuf::GetReq;
 pub use crate::protobuf::RaftMes;
-pub use crate::protobuf::SetReply;
-pub use crate::protobuf::SetReq;
 
 #[cfg(test)]
 mod meta_service_impl_test;

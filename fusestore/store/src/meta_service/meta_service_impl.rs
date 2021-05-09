@@ -2,48 +2,47 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::convert::TryInto;
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
-
+use crate::meta_service::ClientRequest;
 use crate::meta_service::GetReply;
 use crate::meta_service::GetReq;
-use crate::meta_service::Meta;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaService;
 use crate::meta_service::RaftMes;
-use crate::meta_service::SetReply;
-use crate::meta_service::SetReq;
 
 pub struct MetaServiceImpl {
-    pub meta_node: Arc<MetaNode>,
-    // TODO(xp): move metadata into meta_node.
-    pub metadata: Arc<Mutex<Meta>>
+    pub meta_node: Arc<MetaNode>
 }
 
 impl MetaServiceImpl {
     pub async fn create(meta_node: Arc<MetaNode>) -> Self {
-        Self {
-            meta_node,
-            metadata: Arc::new(Mutex::new(Meta::empty()))
-        }
+        Self { meta_node }
     }
 }
 
 #[async_trait::async_trait]
 impl MetaService for MetaServiceImpl {
+    /// Handles a write request.
+    /// This node must be leader or an error returned.
     #[tracing::instrument(level = "info", skip(self))]
-    async fn set(
+    async fn write(
         &self,
-        request: tonic::Request<SetReq>
-    ) -> Result<tonic::Response<SetReply>, tonic::Status> {
-        let req = request.into_inner();
-        let mut m = self.metadata.lock().await;
-        if req.if_absent && m.keys.contains_key(&req.key) {
-            return Ok(tonic::Response::new(SetReply { ok: false }));
-        }
-        m.keys.insert(req.key, req.value);
-        return Ok(tonic::Response::new(SetReply { ok: true }));
+        request: tonic::Request<RaftMes>
+    ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
+        let mes = request.into_inner();
+        let req: ClientRequest = mes.try_into()?;
+
+        // TODO: handle ForwardToLeader error
+        let resp = self
+            .meta_node
+            .local_set(req)
+            .await
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+        let mes: RaftMes = resp.into();
+        Ok(tonic::Response::new(mes))
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -52,15 +51,14 @@ impl MetaService for MetaServiceImpl {
         request: tonic::Request<GetReq>
     ) -> Result<tonic::Response<GetReply>, tonic::Status> {
         let req = request.into_inner();
-        let m = self.metadata.lock().await;
-        let v = m.keys.get(&req.key);
-        let rst = match v {
-            Some(v) => GetReply {
+        let resp = self.meta_node.local_get(req.key.clone()).await;
+        let rst = match resp {
+            Ok(v) => GetReply {
                 ok: true,
                 key: req.key,
-                value: v.clone()
+                value: v
             },
-            None => GetReply {
+            Err(_) => GetReply {
                 ok: false,
                 key: req.key,
                 value: "".into()

@@ -25,6 +25,8 @@ async fn test_distributed_fs() -> anyhow::Result<()> {
     let meta_addr = rand_local_addr();
 
     let mn = MetaNode::new(0).await;
+    let rst = mn.boot(meta_addr.clone()).await;
+    assert!(rst.is_ok());
 
     let meta_srv_impl = MetaServiceImpl::create(mn).await;
     let meta_srv = MetaServiceServer::new(meta_srv_impl);
