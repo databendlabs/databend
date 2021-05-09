@@ -5,6 +5,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::convert::TryFrom;
 use std::fmt;
 use std::io::Cursor;
 use std::sync::Arc;
@@ -107,6 +108,25 @@ pub struct ClientRequest {
 
 impl AppData for ClientRequest {}
 
+impl tonic::IntoRequest<RaftMes> for ClientRequest {
+    fn into_request(self) -> tonic::Request<RaftMes> {
+        let mes = RaftMes {
+            data: serde_json::to_vec(&self).expect("fail to serialize")
+        };
+        tonic::Request::new(mes)
+    }
+}
+
+impl TryFrom<RaftMes> for ClientRequest {
+    type Error = tonic::Status;
+
+    fn try_from(mes: RaftMes) -> Result<Self, Self::Error> {
+        let req: ClientRequest = serde_json::from_slice(&mes.data)
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        Ok(req)
+    }
+}
+
 /// The application data response type which the `MemStore` works with.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ClientResponse {
@@ -117,6 +137,19 @@ pub struct ClientResponse {
 }
 
 impl AppDataResponse for ClientResponse {}
+
+impl From<ClientResponse> for RaftMes {
+    fn from(msg: ClientResponse) -> Self {
+        let data = serde_json::to_vec(&msg).expect("fail to serialize");
+        RaftMes { data }
+    }
+}
+impl From<RaftMes> for ClientResponse {
+    fn from(msg: RaftMes) -> Self {
+        let resp: ClientResponse = serde_json::from_slice(&msg.data).expect("fail to deserialize");
+        resp
+    }
+}
 
 /// Error used to trigger Raft shutdown from storage.
 #[derive(Clone, Debug, Error)]
@@ -671,14 +704,14 @@ impl MetaNode {
 
         let mn = Arc::new(MetaNode { metrics, sto, raft });
 
-        Self::spawn_metrics_monitor(mn.clone(), metrics_rx);
+        Self::subscribe_metrics(mn.clone(), metrics_rx);
 
         mn
     }
 
-    // spawn a monitor to watch leader changes,
-    // and feed the chagne to a local cache.
-    pub fn spawn_metrics_monitor(mn: Arc<Self>, mut metrics_rx: watch::Receiver<RaftMetrics>) {
+    // spawn a monitor to watch raft state changes such as leader changes,
+    // and feed the changes to a local cache.
+    pub fn subscribe_metrics(mn: Arc<Self>, mut metrics_rx: watch::Receiver<RaftMetrics>) {
         tokio::task::spawn(async move {
             loop {
                 let changed = metrics_rx.changed().await;
@@ -716,7 +749,10 @@ impl MetaNode {
         let key = self.sto.node_key(self.sto.id);
         // TODO: use txid?
         let _resp = self
-            .local_set(key, addr, true, None)
+            .local_set(ClientRequest {
+                txid: None,
+                cmd: Cmd::Add { key, value: addr }
+            })
             .await
             .expect("fail to add myself");
         Ok(())
@@ -740,7 +776,7 @@ impl MetaNode {
 
     // get meta data from local state, most business logic without strong consistency requirement should use this to access meta.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get(&self, key: String) -> anyhow::Result<String> {
+    pub async fn local_get(&self, key: String) -> anyhow::Result<String> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.sm.read().await;
@@ -753,27 +789,10 @@ impl MetaNode {
 
     /// Write a meta record through local raft node.
     /// It works only when this node is the leader.
-    ///
-    /// `if_absent=True` indicates an `Add` operation, otherwise a `Set` operation.
-    /// If `txid` is not None, it is used to filter out duplicated log entries, which are maybe caused by client retries.
-    /// If `txid` is None, a log will always be applied.
     #[tracing::instrument(level = "info", skip(self))]
-    pub async fn local_set(
-        &self,
-        key: String,
-        value: String,
-        if_absent: bool,
-        txid: Option<RaftTxId>
-    ) -> anyhow::Result<String> {
-        let cmd = if if_absent {
-            Cmd::Add { key, value }
-        } else {
-            Cmd::Set { key, value }
-        };
-        let write_rst = self
-            .raft
-            .client_write(ClientWriteRequest::new(ClientRequest { txid, cmd }))
-            .await;
+    pub async fn local_set(&self, req: ClientRequest) -> anyhow::Result<ClientResponse> {
+        // TODO: respond ForwardToLeader error
+        let write_rst = self.raft.client_write(ClientWriteRequest::new(req)).await;
 
         tracing::info!("raft.client_write rst: {:?}", write_rst);
 
@@ -784,8 +803,6 @@ impl MetaNode {
             Err(e) => return Err(anyhow::anyhow!("{:}", e))
         };
 
-        let d = resp.data;
-
-        Ok(d.result.unwrap())
+        Ok(resp.data)
     }
 }
