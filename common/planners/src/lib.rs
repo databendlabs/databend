@@ -11,6 +11,8 @@ mod plan_display_test;
 #[cfg(test)]
 mod plan_expression_action_test;
 #[cfg(test)]
+mod plan_expression_test;
+#[cfg(test)]
 mod plan_filter_test;
 #[cfg(test)]
 mod plan_having_test;
@@ -29,6 +31,9 @@ mod plan_stage_test;
 #[cfg(test)]
 mod plan_walker_test;
 
+mod test;
+pub use crate::test::Test;
+
 mod plan_aggregator_final;
 mod plan_aggregator_partial;
 mod plan_builder;
@@ -38,7 +43,7 @@ mod plan_display;
 mod plan_empty;
 mod plan_explain;
 mod plan_explain_test;
-mod plan_expression1;
+mod plan_expression;
 mod plan_expression_action;
 mod plan_expression_action_column;
 mod plan_expression_action_function;
@@ -60,7 +65,6 @@ mod plan_stage;
 mod plan_statistics;
 mod plan_use_database;
 mod plan_walker;
-mod test;
 
 pub use crate::plan_aggregator_final::AggregatorFinalPlan;
 pub use crate::plan_aggregator_partial::AggregatorPartialPlan;
@@ -74,7 +78,7 @@ pub use crate::plan_create_table::TableOptions;
 pub use crate::plan_empty::EmptyPlan;
 pub use crate::plan_explain::ExplainPlan;
 pub use crate::plan_explain::ExplainType;
-pub use crate::plan_expression1::ExpressionPlan1;
+pub use crate::plan_expression::ExpressionPlan;
 pub use crate::plan_expression_action::ExpressionAction;
 pub use crate::plan_expression_action_column::col;
 pub use crate::plan_expression_action_function::add;
@@ -101,4 +105,3 @@ pub use crate::plan_stage::StagePlan;
 pub use crate::plan_stage::StageState;
 pub use crate::plan_statistics::Statistics;
 pub use crate::plan_use_database::UseDatabasePlan;
-pub use crate::test::Test;

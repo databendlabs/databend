@@ -14,7 +14,7 @@ use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
-use crate::ExpressionPlan1;
+use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::LimitPlan;
@@ -32,7 +32,7 @@ pub enum PlanNode {
     Empty(EmptyPlan),
     Stage(StagePlan),
     Projection(ProjectionPlan),
-    Expression(ExpressionPlan1),
+    Expression(ExpressionPlan),
     AggregatorPartial(AggregatorPartialPlan),
     AggregatorFinal(AggregatorFinalPlan),
     Filter(FilterPlan),

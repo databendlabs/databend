@@ -8,7 +8,7 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
-use common_planners::ExpressionPlan1;
+use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::HavingPlan;
 use common_planners::LimitPlan;
@@ -117,7 +117,7 @@ impl PipelineBuilder {
         Ok(true)
     }
 
-    fn visit_expression_plan(pipeline: &mut Pipeline, plan: &ExpressionPlan1) -> Result<bool> {
+    fn visit_expression_plan(pipeline: &mut Pipeline, plan: &ExpressionPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ExpressionTransform::try_create(
                 plan.schema.clone(),

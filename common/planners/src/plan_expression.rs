@@ -11,14 +11,14 @@ use crate::ExpressionAction;
 use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub struct ExpressionPlan1 {
+pub struct ExpressionPlan {
     pub exprs: Vec<ExpressionAction>,
     pub schema: DataSchemaRef,
     pub input: Arc<PlanNode>,
     pub desc: String
 }
 
-impl ExpressionPlan1 {
+impl ExpressionPlan {
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
     }

@@ -17,7 +17,7 @@ use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::ExplainType;
 use crate::ExpressionAction;
-use crate::ExpressionPlan1;
+use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::LimitPlan;
@@ -102,7 +102,7 @@ impl PlanBuilder {
             }
         }
 
-        Ok(Self::from(&PlanNode::Expression(ExpressionPlan1 {
+        Ok(Self::from(&PlanNode::Expression(ExpressionPlan {
             input: Arc::new(self.plan.clone()),
             exprs,
             schema: DataSchemaRefExt::create(merged),
