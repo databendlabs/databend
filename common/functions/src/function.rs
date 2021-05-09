@@ -17,8 +17,15 @@ pub trait IFunction: fmt::Display + Sync + Send + DynClone {
     fn name(&self) -> &str;
     fn return_type(&self, input_schema: &DataSchema) -> Result<DataType>;
     fn nullable(&self, input_schema: &DataSchema) -> Result<bool>;
-    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue>;
     fn set_depth(&mut self, _depth: usize) {}
+
+    // eval is only for none aggregate function
+    fn eval(&self, _block: &DataBlock) -> Result<DataColumnarValue> {
+        Result::Err(ErrorCodes::UnImplement(format!(
+            "Function Error: '{}' eval unimplemented",
+            self.name()
+        )))
+    }
 
     fn accumulate(&mut self, _block: &DataBlock) -> Result<()> {
         Result::Err(ErrorCodes::UnImplement(format!(

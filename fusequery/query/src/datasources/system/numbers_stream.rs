@@ -59,8 +59,8 @@ impl NumbersStream {
 
             for part in partitions {
                 let names: Vec<_> = part.name.split('-').collect();
-                let begin: u64 = names[1].parse().map_err(ErrorCodes::from_parse)?;
-                let end: u64 = names[2].parse().map_err(ErrorCodes::from_parse)?;
+                let begin: u64 = names[1].parse().map_err(ErrorCodes::from_parse_int)?;
+                let end: u64 = names[2].parse().map_err(ErrorCodes::from_parse_int)?;
 
                 let diff = end - begin;
                 let block_nums = diff / block_size;

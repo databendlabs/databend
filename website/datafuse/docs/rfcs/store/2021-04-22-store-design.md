@@ -80,6 +80,42 @@ Every other node is a **learner**, which does not elect but just subscribes
 meta change message from the 5 candidates.
 
 
+## In-process metadata components
+
+A FuseStore process includes two grpc API: the flight service and the meta
+service.
+
+- Meta related components are wrapped into `MetaNode`, in which a `Raft` instance
+    is maintained along with storage and netowrk engines.
+
+    `MetaNode` is the only entry for other FuseStore components to access meta data.
+
+- `RaftNode` communicates with remote RaftNode through `Network`, which send
+    messages to meta-grpc service on other FuseStore nodes.
+
+- `Network` relies on `Storage` to find out info of other nodes.
+
+
+```
+FuseStore components:
+.---------------------------.
+|                           |
+| flight-grpc     meta-grpc |
+|     |               |     |
+|     '--.      .-----'     |
+|        v      v           |
+|        MetaNode           |
+|        |     |            |
+|        |     v            |
+|        |    RaftNode      |
+|        |  .--'   |        |
+|        v  v      v        |
+|      Storage <- Network   |
+|                           |
+'---------------------------'
+```
+
+
 ## Meta data structure
 
 Meta data includes hardware information: nodes, the file information: keys and

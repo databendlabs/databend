@@ -9,6 +9,7 @@ use crate::dfs::Dfs;
 use crate::fs::IFileSystem;
 use crate::localfs::LocalFS;
 use crate::meta_service::GetReq;
+use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::MetaServiceServer;
@@ -22,7 +23,10 @@ async fn test_distributed_fs() -> anyhow::Result<()> {
     let fs = LocalFS::try_create(root.to_str().unwrap().to_string())?;
 
     let meta_addr = rand_local_addr();
-    let meta_srv_impl = MetaServiceImpl::create();
+
+    let mn = MetaNode::new(0).await;
+
+    let meta_srv_impl = MetaServiceImpl::create(mn).await;
     let meta_srv = MetaServiceServer::new(meta_srv_impl);
     serve_grpc!(meta_addr, meta_srv);
 

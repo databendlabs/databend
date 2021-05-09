@@ -7,6 +7,7 @@ use log::info;
 use pretty_assertions::assert_eq;
 
 use crate::meta_service::GetReq;
+use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::MetaServiceServer;
@@ -17,7 +18,9 @@ use crate::tests::rand_local_addr;
 async fn test_meta_server_set_get() -> anyhow::Result<()> {
     let addr = rand_local_addr();
 
-    let meta_srv_impl = MetaServiceImpl::create();
+    let mn = MetaNode::new(0).await;
+
+    let meta_srv_impl = MetaServiceImpl::create(mn).await;
     let meta_srv = MetaServiceServer::new(meta_srv_impl);
 
     serve_grpc!(addr, meta_srv);
