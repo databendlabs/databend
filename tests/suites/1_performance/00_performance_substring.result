@@ -1,18 +1,18 @@
 --------------
-SELECT substring(cast(number as text) from 3) from numbers_mt(100000000) where number > 10000000 order by number desc limit 10
+SELECT substring(cast(number as text) from 3) from numbers_mt(1000000000) where number > 10000000 order by number desc limit 10
 --------------
 
 +--------------------------------+
 | SUBSTRING(CAST(number),3,NULL) |
 +--------------------------------+
-| 999999                         |
-| 999998                         |
-| 999997                         |
-| 999996                         |
-| 999995                         |
-| 999994                         |
-| 999993                         |
-| 999992                         |
-| 999991                         |
-| 999990                         |
+| 9999999                        |
+| 9999998                        |
+| 9999997                        |
+| 9999996                        |
+| 9999995                        |
+| 9999994                        |
+| 9999993                        |
+| 9999992                        |
+| 9999991                        |
+| 9999990                        |
 +--------------------------------+
