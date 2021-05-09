@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_functions::IFunction;
@@ -36,7 +35,6 @@ pub struct ExpressionTransform {
 
 impl ExpressionTransform {
     pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> Result<Self> {
-        let mut fields = schema.fields().clone();
         let mut funcs = vec![];
 
         for expr in &exprs {
@@ -50,15 +48,8 @@ impl ExpressionTransform {
                 ));
             }
             funcs.push(func);
-
-            // Merge fields.
-            let field = expr.to_data_field(&schema)?;
-            if !fields.iter().any(|x| x.name() == field.name()) {
-                fields.push(field);
-            }
         }
 
-        let schema = DataSchemaRefExt::create(fields);
         Ok(ExpressionTransform {
             funcs,
             schema,
