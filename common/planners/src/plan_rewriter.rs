@@ -212,6 +212,32 @@ impl PlanRewriter {
         })
     }
 
+    /// Get the leaves of an expression.
+    pub fn expression_plan_columns(expr: &ExpressionAction) -> Result<Vec<ExpressionAction>> {
+        Ok(match expr {
+            ExpressionAction::Alias(_, expr) => Self::expression_plan_columns(expr)?,
+            ExpressionAction::Column(_) => vec![expr.clone()],
+            ExpressionAction::Literal(_) => vec![],
+            ExpressionAction::BinaryExpression { left, right, .. } => {
+                let mut l = Self::expression_plan_columns(left)?;
+                let mut r = Self::expression_plan_columns(right)?;
+                l.append(&mut r);
+                l
+            }
+            ExpressionAction::Function { args, .. } => {
+                let mut v = vec![];
+                for arg in args {
+                    let mut col = Self::expression_plan_columns(arg)?;
+                    v.append(&mut col);
+                }
+                v
+            }
+            ExpressionAction::Wildcard => vec![],
+            ExpressionAction::Sort { expr, .. } => Self::expression_plan_columns(expr)?,
+            ExpressionAction::Cast { expr, .. } => Self::expression_plan_columns(expr)?
+        })
+    }
+
     /// Collect all unique projection fields to a map.
     fn projections_to_map(
         plan: &PlanNode,
