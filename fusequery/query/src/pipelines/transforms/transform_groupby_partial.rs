@@ -184,6 +184,15 @@ impl IProcessor for GroupByPartialTransform {
                 }
             }
         }
+
+        if self.groups.read().is_empty() {
+            return Ok(Box::pin(DataBlockStream::create(
+                DataSchemaRefExt::create(vec![]),
+                None,
+                vec![]
+            )));
+        }
+
         let delta = start.elapsed();
         info!("Group by partial cost: {:?}", delta);
 
