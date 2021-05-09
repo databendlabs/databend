@@ -8,13 +8,13 @@ use std::collections::HashSet;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
-use crate::ExpressionPlan;
+use crate::ExpressionAction;
 use crate::PlanNode;
 
 pub struct PlanRewriter {}
 
 struct QueryAliasData {
-    aliases: HashMap<String, ExpressionPlan>,
+    aliases: HashMap<String, ExpressionAction>,
     inside_aliases: HashSet<String>,
     // deepest alias current step in
     current_alias: String
@@ -26,7 +26,7 @@ impl PlanRewriter {
     /// SELECT (x+1) as y, y*y FROM ..
     /// ->
     /// SELECT (x+1) as y, (x+1)*(x+1) FROM ..
-    pub fn rewrite_projection_aliases(exprs: Vec<ExpressionPlan>) -> Result<Vec<ExpressionPlan>> {
+    pub fn rewrite_projection_aliases(exprs: &[ExpressionAction]) -> Result<Vec<ExpressionAction>> {
         let mut mp = HashMap::new();
         PlanRewriter::alias_exprs_to_map(&exprs, &mut mp)?;
 
@@ -43,11 +43,11 @@ impl PlanRewriter {
     }
 
     fn alias_exprs_to_map(
-        exprs: &[ExpressionPlan],
-        mp: &mut HashMap<String, ExpressionPlan>
+        exprs: &[ExpressionAction],
+        mp: &mut HashMap<String, ExpressionAction>
     ) -> Result<()> {
         for expr in exprs.iter() {
-            if let ExpressionPlan::Alias(alias, alias_expr) = expr {
+            if let ExpressionAction::Alias(alias, alias_expr) = expr {
                 if let Some(expr_result) = mp.get(alias) {
                     let hash_result = format!("{:?}", expr_result);
                     let hash_expr = format!("{:?}", expr);
@@ -66,11 +66,11 @@ impl PlanRewriter {
     }
 
     fn expr_rewrite_alias(
-        expr: &ExpressionPlan,
+        expr: &ExpressionAction,
         data: &mut QueryAliasData
-    ) -> Result<ExpressionPlan> {
+    ) -> Result<ExpressionAction> {
         match expr {
-            ExpressionPlan::Column(field) => {
+            ExpressionAction::Column(field) => {
                 // x + 1 --> x
                 if *field == data.current_alias {
                     return Ok(expr.clone());
@@ -99,25 +99,25 @@ impl PlanRewriter {
                 Ok(expr.clone())
             }
 
-            ExpressionPlan::BinaryExpression { left, op, right } => {
+            ExpressionAction::BinaryExpression { left, op, right } => {
                 let left_new = PlanRewriter::expr_rewrite_alias(left, data)?;
                 let right_new = PlanRewriter::expr_rewrite_alias(right, data)?;
 
-                Ok(ExpressionPlan::BinaryExpression {
+                Ok(ExpressionAction::BinaryExpression {
                     left: Box::new(left_new),
                     op: op.clone(),
                     right: Box::new(right_new)
                 })
             }
 
-            ExpressionPlan::Function { op, args } => {
-                let new_args: Result<Vec<ExpressionPlan>> = args
+            ExpressionAction::Function { op, args } => {
+                let new_args: Result<Vec<ExpressionAction>> = args
                     .iter()
                     .map(|v| PlanRewriter::expr_rewrite_alias(v, data))
                     .collect();
 
                 match new_args {
-                    Ok(v) => Ok(ExpressionPlan::Function {
+                    Ok(v) => Ok(ExpressionAction::Function {
                         op: op.clone(),
                         args: v
                     }),
@@ -125,7 +125,7 @@ impl PlanRewriter {
                 }
             }
 
-            ExpressionPlan::Alias(alias, plan) => {
+            ExpressionAction::Alias(alias, plan) => {
                 if data.inside_aliases.contains(alias) {
                     return Result::Err(ErrorCodes::SyntexException(format!(
                         "Planner Error: Cyclic aliases: {}",
@@ -140,18 +140,18 @@ impl PlanRewriter {
                 data.inside_aliases.remove(alias);
                 data.current_alias = previous_alias;
 
-                Ok(ExpressionPlan::Alias(alias.clone(), Box::new(new_expr)))
+                Ok(ExpressionAction::Alias(alias.clone(), Box::new(new_expr)))
             }
-            ExpressionPlan::Cast { expr, data_type } => {
+            ExpressionAction::Cast { expr, data_type } => {
                 let new_expr = PlanRewriter::expr_rewrite_alias(expr, data)?;
-                Ok(ExpressionPlan::Cast {
+                Ok(ExpressionAction::Cast {
                     expr: Box::new(new_expr),
                     data_type: data_type.clone()
                 })
             }
-            ExpressionPlan::Wildcard | ExpressionPlan::Literal(_) | ExpressionPlan::Sort { .. } => {
-                Ok(expr.clone())
-            }
+            ExpressionAction::Wildcard
+            | ExpressionAction::Literal(_)
+            | ExpressionAction::Sort { .. } => Ok(expr.clone())
         }
     }
 
@@ -160,9 +160,9 @@ impl PlanRewriter {
     /// ->
     /// SELECT a as b ... where a>1
     pub fn rewrite_alias_expr(
-        projection_map: &HashMap<String, ExpressionPlan>,
-        expr: &ExpressionPlan
-    ) -> Result<ExpressionPlan> {
+        projection_map: &HashMap<String, ExpressionAction>,
+        expr: &ExpressionAction
+    ) -> Result<ExpressionAction> {
         let expressions = Self::expression_plan_children(expr)?;
 
         let expressions = expressions
@@ -170,7 +170,7 @@ impl PlanRewriter {
             .map(|e| Self::rewrite_alias_expr(projection_map, e))
             .collect::<Result<Vec<_>>>()?;
 
-        if let ExpressionPlan::Column(name) = expr {
+        if let ExpressionAction::Column(name) = expr {
             if let Some(expr) = projection_map.get(name) {
                 return Ok(expr.clone());
             }
@@ -180,9 +180,9 @@ impl PlanRewriter {
 
     /// replaces expressions columns by its name on the projection.
     pub fn rewrite_alias_exprs(
-        projection_map: &HashMap<String, ExpressionPlan>,
-        exprs: &[ExpressionPlan]
-    ) -> Result<Vec<ExpressionPlan>> {
+        projection_map: &HashMap<String, ExpressionAction>,
+        exprs: &[ExpressionAction]
+    ) -> Result<Vec<ExpressionAction>> {
         exprs
             .iter()
             .map(|e| Self::rewrite_alias_expr(projection_map, e))
@@ -190,38 +190,38 @@ impl PlanRewriter {
     }
 
     /// Collect all unique projection fields to a map.
-    pub fn projection_to_map(plan: &PlanNode) -> Result<HashMap<String, ExpressionPlan>> {
+    pub fn projection_to_map(plan: &PlanNode) -> Result<HashMap<String, ExpressionAction>> {
         let mut map = HashMap::new();
         Self::projections_to_map(plan, &mut map)?;
         Ok(map)
     }
 
     /// Get the expression children.
-    pub fn expression_plan_children(expr: &ExpressionPlan) -> Result<Vec<ExpressionPlan>> {
+    pub fn expression_plan_children(expr: &ExpressionAction) -> Result<Vec<ExpressionAction>> {
         Ok(match expr {
-            ExpressionPlan::Alias(_, expr) => vec![expr.as_ref().clone()],
-            ExpressionPlan::Column(_) => vec![],
-            ExpressionPlan::Literal(_) => vec![],
-            ExpressionPlan::BinaryExpression { left, right, .. } => {
+            ExpressionAction::Alias(_, expr) => vec![expr.as_ref().clone()],
+            ExpressionAction::Column(_) => vec![],
+            ExpressionAction::Literal(_) => vec![],
+            ExpressionAction::BinaryExpression { left, right, .. } => {
                 vec![left.as_ref().clone(), right.as_ref().clone()]
             }
-            ExpressionPlan::Function { args, .. } => args.clone(),
-            ExpressionPlan::Wildcard => vec![],
-            ExpressionPlan::Sort { expr, .. } => vec![expr.as_ref().clone()],
-            ExpressionPlan::Cast { expr, .. } => vec![expr.as_ref().clone()]
+            ExpressionAction::Function { args, .. } => args.clone(),
+            ExpressionAction::Wildcard => vec![],
+            ExpressionAction::Sort { expr, .. } => vec![expr.as_ref().clone()],
+            ExpressionAction::Cast { expr, .. } => vec![expr.as_ref().clone()]
         })
     }
 
     /// Collect all unique projection fields to a map.
     fn projections_to_map(
         plan: &PlanNode,
-        map: &mut HashMap<String, ExpressionPlan>
+        map: &mut HashMap<String, ExpressionAction>
     ) -> Result<()> {
         match plan {
             PlanNode::Projection(v) => {
                 v.schema.fields().iter().enumerate().for_each(|(i, field)| {
                     let expr = match &v.expr[i] {
-                        ExpressionPlan::Alias(_alias, plan) => plan.as_ref().clone(),
+                        ExpressionAction::Alias(_alias, plan) => plan.as_ref().clone(),
                         other => other.clone()
                     };
                     map.insert(field.name().clone(), expr);
@@ -246,19 +246,22 @@ impl PlanRewriter {
         Ok(())
     }
 
-    fn rebuild_from_exprs(expr: &ExpressionPlan, expressions: &[ExpressionPlan]) -> ExpressionPlan {
+    fn rebuild_from_exprs(
+        expr: &ExpressionAction,
+        expressions: &[ExpressionAction]
+    ) -> ExpressionAction {
         match expr {
-            ExpressionPlan::Alias(alias, _) => {
-                ExpressionPlan::Alias(alias.clone(), Box::from(expressions[0].clone()))
+            ExpressionAction::Alias(alias, _) => {
+                ExpressionAction::Alias(alias.clone(), Box::from(expressions[0].clone()))
             }
-            ExpressionPlan::Column(_) => expr.clone(),
-            ExpressionPlan::Literal(_) => expr.clone(),
-            ExpressionPlan::BinaryExpression { op, .. } => ExpressionPlan::BinaryExpression {
+            ExpressionAction::Column(_) => expr.clone(),
+            ExpressionAction::Literal(_) => expr.clone(),
+            ExpressionAction::BinaryExpression { op, .. } => ExpressionAction::BinaryExpression {
                 left: Box::new(expressions[0].clone()),
                 op: op.clone(),
                 right: Box::new(expressions[1].clone())
             },
-            ExpressionPlan::Function { op, .. } => ExpressionPlan::Function {
+            ExpressionAction::Function { op, .. } => ExpressionAction::Function {
                 op: op.clone(),
                 args: expressions.to_vec()
             },

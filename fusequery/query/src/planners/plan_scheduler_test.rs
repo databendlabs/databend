@@ -16,7 +16,7 @@ fn test_scheduler_plan_with_one_node() -> anyhow::Result<()> {
 
     let plan = PlanBuilder::from(&PlanNode::ReadSource(source))
         .filter(col("number").eq(lit(1i64)))?
-        .project(vec![col("number")])?
+        .project(&[col("number")])?
         .build()?;
 
     let plans = PlanScheduler::reschedule(ctx, &plan)?;
@@ -51,7 +51,7 @@ fn test_scheduler_plan_with_more_cpus_1_node() -> anyhow::Result<()> {
 
     let plan = PlanBuilder::from(&PlanNode::ReadSource(source))
         .filter(col("number").eq(lit(1i64)))?
-        .project(vec![col("number")])?
+        .project(&[col("number")])?
         .build()?;
 
     let plans = PlanScheduler::reschedule(ctx, &plan)?;
@@ -85,20 +85,21 @@ async fn test_scheduler_plan_with_3_nodes() -> anyhow::Result<()> {
 
     let plan = PlanBuilder::from(&PlanNode::ReadSource(source))
         .filter(col("number").eq(lit(1i64)))?
-        .project(vec![col("number")])?
+        .project(&[col("number")])?
         .build()?;
 
     let plans = PlanScheduler::reschedule(ctx, &plan)?;
     assert_eq!(3, plans.len());
-    let expects = vec!["Projection: number:UInt64
-  Filter: (number = 1)
-    ReadDataSource: scan partitions: [107], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
-"Projection: number:UInt64
-  Filter: (number = 1)
-    ReadDataSource: scan partitions: [107], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
-"Projection: number:UInt64
-  Filter: (number = 1)
-    ReadDataSource: scan partitions: [106], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
+    let expects = vec![
+        "Projection: number:UInt64\
+        \n  Filter: (number = 1)\
+        \n    ReadDataSource: scan partitions: [107], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
+        "Projection: number:UInt64\
+        \n  Filter: (number = 1)\
+        \n    ReadDataSource: scan partitions: [107], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
+        "Projection: number:UInt64\
+        \n  Filter: (number = 1)\
+        \n    ReadDataSource: scan partitions: [106], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]"
     ];
 
     for (i, (_, plan)) in plans.iter().enumerate() {
@@ -142,21 +143,22 @@ async fn test_scheduler_plan_with_3_nodes_diff_priority() -> anyhow::Result<()> 
 
     let plan = PlanBuilder::from(&PlanNode::ReadSource(source))
         .filter(col("number").eq(lit(1i64)))?
-        .project(vec![col("number")])?
+        .project(&[col("number")])?
         .build()?;
 
     let plans = PlanScheduler::reschedule(ctx, &plan)?;
     assert_eq!(3, plans.len());
-    let expects = vec!["Projection: number:UInt64
-  Filter: (number = 1)
-    ReadDataSource: scan partitions: [161], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
-"Projection: number:UInt64
-  Filter: (number = 1)
-    ReadDataSource: scan partitions: [97], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
-"Projection: number:UInt64
-  Filter: (number = 1)
-    ReadDataSource: scan partitions: [62], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
-    ];
+    let expects = vec![
+          "Projection: number:UInt64\
+          \n  Filter: (number = 1)\
+          \n    ReadDataSource: scan partitions: [161], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
+          "Projection: number:UInt64\
+          \n  Filter: (number = 1)\
+          \n    ReadDataSource: scan partitions: [97], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
+          "Projection: number:UInt64\
+          \n  Filter: (number = 1)\
+          \n    ReadDataSource: scan partitions: [62], scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000]",
+      ];
 
     for (i, (_, plan)) in plans.iter().enumerate() {
         let actual = format!("{:?}", plan);

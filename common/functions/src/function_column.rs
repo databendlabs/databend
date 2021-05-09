@@ -59,13 +59,13 @@ impl IFunction for ColumnFunction {
 
     fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         block
-            .column_by_name(self.value.as_str())
+            .try_column_by_name(self.value.as_str())
             .map(|column| DataColumnarValue::Array(column.clone()))
     }
 
     fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
         if self.saved.is_none() {
-            let array = block.column_by_name(self.value.as_str())?;
+            let array = block.try_column_by_name(self.value.as_str())?;
             let first = DataValue::try_from_array(array, 0)?;
             self.saved = Some(first);
         }

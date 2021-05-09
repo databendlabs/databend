@@ -12,15 +12,16 @@ fn test_aggregator_plan() -> anyhow::Result<()> {
 
     let source = Test::create().generate_source_plan_for_test(10000)?;
     let plan = PlanBuilder::from(&source)
-        .aggregate_partial(vec![sum(col("number")).alias("sumx")], vec![])?
-        .aggregate_final(vec![sum(col("number")).alias("sumx")], vec![])?
-        .project(vec![col("sumx")])?
+        .aggregate_partial(&[sum(col("number")).alias("sumx")], &[])?
+        .aggregate_final(&[sum(col("number")).alias("sumx")], &[])?
+        .project(&[col("sumx")])?
         .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
         typ: ExplainType::Syntax,
         input: Arc::new(plan)
     });
-    let expect = "Projection: sumx:UInt64\
+    let expect = "\
+    Projection: sumx:UInt64\
     \n  AggregatorFinal: groupBy=[[]], aggr=[[sum([number]) as sumx]]\
     \n    AggregatorPartial: groupBy=[[]], aggr=[[sum([number]) as sumx]]\
     \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";

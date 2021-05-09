@@ -13,7 +13,7 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::ExpressionPlan;
+use common_planners::ExpressionAction;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
@@ -75,11 +75,11 @@ impl ITable for NumbersTable {
 
         let ScanPlan { table_args, .. } = scan.clone();
         if let Some(args) = table_args {
-            if let ExpressionPlan::Literal(DataValue::UInt64(Some(v))) = args {
+            if let ExpressionAction::Literal(DataValue::UInt64(Some(v))) = args {
                 total = v;
             }
 
-            if let ExpressionPlan::Literal(DataValue::Int64(Some(v))) = args {
+            if let ExpressionAction::Literal(DataValue::Int64(Some(v))) = args {
                 total = v as u64;
             }
         } else {

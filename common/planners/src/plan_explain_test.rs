@@ -12,7 +12,7 @@ fn test_explain_plan() -> anyhow::Result<()> {
 
     let source = Test::create().generate_source_plan_for_test(10000)?;
     let plan = PlanBuilder::from(&source)
-        .project(vec![col("number").alias("c1"), col("number").alias("c2")])?
+        .project(&[col("number").alias("c1"), col("number").alias("c2")])?
         .filter(add(col("number"), lit(1)).eq(lit(4)))?
         .having(add(col("number"), lit(1)).eq(lit(4)))?
         .build()?;
@@ -20,7 +20,8 @@ fn test_explain_plan() -> anyhow::Result<()> {
         typ: ExplainType::Syntax,
         input: Arc::new(plan)
     });
-    let expect ="Having: ((number + 1) = 4)\
+    let expect ="\
+    Having: ((number + 1) = 4)\
     \n  Filter: ((number + 1) = 4)\
     \n    Projection: number as c1:UInt64, number as c2:UInt64\
     \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";

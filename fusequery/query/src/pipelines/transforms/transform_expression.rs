@@ -10,27 +10,39 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_functions::IFunction;
-use common_planners::ExpressionPlan;
+use common_planners::ExpressionAction;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
 
-// Executes certain expressions over the block.
-// The expression consists of column identifiers from the block, constants, common functions.
-// For example: hits * 2 + 3.
-// ExpressionTransform normally used for transform internal, such as ProjectionTransform.
-// Aims to transform a block to another format, such as add one column.
+/// Executes certain expressions over the block and append the result column to the new block.
+/// Aims to transform a block to another format, such as add one or more columns against the Expressions.
+///
+/// Example:
+/// SELECT (number+1) as c1, number as c2 from numbers_mt(10) ORDER BY c1,c2;
+/// Expression transform will make two fields on the base field number:
+/// Input block columns:
+/// |number|
+///
+/// Append two columns:
+/// |c1|c2|
+///
+/// So the final block:
+/// |number|c1|c2|
 pub struct ExpressionTransform {
+    // Against Functions.
     funcs: Vec<Box<dyn IFunction>>,
+    // The final schema(Build by plan_builder.expression).
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>
 }
 
 impl ExpressionTransform {
-    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> Result<Self> {
-        let mut funcs = Vec::with_capacity(exprs.len());
+    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionAction>) -> Result<Self> {
+        let mut funcs = vec![];
+
         for expr in &exprs {
             let func = expr.to_function()?;
             if func.is_aggregator() {
@@ -73,7 +85,7 @@ impl IProcessor for ExpressionTransform {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let funcs = self.funcs.clone();
-        let projected_schema = self.schema.clone();
+        let schema = self.schema.clone();
         let input_stream = self.input.execute().await?;
 
         let executor = |schema: DataSchemaRef,
@@ -83,15 +95,20 @@ impl IProcessor for ExpressionTransform {
             let block = block?;
             let rows = block.num_rows();
 
-            let mut columns = Vec::with_capacity(funcs.len());
+            let mut columns = Vec::from(block.columns());
             for func in funcs {
-                columns.push(func.eval(&block)?.to_array(rows)?);
+                match block.column_by_name(format!("{}", func).as_str()) {
+                    None => {
+                        columns.push(func.eval(&block)?.to_array(rows)?);
+                    }
+                    Some(_) => {}
+                }
             }
             Ok(DataBlock::create(schema, columns))
         };
 
         let stream = input_stream.filter_map(move |v| {
-            executor(projected_schema.clone(), funcs.as_slice(), v)
+            executor(schema.clone(), funcs.as_slice(), v)
                 .map(Some)
                 .transpose()
         });

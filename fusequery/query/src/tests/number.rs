@@ -8,7 +8,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_planners::ExpressionPlan;
+use common_planners::ExpressionAction;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 
@@ -43,7 +43,7 @@ impl NumberTestData {
         table.read_plan(self.ctx.clone(), &ScanPlan {
             schema_name: self.db.to_string(),
             table_schema: Arc::new(DataSchema::empty()),
-            table_args: Some(ExpressionPlan::Literal(DataValue::Int64(Some(numbers)))),
+            table_args: Some(ExpressionAction::Literal(DataValue::Int64(Some(numbers)))),
             projection: None,
             projected_schema: Arc::new(DataSchema::empty()),
             filters: vec![],

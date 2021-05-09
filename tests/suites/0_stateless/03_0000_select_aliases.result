@@ -53,13 +53,22 @@ select 1 + x, x + 2, 3 x
 |          4 |          5 |    3 |
 +------------+------------+------+
 --------------
+select 'A bug here'
+--------------
+
++------------+
+| A bug here |
++------------+
+| A bug here |
++------------+
+--------------
 select number + 1 as number, number + 1 as b, b + 1 c from numbers(1)
 --------------
 
 +--------+------+------+
 | number | b    | c    |
 +--------+------+------+
-|      1 |    2 |    3 |
+|      0 |    2 |    3 |
 +--------+------+------+
 --------------
 select number * number +  1 as number, number + 1 as b, b + 1 c from numbers(1)
@@ -68,5 +77,5 @@ select number * number +  1 as number, number + 1 as b, b + 1 c from numbers(1)
 +--------+------+------+
 | number | b    | c    |
 +--------+------+------+
-|      1 |    2 |    3 |
+|      0 |    2 |    3 |
 +--------+------+------+

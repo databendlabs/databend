@@ -11,10 +11,10 @@ fn test_filter_plan() -> anyhow::Result<()> {
     let source = Test::create().generate_source_plan_for_test(10000)?;
     let plan = PlanBuilder::from(&source)
         .filter(col("number").eq(lit(1i64)))?
-        .project(vec![col("number")])?
+        .project(&[col("number")])?
         .build()?;
 
-    let expect = "\
+    let expect ="\
     Projection: number:UInt64\
     \n  Filter: (number = 1)\
     \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";

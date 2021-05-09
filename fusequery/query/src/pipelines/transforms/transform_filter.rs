@@ -13,7 +13,7 @@ use common_datavalues::BooleanArray;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_functions::IFunction;
-use common_planners::ExpressionPlan;
+use common_planners::ExpressionAction;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
@@ -26,7 +26,7 @@ pub struct FilterTransform {
 }
 
 impl FilterTransform {
-    pub fn try_create(predicate: ExpressionPlan, having: bool) -> Result<Self> {
+    pub fn try_create(predicate: ExpressionAction, having: bool) -> Result<Self> {
         let func = predicate.to_function()?;
         if !having && func.is_aggregator() {
             return Result::Err(ErrorCodes::SyntexException(format!(

@@ -6,7 +6,7 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_functions::FunctionFactory;
-use common_planners::ExpressionPlan;
+use common_planners::ExpressionAction;
 
 use crate::sessions::FuseQueryContextRef;
 
@@ -18,7 +18,7 @@ impl ContextFunction {
     pub fn build_args_from_ctx(
         name: &str,
         ctx: FuseQueryContextRef
-    ) -> Result<Vec<ExpressionPlan>> {
+    ) -> Result<Vec<ExpressionAction>> {
         // Check the function is supported in common functions.
         if !FunctionFactory::check(name) {
             return Result::Err(ErrorCodes::UnknownFunction(format!(
@@ -28,7 +28,7 @@ impl ContextFunction {
         }
 
         Ok(match name.to_lowercase().as_str() {
-            "database" => vec![ExpressionPlan::Literal(DataValue::Utf8(Some(
+            "database" => vec![ExpressionAction::Literal(DataValue::Utf8(Some(
                 ctx.get_current_database()
             )))],
             _ => vec![]

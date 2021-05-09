@@ -772,7 +772,7 @@ impl MetaNode {
         };
         let write_rst = self
             .raft
-            .client_write(ClientWriteRequest::new(ClientRequest { txid, cmd: cmd }))
+            .client_write(ClientWriteRequest::new(ClientRequest { txid, cmd }))
             .await;
 
         tracing::info!("raft.client_write rst: {:?}", write_rst);

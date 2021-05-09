@@ -142,16 +142,16 @@ mod tests {
             )
         });
 
-        let group_exprs = vec![col("a"), col("c")];
+        let group_exprs = &[col("a"), col("c")];
 
         // SELECT a FROM table WHERE b = 10 GROUP BY a, c HAVING d < 9 ORDER BY e LIMIT 10;
         let plan = PlanBuilder::from(&source_plan)
             .limit(10)?
-            .sort(&vec![col("e")])?
+            .sort(&[col("e")])?
             .filter(col("d").lt(lit(10)))?
-            .aggregate_partial(vec![], group_exprs)?
+            .aggregate_partial(&[], group_exprs)?
             .filter(col("b").eq(lit(10)))?
-            .project(vec![col("a")])?
+            .project(&[col("a")])?
             .build()?;
 
         let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
