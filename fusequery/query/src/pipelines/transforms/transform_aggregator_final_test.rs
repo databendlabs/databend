@@ -18,12 +18,12 @@ async fn test_transform_final_aggregator() -> anyhow::Result<()> {
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
     // sum(number)+1, avg(number)
-    let aggr_exprs = vec![add(sum(col("number")), lit(2u64)), avg(col("number"))];
+    let aggr_exprs = &[add(sum(col("number")), lit(2u64)), avg(col("number"))];
     let aggr_partial = PlanBuilder::create(test_source.number_schema_for_test()?)
-        .aggregate_partial(aggr_exprs.clone(), vec![])?
+        .aggregate_partial(aggr_exprs, &[])?
         .build()?;
     let aggr_final = PlanBuilder::create(test_source.number_schema_for_test()?)
-        .aggregate_final(aggr_exprs.clone(), vec![])?
+        .aggregate_final(aggr_exprs, &[])?
         .build()?;
 
     // Pipeline.
@@ -33,14 +33,14 @@ async fn test_transform_final_aggregator() -> anyhow::Result<()> {
     pipeline.add_simple_transform(|| {
         Ok(Box::new(AggregatorPartialTransform::try_create(
             aggr_partial.schema(),
-            aggr_exprs.clone()
+            aggr_exprs.to_vec()
         )?))
     })?;
     pipeline.merge_processor()?;
     pipeline.add_simple_transform(|| {
         Ok(Box::new(AggregatorFinalTransform::try_create(
             aggr_final.schema(),
-            aggr_exprs.clone()
+            aggr_exprs.to_vec()
         )?))
     })?;
 

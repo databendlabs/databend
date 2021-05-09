@@ -203,14 +203,14 @@ impl PlanParser {
         let plan = self.filter(&plan, &select.selection)?;
 
         // Projection expressions.
-        let projection_exprs: Vec<ExpressionPlan> = select
+        let projection_exprs = select
             .projection
             .iter()
             .map(|e| self.sql_select_to_rex(&e, &plan.schema()))
             .collect::<Result<Vec<ExpressionPlan>>>()?;
 
         // OrderBy expressions.
-        let order_by_exprs: Vec<ExpressionPlan> = order_by
+        let order_by_exprs = order_by
             .iter()
             .map(|e| -> Result<ExpressionPlan> {
                 Ok(ExpressionPlan::Sort {
@@ -222,7 +222,7 @@ impl PlanParser {
             .collect::<Result<Vec<ExpressionPlan>>>()?;
 
         // Aggregator check.
-        let has_aggregator = (&projection_exprs)
+        let has_aggregator = projection_exprs
             .iter()
             .map(|expr| expr.has_aggregator())
             .fold(Ok(false), |res, item| {
@@ -232,13 +232,13 @@ impl PlanParser {
 
         // Projection.
         let plan = if !select.group_by.is_empty() || has_aggregator? {
-            self.aggregate(&plan, projection_exprs, &select.group_by)
+            self.aggregate(&plan, &projection_exprs, &select.group_by)
                 .and_then(|input| self.sort(&input, order_by))?
         } else {
             self.expression(&plan, &projection_exprs, "Before Projection")
                 .and_then(|input| self.expression(&input, &order_by_exprs, "Before OrderBy"))
                 .and_then(|input| self.sort(&input, order_by))
-                .and_then(|input| self.project(&input, projection_exprs))?
+                .and_then(|input| self.project(&input, &projection_exprs))?
         };
 
         // Having.
@@ -529,7 +529,7 @@ impl PlanParser {
     }
 
     /// Wrap a plan in a projection
-    fn project(&self, input: &PlanNode, expr: Vec<ExpressionPlan>) -> Result<PlanNode> {
+    fn project(&self, input: &PlanNode, expr: &[ExpressionPlan]) -> Result<PlanNode> {
         PlanBuilder::from(&input)
             .project(expr)
             .and_then(|builder| builder.build())
@@ -539,10 +539,10 @@ impl PlanParser {
     fn aggregate(
         &self,
         input: &PlanNode,
-        aggr_expr: Vec<ExpressionPlan>,
+        aggr_expr: &[ExpressionPlan],
         group_by: &[sqlparser::ast::Expr]
     ) -> Result<PlanNode> {
-        let group_expr: Vec<ExpressionPlan> = group_by
+        let group_expr = group_by
             .iter()
             .map(|e| self.sql_to_rex(&e, &input.schema()))
             .collect::<Result<Vec<ExpressionPlan>>>()?;
@@ -551,12 +551,12 @@ impl PlanParser {
         // S1: Apply a fragment plan for distributed planners split.
         // S2: Apply a final aggregator plan.
         PlanBuilder::from(&input)
-            .aggregate_partial(aggr_expr.clone(), group_expr.clone())
+            .aggregate_partial(aggr_expr, &group_expr)
             // TODO self.ctx.get_id().unwrap()
             .and_then(|builder| {
                 builder.stage(self.ctx.get_id().unwrap(), StageState::AggregatorMerge)
             })
-            .and_then(|builder| builder.aggregate_final(aggr_expr, group_expr))
+            .and_then(|builder| builder.aggregate_final(aggr_expr, &group_expr))
             .and_then(|builder| builder.build())
     }
 

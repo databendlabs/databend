@@ -20,7 +20,7 @@ fn test_plan_builds() -> anyhow::Result<()> {
         TestCase {
             name: "projection-simple-pass",
             plan: (PlanBuilder::from(&source)
-                .project(vec![col("number")])?
+                .project(&[col("number")])?
                 .build()),
             expect: "\
         Projection: number:UInt64\
@@ -29,7 +29,7 @@ fn test_plan_builds() -> anyhow::Result<()> {
         TestCase {
             name: "projection-alias-pass",
             plan: (PlanBuilder::from(&source)
-                .project(vec![col("number"), col("number").alias("c1")])?
+                .project(&[col("number"), col("number").alias("c1")])?
                 .build()),
             expect:"\
             Projection: number:UInt64, number as c1:UInt64\
@@ -58,7 +58,7 @@ fn test_plan_builds() -> anyhow::Result<()> {
             name: "expression-before-projection-pass",
             plan: (PlanBuilder::from(&source)
                 .expression(&[col("number"), col("number").alias("c1")], "Before Projection")?
-                .project(vec![col("c1")])?
+                .project(&[col("c1")])?
                 .build()),
             expect:"\
             Projection: c1:UInt64\
@@ -70,7 +70,7 @@ fn test_plan_builds() -> anyhow::Result<()> {
             plan: (PlanBuilder::from(&source)
                 .filter(col("c1").eq(lit(1i64)))?
                 .expression(&[col("number"), col("number").alias("c1")], "Before Projection")?
-                .project(vec![col("c1")])?
+                .project(&[col("c1")])?
                 .build()),
             expect:"\
             Projection: c1:UInt64\

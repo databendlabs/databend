@@ -12,9 +12,9 @@ fn test_aggregator_plan() -> anyhow::Result<()> {
 
     let source = Test::create().generate_source_plan_for_test(10000)?;
     let plan = PlanBuilder::from(&source)
-        .aggregate_partial(vec![sum(col("number")).alias("sumx")], vec![])?
-        .aggregate_final(vec![sum(col("number")).alias("sumx")], vec![])?
-        .project(vec![col("sumx")])?
+        .aggregate_partial(&[sum(col("number")).alias("sumx")], &[])?
+        .aggregate_final(&[sum(col("number")).alias("sumx")], &[])?
+        .project(&[col("sumx")])?
         .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
         typ: ExplainType::Syntax,

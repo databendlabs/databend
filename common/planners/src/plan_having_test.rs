@@ -11,7 +11,7 @@ fn test_having_plan() -> anyhow::Result<()> {
     let source = Test::create().generate_source_plan_for_test(10000)?;
     let plan = PlanBuilder::from(&source)
         .having(col("number").eq(lit(1i64)))?
-        .project(vec![col("number")])?
+        .project(&[col("number")])?
         .build()?;
 
     let expect = "\

@@ -81,9 +81,21 @@ impl PlanBuilder {
     pub fn expression(&self, exprs: &[ExpressionPlan], desc: &str) -> Result<Self> {
         let input_schema = self.plan.schema();
 
+        // Get the projection expressions(Including rewrite).
+        let mut projection_exprs = vec![];
+        let exprs = PlanRewriter::rewrite_projection_aliases(exprs)?;
+        exprs.iter().for_each(|v| match v {
+            ExpressionPlan::Wildcard => {
+                for i in 0..input_schema.fields().len() {
+                    projection_exprs.push(col(input_schema.fields()[i].name()))
+                }
+            }
+            _ => projection_exprs.push(v.clone())
+        });
+
         // Merge fields.
+        let fields = self.exprs_to_fields(&projection_exprs, &input_schema)?;
         let mut merged = input_schema.fields().clone();
-        let fields = self.exprs_to_fields(&exprs, &input_schema)?;
         for field in fields {
             if !merged.iter().any(|x| x.name() == field.name()) && field.name() != "*" {
                 merged.push(field);
@@ -92,14 +104,14 @@ impl PlanBuilder {
 
         Ok(Self::from(&PlanNode::Expression(ExpressionPlan1 {
             input: Arc::new(self.plan.clone()),
-            exprs: Vec::from(exprs),
+            exprs,
             schema: DataSchemaRefExt::create(merged),
             desc: desc.to_string()
         })))
     }
 
     /// Apply a projection.
-    pub fn project(&self, exprs: Vec<ExpressionPlan>) -> Result<Self> {
+    pub fn project(&self, exprs: &[ExpressionPlan]) -> Result<Self> {
         let exprs = PlanRewriter::rewrite_projection_aliases(exprs)?;
         let input_schema = self.plan.schema();
 
@@ -114,6 +126,7 @@ impl PlanBuilder {
         });
 
         let fields = self.exprs_to_fields(&projection_exprs, &input_schema)?;
+
         Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
             input: Arc::new(self.plan.clone()),
             expr: projection_exprs,
@@ -124,8 +137,8 @@ impl PlanBuilder {
     fn aggregate(
         &self,
         mode: AggregateMode,
-        aggr_expr: Vec<ExpressionPlan>,
-        group_expr: Vec<ExpressionPlan>
+        aggr_expr: &[ExpressionPlan],
+        group_expr: &[ExpressionPlan]
     ) -> Result<Self> {
         let input_schema = self.plan.schema();
         let aggr_projection_fields = self.exprs_to_fields(&aggr_expr, &input_schema)?;
@@ -134,14 +147,14 @@ impl PlanBuilder {
             AggregateMode::Partial => {
                 Self::from(&PlanNode::AggregatorPartial(AggregatorPartialPlan {
                     input: Arc::new(self.plan.clone()),
-                    aggr_expr,
-                    group_expr
+                    aggr_expr: aggr_expr.to_vec(),
+                    group_expr: group_expr.to_vec()
                 }))
             }
             AggregateMode::Final => Self::from(&PlanNode::AggregatorFinal(AggregatorFinalPlan {
                 input: Arc::new(self.plan.clone()),
-                aggr_expr,
-                group_expr,
+                aggr_expr: aggr_expr.to_vec(),
+                group_expr: group_expr.to_vec(),
                 schema: DataSchemaRefExt::create(aggr_projection_fields)
             }))
         })
@@ -150,8 +163,8 @@ impl PlanBuilder {
     /// Apply a partial aggregator plan.
     pub fn aggregate_partial(
         &self,
-        aggr_expr: Vec<ExpressionPlan>,
-        group_expr: Vec<ExpressionPlan>
+        aggr_expr: &[ExpressionPlan],
+        group_expr: &[ExpressionPlan]
     ) -> Result<Self> {
         self.aggregate(AggregateMode::Partial, aggr_expr, group_expr)
     }
@@ -159,8 +172,8 @@ impl PlanBuilder {
     /// Apply a final aggregator plan.
     pub fn aggregate_final(
         &self,
-        aggr_expr: Vec<ExpressionPlan>,
-        group_expr: Vec<ExpressionPlan>
+        aggr_expr: &[ExpressionPlan],
+        group_expr: &[ExpressionPlan]
     ) -> Result<Self> {
         self.aggregate(AggregateMode::Final, aggr_expr, group_expr)
     }

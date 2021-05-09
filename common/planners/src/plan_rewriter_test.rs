@@ -152,7 +152,7 @@ fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
     ];
 
     for t in tests {
-        let result = PlanRewriter::rewrite_projection_aliases(t.exprs);
+        let result = PlanRewriter::rewrite_projection_aliases(&t.exprs);
         match &result {
             Ok(v) => assert_eq!(t.expect_str, format!("{:?}", v), "in test_case {}", t.name),
             Err(e) => assert_eq!(t.error_msg, e.to_string(), "in test_case {}", t.name)
@@ -169,7 +169,7 @@ fn test_rewrite_expressions_plan() -> anyhow::Result<()> {
     use crate::*;
     let source = Test::create().generate_source_plan_for_test(10000)?;
     let plan = PlanBuilder::from(&source)
-        .project(vec![col("number").alias("x"), col("number").alias("y")])?
+        .project(&[col("number").alias("x"), col("number").alias("y")])?
         .filter(col("x").eq(lit(1i64)))?
         .build()?;
 

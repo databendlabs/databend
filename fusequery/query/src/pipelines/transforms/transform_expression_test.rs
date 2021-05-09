@@ -75,10 +75,10 @@ async fn test_transform_expression_error() -> anyhow::Result<()> {
     let source = test_source.number_source_transform_for_test(8)?;
     pipeline.add_source(Arc::new(source))?;
 
-    let result = PlanBuilder::create(test_source.number_schema_for_test()?).project(vec![
+    let result = PlanBuilder::create(test_source.number_schema_for_test()?).project(&[
         col("xnumber"),
         col("number"),
-        add(col("number"), lit(1u8)),
+        add(col("number"), lit(1u8))
     ]);
     let actual = format!("{:?}", result.err());
     let expect = "Some(Code: 1002, displayText = InvalidArgumentError(\"Unable to get field named \\\"xnumber\\\". Valid fields: [\\\"number\\\"]\").)";

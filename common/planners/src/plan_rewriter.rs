@@ -26,7 +26,7 @@ impl PlanRewriter {
     /// SELECT (x+1) as y, y*y FROM ..
     /// ->
     /// SELECT (x+1) as y, (x+1)*(x+1) FROM ..
-    pub fn rewrite_projection_aliases(exprs: Vec<ExpressionPlan>) -> Result<Vec<ExpressionPlan>> {
+    pub fn rewrite_projection_aliases(exprs: &[ExpressionPlan]) -> Result<Vec<ExpressionPlan>> {
         let mut mp = HashMap::new();
         PlanRewriter::alias_exprs_to_map(&exprs, &mut mp)?;
 

@@ -12,7 +12,7 @@ fn test_explain_plan() -> anyhow::Result<()> {
 
     let source = Test::create().generate_source_plan_for_test(10000)?;
     let plan = PlanBuilder::from(&source)
-        .project(vec![col("number").alias("c1"), col("number").alias("c2")])?
+        .project(&[col("number").alias("c1"), col("number").alias("c2")])?
         .filter(add(col("number"), lit(1)).eq(lit(4)))?
         .having(add(col("number"), lit(1)).eq(lit(4)))?
         .build()?;
