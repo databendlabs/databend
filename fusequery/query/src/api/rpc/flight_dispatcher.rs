@@ -23,6 +23,7 @@ use tokio::sync::mpsc::error::SendError;
 pub struct PrepareStageInfo(String, String, PlanNode, Vec<String>);
 
 pub enum Request {
+    GetSchema(String, Sender<Result<DataSchemaRef>>),
     GetStream(String, Sender<Result<Receiver<Result<FlightData>>>>),
     PrepareStage(PrepareStageInfo, Sender<Result<()>>),
 }
@@ -72,6 +73,12 @@ impl FlightDispatcher {
                             stream_receiver.send(Ok(stream_info.stream_data_receiver)).await
                         },
                         None => stream_receiver.send(Err(ErrorCodes::NotFoundStream(format!("Stream {} is not found", id)))).await,
+                    };
+                },
+                Request::GetSchema(id, schema_receiver) => {
+                    match dispatcher_state.streams.get(&id) {
+                        Some(stream_info) => schema_receiver.send(Ok(stream_info.schema.clone())).await,
+                        None => schema_receiver.send(Err(ErrorCodes::NotFoundStream(format!("Stream {} is not found", id)))).await,
                     };
                 }
                 Request::PrepareStage(info, response_sender) => {

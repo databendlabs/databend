@@ -26,6 +26,10 @@ use crate::api::rpc::FlightStream;
 use tokio_stream::wrappers::ReceiverStream;
 use common_exception::ErrorCodes;
 use tokio_stream::StreamExt;
+use common_arrow::arrow_flight::flight_descriptor::DescriptorType;
+use common_arrow::arrow_flight::utils::flight_schema_from_arrow_schema;
+use common_datavalues::DataSchemaRef;
+use common_arrow::arrow::datatypes::SchemaRef;
 
 pub struct FuseQueryService {
     dispatcher_sender: Sender<DispatcherRequest>,
@@ -119,7 +123,31 @@ impl FlightService for FuseQueryService {
     }
 
     async fn get_schema(&self, request: Request<FlightDescriptor>) -> Response<SchemaResult> {
-        unimplemented!()
+        let descriptor = request.into_inner();
+
+        fn create_schema(schema_ref: DataSchemaRef) -> SchemaResult {
+            let options = common_arrow::arrow::ipc::writer::IpcWriteOptions::default();
+            flight_schema_from_arrow_schema(&*schema_ref, &options)
+        }
+
+        type ResponseSchema = common_exception::Result<RawResponse<SchemaResult>>;
+        fn create_schema_response(receive_schema: Option<DataSchemaRef>) -> ResponseSchema {
+            receive_schema.ok_or_else(|| ErrorCodes::NotFoundStream("".to_string()))
+                .map(create_schema).map(RawResponse::new)
+        }
+
+        match descriptor.r#type {
+            1 => {
+                // DescriptorType::Path
+                let (response_sender, mut receiver) = channel(1);
+                self.dispatcher_sender.send(DispatcherRequest::GetSchema(descriptor.path.join("/"), response_sender)).await;
+                let schema = receiver.recv().await;
+
+                schema.transpose().and_then(create_schema_response)
+                    .map_err(|e| Status::internal(e.to_string()))
+            },
+            _unimplemented_type => Err(Status::unimplemented(format!("FuseQuery does not implement Flight type: {}", descriptor.r#type)))
+        }
     }
 
     type DoGetStream = FlightStream<FlightData>;
@@ -169,13 +197,25 @@ impl FlightService for FuseQueryService {
     type DoActionStream = FlightStream<FlightResult>;
 
     async fn do_action(&self, request: Request<Action>) -> Response<Self::DoActionStream> {
+        // let action = request.into_inner();
+        // match action.r#type.as_str() {
+        //     "PrepareStage" => {},
+        //     _ => Result::Err(Status::unimplemented(format!("FuseQuery does not implement action: {}.", action.r#type))),
+        // };
         unimplemented!()
     }
 
     type ListActionsStream = FlightStream<ActionType>;
 
     async fn list_actions(&self, request: Request<Empty>) -> Response<Self::ListActionsStream> {
-        unimplemented!()
+        Result::Ok(RawResponse::new(
+            Box::pin(tokio_stream::iter(vec![
+                Ok(ActionType {
+                    r#type: "PrepareQueryStage".to_string(),
+                    description: "Prepare a query stage that can be sent to the remote after receiving data from remote".to_string(),
+                })
+            ])) as FlightStream<ActionType>
+        ))
     }
 }
 
