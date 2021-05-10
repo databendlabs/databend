@@ -36,6 +36,14 @@ pub struct FuseQueryService {
     dispatcher_sender: Sender<DispatcherRequest>,
 }
 
+impl FuseQueryService {
+    pub fn create(dispatcher_sender: Sender<DispatcherRequest>) -> FuseQueryService {
+        FuseQueryService {
+            dispatcher_sender
+        }
+    }
+}
+
 type Response<T> = Result<RawResponse<T>, Status>;
 type StreamRequest<T> = Request<Streaming<T>>;
 
