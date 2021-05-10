@@ -82,8 +82,7 @@ impl FuseQueryContext {
     pub fn progress_callback(&self) -> Result<ProgressCallback> {
         let current_progress = self.progress.clone();
         Ok(Box::new(move |value: &ProgressValues| {
-            current_progress.add_rows(value.read_rows);
-            current_progress.add_bytes(value.read_bytes);
+            current_progress.incr(value);
         }))
     }
 
@@ -93,6 +92,11 @@ impl FuseQueryContext {
 
     pub fn get_and_reset_progress_value(&self) -> ProgressValues {
         self.progress.as_ref().get_and_reset()
+    }
+
+    // Some table can estimate the approx total rows, such as NumbersTable
+    pub fn add_total_rows_approx(&self, total_rows: usize) {
+        self.progress.as_ref().add_total_rows_approx(total_rows);
     }
 
     // Steal n partitions from the partition pool by the pipeline worker.

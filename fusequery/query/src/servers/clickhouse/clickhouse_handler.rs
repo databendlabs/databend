@@ -74,7 +74,7 @@ impl ClickHouseSession for Session {
         tokio::spawn(async move {
             while !cancel.load(Ordering::Relaxed) {
                 let _ = interval_stream.next().await;
-                let _ = tx.send(BlockItem::ProgressTicker).await;
+                tx.send(BlockItem::ProgressTicker).await.ok();
             }
         });
 
@@ -87,12 +87,12 @@ impl ClickHouseSession for Session {
             match clickhouse_stream {
                 Ok(mut clickhouse_stream) => {
                     while let Some(block) = clickhouse_stream.next().await {
-                        let _ = tx2.send(BlockItem::Block(block)).await;
+                        tx2.send(BlockItem::Block(block)).await.ok();
                     }
                 }
 
                 Err(e) => {
-                    let _ = tx2.send(BlockItem::Block(Err(e))).await;
+                    tx2.send(BlockItem::Block(Err(e))).await.ok();
                 }
             }
             cancel_clone.store(true, Ordering::Relaxed);

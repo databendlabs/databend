@@ -43,7 +43,8 @@ impl Stream for ProgressStream {
                     Ok(block) => {
                         let progress_values = ProgressValues {
                             read_rows: block.num_rows(),
-                            read_bytes: block.memory_size()
+                            read_bytes: block.memory_size(),
+                            total_rows_to_read: 0
                         };
 
                         (this.callback)(&progress_values);
