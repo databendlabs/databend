@@ -28,11 +28,11 @@ fn test_filter_alias_push_down_optimizer() -> anyhow::Result<()> {
         },
         Test {
             name:"group-by-alias-push-down",
-            query: "select (number+1) as c1, (number%3+1) as c2 from numbers_mt(10000) group by c2",
+            query: "select max(number+1) as c1, (number%3+1) as c2 from numbers_mt(10000) group by c2",
             expect: "\
-            AggregatorFinal: groupBy=[[((number % 3) + 1) as c2]], aggr=[[(number + 1) as c1, ((number % 3) + 1) as c2]]\
+            AggregatorFinal: groupBy=[[((number % 3) + 1) as c2]], aggr=[[max([(number + 1)]) as c1, ((number % 3) + 1) as c2]]\
             \n  RedistributeStage[state: AggregatorMerge, id: 0]\
-            \n    AggregatorPartial: groupBy=[[((number % 3) + 1) as c2]], aggr=[[(number + 1) as c1, ((number % 3) + 1) as c2]]\
+            \n    AggregatorPartial: groupBy=[[((number % 3) + 1) as c2]], aggr=[[max([(number + 1)]) as c1, ((number % 3) + 1) as c2]]\
             \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]",
         },
         Test {
