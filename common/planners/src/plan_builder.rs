@@ -146,8 +146,9 @@ impl PlanBuilder {
                     PlanRewriter::check_aggr_in_group_expr(&aggr, &group_by_names, &input_schema)?;
                 if !in_group_by {
                     return Result::Err(ErrorCodes::IllegalAggregateExp(format!(
-                        "Column `{:?}` is not under aggregate function and not in GROUP BY",
-                        aggr
+                        "Column `{:?}` is not under aggregate function and not in GROUP BY: While processing {:#}",
+                        aggr,
+                        aggr_expr.iter().map(|aggr| format!("{:#?}", aggr)).collect::<Vec<_>>().join(", ")
                     )));
                 }
             }
