@@ -23,3 +23,11 @@ pub use flight_service::FlightService;
 pub use flight_service::FlightStream;
 pub use flight_dispatcher::FlightDispatcher;
 pub use flight_dispatcher::StreamInfo;
+
+
+use common_exception::ErrorCodes;
+use tonic::Status;
+
+pub fn to_status(error: ErrorCodes) -> Status {
+    Status::internal(error.to_string())
+}

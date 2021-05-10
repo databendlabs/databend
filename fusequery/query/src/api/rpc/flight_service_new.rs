@@ -22,7 +22,7 @@ use common_arrow::arrow_flight::Ticket;
 use common_arrow::arrow_flight::Result as FlightResult;
 
 use crate::api::rpc::flight_dispatcher::{Request as DispatcherRequest, PrepareStageInfo};
-use crate::api::rpc::{FlightStream, StreamInfo, FlightDispatcher};
+use crate::api::rpc::{FlightStream, StreamInfo, FlightDispatcher, to_status};
 use tokio_stream::wrappers::ReceiverStream;
 use common_exception::ErrorCodes;
 use tokio_stream::StreamExt;
@@ -161,8 +161,7 @@ impl FlightService for FuseQueryService {
 
         type ResponseSchema = common_exception::Result<RawResponse<FlightInfo>>;
         fn create_flight_info_response(receive_schema: Option<StreamInfo>) -> ResponseSchema {
-            receive_schema.ok_or_else(|| ErrorCodes::NotFoundStream("".to_string()))
-                .map(create_flight_info).map(RawResponse::new)
+            Ok(RawResponse::new(create_flight_info(receive_schema.unwrap())))
         }
 
         match descriptor.r#type {
@@ -173,7 +172,7 @@ impl FlightService for FuseQueryService {
                 let schema = receiver.recv().await;
 
                 schema.transpose().and_then(create_flight_info_response)
-                    .map_err(|e| Status::internal(e.to_string()))
+                    .map_err(to_status)
             },
             _unimplemented_type => Err(Status::unimplemented(format!("FuseQuery does not implement Flight type: {}", descriptor.r#type)))
         }
@@ -189,8 +188,7 @@ impl FlightService for FuseQueryService {
 
         type ResponseSchema = common_exception::Result<RawResponse<SchemaResult>>;
         fn create_schema_response(receive_schema: Option<DataSchemaRef>) -> ResponseSchema {
-            receive_schema.ok_or_else(|| ErrorCodes::NotFoundStream("".to_string()))
-                .map(create_schema).map(RawResponse::new)
+            Ok(RawResponse::new(create_schema(receive_schema.unwrap())))
         }
 
         match descriptor.r#type {
@@ -201,7 +199,7 @@ impl FlightService for FuseQueryService {
                 let schema = receiver.recv().await;
 
                 schema.transpose().and_then(create_schema_response)
-                    .map_err(|e| Status::internal(e.to_string()))
+                    .map_err(to_status)
             },
             _unimplemented_type => Err(Status::unimplemented(format!("FuseQuery does not implement Flight type: {}", descriptor.r#type)))
         }
@@ -214,14 +212,13 @@ impl FlightService for FuseQueryService {
         fn create_stream(receiver: DataReceiver) -> FlightStream<FlightData> {
             // TODO: Tracking progress is shown in the system.shuffles table
             Box::pin(ReceiverStream::new(receiver).map(|flight_data| {
-                flight_data.map_err(|e| Status::internal(e.to_string()))
+                flight_data.map_err(to_status)
             })) as FlightStream<FlightData>
         }
 
         type ResultResponse = common_exception::Result<RawResponse<FlightStream<FlightData>>>;
         fn create_stream_response(receiver: Option<DataReceiver>) -> ResultResponse {
-            receiver.ok_or_else(|| ErrorCodes::NotFoundStream("".to_string()))
-                .map(create_stream).map(RawResponse::new)
+            Ok(RawResponse::new(create_stream(receiver.unwrap())))
         }
 
         match std::str::from_utf8(&request.into_inner().ticket) {
@@ -234,7 +231,7 @@ impl FlightService for FuseQueryService {
                 receiver.recv().await
                     .transpose()
                     .and_then(create_stream_response)
-                    .map_err(|e| Status::internal(e.to_string()))
+                    .map_err(to_status)
             }
         }
     }
@@ -258,7 +255,7 @@ impl FlightService for FuseQueryService {
 
         fn once(result: common_exception::Result<FlightResult>) -> FlightStream<FlightResult> {
             Box::pin(tokio_stream::once::<Result<FlightResult, Status>>(
-                result.map_err(|e| Status::internal(e.to_string())))
+                result.map_err(to_status))
             ) as FlightStream<FlightResult>
         }
 
@@ -268,7 +265,7 @@ impl FlightService for FuseQueryService {
                     Err(utf_8_error) => Err(Status::invalid_argument(utf_8_error.to_string())),
                     Ok(prepare_stage_info_str) => {
                         let action = serde_json::from_str::<ExecutePlanWithShuffleAction>(prepare_stage_info_str)
-                            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+                            .map_err(ErrorCodes::from_serde).map_err(to_status)?;
 
                         let (response_sender, mut receiver) = channel(1);
                         self.dispatcher_sender.send(DispatcherRequest::PrepareQueryStage(PrepareStageInfo::create(action.query_id, action.stage_id, action.plan, action.shuffle_to), response_sender)).await;
