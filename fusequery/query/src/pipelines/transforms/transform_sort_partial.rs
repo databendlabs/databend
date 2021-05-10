@@ -10,7 +10,7 @@ use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::ExpressionPlan;
+use common_planners::ExpressionAction;
 use common_streams::SendableDataBlockStream;
 use common_streams::SortStream;
 
@@ -19,7 +19,7 @@ use crate::pipelines::processors::IProcessor;
 
 pub struct SortPartialTransform {
     schema: DataSchemaRef,
-    exprs: Vec<ExpressionPlan>,
+    exprs: Vec<ExpressionAction>,
     limit: Option<usize>,
     input: Arc<dyn IProcessor>
 }
@@ -27,7 +27,7 @@ pub struct SortPartialTransform {
 impl SortPartialTransform {
     pub fn try_create(
         schema: DataSchemaRef,
-        exprs: Vec<ExpressionPlan>,
+        exprs: Vec<ExpressionAction>,
         limit: Option<usize>
     ) -> Result<Self> {
         Ok(SortPartialTransform {
@@ -69,12 +69,12 @@ impl IProcessor for SortPartialTransform {
 
 pub fn get_sort_descriptions(
     schema: &DataSchemaRef,
-    exprs: &[ExpressionPlan]
+    exprs: &[ExpressionAction]
 ) -> Result<Vec<SortColumnDescription>> {
     let mut sort_columns_descriptions = vec![];
     for x in exprs {
         match *x {
-            ExpressionPlan::Sort {
+            ExpressionAction::Sort {
                 ref expr,
                 asc,
                 nulls_first

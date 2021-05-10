@@ -12,7 +12,9 @@ use common_infallible::RwLock;
 use common_planners::Partition;
 use common_planners::Partitions;
 use common_planners::Statistics;
+use common_progress::Progress;
 use common_progress::ProgressCallback;
+use common_progress::ProgressValues;
 use uuid::Uuid;
 
 use crate::clusters::Cluster;
@@ -31,8 +33,9 @@ pub struct FuseQueryContext {
     datasource: Arc<dyn IDataSource>,
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Partition>>>,
-    progress_callback: Arc<RwLock<Option<ProgressCallback>>>,
-    current_database: Arc<RwLock<String>>
+    current_database: Arc<RwLock<String>>,
+
+    progress: Arc<Progress>
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
@@ -47,8 +50,8 @@ impl FuseQueryContext {
             datasource: Arc::new(DataSource::try_create()?),
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            progress_callback: Arc::new(RwLock::new(None)),
-            current_database: Arc::new(RwLock::new(String::from("default")))
+            current_database: Arc::new(RwLock::new(String::from("default"))),
+            progress: Arc::new(Progress::create())
         };
 
         ctx.initial_settings()?;
@@ -67,6 +70,7 @@ impl FuseQueryContext {
 
     /// ctx.reset will reset the necessary variables in the session
     pub fn reset(&self) -> Result<()> {
+        self.progress.reset();
         self.statistics.write().clear();
         self.partition_queue.write().clear();
         Ok(())
@@ -75,8 +79,24 @@ impl FuseQueryContext {
     /// Set progress callback to context.
     /// By default, it is called for leaf sources, after each block
     /// Note that the callback can be called from different threads.
-    pub fn set_progress_callback(&self, callback: ProgressCallback) {
-        *self.progress_callback.write() = Some(callback);
+    pub fn progress_callback(&self) -> Result<ProgressCallback> {
+        let current_progress = self.progress.clone();
+        Ok(Box::new(move |value: &ProgressValues| {
+            current_progress.incr(value);
+        }))
+    }
+
+    pub fn get_progress_value(&self) -> ProgressValues {
+        self.progress.as_ref().get_values()
+    }
+
+    pub fn get_and_reset_progress_value(&self) -> ProgressValues {
+        self.progress.as_ref().get_and_reset()
+    }
+
+    // Some table can estimate the approx total rows, such as NumbersTable
+    pub fn add_total_rows_approx(&self, total_rows: usize) {
+        self.progress.as_ref().add_total_rows_approx(total_rows);
     }
 
     // Steal n partitions from the partition pool by the pipeline worker.

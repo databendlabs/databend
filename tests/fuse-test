@@ -59,7 +59,7 @@ def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_fi
         'stderr': stderr_file,
     }
 
-    pattern = '{test} > {stdout} 2> {stderr}'
+    pattern = '{test} > {stdout} 2>&1'
 
     if ext == '.sql':
         pattern = "{client} {options} < " + pattern
@@ -76,7 +76,6 @@ def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_fi
 
     # Normalize randomized database names in stdout, stderr files.
     os.system("LC_ALL=C sed -i -e 's/{test_db}/default/g' {file}".format(test_db=args.database, file=stdout_file))
-    os.system("LC_ALL=C sed -i -e 's/{test_db}/default/g' {file}".format(test_db=args.database, file=stderr_file))
 
     stdout = open(stdout_file, 'rb').read() if os.path.exists(stdout_file) else b''
     stdout = str(stdout, errors='replace', encoding='utf-8')
@@ -317,7 +316,7 @@ def main(args):
     global SERVER_DIED
     global exit_code
 
-    base_dir = os.path.abspath(args.queries)
+    base_dir = os.path.abspath(args.suites)
     tmp_dir = os.path.abspath(args.tmp)
 
     os.environ.setdefault("FUSE_QUERY_BINARY", args.binary)
@@ -344,6 +343,12 @@ def main(args):
     for suite in sorted(os.listdir(base_dir), key=sute_key_func):
         if SERVER_DIED:
             break
+
+        if args.skip_dir and any(s in suite for s in args.skip_dir):
+            continue
+
+        if args.run_dir and not any(s in suite for s in args.run_dir):
+            continue
 
         suite_dir = os.path.join(base_dir, suite)
         suite_re_obj = re.search('^[0-9]+_(.*)$', suite)
@@ -419,8 +424,7 @@ def main(args):
 
 
 def get_additional_client_options(args):
-    # For MySQL client with header and table format
-    return ' -v -t '
+    return args.options
 
 
 def get_additional_client_options_url(args):
@@ -429,9 +433,10 @@ def get_additional_client_options_url(args):
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='fuse-query functional tests')
-    parser.add_argument('-q', '--queries', help='Path to queries dir')
+    parser.add_argument('-q', '--suites', help='Path to suites dir')
     parser.add_argument('-b', '--binary', default='fuse-query', help='Path to fuse-query binary or name of binary in PATH')
     parser.add_argument('-c', '--client', default='mysql -uroot -h127.0.0.1 -P3307 -s ', help='Client program')
+    parser.add_argument('-opt', '--options', default=' -v -t --force ', help="Client program options")
     parser.add_argument('--tmp', help='Path to tmp dir')
     parser.add_argument('-t', '--timeout', type=int, default=600, help='Timeout for each test case in seconds')
     parser.add_argument('test', nargs='*', help='Optional test case name regex')
@@ -444,18 +449,20 @@ if __name__ == '__main__':
     parser.add_argument('--parallel', default='1/1', help='One parallel test run number/total')
     parser.add_argument('-j', '--jobs', default=1, nargs='?', type=int, help='Run all tests in parallel')
     parser.add_argument('--skip', nargs='+', help="Skip these tests")
+    parser.add_argument('--skip-dir', nargs='+', help="Skip all these tests in the dir")
+    parser.add_argument('--run-dir', nargs='+', help="Only run these tests in the dir")
     parser.add_argument('--stop', action='store_true', default=None, dest='stop', help='Stop on network errors')
 
     args = parser.parse_args()
 
-    if args.queries is None and os.path.isdir('queries'):
-        args.queries = 'queries'
-    if args.queries is None:
-        print("Failed to detect path to the queries directory. Please specify it with '--queries' option.")
+    if args.suites is None and os.path.isdir('suites'):
+        args.suites = 'suites'
+    if args.suites is None:
+        print("Failed to detect path to the suites directory. Please specify it with '--suites' option.")
         exit(1)
 
     if args.tmp is None:
-        args.tmp = args.queries
+        args.tmp = args.suites
 
     args.client_with_database = args.client
     if not args.database:

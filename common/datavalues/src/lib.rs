@@ -49,6 +49,7 @@ pub use crate::data_columnar_value::DataColumnarValue;
 pub use crate::data_field::DataField;
 pub use crate::data_schema::DataSchema;
 pub use crate::data_schema::DataSchemaRef;
+pub use crate::data_schema::DataSchemaRefExt;
 pub use crate::data_type::DataType;
 pub use crate::data_type::*;
 pub use crate::data_value::DataValue;

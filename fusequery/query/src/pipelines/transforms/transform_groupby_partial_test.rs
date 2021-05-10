@@ -25,7 +25,7 @@ async fn test_transform_partial_groupby() -> anyhow::Result<()> {
     ];
     let group_exprs = vec![modular(col("number"), lit(3u64))];
     let aggr_partial = PlanBuilder::create(test_source.number_schema_for_test()?)
-        .aggregate_partial(aggr_exprs.clone(), group_exprs.clone())?
+        .aggregate_partial(&aggr_exprs, &group_exprs)?
         .build()?;
 
     // Pipeline.
@@ -57,7 +57,7 @@ async fn test_transform_partial_groupby() -> anyhow::Result<()> {
         "| {\"Struct\":[{\"UInt64\":166833},{\"UInt64\":2}]} | {\"Struct\":[{\"Struct\":[{\"UInt64\":166833},{\"UInt64\":334}]}]} | {\"Struct\":[{\"UInt64\":876},{\"UInt64\":3}]} | 0000000000000000 |",
         "+---------------------------------------------+------------------------------------------------------------+------------------------------------------+------------------+",
     ];
-    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
     Ok(())
 }

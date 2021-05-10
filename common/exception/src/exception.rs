@@ -70,8 +70,9 @@ build_exceptions! {
     CannotReadFile(23),
     ParquetError(24),
     UnknownTable(25),
-    StageExists(26),
-    NotFoundStream(27),
+    IllegalAggregateExp(26),
+    StageExists(27),
+    NotFoundStream(28),
 
     UnknownException(1000),
     TokioError(1001)
@@ -120,35 +121,13 @@ impl Display for ErrorCodes {
 
 #[derive(Error)]
 enum OtherErrors {
-    AnyHow {
-        error: anyhow::Error
-    },
-    SerdeJSON {
-        error: serde_json::Error
-    },
-    ArrowError {
-        error: common_arrow::arrow::error::ArrowError
-    },
-    ParserError {
-        error: sqlparser::parser::ParserError
-    },
-    ParseIntError {
-        error: std::num::ParseIntError
-    },
-    ParserFloatError {
-        error: std::num::ParseFloatError
-    }
+    AnyHow { error: anyhow::Error }
 }
 
 impl Display for OtherErrors {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            OtherErrors::AnyHow { error } => write!(f, "{}", error),
-            OtherErrors::SerdeJSON { error } => write!(f, "{}", error),
-            OtherErrors::ArrowError { error } => write!(f, "{}", error),
-            OtherErrors::ParserError { error } => write!(f, "{}", error),
-            OtherErrors::ParseIntError { error } => write!(f, "{}", error),
-            OtherErrors::ParserFloatError { error } => write!(f, "{}", error)
+            OtherErrors::AnyHow { error } => write!(f, "{}", error)
         }
     }
 }
@@ -156,12 +135,7 @@ impl Display for OtherErrors {
 impl Debug for OtherErrors {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            OtherErrors::AnyHow { error } => write!(f, "{:?}", error),
-            OtherErrors::SerdeJSON { error } => write!(f, "{:?}", error),
-            OtherErrors::ArrowError { error } => write!(f, "{:?}", error),
-            OtherErrors::ParserError { error } => write!(f, "{:?}", error),
-            OtherErrors::ParseIntError { error } => write!(f, "{:?}", error),
-            OtherErrors::ParserFloatError { error } => write!(f, "{}", error)
+            OtherErrors::AnyHow { error } => write!(f, "{:?}", error)
         }
     }
 }
@@ -176,48 +150,48 @@ impl ErrorCodes {
         }
     }
 
-    pub fn from_parse(error: std::num::ParseIntError) -> ErrorCodes {
+    pub fn from_parse_int(error: std::num::ParseIntError) -> ErrorCodes {
         ErrorCodes {
             code: 1002,
-            display_text: String::from(""),
-            cause: Some(Box::new(OtherErrors::ParseIntError { error })),
-            backtrace: None
+            display_text: format!("{}", error),
+            cause: None,
+            backtrace: Some(Backtrace::new())
         }
     }
 
     pub fn from_parse_float(error: std::num::ParseFloatError) -> ErrorCodes {
         ErrorCodes {
             code: 1002,
-            display_text: String::from(""),
-            cause: Some(Box::new(OtherErrors::ParserFloatError { error })),
-            backtrace: None
+            display_text: format!("{}", error),
+            cause: None,
+            backtrace: Some(Backtrace::new())
         }
     }
 
     pub fn from_arrow(error: common_arrow::arrow::error::ArrowError) -> ErrorCodes {
         ErrorCodes {
             code: 1002,
-            display_text: String::from(""),
-            cause: Some(Box::new(OtherErrors::ArrowError { error })),
-            backtrace: None
+            display_text: format!("{}", error),
+            cause: None,
+            backtrace: Some(Backtrace::new())
         }
     }
 
     pub fn from_serde(error: serde_json::Error) -> ErrorCodes {
         ErrorCodes {
             code: 1002,
-            display_text: String::from(""),
-            cause: Some(Box::new(OtherErrors::SerdeJSON { error })),
-            backtrace: None
+            display_text: format!("{}", error),
+            cause: None,
+            backtrace: Some(Backtrace::new())
         }
     }
 
     pub fn from_parser(error: sqlparser::parser::ParserError) -> ErrorCodes {
         ErrorCodes {
-            code: 5,
-            display_text: String::from(""),
-            cause: Some(Box::new(OtherErrors::ParserError { error })),
-            backtrace: None
+            code: 1002,
+            display_text: format!("{}", error),
+            cause: None,
+            backtrace: Some(Backtrace::new())
         }
     }
 }

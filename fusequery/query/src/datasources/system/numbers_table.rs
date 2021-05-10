@@ -3,18 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::mem::size_of;
 use std::sync::Arc;
 
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::ExpressionPlan;
+use common_planners::ExpressionAction;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
@@ -33,18 +32,13 @@ pub struct NumbersTable {
 
 impl NumbersTable {
     pub fn create(table: &'static str) -> Self {
-        // Custom metadata is for deser_json, or it will returns error: value: Error("missing field `metadata`")
-        let metadata: HashMap<String, String> = [("Key".to_string(), "Value".to_string())]
-            .iter()
-            .cloned()
-            .collect();
-
         NumbersTable {
             table,
-            schema: Arc::new(DataSchema::new_with_metadata(
-                vec![DataField::new("number", DataType::UInt64, false)],
-                metadata
-            ))
+            schema: DataSchemaRefExt::create(vec![DataField::new(
+                "number",
+                DataType::UInt64,
+                false
+            )])
         }
     }
 }
@@ -81,11 +75,11 @@ impl ITable for NumbersTable {
 
         let ScanPlan { table_args, .. } = scan.clone();
         if let Some(args) = table_args {
-            if let ExpressionPlan::Literal(DataValue::UInt64(Some(v))) = args {
+            if let ExpressionAction::Literal(DataValue::UInt64(Some(v))) = args {
                 total = v;
             }
 
-            if let ExpressionPlan::Literal(DataValue::Int64(Some(v))) = args {
+            if let ExpressionAction::Literal(DataValue::Int64(Some(v))) = args {
                 total = v as u64;
             }
         } else {
@@ -100,6 +94,7 @@ impl ITable for NumbersTable {
             read_bytes: ((total) * size_of::<u64>() as u64) as usize
         };
         ctx.try_set_statistics(&statistics)?;
+        ctx.add_total_rows_approx(statistics.read_rows);
 
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
@@ -115,7 +110,10 @@ impl ITable for NumbersTable {
     }
 
     async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
-        Ok(Box::pin(NumbersStream::create(ctx, self.schema.clone())))
+        Ok(Box::pin(NumbersStream::try_create(
+            ctx,
+            self.schema.clone()
+        )?))
     }
 }
 

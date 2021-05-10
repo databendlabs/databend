@@ -1,24 +1,24 @@
 # Tests
 
-## Stateless Tests
-
-Stateless Test is functional test.
-
-It uses MySQL client and get the result for checking.
-
-### How to Run
-
-#### 1. Start fuse-query server
+## How to Run
+First, we start fuse-query server:
 `make run`
 
-#### 2. Run fuse-test
+### 0. Stateless Tests
+
+
 ```
 cd tests/
-./fuse-test
+./fuse-test --skip-dir '1_performance'
 ```
 
 If a test fails, there are two files:
 * *.stdout is the actual result
 * *.stderr is the stderr output
 
+### 1. Performance Tests
 
+```
+cd tests/
+./fuse-test --run-dir '1_performance'
+```

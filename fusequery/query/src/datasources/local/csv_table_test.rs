@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
 #[tokio::test]
 async fn test_csv_table() -> anyhow::Result<()> {
     use std::env;
@@ -29,20 +27,20 @@ async fn test_csv_table() -> anyhow::Result<()> {
     let table = CsvTable::try_create(
         "default".into(),
         "test_csv".into(),
-        DataSchema::new(vec![DataField::new("column1", DataType::UInt64, false)]).into(),
+        DataSchemaRefExt::create(vec![DataField::new("column1", DataType::UInt64, false)]).into(),
         options
     )?;
 
     let scan_plan = &ScanPlan {
         schema_name: "".to_string(),
-        table_schema: Arc::new(DataSchema::new(vec![])),
+        table_schema: DataSchemaRefExt::create(vec![]),
         table_args: None,
         projection: None,
-        projected_schema: Arc::new(DataSchema::new(vec![DataField::new(
+        projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "column1",
             DataType::UInt64,
             false
-        )])),
+        )]),
         filters: vec![],
         limit: None
     };
@@ -66,7 +64,7 @@ async fn test_csv_table() -> anyhow::Result<()> {
         "| 6       |",
         "+---------+",
     ];
-    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
     Ok(())
 }
@@ -97,7 +95,7 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
     let table = CsvTable::try_create(
         "default".into(),
         "test_csv".into(),
-        DataSchema::new(vec![
+        DataSchemaRefExt::create(vec![
             DataField::new("column1", DataType::UInt64, false),
             DataField::new("column2", DataType::UInt64, false),
             DataField::new("column3", DataType::UInt64, false),
@@ -108,14 +106,14 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
     )?;
     let scan_plan = &ScanPlan {
         schema_name: "".to_string(),
-        table_schema: Arc::new(DataSchema::new(vec![])),
+        table_schema: DataSchemaRefExt::create(vec![]),
         table_args: None,
         projection: None,
-        projected_schema: Arc::new(DataSchema::new(vec![DataField::new(
+        projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "column2",
             DataType::UInt64,
             false
-        )])),
+        )]),
         filters: vec![],
         limit: None
     };

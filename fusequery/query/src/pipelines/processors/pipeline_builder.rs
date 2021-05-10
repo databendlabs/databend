@@ -8,7 +8,9 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
+use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
+use common_planners::HavingPlan;
 use common_planners::LimitPlan;
 use common_planners::PlanNode;
 use common_planners::ProjectionPlan;
@@ -20,6 +22,7 @@ use log::info;
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::transforms::AggregatorFinalTransform;
 use crate::pipelines::transforms::AggregatorPartialTransform;
+use crate::pipelines::transforms::ExpressionTransform;
 use crate::pipelines::transforms::FilterTransform;
 use crate::pipelines::transforms::GroupByFinalTransform;
 use crate::pipelines::transforms::GroupByPartialTransform;
@@ -61,6 +64,9 @@ impl PipelineBuilder {
             match node {
                 PlanNode::Select(_) => Ok(true),
                 PlanNode::Stage(plan) => self.visit_stage_plan(&mut pipeline, &plan),
+                PlanNode::Expression(plan) => {
+                    PipelineBuilder::visit_expression_plan(&mut pipeline, plan)
+                }
                 PlanNode::Projection(plan) => {
                     PipelineBuilder::visit_projection_plan(&mut pipeline, plan)
                 }
@@ -71,6 +77,7 @@ impl PipelineBuilder {
                     PipelineBuilder::visit_aggregator_final_plan(&mut pipeline, plan)
                 }
                 PlanNode::Filter(plan) => PipelineBuilder::visit_filter_plan(&mut pipeline, plan),
+                PlanNode::Having(plan) => PipelineBuilder::visit_having_plan(&mut pipeline, plan),
                 PlanNode::Sort(plan) => {
                     PipelineBuilder::visit_sort_plan(limit, &mut pipeline, plan)
                 }
@@ -110,11 +117,20 @@ impl PipelineBuilder {
         Ok(true)
     }
 
+    fn visit_expression_plan(pipeline: &mut Pipeline, plan: &ExpressionPlan) -> Result<bool> {
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(ExpressionTransform::try_create(
+                plan.schema.clone(),
+                plan.exprs.clone()
+            )?))
+        })?;
+        Ok(true)
+    }
+
     fn visit_projection_plan(pipeline: &mut Pipeline, plan: &ProjectionPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ProjectionTransform::try_create(
-                plan.schema.clone(),
-                plan.expr.clone()
+                plan.schema.clone()
             )?))
         })?;
         Ok(true)
@@ -170,7 +186,18 @@ impl PipelineBuilder {
     fn visit_filter_plan(pipeline: &mut Pipeline, plan: &FilterPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
-                plan.predicate.clone()
+                plan.predicate.clone(),
+                false
+            )?))
+        })?;
+        Ok(true)
+    }
+
+    fn visit_having_plan(pipeline: &mut Pipeline, plan: &HavingPlan) -> Result<bool> {
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(FilterTransform::try_create(
+                plan.predicate.clone(),
+                true
             )?))
         })?;
         Ok(true)

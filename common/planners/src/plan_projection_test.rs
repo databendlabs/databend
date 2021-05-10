@@ -13,11 +13,7 @@ fn test_projection_plan() -> anyhow::Result<()> {
 
     let projection = PlanNode::Projection(ProjectionPlan {
         expr: vec![col("a")],
-        schema: Arc::new(DataSchema::new(vec![DataField::new(
-            "a",
-            DataType::Utf8,
-            false
-        )])),
+        schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
         input: Arc::from(PlanBuilder::empty().build()?)
     });
     let _ = projection.schema();

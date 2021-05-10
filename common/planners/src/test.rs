@@ -2,11 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
 use anyhow::Result;
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 
 use crate::plan_partition::Partition;
@@ -23,11 +21,8 @@ impl Test {
     }
 
     pub fn generate_source_plan_for_test(&self, total: usize) -> Result<PlanNode> {
-        let schema = Arc::new(DataSchema::new(vec![DataField::new(
-            "number",
-            DataType::UInt64,
-            false
-        )]));
+        let schema =
+            DataSchemaRefExt::create(vec![DataField::new("number", DataType::UInt64, false)]);
 
         let statistics = Statistics {
             read_rows: total,

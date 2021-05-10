@@ -9,15 +9,15 @@ use std::time::Instant;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::StringArray;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_functions::IFunction;
-use common_planners::ExpressionPlan;
+use common_planners::ExpressionAction;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
@@ -33,7 +33,7 @@ pub struct AggregatorPartialTransform {
 }
 
 impl AggregatorPartialTransform {
-    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionPlan>) -> Result<Self> {
+    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionAction>) -> Result<Self> {
         let mut funcs = Vec::with_capacity(exprs.len());
         for expr in &exprs {
             funcs.push(expr.to_function()?);
@@ -95,7 +95,7 @@ impl IProcessor for AggregatorPartialTransform {
             columns.push(col);
         }
 
-        let schema = Arc::new(DataSchema::new(fields));
+        let schema = DataSchemaRefExt::create(fields);
         let block = DataBlock::create(schema, columns);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),

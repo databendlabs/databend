@@ -26,11 +26,11 @@ fn test_arithmetic_function() -> Result<()> {
         func: Box<dyn IFunction>
     }
 
-    let schema = Arc::new(DataSchema::new(vec![
+    let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Int64, false),
         DataField::new("c", DataType::Int16, false),
-    ]));
+    ]);
 
     let field_a = ColumnFunction::try_create("a")?;
     let field_b = ColumnFunction::try_create("b")?;

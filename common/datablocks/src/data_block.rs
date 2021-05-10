@@ -14,6 +14,8 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
+use crate::pretty_format_blocks;
+
 #[derive(Clone)]
 pub struct DataBlock {
     schema: DataSchemaRef,
@@ -73,12 +75,28 @@ impl DataBlock {
         &self.columns
     }
 
-    pub fn column_by_name(&self, name: &str) -> Result<&DataArrayRef> {
+    pub fn try_column_by_name(&self, name: &str) -> Result<&DataArrayRef> {
         if name == "*" {
             Ok(&self.columns[0])
         } else {
             let idx = self.schema.index_of(name).map_err(ErrorCodes::from_arrow)?;
             Ok(&self.columns[idx])
+        }
+    }
+
+    pub fn column_by_name(&self, name: &str) -> Option<&DataArrayRef> {
+        if self.is_empty() {
+            return None;
+        }
+
+        if name == "*" {
+            return Some(&self.columns[0]);
+        };
+
+        if let Ok(idx) = self.schema.index_of(name) {
+            Some(&self.columns[idx])
+        } else {
+            None
         }
     }
 }
@@ -102,12 +120,7 @@ impl TryInto<DataBlock> for arrow::record_batch::RecordBatch {
 
 impl fmt::Debug for DataBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let batch = self
-            .clone()
-            .try_into()
-            .expect("Try convert data_block to batch_record error");
-        let formatted = common_arrow::arrow::util::pretty::pretty_format_batches(&[batch])
-            .expect("Pretty format batches error");
+        let formatted = pretty_format_blocks(&[self.clone()]).expect("Pretty format batches error");
         let lines: Vec<&str> = formatted.trim().lines().collect();
         write!(f, "\n{:#?}\n", lines)
     }

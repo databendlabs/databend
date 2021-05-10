@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashMap;
+
 #[test]
-fn test_rewriter_plan() -> anyhow::Result<()> {
+fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
     use pretty_assertions::assert_eq;
 
     use crate::*;
@@ -11,7 +13,7 @@ fn test_rewriter_plan() -> anyhow::Result<()> {
     #[allow(dead_code)]
     struct RewriteTest {
         name: &'static str,
-        exprs: Vec<ExpressionPlan>,
+        exprs: Vec<ExpressionAction>,
         expect_str: &'static str,
         error_msg: &'static str
     }
@@ -20,21 +22,21 @@ fn test_rewriter_plan() -> anyhow::Result<()> {
         RewriteTest{
             name : "Cyclic",
             exprs: vec![
-                    Box::new(ExpressionPlan::Function {
+                    Box::new(ExpressionAction::Function {
                         op: "plus".to_string(),
                         args: vec![
                             lit(1i32),
                             col("z")
                         ],
                     }).alias("x"),
-                    Box::new(ExpressionPlan::Function {
+                    Box::new(ExpressionAction::Function {
                         op: "plus".to_string(),
                         args: vec![
                             lit(1i32),
                             col("x")
                         ],
                     }).alias("y"),
-                    Box::new(ExpressionPlan::Function {
+                    Box::new(ExpressionAction::Function {
                         op: "plus".to_string(),
                         args: vec![
                             lit(1i32),
@@ -49,14 +51,14 @@ fn test_rewriter_plan() -> anyhow::Result<()> {
         RewriteTest{
             name : "Duplicate aliases",
             exprs: vec![
-                    Box::new(ExpressionPlan::Function {
+                    Box::new(ExpressionAction::Function {
                         op: "plus".to_string(),
                         args: vec![
                             lit(1i32),
                             col("z")
                         ],
                     }).alias("x"),
-                    Box::new(ExpressionPlan::Function {
+                    Box::new(ExpressionAction::Function {
                         op: "plus".to_string(),
                         args: vec![
                             lit(1i32),
@@ -72,14 +74,14 @@ fn test_rewriter_plan() -> anyhow::Result<()> {
             name: "normal",
             exprs: vec![
                 col("x"),
-                Box::new(ExpressionPlan::Function {
+                Box::new(ExpressionAction::Function {
                         op: "add".to_string(),
                         args: vec![
                             lit(1i32),
                             col("x")
                         ],
                     }).alias("y"),
-                ExpressionPlan::Function {
+                ExpressionAction::Function {
                     op: "multiply".to_string(),
                     args: vec![
                         col("y"),
@@ -94,21 +96,21 @@ fn test_rewriter_plan() -> anyhow::Result<()> {
         RewriteTest{
             name: "normal2",
             exprs: vec![
-                    Box::new(ExpressionPlan::Function {
+                Box::new(ExpressionAction::Function {
                         op: "add".to_string(),
                         args: vec![
                             lit(1i32),
                             lit(1i64),
                         ],
                     }).alias("x"),
-                    Box::new(ExpressionPlan::Function {
+                Box::new(ExpressionAction::Function {
                         op: "add".to_string(),
                         args: vec![
                             lit(1i32),
                             col("x")
                         ],
                     }).alias("y"),
-                ExpressionPlan::Function {
+                ExpressionAction::Function {
                     op: "multiply".to_string(),
                     args: vec![
                         col("x"),
@@ -122,21 +124,21 @@ fn test_rewriter_plan() -> anyhow::Result<()> {
         RewriteTest{
             name: "x+1->x",
             exprs: vec![
-                Box::new(ExpressionPlan::Function {
+                Box::new(ExpressionAction::Function {
                     op: "add".to_string(),
                     args: vec![
                         col("x"),
                         lit(1i64),
                     ],
                 }).alias("x"),
-                Box::new(ExpressionPlan::Function {
+                Box::new(ExpressionAction::Function {
                     op: "add".to_string(),
                     args: vec![
                         lit(1i32),
                         col("x")
                     ],
                 }).alias("y"),
-                ExpressionPlan::Function {
+                ExpressionAction::Function {
                     op: "multiply".to_string(),
                     args: vec![
                         col("x"),
@@ -150,12 +152,44 @@ fn test_rewriter_plan() -> anyhow::Result<()> {
     ];
 
     for t in tests {
-        let result = PlanRewriter::exprs_extract_aliases(t.exprs);
+        let result = PlanRewriter::rewrite_projection_aliases(&t.exprs);
         match &result {
             Ok(v) => assert_eq!(t.expect_str, format!("{:?}", v), "in test_case {}", t.name),
             Err(e) => assert_eq!(t.error_msg, e.to_string(), "in test_case {}", t.name)
         }
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_rewrite_expressions_plan() -> anyhow::Result<()> {
+    use pretty_assertions::assert_eq;
+
+    use crate::*;
+    let source = Test::create().generate_source_plan_for_test(10000)?;
+    let plan = PlanBuilder::from(&source)
+        .project(&[col("number").alias("x"), col("number").alias("y")])?
+        .filter(col("x").eq(lit(1i64)))?
+        .build()?;
+
+    let actual = PlanRewriter::projection_to_map(&plan)?;
+    let mut expect = HashMap::new();
+    expect.insert("x".to_string(), col("number"));
+    expect.insert("y".to_string(), col("number"));
+    assert_eq!(expect, actual);
+
+    let exprs = vec![ExpressionAction::Function {
+        op: "multiply".to_string(),
+        args: vec![col("x"), col("y")]
+    }];
+
+    let expect_plan = ExpressionAction::Function {
+        op: "multiply".to_string(),
+        args: vec![col("number"), col("number")]
+    };
+    let actual_plan = PlanRewriter::rewrite_alias_exprs(&actual, &exprs)?;
+    assert_eq!(expect_plan, actual_plan[0]);
 
     Ok(())
 }

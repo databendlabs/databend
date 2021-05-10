@@ -21,13 +21,18 @@ async fn test_transform_projection() -> anyhow::Result<()> {
     pipeline.add_source(Arc::new(source))?;
 
     if let PlanNode::Projection(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
-        .project(vec![col("number"), col("number")])?
+        .project(&[col("number"), col("number")])?
         .build()?
     {
         pipeline.add_simple_transform(|| {
-            Ok(Box::new(ProjectionTransform::try_create(
+            Ok(Box::new(ExpressionTransform::try_create(
                 plan.schema.clone(),
                 plan.expr.clone()
+            )?))
+        })?;
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(ProjectionTransform::try_create(
+                plan.schema.clone()
             )?))
         })?;
     }
@@ -51,7 +56,7 @@ async fn test_transform_projection() -> anyhow::Result<()> {
         "| 0      | 0      |",
         "+--------+--------+",
     ];
-    crate::assert_blocks_sorted_eq!(expected, result.as_slice());
+    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
     Ok(())
 }

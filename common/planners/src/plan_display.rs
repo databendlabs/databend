@@ -52,6 +52,22 @@ impl PlanNode {
                             }
                             Ok(true)
                         }
+                        PlanNode::Expression(plan) => {
+                            write!(f, "Expression: ")?;
+                            for i in 0..plan.exprs.len() {
+                                if i > 0 {
+                                    write!(f, ", ")?;
+                                }
+                                write!(
+                                    f,
+                                    "{:?}:{:?}",
+                                    plan.exprs[i],
+                                    plan.schema().fields()[i].data_type()
+                                )?;
+                            }
+                            write!(f, " ({})", plan.desc)?;
+                            Ok(true)
+                        }
                         PlanNode::AggregatorPartial(plan) => {
                             write!(
                                 f,
@@ -72,17 +88,22 @@ impl PlanNode {
                             write!(f, "Filter: {:?}", plan.predicate)?;
                             Ok(true)
                         }
+                        PlanNode::Having(plan) => {
+                            write!(f, "Having: {:?}", plan.predicate)?;
+                            Ok(true)
+                        }
                         PlanNode::Sort(plan) => {
                             write!(f, "Sort: ")?;
                             for i in 0..plan.order_by.len() {
                                 if i > 0 {
                                     write!(f, ", ")?;
                                 }
+                                let expr = plan.order_by[i].clone();
                                 write!(
                                     f,
                                     "{:?}:{:?}",
-                                    plan.order_by[i],
-                                    plan.schema().fields()[i].data_type()
+                                    expr,
+                                    expr.to_data_field(&plan.schema()).unwrap().data_type()
                                 )?;
                             }
                             Ok(true)

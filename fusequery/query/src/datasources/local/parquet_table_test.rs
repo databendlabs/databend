@@ -27,7 +27,7 @@ async fn test_parquet_table() -> anyhow::Result<()> {
     let table = ParquetTable::try_create(
         "default".into(),
         "test_parquet".into(),
-        DataSchema::new(vec![DataField::new("id", DataType::Int32, false)]).into(),
+        DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)]).clone(),
         options
     )?;
     table.read_plan(ctx.clone(), &ScanPlan::empty())?;

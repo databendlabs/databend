@@ -22,6 +22,7 @@ use common_arrow::arrow_flight::PutResult;
 use common_arrow::arrow_flight::SchemaResult;
 use common_arrow::arrow_flight::Ticket;
 use common_arrow::arrow_flight::{self};
+use common_datavalues::DataSchemaRefExt;
 use common_flights::QueryDoAction;
 use common_flights::QueryDoGet;
 use futures::Stream;
@@ -169,6 +170,17 @@ impl Flight for FlightService {
                                 send_response(&sender, batch.clone()).await.ok();
                             }
                         }
+                    }
+
+                    // Just for empty stream
+                    // TODO: refactor this
+                    if !has_send {
+                        let empty_schema = DataSchemaRefExt::create(vec![]);
+                        let schema_flight_data = arrow_flight::utils::flight_data_from_arrow_schema(
+                            &empty_schema,
+                            &options
+                        );
+                        sender.send(Ok(schema_flight_data)).await.ok();
                     }
 
                     // Cost.

@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::ExpressionPlan;
+use common_planners::ExpressionAction;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
@@ -20,7 +20,7 @@ use crate::pipelines::transforms::transform_sort_partial::get_sort_descriptions;
 
 pub struct SortMergeTransform {
     schema: DataSchemaRef,
-    exprs: Vec<ExpressionPlan>,
+    exprs: Vec<ExpressionAction>,
     limit: Option<usize>,
     input: Arc<dyn IProcessor>
 }
@@ -28,7 +28,7 @@ pub struct SortMergeTransform {
 impl SortMergeTransform {
     pub fn try_create(
         schema: DataSchemaRef,
-        exprs: Vec<ExpressionPlan>,
+        exprs: Vec<ExpressionAction>,
         limit: Option<usize>
     ) -> Result<Self> {
         Ok(SortMergeTransform {

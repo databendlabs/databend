@@ -7,12 +7,13 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use common_arrow::arrow;
+use common_datablocks::DataBlock;
 use common_datavalues as datavalues;
 use common_datavalues::BooleanArray;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_functions::IFunction;
-use common_planners::ExpressionPlan;
+use common_planners::ExpressionAction;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
@@ -25,9 +26,9 @@ pub struct FilterTransform {
 }
 
 impl FilterTransform {
-    pub fn try_create(predicate: ExpressionPlan) -> Result<Self> {
+    pub fn try_create(predicate: ExpressionAction, having: bool) -> Result<Self> {
         let func = predicate.to_function()?;
-        if func.is_aggregator() {
+        if !having && func.is_aggregator() {
             return Result::Err(ErrorCodes::SyntexException(format!(
                 "Aggregate function {:?} is found in WHERE in query",
                 predicate
@@ -61,24 +62,27 @@ impl IProcessor for FilterTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let func_clone = self.func.clone();
+        let func = self.func.clone();
         let input_stream = self.input.execute().await?;
 
-        let stream = input_stream.filter_map(move |v| {
-            let block = v.ok()?;
+        let executor = |func: Box<dyn IFunction>, block: Result<DataBlock>| -> Result<DataBlock> {
+            let block = block?;
             let rows = block.num_rows();
-            let filter_fn = func_clone.clone();
+            let filter_fn = func.clone();
 
             // Filter function eval result to array
-            let filter_array = filter_fn.eval(&block).ok()?.to_array(rows).ok()?;
+            let filter_array = filter_fn.eval(&block)?.to_array(rows)?;
             // Downcast to boolean array
-            let filter_array = datavalues::downcast_array!(filter_array, BooleanArray).ok()?;
+            let filter_array = datavalues::downcast_array!(filter_array, BooleanArray)?;
             // Convert to arrow record_batch
-            let batch = block.try_into().ok()?;
-            let batch = arrow::compute::filter_record_batch(&batch, filter_array).ok()?;
-            let block = batch.try_into().ok()?;
-            Some(Ok(block))
-        });
+            let batch = block.try_into()?;
+            let batch = arrow::compute::filter_record_batch(&batch, filter_array)
+                .map_err(ErrorCodes::from_arrow)?;
+            batch.try_into()
+        };
+
+        let stream =
+            input_stream.filter_map(move |v| executor(func.clone(), v).map(Some).transpose());
         Ok(Box::pin(stream))
     }
 }
