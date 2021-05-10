@@ -6,7 +6,7 @@ use tonic::Response as RawResponse;
 use tonic::Status;
 use tonic::Streaming;
 
-use common_arrow::arrow_flight::Action;
+use common_arrow::arrow_flight::{Action, FlightEndpoint};
 use common_arrow::arrow_flight::ActionType;
 use common_arrow::arrow_flight::Criteria;
 use common_arrow::arrow_flight::Empty;
@@ -21,8 +21,8 @@ use common_arrow::arrow_flight::SchemaResult;
 use common_arrow::arrow_flight::Ticket;
 use common_arrow::arrow_flight::Result as FlightResult;
 
-use crate::api::rpc::flight_dispatcher::Request as DispatcherRequest;
-use crate::api::rpc::FlightStream;
+use crate::api::rpc::flight_dispatcher::{Request as DispatcherRequest, PrepareStageInfo};
+use crate::api::rpc::{FlightStream, StreamInfo, FlightDispatcher};
 use tokio_stream::wrappers::ReceiverStream;
 use common_exception::ErrorCodes;
 use tokio_stream::StreamExt;
@@ -30,6 +30,7 @@ use common_arrow::arrow_flight::flight_descriptor::DescriptorType;
 use common_arrow::arrow_flight::utils::flight_schema_from_arrow_schema;
 use common_datavalues::DataSchemaRef;
 use common_arrow::arrow::datatypes::SchemaRef;
+use common_flights::ExecutePlanWithShuffleAction;
 
 pub struct FuseQueryService {
     dispatcher_sender: Sender<DispatcherRequest>,
@@ -119,7 +120,55 @@ impl FlightService for FuseQueryService {
     }
 
     async fn get_flight_info(&self, request: Request<FlightDescriptor>) -> Response<FlightInfo> {
-        unimplemented!()
+        let descriptor = request.into_inner();
+
+        fn create_descriptor(stream_full_name: &String) -> FlightDescriptor {
+            FlightDescriptor {
+                r#type: DescriptorType::Path as i32,
+                cmd: vec![],
+                path: stream_full_name.split("/").map(|str| str.to_string()).collect::<Vec<_>>(),
+            }
+        }
+
+        // fn create_endpoints(stream_full_name: &String, endpoints: Vec<String>) -> Vec<FlightEndpoint> {
+        //     endpoints.iter().map(|endpoint| {
+        //         FlightEndpoint {
+        //             ticket: Some(Ticket { ticket: endpoint.as_bytes().to_vec() }),
+        //             location: "".to_string(),
+        //         }
+        //     })
+        // }
+
+        fn create_flight_info(stream_info: StreamInfo) -> FlightInfo {
+            let options = common_arrow::arrow::ipc::writer::IpcWriteOptions::default();
+
+            FlightInfo {
+                schema: flight_schema_from_arrow_schema(&*stream_info.0, &options).schema,
+                flight_descriptor: Some(create_descriptor(&stream_info.1)),
+                endpoint: vec![],
+                total_records: -1,
+                total_bytes: -1,
+            }
+        }
+
+        type ResponseSchema = common_exception::Result<RawResponse<FlightInfo>>;
+        fn create_flight_info_response(receive_schema: Option<StreamInfo>) -> ResponseSchema {
+            receive_schema.ok_or_else(|| ErrorCodes::NotFoundStream("".to_string()))
+                .map(create_flight_info).map(RawResponse::new)
+        }
+
+        match descriptor.r#type {
+            1 => {
+                // DescriptorType::Path
+                let (response_sender, mut receiver) = channel(1);
+                self.dispatcher_sender.send(DispatcherRequest::GetStreamInfo(descriptor.path.join("/"), response_sender)).await;
+                let schema = receiver.recv().await;
+
+                schema.transpose().and_then(create_flight_info_response)
+                    .map_err(|e| Status::internal(e.to_string()))
+            },
+            _unimplemented_type => Err(Status::unimplemented(format!("FuseQuery does not implement Flight type: {}", descriptor.r#type)))
+        }
     }
 
     async fn get_schema(&self, request: Request<FlightDescriptor>) -> Response<SchemaResult> {
@@ -197,12 +246,30 @@ impl FlightService for FuseQueryService {
     type DoActionStream = FlightStream<FlightResult>;
 
     async fn do_action(&self, request: Request<Action>) -> Response<Self::DoActionStream> {
-        // let action = request.into_inner();
-        // match action.r#type.as_str() {
-        //     "PrepareStage" => {},
-        //     _ => Result::Err(Status::unimplemented(format!("FuseQuery does not implement action: {}.", action.r#type))),
-        // };
-        unimplemented!()
+        let action = request.into_inner();
+
+        fn once(result: common_exception::Result<FlightResult>) -> FlightStream<FlightResult> {
+            Box::pin(tokio_stream::once::<Result<FlightResult, Status>>(
+                result.map_err(|e| Status::internal(e.to_string())))
+            ) as FlightStream<FlightResult>
+        }
+
+        match action.r#type.as_str() {
+            "PrepareQueryStage" => {
+                match std::str::from_utf8(&action.body) {
+                    Err(utf_8_error) => Err(Status::invalid_argument(utf_8_error.to_string())),
+                    Ok(prepare_stage_info_str) => {
+                        let action = serde_json::from_str::<ExecutePlanWithShuffleAction>(prepare_stage_info_str)
+                            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+                        let (response_sender, mut receiver) = channel(1);
+                        self.dispatcher_sender.send(DispatcherRequest::PrepareQueryStage(PrepareStageInfo::create(action.query_id, action.stage_id, action.plan, action.shuffle_to), response_sender)).await;
+                        Ok(RawResponse::new(once(receiver.recv().await.transpose().map(|_| FlightResult { body: vec![] }))))
+                    }
+                }
+            }
+            _ => Result::Err(Status::unimplemented(format!("FuseQuery does not implement action: {}.", action.r#type))),
+        }
     }
 
     type ListActionsStream = FlightStream<ActionType>;

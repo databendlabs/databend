@@ -22,10 +22,13 @@ use tokio::sync::mpsc::error::SendError;
 
 pub struct PrepareStageInfo(String, String, PlanNode, Vec<String>);
 
+pub struct StreamInfo(pub DataSchemaRef, pub String, pub Vec<String>);
+
 pub enum Request {
     GetSchema(String, Sender<Result<DataSchemaRef>>),
     GetStream(String, Sender<Result<Receiver<Result<FlightData>>>>),
-    PrepareStage(PrepareStageInfo, Sender<Result<()>>),
+    PrepareQueryStage(PrepareStageInfo, Sender<Result<()>>),
+    GetStreamInfo(String, Sender<Result<StreamInfo>>),
 }
 
 pub struct QueryInfo {
@@ -81,9 +84,17 @@ impl FlightDispatcher {
                         None => schema_receiver.send(Err(ErrorCodes::NotFoundStream(format!("Stream {} is not found", id)))).await,
                     };
                 }
-                Request::PrepareStage(info, response_sender) => {
+                Request::PrepareQueryStage(info, response_sender) => {
                     let mut pipeline = Self::create_plan_pipeline(&*state, &info.2);
                     response_sender.send(Self::prepare_stage(&mut dispatcher_state, &info, pipeline)).await;
+                }
+                Request::GetStreamInfo(id, stream_info_receiver) => {
+                    match dispatcher_state.streams.get(&id) {
+                        Some(stream_info) => {
+                            stream_info_receiver.send(Ok(StreamInfo(stream_info.schema.clone(), id, vec![]))).await
+                        },
+                        None => stream_info_receiver.send(Err(ErrorCodes::NotFoundStream(format!("Stream {} is not found", id)))).await,
+                    };
                 }
             };
         }

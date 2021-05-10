@@ -22,3 +22,4 @@ mod flight_dispatcher;
 pub use flight_service::FlightService;
 pub use flight_service::FlightStream;
 pub use flight_dispatcher::FlightDispatcher;
+pub use flight_dispatcher::StreamInfo;

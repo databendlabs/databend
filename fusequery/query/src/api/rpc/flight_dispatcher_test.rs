@@ -42,7 +42,7 @@ async fn test_prepare_stage_with_one_shard() -> Result<()> {
 
 async fn prepare_stage(request_sender: &Sender<Request>, plan: PlanNode, query_id: String, stage_id: String, streams: Vec<String>) -> Result<()> {
     let (prepare_sender, mut prepare_receiver) = channel(1);
-    request_sender.send(Request::PrepareStage(PrepareStageInfo::create(
+    request_sender.send(Request::PrepareQueryStage(PrepareStageInfo::create(
         query_id,
         stage_id,
         plan,
