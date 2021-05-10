@@ -5,7 +5,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
@@ -41,40 +40,6 @@ pub struct PlanBuilder {
     plan: PlanNode
 }
 
-// Case1: group is a column, the name needs to match with aggr
-// Case2: aggr is an alias, unfold aggr
-// Case3: group and aggr are exactly the same expression
-pub fn aggr_group_expr_eq(
-    aggr: &ExpressionAction,
-    group_by_names: &HashSet<String>,
-    input_schema: &DataSchemaRef
-) -> Result<bool> {
-    match aggr {
-        ExpressionAction::Alias(alias, plan) => {
-            if group_by_names.contains(alias) {
-                return Ok(true);
-            } else {
-                return aggr_group_expr_eq(plan, group_by_names, input_schema);
-            }
-        }
-        _ => {
-            let aggr_str = format!("{:?}", aggr);
-            if group_by_names.contains(&aggr_str) {
-                return Ok(true);
-            } else {
-                let columns = PlanRewriter::expression_plan_columns(aggr)?;
-                for col in columns {
-                    let cn = col.to_data_field(input_schema)?.name().clone();
-                    if !group_by_names.contains(&cn) {
-                        return Ok(false);
-                    }
-                }
-            }
-        }
-    };
-    return Ok(true);
-}
-
 impl PlanBuilder {
     /// Create a builder from an existing plan
     pub fn from(plan: &PlanNode) -> Self {
@@ -90,29 +55,6 @@ impl PlanBuilder {
         Self::from(&PlanNode::Empty(EmptyPlan {
             schema: DataSchemaRef::new(DataSchema::empty())
         }))
-    }
-
-    pub fn exprs_to_fields(
-        &self,
-        exprs: &[ExpressionAction],
-        input_schema: &DataSchemaRef
-    ) -> Result<Vec<DataField>> {
-        exprs
-            .iter()
-            .map(|expr| expr.to_data_field(input_schema))
-            .collect::<Result<_>>()
-    }
-
-    pub fn exprs_to_names(
-        &self,
-        exprs: &[ExpressionAction],
-        names: &mut HashSet<String>
-    ) -> Result<()> {
-        for expr in exprs {
-            let name = String::from(format!("{:?}", expr).as_str());
-            names.insert(name.clone());
-        }
-        Ok(())
     }
 
     /// Apply a stage.
@@ -142,7 +84,7 @@ impl PlanBuilder {
         });
 
         // Merge fields.
-        let fields = self.exprs_to_fields(&projection_exprs, &input_schema)?;
+        let fields = PlanRewriter::exprs_to_fields(&projection_exprs, &input_schema)?;
         let mut merged = input_schema.fields().clone();
         for field in fields {
             if !merged.iter().any(|x| x.name() == field.name()) && field.name() != "*" {
@@ -173,7 +115,7 @@ impl PlanBuilder {
             _ => projection_exprs.push(v.clone())
         });
 
-        let fields = self.exprs_to_fields(&projection_exprs, &input_schema)?;
+        let fields = PlanRewriter::exprs_to_fields(&projection_exprs, &input_schema)?;
 
         Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
             input: Arc::new(self.plan.clone()),
@@ -189,22 +131,24 @@ impl PlanBuilder {
         group_expr: &[ExpressionAction]
     ) -> Result<Self> {
         let input_schema = self.plan.schema();
-        let aggr_projection_fields = self.exprs_to_fields(&aggr_expr, &input_schema)?;
+        let aggr_projection_fields = PlanRewriter::exprs_to_fields(&aggr_expr, &input_schema)?;
 
         // Aggregator check.
         let mut group_by_names = HashSet::new();
-        self.exprs_to_names(&group_expr, &mut group_by_names)?;
+        PlanRewriter::exprs_to_names(&group_expr, &mut group_by_names)?;
         for aggr in aggr_expr {
             // do not check literal expressions
             if let ExpressionAction::Literal(_) = aggr {
                 continue;
             } else if !aggr.has_aggregator()? {
                 // Check if aggr is in group-by's list
-                let in_group_by = aggr_group_expr_eq(&aggr, &group_by_names, &input_schema)?;
+                let in_group_by =
+                    PlanRewriter::check_aggr_in_group_expr(&aggr, &group_by_names, &input_schema)?;
                 if !in_group_by {
                     return Result::Err(ErrorCodes::IllegalAggregateExp(format!(
-                        "Expression {:?} is not an aggregate function.",
-                        aggr
+                        "Column `{:?}` is not under aggregate function and not in GROUP BY: While processing {:#}",
+                        aggr,
+                        aggr_expr.iter().map(|aggr| format!("{:#?}", aggr)).collect::<Vec<_>>().join(", ")
                     )));
                 }
             }

@@ -57,8 +57,7 @@ mod tests {
                     &vec![col("a")]
                 )),
                 expect_error: true,
-                expect:
-                    "Code: 26, displayText = Expression (number + 1) is not an aggregate function.."
+                expect: "Code: 26, displayText = Column `(number + 1)` is not under aggregate function and not in GROUP BY: While processing sum([number]) as a, (number + 1)."
             },
             TestCase {
                 name: "aggr-expr-not-in-group-by",
@@ -70,8 +69,7 @@ mod tests {
                     &vec![modular(col("a"), lit(4))]
                 )),
                 expect_error: true,
-                expect:
-                    "Code: 26, displayText = Expression (number % 3) is not an aggregate function.."
+                expect: "Code: 26, displayText = Column `(number % 3)` is not under aggregate function and not in GROUP BY: While processing sum([number]) as a, (number % 3)."
             },
             TestCase {
                 name: "aggr-expr-valid",
@@ -89,24 +87,17 @@ mod tests {
         ];
 
         for test in tests {
-            println!("name: {}", test.name);
             match test.plan {
                 Err(e) => {
-                    if test.expect_error {
-                        let actual = format!("{}", e);
-                        assert_eq!(test.expect, actual);
-                    } else {
+                    if !test.expect_error {
                         return Err(anyhow!("Error: we expect a failure."));
                     }
+                    let actual = format!("{}", e);
+                    assert_eq!(test.expect, actual, "{:?}", test.name);
                 }
                 Ok(p) => {
-                    if !test.expect_error {
-                        println!("p: {:?}", p.build()?);
-                        let actual = format!("{:?}", p.build()?);
-                        assert_eq!(test.expect, actual);
-                    } else {
-                        return Err(anyhow!("Error: we expect a failure."));
-                    }
+                    let actual = format!("{:?}", p.build()?);
+                    assert_eq!(test.expect, actual, "{:?}", test.name);
                 }
             }
         }
