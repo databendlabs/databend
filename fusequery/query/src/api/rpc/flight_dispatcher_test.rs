@@ -21,7 +21,7 @@ async fn test_prepare_stage_with_one_shard() -> Result<()> {
 
     let receive_res = get_stream_from_dispatcher(&request_sender, &stream_id).await;
     assert!(receive_res.is_err());
-    assert_eq!(format!("{}", receive_res.err().unwrap()), "Code: 27, displayText = Stream query_id/stage_id/stream_id is not found.");
+    assert_eq!(format!("{}", receive_res.err().unwrap()), "Code: 28, displayText = Stream query_id/stage_id/stream_id is not found.");
 
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
