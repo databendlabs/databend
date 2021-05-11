@@ -16,7 +16,7 @@ async fn test_transform_filter() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
-    let mut pipeline = Pipeline::create();
+    let mut pipeline = Pipeline::create(ctx.clone());
 
     let source = test_source.number_source_transform_for_test(10000)?;
     pipeline.add_source(Arc::new(source))?;
@@ -65,7 +65,7 @@ async fn test_transform_filter_error() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
-    let mut pipeline = Pipeline::create();
+    let mut pipeline = Pipeline::create(ctx.clone());
 
     let source = test_source.number_source_transform_for_test(10000)?;
     pipeline.add_source(Arc::new(source))?;

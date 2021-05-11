@@ -14,14 +14,19 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::IProcessor;
+use crate::sessions::FuseQueryContextRef;
 
 pub struct MergeProcessor {
+    ctx: FuseQueryContextRef,
     inputs: Vec<Arc<dyn IProcessor>>
 }
 
 impl MergeProcessor {
-    pub fn create() -> Self {
-        MergeProcessor { inputs: vec![] }
+    pub fn create(ctx: FuseQueryContextRef) -> Self {
+        MergeProcessor {
+            ctx,
+            inputs: vec![]
+        }
     }
 }
 
@@ -56,7 +61,7 @@ impl IProcessor for MergeProcessor {
                 for i in 0..inputs {
                     let input = self.inputs[i].clone();
                     let sender = sender.clone();
-                    tokio::spawn(async move {
+                    self.ctx.spawn(async move {
                         let mut stream = match input.execute().await {
                             Err(e) => {
                                 sender.send(Result::Err(e)).await.ok();

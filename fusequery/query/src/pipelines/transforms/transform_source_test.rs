@@ -12,9 +12,9 @@ async fn transform_source_test() -> anyhow::Result<()> {
     use crate::pipelines::processors::*;
 
     let ctx = crate::tests::try_create_context()?;
-    let test_source = crate::tests::NumberTestData::create(ctx);
+    let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
-    let mut pipeline = Pipeline::create();
+    let mut pipeline = Pipeline::create(ctx);
 
     let a = test_source.number_source_transform_for_test(1)?;
     pipeline.add_source(Arc::new(a))?;

@@ -78,7 +78,7 @@ impl ClickHouseSession for Session {
             }
         });
 
-        tokio::spawn(async move {
+        self.ctx.spawn(async move {
             let clickhouse_stream = interpreter
                 .execute()
                 .await

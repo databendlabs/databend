@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::VecDeque;
+use std::future::Future;
 use std::sync::Arc;
 
 use common_datavalues::DataValue;
@@ -15,6 +16,7 @@ use common_planners::Statistics;
 use common_progress::Progress;
 use common_progress::ProgressCallback;
 use common_progress::ProgressValues;
+use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 use crate::clusters::Cluster;
@@ -34,8 +36,8 @@ pub struct FuseQueryContext {
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Partition>>>,
     current_database: Arc<RwLock<String>>,
-
-    progress: Arc<Progress>
+    progress: Arc<Progress>,
+    thread_pool: Arc<tokio::runtime::Runtime>
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
@@ -43,6 +45,11 @@ pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 impl FuseQueryContext {
     pub fn try_create() -> Result<FuseQueryContextRef> {
         let settings = Settings::create();
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_io()
+            .enable_time()
+            .build()
+            .map_err(|tokio_error| ErrorCodes::TokioError(format!("{}", tokio_error)))?;
         let ctx = FuseQueryContext {
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings,
@@ -51,7 +58,8 @@ impl FuseQueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             current_database: Arc::new(RwLock::new(String::from("default"))),
-            progress: Arc::new(Progress::create())
+            progress: Arc::new(Progress::create()),
+            thread_pool: Arc::new(runtime)
         };
 
         ctx.initial_settings()?;
@@ -74,6 +82,16 @@ impl FuseQueryContext {
         self.statistics.write().clear();
         self.partition_queue.write().clear();
         Ok(())
+    }
+
+    /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
+    /// Same as tokio::runtime.spawn.
+    pub fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static
+    {
+        self.thread_pool.spawn(task)
     }
 
     /// Set progress callback to context.
@@ -182,6 +200,12 @@ impl FuseQueryContext {
         ("max_threads", u64, num_cpus::get() as u64, "The maximum number of threads to execute the request. By default, it is determined automatically.".to_string()),
         ("max_block_size", u64, 10000, "Maximum block size for reading".to_string()),
         ("flight_client_timeout", u64, 60, "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds".to_string())
+    }
+}
+
+impl Drop for FuseQueryContext {
+    fn drop(&mut self) {
+        std::mem::forget(self.thread_pool.clone());
     }
 }
 

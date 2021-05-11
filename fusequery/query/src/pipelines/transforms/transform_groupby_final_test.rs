@@ -33,7 +33,7 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
         .build()?;
 
     // Pipeline.
-    let mut pipeline = Pipeline::create();
+    let mut pipeline = Pipeline::create(ctx.clone());
     let source = test_source.number_source_transform_for_test(1000)?;
     pipeline.add_source(Arc::new(source))?;
     pipeline.add_simple_transform(|| {
