@@ -40,12 +40,12 @@ pub struct ExpressionTransform {
 }
 
 impl ExpressionTransform {
-    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionAction>) -> Result<Self> {
+    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionAction>, skip_aggregate: bool) -> Result<Self> {
         let mut funcs = vec![];
 
         for expr in &exprs {
             let func = expr.to_function()?;
-            if func.is_aggregator() {
+            if func.has_aggregator() {
                 return Result::Err(ErrorCodes::BadTransformType(
                     format!(
                         "Aggregate function {} is found in ExpressionTransform, should AggregatorTransform",

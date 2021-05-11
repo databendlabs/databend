@@ -262,6 +262,10 @@ impl PlanParser {
                 res.and_then(|res| item.map(|item| res || item))
             });
 
+
+        // Before group by
+
+        println!("proj {:?}, agg: {:?}, group: {:?}", projection_exprs, projection_exprs, select.group_by);
         // Projection.
         let plan = if !select.group_by.is_empty() || has_aggregator? {
             self.aggregate(&plan, &projection_exprs, &select.group_by)

@@ -67,8 +67,8 @@ impl IFunction for AliasFunction {
         self.func.merge_result()
     }
 
-    fn is_aggregator(&self) -> bool {
-        self.func.is_aggregator()
+    fn has_aggregator(&self) -> bool {
+        self.func.has_aggregator()
     }
 }
 

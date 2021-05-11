@@ -55,7 +55,7 @@ pub trait IFunction: fmt::Display + Sync + Send + DynClone {
         )))
     }
 
-    fn is_aggregator(&self) -> bool {
+    fn has_aggregator(&self) -> bool {
         false
     }
 }

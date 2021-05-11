@@ -87,7 +87,7 @@ impl IFunction for AggregatorCountFunction {
         Ok(self.state.clone())
     }
 
-    fn is_aggregator(&self) -> bool {
+    fn has_aggregator(&self) -> bool {
         true
     }
 }

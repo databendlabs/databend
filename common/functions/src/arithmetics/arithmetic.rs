@@ -129,8 +129,8 @@ impl IFunction for ArithmeticFunction {
         )
     }
 
-    fn is_aggregator(&self) -> bool {
-        self.left.is_aggregator() || self.right.is_aggregator()
+    fn has_aggregator(&self) -> bool {
+        self.left.has_aggregator() || self.right.has_aggregator()
     }
 }
 

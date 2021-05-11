@@ -8,7 +8,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_exception::Result;
+use common_exception::{Result, ErrorCodes};
 use common_functions::AliasFunction;
 use common_functions::CastFunction;
 use common_functions::ColumnFunction;
@@ -35,6 +35,13 @@ pub enum ExpressionAction {
         op: String,
         args: Vec<ExpressionAction>
     },
+
+    /// Functions with a set of arguments.
+    AggregateFunction {
+        op: String,
+        args: Vec<ExpressionAction>
+    },
+
 
     /// A sort expression, that can be used to sort values.
     Sort {
@@ -90,12 +97,38 @@ impl ExpressionAction {
             ExpressionAction::Cast { expr, data_type } => Ok(CastFunction::create(
                 expr.to_function_with_depth(depth)?,
                 data_type.clone()
-            ))
+            )),
+            ExpressionAction::AggregateFunction { .. } => Result::Err(ErrorCodes::LogicalError(format!(
+                "Functions can't be built from AggregateFunction `{:?}",
+                self,
+            )))
         }
     }
 
     pub fn to_function(&self) -> Result<Box<dyn IFunction>> {
         self.to_function_with_depth(0)
+    }
+
+    // TODO fixme: create IAggregateFunction
+    pub fn to_aggregate_function(&self) -> Result<Box<dyn IFunction>> {
+        match self {
+            ExpressionAction::AggregateFunction { op, args } => {
+                let mut funcs = Vec::with_capacity(args.len());
+                for arg in args {
+                    let mut func = arg.to_function_with_depth(depth + 1)?;
+                    func.set_depth(depth);
+                    funcs.push(func);
+                }
+                let mut func = FunctionFactory::get(op, &funcs)?;
+                func.set_depth(depth);
+                Ok(func)
+            },
+
+            _ => Result::Err(ErrorCodes::LogicalError(format!(
+                "AggregateFunction can't be built from other expressions `{:?}",
+                self,
+            ))),
+        }
     }
 
     pub fn to_data_field(&self, input_schema: &DataSchemaRef) -> Result<DataField> {
@@ -109,7 +142,7 @@ impl ExpressionAction {
     }
 
     pub fn has_aggregator(&self) -> Result<bool> {
-        Ok(self.to_function()?.is_aggregator())
+        Ok(self.to_function()?.has_aggregator())
     }
 }
 
@@ -123,6 +156,7 @@ impl fmt::Debug for ExpressionAction {
                 write!(f, "({:?} {} {:?})", left, op, right,)
             }
             ExpressionAction::Function { op, args } => write!(f, "{}({:?})", op, args),
+            ExpressionAction::AggregateFunction { op, args } => write!(f, "{}({:?})", op, args),
             ExpressionAction::Sort { expr, .. } => write!(f, "{:?}", expr),
             ExpressionAction::Wildcard => write!(f, "*"),
             ExpressionAction::Cast { expr, data_type } => {

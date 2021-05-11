@@ -122,7 +122,7 @@ impl IFunction for AggregatorAvgFunction {
         })
     }
 
-    fn is_aggregator(&self) -> bool {
+    fn has_aggregator(&self) -> bool {
         true
     }
 }
