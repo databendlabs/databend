@@ -73,6 +73,7 @@ build_exceptions! {
     IllegalAggregateExp(26),
     StageExists(27),
     NotFoundStream(28),
+    BadColumnarType(29),
 
     UnknownException(1000),
     TokioError(1001)
