@@ -265,9 +265,10 @@ impl DataValue {
                 )
             }
             DataType::List(nested_type) => {
-                let list_array = array.as_any().downcast_ref::<ListArray>().ok_or_else(|| {
-                    ErrorCodes::LogicalError("Failed to downcast ListArray".to_string())
-                })?;
+                let list_array = array
+                    .as_any()
+                    .downcast_ref::<ListArray>()
+                    .ok_or_else(|| ErrorCodes::LogicalError("Failed to downcast ListArray"))?;
                 let value = match list_array.is_null(index) {
                     true => None,
                     false => {
@@ -281,13 +282,10 @@ impl DataValue {
                 Ok(DataValue::List(value, nested_type.data_type().clone()))
             }
             DataType::Struct(_) => {
-                let strut_array =
-                    array
-                        .as_any()
-                        .downcast_ref::<StructArray>()
-                        .ok_or_else(|| {
-                            ErrorCodes::LogicalError("Failed to downcast StructArray".to_string())
-                        })?;
+                let strut_array = array
+                    .as_any()
+                    .downcast_ref::<StructArray>()
+                    .ok_or_else(|| ErrorCodes::LogicalError("Failed to downcast StructArray"))?;
                 let nested_array = strut_array.column(index);
                 let scalar_vec = (0..nested_array.len())
                     .map(|i| Self::try_from_array(&nested_array, i))

@@ -37,7 +37,7 @@ impl IProcessor for SourceTransform {
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> Result<()> {
         Result::Err(ErrorCodes::LogicalError(
-            "Cannot call SourceTransform connect_to".to_string()
+            "Cannot call SourceTransform connect_to"
         ))
     }
 

@@ -39,7 +39,7 @@ impl SubstringFunction {
                 len: args[2].clone()
             })),
             _ => Result::Err(ErrorCodes::BadArguments(
-                "Function Error: Substring function args length must be 3".to_string()
+                "Function Error: Substring function args length must be 3"
             ))
         }
     }

@@ -368,7 +368,7 @@ macro_rules! build_list {
                             }
                             _ => {
                                 return Result::Err(ErrorCodes::BadDataValueType(
-                                    "Incompatible DataValue for list".to_string()
+                                    "Incompatible DataValue for list"
                                 ))
                             }
                         };
@@ -395,7 +395,7 @@ macro_rules! try_build_array {
                 }
                 _ => {
                     return Result::Err(ErrorCodes::BadDataValueType(
-                        "Incompatible DataValue for list".to_string()
+                        "Incompatible DataValue for list"
                     ))
                 }
             };

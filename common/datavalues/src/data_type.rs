@@ -61,7 +61,7 @@ pub fn numeric_byte_size(dt: &DataType) -> Result<usize> {
         DataType::Int32 | DataType::UInt32 | DataType::Float32 => Ok(4),
         DataType::Int64 | DataType::UInt64 | DataType::Float64 => Ok(8),
         _ => Result::Err(ErrorCodes::BadArguments(
-            "Function number_byte_size argument must be numeric types".to_string()
+            "Function number_byte_size argument must be numeric types"
         ))
     }
 }

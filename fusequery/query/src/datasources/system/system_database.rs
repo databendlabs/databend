@@ -81,7 +81,7 @@ impl IDatabase for SystemDatabase {
 
     async fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
         Result::Err(ErrorCodes::UnImplement(
-            "DataSource Error: cannot create table for system database".to_string()
+            "DataSource Error: cannot create table for system database"
         ))
     }
 }
