@@ -54,7 +54,7 @@ impl IFileSystem for Dfs {
         let mut client = self.make_client().await?;
         let req = ClientRequest {
             txid: None,
-            cmd: Cmd::Add {
+            cmd: Cmd::AddFile {
                 key: path,
                 value: "".into()
             }
