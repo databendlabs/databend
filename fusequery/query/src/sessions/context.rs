@@ -37,7 +37,7 @@ pub struct FuseQueryContext {
     partition_queue: Arc<RwLock<VecDeque<Partition>>>,
     current_database: Arc<RwLock<String>>,
     progress: Arc<Progress>,
-    thread_pool: Arc<tokio::runtime::Runtime>
+    thread_pool: Arc<RwLock<tokio::runtime::Runtime>>
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
@@ -59,10 +59,12 @@ impl FuseQueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             current_database: Arc::new(RwLock::new(String::from("default"))),
             progress: Arc::new(Progress::create()),
-            thread_pool: Arc::new(runtime)
+            thread_pool: Arc::new(RwLock::new(runtime))
         };
-
         ctx.initial_settings()?;
+
+        // Define setting.
+        ctx.settings.try_set_u64("max_threads", num_cpus::get() as u64, "The maximum number of threads to execute the request. By default, it is determined automatically.".to_string())?;
         Ok(Arc::new(ctx))
     }
 
@@ -91,7 +93,7 @@ impl FuseQueryContext {
         T: Future + Send + 'static,
         T::Output: Send + 'static
     {
-        self.thread_pool.spawn(task)
+        self.thread_pool.read().spawn(task)
     }
 
     /// Set progress callback to context.
@@ -196,8 +198,20 @@ impl FuseQueryContext {
             })
     }
 
+    pub fn get_max_threads(&self) -> Result<u64> {
+        self.settings.try_get_u64("max_threads")
+    }
+
+    pub fn set_max_threads(&self, threads: u64) -> Result<()> {
+        *self.thread_pool.write() = tokio::runtime::Builder::new_multi_thread()
+            .enable_io()
+            .enable_time()
+            .build()
+            .map_err(|tokio_error| ErrorCodes::TokioError(format!("{}", tokio_error)))?;
+        self.settings.try_update_u64("max_threads", threads)
+    }
+
     apply_macros! { apply_getter_setter_settings, apply_initial_settings, apply_update_settings,
-        ("max_threads", u64, num_cpus::get() as u64, "The maximum number of threads to execute the request. By default, it is determined automatically.".to_string()),
         ("max_block_size", u64, 10000, "Maximum block size for reading".to_string()),
         ("flight_client_timeout", u64, 60, "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds".to_string())
     }
@@ -205,7 +219,7 @@ impl FuseQueryContext {
 
 impl Drop for FuseQueryContext {
     fn drop(&mut self) {
-        std::mem::forget(self.thread_pool.clone());
+        // What todo here?
     }
 }
 
