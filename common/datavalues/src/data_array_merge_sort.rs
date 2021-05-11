@@ -19,7 +19,7 @@ impl DataArrayMerge {
     pub fn merge_array(lhs: &ArrayRef, rhs: &ArrayRef, indices: &[bool]) -> Result<ArrayRef> {
         if lhs.data_type() != rhs.data_type() {
             return Result::Err(ErrorCodes::BadDataValueType(
-                "It is impossible to merge arrays of different data types.".to_string()
+                "It is impossible to merge arrays of different data types."
             ));
         }
 
@@ -82,7 +82,7 @@ impl DataArrayMerge {
         };
         if lhs.is_empty() {
             return Result::Err(ErrorCodes::BadDataArrayLength(
-                "Merge requires lhs to have at least 1 entry.".to_string()
+                "Merge requires lhs to have at least 1 entry."
             ));
         };
         if lhs.len() != options.len() {

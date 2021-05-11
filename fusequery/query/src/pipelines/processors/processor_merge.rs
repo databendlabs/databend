@@ -48,7 +48,7 @@ impl IProcessor for MergeProcessor {
         let inputs = self.inputs.len();
         match inputs {
             0 => Result::Err(ErrorCodes::IllegalTransformConnectionState(
-                "Merge processor inputs cannot be zero".to_string()
+                "Merge processor inputs cannot be zero"
             )),
             1 => self.inputs[0].execute().await,
             _ => {

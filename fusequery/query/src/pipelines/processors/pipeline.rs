@@ -44,9 +44,9 @@ impl Pipeline {
 
     /// Last pipe of the pipeline.
     pub fn last_pipe(&self) -> Result<&Pipe> {
-        self.pipes.last().ok_or_else(|| {
-            ErrorCodes::IllegalPipelineState("Pipeline last pipe can not be none".to_string())
-        })
+        self.pipes
+            .last()
+            .ok_or_else(|| ErrorCodes::IllegalPipelineState("Pipeline last pipe can not be none"))
     }
 
     pub fn add_source(&mut self, source: Arc<dyn IProcessor>) -> Result<()> {
