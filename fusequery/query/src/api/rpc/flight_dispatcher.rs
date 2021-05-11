@@ -20,7 +20,7 @@ use std::convert::TryInto;
 use tonic::Status;
 use tokio::sync::mpsc::error::SendError;
 
-pub struct PrepareStageInfo(String, String, PlanNode, Vec<String>);
+pub struct PrepareStageInfo(pub String, pub String, pub PlanNode, pub Vec<String>);
 
 pub struct StreamInfo(pub DataSchemaRef, pub String, pub Vec<String>);
 
