@@ -35,14 +35,21 @@ async fn test_meta_server_set_get() -> anyhow::Result<()> {
         // add: ok
         let req = ClientRequest {
             txid: None,
-            cmd: Cmd::Add {
+            cmd: Cmd::AddFile {
                 key: "foo".to_string(),
                 value: "bar".to_string()
             }
         };
         let rst = client.write(req).await?.into_inner();
         let resp: ClientResponse = rst.into();
-        assert_eq!("bar".to_string(), resp.result.unwrap());
+        match resp {
+            ClientResponse::String { prev: _, result } => {
+                assert_eq!("bar".to_string(), result.unwrap());
+            }
+            _ => {
+                panic!("not string")
+            }
+        }
 
         // get the stored value
 
@@ -55,27 +62,41 @@ async fn test_meta_server_set_get() -> anyhow::Result<()> {
         // add: conflict with existent.
         let req = ClientRequest {
             txid: None,
-            cmd: Cmd::Add {
+            cmd: Cmd::AddFile {
                 key: "foo".to_string(),
                 value: "bar".to_string()
             }
         };
         let rst = client.write(req).await?.into_inner();
         let resp: ClientResponse = rst.into();
-        assert!(resp.result.is_none());
+        match resp {
+            ClientResponse::String { prev: _, result } => {
+                assert!(result.is_none());
+            }
+            _ => {
+                panic!("not string")
+            }
+        }
     }
     {
         // set: overrde. ok.
         let req = ClientRequest {
             txid: None,
-            cmd: Cmd::Set {
+            cmd: Cmd::SetFile {
                 key: "foo".to_string(),
                 value: "bar2".to_string()
             }
         };
         let rst = client.write(req).await?.into_inner();
         let resp: ClientResponse = rst.into();
-        assert_eq!(Some("bar2".to_string()), resp.result);
+        match resp {
+            ClientResponse::String { prev: _, result } => {
+                assert_eq!(Some("bar2".to_string()), result);
+            }
+            _ => {
+                panic!("not string")
+            }
+        }
 
         // get the stored value
 
