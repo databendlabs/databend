@@ -17,7 +17,7 @@ pub struct MetaServiceImpl {
 }
 
 impl MetaServiceImpl {
-    pub async fn create(meta_node: Arc<MetaNode>) -> Self {
+    pub fn create(meta_node: Arc<MetaNode>) -> Self {
         Self { meta_node }
     }
 }

@@ -14,9 +14,6 @@ use crate::meta_service::GetReq;
 use crate::meta_service::MemStoreStateMachine;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
-use crate::meta_service::MetaServiceImpl;
-use crate::meta_service::MetaServiceServer;
-use crate::meta_service::Node;
 use crate::meta_service::RaftTxId;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -171,11 +168,11 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     // Start a single node meta service cluster.
     // Test the single node is recorded by this cluster.
 
-    let mn = MetaNode::new(0).await;
-
     let addr = "127.0.0.1:9000".to_string();
-    let resp = mn.boot(addr.clone()).await;
+    let resp = MetaNode::boot(0, addr.clone()).await;
     assert!(resp.is_ok());
+
+    let mn = resp.unwrap();
 
     let got = mn.get_node(&0).await;
     assert_eq!(addr, got.unwrap().address);
@@ -188,44 +185,23 @@ async fn test_meta_node_add_non_voter() -> anyhow::Result<()> {
 
     // Start a meta service cluster with one voter(leader) and one non-voter.
 
-    // node-0: voter
+    // node-0: voter, becomes leader.
     let nid0 = 0;
     let addr0 = "127.0.0.1:19000".to_string();
-    let mn0 = MetaNode::new(nid0).await;
-    let mut mrx0 = mn0.raft.metrics();
-    let srv0 = MetaServiceImpl::create(mn0.clone()).await;
-    let srv0 = MetaServiceServer::new(srv0);
-    serve_grpc!(addr0, srv0);
-
-    check_connection(addr0.clone()).await?;
-
     // node-1: non-voter
     let nid1 = 1;
     let addr1 = "127.0.0.1:19001".to_string();
-    let mn1 = MetaNode::new(1).await;
-    let mut mrx1 = mn1.raft.metrics();
-    let srv1 = MetaServiceImpl::create(mn1.clone()).await;
-    let srv1 = MetaServiceServer::new(srv1);
-    serve_grpc!(addr1, srv1);
 
-    check_connection(addr1.clone()).await?;
+    // boot up a single-node cluster
+    let mn0 = MetaNode::boot(nid0, addr0.clone()).await?;
+    let mut mrx0 = mn0.raft.metrics();
 
-    wait_for("nid0 to be non-voter", &mut mrx0, |x| {
-        x.state == State::NonVoter
-    })
-    .await;
-    wait_for("nid1 to be non-voter", &mut mrx1, |x| {
-        x.state == State::NonVoter
-    })
-    .await;
+    check_connection(&addr0).await?;
 
     {
-        // boot up a single-node cluster
-        let resp = mn0.boot(addr0.clone()).await;
-        assert!(resp.is_ok());
-
+        // check: node-0 is stored.
         let got = mn0.get_node(&nid0).await;
-        assert_eq!(addr0, got.unwrap().address, "nid1 is added");
+        assert_eq!(addr0, got.unwrap().address, "nid0 is added");
 
         wait_for("nid0 to be leader", &mut mrx0, |x| x.state == State::Leader).await;
         wait_for("nid0 current_leader==0", &mut mrx0, |x| {
@@ -234,20 +210,12 @@ async fn test_meta_node_add_non_voter() -> anyhow::Result<()> {
         .await;
     }
 
+    let mn1 = MetaNode::boot_non_voter(nid1, &addr1).await?;
+    let mut mrx1 = mn1.raft.metrics();
+
     {
         // add node-1 to cluster as non-voter
-        let resp = mn0
-            .write_to_local_leader(ClientRequest {
-                txid: None,
-                cmd: Cmd::AddNode {
-                    node_id: nid1,
-                    node: Node {
-                        name: "".to_string(),
-                        address: addr1.clone()
-                    }
-                }
-            })
-            .await;
+        let resp = mn0.add_node(nid1, addr1.clone()).await;
         match resp.unwrap() {
             ClientResponse::Node { prev: _, result } => {
                 assert_eq!(addr1, result.unwrap().address);
@@ -258,6 +226,13 @@ async fn test_meta_node_add_non_voter() -> anyhow::Result<()> {
         }
     }
 
+    check_connection(&addr1).await?;
+
+    wait_for("nid1 to be non-voter", &mut mrx1, |x| {
+        x.state == State::NonVoter
+    })
+    .await;
+
     wait_for("nid1 current_leader==0", &mut mrx1, |x| {
         x.current_leader == Some(0)
     })
@@ -266,7 +241,7 @@ async fn test_meta_node_add_non_voter() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn check_connection(addr: String) -> anyhow::Result<()> {
+async fn check_connection(addr: &str) -> anyhow::Result<()> {
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
     let req = tonic::Request::new(GetReq { key: "foo".into() });
     let rst = client.get(req).await?.into_inner();

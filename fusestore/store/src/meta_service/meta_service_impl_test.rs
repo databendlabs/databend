@@ -20,11 +20,11 @@ use crate::tests::rand_local_addr;
 async fn test_meta_server_set_get() -> anyhow::Result<()> {
     let addr = rand_local_addr();
 
-    let mn = MetaNode::new(0).await;
-    let rst = mn.boot(addr.clone()).await;
+    let rst = MetaNode::boot(0, addr.clone()).await;
     assert!(rst.is_ok());
+    let mn = rst.unwrap();
 
-    let meta_srv_impl = MetaServiceImpl::create(mn).await;
+    let meta_srv_impl = MetaServiceImpl::create(mn);
     let meta_srv = MetaServiceServer::new(meta_srv_impl);
 
     serve_grpc!(addr, meta_srv);
