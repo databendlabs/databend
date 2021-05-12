@@ -78,11 +78,6 @@ impl Runtime {
     {
         self.handle.spawn(task)
     }
-
-    /// Run a future to completion on this `Handle`'s associated `Runtime`.
-    pub fn block_on<F: Future>(&self, future: F) -> F::Output {
-        self.handle.block_on(future)
-    }
 }
 
 /// Dropping the dropper will cause runtime to shutdown.

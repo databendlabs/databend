@@ -65,9 +65,9 @@ impl<W: io::Write> MysqlShim<W> for Session {
         let start = Instant::now();
 
         type ResultSet = Result<Vec<DataBlock>>;
-        fn receive_data_set(ctx: FuseQueryContextRef, interpreter: InterpreterPtr) -> ResultSet {
+        fn receive_data_set(interpreter: InterpreterPtr) -> ResultSet {
             use futures::future::TryFutureExt;
-            ctx.block_on(
+            futures::executor::block_on(
                 interpreter
                     .execute()
                     .and_then(|stream| stream.collect::<Result<Vec<DataBlock>>>())
@@ -79,7 +79,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
             .build_from_sql(query)
             .and_then(|built_plan| InterpreterFactory::get(self.ctx.clone(), built_plan))
             // Execute query and get result
-            .and_then(|interpreter| receive_data_set(self.ctx.clone(), interpreter))
+            .and_then(|interpreter| receive_data_set(interpreter))
             // Push result set to client
             .and_match(done(writer));
 

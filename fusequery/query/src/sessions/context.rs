@@ -93,11 +93,6 @@ impl FuseQueryContext {
         self.thread_pool.read().spawn(task)
     }
 
-    /// Run a future to completion on this `Handle`'s associated `Runtime`.
-    pub fn block_on<F: Future>(&self, future: F) -> F::Output {
-        self.thread_pool.read().block_on(future)
-    }
-
     /// Set progress callback to context.
     /// By default, it is called for leaf sources, after each block
     /// Note that the callback can be called from different threads.
