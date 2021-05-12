@@ -74,6 +74,7 @@ build_exceptions! {
     StageExists(27),
     NotFoundStream(28),
     BadColumnarType(29),
+    UnknownColumn(30),
 
     UnknownException(1000),
     TokioError(1001)

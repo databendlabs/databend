@@ -99,6 +99,14 @@ impl DataBlock {
             None
         }
     }
+
+    pub fn index_by_name(&self, column_name: &str) -> Option<usize> {
+        match column_name {
+            "" => None,
+            "*" => Some(0),
+            other_column_name => self.schema.index_of(other_column_name).ok()
+        }
+    }
 }
 
 impl TryInto<arrow::record_batch::RecordBatch> for DataBlock {

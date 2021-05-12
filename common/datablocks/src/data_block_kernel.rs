@@ -2,18 +2,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_arrow::arrow::array::UInt32Builder;
+use common_arrow::arrow::array::{UInt32Builder, ArrayRef};
 use common_arrow::arrow::compute;
-use common_datavalues::DataArrayMerge;
+use common_datavalues::{DataArrayMerge, DataColumnarScatter, DataArrayRef};
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::DataBlock;
+use std::sync::Arc;
 
 pub struct SortColumnDescription {
     pub column_name: String,
     pub asc: bool,
-    pub nulls_first: bool
+    pub nulls_first: bool,
 }
 
 impl DataBlock {
@@ -167,9 +168,52 @@ impl DataBlock {
                 let right = DataBlock::merge_sort_blocks(
                     &blocks[blocks.len() / 2..blocks.len()],
                     sort_columns_descriptions,
-                    limit
+                    limit,
                 )?;
                 DataBlock::merge_sort_block(&left, &right, sort_columns_descriptions, limit)
+            }
+        }
+    }
+
+    pub fn scatter_block(
+        block: &DataBlock,
+        scatter_column_name: String,
+        scatter_size: usize) -> Result<Vec<DataBlock>> {
+        match block.index_by_name(&scatter_column_name) {
+            None => Result::Err(ErrorCodes::UnknownColumn(format!("{}", scatter_column_name))),
+            Some(scatter_index_column_index) => {
+                let columns_size = block.num_columns();
+                let mut scattered_columns: Vec<Option<ArrayRef>> = vec![];
+
+                scattered_columns.resize_with(scatter_size * columns_size, || None);
+
+                let indices = block.column(scatter_index_column_index);
+                for column_index in 0..columns_size {
+                    let column = block.column(column_index);
+                    let mut scattered_column = DataColumnarScatter::scatter(column, indices, scatter_size)?;
+
+                    for scattered_index in 0..scattered_column.len() {
+                        scattered_columns[scattered_index * columns_size + column_index] = Some(scattered_column.remove(0));
+                    }
+                }
+
+                let mut scattered_blocks = vec![];
+                for index in 0..scatter_size {
+                    let begin_index = index * columns_size;
+                    let end_index = (index + 1) * columns_size;
+
+                    let mut block_columns = vec![];
+                    for scattered_column in &scattered_columns[begin_index..end_index] {
+                        match scattered_column {
+                            None => panic!(""),
+                            Some(scattered_column) => block_columns.push(scattered_column.clone()),
+                        };
+                    }
+
+                    scattered_blocks.push(DataBlock::create(block.schema().clone(), block_columns));
+                }
+
+                Ok(scattered_blocks)
             }
         }
     }
