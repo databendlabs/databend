@@ -14,7 +14,7 @@ use clickhouse_srv::types::Block as ClickHouseBlock;
 use clickhouse_srv::*;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use log::info;
+use log::error;
 use metrics::histogram;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
@@ -184,6 +184,7 @@ impl ClickHouseHandler {
         .await?;
 
         loop {
+            let session_mgr = self.session_manager.clone();
             // Asynchronously wait for an inbound TcpStream.
             let (stream, _) = listener.accept().await?;
             let ctx = self
@@ -191,14 +192,14 @@ impl ClickHouseHandler {
                 .try_create_context()?
                 .with_cluster(self.cluster.clone())?;
             ctx.set_max_threads(self.conf.num_cpus)?;
-            let session_mgr = self.session_manager.clone();
+
             // Spawn our handler to be run asynchronously.
             tokio::spawn(async move {
                 if let Err(e) =
                     ClickHouseServer::run_on_stream(Arc::new(Session::create(ctx.clone())), stream)
                         .await
                 {
-                    info!("Error: {:?}", e);
+                    error!("Error: {:?}", e);
                 }
                 session_mgr.try_remove_context(ctx).unwrap();
             });

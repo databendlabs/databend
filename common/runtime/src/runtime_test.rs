@@ -13,7 +13,7 @@ async fn test_runtime() -> anyhow::Result<()> {
             let rt2 = Runtime::with_worker_threads(1).unwrap();
             rt2.spawn(async {
                 let rt3 = Runtime::with_default_worker_threads().unwrap();
-                rt3.spawn(async {});
+                rt3.block_on(async {});
             });
         });
     });

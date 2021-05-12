@@ -686,7 +686,6 @@ dependencies = [
  "anyhow",
  "common-exception",
  "futures",
- "pretty_assertions",
  "tokio",
 ]
 
