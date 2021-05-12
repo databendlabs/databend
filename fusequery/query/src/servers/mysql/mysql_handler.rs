@@ -7,12 +7,15 @@ use std::net;
 use std::time::Instant;
 
 use common_datablocks::DataBlock;
+use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_ext::ResultExt;
+use common_ext::ResultTupleExt;
 use log::debug;
 use metrics::histogram;
 use msql_srv::*;
 use threadpool::ThreadPool;
+use tokio::runtime::Runtime;
 use tokio_stream::StreamExt as OtherStreamExt;
 
 use crate::clusters::ClusterRef;
@@ -64,10 +67,18 @@ impl<W: io::Write> MysqlShim<W> for Session {
         self.ctx.reset().unwrap();
         let start = Instant::now();
 
+        fn build_runtime(_max_threads: u64) -> Result<Runtime> {
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_io()
+                .enable_time()
+                .build()
+                .map_err(|tokio_error| ErrorCodes::TokioError(format!("{}", tokio_error)))
+        }
+
         type ResultSet = Result<Vec<DataBlock>>;
-        fn receive_data_set(interpreter: InterpreterPtr) -> ResultSet {
+        fn receive_data_set(runtime: Runtime, interpreter: InterpreterPtr) -> ResultSet {
             use futures::future::TryFutureExt;
-            futures::executor::block_on(
+            runtime.block_on(
                 interpreter
                     .execute()
                     .and_then(|stream| stream.collect::<Result<Vec<DataBlock>>>())
@@ -79,7 +90,9 @@ impl<W: io::Write> MysqlShim<W> for Session {
             .build_from_sql(query)
             .and_then(|built_plan| InterpreterFactory::get(self.ctx.clone(), built_plan))
             // Execute query and get result
-            .and_then(|interpreter| receive_data_set(interpreter))
+            .zip(self.ctx.get_max_threads())
+            .left_and_then(build_runtime)
+            .and_then_tuple(receive_data_set)
             // Push result set to client
             .and_match(done(writer));
 
