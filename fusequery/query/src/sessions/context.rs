@@ -37,7 +37,7 @@ pub struct FuseQueryContext {
     partition_queue: Arc<RwLock<VecDeque<Partition>>>,
     current_database: Arc<RwLock<String>>,
     progress: Arc<Progress>,
-    thread_pool: Arc<RwLock<tokio::runtime::Runtime>>
+    thread_pool: Arc<RwLock<tokio::runtime::Handle>>
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
@@ -59,7 +59,7 @@ impl FuseQueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             current_database: Arc::new(RwLock::new(String::from("default"))),
             progress: Arc::new(Progress::create()),
-            thread_pool: Arc::new(RwLock::new(runtime))
+            thread_pool: Arc::new(RwLock::new(runtime.handle().clone()))
         };
         ctx.initial_settings()?;
 
@@ -207,19 +207,15 @@ impl FuseQueryContext {
             .enable_io()
             .enable_time()
             .build()
-            .map_err(|tokio_error| ErrorCodes::TokioError(format!("{}", tokio_error)))?;
+            .map_err(|tokio_error| ErrorCodes::TokioError(format!("{}", tokio_error)))?
+            .handle()
+            .clone();
         self.settings.try_update_u64("max_threads", threads)
     }
 
     apply_macros! { apply_getter_setter_settings, apply_initial_settings, apply_update_settings,
         ("max_block_size", u64, 10000, "Maximum block size for reading".to_string()),
         ("flight_client_timeout", u64, 60, "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds".to_string())
-    }
-}
-
-impl Drop for FuseQueryContext {
-    fn drop(&mut self) {
-        // What todo here?
     }
 }
 

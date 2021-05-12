@@ -10,6 +10,7 @@ members = [
     "common/infallible",
     "common/planners",
     "common/progress",
+    "common/runtime",
     "common/streams",
     "common/exception",
     "common/ext",
