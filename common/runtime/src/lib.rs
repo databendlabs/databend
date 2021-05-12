@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#[cfg(test)]
+mod runtime_test;
+
 mod runtime;
 
 pub use runtime::Dropper;
