@@ -38,7 +38,7 @@ pub struct FuseQueryContext {
     partition_queue: Arc<RwLock<VecDeque<Partition>>>,
     current_database: Arc<RwLock<String>>,
     progress: Arc<Progress>,
-    thread_pool: Arc<RwLock<Runtime>>
+    runtime: Arc<RwLock<Runtime>>
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
@@ -56,7 +56,7 @@ impl FuseQueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             current_database: Arc::new(RwLock::new(String::from("default"))),
             progress: Arc::new(Progress::create()),
-            thread_pool: Arc::new(RwLock::new(Runtime::with_worker_threads(cpus)?))
+            runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(cpus)?))
         };
         ctx.initial_settings()?;
 
@@ -84,13 +84,13 @@ impl FuseQueryContext {
     }
 
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
-    /// Same as tokio::runtime.spawn.
-    pub fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
+    /// The task will run in the current context thread_pool not the global.
+    pub fn execute_task<T>(&self, task: T) -> JoinHandle<T::Output>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static
     {
-        self.thread_pool.read().spawn(task)
+        self.runtime.read().spawn(task)
     }
 
     /// Set progress callback to context.
@@ -200,7 +200,7 @@ impl FuseQueryContext {
     }
 
     pub fn set_max_threads(&self, threads: u64) -> Result<()> {
-        *self.thread_pool.write() = Runtime::with_worker_threads(threads as usize)?;
+        *self.runtime.write() = Runtime::with_worker_threads(threads as usize)?;
         self.settings.try_update_u64("max_threads", threads)
     }
 

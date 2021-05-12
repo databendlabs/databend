@@ -61,7 +61,7 @@ impl IProcessor for MergeProcessor {
                 for i in 0..inputs {
                     let input = self.inputs[i].clone();
                     let sender = sender.clone();
-                    self.ctx.spawn(async move {
+                    self.ctx.execute_task(async move {
                         let mut stream = match input.execute().await {
                             Err(e) => {
                                 sender.send(Result::Err(e)).await.ok();

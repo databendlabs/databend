@@ -78,7 +78,7 @@ impl ClickHouseSession for Session {
             }
         });
 
-        self.ctx.spawn(async move {
+        self.ctx.execute_task(async move {
             let clickhouse_stream = interpreter
                 .execute()
                 .await

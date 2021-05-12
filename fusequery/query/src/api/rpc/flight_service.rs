@@ -137,7 +137,7 @@ impl Flight for FlightService {
                     .await
                     .map_err(|e| Status::internal(e.to_string()))?;
 
-                ctx.clone().spawn(async move {
+                ctx.clone().execute_task(async move {
                     let options = arrow::ipc::writer::IpcWriteOptions::default();
                     let mut has_send = false;
                     let start = Instant::now();
