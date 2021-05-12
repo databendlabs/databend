@@ -1,6 +1,6 @@
 ---
 name: Build issue
-about: Report failed FuseQuery build from master
+about: Report failed datafuse build from master
 title: ''
 labels: build
 assignees: ''

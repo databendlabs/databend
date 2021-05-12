@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for FuseQuery
+about: Suggest an idea for datafuse
 title: ''
 labels: feature
 assignees: ''
