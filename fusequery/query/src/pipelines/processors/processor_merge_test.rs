@@ -15,7 +15,7 @@ async fn test_processor_merge() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let test_source = tests::NumberTestData::create(ctx.clone());
 
-    let mut pipeline = Pipeline::create();
+    let mut pipeline = Pipeline::create(ctx.clone());
 
     let source = test_source.number_source_transform_for_test(2)?;
     pipeline.add_source(Arc::new(source))?;

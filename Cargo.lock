@@ -680,6 +680,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-runtime"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common-exception",
+ "futures",
+ "tokio",
+]
+
+[[package]]
 name = "common-streams"
 version = "0.1.0"
 dependencies = [
@@ -1213,6 +1223,7 @@ dependencies = [
  "common-infallible",
  "common-planners",
  "common-progress",
+ "common-runtime",
  "common-streams",
  "criterion",
  "crossbeam 0.8.0",
