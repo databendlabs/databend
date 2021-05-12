@@ -58,10 +58,11 @@ impl FuseQueryContext {
             progress: Arc::new(Progress::create()),
             runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(cpus)?))
         };
+        // Default settings.
         ctx.initial_settings()?;
-
-        // Default setting.
+        // Customize settings.
         ctx.settings.try_set_u64("max_threads", cpus as u64, "The maximum number of threads to execute the request. By default, it is determined automatically.".to_string())?;
+
         Ok(Arc::new(ctx))
     }
 
