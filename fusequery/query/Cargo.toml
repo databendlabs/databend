@@ -21,6 +21,7 @@ common-functions = {path = "../../common/functions"}
 common-infallible = {path = "../../common/infallible"}
 common-planners = {path = "../../common/planners"}
 common-progress = {path = "../../common/progress"}
+common-runtime = {path = "../../common/runtime"}
 common-streams = {path = "../../common/streams"}
 common-exception = {path = "../../common/exception"}
 common-ext = {path= "../../common/ext"}

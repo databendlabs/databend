@@ -16,6 +16,7 @@ use common_planners::Statistics;
 use common_progress::Progress;
 use common_progress::ProgressCallback;
 use common_progress::ProgressValues;
+use common_runtime::Runtime;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
@@ -37,19 +38,15 @@ pub struct FuseQueryContext {
     partition_queue: Arc<RwLock<VecDeque<Partition>>>,
     current_database: Arc<RwLock<String>>,
     progress: Arc<Progress>,
-    thread_pool: Arc<RwLock<tokio::runtime::Handle>>
+    thread_pool: Arc<RwLock<Runtime>>
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
     pub fn try_create() -> Result<FuseQueryContextRef> {
+        let cpus = num_cpus::get();
         let settings = Settings::create();
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_io()
-            .enable_time()
-            .build()
-            .map_err(|tokio_error| ErrorCodes::TokioError(format!("{}", tokio_error)))?;
         let ctx = FuseQueryContext {
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings,
@@ -59,12 +56,12 @@ impl FuseQueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             current_database: Arc::new(RwLock::new(String::from("default"))),
             progress: Arc::new(Progress::create()),
-            thread_pool: Arc::new(RwLock::new(runtime.handle().clone()))
+            thread_pool: Arc::new(RwLock::new(Runtime::with_worker_threads(cpus)?))
         };
         ctx.initial_settings()?;
 
-        // Define setting.
-        ctx.settings.try_set_u64("max_threads", num_cpus::get() as u64, "The maximum number of threads to execute the request. By default, it is determined automatically.".to_string())?;
+        // Default setting.
+        ctx.settings.try_set_u64("max_threads", cpus as u64, "The maximum number of threads to execute the request. By default, it is determined automatically.".to_string())?;
         Ok(Arc::new(ctx))
     }
 
@@ -203,13 +200,7 @@ impl FuseQueryContext {
     }
 
     pub fn set_max_threads(&self, threads: u64) -> Result<()> {
-        *self.thread_pool.write() = tokio::runtime::Builder::new_multi_thread()
-            .enable_io()
-            .enable_time()
-            .build()
-            .map_err(|tokio_error| ErrorCodes::TokioError(format!("{}", tokio_error)))?
-            .handle()
-            .clone();
+        *self.thread_pool.write() = Runtime::with_worker_threads(threads as usize)?;
         self.settings.try_update_u64("max_threads", threads)
     }
 
