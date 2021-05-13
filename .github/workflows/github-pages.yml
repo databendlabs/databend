@@ -16,22 +16,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      - name: Checkout  🛎️
+      - name: Checkout 🛎️
         uses: actions/checkout@v2
 
       - name: Set up Node.js runtime
         uses: actions/setup-node@v1
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Set up Node.js dependencies
-        run: npm install
-
-      - name: Build project  🔧
-        run: |
-          npm run build
       - uses: actions/setup-python@v2
         with:
           python-version: 3.x
       - run: pip install mkdocs-material
-      - run: mkdocs gh-deploy --force
+
+      - name: Build project 🔧
+        run: |
+          cd website/datafuse
+          npm install
+          npm run build
+          mkdocs gh-deploy --force
