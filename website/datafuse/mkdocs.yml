@@ -69,27 +69,10 @@ theme:
     code: Roboto Mono
   favicon: assets/favicon.png
   icon:
-    logo: logo
 
 # Plugins
 plugins:
   - search
-  - redirects:
-      redirect_maps:
-        changelog/insiders.md: insiders/changelog.md
-        extensions/admonition.md: reference/admonitions.md
-        extensions/codehilite.md: reference/code-blocks.md
-        extensions/footnotes.md: reference/footnotes.md
-        extensions/metadata.md: reference/meta-tags.md
-        extensions/permalinks.md: setup/setting-up-navigation.md #permalink
-        extensions/pymdown.md: reference/admonitions.md
-        plugins/revision-date.md: setup/adding-a-git-repository.md #revision-date
-        plugins/search.md: setup/setting-up-site-search.md
-        releases/4.md: upgrading.md #upgrading-from-4x-to-5x
-        releases/5.md: upgrading.md #upgrading-from-3x-to-4x
-        releases/changelog.md: changelog.md
-        setup/adding-social-links.md: setup/setting-up-the-footer.md
-        sponsorship.md: insiders/index.md
   - minify:
       minify_html: true
 
@@ -142,6 +125,30 @@ markdown_extensions:
 # Page tree
 nav:
   - Home: index.md
+  - Documentation:
+    - Overview:
+      - Architecture: overview/architecture.md
+      - Performance: overview/performance.md
+      - Installation: overview/building-and-running.md
+    - SQL Reference:
+      - Data Definition Language:
+          - CREATE DATABASE: sqlstatement/data-definition-language-ddl/ddl-create-database.md
+      - Data Manipulation Language:
+          - SELECT: sqlstatement/data-manipulation-language-dml/dml-select.md
+      - Aggregate Functions:
+          - AVG: sqlstatement/aggregate-functions/aggregate-avg.md
+          - COUNT: sqlstatement/aggregate-functions/aggregate-count.md
+          - MAX: sqlstatement/aggregate-functions/aggregate-max.md
+          - MIN: sqlstatement/aggregate-functions/aggregate-min.md
+          - SUM: sqlstatement/aggregate-functions/aggregate-sum.md
+      - Information Functions:
+          - DATABASE: sqlstatement/information-functions/database.md
+      - Show Commands:
+          - SHOW DATABASE: sqlstatement/show-commands/show-databases.md
+      - RFCs:
+          - FuseQuery Join: rfcs/query/2021-05-01-join-framework-design.md
+          - FuseStore Design: rfcs/store/2021-04-22-store-design.md
+  - Performance: overview/performance.md
 
 # Google Analytics
 google_analytics:

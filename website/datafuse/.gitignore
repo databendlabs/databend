@@ -64,3 +64,6 @@ tmp
 # IDEs
 .vscode
 .idea
+
+material/*
+build/*
