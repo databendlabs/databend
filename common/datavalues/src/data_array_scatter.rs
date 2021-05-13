@@ -4,7 +4,7 @@
 
 
 use crate::{DataColumnarValue, DataArrayRef};
-use common_arrow::arrow::datatypes::{IntervalUnit, DataType, ArrowPrimitiveType, UInt8Type, Int8Type, Int16Type, Int32Type, Int64Type, UInt16Type, UInt32Type, UInt64Type, Float32Type, Float64Type, TimeUnit, Time32SecondType, Time32MillisecondType, Time64MicrosecondType, Time64NanosecondType, DurationSecondType, DurationMillisecondType, DurationMicrosecondType, DurationNanosecondType, IntervalYearMonthType, IntervalDayTimeType, TimestampSecondType, TimestampMillisecondType, TimestampMicrosecondType, TimestampNanosecondType};
+use common_arrow::arrow::datatypes::{IntervalUnit, DataType, ArrowPrimitiveType, UInt8Type, Int8Type, Int16Type, Int32Type, Int64Type, UInt16Type, UInt32Type, UInt64Type, Float32Type, Float64Type, TimeUnit, Time32SecondType, Time32MillisecondType, Time64MicrosecondType, Time64NanosecondType, DurationSecondType, DurationMillisecondType, DurationMicrosecondType, DurationNanosecondType, IntervalYearMonthType, IntervalDayTimeType, TimestampSecondType, TimestampMillisecondType, TimestampMicrosecondType, TimestampNanosecondType, Date32Type, Date64Type};
 use common_arrow::arrow::array::{BooleanArray, PrimitiveArray, UInt64Array, BufferBuilder, ArrayData, BooleanBufferBuilder, ArrayRef};
 use common_arrow::arrow::buffer::MutableBuffer;
 use common_exception::{Result, ErrorCodes};
@@ -41,8 +41,8 @@ impl DataColumnarScatter {
             DataType::UInt64 => Self::scatter_primitive_data::<UInt64Type>(data, indices, nums),
             DataType::Float32 => Self::scatter_primitive_data::<Float32Type>(data, indices, nums),
             DataType::Float64 => Self::scatter_primitive_data::<Float64Type>(data, indices, nums),
-            DataType::Date32 => Self::scatter_primitive_data::<UInt8Type>(data, indices, nums),
-            DataType::Date64 => Self::scatter_primitive_data::<UInt8Type>(data, indices, nums),
+            DataType::Date32 => Self::scatter_primitive_data::<Date32Type>(data, indices, nums),
+            DataType::Date64 => Self::scatter_primitive_data::<Date64Type>(data, indices, nums),
             DataType::Time32(TimeUnit::Second) => Self::scatter_primitive_data::<Time32SecondType>(data, indices, nums),
             DataType::Time32(TimeUnit::Millisecond) => Self::scatter_primitive_data::<Time32MillisecondType>(data, indices, nums),
             DataType::Time64(TimeUnit::Microsecond) => Self::scatter_primitive_data::<Time64MicrosecondType>(data, indices, nums),
@@ -101,7 +101,7 @@ impl DataColumnarScatter {
             }
 
             for index in 0..primitive_data_slice.len() {
-                scattered_null_bit_builders[indices[index] as usize].append(data.is_null(index));
+                scattered_null_bit_builders[indices[index] as usize].append(!data.is_null(index));
             }
 
             for index in 0..scattered_size {

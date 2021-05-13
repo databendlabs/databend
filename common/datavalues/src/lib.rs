@@ -19,8 +19,8 @@ mod data_value_arithmetic_test;
 #[cfg(test)]
 mod data_value_kernel_test;
 
-// #[cfg(test)]
-// mod data_array_scatter_test;
+#[cfg(test)]
+mod data_array_scatter_test;
 
 #[macro_use]
 mod macros;
