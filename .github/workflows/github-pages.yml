@@ -7,15 +7,33 @@ on:
     paths:
       - "website/**/*"
 
+env:
+  PYTHON_VERSION: 3.x
+
 jobs:
-  deploy:
+  documentation:
+    name: Build documentation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python runtime
+        uses: actions/setup-python@v1
         with:
-          python-version: 3.x
-      - run: pip install mkdocs-material
-      - run: |
-          cd website/datafuse
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Python dependencies
+        run: |
+          pip install .
+          pip install \
+            mkdocs-minify-plugin>=0.3 \
+            mkdocs-redirects>=1.0
+
+      - name: Deploy website
+        env:
+          GOOGLE_ANALYTICS_KEY: ${{ secrets.GOOGLE_ANALYTICS_KEY }}
+        run: |
           mkdocs gh-deploy --force
+          mkdocs --version
