@@ -170,6 +170,28 @@ If a node found that a `key` is uploaded and the `slot` for the `key` is on this
 node, it pulls the data block from the uploading node.
 
 
+## Meta cluster startup
+
+A FuseStore cluster is stateful thus the startup is done in several steps:
+
+- Boot up the first node in a cluster, by calling `MetaNode::boot()`.
+  This func creates an empty raft instance add initialize itself as the leader of the solo cluster.
+  
+- Creating node is done with `MetaNode::boot_non_voter()`. 
+  This func does nothing more than initializing a raft instance.
+  It returns the `MetaNode` instance with network API ready for accepting raft communications.
+  At this point it is unaware of anything about the cluster.
+  
+  To add this new node to a cluster, send an `Cmd::AddNode` request to the leader.
+  The leader will then commit the node info into its own storage and start sending 
+  raft snapshot and logs to the new node.
+
+When a node is shutting down and restarted, just the `MetaNode::new()` is used to start the meta-service.
+When a node is restarted:
+ 
+- A candidate(AKA voter) that becomes the new leader is able to find out every node from its local storage and then add them as non-voter in order to replicate logs to them.
+- A non-voter has nothing to do other than receiving logs from the leader.
+
 # DFS Example
 
 ```

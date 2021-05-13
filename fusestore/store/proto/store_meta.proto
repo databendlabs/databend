@@ -7,6 +7,7 @@ syntax = "proto3";
 // meta data types for FuseStore
 package store_meta;
 
+// TODO(zbr): keep it or remove
 message Db {
   int64 db_id = 1;
   // Every modification has a corresponding unique ver.
@@ -15,6 +16,7 @@ message Db {
   map<int64, Table> tables = 3;
 }
 
+// TODO(zbr): keep it or remove
 message Table {
   int64 table_id = 1;
   // Every modification has a corresponding unique ver.
@@ -33,11 +35,13 @@ message Table {
 // A Cmd serves as a raft log entry to commit an atomic operation into meta data
 // storage.
 
+// TODO(zbr): keep it or remove
 message CmdCreateDatabase {
   string db_name = 20;
   Db db = 50;
 }
 
+// TODO(zbr): keep it or remove
 message CmdCreateTable {
   string db_name = 20;
   string table_name = 30;
@@ -53,7 +57,7 @@ message GetReply {
   string value = 3;
 }
 
-message RaftMes { bytes data = 1; }
+message RaftMes { string data = 1; }
 
 service MetaService {
 
