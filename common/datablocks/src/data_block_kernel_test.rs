@@ -148,3 +148,42 @@ fn test_data_block_sort() -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn test_scatter_block() -> anyhow::Result<()> {
+    use std::sync::Arc;
+
+    use common_datavalues::*;
+
+    use crate::*;
+
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", DataType::Int64, false),
+        DataField::new("b", DataType::Float64, false),
+    ]);
+
+    let raw = DataBlock::create(schema.clone(), vec![
+        Arc::new(Int64Array::from(vec![1, 2, 3])),
+        Arc::new(Float64Array::from(vec![1., 2., 3.])),
+    ]);
+
+    let scattered = DataBlock::scatter_block(&raw, &[0, 1, 0], 2)?;
+    assert_eq!(scattered.len(), 2);
+    assert_eq!(raw.schema(), scattered[0].schema());
+    assert_eq!(raw.schema(), scattered[1].schema());
+    assert_eq!(scattered[0].num_rows(), 2);
+    assert_eq!(scattered[1].num_rows(), 1);
+
+    let expected = vec![
+        "+---+---+",
+        "| a | b |",
+        "+---+---+",
+        "| 1 | 1 |",
+        "| 3 | 3 |",
+        "| 2 | 2 |",
+        "+---+---+",
+    ];
+    crate::assert_blocks_eq(expected, &scattered);
+
+    Ok(())
+}
