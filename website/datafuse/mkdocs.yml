@@ -27,7 +27,7 @@ site_description: >-
 # Repository
 repo_name: datafuselabs/datafuse
 repo_url: https://github.com/datafuselabs/datafuse
-edit_uri: "https://github.com/datafuselabs/datafuse/website"
+edit_uri: "https://github.com/datafuselabs/datafuse/tree/master/website/datafuse/docs"
 
 # Copyright
 copyright: Copyright &copy; 2020 - 2021 DatafuseLabs
