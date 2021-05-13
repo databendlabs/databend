@@ -26,6 +26,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
+          cd website/datafuse
           pip install .
           pip install \
             mkdocs-minify-plugin>=0.3 \
@@ -35,5 +36,6 @@ jobs:
         env:
           GOOGLE_ANALYTICS_KEY: ${{ secrets.GOOGLE_ANALYTICS_KEY }}
         run: |
+          cd website/datafuse
           mkdocs gh-deploy --force
           mkdocs --version
