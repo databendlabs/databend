@@ -13,13 +13,12 @@ use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 /// Tokio Runtime wrapper.
-/// If a runtime is in an asynchronous context, we will the shutdown it first.
-#[allow(dead_code)]
+/// If a runtime is in an asynchronous context, shutdown it first.
 pub struct Runtime {
-    // Use to receive a drop signal when dropper is dropped.
-    dropper: Dropper,
     // Handle to runtime.
-    handle: Handle
+    handle: Handle,
+    // Use to receive a drop signal when dropper is dropped.
+    _dropper: Dropper
 }
 
 impl Runtime {
@@ -48,7 +47,7 @@ impl Runtime {
 
         Ok(Runtime {
             handle,
-            dropper: Dropper {
+            _dropper: Dropper {
                 close: Some(send_stop)
             }
         })
@@ -59,13 +58,13 @@ impl Runtime {
     /// its executor.
     pub fn with_default_worker_threads() -> Result<Self> {
         let mut runtime = tokio::runtime::Builder::new_multi_thread();
-        let builder = runtime.enable_io().enable_time();
+        let builder = runtime.enable_all();
         Self::create(builder)
     }
 
     pub fn with_worker_threads(workers: usize) -> Result<Self> {
         let mut runtime = tokio::runtime::Builder::new_multi_thread();
-        let builder = runtime.worker_threads(workers).enable_io().enable_time();
+        let builder = runtime.enable_all().worker_threads(workers);
         Self::create(builder)
     }
 
