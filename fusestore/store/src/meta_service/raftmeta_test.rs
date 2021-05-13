@@ -16,6 +16,7 @@ use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::MetaServiceServer;
+use crate::meta_service::Node;
 use crate::meta_service::RaftTxId;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -68,13 +69,13 @@ async fn test_state_machine_apply_add() -> anyhow::Result<()> {
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
         let resp = sm.apply(5, &ClientRequest {
             txid: txid.clone(),
-            cmd: Cmd::Add {
+            cmd: Cmd::AddFile {
                 key: k.to_string(),
                 value: v.to_string()
             }
         });
         assert_eq!(
-            ClientResponse {
+            ClientResponse::String {
                 prev: want_prev.clone(),
                 result: want_result.clone()
             },
@@ -144,13 +145,13 @@ async fn test_state_machine_apply_set() -> anyhow::Result<()> {
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
         let resp = sm.apply(5, &ClientRequest {
             txid: txid.clone(),
-            cmd: Cmd::Set {
+            cmd: Cmd::SetFile {
                 key: k.to_string(),
                 value: v.to_string()
             }
         });
         assert_eq!(
-            ClientResponse {
+            ClientResponse::String {
                 prev: want_prev.clone(),
                 result: want_result.clone()
             },
@@ -176,8 +177,8 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     let resp = mn.boot(addr.clone()).await;
     assert!(resp.is_ok());
 
-    let got = mn.get(mn.sto.node_key(0)).await;
-    assert_eq!(addr, got.unwrap());
+    let got = mn.get_node(&0).await;
+    assert_eq!(addr, got.unwrap().address);
     Ok(())
 }
 
@@ -223,8 +224,8 @@ async fn test_meta_node_add_non_voter() -> anyhow::Result<()> {
         let resp = mn0.boot(addr0.clone()).await;
         assert!(resp.is_ok());
 
-        let got = mn0.get(mn0.sto.node_key(nid0)).await;
-        assert_eq!(addr0, got.unwrap(), "nid1 is added");
+        let got = mn0.get_node(&nid0).await;
+        assert_eq!(addr0, got.unwrap().address, "nid1 is added");
 
         wait_for("nid0 to be leader", &mut mrx0, |x| x.state == State::Leader).await;
         wait_for("nid0 current_leader==0", &mut mrx0, |x| {
@@ -235,9 +236,26 @@ async fn test_meta_node_add_non_voter() -> anyhow::Result<()> {
 
     {
         // add node-1 to cluster as non-voter
-        let key = mn0.sto.node_key(nid1);
-        let resp = mn0.local_set(key, addr1.clone(), false, None).await;
-        assert_eq!(addr1, resp.unwrap());
+        let resp = mn0
+            .write_to_local_leader(ClientRequest {
+                txid: None,
+                cmd: Cmd::AddNode {
+                    node_id: nid1,
+                    node: Node {
+                        name: "".to_string(),
+                        address: addr1.clone()
+                    }
+                }
+            })
+            .await;
+        match resp.unwrap() {
+            ClientResponse::Node { prev: _, result } => {
+                assert_eq!(addr1, result.unwrap().address);
+            }
+            _ => {
+                panic!("expect node")
+            }
+        }
     }
 
     wait_for("nid1 current_leader==0", &mut mrx1, |x| {

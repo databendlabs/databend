@@ -59,7 +59,7 @@ impl PipelineBuilder {
             }
         })?;
 
-        let mut pipeline = Pipeline::create();
+        let mut pipeline = Pipeline::create(self.ctx.clone());
         self.plan.walk_postorder(|node| -> Result<bool> {
             match node {
                 PlanNode::Select(_) => Ok(true),

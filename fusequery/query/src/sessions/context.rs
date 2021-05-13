@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::VecDeque;
+use std::future::Future;
 use std::sync::Arc;
 
 use common_datavalues::DataValue;
@@ -15,6 +16,8 @@ use common_planners::Statistics;
 use common_progress::Progress;
 use common_progress::ProgressCallback;
 use common_progress::ProgressValues;
+use common_runtime::Runtime;
+use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 use crate::clusters::Cluster;
@@ -34,14 +37,15 @@ pub struct FuseQueryContext {
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Partition>>>,
     current_database: Arc<RwLock<String>>,
-
-    progress: Arc<Progress>
+    progress: Arc<Progress>,
+    runtime: Arc<RwLock<Runtime>>
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
     pub fn try_create() -> Result<FuseQueryContextRef> {
+        let cpus = num_cpus::get();
         let settings = Settings::create();
         let ctx = FuseQueryContext {
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
@@ -51,10 +55,14 @@ impl FuseQueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             current_database: Arc::new(RwLock::new(String::from("default"))),
-            progress: Arc::new(Progress::create())
+            progress: Arc::new(Progress::create()),
+            runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(cpus)?))
         };
-
+        // Default settings.
         ctx.initial_settings()?;
+        // Customize settings.
+        ctx.settings.try_set_u64("max_threads", cpus as u64, "The maximum number of threads to execute the request. By default, it is determined automatically.".to_string())?;
+
         Ok(Arc::new(ctx))
     }
 
@@ -76,19 +84,37 @@ impl FuseQueryContext {
         Ok(())
     }
 
+    /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
+    /// The task will run in the current context thread_pool not the global.
+    pub fn execute_task<T>(&self, task: T) -> JoinHandle<T::Output>
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static
+    {
+        self.runtime.read().spawn(task)
+    }
+
     /// Set progress callback to context.
     /// By default, it is called for leaf sources, after each block
     /// Note that the callback can be called from different threads.
     pub fn progress_callback(&self) -> Result<ProgressCallback> {
         let current_progress = self.progress.clone();
         Ok(Box::new(move |value: &ProgressValues| {
-            current_progress.add_rows(value.read_rows);
-            current_progress.add_bytes(value.read_bytes);
+            current_progress.incr(value);
         }))
     }
 
     pub fn get_progress_value(&self) -> ProgressValues {
         self.progress.as_ref().get_values()
+    }
+
+    pub fn get_and_reset_progress_value(&self) -> ProgressValues {
+        self.progress.as_ref().get_and_reset()
+    }
+
+    // Some table can estimate the approx total rows, such as NumbersTable
+    pub fn add_total_rows_approx(&self, total_rows: usize) {
+        self.progress.as_ref().add_total_rows_approx(total_rows);
     }
 
     // Steal n partitions from the partition pool by the pipeline worker.
@@ -170,8 +196,16 @@ impl FuseQueryContext {
             })
     }
 
+    pub fn get_max_threads(&self) -> Result<u64> {
+        self.settings.try_get_u64("max_threads")
+    }
+
+    pub fn set_max_threads(&self, threads: u64) -> Result<()> {
+        *self.runtime.write() = Runtime::with_worker_threads(threads as usize)?;
+        self.settings.try_update_u64("max_threads", threads)
+    }
+
     apply_macros! { apply_getter_setter_settings, apply_initial_settings, apply_update_settings,
-        ("max_threads", u64, num_cpus::get() as u64, "The maximum number of threads to execute the request. By default, it is determined automatically.".to_string()),
         ("max_block_size", u64, 10000, "Maximum block size for reading".to_string()),
         ("flight_client_timeout", u64, 60, "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds".to_string())
     }

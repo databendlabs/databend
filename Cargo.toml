@@ -10,6 +10,7 @@ members = [
     "common/infallible",
     "common/planners",
     "common/progress",
+    "common/runtime",
     "common/streams",
     "common/exception",
     "common/ext",
@@ -29,3 +30,6 @@ debug = true
 
 [profile.bench]
 debug = true
+
+[profile.dev]
+split-debuginfo = "unpacked"

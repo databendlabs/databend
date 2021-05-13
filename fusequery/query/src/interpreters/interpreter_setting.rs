@@ -7,6 +7,7 @@ use std::sync::Arc;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
+use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::SettingPlan;
 use common_streams::DataBlockStream;
@@ -39,6 +40,10 @@ impl IInterpreter for SettingInterpreter {
             match var.variable.to_lowercase().as_str() {
                 // To be compatible with some drivers
                 "sql_mode" | "autocommit" => {}
+                "max_threads" => {
+                    let threads: u64 = var.value.parse().map_err(ErrorCodes::from_parse_int)?;
+                    self.ctx.set_max_threads(threads)?;
+                }
                 _ => {
                     self.ctx.update_settings(&var.variable, var.value)?;
                 }

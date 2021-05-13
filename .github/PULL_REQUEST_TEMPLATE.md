@@ -1,9 +1,5 @@
 ## Summary
 
-<!--
-Write your motivation for proposed changes here.
--->
-
 ## Changelog
 
 - New Feature
@@ -16,13 +12,12 @@ Write your motivation for proposed changes here.
 - Other
 
 ## Related Issues
-
 <!--
-The issue fixed or related of this patch if have.
+fixes #issue
 -->
 
 ## Test Plan
 
 <!--
-Share your test plan here. If you changed code, please provide us with clear instructions for verifying that your changes work.
+Unit Tests/Stateless Tests
 -->

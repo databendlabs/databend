@@ -4,9 +4,9 @@ version = 3
 
 [[package]]
 name = "addr2line"
-version = "0.14.1"
+version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a55f82cfe485775d02112886f4169bde0c5894d75e79ead7eafe7e40a25e45f7"
+checksum = "03345e98af8f3d786b6d9f656ccfa6ac316d954e92bc4841f0bba20789d5fb5a"
 dependencies = [
  "gimli",
 ]
@@ -212,9 +212,9 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
 name = "backtrace"
-version = "0.3.58"
+version = "0.3.59"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88fb5a785d6b44fd9d6700935608639af1b8356de1e55d5f7c2740f4faa15d82"
+checksum = "4717cfcbfaa661a0fd48f8453951837ae7e8f81e481fbb136e3202d72805a744"
 dependencies = [
  "addr2line",
  "cc",
@@ -677,6 +677,16 @@ dependencies = [
  "anyhow",
  "common-infallible",
  "pretty_assertions",
+]
+
+[[package]]
+name = "common-runtime"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common-exception",
+ "futures",
+ "tokio",
 ]
 
 [[package]]
@@ -1213,6 +1223,7 @@ dependencies = [
  "common-infallible",
  "common-planners",
  "common-progress",
+ "common-runtime",
  "common-streams",
  "criterion",
  "crossbeam 0.8.0",
@@ -1422,9 +1433,9 @@ dependencies = [
 
 [[package]]
 name = "gimli"
-version = "0.23.0"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6503fe142514ca4799d4c26297c4248239fe8838d827db6bd6065c6ed29a6ce"
+checksum = "0e4075386626662786ddb0ec9081e7c7eeb1ba31951f447ca780ef9f5d568189"
 
 [[package]]
 name = "glob"
@@ -1473,6 +1484,15 @@ name = "hashbrown"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
+
+[[package]]
+name = "hashbrown"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
+dependencies = [
+ "ahash",
+]
 
 [[package]]
 name = "headers"
@@ -1644,7 +1664,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "824845a0bf897a9042383849b02c1bc219c2383772efcd5c6f9766fa4b81aef3"
 dependencies = [
  "autocfg 1.0.1",
- "hashbrown",
+ "hashbrown 0.9.1",
 ]
 
 [[package]]
@@ -1909,19 +1929,20 @@ dependencies = [
 
 [[package]]
 name = "metrics"
-version = "0.14.2"
+version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58e285601dcfb9f3a8f37a7093b9956a0df730b50848c8ac0117406aff06c851"
+checksum = "c53c23fff9a59f261498953cf41dc9ffc2522fd79723bdf283c1e88dc1633624"
 dependencies = [
  "metrics-macros",
  "proc-macro-hack",
+ "t1ha",
 ]
 
 [[package]]
 name = "metrics-exporter-prometheus"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d23bb354bd7dd5d244f2e9a389a0c3249bb6b994aca71bd6c2f7cd6fa2657fc"
+checksum = "954533c2d91c118cf2405264a4ac3a5592e84efac12b1f18561400ffef0597eb"
 dependencies = [
  "hyper",
  "metrics",
@@ -1934,9 +1955,9 @@ dependencies = [
 
 [[package]]
 name = "metrics-macros"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11ac60cd4d3a869fd39d57baf0ed7f79fb677580d8d6655c4330d4f1126bc27b"
+checksum = "b22572ba9964744e261d34553568683b76db277bcd309ebf7215e28e0982505d"
 dependencies = [
  "lazy_static",
  "proc-macro-hack",
@@ -1948,21 +1969,24 @@ dependencies = [
 
 [[package]]
 name = "metrics-util"
-version = "0.6.2"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ace44e2c64f785c3c37605ecf7504e5fc4efbb2936a49cc56c1084d79657a4d"
+checksum = "6586f4c52af81a3f7832cf0bc86141d2fca7207bedd09fdd3f7da60c8dcd0c4a"
 dependencies = [
  "aho-corasick",
  "atomic-shim",
  "crossbeam-epoch 0.9.3",
  "crossbeam-utils 0.8.3",
  "dashmap",
+ "hashbrown 0.11.2",
  "indexmap",
  "metrics",
+ "num_cpus",
  "ordered-float 2.1.1",
  "parking_lot",
  "quanta",
  "sketches-ddsketch",
+ "t1ha",
 ]
 
 [[package]]
@@ -2284,9 +2308,9 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.23.0"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9a7ab5d64814df0fe4a4b5ead45ed6c5f181ee3ff04ba344313a6c80446c5d4"
+checksum = "1a5b3dd1c072ee7963717671d1ca129f1048fda25edea6b752bfc71ac8854170"
 
 [[package]]
 name = "once_cell"
@@ -3359,6 +3383,18 @@ dependencies = [
  "quote",
  "syn",
  "unicode-xid",
+]
+
+[[package]]
+name = "t1ha"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa44aa51ae1a544e2c35a38831ba54ae40591f21384816f531b84f3e984b9ccc"
+dependencies = [
+ "cfg-if 0.1.10",
+ "lazy_static",
+ "num-traits",
+ "rustc_version",
 ]
 
 [[package]]

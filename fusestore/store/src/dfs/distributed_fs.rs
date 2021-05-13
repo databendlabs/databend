@@ -8,8 +8,9 @@ use tonic::transport::channel::Channel;
 use crate::fs::IFileSystem;
 use crate::fs::ListResult;
 use crate::localfs::LocalFS;
+use crate::meta_service::ClientRequest;
+use crate::meta_service::Cmd;
 use crate::meta_service::MetaServiceClient;
-use crate::meta_service::SetReq;
 
 /// DFS is a distributed file system impl.
 /// When a file is added, it stores it locally, commit the this action into distributed meta data(something like a raft group).
@@ -51,13 +52,14 @@ impl IFileSystem for Dfs {
         // update meta, other store nodes will be informed about this change and then pull the data to complete replication.
 
         let mut client = self.make_client().await?;
-        client
-            .set(tonic::Request::new(SetReq {
+        let req = ClientRequest {
+            txid: None,
+            cmd: Cmd::AddFile {
                 key: path,
-                value: "".into(),
-                if_absent: true
-            }))
-            .await?;
+                value: "".into()
+            }
+        };
+        client.write(req).await?;
         Ok(())
     }
 

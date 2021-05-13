@@ -2,12 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
+use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::col;
@@ -56,17 +57,6 @@ impl PlanBuilder {
         }))
     }
 
-    pub fn exprs_to_fields(
-        &self,
-        exprs: &[ExpressionAction],
-        input_schema: &DataSchemaRef
-    ) -> Result<Vec<DataField>> {
-        exprs
-            .iter()
-            .map(|expr| expr.to_data_field(input_schema))
-            .collect::<Result<_>>()
-    }
-
     /// Apply a stage.
     pub fn stage(&self, uuid: String, state: StageState) -> Result<Self> {
         Ok(Self::from(&PlanNode::Stage(StagePlan {
@@ -94,7 +84,7 @@ impl PlanBuilder {
         });
 
         // Merge fields.
-        let fields = self.exprs_to_fields(&projection_exprs, &input_schema)?;
+        let fields = PlanRewriter::exprs_to_fields(&projection_exprs, &input_schema)?;
         let mut merged = input_schema.fields().clone();
         for field in fields {
             if !merged.iter().any(|x| x.name() == field.name()) && field.name() != "*" {
@@ -125,7 +115,7 @@ impl PlanBuilder {
             _ => projection_exprs.push(v.clone())
         });
 
-        let fields = self.exprs_to_fields(&projection_exprs, &input_schema)?;
+        let fields = PlanRewriter::exprs_to_fields(&projection_exprs, &input_schema)?;
 
         Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
             input: Arc::new(self.plan.clone()),
@@ -141,7 +131,28 @@ impl PlanBuilder {
         group_expr: &[ExpressionAction]
     ) -> Result<Self> {
         let input_schema = self.plan.schema();
-        let aggr_projection_fields = self.exprs_to_fields(&aggr_expr, &input_schema)?;
+        let aggr_projection_fields = PlanRewriter::exprs_to_fields(&aggr_expr, &input_schema)?;
+
+        // Aggregator check.
+        let mut group_by_names = HashSet::new();
+        PlanRewriter::exprs_to_names(&group_expr, &mut group_by_names)?;
+        for aggr in aggr_expr {
+            // do not check literal expressions
+            if let ExpressionAction::Literal(_) = aggr {
+                continue;
+            } else if !aggr.has_aggregator()? {
+                // Check if aggr is in group-by's list
+                let in_group_by =
+                    PlanRewriter::check_aggr_in_group_expr(&aggr, &group_by_names, &input_schema)?;
+                if !in_group_by {
+                    return Result::Err(ErrorCodes::IllegalAggregateExp(format!(
+                        "Column `{:?}` is not under aggregate function and not in GROUP BY: While processing {:#}",
+                        aggr,
+                        aggr_expr.iter().map(|aggr| format!("{:#?}", aggr)).collect::<Vec<_>>().join(", ")
+                    )));
+                }
+            }
+        }
 
         Ok(match mode {
             AggregateMode::Partial => {
