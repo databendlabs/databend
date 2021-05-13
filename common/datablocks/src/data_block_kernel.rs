@@ -4,7 +4,7 @@
 
 use common_arrow::arrow::array::{UInt32Builder, ArrayRef, UInt64Builder};
 use common_arrow::arrow::compute;
-use common_datavalues::{DataArrayMerge, DataColumnarScatter, DataArrayRef};
+use common_datavalues::{DataArrayMerge, DataArrayScatter, DataArrayRef};
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
@@ -187,7 +187,7 @@ impl DataBlock {
         let indices: DataArrayRef = Arc::new(builder.finish());
         for column_index in 0..columns_size {
             let column = block.column(column_index);
-            let mut scattered_column = DataColumnarScatter::scatter(column, &indices, scatter_size)?;
+            let mut scattered_column = DataArrayScatter::scatter(column, &indices, scatter_size)?;
 
             for scattered_index in 0..scattered_column.len() {
                 scattered_columns[scattered_index * columns_size + column_index] = Some(scattered_column.remove(0));

@@ -5,15 +5,15 @@
 
 use crate::{DataColumnarValue, DataArrayRef};
 use common_arrow::arrow::datatypes::{IntervalUnit, DataType, ArrowPrimitiveType, UInt8Type, Int8Type, Int16Type, Int32Type, Int64Type, UInt16Type, UInt32Type, UInt64Type, Float32Type, Float64Type, TimeUnit, Time32SecondType, Time32MillisecondType, Time64MicrosecondType, Time64NanosecondType, DurationSecondType, DurationMillisecondType, DurationMicrosecondType, DurationNanosecondType, IntervalYearMonthType, IntervalDayTimeType, TimestampSecondType, TimestampMillisecondType, TimestampMicrosecondType, TimestampNanosecondType, Date32Type, Date64Type};
-use common_arrow::arrow::array::{BooleanArray, PrimitiveArray, UInt64Array, BufferBuilder, ArrayData, BooleanBufferBuilder, ArrayRef};
+use common_arrow::arrow::array::{BooleanArray, PrimitiveArray, UInt64Array, BufferBuilder, ArrayData, BooleanBufferBuilder, ArrayRef, BinaryArray, GenericBinaryArray, BinaryOffsetSizeTrait, GenericStringBuilder, Array, BinaryBuilder, LargeBinaryBuilder, GenericStringArray, StringOffsetSizeTrait, LargeBinaryArray};
 use common_arrow::arrow::buffer::MutableBuffer;
 use common_exception::{Result, ErrorCodes};
 use std::sync::Arc;
 use common_arrow::parquet::record::reader::Reader::PrimitiveReader;
 
-pub struct DataColumnarScatter;
+pub struct DataArrayScatter;
 
-impl DataColumnarScatter {
+impl DataArrayScatter {
     #[inline]
     pub fn scatter(data: &DataArrayRef, indices: &DataArrayRef, nums: usize) -> Result<Vec<DataArrayRef>> {
         if data.len() != indices.len() {
@@ -57,19 +57,19 @@ impl DataColumnarScatter {
             DataType::Timestamp(TimeUnit::Millisecond, _) => Self::scatter_primitive_data::<TimestampMillisecondType>(data, indices, nums),
             DataType::Timestamp(TimeUnit::Microsecond, _) => Self::scatter_primitive_data::<TimestampMicrosecondType>(data, indices, nums),
             DataType::Timestamp(TimeUnit::Nanosecond, _) => Self::scatter_primitive_data::<TimestampNanosecondType>(data, indices, nums),
-            // DataType::Binary => {},
+            DataType::Binary => Self::scatter_binary_data(data, indices, nums),
+            DataType::LargeBinary => Self::scatter_large_binary_data(data, indices, nums),
+            DataType::Utf8 => Self::scatter_string_data::<i32>(data, indices, nums),
+            DataType::LargeUtf8 => Self::scatter_string_data::<i64>(data, indices, nums),
+            // DataType::Decimal(_, _) => {},
             // DataType::FixedSizeBinary(i32) => {},
-            // DataType::LargeBinary => {},
-            // DataType::Utf8 => {},
-            // DataType::LargeUtf8 => {},
             // DataType::List(Box < Field>) => {},
             // DataType::FixedSizeList(Box<Field>, i32) => {},
             // DataType::LargeList(Box<Field>) => {},
             // DataType::Struct(Vec<Field>) => {},
             // DataType::Union(Vec<Field>) => {},
             // DataType::Dictionary(Box<DataType>, Box<DataType>) => {},
-            // DataType::Decimal(usize, usize) => {},
-            _ => Result::Err(ErrorCodes::BadDataValueType("".to_string()))
+            _ => Result::Err(ErrorCodes::BadDataValueType(format!("DataType:{:?} does not implement scatter", stringify!(PrimitiveArray<T>))))
         }
     }
 
@@ -87,7 +87,7 @@ impl DataColumnarScatter {
             })?;
 
         let primitive_data_slice = primitive_data.values();
-        let mut scattered_data_builder = Self::create_scatter_builders::<T>(scattered_size, indices.len());
+        let mut scattered_data_builder = Self::create_primitive_builders::<T>(scattered_size, indices.len());
 
         for index in 0..primitive_data_slice.len() {
             scattered_data_builder[indices[index] as usize].append(primitive_data_slice[index]);
@@ -111,6 +111,7 @@ impl DataColumnarScatter {
 
         let mut scattered_data_res: Vec<ArrayRef> = vec![];
         for index in 0..scattered_size {
+            // We don't care about time zones, which are always bound to the schema
             let mut builder = ArrayData::builder(T::DATA_TYPE)
                 .len(scattered_data_builder[index].len())
                 .add_buffer(scattered_data_builder[index].finish());
@@ -128,14 +129,132 @@ impl DataColumnarScatter {
         Ok(scattered_data_res)
     }
 
+    fn scatter_binary_data(data: &DataArrayRef, indices: &[u64], scattered_size: usize) -> Result<Vec<ArrayRef>> {
+        let binary_data = data
+            .as_any()
+            .downcast_ref::<BinaryArray>()
+            .ok_or_else(|| {
+                ErrorCodes::BadDataValueType(format!(
+                    "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
+                    data.data_type(),
+                    stringify!(BinaryArray)
+                ))
+            })?;
+
+        let value_size = binary_data.value_data().len();
+        let mut scattered_data_builder = Self::create_binary_builders(scattered_size, value_size);
+
+        for index in 0..binary_data.len() {
+            if !binary_data.is_null(index) {
+                scattered_data_builder[indices[index] as usize].append_value(binary_data.value(index)).map_err(ErrorCodes::from_arrow)?;
+            } else {
+                scattered_data_builder[indices[index] as usize].append_null().map_err(ErrorCodes::from_arrow)?;
+            }
+        }
+
+        let mut scattered_data_res: Vec<ArrayRef> = vec![];
+        for index in 0..scattered_size {
+            scattered_data_res.push(Arc::new(scattered_data_builder[index].finish()));
+        }
+
+        Ok(scattered_data_res)
+    }
+
+    fn scatter_large_binary_data(data: &DataArrayRef, indices: &[u64], scattered_size: usize) -> Result<Vec<ArrayRef>> {
+        let binary_data = data
+            .as_any()
+            .downcast_ref::<LargeBinaryArray>()
+            .ok_or_else(|| {
+                ErrorCodes::BadDataValueType(format!(
+                    "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
+                    data.data_type(),
+                    stringify!(LargeBinaryArray)
+                ))
+            })?;
+
+        let value_size = binary_data.value_data().len();
+        let mut scattered_data_builder = Self::create_large_binary_builders(scattered_size, value_size);
+
+        for index in 0..binary_data.len() {
+            if !binary_data.is_null(index) {
+                scattered_data_builder[indices[index] as usize].append_value(binary_data.value(index)).map_err(ErrorCodes::from_arrow)?;
+            } else {
+                scattered_data_builder[indices[index] as usize].append_null().map_err(ErrorCodes::from_arrow)?;
+            }
+        }
+
+        let mut scattered_data_res: Vec<ArrayRef> = vec![];
+        for index in 0..scattered_size {
+            scattered_data_res.push(Arc::new(scattered_data_builder[index].finish()));
+        }
+
+        Ok(scattered_data_res)
+    }
+
+    fn scatter_string_data<T: StringOffsetSizeTrait>(data: &DataArrayRef, indices: &[u64], scattered_size: usize) -> Result<Vec<ArrayRef>> {
+        let binary_data = data
+            .as_any()
+            .downcast_ref::<GenericStringArray<T>>()
+            .ok_or_else(|| {
+                ErrorCodes::BadDataValueType(format!(
+                    "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
+                    data.data_type(),
+                    stringify!(GenericStringArray<T>)
+                ))
+            })?;
+
+        let value_size = binary_data.value_data().len();
+        let mut scattered_data_builder = Self::create_string_builders::<T>(scattered_size, value_size);
+
+        for index in 0..binary_data.len() {
+            if !binary_data.is_null(index) {
+                scattered_data_builder[indices[index] as usize].append_value(binary_data.value(index))
+                    .map_err(ErrorCodes::from_arrow)?;
+            } else {
+                scattered_data_builder[indices[index] as usize].append_null().map_err(ErrorCodes::from_arrow)?;
+            }
+        }
+
+        let mut scattered_data_res: Vec<ArrayRef> = vec![];
+        for index in 0..scattered_size {
+            scattered_data_res.push(Arc::new(scattered_data_builder[index].finish()));
+        }
+
+        Ok(scattered_data_res)
+    }
+
     #[inline]
-    fn create_scatter_builders<T: ArrowPrimitiveType>(
+    fn create_primitive_builders<T: ArrowPrimitiveType>(
         scattered_size: usize,
         scatter_data_len: usize) -> Vec<BufferBuilder<T::Native>> {
         let guess_scattered_len = ((scatter_data_len as f64) * 1.1 / (scattered_size as f64)) as usize;
         (0..scattered_size).map(|_| {
             BufferBuilder::<T::Native>::new(guess_scattered_len)
         }).collect::<Vec<_>>()
+    }
+
+    #[inline]
+    fn create_binary_builders(
+        scattered_size: usize,
+        scatter_data_len: usize) -> Vec<BinaryBuilder> {
+        let guess_scattered_len = ((scatter_data_len as f64) * 1.1 / (scattered_size as f64)) as usize;
+        (0..scattered_size).map(|_| BinaryBuilder::new(guess_scattered_len)).collect::<Vec<_>>()
+    }
+
+    #[inline]
+    fn create_large_binary_builders(
+        scattered_size: usize,
+        scatter_data_len: usize) -> Vec<LargeBinaryBuilder> {
+        let guess_scattered_len = ((scatter_data_len as f64) * 1.1 / (scattered_size as f64)) as usize;
+        (0..scattered_size).map(|_| LargeBinaryBuilder::new(guess_scattered_len)).collect::<Vec<_>>()
+    }
+
+    #[inline]
+    fn create_string_builders<T: StringOffsetSizeTrait>(
+        scattered_size: usize,
+        scatter_data_len: usize) -> Vec<GenericStringBuilder<T>> {
+        let guess_scattered_len = ((scatter_data_len as f64) * 1.1 / (scattered_size as f64)) as usize;
+        (0..scattered_size).map(|_| GenericStringBuilder::<T>::new(guess_scattered_len)).collect::<Vec<_>>()
     }
 
     #[inline]

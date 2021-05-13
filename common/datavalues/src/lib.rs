@@ -63,4 +63,4 @@ pub use crate::data_value_operator::DataValueAggregateOperator;
 pub use crate::data_value_operator::DataValueArithmeticOperator;
 pub use crate::data_value_operator::DataValueComparisonOperator;
 pub use crate::data_value_operator::DataValueLogicOperator;
-pub use crate::data_array_scatter::DataColumnarScatter;
+pub use crate::data_array_scatter::DataArrayScatter;

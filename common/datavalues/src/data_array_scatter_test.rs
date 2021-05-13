@@ -4,13 +4,14 @@
 
 use common_exception::Result;
 use std::sync::Arc;
-use crate::{UInt32Array, Float64Array, DataColumnarScatter, UInt64Array, Int8Array, DataArrayRef, Int16Array, Int32Array, Int64Array, UInt8Array, UInt16Array, Float32Array, Date32Array, Date64Array};
+use crate::{UInt32Array, Float64Array, DataArrayScatter, UInt64Array, Int8Array, DataArrayRef, Int16Array, Int32Array, Int64Array, UInt8Array, UInt16Array, Float32Array, Date32Array, Date64Array, BinaryArray, StringArray};
 use common_arrow::arrow::datatypes::{ArrowPrimitiveType, UInt8Type, Int8Type};
-use common_arrow::arrow::array::{PrimitiveArray, ArrayRef, TimestampSecondArray, TimestampMillisecondArray, TimestampMicrosecondArray, TimestampNanosecondArray, Time32SecondArray, Time32MillisecondArray, Time64MicrosecondArray, Time64NanosecondArray, IntervalYearMonthArray, IntervalDayTimeArray, DurationSecondArray, DurationMillisecondArray, DurationMicrosecondArray, DurationNanosecondArray};
+use common_arrow::arrow::array::{PrimitiveArray, ArrayRef, TimestampSecondArray, TimestampMillisecondArray, TimestampMicrosecondArray, TimestampNanosecondArray, Time32SecondArray, Time32MillisecondArray, Time64MicrosecondArray, Time64NanosecondArray, IntervalYearMonthArray, IntervalDayTimeArray, DurationSecondArray, DurationMillisecondArray, DurationMicrosecondArray, DurationNanosecondArray, LargeBinaryArray, LargeStringArray};
 use common_arrow::arrow::alloc::NativeType;
+use common_arrow::arrow::datatypes::DataType::LargeBinary;
 
 #[test]
-fn test_scatter_primitive_data() -> Result<()> {
+fn test_scatter_array_data() -> Result<()> {
     #[allow(dead_code)]
     struct ArrayTest {
         name: &'static str,
@@ -282,6 +283,48 @@ fn test_scatter_primitive_data() -> Result<()> {
             error: "",
         },
         ArrayTest {
+            name: "non-null-Binary",
+            array: Arc::new(BinaryArray::from(vec![&vec![1_u8][..], &vec![2_u8][..], &vec![3_u8][..]])),
+            indices: Arc::new(UInt64Array::from(vec![0, 1, 0])),
+            expect: vec![
+                Arc::new(BinaryArray::from(vec![&vec![1_u8][..], &vec![3_u8][..]])),
+                Arc::new(BinaryArray::from(vec![&vec![2_u8][..]]))
+            ],
+            error: "",
+        },
+        ArrayTest {
+            name: "non-null-LargeBinary",
+            array: Arc::new(LargeBinaryArray::from(vec![&vec![1_u8][..], &vec![2_u8][..], &vec![3_u8][..]])),
+            indices: Arc::new(UInt64Array::from(vec![0, 1, 0])),
+            expect: vec![
+                Arc::new(LargeBinaryArray::from(vec![&vec![1_u8][..], &vec![3_u8][..]])),
+                Arc::new(LargeBinaryArray::from(vec![&vec![2_u8][..]]))
+            ],
+            error: "",
+        },
+        ArrayTest {
+            name: "non-null-String",
+            array: Arc::new(StringArray::from(vec!["1", "2", "3"])),
+            indices: Arc::new(UInt64Array::from(vec![0, 1, 0])),
+            expect: vec![
+                Arc::new(StringArray::from(vec!["1", "3"])),
+                Arc::new(StringArray::from(vec!["2"]))
+            ],
+            error: "",
+        },
+        ArrayTest {
+            name: "non-null-LargeString",
+            array: Arc::new(LargeStringArray::from(vec!["1", "2", "3"])),
+            indices: Arc::new(UInt64Array::from(vec![0, 1, 0])),
+            expect: vec![
+                Arc::new(LargeStringArray::from(vec!["1", "3"])),
+                Arc::new(LargeStringArray::from(vec!["2"]))
+            ],
+            error: "",
+        },
+
+
+        ArrayTest {
             name: "null-Int8",
             array: Arc::new(Int8Array::from(vec![None, Some(1), None, Some(2), None, Some(3)])),
             indices: Arc::new(UInt64Array::from(vec![0, 1, 1, 0, 0, 1])),
@@ -541,10 +584,50 @@ fn test_scatter_primitive_data() -> Result<()> {
             ],
             error: "",
         },
+        ArrayTest {
+            name: "null-Binary",
+            array: Arc::new(BinaryArray::from(vec![None, Some(&vec![1_u8][..]), None, Some(&vec![2_u8][..]), None, Some(&vec![3_u8][..])])),
+            indices: Arc::new(UInt64Array::from(vec![0, 1, 1, 0, 0, 1])),
+            expect: vec![
+                Arc::new(BinaryArray::from(vec![None, Some(&vec![2_u8][..]), None])),
+                Arc::new(BinaryArray::from(vec![Some(&vec![1_u8][..]), None, Some(&vec![3_u8][..])]))
+            ],
+            error: "",
+        },
+        ArrayTest {
+            name: "null-LargeBinary",
+            array: Arc::new(LargeBinaryArray::from(vec![None, Some(&vec![1_u8][..]), None, Some(&vec![2_u8][..]), None, Some(&vec![3_u8][..])])),
+            indices: Arc::new(UInt64Array::from(vec![0, 1, 1, 0, 0, 1])),
+            expect: vec![
+                Arc::new(LargeBinaryArray::from(vec![None, Some(&vec![2_u8][..]), None])),
+                Arc::new(LargeBinaryArray::from(vec![Some(&vec![1_u8][..]), None, Some(&vec![3_u8][..])]))
+            ],
+            error: "",
+        },
+        ArrayTest {
+            name: "null-String",
+            array: Arc::new(StringArray::from(vec![None, Some("1"), None, Some("2"), None, Some("3")])),
+            indices: Arc::new(UInt64Array::from(vec![0, 1, 1, 0, 0, 1])),
+            expect: vec![
+                Arc::new(StringArray::from(vec![None, Some("2"), None])),
+                Arc::new(StringArray::from(vec![Some("1"), None, Some("3")]))
+            ],
+            error: "",
+        },
+        ArrayTest {
+            name: "null-LargeString",
+            array: Arc::new(LargeStringArray::from(vec![None, Some("1"), None, Some("2"), None, Some("3")])),
+            indices: Arc::new(UInt64Array::from(vec![0, 1, 1, 0, 0, 1])),
+            expect: vec![
+                Arc::new(LargeStringArray::from(vec![None, Some("2"), None])),
+                Arc::new(LargeStringArray::from(vec![Some("1"), None, Some("3")]))
+            ],
+            error: "",
+        },
     ];
 
     for test in tests {
-        let result = DataColumnarScatter::scatter(&test.array, &test.indices, 2);
+        let result = DataArrayScatter::scatter(&test.array, &test.indices, 2);
         match result {
             Ok(scattered_array) => assert_eq!(
                 scattered_array,
