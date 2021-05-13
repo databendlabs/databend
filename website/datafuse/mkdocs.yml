@@ -128,7 +128,6 @@ nav:
   - Documentation:
     - Overview:
       - Architecture: overview/architecture.md
-      - Performance: overview/performance.md
       - Installation: overview/building-and-running.md
     - SQL Reference:
       - Data Definition Language:
