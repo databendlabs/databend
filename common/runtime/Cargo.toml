@@ -1,0 +1,21 @@
+[package]
+name = "common-runtime"
+version = "0.1.0"
+authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+common-exception = {path = "../exception"}
+
+# Github dependencies
+
+# Crates.io dependencies
+anyhow = "1.0.40"
+futures = "0.3"
+tokio = { version = "1.5", features = ["macros", "rt","rt-multi-thread", "sync"] }
+
+[dev-dependencies]
+

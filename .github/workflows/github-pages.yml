@@ -7,23 +7,30 @@ on:
     paths:
       - "website/**/*"
 
+env:
+  NODE_VERSION: 14.x
+
 jobs:
-  build-and-deploy:
+  build:
+    name: Build project
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout 🛎️
-        uses: actions/checkout@v2.3.1
 
-      - name: Install and Build 🔧 # This example project is built using npm and outputs the result to the 'build' folder. Replace with the commands required to build your project, or remove this step entirely if your site is pre-built.
+      - name: Checkout 🛎️
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js runtime
+        uses: actions/setup-node@v1
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
+      - run: pip install mkdocs-material
+
+      - name: Build project 🔧
         run: |
           cd website/datafuse
           npm install
           npm run build
-
-      - name: Deploy 🚀
-        uses: JamesIves/github-pages-deploy-action@4.1.1
-        if: >
-          github.ref == 'refs/heads/master'
-        with:
-          branch: gh-pages # The branch the action should deploy to.
-          folder: website/datafuse/build # The folder the action should deploy.
+          mkdocs gh-deploy --force

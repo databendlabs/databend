@@ -4,14 +4,15 @@
 
 mod meta;
 mod meta_service_impl;
+mod placement;
 mod raftmeta;
 
-pub use meta::IMeta;
+pub use async_raft::NodeId;
 pub use meta::Meta;
 pub use meta::Node;
-pub use meta::NodeId;
 pub use meta::Slot;
 pub use meta_service_impl::MetaServiceImpl;
+pub use placement::IPlacement;
 pub use raftmeta::ClientRequest;
 pub use raftmeta::ClientResponse;
 pub use raftmeta::Cmd;

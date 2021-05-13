@@ -680,6 +680,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-runtime"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common-exception",
+ "futures",
+ "tokio",
+]
+
+[[package]]
 name = "common-streams"
 version = "0.1.0"
 dependencies = [
@@ -1214,6 +1224,7 @@ dependencies = [
  "common-infallible",
  "common-planners",
  "common-progress",
+ "common-runtime",
  "common-streams",
  "criterion",
  "crossbeam 0.8.0",
@@ -1222,7 +1233,7 @@ dependencies = [
  "indexmap",
  "lazy_static",
  "log",
- "metrics 0.15.1",
+ "metrics",
  "metrics-exporter-prometheus",
  "msql-srv",
  "num 0.4.0",
@@ -1265,7 +1276,7 @@ dependencies = [
  "lazy_static",
  "log",
  "maplit",
- "metrics 0.15.1",
+ "metrics",
  "metrics-exporter-prometheus",
  "num 0.4.0",
  "num_cpus",
@@ -1476,6 +1487,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
 
 [[package]]
+name = "hashbrown"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
+dependencies = [
+ "ahash",
+]
+
+[[package]]
 name = "headers"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1645,7 +1665,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "824845a0bf897a9042383849b02c1bc219c2383772efcd5c6f9766fa4b81aef3"
 dependencies = [
  "autocfg 1.0.1",
- "hashbrown",
+ "hashbrown 0.9.1",
 ]
 
 [[package]]
@@ -1910,52 +1930,28 @@ dependencies = [
 
 [[package]]
 name = "metrics"
-version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58e285601dcfb9f3a8f37a7093b9956a0df730b50848c8ac0117406aff06c851"
-dependencies = [
- "metrics-macros 0.2.0",
- "proc-macro-hack",
-]
-
-[[package]]
-name = "metrics"
 version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c53c23fff9a59f261498953cf41dc9ffc2522fd79723bdf283c1e88dc1633624"
 dependencies = [
- "metrics-macros 0.3.0",
+ "metrics-macros",
  "proc-macro-hack",
  "t1ha",
 ]
 
 [[package]]
 name = "metrics-exporter-prometheus"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d23bb354bd7dd5d244f2e9a389a0c3249bb6b994aca71bd6c2f7cd6fa2657fc"
+checksum = "954533c2d91c118cf2405264a4ac3a5592e84efac12b1f18561400ffef0597eb"
 dependencies = [
  "hyper",
- "metrics 0.14.2",
+ "metrics",
  "metrics-util",
  "parking_lot",
  "quanta",
  "thiserror",
  "tokio",
-]
-
-[[package]]
-name = "metrics-macros"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11ac60cd4d3a869fd39d57baf0ed7f79fb677580d8d6655c4330d4f1126bc27b"
-dependencies = [
- "lazy_static",
- "proc-macro-hack",
- "proc-macro2",
- "quote",
- "regex",
- "syn",
 ]
 
 [[package]]
@@ -1974,21 +1970,24 @@ dependencies = [
 
 [[package]]
 name = "metrics-util"
-version = "0.6.2"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ace44e2c64f785c3c37605ecf7504e5fc4efbb2936a49cc56c1084d79657a4d"
+checksum = "6586f4c52af81a3f7832cf0bc86141d2fca7207bedd09fdd3f7da60c8dcd0c4a"
 dependencies = [
  "aho-corasick",
  "atomic-shim",
  "crossbeam-epoch 0.9.3",
  "crossbeam-utils 0.8.3",
  "dashmap",
+ "hashbrown 0.11.2",
  "indexmap",
- "metrics 0.14.2",
+ "metrics",
+ "num_cpus",
  "ordered-float 2.1.1",
  "parking_lot",
  "quanta",
  "sketches-ddsketch",
+ "t1ha",
 ]
 
 [[package]]

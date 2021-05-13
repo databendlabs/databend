@@ -39,7 +39,7 @@ impl CsvTable {
         let file = match options.get("location") {
             None => {
                 return Result::Err(ErrorCodes::BadOption(
-                    "CSV Engine must contains file location options".to_string()
+                    "CSV Engine must contains file location options"
                 ));
             }
             Some(v) => v.trim_matches(|s| s == '\'' || s == '"').to_string()

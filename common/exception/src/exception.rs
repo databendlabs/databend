@@ -30,10 +30,10 @@ macro_rules! build_exceptions {
         as_item! {
             impl ErrorCodes {
                 $(
-                pub fn $body(display_text: String) -> ErrorCodes {
+                pub fn $body(display_text: impl Into<String>) -> ErrorCodes {
                     ErrorCodes {
                         code:$code,
-                        display_text,
+                        display_text: display_text.into(),
                         cause: None,
                         backtrace: Some(Backtrace::new()),
                     }

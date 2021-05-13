@@ -18,7 +18,7 @@ async fn test_transform_sort() -> anyhow::Result<()> {
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
     // Pipeline.
-    let mut pipeline = Pipeline::create();
+    let mut pipeline = Pipeline::create(ctx.clone());
     let a = test_source.number_source_transform_for_test(8)?;
     pipeline.add_source(Arc::new(a))?;
 

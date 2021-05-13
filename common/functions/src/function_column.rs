@@ -75,7 +75,7 @@ impl IFunction for ColumnFunction {
     fn accumulate_result(&self) -> Result<Vec<DataValue>> {
         self.saved
             .as_ref()
-            .ok_or_else(|| ErrorCodes::IllegalFunctionState("column saved is None".to_string()))
+            .ok_or_else(|| ErrorCodes::IllegalFunctionState("column saved is None"))
             .map(|saved| vec![saved.clone()])
     }
 
@@ -89,7 +89,7 @@ impl IFunction for ColumnFunction {
     fn merge_result(&self) -> Result<DataValue> {
         self.saved
             .as_ref()
-            .ok_or_else(|| ErrorCodes::IllegalFunctionState("column saved is None".to_string()))
+            .ok_or_else(|| ErrorCodes::IllegalFunctionState("column saved is None"))
             .map(|saved| saved.clone())
     }
 }

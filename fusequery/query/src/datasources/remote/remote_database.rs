@@ -60,7 +60,7 @@ impl IDatabase for RemoteDatabase {
 
     fn get_table(&self, _table_name: &str) -> Result<Arc<dyn ITable>> {
         Result::Err(ErrorCodes::UnImplement(
-            "RemoteDatabase get_table not yet implemented".to_string()
+            "RemoteDatabase get_table not yet implemented"
         ))
     }
 

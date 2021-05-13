@@ -67,11 +67,9 @@ impl<W: io::Write> MysqlShim<W> for Session {
         self.ctx.reset().unwrap();
         let start = Instant::now();
 
-        fn build_runtime(max_threads: u64) -> Result<Runtime> {
+        fn build_runtime() -> Result<Runtime> {
             tokio::runtime::Builder::new_multi_thread()
-                .enable_io()
-                .enable_time()
-                .worker_threads(max_threads as usize)
+                .enable_all()
                 .build()
                 .map_err(|tokio_error| ErrorCodes::TokioError(format!("{}", tokio_error)))
         }
@@ -90,9 +88,8 @@ impl<W: io::Write> MysqlShim<W> for Session {
         let output = PlanParser::create(self.ctx.clone())
             .build_from_sql(query)
             .and_then(|built_plan| InterpreterFactory::get(self.ctx.clone(), built_plan))
+            .zip(build_runtime())
             // Execute query and get result
-            .zip(self.ctx.get_max_threads())
-            .left_and_then(build_runtime)
             .and_then_tuple(receive_data_set)
             // Push result set to client
             .and_match(done(writer));

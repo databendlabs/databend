@@ -17,7 +17,7 @@ pub struct MetaServiceImpl {
 }
 
 impl MetaServiceImpl {
-    pub async fn create(meta_node: Arc<MetaNode>) -> Self {
+    pub fn create(meta_node: Arc<MetaNode>) -> Self {
         Self { meta_node }
     }
 }
@@ -37,7 +37,7 @@ impl MetaService for MetaServiceImpl {
         // TODO: handle ForwardToLeader error
         let resp = self
             .meta_node
-            .local_set(req)
+            .write_to_local_leader(req)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
@@ -51,14 +51,14 @@ impl MetaService for MetaServiceImpl {
         request: tonic::Request<GetReq>
     ) -> Result<tonic::Response<GetReply>, tonic::Status> {
         let req = request.into_inner();
-        let resp = self.meta_node.local_get(req.key.clone()).await;
+        let resp = self.meta_node.get_file(&req.key).await;
         let rst = match resp {
-            Ok(v) => GetReply {
+            Some(v) => GetReply {
                 ok: true,
                 key: req.key,
                 value: v
             },
-            Err(_) => GetReply {
+            None => GetReply {
                 ok: false,
                 key: req.key,
                 value: "".into()

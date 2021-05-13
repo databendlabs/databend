@@ -52,9 +52,7 @@ impl PlanParser {
                 .first()
                 .map(|statement| self.statement_to_plan(&statement))
                 .unwrap_or_else(|| {
-                    Result::Err(ErrorCodes::SyntexException(String::from(
-                        "Only support single query"
-                    )))
+                    Result::Err(ErrorCodes::SyntexException("Only support single query"))
                 })
         })
     }
@@ -107,9 +105,7 @@ impl PlanParser {
 
     pub fn sql_create_database_to_plan(&self, create: &DfCreateDatabase) -> Result<PlanNode> {
         if create.name.0.is_empty() {
-            return Result::Err(ErrorCodes::SyntexException(
-                "Create database name is empty".to_string()
-            ));
+            return Result::Err(ErrorCodes::SyntexException("Create database name is empty"));
         }
         let create_database_name = create.name.0[0].value.clone();
 
@@ -134,9 +130,7 @@ impl PlanParser {
     pub fn sql_create_table_to_plan(&self, create: &DfCreateTable) -> Result<PlanNode> {
         let mut db = self.ctx.get_current_database();
         if create.name.0.is_empty() {
-            return Result::Err(ErrorCodes::SyntexException(
-                "Create table name is empty".to_string()
-            ));
+            return Result::Err(ErrorCodes::SyntexException("Create table name is empty"));
         }
         let mut table = create.name.0[0].value.clone();
         if create.name.0.len() > 1 {
@@ -278,9 +272,7 @@ impl PlanParser {
         match from.len() {
             0 => self.plan_with_dummy_source(),
             1 => self.plan_table_with_joins(&from[0]),
-            _ => Result::Err(ErrorCodes::SyntexException(
-                "Cannot support JOIN clause".to_string()
-            ))
+            _ => Result::Err(ErrorCodes::SyntexException("Cannot support JOIN clause"))
         }
     }
 
@@ -326,7 +318,7 @@ impl PlanParser {
                 if !args.is_empty() {
                     if name.0.len() >= 2 {
                         return Result::Err(ErrorCodes::BadArguments(
-                            "Currently table can't have arguments".to_string()
+                            "Currently table can't have arguments"
                         ));
                     }
 
@@ -371,9 +363,9 @@ impl PlanParser {
             }
             Derived { subquery, .. } => self.query_to_plan(subquery),
             NestedJoin(table_with_joins) => self.plan_table_with_joins(table_with_joins),
-            TableFunction { .. } => Result::Err(ErrorCodes::UnImplement(
-                "Unsupported table function".to_string()
-            ))
+            TableFunction { .. } => {
+                Result::Err(ErrorCodes::UnImplement("Unsupported table function"))
+            }
         }
     }
 
@@ -618,7 +610,7 @@ impl PlanParser {
                     .and_then(|limit_expr| match limit_expr {
                         ExpressionAction::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
                         _ => Err(ErrorCodes::SyntexException(
-                            "Unexpected expression for LIMIT clause".to_string()
+                            "Unexpected expression for LIMIT clause"
                         ))
                     })?;
 

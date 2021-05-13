@@ -14,6 +14,8 @@ use crate::dfs::Dfs;
 use crate::executor::ActionHandler;
 use crate::fs::IFileSystem;
 use crate::localfs::LocalFS;
+use crate::meta_service::MetaNode;
+use crate::tests::rand_local_addr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_action_handler_do_pull_file() -> anyhow::Result<()> {
@@ -23,9 +25,13 @@ async fn test_action_handler_do_pull_file() -> anyhow::Result<()> {
     let fs = LocalFS::try_create(root.to_str().unwrap().to_string())?;
     fs.add("foo".into(), "bar".as_bytes()).await?;
 
-    let meta_addr = "127.0.0.1:10999".into();
+    let meta_addr = rand_local_addr();
 
-    let dfs = Dfs::create(fs, meta_addr);
+    let rst = MetaNode::boot(0, meta_addr.clone()).await;
+    assert!(rst.is_ok());
+    let mn = rst.unwrap();
+
+    let dfs = Dfs::create(fs, mn);
     let hdlr = ActionHandler::create(Arc::new(dfs));
     {
         // pull file

@@ -11,14 +11,16 @@ use common_streams::SendableDataBlockStream;
 use crate::pipelines::processors::IProcessor;
 use crate::pipelines::processors::MergeProcessor;
 use crate::pipelines::processors::Pipe;
+use crate::sessions::FuseQueryContextRef;
 
 pub struct Pipeline {
+    ctx: FuseQueryContextRef,
     pipes: Vec<Pipe>
 }
 
 impl Pipeline {
-    pub fn create() -> Self {
-        Pipeline { pipes: vec![] }
+    pub fn create(ctx: FuseQueryContextRef) -> Self {
+        Pipeline { ctx, pipes: vec![] }
     }
 
     /// Reset the pipeline.
@@ -44,9 +46,9 @@ impl Pipeline {
 
     /// Last pipe of the pipeline.
     pub fn last_pipe(&self) -> Result<&Pipe> {
-        self.pipes.last().ok_or_else(|| {
-            ErrorCodes::IllegalPipelineState("Pipeline last pipe can not be none".to_string())
-        })
+        self.pipes
+            .last()
+            .ok_or_else(|| ErrorCodes::IllegalPipelineState("Pipeline last pipe can not be none"))
     }
 
     pub fn add_source(&mut self, source: Arc<dyn IProcessor>) -> Result<()> {
@@ -94,7 +96,7 @@ impl Pipeline {
     pub fn merge_processor(&mut self) -> Result<()> {
         let last_pipe = self.last_pipe()?;
         if last_pipe.nums() > 1 {
-            let mut merge = MergeProcessor::create();
+            let mut merge = MergeProcessor::create(self.ctx.clone());
             for x in last_pipe.processors() {
                 merge.connect_to(x.clone())?;
             }

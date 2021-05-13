@@ -36,17 +36,13 @@ impl DataBlock {
 
     pub fn concat_blocks(blocks: &[DataBlock]) -> Result<DataBlock> {
         if blocks.is_empty() {
-            return Result::Err(ErrorCodes::EmptyData(
-                "Can't concat empty blocks".to_string()
-            ));
+            return Result::Err(ErrorCodes::EmptyData("Can't concat empty blocks"));
         }
 
         let first_block = &blocks[0];
         for block in blocks.iter() {
             if block.schema().ne(first_block.schema()) {
-                return Result::Err(ErrorCodes::DataStructMissMatch(
-                    "Schema not matched".to_string()
-                ));
+                return Result::Err(ErrorCodes::DataStructMissMatch("Schema not matched"));
             }
         }
 
@@ -149,9 +145,7 @@ impl DataBlock {
         limit: Option<usize>,
     ) -> Result<DataBlock> {
         match blocks.len() {
-            0 => Result::Err(ErrorCodes::EmptyData(
-                "Can't merge empty blocks".to_string()
-            )),
+            0 => Result::Err(ErrorCodes::EmptyData("Can't merge empty blocks")),
             1 => Ok(blocks[0].clone()),
             2 => DataBlock::merge_sort_block(
                 &blocks[0],

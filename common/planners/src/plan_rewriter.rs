@@ -344,7 +344,7 @@ impl PlanRewriter {
 
     pub fn exprs_to_names(exprs: &[ExpressionAction], names: &mut HashSet<String>) -> Result<()> {
         for expr in exprs {
-            let name = String::from(format!("{:?}", expr).as_str());
+            let name = format!("{:?}", expr);
             names.insert(name.clone());
         }
         Ok(())

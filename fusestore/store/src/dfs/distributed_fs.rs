@@ -2,15 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use tonic::transport::channel::Channel;
 
 use crate::fs::IFileSystem;
 use crate::fs::ListResult;
 use crate::localfs::LocalFS;
 use crate::meta_service::ClientRequest;
 use crate::meta_service::Cmd;
-use crate::meta_service::MetaServiceClient;
+use crate::meta_service::MetaNode;
 
 /// DFS is a distributed file system impl.
 /// When a file is added, it stores it locally, commit the this action into distributed meta data(something like a raft group).
@@ -22,25 +23,19 @@ pub struct Dfs {
     /// The local fs to store data copies.
     /// The distributed fs is a cluster of local-fs organized with a meta data service.
     pub local_fs: LocalFS,
-    pub meta_service_addr: String
+    pub meta_node: Arc<MetaNode>
 }
 
 impl Dfs {
-    pub fn create(local_fs: LocalFS, meta_service_addr: String) -> Dfs {
+    pub fn create(local_fs: LocalFS, meta_node: Arc<MetaNode>) -> Dfs {
         Dfs {
             local_fs,
-            meta_service_addr
+            meta_node
         }
     }
 }
 
-impl Dfs {
-    pub async fn make_client(&self) -> anyhow::Result<MetaServiceClient<Channel>> {
-        let client =
-            MetaServiceClient::connect(format!("http://{}", self.meta_service_addr)).await?;
-        Ok(client)
-    }
-}
+impl Dfs {}
 
 #[async_trait]
 impl IFileSystem for Dfs {
@@ -51,15 +46,14 @@ impl IFileSystem for Dfs {
 
         // update meta, other store nodes will be informed about this change and then pull the data to complete replication.
 
-        let mut client = self.make_client().await?;
         let req = ClientRequest {
             txid: None,
-            cmd: Cmd::Add {
+            cmd: Cmd::AddFile {
                 key: path,
                 value: "".into()
             }
         };
-        client.write(req).await?;
+        let _resp = self.meta_node.write(req).await?;
         Ok(())
     }
 

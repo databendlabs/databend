@@ -42,7 +42,11 @@ use tokio::sync::RwLockReadGuard;
 use tokio::sync::RwLockWriteGuard;
 use tonic::transport::channel::Channel;
 
+use crate::meta_service::Meta;
 use crate::meta_service::MetaServiceClient;
+use crate::meta_service::MetaServiceImpl;
+use crate::meta_service::MetaServiceServer;
+use crate::meta_service::Node;
 use crate::meta_service::RaftMes;
 
 const ERR_INCONSISTENT_LOG: &str =
@@ -53,32 +57,37 @@ const ERR_INCONSISTENT_LOG: &str =
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Cmd {
     // AKA put-if-absent. add a key-value record only when key is absent.
-    Add { key: String, value: String },
+    AddFile { key: String, value: String },
     // Override the record with key.
-    Set { key: String, value: String }
+    SetFile { key: String, value: String },
+    // Add node if absent
+    AddNode { node_id: NodeId, node: Node }
 }
 
 impl fmt::Display for Cmd {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Cmd::Add { key, value } => {
-                write!(f, "add:{}={}", key, value)
+            Cmd::AddFile { key, value } => {
+                write!(f, "addfile:{}={}", key, value)
             }
-            Cmd::Set { key, value } => {
-                write!(f, "set:{}={}", key, value)
+            Cmd::SetFile { key, value } => {
+                write!(f, "setfile:{}={}", key, value)
+            }
+            Cmd::AddNode { node_id, node } => {
+                write!(f, "addnode:{}={}", node_id, node)
             }
         }
     }
 }
 
-/// RaftTxId is the enssential info to identify an write operation to raft.
+/// RaftTxId is the essential info to identify an write operation to raft.
 /// Logs with the same RaftTxId are considered the same and only the first of them will be applied.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct RaftTxId {
     /// The ID of the client which has sent the request.
     pub client: String,
     /// The serial number of this request.
-    /// TODO(xp): a client msut generate consistent `client` and globally unique serial.
+    /// TODO(xp): a client must generate consistent `client` and globally unique serial.
     /// TODO(xp): in this impl the state machine records only one serial, which implies serial must be monotonic incremental for every client.
     pub serial: u64
 }
@@ -116,6 +125,30 @@ impl tonic::IntoRequest<RaftMes> for ClientRequest {
         tonic::Request::new(mes)
     }
 }
+impl tonic::IntoRequest<RaftMes> for AppendEntriesRequest<ClientRequest> {
+    fn into_request(self) -> tonic::Request<RaftMes> {
+        let mes = RaftMes {
+            data: serde_json::to_vec(&self).expect("fail to serialize")
+        };
+        tonic::Request::new(mes)
+    }
+}
+impl tonic::IntoRequest<RaftMes> for InstallSnapshotRequest {
+    fn into_request(self) -> tonic::Request<RaftMes> {
+        let mes = RaftMes {
+            data: serde_json::to_vec(&self).expect("fail to serialize")
+        };
+        tonic::Request::new(mes)
+    }
+}
+impl tonic::IntoRequest<RaftMes> for VoteRequest {
+    fn into_request(self) -> tonic::Request<RaftMes> {
+        let mes = RaftMes {
+            data: serde_json::to_vec(&self).expect("fail to serialize")
+        };
+        tonic::Request::new(mes)
+    }
+}
 
 impl TryFrom<RaftMes> for ClientRequest {
     type Error = tonic::Status;
@@ -129,11 +162,17 @@ impl TryFrom<RaftMes> for ClientRequest {
 
 /// The application data response type which the `MemStore` works with.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct ClientResponse {
-    // The value before applying a ClientRequest.
-    pub prev: Option<String>,
-    // The value after applying a ClientRequest.
-    pub result: Option<String>
+pub enum ClientResponse {
+    String {
+        // The value before applying a ClientRequest.
+        prev: Option<String>,
+        // The value after applying a ClientRequest.
+        result: Option<String>
+    },
+    Node {
+        prev: Option<Node>,
+        result: Option<Node>
+    }
 }
 
 impl AppDataResponse for ClientResponse {}
@@ -148,6 +187,22 @@ impl From<RaftMes> for ClientResponse {
     fn from(msg: RaftMes) -> Self {
         let resp: ClientResponse = serde_json::from_slice(&msg.data).expect("fail to deserialize");
         resp
+    }
+}
+impl From<(Option<String>, Option<String>)> for ClientResponse {
+    fn from(v: (Option<String>, Option<String>)) -> Self {
+        ClientResponse::String {
+            prev: v.0,
+            result: v.1
+        }
+    }
+}
+impl From<(Option<Node>, Option<Node>)> for ClientResponse {
+    fn from(v: (Option<Node>, Option<Node>)) -> Self {
+        ClientResponse::Node {
+            prev: v.0,
+            result: v.1
+        }
     }
 }
 
@@ -178,17 +233,12 @@ pub struct MemStoreStateMachine {
     /// A mapping of client IDs to their state info:
     /// (serial, ClientResponse)
     pub client_serial_responses: HashMap<String, (u64, ClientResponse)>,
-    pub kvs: HashMap<String, String>
+
+    pub meta: Meta
 }
 
 impl MemStoreStateMachine {
     /// Apply an log entry to state machine.
-    ///
-    /// For an `Add` command, if the specified key presents, the returned ClientResponse set result
-    /// to None and prev to the previous value.
-    ///
-    /// For an `Set` command, it always succeeds. and returns the previous value and the value
-    /// client specified.
     ///
     /// If a duplicated log entry is detected by checking data.txid, no update
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
@@ -204,24 +254,7 @@ impl MemStoreStateMachine {
             }
         }
 
-        let (prev, rst): (Option<String>, Option<String>) = match data.cmd {
-            Cmd::Add { ref key, ref value } => {
-                if self.kvs.contains_key(key) {
-                    let prev = self.kvs.get(key);
-                    (prev.cloned(), None)
-                } else {
-                    let prev = self.kvs.insert(key.clone(), value.clone());
-                    (prev, Some(value.clone()))
-                }
-            }
-
-            Cmd::Set { ref key, ref value } => {
-                let prev = self.kvs.insert(key.clone(), value.clone());
-                (prev, Some(value.clone()))
-            }
-        };
-
-        let resp = ClientResponse { prev, result: rst };
+        let resp = self.meta.apply(data)?;
 
         if let Some(ref txid) = data.txid {
             self.client_serial_responses
@@ -232,9 +265,6 @@ impl MemStoreStateMachine {
 }
 
 /// An in-memory storage system implementing the `async_raft::RaftStorage` trait.
-///
-/// TODO: support at least 3 data set: nodes in cluster, block distribution and dfs-file metas.
-///       See: meta::Meta
 pub struct MemStore {
     /// The ID of the Raft node for which this memory storage instances is configured.
     id: NodeId,
@@ -574,10 +604,15 @@ pub struct Network {
 }
 
 impl Network {
-    pub fn new(m: Arc<MemStore>) -> Network {
-        Network { sto: m }
+    pub fn new(sto: Arc<MemStore>) -> Network {
+        Network { sto }
     }
-    pub async fn make_client(&self, addr: String) -> anyhow::Result<MetaServiceClient<Channel>> {
+
+    pub async fn make_client(
+        &self,
+        node_id: &NodeId
+    ) -> anyhow::Result<MetaServiceClient<Channel>> {
+        let addr = self.sto.get_node_addr(node_id).await?;
         let client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
         Ok(client)
     }
@@ -591,13 +626,8 @@ impl RaftNetwork<ClientRequest> for Network {
         target: NodeId,
         rpc: AppendEntriesRequest<ClientRequest>
     ) -> Result<AppendEntriesResponse> {
-        let addr = self.sto.get_node_addr(target).await?;
-        let data = serde_json::to_vec(&rpc)?;
-
-        let req = tonic::Request::new(RaftMes { data });
-
-        let mut client = self.make_client(addr).await?;
-        let resp = client.append_entries(req).await?;
+        let mut client = self.make_client(&target).await?;
+        let resp = client.append_entries(rpc).await?;
         let mes = resp.into_inner();
         let resp = serde_json::from_slice(&mes.data)?;
 
@@ -610,13 +640,8 @@ impl RaftNetwork<ClientRequest> for Network {
         target: NodeId,
         rpc: InstallSnapshotRequest
     ) -> Result<InstallSnapshotResponse> {
-        let addr = self.sto.get_node_addr(target).await?;
-        let data = serde_json::to_vec(&rpc)?;
-
-        let req = tonic::Request::new(RaftMes { data });
-
-        let mut client = self.make_client(addr).await?;
-        let resp = client.install_snapshot(req).await?;
+        let mut client = self.make_client(&target).await?;
+        let resp = client.install_snapshot(rpc).await?;
         let mes = resp.into_inner();
         let resp = serde_json::from_slice(&mes.data)?;
 
@@ -625,13 +650,8 @@ impl RaftNetwork<ClientRequest> for Network {
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn vote(&self, target: NodeId, rpc: VoteRequest) -> Result<VoteResponse> {
-        let addr = self.sto.get_node_addr(target).await?;
-        let data = serde_json::to_vec(&rpc)?;
-
-        let req = tonic::Request::new(RaftMes { data });
-
-        let mut client = self.make_client(addr).await?;
-        let resp = client.vote(req).await?;
+        let mut client = self.make_client(&target).await?;
+        let resp = client.vote(rpc).await?;
         let mes = resp.into_inner();
         let resp = serde_json::from_slice(&mes.data)?;
 
@@ -645,84 +665,172 @@ pub type MetaRaft = Raft<ClientRequest, ClientResponse, Network, MemStore>;
 // MetaNode is the container of meta data related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
     // metrics subscribes raft state changes. The most important field is the leader node id, to which all write operations should be forward.
-    pub metrics: Arc<RwLock<RaftMetrics>>,
+    pub metrics_rx: watch::Receiver<RaftMetrics>,
     pub sto: Arc<MemStore>,
     pub raft: MetaRaft
 }
 
 impl MemStore {
-    // build a meta data key of node in the cluster.
-    pub fn node_key(&self, node_id: NodeId) -> String {
-        format!("node/{:}", node_id)
+    pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
+        let sm = self.sm.read().await;
+
+        sm.meta.get_node(node_id)
     }
 
-    pub async fn get_node_addr(&self, node_id: NodeId) -> anyhow::Result<String> {
-        let key = self.node_key(node_id);
-        let ns = self.sm.read().await;
-
-        let addr = ns
-            .kvs
-            .get(&key)
-            .ok_or_else(|| anyhow::anyhow!("node not found: {:}", key))?;
-        Ok(addr.clone())
+    pub async fn get_node_addr(&self, node_id: &NodeId) -> anyhow::Result<String> {
+        let addr = self
+            .get_node(node_id)
+            .await
+            .map(|n| n.address)
+            .ok_or_else(|| anyhow::anyhow!("node not found {}", node_id))?;
+        Ok(addr)
     }
 
-    pub async fn list_added_non_voters(&self) -> HashSet<NodeId> {
-        // TODO: impl a hierarchical structure in storage.
-
+    /// A non-voter is a node stored in raft store, but is not configured as a voter in the raft group.
+    pub async fn list_non_voters(&self) -> HashSet<NodeId> {
         let mut rst = HashSet::new();
         let sm = self.sm.read().await;
         let ms = self
             .get_membership_config()
             .await
             .expect("fail to get membership");
-        // TODO: there is no iteration in store. Using a for loop to iterate nodes for now.
-        for i in 0..100 {
-            let key = self.node_key(i);
+
+        for i in sm.meta.nodes.keys() {
             // it has been added into this cluster and is not a voter.
-            if sm.kvs.contains_key(&key) && !ms.contains(&i) {
-                rst.insert(i);
+            if !ms.contains(i) {
+                rst.insert(*i);
             }
         }
         rst
     }
 }
 
-impl MetaNode {
-    pub async fn new(node_id: NodeId) -> Arc<MetaNode> {
-        let config = Config::build("foo_cluster".into())
-            .validate()
-            .expect("fail to build raft config");
+pub struct MetaNodeBuilder {
+    node_id: Option<NodeId>,
+    config: Option<Config>,
+    sto: Option<Arc<MemStore>>,
+    monitor_metrics: bool,
+    start_grpc_service: bool
+}
 
-        let sto = Arc::new(MemStore::new(node_id));
+impl MetaNodeBuilder {
+    pub async fn build(mut self) -> anyhow::Result<Arc<MetaNode>> {
+        let node_id = self
+            .node_id
+            .ok_or_else(|| anyhow::anyhow!("node_id is not set"))?;
+
+        let config = self
+            .config
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("config is not set"))?;
+
+        let sto = self
+            .sto
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("sto is not set"))?;
+
         let net = Network::new(sto.clone());
 
         let raft = MetaRaft::new(node_id, Arc::new(config), Arc::new(net), sto.clone());
         let metrics_rx = raft.metrics();
-        let metrics = metrics_rx.borrow().clone();
-        let metrics = Arc::new(RwLock::new(metrics));
 
-        let mn = Arc::new(MetaNode { metrics, sto, raft });
+        let mn = Arc::new(MetaNode {
+            metrics_rx: metrics_rx.clone(),
+            sto: sto.clone(),
+            raft
+        });
 
-        Self::subscribe_metrics(mn.clone(), metrics_rx);
+        if self.monitor_metrics {
+            MetaNode::subscribe_metrics(mn.clone(), metrics_rx);
+        }
 
-        mn
+        if self.start_grpc_service {
+            let addr = sto.get_node_addr(&node_id).await?;
+            MetaNode::start_grpc(mn.clone(), &addr)?;
+        }
+        Ok(mn)
+    }
+
+    pub fn node_id(mut self, node_id: NodeId) -> Self {
+        self.node_id = Some(node_id);
+        self
+    }
+    pub fn sto(mut self, sto: Arc<MemStore>) -> Self {
+        self.sto = Some(sto);
+        self
+    }
+    pub fn start_grpc_service(mut self, b: bool) -> Self {
+        self.start_grpc_service = b;
+        self
+    }
+    pub fn monitor_metrics(mut self, b: bool) -> Self {
+        self.monitor_metrics = b;
+        self
+    }
+}
+
+impl MetaNode {
+    pub fn builder() -> MetaNodeBuilder {
+        MetaNodeBuilder {
+            node_id: None,
+            config: Some(
+                Config::build("foo_cluster".into())
+                    .validate()
+                    .expect("fail to build raft config")
+            ),
+            sto: None,
+            monitor_metrics: true,
+            start_grpc_service: true
+        }
+    }
+
+    /// Start the grpc service for raft communication and meta operation API.
+    #[tracing::instrument(level = "info", skip(mn))]
+    pub fn start_grpc(mn: Arc<MetaNode>, addr: &str) -> anyhow::Result<()> {
+        let meta_srv_impl = MetaServiceImpl::create(mn);
+        let meta_srv = MetaServiceServer::new(meta_srv_impl);
+
+        let addr = addr.parse::<std::net::SocketAddr>()?;
+
+        let srv = tonic::transport::Server::builder().add_service(meta_srv);
+
+        tokio::spawn(async move {
+            srv.serve(addr)
+                .await
+                .map_err(|e| anyhow::anyhow!("MetaNode service error: {:?}", e))?;
+            Ok::<(), anyhow::Error>(())
+        });
+        Ok(())
+    }
+
+    /// Start a MetaStore node from initialized store.
+    #[tracing::instrument(level = "info")]
+    pub async fn new(node_id: NodeId) -> Arc<MetaNode> {
+        let b = MetaNode::builder()
+            .node_id(node_id)
+            .sto(Arc::new(MemStore::new(node_id)));
+
+        b.build().await.expect("can not fail")
     }
 
     // spawn a monitor to watch raft state changes such as leader changes,
-    // and feed the changes to a local cache.
+    // and manually add non-voter to cluster so that non-voter receives raft logs.
     pub fn subscribe_metrics(mn: Arc<Self>, mut metrics_rx: watch::Receiver<RaftMetrics>) {
+        //TODO: return a handle for join
         tokio::task::spawn(async move {
             loop {
                 let changed = metrics_rx.changed().await;
                 if changed.is_ok() {
                     let mm = metrics_rx.borrow().clone();
-                    *mn.metrics.write().await = mm;
-                    // TODO: check result
-                    let _rst = mn
-                        .add_configured_non_voters()
-                        .await
-                        .expect("fail to update non-voter");
+                    if let Some(cur) = mm.current_leader {
+                        if cur == mn.sto.id {
+                            // TODO: check result
+                            let _rst = mn
+                                .add_configured_non_voters()
+                                .await
+                                .expect("fail to update non-voter");
+                        }
+                    }
                 } else {
                     // shutting down
                     break;
@@ -731,31 +839,55 @@ impl MetaNode {
         });
     }
 
-    /// boot is called only once when booting up a cluster.
-    #[tracing::instrument(level = "info", skip(self))]
-    pub async fn boot(&self, addr: String) -> anyhow::Result<()> {
-        let node_id = self.sto.id;
+    /// Boot up the first node to create a cluster.
+    /// For every cluster this func should be called exactly once.
+    /// When a node is initialized with boot or boot_non_voter, start it with MetaStore::new().
+    #[tracing::instrument(level = "info")]
+    pub async fn boot(node_id: NodeId, addr: String) -> anyhow::Result<Arc<MetaNode>> {
+        let mn = MetaNode::boot_non_voter(node_id, &addr).await?;
+
         let mut cluster_node_ids = HashSet::new();
         cluster_node_ids.insert(node_id);
 
-        let rst = self
+        let rst = mn
             .raft
             .initialize(cluster_node_ids)
             .await
             .map_err(|x| anyhow::anyhow!("{:?}", x))?;
 
         tracing::info!("booted, rst: {:?}", rst);
+        mn.add_node(node_id, addr).await?;
 
-        let key = self.sto.node_key(self.sto.id);
-        // TODO: use txid?
-        let _resp = self
-            .local_set(ClientRequest {
-                txid: None,
-                cmd: Cmd::Add { key, value: addr }
-            })
-            .await
-            .expect("fail to add myself");
-        Ok(())
+        Ok(mn)
+    }
+
+    /// Boot a node that is going to join an existent cluster.
+    /// For every node this should be called exactly once.
+    /// When successfully initialized(e.g. received logs from raft leader), a node should be started with MetaNode::new().
+    #[tracing::instrument(level = "info")]
+    pub async fn boot_non_voter(node_id: NodeId, addr: &str) -> anyhow::Result<Arc<MetaNode>> {
+        // TODO test MetaNode::new() on a booted store.
+        // TODO: Before calling this func, the node should be added as a non-voter to leader.
+        // TODO: check raft initialState to see if the store is clean.
+
+        // When booting, there is addr stored in local store.
+        // Thus we need to start grpc manually.
+        let sto = MemStore::new(node_id);
+
+        let b = MetaNode::builder()
+            .node_id(node_id)
+            .start_grpc_service(false)
+            .sto(Arc::new(sto));
+
+        let mn = b.build().await?;
+
+        // Manually start the grpc, since no addr is stored yet.
+        // We can not use the startup routine for initialized node.
+        MetaNode::start_grpc(mn.clone(), addr)?;
+
+        tracing::info!("booted non-voter: {}={}", node_id, addr);
+
+        Ok(mn)
     }
 
     /// When a leader is established, it is the leader's responsibility to setup replication from itself to non-voters, AKA learners.
@@ -764,33 +896,111 @@ impl MetaNode {
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn add_configured_non_voters(&self) -> anyhow::Result<()> {
         // TODO after leader established, add non-voter through apis
-        let node_ids = self.sto.list_added_non_voters().await;
+        let node_ids = self.sto.list_non_voters().await;
         for i in node_ids.iter() {
             self.raft
                 .add_non_voter(*i)
                 .await
                 .expect("fail to add non-voter");
+
+            tracing::info!("non-voter is added: {}", i);
         }
         Ok(())
     }
 
-    // get meta data from local state, most business logic without strong consistency requirement should use this to access meta.
+    // get a file from local meta state, most business logic without strong consistency requirement should use this to access meta.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn local_get(&self, key: String) -> anyhow::Result<String> {
+    pub async fn get_file(&self, key: &str) -> Option<String> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.sm.read().await;
-        let v = sm
-            .kvs
-            .get(&key)
-            .ok_or_else(|| anyhow::anyhow!("meta data key not found: {:}", key))?;
-        Ok(v.clone())
+        sm.meta.get_file(key)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
+        // inconsistent get: from local state machine
+
+        let sm = self.sto.sm.read().await;
+        sm.meta.get_node(node_id)
+    }
+
+    /// Add a new node into this cluster.
+    /// The node info is committed with raft, thus it must be called on an initialized node.
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn add_node(&self, node_id: NodeId, addr: String) -> anyhow::Result<ClientResponse> {
+        // TODO: use txid?
+        let _resp = self
+            .write(ClientRequest {
+                txid: None,
+                cmd: Cmd::AddNode {
+                    node_id,
+                    node: Node {
+                        name: "".to_string(),
+                        address: addr
+                    }
+                }
+            })
+            .await?;
+        Ok(_resp)
+    }
+
+    /// Submit a write request to the known leader. Returns the response after applying the request.
+    #[tracing::instrument(level = "info", skip(self))]
+    pub async fn write(&self, req: ClientRequest) -> anyhow::Result<ClientResponse> {
+        // TODO handle ForwardToLeader error if leader changed.
+        let leader = self.get_leader().await;
+
+        if leader == self.sto.id {
+            return self.write_to_local_leader(req).await;
+        }
+
+        // forward to leader
+
+        let addr = self.sto.get_node_addr(&leader).await?;
+        let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
+        let resp = client.write(req).await?;
+        let mes = resp.into_inner();
+        let resp = serde_json::from_slice(&mes.data)?;
+        Ok(resp)
+    }
+
+    #[tracing::instrument(level = "info", skip(self))]
+    pub async fn get_leader(&self) -> NodeId {
+        // try to get the leader from the latest metrics.
+        // If leader is absent, wait for an update in which a leader is set.
+
+        if let Some(l) = self.metrics_rx.borrow().current_leader {
+            return l;
+        }
+
+        // slow path: wait loop
+
+        let mut rx = self.metrics_rx.clone();
+
+        loop {
+            // If changed() is called before clone(),
+            // we may miss the changed message.
+            // Thus we need to re-check the cloned rx.
+            if let Some(l) = rx.borrow().current_leader {
+                return l;
+            }
+
+            let changed = rx.changed().await;
+            if changed.is_err() {
+                tracing::info!("raft metrics tx closed");
+                return 0;
+            }
+        }
     }
 
     /// Write a meta record through local raft node.
     /// It works only when this node is the leader.
     #[tracing::instrument(level = "info", skip(self))]
-    pub async fn local_set(&self, req: ClientRequest) -> anyhow::Result<ClientResponse> {
+    pub async fn write_to_local_leader(
+        &self,
+        req: ClientRequest
+    ) -> anyhow::Result<ClientResponse> {
         // TODO: respond ForwardToLeader error
         let write_rst = self.raft.client_write(ClientWriteRequest::new(req)).await;
 

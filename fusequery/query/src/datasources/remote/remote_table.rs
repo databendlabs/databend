@@ -59,13 +59,13 @@ impl ITable for RemoteTable {
 
     fn read_plan(&self, _ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
         Result::Err(ErrorCodes::UnImplement(
-            "RemoteTable read_plan not yet implemented".to_string()
+            "RemoteTable read_plan not yet implemented"
         ))
     }
 
     async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
         Result::Err(ErrorCodes::UnImplement(
-            "RemoteTable read not yet implemented".to_string()
+            "RemoteTable read not yet implemented"
         ))
     }
 }
