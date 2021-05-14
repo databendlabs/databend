@@ -29,4 +29,9 @@ title: Performance
 
     FuseQuery system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/8c37f5390e129cfc9d648ff930d9ef03)
 
+<figure>
+  <img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/datafuse-avg-100b.gif"/>
+  <figcaption>100,000,000,000 show time</figcaption>
+</figure>
+
 Experience 100 billion performance on your laptop, [talk is cheap just bench it](building-and-running.md)
