@@ -33,11 +33,14 @@ This document describes how to build and run [FuseQuery](https://github.com/data
 
 === "MySQL Client"
 
-    ```markdown
+    !!! note
+        numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
+
+    ```
     $ mysql -h127.0.0.1 -P3307
     ```
     ```markdown
-    mysql> SELECT avg(number) FROM numbers_mt(1000000000);
+    mysql> SELECT avg(number) FROM numbers(1000000000);
     +-------------+
     | avg(number) |
     +-------------+
@@ -48,15 +51,18 @@ This document describes how to build and run [FuseQuery](https://github.com/data
 
 === "ClickHouse Client"
 
-    ```markdown
+    !!! note
+        numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
+
+    ```
     $ clickhouse client
     ```
 
-    ```markdown
-    datafuse :) SELECT avg(number) FROM numbers_mt(1000000000);
+    ```
+    datafuse :) SELECT avg(number) FROM numbers(1000000000);
 
     SELECT avg(number)
-      FROM numbers_mt(1000000000)
+      FROM numbers(1000000000)
 
     Query id: 89e06fba-1d57-464d-bfb0-238df85a2e66
 

@@ -9,7 +9,7 @@ The MAX() function returns the maximum value in a set of values.
 
 ## Syntax
 
-```sql
+```
 MAX(expression)
 ```
 
@@ -25,7 +25,10 @@ The maximum value, in the type of the value.
 
 ## Examples
 
-```sql
+!!! note
+    numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
+
+```
 mysql> SELECT MAX(*) FROM numbers(3);
 +--------+
 | max(*) |
