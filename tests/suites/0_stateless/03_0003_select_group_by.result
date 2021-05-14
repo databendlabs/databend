@@ -60,3 +60,4 @@ SELECT number%3 as c1, number as c2 FROM numbers_mt(10) where number > 2 group b
 --------------
 
 ERROR 1105 (HY000) at line 9: Code: 26, displayText = Column `number as c2` is not under aggregate function and not in GROUP BY: While processing (number % 3) as c1, number as c2.
+ERROR 1105 (HY000) at line 10: Code: 26, displayText = Column `number as c2` is not under aggregate function and not in GROUP BY: While processing (number % 3) as c1, number as c2, max([c2]).
