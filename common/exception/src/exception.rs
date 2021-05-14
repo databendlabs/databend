@@ -19,6 +19,26 @@ pub struct ErrorCodes {
     backtrace: Option<Backtrace>
 }
 
+impl ErrorCodes {
+    pub fn code(&self) -> u16 {
+        self.code
+    }
+
+    pub fn message(&self) -> String {
+        self.cause
+            .as_ref()
+            .map(|cause| format!("{:?}", cause))
+            .unwrap_or_else(|| self.display_text.clone())
+    }
+
+    pub fn backtrace(&self) -> String {
+        return match self.backtrace.as_ref() {
+            None => "".to_string(), // no backtrace
+            Some(backtrace) => format!("{:?}", backtrace)
+        };
+    }
+}
+
 macro_rules! as_item {
     ($i:item) => {
         $i
@@ -80,40 +100,31 @@ pub type Result<T> = std::result::Result<T, ErrorCodes>;
 
 impl Debug for ErrorCodes {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.cause
-            .as_ref()
-            .map(|cause| write!(f, "Code: {}, displayText = {:?}.", self.code, cause))
-            .unwrap_or_else(|| {
-                write!(
-                    f,
-                    "Code: {}, displayText = {:?}.",
-                    self.code.clone(),
-                    self.display_text.clone()
-                )?;
-                match self.backtrace.as_ref() {
-                    None => Ok(()), // no backtrace
-                    Some(backtrace) => {
-                        // TODO: Custom stack frame format for print
-                        write!(f, "\n\n{:?}", backtrace)
-                    }
-                }
-            })
+        write!(
+            f,
+            "Code: {}, displayText = {}.",
+            self.code(),
+            self.message(),
+        )?;
+
+        match self.backtrace.as_ref() {
+            None => Ok(()), // no backtrace
+            Some(backtrace) => {
+                // TODO: Custom stack frame format for print
+                write!(f, "\n\n{:?}", backtrace)
+            }
+        }
     }
 }
 
 impl Display for ErrorCodes {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.cause
-            .as_ref()
-            .map(|cause| write!(f, "Code: {}, displayText = {}.", self.code, cause))
-            .unwrap_or_else(|| {
-                write!(
-                    f,
-                    "Code: {}, displayText = {}.",
-                    self.code.clone(),
-                    self.display_text.clone()
-                )
-            })
+        write!(
+            f,
+            "Code: {}, displayText = {}.",
+            self.code(),
+            self.message(),
+        )
     }
 }
 

@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::borrow::Cow;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -10,6 +9,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use clickhouse_srv::connection::Connection;
+use clickhouse_srv::errors::ServerError;
 use clickhouse_srv::types::Block as ClickHouseBlock;
 use clickhouse_srv::*;
 use common_exception::ErrorCodes;
@@ -41,7 +41,12 @@ impl Session {
 }
 
 pub fn to_clickhouse_err(res: ErrorCodes) -> clickhouse_srv::errors::Error {
-    clickhouse_srv::errors::Error::Other(Cow::from(res.to_string()))
+    clickhouse_srv::errors::Error::Server(ServerError {
+        code: res.code() as u32,
+        name: "DB:Exception".to_string(),
+        message: res.message(),
+        stack_trace: res.backtrace()
+    })
 }
 
 enum BlockItem {
