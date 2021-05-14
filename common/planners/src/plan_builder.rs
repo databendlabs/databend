@@ -138,7 +138,7 @@ impl PlanBuilder {
         // Aggregator check.
         let mut group_by_names = HashSet::new();
         PlanRewriter::exprs_to_names(&group_expr, &mut group_by_names)?;
-        for aggr in aggr_expr {
+        for aggr in &rewrite_aggr_exprs {
             // do not check literal expressions
             if let ExpressionAction::Literal(_) = aggr {
                 continue;
@@ -160,13 +160,13 @@ impl PlanBuilder {
             AggregateMode::Partial => {
                 Self::from(&PlanNode::AggregatorPartial(AggregatorPartialPlan {
                     input: Arc::new(self.plan.clone()),
-                    aggr_expr: aggr_expr.to_vec(),
+                    aggr_expr: rewrite_aggr_exprs.to_vec(),
                     group_expr: group_expr.to_vec()
                 }))
             }
             AggregateMode::Final => Self::from(&PlanNode::AggregatorFinal(AggregatorFinalPlan {
                 input: Arc::new(self.plan.clone()),
-                aggr_expr: aggr_expr.to_vec(),
+                aggr_expr: rewrite_aggr_exprs.to_vec(),
                 group_expr: group_expr.to_vec(),
                 schema: DataSchemaRefExt::create(aggr_projection_fields)
             }))
