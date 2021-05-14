@@ -36,13 +36,6 @@ pub enum ExpressionAction {
         args: Vec<ExpressionAction>
     },
 
-    /// Functions with a set of arguments.
-    AggregateFunction {
-        op: String,
-        args: Vec<ExpressionAction>
-    },
-
-
     /// A sort expression, that can be used to sort values.
     Sort {
         /// The expression to sort on
@@ -98,10 +91,6 @@ impl ExpressionAction {
                 expr.to_function_with_depth(depth)?,
                 data_type.clone()
             )),
-            ExpressionAction::AggregateFunction { .. } => Result::Err(ErrorCodes::LogicalError(format!(
-                "Functions can't be built from AggregateFunction `{:?}",
-                self,
-            )))
         }
     }
 
@@ -111,24 +100,7 @@ impl ExpressionAction {
 
     // TODO fixme: create IAggregateFunction
     pub fn to_aggregate_function(&self) -> Result<Box<dyn IFunction>> {
-        match self {
-            ExpressionAction::AggregateFunction { op, args } => {
-                let mut funcs = Vec::with_capacity(args.len());
-                for arg in args {
-                    let mut func = arg.to_function_with_depth(depth + 1)?;
-                    func.set_depth(depth);
-                    funcs.push(func);
-                }
-                let mut func = FunctionFactory::get(op, &funcs)?;
-                func.set_depth(depth);
-                Ok(func)
-            },
-
-            _ => Result::Err(ErrorCodes::LogicalError(format!(
-                "AggregateFunction can't be built from other expressions `{:?}",
-                self,
-            ))),
-        }
+        self.to_function_with_depth(0)
     }
 
     pub fn to_data_field(&self, input_schema: &DataSchemaRef) -> Result<DataField> {
@@ -156,7 +128,6 @@ impl fmt::Debug for ExpressionAction {
                 write!(f, "({:?} {} {:?})", left, op, right,)
             }
             ExpressionAction::Function { op, args } => write!(f, "{}({:?})", op, args),
-            ExpressionAction::AggregateFunction { op, args } => write!(f, "{}({:?})", op, args),
             ExpressionAction::Sort { expr, .. } => write!(f, "{:?}", expr),
             ExpressionAction::Wildcard => write!(f, "*"),
             ExpressionAction::Cast { expr, data_type } => {
