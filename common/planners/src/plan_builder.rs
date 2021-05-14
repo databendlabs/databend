@@ -131,7 +131,9 @@ impl PlanBuilder {
         group_expr: &[ExpressionAction]
     ) -> Result<Self> {
         let input_schema = self.plan.schema();
-        let aggr_projection_fields = PlanRewriter::exprs_to_fields(&aggr_expr, &input_schema)?;
+        let rewrite_aggr_exprs = PlanRewriter::rewrite_projection_aliases(aggr_expr)?;
+        let aggr_projection_fields =
+            PlanRewriter::exprs_to_fields(&rewrite_aggr_exprs, &input_schema)?;
 
         // Aggregator check.
         let mut group_by_names = HashSet::new();
