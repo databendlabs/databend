@@ -8,29 +8,34 @@ on:
       - "website/**/*"
 
 env:
-  NODE_VERSION: 14.x
+  PYTHON_VERSION: 3.x
 
 jobs:
-  build:
-    name: Build project
+  documentation:
+    name: Build documentation
     runs-on: ubuntu-latest
     steps:
 
-      - name: Checkout 🛎️
+      - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Set up Node.js runtime
-        uses: actions/setup-node@v1
+      - name: Set up Python runtime
+        uses: actions/setup-python@v1
         with:
-          node-version: ${{ env.NODE_VERSION }}
-      - uses: actions/setup-python@v2
-        with:
-          python-version: 3.x
-      - run: pip install mkdocs-material
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Build project 🔧
+      - name: Install Python dependencies
         run: |
           cd website/datafuse
-          npm install
-          npm run build
+          pip install .
+          pip install \
+            mkdocs-minify-plugin>=0.3 \
+            mkdocs-redirects>=1.0
+
+      - name: Deploy website
+        env:
+          GOOGLE_ANALYTICS_KEY: ${{ secrets.GOOGLE_ANALYTICS_KEY }}
+        run: |
+          cd website/datafuse
           mkdocs gh-deploy --force
+          mkdocs --version

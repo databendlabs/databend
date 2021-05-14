@@ -19,8 +19,6 @@ jobs:
           override: true
 
       - name: Install grcov
-        if: >
-          github.ref == 'refs/heads/master'
         uses: actions-rs/install@v0.1
         with:
           crate: grcov
@@ -39,14 +37,10 @@ jobs:
           RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
 
       - name: Run code coverage
-        if: >
-          github.ref == 'refs/heads/master'
         uses: actions-rs/grcov@v0.1.5
         id: coverage
 
       - name: Upload to codecov.io
-        if: >
-          github.ref == 'refs/heads/master'
         uses: codecov/codecov-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

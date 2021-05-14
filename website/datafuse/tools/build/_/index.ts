@@ -128,6 +128,7 @@ export function resolve(
 export function watch(
   pattern: string, options: WatchOptions
 ): Observable<string> {
+  // @ts-ignore
   return fromEvent(chokidar.watch(pattern, options), "change")
 }
 

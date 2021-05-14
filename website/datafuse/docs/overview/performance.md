@@ -3,12 +3,13 @@ id: performance
 title: Performance
 ---
 
-* **Memory SIMD-Vector processing performance only**
-* Dataset: 100,000,000,000 (100 Billion)
-* Hardware: AMD Ryzen 7 PRO 4750U, 8 CPU Cores, 16 Threads
-* Rust: rustc 1.53.0-nightly (673d0db5e 2021-03-23)
-* Build with Link-time Optimization and Using CPU Specific Instructions
-* ClickHouse server version 21.4.6 revision 54447
+!!! note
+    * **Memory SIMD-Vector processing performance only**
+    * Dataset: 100,000,000,000 (100 Billion)
+    * Hardware: AMD Ryzen 7 PRO 4750U, 8 CPU Cores, 16 Threads
+    * Rust: rustc 1.53.0-nightly (673d0db5e 2021-03-23)
+    * Build with Link-time Optimization and Using CPU Specific Instructions
+    * ClickHouse server version 21.4.6 revision 54447
 
 | Query                                                        | FuseQuery (v0.4.1)                                  | ClickHouse (v21.4.6)                                         |
 | ------------------------------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------ |
@@ -23,10 +24,14 @@ title: Performance
 | SELECT number FROM numbers_mt(10000000000) ORDER BY number DESC LIMIT 1000 | 5.34 s.<br />(1.87 billion rows/s., 14.99 GB/s.)    | **×2.6 slow, (13.95 s.)** <br /> (716.62 million rows/s., 5.73 GB/s.) |
 | SELECT max(number),sum(number) FROM numbers_mt(1000000000) GROUP BY number % 3, number % 4, number % 5 | 9.03 s.<br />(110.71 million rows/s., 886.50 MB/s.) | **×3.5 fast, (2.60 s.)** <br /> (385.28 million rows/s., 3.08 GB/s.) |
 
+!!! note "Notes"
+    ClickHouse system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/bba7ec2c23da8017eced7118b59fc7d5) 
 
-Note:
+    FuseQuery system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/8c37f5390e129cfc9d648ff930d9ef03)
 
-* ClickHouse system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/bba7ec2c23da8017eced7118b59fc7d5)
-* FuseQuery system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/8c37f5390e129cfc9d648ff930d9ef03)
+<figure>
+  <img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/datafuse-avg-100b.gif"/>
+  <figcaption>100,000,000,000 show time</figcaption>
+</figure>
 
 Experience 100 billion performance on your laptop, [talk is cheap just bench it](building-and-running.md)

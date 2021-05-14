@@ -7,13 +7,13 @@ Returns the name of the currently selected database. If no database is selected,
 
 ## Syntax
 
-```sql
+```
 SELECT DATABASE() 
 ```
 
 ## Examples
 
-```sql
+```
 mysql> SELECT DATABASE();
 +------------+
 | database() |

@@ -1,4 +1,4 @@
 ---
 template: overrides/home.html
-title: Material for MkDocs
+title: Datafuse - A Modern Real-Time Data Processing & Analytics DBMS with Cloud-Native Architecture
 ---
