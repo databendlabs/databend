@@ -11,7 +11,7 @@ The SUM() function calculates the sum of a set of values.
 
 ## Syntax
 
-```sql
+```
 SUM(expression)
 ```
 
@@ -27,7 +27,10 @@ A double if the input type is double, otherwise integer.
 
 ## Examples
 
-```sql
+!!! note
+    numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
+
+```
 mysql> SELECT SUM(*) FROM numbers(3);
 +--------+
 | sum(*) |
