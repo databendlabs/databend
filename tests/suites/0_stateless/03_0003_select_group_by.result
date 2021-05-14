@@ -66,7 +66,7 @@ SELECT number%3 as c1, number as c2, max(c2) FROM numbers_mt(10) where number > 
 
 ERROR 1105 (HY000) at line 10: Code: 26, displayText = Column `number as c2` is not under aggregate function and not in GROUP BY: While processing (number % 3) as c1, number as c2, max([c2]).
 --------------
-select 1 + sum(number) as d, d + 3 from numbers(10) group by number % 4 order by d
+SELECT 1 + sum(number) as d, d + 3 FROM numbers(10) group by number % 4 order by d
 --------------
 
 +------+-------------------------------+
@@ -77,3 +77,8 @@ select 1 + sum(number) as d, d + 3 from numbers(10) group by number % 4 order by
 |   13 |                            16 |
 |   16 |                            19 |
 +------+-------------------------------+
+--------------
+SELECT min(sum(number)) FROM numbers(10)
+--------------
+
+ERROR 1105 (HY000) at line 12: Code: 26, displayText = Aggregate function sum([number]) is found inside another aggregate function in query: While processing sum([number]).
