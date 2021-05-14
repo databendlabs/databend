@@ -8,4 +8,4 @@ SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by c1 order by 
 
 SELECT number%3 as c1, number as c2 FROM numbers_mt(10) where number > 2 group by c1 order by c1;
 SELECT number%3 as c1, number as c2, max(c2) FROM numbers_mt(10) where number > 2 group by c1 order by c1;
-select 1 + sum(number) as d, d + 3 from numbers(10) group by number % 4;
+select 1 + sum(number) as d, d + 3 from numbers(10) group by number % 4 order by d;
