@@ -1,1 +1,0 @@
-SELECT * FROM system.contributors ORDER BY name LIMIT 15;

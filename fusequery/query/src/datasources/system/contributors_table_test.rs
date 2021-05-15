@@ -18,7 +18,6 @@ async fn test_contributors_table() -> anyhow::Result<()> {
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);
-    assert_eq!(true, block.num_rows() > 15);
 
     Ok(())
 }
