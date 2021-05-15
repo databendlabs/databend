@@ -20,7 +20,7 @@
 
 # Project information
 site_name: Datafuse
-site_url: https://datafuse.dev
+site_url: https://datafuse.rs
 site_author: DatafuseLabs
 site_description: >-
 
@@ -144,6 +144,8 @@ nav:
           - DATABASE: sqlstatement/information-functions/database.md
       - Show Commands:
           - SHOW DATABASE: sqlstatement/show-commands/show-databases.md
+      - System Tables: system/system-tables.md
+      - Contributing: development/contributing.md
       - RFCs:
           - FuseQuery Join: rfcs/query/2021-05-01-join-framework-design.md
           - FuseStore Design: rfcs/store/2021-04-22-store-design.md

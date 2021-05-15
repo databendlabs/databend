@@ -64,6 +64,10 @@ uuid = { version = "0.8", features = ["serde", "v4"] }
 pretty_assertions = "0.7"
 criterion = "0.3"
 
+[build-dependencies]
+vergen = "5.1.5"
+run_script = "^0.7.0"
+
 [[bench]]
 name = "bench_main"
 harness = false

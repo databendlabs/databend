@@ -15,7 +15,7 @@ Reads from this table are parallelized too.
 
 Used for tests.
 
-```text
+```
 mysql> SELECT avg(number) FROM numbers(100000000);
 +-------------+
 | avg(number) |
@@ -34,7 +34,7 @@ The same as system.numbers
 
 Contains information about session settings for current user.
 
-```text
+```
 mysql> SELECT * FROM system.settings;
 +----------------+---------+---------------------------------------------------------------------------------------------------+
 | name           | value   | description                                                                                       |
@@ -50,7 +50,7 @@ mysql> SELECT * FROM system.settings;
 
 Contains information about normal and aggregate functions.
 
-```text
+```
 mysql> SELECT * FROM system.functions;
 +-------+
 | name  |
@@ -75,4 +75,36 @@ mysql> SELECT * FROM system.functions;
 | avg   |
 +-------+
 18 rows in set (0.00 sec)
+```
+## system.contributors
+
+Contains information about contributors. The order is random at query execution time.
+
+```
+mysql> SELECT * FROM system.contributors LIMIT 20;
++-------------------------+
+| name                    |
++-------------------------+
+| artorias1024            |
+| BohuTANG                |
+| dependabot[bot]         |
+| dependabot-preview[bot] |
+| drdr xp                 |
+| Eason                   |
+| hulunbier               |
+| jyizheng                |
+| leiysky                 |
+| smallfish               |
+| sundy-li                |
+| sundyli                 |
+| taiyang-li              |
+| TLightSky               |
+| Winter Zhang            |
+| wubx                    |
+| yizheng                 |
+| Yizheng Jiao            |
+| zhang2014               |
+| zhihanz                 |
++-------------------------+
+20 rows in set (0.00 sec)
 ```

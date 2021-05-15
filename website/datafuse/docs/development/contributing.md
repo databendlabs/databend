@@ -3,9 +3,21 @@ id: development-contributing
 title: Contribution Guide
 ---
 
+## Contributing to Datafuse
+
+Datafuse is an open project, and you can contribute to it in many ways. You can help with ideas, code, or documentation. We appreciate any efforts that help us to make the project better.
+
 Our goal is to make contributing to the Datafuse project easy and transparent.
 
-## Contributing to Datafuse
+Thank you.
+
+!!! note "Notes"
+    Once the code been merged, your name will be stoned in the `system.contributors` table forever.
+
+    `SELECT * FROM system.contributors`
+
+
+## Contributing
 
 To contribute to Datafuse, ensure that you have the latest version of the codebase, run the following:
 ```
@@ -22,7 +34,7 @@ For detailed guidance on how to contribute to the codebase refer to [Coding Guid
 
 ## Documentation
 
-All developer documentation is published on the Datafuse developer site. 
+All developer documentation is published on the Datafuse developer site, [datafuse.rs](https://datafuse.rs). 
 
 ## Pull Requests
 
