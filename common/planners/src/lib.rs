@@ -68,6 +68,7 @@ mod plan_table_drop;
 mod plan_use_database;
 mod plan_visitor;
 mod plan_walker;
+mod plan_expression_action_common;
 
 pub use crate::plan_aggregator_final::AggregatorFinalPlan;
 pub use crate::plan_aggregator_partial::AggregatorPartialPlan;

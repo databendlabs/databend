@@ -15,7 +15,7 @@ use dyn_clone::DynClone;
 
 pub trait IFunction: fmt::Display + Sync + Send + DynClone {
     fn name(&self) -> &str;
-    fn return_type(&self, input_schema: &DataSchema) -> Result<DataType>;
+    fn return_type(&self, args: &[DataType]) -> Result<DataType>;
     fn nullable(&self, input_schema: &DataSchema) -> Result<bool>;
     fn set_depth(&mut self, _depth: usize) {}
 
