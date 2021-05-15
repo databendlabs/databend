@@ -3,5 +3,10 @@ updates:
 - package-ecosystem: cargo
   directory: "/"
   schedule:
-    interval: weekly
-  open-pull-requests-limit: 100
+    interval: daily
+  open-pull-requests-limit: 10
+  target-branch: master
+  ignore:
+  - dependency-name: libc
+    versions:
+    - 0.2.83
