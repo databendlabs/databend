@@ -3,13 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 
-use crate::{DataColumnarValue, DataArrayRef};
+use crate::DataArrayRef;
 use common_arrow::arrow::datatypes::{IntervalUnit, DataType, ArrowPrimitiveType, UInt8Type, Int8Type, Int16Type, Int32Type, Int64Type, UInt16Type, UInt32Type, UInt64Type, Float32Type, Float64Type, TimeUnit, Time32SecondType, Time32MillisecondType, Time64MicrosecondType, Time64NanosecondType, DurationSecondType, DurationMillisecondType, DurationMicrosecondType, DurationNanosecondType, IntervalYearMonthType, IntervalDayTimeType, TimestampSecondType, TimestampMillisecondType, TimestampMicrosecondType, TimestampNanosecondType, Date32Type, Date64Type};
-use common_arrow::arrow::array::{BooleanArray, PrimitiveArray, UInt64Array, BufferBuilder, ArrayData, BooleanBufferBuilder, ArrayRef, BinaryArray, GenericBinaryArray, BinaryOffsetSizeTrait, GenericStringBuilder, Array, BinaryBuilder, LargeBinaryBuilder, GenericStringArray, StringOffsetSizeTrait, LargeBinaryArray};
-use common_arrow::arrow::buffer::MutableBuffer;
+use common_arrow::arrow::array::{BooleanArray, PrimitiveArray, UInt64Array, BufferBuilder, ArrayData, BooleanBufferBuilder, ArrayRef, BinaryArray, GenericStringBuilder, Array, BinaryBuilder, LargeBinaryBuilder, GenericStringArray, StringOffsetSizeTrait, LargeBinaryArray};
 use common_exception::{Result, ErrorCodes};
 use std::sync::Arc;
-use common_arrow::parquet::record::reader::Reader::PrimitiveReader;
 
 pub struct DataArrayScatter;
 

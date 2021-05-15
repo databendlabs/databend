@@ -24,7 +24,7 @@ pub struct ExecutePlanWithShuffleAction {
     pub query_id: String,
     pub stage_id: String,
     pub plan: PlanNode,
-    pub shuffle_to: Vec<String>,
+    pub scatters: Vec<String>,
 }
 
 // Action wrapper for do_action.

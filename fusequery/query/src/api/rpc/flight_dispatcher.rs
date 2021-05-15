@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use std::collections::HashMap;
 
 use tokio::runtime::Runtime;
@@ -37,7 +41,7 @@ pub struct QueryInfo {
 
 pub struct FlightStreamInfo {
     schema: DataSchemaRef,
-    stream_data_receiver: Receiver<Result<FlightData>>,
+    data_receiver: Receiver<Result<FlightData>>,
     launcher_sender: Sender<()>,
 }
 
@@ -73,7 +77,7 @@ impl FlightDispatcher {
                     match dispatcher_state.streams.remove(&id) {
                         Some(stream_info) => {
                             stream_info.launcher_sender.send(()).await;
-                            stream_receiver.send(Ok(stream_info.stream_data_receiver)).await
+                            stream_receiver.send(Ok(stream_info.data_receiver)).await
                         },
                         None => stream_receiver.send(Err(ErrorCodes::NotFoundStream(format!("Stream {} is not found", id)))).await,
                     };
@@ -215,15 +219,15 @@ impl FlightStreamInfo {
         let (sender, mut receive) = channel(100);
         (sender, FlightStreamInfo {
             schema: schema.clone(),
-            stream_data_receiver: receive,
+            data_receiver: receive,
             launcher_sender: launcher_sender.clone(),
         })
     }
 }
 
 impl PrepareStageInfo {
-    pub fn create(query_id: String, stage_id: String, plan_node: PlanNode, shuffle_to: Vec<String>) -> PrepareStageInfo {
-        PrepareStageInfo(query_id, stage_id, plan_node, shuffle_to)
+    pub fn create(query_id: String, stage_id: String, plan_node: PlanNode, scatters: Vec<String>) -> PrepareStageInfo {
+        PrepareStageInfo(query_id, stage_id, plan_node, scatters)
     }
 }
 

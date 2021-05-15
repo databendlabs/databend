@@ -268,7 +268,7 @@ impl FlightService for FuseQueryService {
                             .map_err(ErrorCodes::from_serde).map_err(to_status)?;
 
                         let (response_sender, mut receiver) = channel(1);
-                        self.dispatcher_sender.send(DispatcherRequest::PrepareQueryStage(PrepareStageInfo::create(action.query_id, action.stage_id, action.plan, action.shuffle_to), response_sender)).await;
+                        self.dispatcher_sender.send(DispatcherRequest::PrepareQueryStage(PrepareStageInfo::create(action.query_id, action.stage_id, action.plan, action.scatters), response_sender)).await;
                         Ok(RawResponse::new(once(receiver.recv().await.transpose().map(|_| FlightResult { body: vec![] }))))
                     }
                 }

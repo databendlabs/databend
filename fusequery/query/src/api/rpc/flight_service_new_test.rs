@@ -56,7 +56,7 @@ async fn test_prepare_query_stage() -> Result<()> {
     let response = service.do_action(Request::new(
         Action {
             r#type: "PrepareQueryStage".to_string(),
-            body: "{\"query_id\":\"query_id\",\"stage_id\":\"stage_id\",\"plan\":{\"Empty\":{\"schema\":{\"fields\":[]}}},\"shuffle_to\":[\"stream_1\",\"stream_2\"]}".as_bytes().to_vec(),
+            body: "{\"query_id\":\"query_id\",\"stage_id\":\"stage_id\",\"plan\":{\"Empty\":{\"schema\":{\"fields\":[]}}},\"scatters\":[\"stream_1\",\"stream_2\"]}".as_bytes().to_vec(),
         }
     )).await;
 
