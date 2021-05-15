@@ -25,6 +25,7 @@ impl SystemDatabase {
         let table_list: Vec<Arc<dyn ITable>> = vec![
             Arc::new(system::OneTable::create()),
             Arc::new(system::FunctionsTable::create()),
+            Arc::new(system::ContributorsTable::create()),
             Arc::new(system::SettingsTable::create()),
             Arc::new(system::NumbersTable::create("numbers")),
             Arc::new(system::NumbersTable::create("numbers_mt")),
