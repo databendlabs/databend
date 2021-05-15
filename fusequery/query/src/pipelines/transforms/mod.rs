@@ -45,6 +45,7 @@ pub use transform_expression::ExpressionTransform;
 pub use transform_filter::FilterTransform;
 pub use transform_groupby_final::GroupByFinalTransform;
 pub use transform_groupby_partial::GroupByPartialTransform;
+pub use transform_join::NestedLoopJoinTransform;
 pub use transform_limit::LimitTransform;
 pub use transform_projection::ProjectionTransform;
 pub use transform_remote::RemoteTransform;

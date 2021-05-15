@@ -5,9 +5,9 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_arrow::arrow::array::new_empty_array;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataValue;
 use common_exception::Result;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -68,34 +68,59 @@ impl IProcessor for NestedLoopJoinTransform {
         let left_buffer = read_left_task.await.unwrap()?;
         let right_buffer = read_right_task.await.unwrap()?;
 
-        let result_columns = self
-            .schema
-            .fields()
-            .into_iter()
-            .map(|field| new_empty_array(field.data_type()))
-            .collect();
-        let result_block = DataBlock::create(self.schema.clone(), result_columns.clone());
+        // let result = left_buffer
+        //     .into_iter()
+        //     .map(|inner_block| {
+        //         right_buffer
+        //             .iter()
+        //             .cloned()
+        //             .map(|outer_block| {
+        //                 let mut joined_blocks: Vec<DataBlock> = vec![];
+        //                 for i in 0..inner_block.num_rows() {
+        //                     let mut result_columns = vec![];
+        //                     for column in inner_block.columns() {
+        //                         let inner_value = DataValue::try_from_array(column, i).unwrap();
+        //                         result_columns.push(
+        //                             inner_value
+        //                                 .to_array_with_size(outer_block.num_rows())
+        //                                 .unwrap()
+        //                         );
+        //                     }
+        //                     for column in outer_block.columns() {
+        //                         result_columns.push(column.clone());
+        //                     }
+        //                     joined_blocks
+        //                         .push(DataBlock::create(self.schema.clone(), result_columns));
+        //                 }
+        //                 joined_blocks
+        //             })
+        //             .flatten()
+        //     })
+        //     .flatten()
+        //     .collect();
 
-        let result = right_buffer
-            .iter()
-            .flat_map(|outer_block| {
-                left_buffer.iter().flat_map(|inner_block| {
-                    let mut joined_blocks = vec![];
-                    for i in 0..inner_block.num_rows() {
-                        let block = result_block.clone();
-                        for j in 0..outer_block.num_rows() {
-                            let columns = block.columns();
-                        }
+        let mut joined_blocks: Vec<DataBlock> = vec![];
+        for outer_block in &right_buffer {
+            for inner_block in &left_buffer {
+                for i in 0..inner_block.num_rows() {
+                    let mut result_columns = vec![];
+                    for column in inner_block.columns() {
+                        let inner_value = DataValue::try_from_array(column, i)?;
+                        result_columns
+                            .push(inner_value.to_array_with_size(outer_block.num_rows())?);
                     }
-                    joined_blocks
-                })
-            })
-            .collect();
+                    for column in outer_block.columns() {
+                        result_columns.push(column.clone());
+                    }
+                    joined_blocks.push(DataBlock::create(self.schema.clone(), result_columns));
+                }
+            }
+        }
 
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            result
+            joined_blocks
         )))
     }
 }

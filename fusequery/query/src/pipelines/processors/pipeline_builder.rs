@@ -28,6 +28,7 @@ use crate::pipelines::transforms::FilterTransform;
 use crate::pipelines::transforms::GroupByFinalTransform;
 use crate::pipelines::transforms::GroupByPartialTransform;
 use crate::pipelines::transforms::LimitTransform;
+use crate::pipelines::transforms::NestedLoopJoinTransform;
 use crate::pipelines::transforms::ProjectionTransform;
 use crate::pipelines::transforms::RemoteTransform;
 use crate::pipelines::transforms::SortMergeTransform;
@@ -96,8 +97,8 @@ impl PipelineBuilder {
         Ok(pipeline)
     }
 
-    fn visit_stage_plan(&self, pipeline: &mut Pipeline, plan: &&StagePlan) -> Result<bool> {
-        let executors = PlanScheduler::reschedule(self.ctx.clone(), &plan.input.as_ref())?;
+    fn visit_stage_plan(&self, pipeline: &mut Pipeline, plan: &StagePlan) -> Result<bool> {
+        let executors = PlanScheduler::reschedule(self.ctx.clone(), plan.input.as_ref())?;
 
         // If the executors is not empty.
         if !executors.is_empty() {
@@ -285,6 +286,15 @@ impl PipelineBuilder {
     }
 
     fn visit_join_plan(&self, pipeline: &mut Pipeline, plan: &JoinPlan) -> Result<bool> {
+        let left = PipelineBuilder::create(self.ctx.clone(), *plan.left_child).build()?;
+        let right = PipelineBuilder::create(self.ctx.clone(), *plan.right_child).build()?;
+        pipeline.add_simple_transform(|| {
+            Box::new(NestedLoopJoinTransform::try_create(
+                plan.schema().clone(),
+                left,
+                right
+            )?)
+        });
         Ok(false)
     }
 }
