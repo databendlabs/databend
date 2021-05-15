@@ -25,3 +25,4 @@ pub use crate::function_column::ColumnFunction;
 pub use crate::function_factory::FactoryFuncRef;
 pub use crate::function_factory::FunctionFactory;
 pub use crate::function_literal::LiteralFunction;
+pub use crate::arithmetics::ArithmeticModuloFunction;

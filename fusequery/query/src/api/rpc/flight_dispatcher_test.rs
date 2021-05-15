@@ -12,7 +12,7 @@ use common_arrow::arrow_flight::FlightData;
 use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
 use common_datablocks::{DataBlock, assert_blocks_eq};
 use common_exception::{ErrorCodes, Result};
-use common_planners::{PlanBuilder, PlanNode};
+use common_planners::{PlanBuilder, PlanNode, ExpressionAction};
 
 use crate::api::rpc::flight_dispatcher::{PrepareStageInfo, Request};
 use crate::api::rpc::FlightDispatcher;
@@ -20,6 +20,7 @@ use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::sessions::Session;
 use crate::api::rpc::flight_data_stream::FlightDataStream;
+use common_datavalues::DataValue;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_stream_with_non_exists_stream() -> Result<()> {
@@ -54,7 +55,7 @@ async fn test_prepare_stage_with_no_scatter() -> Result<()> {
                     stage_id.clone(),
                     plan.clone(),
                     vec![stream_id.clone()],
-                    None,
+                    ExpressionAction::Literal(DataValue::UInt64(Some(1))),
                 ), sender,
             )))
         };
@@ -92,6 +93,64 @@ async fn test_prepare_stage_with_no_scatter() -> Result<()> {
             },
         }
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_prepare_stage_with_scatter() -> Result<()> {
+    // if let (Some(query_id), Some(stage_id), None) = generate_uuids(2) {
+    //     let stream_prefix = format!("{}/{}/", query_id, stage_id);
+    //     let create_prepare_query_stage = |sender: Sender<Result<()>>| {
+    //         let ctx = crate::tests::try_create_context()?;
+    //         let test_source = crate::tests::NumberTestData::create(ctx.clone());
+    //         let read_source_plan = test_source.number_read_source_plan_for_test(5)?;
+    //         let plan = PlanBuilder::from(&PlanNode::ReadSource(read_source_plan)).build()?;
+    //
+    //         PlanBuilder::expression();
+    //         Ok((plan.schema().clone(), Request::PrepareQueryStage(
+    //             PrepareStageInfo::create(
+    //                 query_id.clone(),
+    //                 stage_id.clone(),
+    //                 plan.clone(),
+    //                 vec![stream_id.clone()],
+    //                 None,
+    //             ), sender,
+    //         )))
+    //     };
+    //
+    //     let (dispatcher, request_sender) = create_dispatcher();
+    //     let (prepare_stage_sender, mut prepare_stage_receiver) = channel(1);
+    //
+    //     let (schema, prepare_query_stage) = create_prepare_query_stage(prepare_stage_sender)?;
+    //     request_sender.send(prepare_query_stage).await;
+    //     prepare_stage_receiver.recv().await.transpose()?;
+    //
+    //     // GetStream and collect items
+    //     let (sender_v, mut receiver) = channel(1);
+    //     request_sender.send(Request::GetStream(stream_prefix.clone(), sender_v)).await;
+    //     match receiver.recv().await.unwrap() {
+    //         Err(error) => assert!(false, "{}", error),
+    //         Ok(data_receiver) => {
+    //             let blocks = FlightDataStream::from_receiver(schema, data_receiver)
+    //                 .collect::<Result<Vec<_>>>().await;
+    //
+    //             let expect = vec![
+    //                 "+--------+",
+    //                 "| number |",
+    //                 "+--------+",
+    //                 "| 0      |",
+    //                 "| 1      |",
+    //                 "| 2      |",
+    //                 "| 3      |",
+    //                 "| 4      |",
+    //                 "+--------+"
+    //             ];
+    //
+    //             assert_blocks_eq(expect, &blocks?)
+    //         },
+    //     }
+    // }
 
     Ok(())
 }

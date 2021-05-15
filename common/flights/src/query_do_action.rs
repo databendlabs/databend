@@ -11,7 +11,7 @@ use prost::Message;
 use tonic::Request;
 
 use crate::protobuf::FlightQueryRequest;
-use common_planners::PlanNode;
+use common_planners::{PlanNode, ExpressionAction};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct FetchPartitionAction {
@@ -25,7 +25,7 @@ pub struct ExecutePlanWithShuffleAction {
     pub stage_id: String,
     pub plan: PlanNode,
     pub scatters: Vec<String>,
-    pub scatters_plan: Option<PlanNode>
+    pub scatters_action: ExpressionAction
 }
 
 // Action wrapper for do_action.

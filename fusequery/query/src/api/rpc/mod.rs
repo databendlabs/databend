@@ -18,6 +18,7 @@ mod metrics;
 mod flight_service_new;
 mod flight_dispatcher;
 mod flight_data_stream;
+mod flight_scatter;
 
 
 pub use flight_service::FlightService;

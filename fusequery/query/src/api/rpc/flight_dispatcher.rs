@@ -10,7 +10,7 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use common_arrow::arrow_flight::FlightData;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::PlanNode;
+use common_planners::{PlanNode, ExpressionAction};
 
 use common_datavalues::DataSchemaRef;
 use common_arrow::arrow::datatypes::{SchemaRef, Schema, Field};
@@ -26,8 +26,9 @@ use tokio::sync::mpsc::error::SendError;
 use common_datablocks::DataBlock;
 use crate::pipelines::transforms::ExpressionTransform;
 use common_arrow::arrow::record_batch::RecordBatch;
+use crate::api::rpc::flight_scatter::FlightScatter;
 
-pub struct PrepareStageInfo(pub String, pub String, pub PlanNode, pub Vec<String>, pub Option<PlanNode>);
+pub struct PrepareStageInfo(pub String, pub String, pub PlanNode, pub Vec<String>, pub ExpressionAction);
 
 pub struct StreamInfo(pub DataSchemaRef, pub String, pub Vec<String>);
 
@@ -134,13 +135,14 @@ impl FlightDispatcher {
             state.streams.insert(stream_full_name, stream_info);
         }
 
-        let (expr_name, pipeline) = Self::transform_scatters_pipeline(pipeline?, &info)?;
+        let mut pipeline = pipeline?;
+        let flight_scatter = FlightScatter::try_create(info.4.clone(), streams_data_sender.len())?;
         let query_info = state.queries.get_mut(&info.0).expect("No exists query info");
 
         query_info.runtime.spawn(async move {
             let _ = launcher_receiver.recv().await;
 
-            let _ = Self::receive_data_and_push(pipeline, expr_name, streams_data_sender).await;
+            let _ = Self::receive_data_and_push(pipeline, flight_scatter, streams_data_sender).await;
 
             // TODO: push stage terminal request.
             // for stream_data_sender in streams_data_sender {
@@ -161,33 +163,9 @@ impl FlightDispatcher {
             })
     }
 
-    fn transform_scatters_pipeline(mut pipeline: Pipeline, info: &PrepareStageInfo) -> Result<(Option<String>, Pipeline)> {
-        match info.3.len() {
-            0 | 1 => Ok((None, pipeline)),
-            _ => {
-                match &info.4 {
-                    _ => Result::Err(ErrorCodes::BadScatterExpression("Scatter must be Expression PlanNode.")),
-                    Some(PlanNode::Expression(expression)) => {
-                        if expression.exprs.len() != 1 {
-                            return Result::Err(ErrorCodes::BadScatterExpression("Scatter expressions length must be equals 1."));
-                        }
-
-                        pipeline.add_simple_transform(||
-                            Ok(Box::new(ExpressionTransform::try_create(
-                                expression.schema.clone(),
-                                expression.exprs.clone(),
-                            )?))
-                        );
-                        Ok((Some(format!("{}", expression.exprs[0].to_function()?)), pipeline))
-                    },
-                }
-            }
-        }
-    }
-
     // We need to always use the inline function to ensure that async/await state machine is simple enough
     #[inline(always)]
-    async fn receive_data_and_push(mut pipeline: Pipeline, scatter_column_name: Option<String>, senders: Vec<Sender<Result<FlightData>>>) -> Result<()> {
+    async fn receive_data_and_push(mut pipeline: Pipeline, flight_scatter: FlightScatter, senders: Vec<Sender<Result<FlightData>>>) -> Result<()> {
         use common_arrow::arrow::ipc::writer::IpcWriteOptions;
         use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
 
@@ -206,23 +184,19 @@ impl FlightDispatcher {
                 }
             }
         } else {
-            let scatter_column_name = scatter_column_name.unwrap();
+            // let scatter_column_name = scatter_column_name.unwrap();
             while let Some(item) = pipeline_stream.next().await {
                 let block = item?;
-                match block.column_by_name(&scatter_column_name) {
-                    None => return Result::Err(ErrorCodes::UnknownColumn("")),
-                    Some(indices) => {
-                        let mut scattered_data = DataBlock::scatter_block(&block, &indices, senders.len())?;
+                let mut scattered_data = flight_scatter.execute(block)?;
+                // let mut scattered_data = DataBlock::scatter_block(&block, &indices, senders.len())?;
 
-                        for index in 0..scattered_data.len() {
-                            if !scattered_data[index].is_empty() {
-                                let record_batch = Self::transform_scattered_block(scattered_data.remove(0), &scatter_column_name)?;
-                                let (dicts, values) = flight_data_from_arrow_batch(&record_batch, &options);
-                                let normalized_flight_data = dicts.into_iter().chain(std::iter::once(values));
-                                for flight_data in normalized_flight_data {
-                                    senders[index].send(Ok(flight_data)).await;
-                                }
-                            }
+                for index in 0..scattered_data.len() {
+                    if !scattered_data[index].is_empty() {
+                        let record_batch = scattered_data.remove(0).try_into()?;
+                        let (dicts, values) = flight_data_from_arrow_batch(&record_batch, &options);
+                        let normalized_flight_data = dicts.into_iter().chain(std::iter::once(values));
+                        for flight_data in normalized_flight_data {
+                            senders[index].send(Ok(flight_data)).await;
                         }
                     }
                 }
@@ -230,22 +204,6 @@ impl FlightDispatcher {
         }
 
         Ok(())
-    }
-
-    fn transform_scattered_block(block: DataBlock, remove_column: &String) -> Result<RecordBatch> {
-        let mut fields = vec![];
-        let mut columns = vec![];
-
-        let origin_columns = block.columns();
-        let origin_fields = block.schema().fields();
-        for index in 0..block.num_columns() {
-            if (origin_fields[index]).name() != remove_column {
-                fields.push(origin_fields[index].clone());
-                columns.push(origin_columns[index].clone());
-            }
-        }
-
-        DataBlock::create(Arc::new(Schema::new(fields)), columns).try_into()
     }
 
     pub fn new(conf: Config, cluster: ClusterRef, session_manager: SessionRef) -> FlightDispatcher {
@@ -281,8 +239,8 @@ impl FlightStreamInfo {
 }
 
 impl PrepareStageInfo {
-    pub fn create(query_id: String, stage_id: String, plan_node: PlanNode, scatters: Vec<String>, scatters_plan: Option<PlanNode>) -> PrepareStageInfo {
-        PrepareStageInfo(query_id, stage_id, plan_node, scatters, scatters_plan)
+    pub fn create(query_id: String, stage_id: String, plan_node: PlanNode, scatters: Vec<String>, scatters_action: ExpressionAction) -> PrepareStageInfo {
+        PrepareStageInfo(query_id, stage_id, plan_node, scatters, scatters_action)
     }
 }
 
