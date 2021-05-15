@@ -13,8 +13,8 @@ use common_exception::Result;
 use common_planners::PlanNode;
 
 use common_datavalues::DataSchemaRef;
-use common_arrow::arrow::datatypes::SchemaRef;
-use crate::pipelines::processors::{Pipeline, PipelineBuilder};
+use common_arrow::arrow::datatypes::{SchemaRef, Schema, Field};
+use crate::pipelines::processors::{Pipeline, PipelineBuilder, IProcessor};
 use crate::configs::Config;
 use crate::clusters::ClusterRef;
 use crate::sessions::SessionRef;
@@ -23,8 +23,11 @@ use tokio_stream::StreamExt;
 use std::convert::TryInto;
 use tonic::Status;
 use tokio::sync::mpsc::error::SendError;
+use common_datablocks::DataBlock;
+use crate::pipelines::transforms::ExpressionTransform;
+use common_arrow::arrow::record_batch::RecordBatch;
 
-pub struct PrepareStageInfo(pub String, pub String, pub PlanNode, pub Vec<String>);
+pub struct PrepareStageInfo(pub String, pub String, pub PlanNode, pub Vec<String>, pub Option<PlanNode>);
 
 pub struct StreamInfo(pub DataSchemaRef, pub String, pub Vec<String>);
 
@@ -109,12 +112,13 @@ impl FlightDispatcher {
         if !state.queries.contains_key(&info.0) {
             fn build_runtime(max_threads: u64) -> Result<Runtime> {
                 tokio::runtime::Builder::new_multi_thread()
-                    .enable_io()
+                    .enable_all()
                     .worker_threads(max_threads as usize)
                     .build()
                     .map_err(|tokio_error| ErrorCodes::TokioError(format!("{}", tokio_error)))
             }
 
+            // TODO: max_threads
             match build_runtime(8) {
                 Err(e) => return Err(e),
                 Ok(runtime) => state.queries.insert(info.0.clone(), QueryInfo { runtime })
@@ -130,13 +134,15 @@ impl FlightDispatcher {
             state.streams.insert(stream_full_name, stream_info);
         }
 
+        let (expr_name, pipeline) = Self::transform_scatters_pipeline(pipeline?, &info)?;
         let query_info = state.queries.get_mut(&info.0).expect("No exists query info");
 
         query_info.runtime.spawn(async move {
             let _ = launcher_receiver.recv().await;
 
-            let _ = Self::receive_data_and_push(pipeline, streams_data_sender).await;
+            let _ = Self::receive_data_and_push(pipeline, expr_name, streams_data_sender).await;
 
+            // TODO: push stage terminal request.
             // for stream_data_sender in streams_data_sender {
             //     stream_data_sender.send(last_result.clone()).await;
             // }
@@ -155,17 +161,40 @@ impl FlightDispatcher {
             })
     }
 
+    fn transform_scatters_pipeline(mut pipeline: Pipeline, info: &PrepareStageInfo) -> Result<(Option<String>, Pipeline)> {
+        match info.3.len() {
+            0 | 1 => Ok((None, pipeline)),
+            _ => {
+                match &info.4 {
+                    _ => Result::Err(ErrorCodes::BadScatterExpression("Scatter must be Expression PlanNode.")),
+                    Some(PlanNode::Expression(expression)) => {
+                        if expression.exprs.len() != 1 {
+                            return Result::Err(ErrorCodes::BadScatterExpression("Scatter expressions length must be equals 1."));
+                        }
+
+                        pipeline.add_simple_transform(||
+                            Ok(Box::new(ExpressionTransform::try_create(
+                                expression.schema.clone(),
+                                expression.exprs.clone(),
+                            )?))
+                        );
+                        Ok((Some(format!("{}", expression.exprs[0].to_function()?)), pipeline))
+                    },
+                }
+            }
+        }
+    }
+
     // We need to always use the inline function to ensure that async/await state machine is simple enough
     #[inline(always)]
-    async fn receive_data_and_push(action_pipeline: Result<Pipeline>, senders: Vec<Sender<Result<FlightData>>>) -> Result<()> {
+    async fn receive_data_and_push(mut pipeline: Pipeline, scatter_column_name: Option<String>, senders: Vec<Sender<Result<FlightData>>>) -> Result<()> {
         use common_arrow::arrow::ipc::writer::IpcWriteOptions;
         use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
 
         let options = IpcWriteOptions::default();
-        let mut pipeline = action_pipeline?;
         let mut pipeline_stream = pipeline.execute().await?;
 
-        if senders.len() == 1 {
+        if senders.len() <= 1 {
             while let Some(item) = pipeline_stream.next().await {
                 let block = item?;
 
@@ -177,21 +206,46 @@ impl FlightDispatcher {
                 }
             }
         } else {
+            let scatter_column_name = scatter_column_name.unwrap();
             while let Some(item) = pipeline_stream.next().await {
                 let block = item?;
+                match block.column_by_name(&scatter_column_name) {
+                    None => return Result::Err(ErrorCodes::UnknownColumn("")),
+                    Some(indices) => {
+                        let mut scattered_data = DataBlock::scatter_block(&block, &indices, senders.len())?;
 
-                // TODO: split block and push to sender
-                let record_batch = block.try_into()?;
-                let (dicts, values) = flight_data_from_arrow_batch(&record_batch, &options);
-                let normalized_flight_data = dicts.into_iter().chain(std::iter::once(values));
-                for flight_data in normalized_flight_data {
-                    // TODO: push to sender
-                    senders[0].send(Ok(flight_data)).await;
+                        for index in 0..scattered_data.len() {
+                            if !scattered_data[index].is_empty() {
+                                let record_batch = Self::transform_scattered_block(scattered_data.remove(0), &scatter_column_name)?;
+                                let (dicts, values) = flight_data_from_arrow_batch(&record_batch, &options);
+                                let normalized_flight_data = dicts.into_iter().chain(std::iter::once(values));
+                                for flight_data in normalized_flight_data {
+                                    senders[index].send(Ok(flight_data)).await;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
 
         Ok(())
+    }
+
+    fn transform_scattered_block(block: DataBlock, remove_column: &String) -> Result<RecordBatch> {
+        let mut fields = vec![];
+        let mut columns = vec![];
+
+        let origin_columns = block.columns();
+        let origin_fields = block.schema().fields();
+        for index in 0..block.num_columns() {
+            if (origin_fields[index]).name() != remove_column {
+                fields.push(origin_fields[index].clone());
+                columns.push(origin_columns[index].clone());
+            }
+        }
+
+        DataBlock::create(Arc::new(Schema::new(fields)), columns).try_into()
     }
 
     pub fn new(conf: Config, cluster: ClusterRef, session_manager: SessionRef) -> FlightDispatcher {
@@ -216,6 +270,7 @@ impl DispatcherState {
 
 impl FlightStreamInfo {
     pub fn create(schema: &SchemaRef, launcher_sender: &Sender<()>) -> (Sender<Result<FlightData>>, FlightStreamInfo) {
+        // TODO: Back pressure buffer size
         let (sender, mut receive) = channel(100);
         (sender, FlightStreamInfo {
             schema: schema.clone(),
@@ -226,8 +281,8 @@ impl FlightStreamInfo {
 }
 
 impl PrepareStageInfo {
-    pub fn create(query_id: String, stage_id: String, plan_node: PlanNode, scatters: Vec<String>) -> PrepareStageInfo {
-        PrepareStageInfo(query_id, stage_id, plan_node, scatters)
+    pub fn create(query_id: String, stage_id: String, plan_node: PlanNode, scatters: Vec<String>, scatters_plan: Option<PlanNode>) -> PrepareStageInfo {
+        PrepareStageInfo(query_id, stage_id, plan_node, scatters, scatters_plan)
     }
 }
 

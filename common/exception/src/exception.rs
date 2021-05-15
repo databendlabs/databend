@@ -95,6 +95,7 @@ build_exceptions! {
     NotFoundStream(28),
     BadColumnarType(29),
     UnknownColumn(30),
+    BadScatterExpression(31),
 
     UnknownException(1000),
     TokioError(1001)

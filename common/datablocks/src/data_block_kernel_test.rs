@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_arrow::arrow::array::UInt64Builder;
+use common_exception::ErrorCodes;
+
 #[test]
 fn test_data_block_kernel_take() -> anyhow::Result<()> {
     use std::sync::Arc;
@@ -167,7 +170,11 @@ fn test_scatter_block() -> anyhow::Result<()> {
         Arc::new(Float64Array::from(vec![1., 2., 3.])),
     ]);
 
-    let scattered = DataBlock::scatter_block(&raw, &[0, 1, 0], 2)?;
+    let mut builder = UInt64Builder::new(3);
+    builder.append_slice(&[0, 1, 0]).map_err(ErrorCodes::from_arrow)?;
+    let indices: DataArrayRef = Arc::new(builder.finish());
+
+    let scattered = DataBlock::scatter_block(&raw, &indices, 2)?;
     assert_eq!(scattered.len(), 2);
     assert_eq!(raw.schema(), scattered[0].schema());
     assert_eq!(raw.schema(), scattered[1].schema());

@@ -52,8 +52,9 @@ async fn test_prepare_stage_with_no_scatter() -> Result<()> {
                 PrepareStageInfo::create(
                     query_id.clone(),
                     stage_id.clone(),
-                    plan,
+                    plan.clone(),
                     vec![stream_id.clone()],
+                    None,
                 ), sender,
             )))
         };

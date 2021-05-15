@@ -169,16 +169,12 @@ impl DataBlock {
         }
     }
 
-    pub fn scatter_block(block: &DataBlock, indices: &[u64], scatter_size: usize) -> Result<Vec<DataBlock>> {
+    pub fn scatter_block(block: &DataBlock, indices: &DataArrayRef, scatter_size: usize) -> Result<Vec<DataBlock>> {
         let columns_size = block.num_columns();
         let mut scattered_columns: Vec<Option<ArrayRef>> = vec![];
 
         scattered_columns.resize_with(scatter_size * columns_size, || None);
 
-        let mut builder = UInt64Builder::new(indices.len());
-        builder.append_slice(indices).map_err(ErrorCodes::from_arrow)?;
-
-        let indices: DataArrayRef = Arc::new(builder.finish());
         for column_index in 0..columns_size {
             let column = block.column(column_index);
             let mut scattered_column = DataArrayScatter::scatter(column, &indices, scatter_size)?;

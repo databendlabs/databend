@@ -17,6 +17,7 @@ use common_arrow::parquet::data_type::AsBytes;
 use common_arrow::arrow_flight::flight_descriptor::DescriptorType;
 use common_datavalues::DataType;
 use common_arrow::arrow::ipc::convert;
+use warp::reply::Response;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_service_list_actions() -> Result<()> {
@@ -56,13 +57,14 @@ async fn test_prepare_query_stage() -> Result<()> {
     let response = service.do_action(Request::new(
         Action {
             r#type: "PrepareQueryStage".to_string(),
-            body: "{\"query_id\":\"query_id\",\"stage_id\":\"stage_id\",\"plan\":{\"Empty\":{\"schema\":{\"fields\":[]}}},\"scatters\":[\"stream_1\",\"stream_2\"]}".as_bytes().to_vec(),
+            body: "{\"query_id\":\"query_id\",\"stage_id\":\"stage_id\",\"plan\":{\"Empty\":{\"schema\":{\"fields\":[]}}},\"scatters\":[\"stream_1\",\"stream_2\"], \"scatters_plan\":{\"Empty\":{\"schema\":{\"fields\":[]}}}}".as_bytes().to_vec(),
         }
     )).await;
 
-    // First:check error status
-    join_handler.await.expect("Receive unexpect prepare stage info");
-    assert!(response.is_ok());
+    match response {
+        Err(error) => assert!(false, "test_prepare_query_stage error: {:?}", error),
+        Ok(_) => join_handler.await.expect("Receive unexpect prepare stage info"),
+    };
 
     Ok(())
 }
