@@ -33,6 +33,7 @@ pub struct Meta {
 
 impl Meta {
     // Apply an op from client.
+    #[tracing::instrument(level = "info", skip(self))]
     pub fn apply(&mut self, data: &ClientRequest) -> anyhow::Result<ClientResponse> {
         match data.cmd {
             Cmd::AddFile { ref key, ref value } => {
@@ -41,12 +42,14 @@ impl Meta {
                     Ok((prev.cloned(), None).into())
                 } else {
                     let prev = self.keys.insert(key.clone(), value.clone());
+                    tracing::info!("applied AddFile: {}={}", key, value);
                     Ok((prev, Some(value.clone())).into())
                 }
             }
 
             Cmd::SetFile { ref key, ref value } => {
                 let prev = self.keys.insert(key.clone(), value.clone());
+                tracing::info!("applied SetFile: {}={}", key, value);
                 Ok((prev, Some(value.clone())).into())
             }
 
@@ -59,14 +62,18 @@ impl Meta {
                     Ok((prev.cloned(), None).into())
                 } else {
                     let prev = self.nodes.insert(*node_id, node.clone());
+                    tracing::info!("applied AddNode: {}={:?}", node_id, node);
                     Ok((prev, Some(node.clone())).into())
                 }
             }
         }
     }
 
+    #[tracing::instrument(level = "info", skip(self))]
     pub fn get_file(&self, key: &str) -> Option<String> {
+        tracing::info!("meta::get_file: {}", key);
         let x = self.keys.get(key);
+        tracing::info!("meta::get_file: {}={:?}", key, x);
         x.cloned()
     }
 

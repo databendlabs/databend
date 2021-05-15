@@ -75,8 +75,8 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
         let req = request.into_inner();
 
-        let ae_req = serde_json::from_slice(&req.data)
-            .map_err(|x| tonic::Status::internal(x.to_string()))?;
+        let ae_req =
+            serde_json::from_str(&req.data).map_err(|x| tonic::Status::internal(x.to_string()))?;
 
         let resp = self
             .meta_node
@@ -84,7 +84,7 @@ impl MetaService for MetaServiceImpl {
             .append_entries(ae_req)
             .await
             .map_err(|x| tonic::Status::internal(x.to_string()))?;
-        let data = serde_json::to_vec(&resp).expect("fail to serialize resp");
+        let data = serde_json::to_string(&resp).expect("fail to serialize resp");
         let mes = RaftMes { data };
 
         Ok(tonic::Response::new(mes))
@@ -97,8 +97,8 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
         let req = request.into_inner();
 
-        let is_req = serde_json::from_slice(&req.data)
-            .map_err(|x| tonic::Status::internal(x.to_string()))?;
+        let is_req =
+            serde_json::from_str(&req.data).map_err(|x| tonic::Status::internal(x.to_string()))?;
 
         let resp = self
             .meta_node
@@ -106,7 +106,7 @@ impl MetaService for MetaServiceImpl {
             .install_snapshot(is_req)
             .await
             .map_err(|x| tonic::Status::internal(x.to_string()))?;
-        let data = serde_json::to_vec(&resp).expect("fail to serialize resp");
+        let data = serde_json::to_string(&resp).expect("fail to serialize resp");
         let mes = RaftMes { data };
 
         Ok(tonic::Response::new(mes))
@@ -119,8 +119,8 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
         let req = request.into_inner();
 
-        let v_req = serde_json::from_slice(&req.data)
-            .map_err(|x| tonic::Status::internal(x.to_string()))?;
+        let v_req =
+            serde_json::from_str(&req.data).map_err(|x| tonic::Status::internal(x.to_string()))?;
 
         let resp = self
             .meta_node
@@ -128,7 +128,7 @@ impl MetaService for MetaServiceImpl {
             .vote(v_req)
             .await
             .map_err(|x| tonic::Status::internal(x.to_string()))?;
-        let data = serde_json::to_vec(&resp).expect("fail to serialize resp");
+        let data = serde_json::to_string(&resp).expect("fail to serialize resp");
         let mes = RaftMes { data };
 
         Ok(tonic::Response::new(mes))

@@ -129,8 +129,7 @@ dependencies = [
 [[package]]
 name = "async-raft"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c9e14ce344bff51ccc1d430c2c93f84ca3320b3f86f69550871f6ae6957697a"
+source = "git+https://github.com/drmingdrmer/async-raft?branch=fix-non-voter-restart#786f091dd691c3189c477a5e0050eef60ef0f9b3"
 dependencies = [
  "anyhow",
  "async-trait",
