@@ -17,6 +17,7 @@ use crate::ExplainPlan;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
+use crate::JoinPlan;
 use crate::LimitPlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
@@ -40,6 +41,7 @@ pub enum PlanNode {
     Sort(SortPlan),
     Limit(LimitPlan),
     Scan(ScanPlan),
+    Join(JoinPlan),
     ReadSource(ReadDataSourcePlan),
     Select(SelectPlan),
     Explain(ExplainPlan),
@@ -64,6 +66,7 @@ impl PlanNode {
             PlanNode::AggregatorFinal(v) => v.schema(),
             PlanNode::Filter(v) => v.schema(),
             PlanNode::Having(v) => v.schema(),
+            PlanNode::Join(v) => v.schema(),
             PlanNode::Limit(v) => v.schema(),
             PlanNode::ReadSource(v) => v.schema(),
             PlanNode::Select(v) => v.schema(),
@@ -89,6 +92,7 @@ impl PlanNode {
             PlanNode::AggregatorFinal(_) => "AggregatorFinalPlan",
             PlanNode::Filter(_) => "FilterPlan",
             PlanNode::Having(_) => "HavingPlan",
+            PlanNode::Join(_) => "JoinPlan",
             PlanNode::Limit(_) => "LimitPlan",
             PlanNode::ReadSource(_) => "ReadSourcePlan",
             PlanNode::Select(_) => "SelectPlan",

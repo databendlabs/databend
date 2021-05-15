@@ -21,6 +21,7 @@ use crate::ExpressionAction;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
+use crate::JoinPlan;
 use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
@@ -235,6 +236,15 @@ impl PlanBuilder {
             table_args,
             filters: vec![],
             limit
+        })))
+    }
+
+    /// Apply a join
+    pub fn join(&self, conditions: &[ExpressionAction], right: &PlanNode) -> Result<Self> {
+        Ok(Self::from(&PlanNode::Join(JoinPlan {
+            conditions: Vec::from(conditions),
+            left_child: Arc::new(self.plan.clone()),
+            right_child: Arc::new(PlanBuilder::from(right).plan.clone())
         })))
     }
 

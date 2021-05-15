@@ -11,6 +11,7 @@ use common_planners::AggregatorPartialPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::HavingPlan;
+use common_planners::JoinPlan;
 use common_planners::LimitPlan;
 use common_planners::PlanNode;
 use common_planners::ProjectionPlan;
@@ -83,6 +84,7 @@ impl PipelineBuilder {
                 }
                 PlanNode::Limit(plan) => PipelineBuilder::visit_limit_plan(&mut pipeline, plan),
                 PlanNode::ReadSource(plan) => self.visit_read_data_source_plan(&mut pipeline, plan),
+                PlanNode::Join(plan) => self.visit_join_plan(&mut pipeline, plan),
                 other => Result::Err(ErrorCodes::UnknownPlan(format!(
                     "Build pipeline from the plan node unsupported:{:?}",
                     other.name()
@@ -280,5 +282,9 @@ impl PipelineBuilder {
             pipeline.add_source(Arc::new(source))?;
         }
         Ok(true)
+    }
+
+    fn visit_join_plan(&self, pipeline: &mut Pipeline, plan: &JoinPlan) -> Result<bool> {
+        Ok(false)
     }
 }
