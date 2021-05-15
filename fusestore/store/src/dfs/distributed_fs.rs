@@ -39,7 +39,7 @@ impl Dfs {}
 
 #[async_trait]
 impl IFileSystem for Dfs {
-    async fn add<'a>(&'a self, path: String, data: &[u8]) -> anyhow::Result<()> {
+    async fn add(&self, path: String, data: &[u8]) -> anyhow::Result<()> {
         // add the file to local fs
 
         self.local_fs.add(path.clone(), data).await?;
@@ -57,12 +57,12 @@ impl IFileSystem for Dfs {
         Ok(())
     }
 
-    async fn read_all<'a>(&'a self, path: String) -> anyhow::Result<Vec<u8>> {
+    async fn read_all(&self, path: String) -> anyhow::Result<Vec<u8>> {
         // TODO read local cached meta first
         self.local_fs.read_all(path).await
     }
 
-    async fn list<'a>(&'a self, path: String) -> anyhow::Result<ListResult> {
+    async fn list(&self, path: String) -> anyhow::Result<ListResult> {
         let _key = path;
 
         // TODO read local meta cache to list

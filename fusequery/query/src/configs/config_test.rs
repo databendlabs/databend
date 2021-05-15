@@ -11,7 +11,7 @@ fn test_config() -> common_exception::Result<()> {
     // Default.
     {
         let expect = Config {
-            version: include_str!(concat!(env!("OUT_DIR"), "/version-info.txt")).to_string(),
+            version: "".to_string(),
             log_level: "debug".to_string(),
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),

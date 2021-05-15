@@ -1,9 +1,7 @@
 name: Website Build and Deploy
 on:
   push:
-    paths:
-      - "website/**/*"
-  pull_request:
+    branches: master
     paths:
       - "website/**/*"
 
