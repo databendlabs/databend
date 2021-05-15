@@ -71,8 +71,10 @@ impl ITable for ContributorsTable {
     }
 
     async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
-        let contributors: Vec<&str> = vec![env!("COMMIT_AUTHORS")];
-        println!("{:?}", contributors);
+        let contributors: Vec<&str> = env!("COMMIT_AUTHORS")
+            .split_terminator(',')
+            .map(|x| x.trim())
+            .collect();
         let block = DataBlock::create(self.schema.clone(), vec![Arc::new(StringArray::from(
             contributors
         ))]);

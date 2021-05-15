@@ -5,6 +5,8 @@
 #[cfg(test)]
 mod clusters_table_test;
 #[cfg(test)]
+mod contributors_table_test;
+#[cfg(test)]
 mod databases_table_test;
 #[cfg(test)]
 mod functions_table_test;

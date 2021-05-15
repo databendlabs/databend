@@ -1231,6 +1231,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fsio"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a50045aa8931ae01afbc5d72439e8f57f326becb8c70d07dfc816778eff3d167"
+dependencies = [
+ "rand 0.8.3",
+ "users",
+]
+
+[[package]]
 name = "funty"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1272,6 +1282,7 @@ dependencies = [
  "pretty_assertions",
  "prost",
  "rand 0.8.3",
+ "run_script",
  "serde",
  "serde_json",
  "sqlparser",
@@ -2999,6 +3010,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "run_script"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1c022176d696304ff6655716c2c09e1b888c00ac66a7c53c037ae7c9511ce6c"
+dependencies = [
+ "fsio",
+]
+
+[[package]]
 name = "rust-argon2"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4018,6 +4038,16 @@ dependencies = [
  "idna",
  "matches",
  "percent-encoding",
+]
+
+[[package]]
+name = "users"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24cc0f6d6f267b73e5a2cadf007ba8f9bc39c6a6f9666f8cf25ea809a153b032"
+dependencies = [
+ "libc",
+ "log",
 ]
 
 [[package]]
