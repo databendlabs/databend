@@ -49,7 +49,7 @@ structopt = "0.3"
 tempfile = "3.2.0"
 thiserror = "1.0.24"
 threadpool = "1.8.1"
-tokio = { version = "1.5", features = ["macros", "rt","rt-multi-thread", "sync"] }
+tokio = { version = "1.6", features = ["macros", "rt","rt-multi-thread", "sync"] }
 tokio-stream = "0.1"
 tonic = "0.4"
 tracing = "0.1.26"

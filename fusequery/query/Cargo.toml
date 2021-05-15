@@ -53,7 +53,7 @@ sqlparser = "0.9"
 structopt = "0.3"
 structopt-toml = "0.4.5"
 threadpool = "1.8.1"
-tokio = { version = "1.5", features = ["macros", "rt","rt-multi-thread", "sync"] }
+tokio = { version = "1.6", features = ["macros", "rt","rt-multi-thread", "sync"] }
 tokio-stream = "0.1"
 toml = "0.5.6"
 tonic = "0.4"
