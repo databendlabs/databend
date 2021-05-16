@@ -47,11 +47,11 @@ impl IOptimizer for LimitPushDownOptimizer {
         plan.walk_postorder(|node| -> Result<bool> {
             if let PlanNode::Limit(LimitPlan { n, input: _ }) = node {
                 let mut new_node = limit_push_down(Some(*n), node)?;
-                new_node.set_input(&rewritten_node)?;
+                new_node.set_input(&rewritten_node);
                 rewritten_node = new_node;
             } else {
                 let mut clone_node = node.clone();
-                clone_node.set_input(&rewritten_node)?;
+                clone_node.set_input(&rewritten_node);
                 rewritten_node = clone_node;
             }
             Ok(true)
