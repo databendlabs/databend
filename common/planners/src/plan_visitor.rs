@@ -22,11 +22,6 @@ use crate::SortPlan;
 use crate::StagePlan;
 use crate::UseDatabasePlan;
 
-/// Default plan visitor that can walk through a entire plan.
-struct DefaultPlanVisitor {}
-
-impl<'plan> PlanVisitor<'plan> for DefaultPlanVisitor {}
-
 /// `PlanVisitor` implements visitor pattern(reference [syn](https://docs.rs/syn/1.0.72/syn/visit/trait.Visit.html)) for `PlanNode`.
 ///
 /// `PlanVisitor` would provide default implementations for each variant of `PlanNode` to visit a plan tree in preorder.
