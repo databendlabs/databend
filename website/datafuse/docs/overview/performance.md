@@ -31,7 +31,7 @@ title: Performance
 
 <figure>
   <img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/datafuse-avg-100b.gif"/>
-  <figcaption>100,000,000,000 show time</figcaption>
+  <figcaption>100,000,000,000 records on laptop show</figcaption>
 </figure>
 
 Experience 100 billion performance on your laptop, [talk is cheap just bench it](building-and-running.md)
