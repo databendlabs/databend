@@ -184,19 +184,17 @@ impl FlightDispatcher {
                 }
             }
         } else {
-            // let scatter_column_name = scatter_column_name.unwrap();
             while let Some(item) = pipeline_stream.next().await {
                 let block = item?;
                 let mut scattered_data = flight_scatter.execute(block)?;
-                // let mut scattered_data = DataBlock::scatter_block(&block, &indices, senders.len())?;
 
                 for index in 0..scattered_data.len() {
-                    if !scattered_data[index].is_empty() {
+                    if !scattered_data[0].is_empty() {
                         let record_batch = scattered_data.remove(0).try_into()?;
                         let (dicts, values) = flight_data_from_arrow_batch(&record_batch, &options);
                         let normalized_flight_data = dicts.into_iter().chain(std::iter::once(values));
                         for flight_data in normalized_flight_data {
-                            senders[index].send(Ok(flight_data)).await;
+                            &senders[index].send(Ok(flight_data)).await;
                         }
                     }
                 }
