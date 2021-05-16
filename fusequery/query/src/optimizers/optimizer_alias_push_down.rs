@@ -35,7 +35,7 @@ impl IOptimizer for AliasPushDownOptimizer {
         });
 
         let projection_map = PlanRewriter::projection_to_map(plan)?;
-        plan.walk_postorder(&mut |node| -> Result<bool> {
+        plan.walk_postorder(|node| -> Result<bool> {
             match node {
                 PlanNode::Filter(plan) => {
                     let rewritten_expr =

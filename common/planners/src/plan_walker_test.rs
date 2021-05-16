@@ -18,7 +18,7 @@ fn test_plan_walker() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // PreOrder.
     {
         let mut actual: Vec<String> = vec![];
-        plan.input().as_ref().walk_preorder(&mut |plan| -> Result<
+        plan.input().as_ref().walk_preorder(|plan| -> Result<
             bool,
             Box<dyn std::error::Error>
         > {
@@ -37,7 +37,7 @@ fn test_plan_walker() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // PostOrder.
     {
         let mut actual: Vec<String> = vec![];
-        plan.input().as_ref().walk_postorder(&mut |plan| -> Result<
+        plan.input().as_ref().walk_postorder(|plan| -> Result<
             bool,
             Box<dyn std::error::Error>
         > {

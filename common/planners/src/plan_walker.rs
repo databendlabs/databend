@@ -115,9 +115,9 @@ impl PlanNode {
     /// A Preorder walk of this graph is A B C
     pub fn walk_preorder<E>(
         &self,
-        visitor: &mut dyn FnMut(&PlanNode) -> Result<bool, E>
+        mut visitor: impl FnMut(&PlanNode) -> Result<bool, E>
     ) -> Result<(), E> {
-        Self::walk_base(WalkOrder::PreOrder, self, visitor)
+        Self::walk_base(WalkOrder::PreOrder, self, &mut visitor)
     }
 
     /// Postorder walk is when each node is visited after all of its inputs:
@@ -129,8 +129,8 @@ impl PlanNode {
     /// A Postorder walk of this graph is C B A
     pub fn walk_postorder<E>(
         &self,
-        visitor: &mut dyn FnMut(&PlanNode) -> Result<bool, E>
+        mut visitor: impl FnMut(&PlanNode) -> Result<bool, E>
     ) -> Result<(), E> {
-        Self::walk_base(WalkOrder::PostOrder, self, visitor)
+        Self::walk_base(WalkOrder::PostOrder, self, &mut visitor)
     }
 }
