@@ -25,12 +25,9 @@ impl<'plan, 'a, E> PlanVisitor<'plan> for PreOrderWalker<'a, E> {
         }
         match (self.callback)(node) {
             Ok(true) => {
-                println!("Preorder: visiting {}", node.name());
                 self.visit_plan_node(node.input().as_ref());
             }
-            Ok(false) => {
-                return;
-            }
+            Ok(false) => {}
             Err(e) => {
                 self.state = Result::Err(e);
             }
@@ -41,7 +38,7 @@ impl<'plan, 'a, E> PlanVisitor<'plan> for PreOrderWalker<'a, E> {
 impl<'a, E> PreOrderWalker<'a, E> {
     fn new(callback: &'a mut dyn FnMut(&PlanNode) -> Result<bool, E>) -> PreOrderWalker<E> {
         PreOrderWalker {
-            callback: callback,
+            callback,
             state: Ok(())
         }
     }
@@ -62,13 +59,8 @@ impl<'plan, 'a, E> PlanVisitor<'plan> for PostOrderWalker<'a, E> {
             return;
         }
         self.visit_plan_node(node.input().as_ref());
-        match self.state {
-            Ok(true) => {
-                self.state = (self.callback)(node);
-            }
-            _ => {
-                return;
-            }
+        if let Ok(true) = self.state {
+            self.state = (self.callback)(node);
         }
     }
 }
@@ -76,7 +68,7 @@ impl<'plan, 'a, E> PlanVisitor<'plan> for PostOrderWalker<'a, E> {
 impl<'a, E> PostOrderWalker<'a, E> {
     fn new(callback: &'a mut dyn FnMut(&PlanNode) -> Result<bool, E>) -> PostOrderWalker<E> {
         PostOrderWalker {
-            callback: callback,
+            callback,
             state: Ok(true)
         }
     }
