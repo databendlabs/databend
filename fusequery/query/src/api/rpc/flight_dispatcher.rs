@@ -37,6 +37,7 @@ pub enum Request {
     GetStream(String, Sender<Result<Receiver<Result<FlightData>>>>),
     PrepareQueryStage(PrepareStageInfo, Sender<Result<()>>),
     GetStreamInfo(String, Sender<Result<StreamInfo>>),
+    TerminalStage(String, String),
 }
 
 pub struct QueryInfo {
@@ -68,12 +69,13 @@ impl FlightDispatcher {
     pub fn run(&self) -> Sender<Request> {
         let state = self.state.clone();
         let (sender, mut receiver) = channel::<Request>(100);
-        tokio::spawn(async move { Self::dispatch(state.clone(), receiver).await });
+        let dispatch_sender = sender.clone();
+        tokio::spawn(async move { Self::dispatch(state.clone(), receiver, dispatch_sender).await });
         sender.clone()
     }
 
     #[inline(always)]
-    async fn dispatch(state: Arc<ServerState>, mut receiver: Receiver<Request>) {
+    async fn dispatch(state: Arc<ServerState>, mut receiver: Receiver<Request>, request_sender: Sender<Request>) {
         let mut dispatcher_state = DispatcherState::create();
         while let Some(request) = receiver.recv().await {
             match request {
@@ -94,7 +96,7 @@ impl FlightDispatcher {
                 }
                 Request::PrepareQueryStage(info, response_sender) => {
                     let mut pipeline = Self::create_plan_pipeline(&*state, &info.2);
-                    response_sender.send(Self::prepare_stage(&mut dispatcher_state, &info, pipeline)).await;
+                    response_sender.send(Self::prepare_stage(&mut dispatcher_state, &info, pipeline, request_sender.clone())).await;
                 }
                 Request::GetStreamInfo(id, stream_info_receiver) => {
                     match dispatcher_state.streams.get(&id) {
@@ -103,13 +105,29 @@ impl FlightDispatcher {
                         },
                         None => stream_info_receiver.send(Err(ErrorCodes::NotFoundStream(format!("Stream {} is not found", id)))).await,
                     };
+                },
+                Request::TerminalStage(query_id, _stage_id) => {
+                    let stream_prefix = format!("{}/", query_id);
+                    for (id, _) in &dispatcher_state.streams {
+                        if id.starts_with(&stream_prefix) {
+                            break;
+                        }
+                    }
+
+                    // Destroy runtime
+                    match dispatcher_state.queries.remove(&query_id) {
+                        None => {},
+                        Some(query_info) => {
+                            query_info.runtime.shutdown_background();
+                        }
+                    };
                 }
             };
         }
         // TODO: shutdown
     }
 
-    fn prepare_stage(state: &mut DispatcherState, info: &PrepareStageInfo, mut pipeline: Result<Pipeline>) -> Result<()> {
+    fn prepare_stage(state: &mut DispatcherState, info: &PrepareStageInfo, mut pipeline: Result<Pipeline>, request_sender: Sender<Request>) -> Result<()> {
         if !state.queries.contains_key(&info.0) {
             fn build_runtime(max_threads: u64) -> Result<Runtime> {
                 tokio::runtime::Builder::new_multi_thread()
@@ -135,6 +153,8 @@ impl FlightDispatcher {
             state.streams.insert(stream_full_name, stream_info);
         }
 
+        let query_id = info.0.clone();
+        let stage_id = info.1.clone();
         let mut pipeline = pipeline?;
         let flight_scatter = FlightScatter::try_create(info.4.clone(), streams_data_sender.len())?;
         let query_info = state.queries.get_mut(&info.0).expect("No exists query info");
@@ -142,12 +162,16 @@ impl FlightDispatcher {
         query_info.runtime.spawn(async move {
             let _ = launcher_receiver.recv().await;
 
-            let _ = Self::receive_data_and_push(pipeline, flight_scatter, streams_data_sender).await;
+            if let Err(error) = Self::receive_data_and_push(pipeline, flight_scatter, &streams_data_sender).await {
+                for sender in streams_data_sender {
+                    if let Err(send_error) = sender.send(Err(error.clone())).await {
+                        // TODO: log to error
+                    }
+                }
+            }
 
-            // TODO: push stage terminal request.
-            // for stream_data_sender in streams_data_sender {
-            //     stream_data_sender.send(last_result.clone()).await;
-            // }
+            // Destroy Query Stage
+            request_sender.send(Request::TerminalStage(query_id, stage_id)).await;
         });
 
         Ok(())
@@ -165,7 +189,7 @@ impl FlightDispatcher {
 
     // We need to always use the inline function to ensure that async/await state machine is simple enough
     #[inline(always)]
-    async fn receive_data_and_push(mut pipeline: Pipeline, flight_scatter: FlightScatter, senders: Vec<Sender<Result<FlightData>>>) -> Result<()> {
+    async fn receive_data_and_push(mut pipeline: Pipeline, flight_scatter: FlightScatter, senders: &Vec<Sender<Result<FlightData>>>) -> Result<()> {
         use common_arrow::arrow::ipc::writer::IpcWriteOptions;
         use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
 
@@ -227,7 +251,7 @@ impl DispatcherState {
 impl FlightStreamInfo {
     pub fn create(schema: &SchemaRef, launcher_sender: &Sender<()>) -> (Sender<Result<FlightData>>, FlightStreamInfo) {
         // TODO: Back pressure buffer size
-        let (sender, mut receive) = channel(100);
+        let (sender, mut receive) = channel(5);
         (sender, FlightStreamInfo {
             schema: schema.clone(),
             data_receiver: receive,

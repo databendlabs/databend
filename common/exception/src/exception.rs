@@ -16,7 +16,7 @@ pub struct ErrorCodes {
     code: u16,
     display_text: String,
     cause: Option<Box<dyn std::error::Error + Sync + Send>>,
-    backtrace: Option<Backtrace>
+    backtrace: Option<Backtrace>,
 }
 
 impl ErrorCodes {
@@ -154,13 +154,24 @@ impl Debug for OtherErrors {
     }
 }
 
+impl Clone for ErrorCodes {
+    fn clone(&self) -> Self {
+        ErrorCodes {
+            code: self.code.clone(),
+            display_text: self.display_text.clone(),
+            cause: None,
+            backtrace: self.backtrace.clone(),
+        }
+    }
+}
+
 impl ErrorCodes {
     pub fn from_anyhow(error: anyhow::Error) -> ErrorCodes {
         ErrorCodes {
             code: 1002,
             display_text: String::from(""),
             cause: Some(Box::new(OtherErrors::AnyHow { error })),
-            backtrace: None
+            backtrace: None,
         }
     }
 
