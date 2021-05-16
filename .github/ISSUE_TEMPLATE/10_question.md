@@ -7,4 +7,4 @@ assignees: ''
 
 ---
 
-Make sure to check documentation https://datafuse.dev first. 
+Make sure to check documentation https://datafuse.rs first. 

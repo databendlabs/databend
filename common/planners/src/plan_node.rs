@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_exception::Result;
 
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
@@ -117,7 +116,7 @@ impl PlanNode {
         }
     }
 
-    pub fn set_input(&mut self, node: &PlanNode) -> Result<()> {
+    pub fn set_input(&mut self, node: &PlanNode) {
         match self {
             PlanNode::Stage(v) => v.set_input(node),
             PlanNode::Projection(v) => v.set_input(node),
@@ -131,7 +130,7 @@ impl PlanNode {
             PlanNode::Select(v) => v.set_input(node),
             PlanNode::Sort(v) => v.set_input(node),
 
-            _ => Ok(())
+            _ => {}
         }
     }
 }

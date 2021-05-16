@@ -44,7 +44,7 @@ in Rust, inspired by [ClickHouse](https://github.com/ClickHouse/ClickHouse) and 
   - Everything is Distributed
   
 * **High Reliability**
-  - True Separation of Storage and Compute
+  - Datafuse primary design goal is reliability
 
 ## Architecture
 

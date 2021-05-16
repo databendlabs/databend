@@ -44,7 +44,7 @@ impl IOptimizer for AliasPushDownOptimizer {
                         predicate: rewritten_expr,
                         input: rewritten_node.input()
                     });
-                    new_node.set_input(&rewritten_node)?;
+                    new_node.set_input(&rewritten_node);
                     rewritten_node = new_node;
                 }
                 PlanNode::AggregatorPartial(plan) => {
@@ -57,7 +57,7 @@ impl IOptimizer for AliasPushDownOptimizer {
                         aggr_expr,
                         input: rewritten_node.input()
                     });
-                    new_node.set_input(&rewritten_node)?;
+                    new_node.set_input(&rewritten_node);
                     rewritten_node = new_node;
                 }
                 PlanNode::AggregatorFinal(plan) => {
@@ -71,12 +71,12 @@ impl IOptimizer for AliasPushDownOptimizer {
                         input: rewritten_node.input(),
                         schema: plan.schema()
                     });
-                    new_node.set_input(&rewritten_node)?;
+                    new_node.set_input(&rewritten_node);
                     rewritten_node = new_node;
                 }
                 _ => {
                     let mut clone_node = node.clone();
-                    clone_node.set_input(&rewritten_node)?;
+                    clone_node.set_input(&rewritten_node);
                     rewritten_node = clone_node;
                 }
             }
