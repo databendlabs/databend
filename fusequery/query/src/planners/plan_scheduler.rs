@@ -29,7 +29,7 @@ impl PlanScheduler {
         // Get the source plan node by walk
         let mut source_plan = ReadDataSourcePlan::empty();
         {
-            plan.walk_preorder(|plan| -> Result<bool> {
+            plan.walk_preorder(&mut |plan| -> Result<bool> {
                 match plan {
                     PlanNode::ReadSource(node) => {
                         source_plan = node.clone();
@@ -115,7 +115,7 @@ impl PlanScheduler {
                 });
 
                 // Walk and rewrite the plan from the source.
-                plan.walk_postorder(|node| -> Result<bool> {
+                plan.walk_postorder(&mut |node| -> Result<bool> {
                     if let PlanNode::ReadSource(_) = node {
                         rewritten_node = PlanNode::ReadSource(new_source_plan.clone());
                     } else {

@@ -47,6 +47,22 @@ use crate::UseDatabasePlan;
 /// });
 /// visitor.visit_plan_node(&plan); // Output: table
 /// ```
+///
+/// By default, `PlanVisitor` will visit all `PlanNode` with depth first traversal(i.e. recursively access children of a node).
+/// In some cases, people want to explicitly traverse the tree in pre-order or post-order, for whom the default implementation
+/// doesn't work. Here we provide an example of pre-order traversal:
+/// ```ignore
+/// struct PreOrder {
+///     pub process: FnMut(&PlanNode)
+/// }
+///
+/// impl<'plan> PlanVisitor<'plan> for PreOrder {
+///     fn visit_plan_node(&mut self, plan: &PlanNode) {
+///         self.process(plan); // Process current node first
+///         PlanVisitor::visit_plan_node(self, plan.input().as_ref()); // Then process children
+///     }
+/// }
+/// ```
 pub trait PlanVisitor<'plan> {
     fn visit_plan_node(&mut self, node: &'plan PlanNode) {
         match node {

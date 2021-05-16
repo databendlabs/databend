@@ -49,7 +49,7 @@ impl PipelineBuilder {
         info!("Received for plan:\n{:?}", self.plan);
 
         let mut limit = None;
-        self.plan.walk_preorder(|node| -> Result<bool> {
+        self.plan.walk_preorder(&mut |node| -> Result<bool> {
             match node {
                 PlanNode::Limit(ref limit_plan) => {
                     limit = Some(limit_plan.n);
@@ -60,7 +60,7 @@ impl PipelineBuilder {
         })?;
 
         let mut pipeline = Pipeline::create(self.ctx.clone());
-        self.plan.walk_postorder(|node| -> Result<bool> {
+        self.plan.walk_postorder(&mut |node| -> Result<bool> {
             match node {
                 PlanNode::Select(_) => Ok(true),
                 PlanNode::Stage(plan) => self.visit_stage_plan(&mut pipeline, &plan),

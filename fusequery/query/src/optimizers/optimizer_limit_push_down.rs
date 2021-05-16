@@ -44,7 +44,7 @@ impl IOptimizer for LimitPushDownOptimizer {
             schema: Arc::new(DataSchema::empty())
         });
 
-        plan.walk_postorder(|node| -> Result<bool> {
+        plan.walk_postorder(&mut |node| -> Result<bool> {
             if let PlanNode::Limit(LimitPlan { n, input: _ }) = node {
                 let mut new_node = limit_push_down(Some(*n), node)?;
                 new_node.set_input(&rewritten_node);

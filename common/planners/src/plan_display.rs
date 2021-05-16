@@ -26,7 +26,7 @@ impl PlanNode {
                     Ok(())
                 };
 
-                self.0.walk_preorder(|node| {
+                self.0.walk_preorder(&mut |node| {
                     write_indent(f)?;
                     match node {
                         PlanNode::Stage(plan) => {
