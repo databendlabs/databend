@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+
 #[test]
 fn test_logic_function() -> anyhow::Result<()> {
     use std::sync::Arc;
@@ -19,7 +21,8 @@ fn test_logic_function() -> anyhow::Result<()> {
         func_name: &'static str,
         display: &'static str,
         nullable: bool,
-        block: DataBlock,
+        arg_names: Vec<&'static str>,
+        columns: Vec<DataColumnarValue>,
         expect: DataArrayRef,
         error: &'static str,
         func: Box<dyn IFunction>
@@ -30,20 +33,18 @@ fn test_logic_function() -> anyhow::Result<()> {
         DataField::new("b", DataType::Boolean, false),
     ]);
 
-    let field_a = ColumnFunction::try_create("a").unwrap();
-    let field_b = ColumnFunction::try_create("b").unwrap();
-
     let tests = vec![
         Test {
             name: "and-passed",
             func_name: "AndFunction",
             display: "a and b",
             nullable: false,
-            func: LogicAndFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
-            block: DataBlock::create(schema.clone(), vec![
-                Arc::new(BooleanArray::from(vec![true, true, true, false])),
-                Arc::new(BooleanArray::from(vec![true, false, true, true])),
-            ]),
+            func: LogicAndFunction::try_create_func("", ctx.clone())?,
+            arg_names: vec!["a", "b"],
+            columns: vec![
+                Arc::new(BooleanArray::from(vec![true, true, true, false])).into(),
+                Arc::new(BooleanArray::from(vec![true, false, true, true])).into(),
+            ],
             expect: Arc::new(BooleanArray::from(vec![true, false, true, false])),
             error: ""
         },
@@ -52,11 +53,12 @@ fn test_logic_function() -> anyhow::Result<()> {
             func_name: "OrFunction",
             display: "a or b",
             nullable: false,
-            func: LogicOrFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
-            block: DataBlock::create(schema.clone(), vec![
-                Arc::new(BooleanArray::from(vec![true, true, true, false])),
-                Arc::new(BooleanArray::from(vec![true, false, true, true])),
-            ]),
+            func: LogicOrFunction::try_create_func("", ctx.clone())?,
+            arg_names: vec!["a", "b"],
+            columns: vec![
+                Arc::new(BooleanArray::from(vec![true, true, true, false])).into(),
+                Arc::new(BooleanArray::from(vec![true, false, true, true])).into(),
+            ],
             expect: Arc::new(BooleanArray::from(vec![true, true, true, true])),
             error: ""
         },
@@ -75,15 +77,16 @@ fn test_logic_function() -> anyhow::Result<()> {
 
         // Nullable check.
         let expect_null = t.nullable;
-        let actual_null = func.nullable(t.block.schema())?;
+        let actual_null = func.nullable(&schema)?;
         assert_eq!(expect_null, actual_null);
 
         let ref v = func.eval(&t.block)?;
         // Type check.
-        let expect_type = func.return_type(t.block.schema())?;
+        let args = t.arg_names.iter().map(|name| schema.field_with_name(name)?.data_type()).collect::<Result<Vec<DataType>>>()?;
+        let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
-        assert_eq!(v.to_array(t.block.num_rows())?.as_ref(), t.expect.as_ref());
+        assert_eq!(v.to_array()?.as_ref(), t.expect.as_ref());
     }
     Ok(())
 }

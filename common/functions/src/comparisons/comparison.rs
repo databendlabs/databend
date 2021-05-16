@@ -45,7 +45,7 @@ impl ComparisonFunction {
 
     pub fn try_create_func(
         op: DataValueComparisonOperator,
-        _ctx: Arc<dyn FunctionCtx>
+        _ctx: Arc<dyn FunctionCtx>,
     ) -> Result<Box<dyn IFunction>> {
         Ok(Box::new(ComparisonFunction {
             op
@@ -66,13 +66,13 @@ impl IFunction for ComparisonFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumnarValue]) -> Result<DataColumnarValue> {
+    fn eval(&self, columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
         let result = DataArrayComparison::data_array_comparison_op(self.op.clone(), columns[0].as_ref(), columns[1].as_ref())?;
 
         match (columns[0].as_ref(), columns[1].as_ref()) {
-            (DataColumnarValue::Scalar(_), DataColumnarValue::Scalar(_)) => {
+            (DataColumnarValue::Constant(_), DataColumnarValue::Constant(_)) => {
                 let data_value = DataValue::try_from_array(&result, 0)?;
-                Ok(DataColumnarValue::Scalar(data_value))
+                Ok(DataColumnarValue::Constant(data_value, input_rows))
             }
             _ => Ok(DataColumnarValue::Array(result))
         }

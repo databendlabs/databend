@@ -10,11 +10,11 @@ use common_infallible::RwLock;
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
 
-use crate::aggregators::AggregatorFunction;
-use crate::IFunction;
+use crate::aggregator::AggregatorFunction;
+use crate::{IAggreagteFunction, AggregateFunctionCtx};
 
 pub struct AggregateFunctionFactory;
-pub type FactoryFunc = fn(name: &str, args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>>;
+pub type FactoryFunc = fn(name: &str, ctx: Arc<dyn AggregateFunctionCtx>) -> Result<Box<dyn IAggreagteFunction>>;
 
 pub type FactoryFuncRef = Arc<RwLock<IndexMap<&'static str, FactoryFunc>>>;
 
@@ -22,22 +22,18 @@ lazy_static! {
     static ref FACTORY: FactoryFuncRef = {
         let map: FactoryFuncRef = Arc::new(RwLock::new(IndexMap::new()));
         AggregatorFunction::register(map.clone()).unwrap();
-        ArithmeticFunction::register(map.clone()).unwrap();
-        ComparisonFunction::register(map.clone()).unwrap();
-        LogicFunction::register(map.clone()).unwrap();
-        StringFunction::register(map.clone()).unwrap();
-        UdfFunction::register(map.clone()).unwrap();
+
         map
     };
 }
 
 impl AggregateFunctionFactory {
-    pub fn get(name: &str, args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
+    pub fn get(name: &str, ctx: Arc<dyn AggregateFunctionCtx>) -> Result<Box<dyn IAggreagteFunction>> {
         let map = FACTORY.read();
         let creator = map.get(&*name.to_lowercase()).ok_or_else(|| {
-            ErrorCodes::UnknownFunction(format!("Unsupported Function: {}", name))
+            ErrorCodes::UnknownFunction(format!("Unsupported AggregateFunction: {}", name))
         })?;
-        (creator)(name, args)
+        (creator)(name, ctx)
     }
 
     pub fn check(name: &str) -> bool {

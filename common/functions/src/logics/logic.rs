@@ -15,16 +15,13 @@ use common_exception::Result;
 
 use crate::logics::LogicAndFunction;
 use crate::logics::LogicOrFunction;
-use crate::FactoryFuncRef;
+use crate::{FactoryFuncRef, FunctionCtx};
 use crate::IFunction;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct LogicFunction {
-    depth: usize,
     op: DataValueLogicOperator,
-    left: Box<dyn IFunction>,
-    right: Box<dyn IFunction>,
-    saved: Option<DataColumnarValue>
 }
 
 impl LogicFunction {
@@ -37,21 +34,11 @@ impl LogicFunction {
 
     pub fn try_create_func(
         op: DataValueLogicOperator,
-        args: &[Box<dyn IFunction>]
+        ctx: Arc<dyn FunctionCtx>,
     ) -> Result<Box<dyn IFunction>> {
-        match args.len() {
-            2 => Result::Ok(Box::new(LogicFunction {
-                depth: 0,
-                op,
-                left: args[0].clone(),
-                right: args[1].clone(),
-                saved: None
-            })),
-            _ => Result::Err(ErrorCodes::BadArguments(format!(
-                "Function Error: Logic function {} args length must be 2",
-                op
-            )))
-        }
+        Ok(Box::new(LogicFunction {
+            op,
+        }))
     }
 }
 
@@ -60,7 +47,7 @@ impl IFunction for LogicFunction {
         "LogicFunction"
     }
 
-    fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
+    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Boolean)
     }
 
@@ -68,22 +55,14 @@ impl IFunction for LogicFunction {
         Ok(false)
     }
 
-    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
+    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
         Ok(DataColumnarValue::Array(
             DataArrayLogic::data_array_logic_op(
                 self.op.clone(),
-                &self.left.eval(block)?,
-                &self.right.eval(block)?
+                columns[0].as_ref(),
+                columns[1].as_ref(),
             )?
         ))
-    }
-
-    fn set_depth(&mut self, depth: usize) {
-        self.depth = depth;
-    }
-
-    fn has_aggregator(&self) -> bool {
-        self.left.has_aggregator() || self.right.has_aggregator()
     }
 }
 

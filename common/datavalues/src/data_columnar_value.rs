@@ -13,23 +13,30 @@ pub enum DataColumnarValue {
     // Array of values.
     Array(DataArrayRef),
     // A Single value.
-    Scalar(DataValue)
+    Constant(DataValue, usize)
 }
 
 impl DataColumnarValue {
     pub fn data_type(&self) -> DataType {
         let x = match self {
             DataColumnarValue::Array(v) => v.data_type().clone(),
-            DataColumnarValue::Scalar(v) => v.data_type()
+            DataColumnarValue::Constant(v, _) => v.data_type()
         };
         x
     }
 
     #[inline]
-    pub fn to_array(&self, size: usize) -> Result<DataArrayRef> {
+    pub fn to_array(&self) -> Result<DataArrayRef> {
         match self {
             DataColumnarValue::Array(array) => Ok(array.clone()),
-            DataColumnarValue::Scalar(scalar) => scalar.to_array_with_size(size)
+            DataColumnarValue::Constant(scalar, size) => scalar.to_array_with_size(*size)
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            DataColumnarValue::Array(array) => array.len(),
+            DataColumnarValue::Constant(_, size) => *size,
         }
     }
 }

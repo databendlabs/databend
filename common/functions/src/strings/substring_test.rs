@@ -5,7 +5,7 @@
 use common_exception::Result;
 
 use crate::strings::SubstringFunction;
-use crate::ColumnFunction;
+use crate::{ColumnFunction, MockFunctionCtx};
 use crate::IFunction;
 use crate::LiteralFunction;
 
@@ -22,28 +22,33 @@ fn test_substring_function() -> Result<()> {
         name: &'static str,
         display: &'static str,
         nullable: bool,
-        block: DataBlock,
+        arg_names: Vec<&'static str>,
+        columns: Vec<DataColumnarValue>,
         expect: DataArrayRef,
         error: &'static str,
         func: Box<dyn IFunction>
     }
 
-    let field_a = ColumnFunction::try_create("a").unwrap();
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", DataType::Utf8, false),
+        DataField::new("b", DataType::UInt64, false),
+        DataField::new("c", DataType::UInt64, false),
+    ]);
+
+    let ctx = Arc::new(MockFunctionCtx);
 
     let tests = vec![
         Test {
             name: "substring-abcde-passed",
             display: "SUBSTRING(a,2,3)",
             nullable: false,
-            block: DataBlock::create(
-                DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
-                vec![Arc::new(StringArray::from(vec!["abcde"]))]
-            ),
-            func: SubstringFunction::try_create("substring", &[
-                field_a.clone(),
-                LiteralFunction::try_create(DataValue::Int64(Some(2)))?,
-                LiteralFunction::try_create(DataValue::UInt64(Some(3)))?
-            ])?,
+            arg_names: vec!["a", "b", "c"],
+            columns: vec![
+                Arc::new(StringArray::from(vec!["abcde"])).into(),
+                Arc::new(UInt64Array::from(vec![2])).into(),
+                Arc::new(UInt64Array::from(vec![3])).into(),
+            ],
+            func: SubstringFunction::try_create("substring", ctx.clone())?,
             expect: Arc::new(StringArray::from(vec!["bcd"])),
             error: ""
         },
@@ -51,31 +56,27 @@ fn test_substring_function() -> Result<()> {
             name: "substring-abcde-passed",
             display: "SUBSTRING(a,1,3)",
             nullable: false,
-            block: DataBlock::create(
-                DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
-                vec![Arc::new(StringArray::from(vec!["abcde"]))]
-            ),
-            func: SubstringFunction::try_create("substring", &[
-                field_a.clone(),
-                LiteralFunction::try_create(DataValue::Int64(Some(1)))?,
-                LiteralFunction::try_create(DataValue::UInt64(Some(3)))?
-            ])?,
+            arg_names: vec!["a", "b", "c"],
+            columns: vec![
+                Arc::new(StringArray::from(vec!["abcde"])).into(),
+                Arc::new(UInt64Array::from(vec![1])).into(),
+                Arc::new(UInt64Array::from(vec![3])).into(),
+            ],
+            func: SubstringFunction::try_create("substring", ctx.clone())?,
             expect: Arc::new(StringArray::from(vec!["abc"])),
             error: ""
         },
         Test {
             name: "substring-abcde-passed",
-            display: "SUBSTRING(a,2,NULL)",
+            display: "SUBSTRING(a,2)",
             nullable: false,
-            block: DataBlock::create(
-                DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
-                vec![Arc::new(StringArray::from(vec!["abcde"]))]
-            ),
-            func: SubstringFunction::try_create("substring", &[
-                field_a.clone(),
-                LiteralFunction::try_create(DataValue::Int64(Some(2)))?,
-                LiteralFunction::try_create(DataValue::UInt64(None))?
-            ])?,
+            arg_names: vec!["a", "b"],
+            columns: vec![
+                Arc::new(StringArray::from(vec!["abcde"])).into(),
+                Arc::new(UInt64Array::from(vec![2])).into(),
+            ],
+
+            func: SubstringFunction::try_create("substring", ctx.clone())?,
             expect: Arc::new(StringArray::from(vec!["bcde"])),
             error: ""
         },
@@ -98,13 +99,16 @@ fn test_substring_function() -> Result<()> {
         let actual_null = func.nullable(t.block.schema())?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&t.block)?;
+        let ref v = func.eval(&t.block, t.columns[0].len())?;
+
+        let args = t.arg_names.iter().map(|name| schema.field_with_name(name)?.data_type()).collect::<Result<Vec<DataType>>>()?;
+
         // Type check.
-        let expect_type = func.return_type(t.block.schema())?;
+        let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
 
-        assert_eq!(v.to_array(t.block.num_rows())?.as_ref(), t.expect.as_ref());
+        assert_eq!(v.to_array()?.as_ref(), t.expect.as_ref());
     }
     Ok(())
 }

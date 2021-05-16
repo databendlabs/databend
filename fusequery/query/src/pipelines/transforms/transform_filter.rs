@@ -71,7 +71,7 @@ impl IProcessor for FilterTransform {
             let filter_fn = func.clone();
 
             // Filter function eval result to array
-            let filter_array = filter_fn.eval(&block)?.to_array(rows)?;
+            let filter_array = filter_fn.eval(&block)?.to_array()?;
             // Downcast to boolean array
             let filter_array = datavalues::downcast_array!(filter_array, BooleanArray)?;
             // Convert to arrow record_batch

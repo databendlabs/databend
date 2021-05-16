@@ -376,7 +376,7 @@ fn test_array_scalar_arithmetic() {
         let result = DataArrayArithmetic::data_array_arithmetic_op(
             t.op.clone(),
             &DataColumnarValue::Array(t.array),
-            &DataColumnarValue::Scalar(t.scalar)
+            &DataColumnarValue::Constant(t.scalar, t.array.len())
         );
         match result {
             Ok(v) => assert_eq!(
@@ -444,7 +444,7 @@ fn test_scalar_array_arithmetic() {
     for t in tests {
         let result = DataArrayArithmetic::data_array_arithmetic_op(
             t.op.clone(),
-            &DataColumnarValue::Scalar(t.scalar),
+            &DataColumnarValue::Constant(t.scalar, t.array.len()),
             &DataColumnarValue::Array(t.array)
         );
         match result {

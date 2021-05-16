@@ -141,7 +141,7 @@ fn test_comparison_function() -> Result<()> {
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
 
-        assert_eq!(v.to_array(v.num_rows())?.as_ref(), t.expect.as_ref());
+        assert_eq!(v.to_array()?.as_ref(), t.expect.as_ref());
     }
     Ok(())
 }

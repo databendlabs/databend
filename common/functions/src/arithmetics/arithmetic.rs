@@ -74,13 +74,13 @@ impl IFunction for ArithmeticFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumnarValue]) -> Result<DataColumnarValue> {
+    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
         let result = DataArrayArithmetic::data_array_arithmetic_op(self.op.clone(), columns[0].as_ref(), columns[1].as_ref())?;
 
         match (left, right) {
-            (DataColumnarValue::Scalar(_), DataColumnarValue::Scalar(_)) => {
+            (DataColumnarValue::Constant(_), DataColumnarValue::Constant(_)) => {
                 let data_value = DataValue::try_from_array(&result, 0)?;
-                Ok(DataColumnarValue::Scalar(data_value))
+                Ok(DataColumnarValue::Constant(data_value))
             }
             _ => Ok(DataColumnarValue::Array(result))
         }

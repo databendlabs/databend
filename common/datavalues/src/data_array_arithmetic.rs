@@ -36,15 +36,15 @@ impl DataArrayArithmetic {
             (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
                 (left_array.clone(), right_array.clone())
             }
-            (DataColumnarValue::Array(array), DataColumnarValue::Scalar(scalar)) => {
+            (DataColumnarValue::Array(array), DataColumnarValue::Constant(scalar, _)) => {
                 (array.clone(), scalar.to_array_with_size(array.len())?)
             }
-            (DataColumnarValue::Scalar(scalar), DataColumnarValue::Array(array)) => {
+            (DataColumnarValue::Constant(scalar, _), DataColumnarValue::Array(array)) => {
                 (scalar.to_array_with_size(array.len())?, array.clone())
             }
-            (DataColumnarValue::Scalar(left_scalar), DataColumnarValue::Scalar(right_scalar)) => (
-                left_scalar.to_array_with_size(1)?,
-                right_scalar.to_array_with_size(1)?
+            (DataColumnarValue::Constant(left_scalar, rows), DataColumnarValue::Constant(right_scalar, _)) => (
+                left_scalar.to_array_with_size(*rows)?,
+                right_scalar.to_array_with_size(*rows)?
             )
         };
 

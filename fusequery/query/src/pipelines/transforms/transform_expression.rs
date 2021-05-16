@@ -99,7 +99,7 @@ impl IProcessor for ExpressionTransform {
             for func in funcs {
                 match block.column_by_name(format!("{}", func).as_str()) {
                     None => {
-                        columns.push(func.eval(&block)?.to_array(rows)?);
+                        columns.push(func.eval(&block)?.to_array()?);
                     }
                     Some(_) => {}
                 }

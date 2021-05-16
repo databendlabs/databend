@@ -43,7 +43,7 @@ impl IFunction for UdfExampleFunction {
     }
 
     fn eval(&self, _block: &DataBlock) -> Result<DataColumnarValue> {
-        Ok(DataColumnarValue::Scalar(DataValue::Boolean(Some(true))))
+        Ok(DataColumnarValue::Constant(DataValue::Boolean(Some(true))))
     }
 }
 

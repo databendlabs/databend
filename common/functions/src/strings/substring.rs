@@ -4,44 +4,32 @@
 
 use std::fmt;
 use std::ops::Deref;
+use std::sync::Arc;
 
+use common_arrow::arrow::array::Int64Array;
 use common_arrow::arrow::compute;
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_datavalues::UInt64Array;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
+use crate::FunctionCtx;
 use crate::IFunction;
 
 #[derive(Clone)]
 pub struct SubstringFunction {
-    display_name: String,
-    /// The expression to substring
-    expr: Box<dyn IFunction>,
-    /// Substring params
-    from: Box<dyn IFunction>,
-    len: Box<dyn IFunction>
+    display_name: String
 }
 
 impl SubstringFunction {
-    pub fn try_create(
-        display_name: &str,
-        args: &[Box<dyn IFunction>]
-    ) -> Result<Box<dyn IFunction>> {
-        match args.len() {
-            3 => Ok(Box::new(SubstringFunction {
-                display_name: display_name.to_string(),
-                expr: args[0].clone(),
-                from: args[1].clone(),
-                len: args[2].clone()
-            })),
-            _ => Result::Err(ErrorCodes::BadArguments(
-                "Function Error: Substring function args length must be 3"
-            ))
-        }
+    pub fn try_create(display_name: &str, ctx: Arc<dyn FunctionCtx>) -> Result<Box<dyn IFunction>> {
+        Ok(Box::new(SubstringFunction {
+            display_name: display_name.to_string()
+        }))
     }
 }
 
@@ -50,19 +38,36 @@ impl IFunction for SubstringFunction {
         "substring"
     }
 
-    fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
-        self.expr.return_type(input_schema)
+    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+        Ok(DataType::Utf8)
     }
 
     fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
-        self.expr.nullable(input_schema)
+        Ok(false)
     }
 
-    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
-        let value = self.expr.eval(block)?;
-        let from = self.from.eval(block)?;
-        let mut from_scalar = 0_i64;
-        if let DataColumnarValue::Scalar(from) = from {
+    fn eval(&self, columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
+        // TODO: make this function support column value as arguments rather than literal
+        let from = columns[1]
+            .to_array()?
+            .as_any()
+            .downcast_ref::<Int64Array>()
+            .unwrap()
+            .value(0);
+        let end = {
+            if columns.len() >= 3 {
+                let v = columns[2]
+                    .to_array()?
+                    .as_any()
+                    .downcast_ref::<UInt64Array>()
+                    .unwrap();
+                Some(v.value(0))
+            } else {
+                None
+            }
+        };
+
+        if let DataColumnarValue::Constant(from) = from {
             match from {
                 DataValue::Int64(Some(from)) => {
                     from_scalar = from - 1;
@@ -80,21 +85,10 @@ impl IFunction for SubstringFunction {
             len_scalar = len;
         }
 
-        match value {
-            DataColumnarValue::Array(v) => Ok(DataColumnarValue::Array(
-                compute::kernels::substring::substring(v.deref(), from_scalar, &len_scalar)?
-            )),
-            DataColumnarValue::Scalar(v) => {
-                let scalar_array = v.to_array()?;
-                let substring_array = compute::kernels::substring::substring(
-                    scalar_array.deref(),
-                    from_scalar,
-                    &len_scalar
-                )?;
-                let substring_scalar = DataValue::try_from_array(&substring_array, 0)?;
-                Ok(DataColumnarValue::Scalar(substring_scalar))
-            }
-        }
+        let value = columns[0].to_array()?;
+        Ok(DataColumnarValue::Array(
+            compute::kernels::substring::substring(&value, from, &end)?
+        ))
     }
 }
 

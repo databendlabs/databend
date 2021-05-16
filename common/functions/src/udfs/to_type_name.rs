@@ -53,7 +53,7 @@ impl IFunction for ToTypeNameFunction {
 
     fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         let type_name = format!("{}", self.arg.return_type(block.schema())?);
-        Ok(DataColumnarValue::Scalar(DataValue::Utf8(Some(type_name))))
+        Ok(DataColumnarValue::Constant(DataValue::Utf8(Some(type_name))))
     }
 }
 

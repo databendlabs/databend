@@ -43,7 +43,7 @@ impl IFunction for AliasFunction {
         self.func.nullable(input_schema)
     }
 
-    fn eval(&self, columns: &[DataColumnarValue]) -> Result<DataColumnarValue> {
+    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
         Ok(columns[0].clone())
     }
 }

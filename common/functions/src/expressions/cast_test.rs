@@ -19,24 +19,19 @@ fn test_cast_function() -> Result<()> {
         name: &'static str,
         display: &'static str,
         nullable: bool,
-        block: DataBlock,
+        columns: Vec<DataColumnarValue>,
         cast_type: DataType,
         expect: DataArrayRef,
         error: &'static str,
         func: Box<dyn IFunction>
     }
 
-    let field_a = ColumnFunction::try_create("a").unwrap();
-
     let tests = vec![
         Test {
             name: "cast-int64-to-int8-passed",
             display: "CAST(a)",
             nullable: false,
-            block: DataBlock::create(
-                DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]),
-                vec![Arc::new(Int64Array::from(vec![4, 3, 2, 4]))]
-            ),
+            columns: vec![Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into()],
             func: CastFunction::create( DataType::Int8),
             cast_type: DataType::Int8,
             expect: Arc::new(Int8Array::from(vec![4, 3, 2, 4])),
@@ -46,10 +41,9 @@ fn test_cast_function() -> Result<()> {
             name: "cast-string-to-date32-passed",
             display: "CAST(a)",
             nullable: false,
-            block: DataBlock::create(
-                DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
-                vec![Arc::new(StringArray::from(vec!["20210305", "20211024"]))]
-            ),
+            columns: vec![
+               Arc::new(StringArray::from(vec!["20210305", "20211024"])).into()
+            ],
             func: CastFunction::create(DataType::Int32),
             cast_type: DataType::Date32,
             expect: Arc::new(Int32Array::from(vec![20210305, 20211024])),
@@ -59,10 +53,9 @@ fn test_cast_function() -> Result<()> {
 
     for t in tests {
         let func = t.func;
-        if let Err(e) = func.eval(&t.block) {
+        if let Err(e) = func.eval(&t.columns) {
             assert_eq!(t.error, e.to_string());
         }
-        func.eval(&t.block)?;
 
         // Display check.
         let expect_display = t.display.to_string();
@@ -74,13 +67,13 @@ fn test_cast_function() -> Result<()> {
         let actual_null = func.nullable(t.block.schema())?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&t.block)?;
+        let ref v = func.eval(&t.columns)?;
         // Type check.
         let args = vec![t.cast_type];
         let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
-        assert_eq!(v.to_array(t.block.num_rows())?.as_ref(), t.expect.as_ref());
+        assert_eq!(v.to_array()?.as_ref(), t.expect.as_ref());
     }
     Ok(())
 }

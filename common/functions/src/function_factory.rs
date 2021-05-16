@@ -10,7 +10,6 @@ use common_infallible::RwLock;
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
 
-use crate::aggregators::AggregatorFunction;
 use crate::arithmetics::ArithmeticFunction;
 use crate::comparisons::ComparisonFunction;
 use crate::logics::LogicFunction;
@@ -36,12 +35,12 @@ lazy_static! {
 }
 
 impl FunctionFactory {
-    pub fn get(name: &str, args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
+    pub fn get(name: &str, ctx: Arc<dyn FunctionCtx>) -> Result<Box<dyn IFunction>> {
         let map = FACTORY.read();
         let creator = map.get(&*name.to_lowercase()).ok_or_else(|| {
             ErrorCodes::UnknownFunction(format!("Unsupported Function: {}", name))
         })?;
-        (creator)(name, args)
+        (creator)(name, ctx)
     }
 
     pub fn check(name: &str) -> bool {

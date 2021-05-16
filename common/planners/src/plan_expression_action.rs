@@ -9,12 +9,14 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::{Result, ErrorCodes};
-use common_functions::AliasFunction;
+use common_functions::{AliasFunction, FunctionCtx};
 use common_functions::CastFunction;
 use common_functions::ColumnFunction;
 use common_functions::FunctionFactory;
 use common_functions::IFunction;
 use common_functions::LiteralFunction;
+use std::sync::Arc;
+use common_aggregate_functions::{AggregateFunctionFactory, AggregateFunctionCtx};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum ExpressionAction {
@@ -73,34 +75,36 @@ impl ExpressionAction {
         })
     }
 
-    pub fn to_data_type(&self, input_schema: &DataSchemaRef) -> Result<DataType> {
+    pub fn to_data_type<S>(&self, input_schema: &DataSchemaRef, ctx: Arc<S>) -> Result<DataType>
+    where S: FunctionCtx + AggregateFunctionCtx {
         match self {
-            ExpressionAction::Alias(_, expr) => expr.to_data_type(input_schema),
+            ExpressionAction::Alias(_, expr) => expr.to_data_type(input_schema, ctx.clone()),
             ExpressionAction::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
             ExpressionAction::Literal(v) => Ok(v.data_type()),
             ExpressionAction::ScalarFunction { op, args } => {
                 let mut arg_types = Vec::with_capacity(args.len());
                 for arg in args {
-                    args_types.push(arg.to_data_type(input_schema)?);
+                    args_types.push(arg.to_data_type(input_schema, ctx.clone())?);
                 }
-                let func = FunctionFactory::get(op)?;
+                let func = FunctionFactory::get(op, ctx.clone())?;
                 func.return_type(&arg_types)
             }
             ExpressionAction::AggregateFunction { op, args } => {
-
+                let mut arg_types = Vec::with_capacity(args.len());
+                for arg in args {
+                    args_types.push(arg.to_data_type(input_schema, ctx.clone())?);
+                }
+                let func = AggregateFunctionFactory::get(op, ctx.clone())?;
+                func.return_type(&arg_types)
             }
             ExpressionAction::Wildcard => Result::Err(ErrorCodes::IllegalDataType("Wildcard expressions are not valid to get return type")),
             ExpressionAction::Cast {expr, data_type } => Ok(data_type.clone()),
-            ExpressionAction::Sort { expr, .. } => expr.to_data_type(input_schema),
+            ExpressionAction::Sort { expr, .. } => expr.to_data_type(input_schema, ctx.clone())?,
         }
     }
 
-    pub fn nullable(&self, input_schema: &DataSchemaRef) -> Result<bool> {
-        Ok(false)
-    }
-
     pub fn has_aggregator(&self) -> Result<bool> {
-        Ok(self.to_function()?.has_aggregator())
+        Ok(false)
     }
 }
 

@@ -47,7 +47,7 @@ impl IFunction for ColumnFunction {
         Ok(field.is_nullable())
     }
 
-    fn eval(&self, columns: &[DataColumnarValue]) -> Result<DataColumnarValue> {
+    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
         Ok(columns[0].clone())
     }
 }

@@ -4,8 +4,7 @@
 
 use std::fmt;
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataArrayAggregate;
+use common_datavalues::{DataArrayAggregate, DataColumnarValue};
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -14,43 +13,36 @@ use common_datavalues::DataValueAggregateOperator;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
-use crate::IFunction;
+use crate::{IAggreagteFunction, AggregateFunctionCtx};
+use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct AggregatorMinFunction {
+pub struct AggregateMinFunction {
     display_name: String,
     depth: usize,
-    arg: Box<dyn IFunction>,
     state: DataValue
 }
 
-impl AggregatorMinFunction {
+impl AggregateMinFunction {
     pub fn try_create(
         display_name: &str,
-        args: &[Box<dyn IFunction>]
-    ) -> Result<Box<dyn IFunction>> {
-        match args.len() {
-            1 => Ok(Box::new(AggregatorMinFunction {
-                display_name: display_name.to_string(),
-                depth: 0,
-                arg: args[0].clone(),
-                state: DataValue::Null
-            })),
-            _ => Result::Err(ErrorCodes::BadArguments(format!(
-                "Function Error: Aggregator function {} args require single argument",
-                display_name
-            )))
-        }
+        ctx: Arc<dyn AggregateFunctionCtx>
+    ) -> Result<Box<dyn IAggreagteFunction>> {
+        Ok(Box::new(AggregateMinFunction {
+            display_name: display_name.to_string(),
+            depth: 0,
+            state: DataValue::Null
+        }))
     }
 }
 
-impl IFunction for AggregatorMinFunction {
+impl IAggreagteFunction for AggregateMinFunction {
     fn name(&self) -> &str {
-        "AggregatorMinFunction"
+        "AggregateMinFunction"
     }
 
-    fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
-        self.arg.return_type(input_schema)
+    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+        Ok(args[0].clone())
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
@@ -61,15 +53,13 @@ impl IFunction for AggregatorMinFunction {
         self.depth = depth;
     }
 
-    fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
-        let rows = block.num_rows();
-        let val = self.arg.eval(&block)?;
+    fn accumulate(&mut self, columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
         self.state = DataValueAggregate::data_value_aggregate_op(
             DataValueAggregateOperator::Min,
             self.state.clone(),
             DataArrayAggregate::data_array_aggregate_op(
                 DataValueAggregateOperator::Min,
-                val.to_array(rows)?
+                columns[0].to_array()?
             )?
         )?;
         Ok(())
@@ -92,13 +82,9 @@ impl IFunction for AggregatorMinFunction {
     fn merge_result(&self) -> Result<DataValue> {
         Ok(self.state.clone())
     }
-
-    fn has_aggregator(&self) -> bool {
-        true
-    }
 }
 
-impl fmt::Display for AggregatorMinFunction {
+impl fmt::Display for AggregateMinFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}({})", self.display_name, self.arg)
     }

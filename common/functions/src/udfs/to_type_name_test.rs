@@ -64,7 +64,7 @@ fn test_to_type_name_function() -> anyhow::Result<()> {
         let expect_type = func.return_type(t.block.schema())?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
-        assert_eq!(v.to_array(t.block.num_rows())?.as_ref(), t.expect.as_ref());
+        assert_eq!(v.to_array()?.as_ref(), t.expect.as_ref());
     }
     Ok(())
 }

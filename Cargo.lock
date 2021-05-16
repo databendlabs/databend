@@ -677,6 +677,7 @@ name = "common-planners"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "common-aggregate-functions",
  "common-datavalues",
  "common-exception",
  "common-functions",
@@ -1275,6 +1276,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "clickhouse-srv",
+ "common-aggregate-functions",
  "common-arrow",
  "common-datablocks",
  "common-datavalues",

@@ -17,11 +17,11 @@ pub trait IFunction: fmt::Display + Sync + Send + DynClone {
     fn name(&self) -> &str;
     fn return_type(&self, args: &[DataType]) -> Result<DataType>;
     fn nullable(&self, input_schema: &DataSchema) -> Result<bool>;
-    fn eval(&self, columns: &[DataColumnarValue]) -> Result<DataColumnarValue>;
+    fn eval(&self, columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue>;
 }
 
 pub trait FunctionCtx {
-    fn current_database() -> &str;
+    fn current_database(&self) -> &str;
 }
 
 dyn_clone::clone_trait_object!(IFunction);
