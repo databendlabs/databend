@@ -11,6 +11,7 @@ mod aggregator_count;
 mod aggregator_max;
 mod aggregator_min;
 mod aggregator_sum;
+mod aggregator_function_factory;
 
 pub use aggregator::AggregatorFunction;
 pub use aggregator_avg::AggregatorAvgFunction;

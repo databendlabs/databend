@@ -20,16 +20,10 @@ fn test_column_function() -> anyhow::Result<()> {
     // Ok.
     {
         let col = ColumnFunction::try_create("a")?;
-        let _ = col.eval(&block)?;
+        let columns = vec![DataColumnarValue::Array(block.try_column_by_name("a")?.clone())];
+        let _ = col.eval(&columns)?;
     }
 
-    // Field not found error.
-    {
-        let col = ColumnFunction::try_create("xx")?;
-        let actual = col.eval(&block);
-        let expect = "Code: 1002, displayText = Invalid argument error: Unable to get field named \"xx\". Valid fields: [\"a\"].";
-        assert_eq!(expect, format!("{}", actual.err().unwrap()));
-    }
 
     Ok(())
 }

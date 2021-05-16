@@ -3,16 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_exception::Result;
+use std::sync::Arc;
+
+use common_datablocks::*;
+use common_datavalues::*;
+use pretty_assertions::assert_eq;
+
+use crate::*;
 
 #[test]
 fn test_cast_function() -> Result<()> {
-    use std::sync::Arc;
-
-    use common_datablocks::*;
-    use common_datavalues::*;
-    use pretty_assertions::assert_eq;
-
-    use crate::*;
 
     #[allow(dead_code)]
     struct Test {
@@ -20,6 +20,7 @@ fn test_cast_function() -> Result<()> {
         display: &'static str,
         nullable: bool,
         block: DataBlock,
+        cast_type: DataType,
         expect: DataArrayRef,
         error: &'static str,
         func: Box<dyn IFunction>
@@ -36,7 +37,8 @@ fn test_cast_function() -> Result<()> {
                 DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]),
                 vec![Arc::new(Int64Array::from(vec![4, 3, 2, 4]))]
             ),
-            func: CastFunction::create(field_a.clone(), DataType::Int8),
+            func: CastFunction::create( DataType::Int8),
+            cast_type: DataType::Int8,
             expect: Arc::new(Int8Array::from(vec![4, 3, 2, 4])),
             error: ""
         },
@@ -48,7 +50,8 @@ fn test_cast_function() -> Result<()> {
                 DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
                 vec![Arc::new(StringArray::from(vec!["20210305", "20211024"]))]
             ),
-            func: CastFunction::create(field_a.clone(), DataType::Int32),
+            func: CastFunction::create(DataType::Int32),
+            cast_type: DataType::Date32,
             expect: Arc::new(Int32Array::from(vec![20210305, 20211024])),
             error: ""
         },
@@ -73,10 +76,10 @@ fn test_cast_function() -> Result<()> {
 
         let ref v = func.eval(&t.block)?;
         // Type check.
-        let expect_type = func.return_type(t.block.schema())?;
+        let args = vec![t.cast_type];
+        let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
-
         assert_eq!(v.to_array(t.block.num_rows())?.as_ref(), t.expect.as_ref());
     }
     Ok(())

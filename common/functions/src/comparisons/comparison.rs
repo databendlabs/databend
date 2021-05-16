@@ -20,16 +20,13 @@ use crate::comparisons::ComparisonGtFunction;
 use crate::comparisons::ComparisonLtEqFunction;
 use crate::comparisons::ComparisonLtFunction;
 use crate::comparisons::ComparisonNotEqFunction;
-use crate::FactoryFuncRef;
+use crate::{FactoryFuncRef, FunctionCtx};
 use crate::IFunction;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
-    depth: usize,
-    op: DataValueComparisonOperator,
-    left: Box<dyn IFunction>,
-    right: Box<dyn IFunction>,
-    saved: Option<DataColumnarValue>
+    op: DataValueComparisonOperator
 }
 
 impl ComparisonFunction {
@@ -48,21 +45,11 @@ impl ComparisonFunction {
 
     pub fn try_create_func(
         op: DataValueComparisonOperator,
-        args: &[Box<dyn IFunction>]
+        _ctx: Arc<dyn FunctionCtx>
     ) -> Result<Box<dyn IFunction>> {
-        match args.len() {
-            2 => Ok(Box::new(ComparisonFunction {
-                depth: 0,
-                op,
-                left: args[0].clone(),
-                right: args[1].clone(),
-                saved: None
-            })),
-            _ => Result::Err(ErrorCodes::BadArguments(format!(
-                "Function Error: Comparison function {} args length must be 2",
-                op
-            )))
-        }
+        Ok(Box::new(ComparisonFunction {
+            op
+        }))
     }
 }
 
@@ -71,7 +58,7 @@ impl IFunction for ComparisonFunction {
         "ComparisonFunction"
     }
 
-    fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
+    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Boolean)
     }
 
@@ -79,22 +66,16 @@ impl IFunction for ComparisonFunction {
         Ok(false)
     }
 
-    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
-        let left = &self.left.eval(block)?;
-        let right = &self.right.eval(block)?;
-        let result = DataArrayComparison::data_array_comparison_op(self.op.clone(), left, right)?;
+    fn eval(&self, columns: &[DataColumnarValue]) -> Result<DataColumnarValue> {
+        let result = DataArrayComparison::data_array_comparison_op(self.op.clone(), columns[0].as_ref(), columns[1].as_ref())?;
 
-        match (left, right) {
+        match (columns[0].as_ref(), columns[1].as_ref()) {
             (DataColumnarValue::Scalar(_), DataColumnarValue::Scalar(_)) => {
                 let data_value = DataValue::try_from_array(&result, 0)?;
                 Ok(DataColumnarValue::Scalar(data_value))
             }
             _ => Ok(DataColumnarValue::Array(result))
         }
-    }
-
-    fn set_depth(&mut self, depth: usize) {
-        self.depth = depth;
     }
 }
 

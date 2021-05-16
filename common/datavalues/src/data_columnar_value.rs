@@ -33,3 +33,9 @@ impl DataColumnarValue {
         }
     }
 }
+
+impl From<DataArrayRef> for DataColumnarValue {
+    fn from(array: DataArrayRef) -> Self {
+        DataColumnarValue::Array(array.clone())
+    }
+}

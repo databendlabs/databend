@@ -13,7 +13,7 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
-use crate::IFunction;
+use crate::function::IFunction;
 
 /// provide Datafuse default cast options
 pub const DEFAULT_DATAFUSE_CAST_OPTIONS: CastOptions = CastOptions { safe: false };
@@ -27,7 +27,7 @@ pub struct CastFunction {
 }
 
 impl CastFunction {
-    pub fn create(expr: Box<dyn IFunction>, cast_type: DataType) -> Box<dyn IFunction> {
+    pub fn create(cast_type: DataType) -> Box<dyn IFunction> {
         Box::new(Self { expr, cast_type })
     }
 }
@@ -37,7 +37,7 @@ impl IFunction for CastFunction {
         "cast"
     }
 
-    fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
+    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
         Ok(self.cast_type.clone())
     }
 

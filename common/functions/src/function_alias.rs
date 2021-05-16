@@ -17,15 +17,15 @@ use crate::IFunction;
 pub struct AliasFunction {
     depth: usize,
     alias: String,
-    func: Box<dyn IFunction>
+    func: Box<dyn IFunction>,
 }
 
 impl AliasFunction {
-    pub fn try_create(alias: String, func: Box<dyn IFunction>) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(alias: String) -> Result<Box<dyn IFunction>> {
         Ok(Box::new(AliasFunction {
             depth: 0,
             alias,
-            func
+            func,
         }))
     }
 }
@@ -35,40 +35,16 @@ impl IFunction for AliasFunction {
         "AliasFunction"
     }
 
-    fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
-        self.func.return_type(input_schema)
+    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+        Ok(args[0].clone())
     }
 
     fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
         self.func.nullable(input_schema)
     }
 
-    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
-        self.func.eval(block)
-    }
-
-    fn set_depth(&mut self, depth: usize) {
-        self.depth = depth;
-    }
-
-    fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
-        self.func.accumulate(block)
-    }
-
-    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
-        self.func.accumulate_result()
-    }
-
-    fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        self.func.merge(states)
-    }
-
-    fn merge_result(&self) -> Result<DataValue> {
-        self.func.merge_result()
-    }
-
-    fn has_aggregator(&self) -> bool {
-        self.func.has_aggregator()
+    fn eval(&self, columns: &[DataColumnarValue]) -> Result<DataColumnarValue> {
+        Ok(columns[0].clone())
     }
 }
 

@@ -6,15 +6,16 @@ use common_datavalues::DataValueComparisonOperator;
 use common_exception::Result;
 
 use crate::comparisons::ComparisonFunction;
-use crate::IFunction;
+use crate::{IFunction, FunctionCtx};
+use std::sync::Arc;
 
 pub struct ComparisonLtFunction;
 
 impl ComparisonLtFunction {
     pub fn try_create_func(
         _display_name: &str,
-        args: &[Box<dyn IFunction>]
+        ctx: Arc<dyn FunctionCtx>
     ) -> Result<Box<dyn IFunction>> {
-        ComparisonFunction::try_create_func(DataValueComparisonOperator::Lt, args)
+        ComparisonFunction::try_create_func(DataValueComparisonOperator::Lt, ctx)
     }
 }

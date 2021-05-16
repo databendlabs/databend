@@ -26,7 +26,7 @@ pub enum ExpressionAction {
     Literal(DataValue),
 
     /// ScalarFunction with a set of arguments.
-    /// Note: BinaryFunction is a also kind of scalar function
+    /// Note: BinaryFunction is a also kind of functions function
     ScalarFunction {
         op: String,
         args: Vec<ExpressionAction>
@@ -60,40 +60,6 @@ pub enum ExpressionAction {
 }
 
 impl ExpressionAction {
-    fn to_function_with_depth(&self, depth: usize) -> Result<Box<dyn IFunction>> {
-        match self {
-            ExpressionAction::Column(ref v) => ColumnFunction::try_create(v.as_str()),
-            ExpressionAction::Literal(ref v) => LiteralFunction::try_create(v.clone()),
-            ExpressionAction::ScalarFunction { op, args } => {
-                let mut funcs = Vec::with_capacity(args.len());
-                for arg in args {
-                    let mut func = arg.to_function_with_depth(depth + 1)?;
-                    func.set_depth(depth);
-                    funcs.push(func);
-                }
-                let mut func = FunctionFactory::get(op, &funcs)?;
-                func.set_depth(depth);
-                Ok(func)
-            }
-            ExpressionAction::Alias(alias, expr) => {
-                let mut func = expr.to_function_with_depth(depth)?;
-                func.set_depth(depth);
-                AliasFunction::try_create(alias.clone(), func)
-            }
-            ExpressionAction::Sort { expr, .. } => expr.to_function_with_depth(depth),
-            ExpressionAction::Wildcard => ColumnFunction::try_create("*"),
-            ExpressionAction::Cast { expr, data_type } => Ok(CastFunction::create(
-                expr.to_function_with_depth(depth)?,
-                data_type.clone()
-            )),
-        }
-    }
-
-    pub fn to_function(&self) -> Result<Box<dyn IFunction>> {
-        self.to_function_with_depth(0)
-    }
-
-
     pub fn column_name(&self) -> &str {
         format!("{:?}", self).as_str()
     }
@@ -150,7 +116,7 @@ impl fmt::Debug for ExpressionAction {
             ExpressionAction::Sort { expr, .. } => write!(f, "{:?}", expr),
             ExpressionAction::Wildcard => write!(f, "*"),
             ExpressionAction::Cast { expr, data_type } => {
-                write!(f, "CAST({:?} AS {:?})", expr, data_type)
+                write!(f, "cast({:?} as {:?})", expr, data_type)
             }
         }
     }

@@ -293,7 +293,7 @@ impl DataValue {
                 Ok(DataValue::Struct(scalar_vec))
             }
             other => Result::Err(ErrorCodes::BadDataValueType(format!(
-                "DataValue Error: Can't create a scalar of array of type \"{:?}\"",
+                "DataValue Error: Can't create a functions of array of type \"{:?}\"",
                 other
             )))
         }

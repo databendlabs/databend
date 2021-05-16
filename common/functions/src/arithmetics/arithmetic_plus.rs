@@ -6,15 +6,16 @@ use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
 use crate::arithmetics::ArithmeticFunction;
-use crate::IFunction;
+use crate::{IFunction, FunctionCtx};
+use std::sync::Arc;
 
 pub struct ArithmeticPlusFunction;
 
 impl ArithmeticPlusFunction {
     pub fn try_create_func(
         _display_name: &str,
-        args: &[Box<dyn IFunction>]
+        ctx: Arc<dyn FunctionCtx>
     ) -> Result<Box<dyn IFunction>> {
-        ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus, args)
+        ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus, ctx)
     }
 }

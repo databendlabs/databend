@@ -20,7 +20,8 @@ fn test_comparison_function() -> Result<()> {
         name: &'static str,
         display: &'static str,
         nullable: bool,
-        block: DataBlock,
+        arg_names: Vec<&'static str>,
+        columns: Vec<DataColumnarValue>,
         expect: DataArrayRef,
         error: &'static str,
         func: Box<dyn IFunction>
@@ -33,17 +34,18 @@ fn test_comparison_function() -> Result<()> {
 
     let field_a = ColumnFunction::try_create("a").unwrap();
     let field_b = ColumnFunction::try_create("b").unwrap();
-
+    let ctx = Arc::new(MockFunctionCtx);
     let tests = vec![
         Test {
             name: "eq-passed",
             display: "a = b",
             nullable: false,
-            func: ComparisonEqFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
-            block: DataBlock::create(schema.clone(), vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
-            ]),
+            func: ComparisonEqFunction::try_create_func("", ctx.clone())?,
+            arg_names: vec!["a", "b"],
+            columns: vec![
+                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into().into(),
+                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into().into(),
+            ],
             expect: Arc::new(BooleanArray::from(vec![false, false, false, true])),
             error: ""
         },
@@ -51,11 +53,12 @@ fn test_comparison_function() -> Result<()> {
             name: "gt-passed",
             display: "a > b",
             nullable: false,
-            func: ComparisonGtFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
-            block: DataBlock::create(schema.clone(), vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
-            ]),
+            func: ComparisonGtFunction::try_create_func("", ctx.clone())?,
+            arg_names: vec!["a", "b"],
+            columns: vec![
+                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
+                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
+            ],
             expect: Arc::new(BooleanArray::from(vec![true, true, false, false])),
             error: ""
         },
@@ -63,11 +66,12 @@ fn test_comparison_function() -> Result<()> {
             name: "gt-eq-passed",
             display: "a >= b",
             nullable: false,
-            func: ComparisonGtEqFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
-            block: DataBlock::create(schema.clone(), vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
-            ]),
+            func: ComparisonGtEqFunction::try_create_func("", ctx.clone())?,
+            arg_names: vec!["a", "b"],
+            columns: vec![
+                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
+                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
+            ],
             expect: Arc::new(BooleanArray::from(vec![true, true, false, true])),
             error: ""
         },
@@ -75,11 +79,12 @@ fn test_comparison_function() -> Result<()> {
             name: "lt-passed",
             display: "a < b",
             nullable: false,
-            func: ComparisonLtFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
-            block: DataBlock::create(schema.clone(), vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
-            ]),
+            func: ComparisonLtFunction::try_create_func("", ctx.clone())?,
+            arg_names: vec!["a", "b"],
+            columns: vec![
+                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
+                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
+            ],
             expect: Arc::new(BooleanArray::from(vec![false, false, true, false])),
             error: ""
         },
@@ -87,11 +92,12 @@ fn test_comparison_function() -> Result<()> {
             name: "lt-eq-passed",
             display: "a <= b",
             nullable: false,
-            func: ComparisonLtEqFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
-            block: DataBlock::create(schema.clone(), vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
-            ]),
+            func: ComparisonLtEqFunction::try_create_func("", ctx.clone())?,
+            arg_names: vec!["a", "b"],
+            columns: vec![
+                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into().into(),
+                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).if_not_exists.into(),
+            ],
             expect: Arc::new(BooleanArray::from(vec![false, false, true, true])),
             error: ""
         },
@@ -99,14 +105,12 @@ fn test_comparison_function() -> Result<()> {
             name: "not-eq-passed",
             display: "a != b",
             nullable: false,
-            func: ComparisonNotEqFunction::try_create_func("", &[
-                field_a.clone(),
-                field_b.clone()
-            ])?,
-            block: DataBlock::create(schema.clone(), vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
-            ]),
+            func: ComparisonNotEqFunction::try_create_func("", ctx.clone())?,
+            arg_names: vec!["a", "b"],
+            columns: vec![
+                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
+                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
+            ],
             expect: Arc::new(BooleanArray::from(vec![true, true, true, false])),
             error: ""
         },
@@ -124,18 +128,20 @@ fn test_comparison_function() -> Result<()> {
         let actual_display = format!("{}", func);
         assert_eq!(expect_display, actual_display);
 
+        let args = t.arg_names.iter().map(|name| schema.field_with_name(name)?.data_type()).collect::<Result<Vec<DataType>>>()?;
+
         // Nullable check.
         let expect_null = t.nullable;
-        let actual_null = func.nullable(t.block.schema())?;
+        let actual_null = func.nullable(&schema)?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&t.block)?;
+        let ref v = func.eval(&t.columns)?;
         // Type check.
-        let expect_type = func.return_type(t.block.schema())?;
+        let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
 
-        assert_eq!(v.to_array(t.block.num_rows())?.as_ref(), t.expect.as_ref());
+        assert_eq!(v.to_array(v.num_rows())?.as_ref(), t.expect.as_ref());
     }
     Ok(())
 }

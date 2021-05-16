@@ -20,15 +20,14 @@ use crate::arithmetics::ArithmeticMinusFunction;
 use crate::arithmetics::ArithmeticModuloFunction;
 use crate::arithmetics::ArithmeticMulFunction;
 use crate::arithmetics::ArithmeticPlusFunction;
-use crate::FactoryFuncRef;
+use crate::{FactoryFuncRef, FunctionCtx};
 use crate::IFunction;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct ArithmeticFunction {
     depth: usize,
     op: DataValueArithmeticOperator,
-    left: Box<dyn IFunction>,
-    right: Box<dyn IFunction>
 }
 
 impl ArithmeticFunction {
@@ -49,20 +48,12 @@ impl ArithmeticFunction {
 
     pub fn try_create_func(
         op: DataValueArithmeticOperator,
-        args: &[Box<dyn IFunction>]
+        _ctx: Arc<dyn FunctionCtx>,
     ) -> Result<Box<dyn IFunction>> {
-        match args.len() {
-            2 => Ok(Box::new(ArithmeticFunction {
-                depth: 0,
-                op,
-                left: args[0].clone(),
-                right: args[1].clone()
-            })),
-            _ => Result::Err(ErrorCodes::BadArguments(format!(
-                "Function Error: Arithmetic function {} args length must be 2",
-                op
-            )))
-        }
+        Ok(Box::new(ArithmeticFunction {
+            depth: 0,
+            op,
+        }))
     }
 }
 
@@ -71,22 +62,20 @@ impl IFunction for ArithmeticFunction {
         "ArithmeticFunction"
     }
 
-    fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
+    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
         common_datavalues::numerical_arithmetic_coercion(
             &self.op,
-            &self.left.return_type(input_schema)?,
-            &self.right.return_type(input_schema)?
+            &args[0],
+            &args[1],
         )
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
+    fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
-        let left = &self.left.eval(block)?;
-        let right = &self.right.eval(block)?;
-        let result = DataArrayArithmetic::data_array_arithmetic_op(self.op.clone(), left, right)?;
+    fn eval(&self, columns: &[DataColumnarValue]) -> Result<DataColumnarValue> {
+        let result = DataArrayArithmetic::data_array_arithmetic_op(self.op.clone(), columns[0].as_ref(), columns[1].as_ref())?;
 
         match (left, right) {
             (DataColumnarValue::Scalar(_), DataColumnarValue::Scalar(_)) => {
@@ -95,42 +84,6 @@ impl IFunction for ArithmeticFunction {
             }
             _ => Ok(DataColumnarValue::Array(result))
         }
-    }
-
-    fn set_depth(&mut self, depth: usize) {
-        self.left.set_depth(depth);
-        self.right.set_depth(depth + 1);
-        self.depth = depth;
-    }
-
-    fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
-        self.left.accumulate(&block)?;
-        self.right.accumulate(&block)
-    }
-
-    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
-        Ok([
-            &self.left.accumulate_result()?[..],
-            &self.right.accumulate_result()?[..]
-        ]
-        .concat())
-    }
-
-    fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        self.left.merge(states)?;
-        self.right.merge(states)
-    }
-
-    fn merge_result(&self) -> Result<DataValue> {
-        DataValueArithmetic::data_value_arithmetic_op(
-            self.op.clone(),
-            self.left.merge_result()?,
-            self.right.merge_result()?
-        )
-    }
-
-    fn has_aggregator(&self) -> bool {
-        self.left.has_aggregator() || self.right.has_aggregator()
     }
 }
 
