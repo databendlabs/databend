@@ -36,6 +36,19 @@ struct ProjectionPushDownImpl {
 }
 
 impl<'plan> PlanVisitor<'plan> for ProjectionPushDownImpl {
+    fn visit_plan_node(&mut self, plan: &PlanNode) {
+        match plan {
+            PlanNode::AggregatorPartial(plan) => self.visit_aggregate_partial(plan),
+            PlanNode::AggregatorFinal(plan) => self.visit_aggregate_final(plan),
+            PlanNode::Empty(plan) => self.visit_empty(plan),
+            PlanNode::Projection(plan) => self.visit_projection(plan),
+            PlanNode::Filter(plan) => self.visit_filter(plan),
+            PlanNode::Sort(plan) => self.visit_sort(plan),
+            PlanNode::ReadSource(plan) => self.visit_read_data_source(plan),
+            _ => self.visit(plan)
+        }
+    }
+
     fn visit_projection(&mut self, plan: &ProjectionPlan) {
         if self.state.is_err() {
             return;
@@ -45,9 +58,10 @@ impl<'plan> PlanVisitor<'plan> for ProjectionPushDownImpl {
             return;
         }
         self.has_projection = true;
-        self.visit(&plan.input);
+        self.visit_plan_node(&plan.input);
         let mut new_plan = plan.clone();
-        new_plan.set_input(&self.new_plan);
+        // TODO: check result
+        new_plan.set_input(&self.new_plan).unwrap();
         self.new_plan = PlanNode::Projection(new_plan);
     }
 
@@ -59,9 +73,10 @@ impl<'plan> PlanVisitor<'plan> for ProjectionPushDownImpl {
             self.state = Result::Err(e);
             return;
         }
-        self.visit(&plan.input);
+        self.visit_plan_node(&plan.input);
         let mut new_plan = plan.clone();
-        new_plan.set_input(&self.new_plan);
+        // TODO: check result
+        new_plan.set_input(&self.new_plan).unwrap();
         self.new_plan = PlanNode::Filter(new_plan);
     }
 
@@ -76,9 +91,10 @@ impl<'plan> PlanVisitor<'plan> for ProjectionPushDownImpl {
             self.state = Result::Err(e);
             return;
         }
-        self.visit(&plan.input);
+        self.visit_plan_node(&plan.input);
         let mut new_plan = plan.clone();
-        new_plan.set_input(&self.new_plan);
+        // TODO: check result
+        new_plan.set_input(&self.new_plan).unwrap();
         self.new_plan = PlanNode::AggregatorPartial(new_plan);
     }
 
@@ -93,9 +109,10 @@ impl<'plan> PlanVisitor<'plan> for ProjectionPushDownImpl {
             self.state = Result::Err(e);
             return;
         }
-        self.visit(&plan.input);
+        self.visit_plan_node(&plan.input);
         let mut new_plan = plan.clone();
-        new_plan.set_input(&self.new_plan);
+        // TODO: check result
+        new_plan.set_input(&self.new_plan).unwrap();
         self.new_plan = PlanNode::AggregatorFinal(new_plan);
     }
 
@@ -107,9 +124,10 @@ impl<'plan> PlanVisitor<'plan> for ProjectionPushDownImpl {
             self.state = Result::Err(e);
             return;
         }
-        self.visit(&plan.input);
+        self.visit_plan_node(&plan.input);
         let mut new_plan = plan.clone();
-        new_plan.set_input(&self.new_plan);
+        // TODO: check result
+        new_plan.set_input(&self.new_plan).unwrap();
         self.new_plan = PlanNode::Sort(new_plan);
     }
 
@@ -170,7 +188,8 @@ impl ProjectionPushDownImpl {
         }
         self.visit_plan_node(&plan.input());
         let mut new_plan = plan.clone();
-        new_plan.set_input(&self.new_plan);
+        // TODO: check result
+        new_plan.set_input(&self.new_plan).unwrap();
         self.new_plan = new_plan;
     }
 
