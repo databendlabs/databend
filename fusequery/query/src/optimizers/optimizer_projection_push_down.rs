@@ -60,8 +60,7 @@ impl<'plan> PlanVisitor<'plan> for ProjectionPushDownImpl {
         self.has_projection = true;
         self.visit_plan_node(&plan.input);
         let mut new_plan = plan.clone();
-        // TODO: check result
-        new_plan.set_input(&self.new_plan).unwrap();
+        new_plan.set_input(&self.new_plan);
         self.new_plan = PlanNode::Projection(new_plan);
     }
 
@@ -75,8 +74,7 @@ impl<'plan> PlanVisitor<'plan> for ProjectionPushDownImpl {
         }
         self.visit_plan_node(&plan.input);
         let mut new_plan = plan.clone();
-        // TODO: check result
-        new_plan.set_input(&self.new_plan).unwrap();
+        new_plan.set_input(&self.new_plan);
         self.new_plan = PlanNode::Filter(new_plan);
     }
 
@@ -93,8 +91,7 @@ impl<'plan> PlanVisitor<'plan> for ProjectionPushDownImpl {
         }
         self.visit_plan_node(&plan.input);
         let mut new_plan = plan.clone();
-        // TODO: check result
-        new_plan.set_input(&self.new_plan).unwrap();
+        new_plan.set_input(&self.new_plan);
         self.new_plan = PlanNode::AggregatorPartial(new_plan);
     }
 
@@ -111,8 +108,7 @@ impl<'plan> PlanVisitor<'plan> for ProjectionPushDownImpl {
         }
         self.visit_plan_node(&plan.input);
         let mut new_plan = plan.clone();
-        // TODO: check result
-        new_plan.set_input(&self.new_plan).unwrap();
+        new_plan.set_input(&self.new_plan);
         self.new_plan = PlanNode::AggregatorFinal(new_plan);
     }
 
@@ -126,8 +122,7 @@ impl<'plan> PlanVisitor<'plan> for ProjectionPushDownImpl {
         }
         self.visit_plan_node(&plan.input);
         let mut new_plan = plan.clone();
-        // TODO: check result
-        new_plan.set_input(&self.new_plan).unwrap();
+        new_plan.set_input(&self.new_plan);
         self.new_plan = PlanNode::Sort(new_plan);
     }
 
@@ -188,8 +183,7 @@ impl ProjectionPushDownImpl {
         }
         self.visit_plan_node(&plan.input());
         let mut new_plan = plan.clone();
-        // TODO: check result
-        new_plan.set_input(&self.new_plan).unwrap();
+        new_plan.set_input(&self.new_plan);
         self.new_plan = new_plan;
     }
 

@@ -5,7 +5,6 @@
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
-use common_exception::Result;
 
 use crate::PlanNode;
 
@@ -35,8 +34,7 @@ impl StagePlan {
         self.input.clone()
     }
 
-    pub fn set_input(&mut self, input: &PlanNode) -> Result<()> {
+        pub fn set_input(&mut self, input: &PlanNode) {
         self.input = Arc::new(input.clone());
-        Ok(())
     }
 }
