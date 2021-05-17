@@ -132,6 +132,14 @@ impl IDataSource for DataSource {
         Ok(database.clone())
     }
 
+    fn get_databases(&self) -> Result<Vec<String>> {
+        let mut results = vec![];
+        for (k, _v) in self.databases.read().iter() {
+            results.push(k.clone());
+        }
+        Ok(results)
+    }
+
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
         let db_lock = self.databases.read();
         let database = db_lock.get(db_name).ok_or_else(|| {
@@ -143,14 +151,6 @@ impl IDataSource for DataSource {
 
         let table = database.get_table(table_name)?;
         Ok(table.clone())
-    }
-
-    fn get_databases(&self) -> Result<Vec<String>> {
-        let mut results = vec![];
-        for (k, _v) in self.databases.read().iter() {
-            results.push(k.clone());
-        }
-        Ok(results)
     }
 
     fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>> {
