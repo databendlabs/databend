@@ -13,6 +13,7 @@ mod optimizer;
 mod optimizer_alias_push_down;
 mod optimizer_limit_push_down;
 mod optimizer_projection_push_down;
+mod optimizer_scatters;
 
 pub use optimizer::IOptimizer;
 pub use optimizer::Optimizer;

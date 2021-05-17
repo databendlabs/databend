@@ -29,7 +29,6 @@ use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SortPlan;
 use crate::StagePlan;
-use crate::StageState;
 
 pub enum AggregateMode {
     Partial,
@@ -58,14 +57,14 @@ impl PlanBuilder {
     }
 
     /// Apply a stage.
-    pub fn stage(&self, uuid: String, state: StageState) -> Result<Self> {
-        Ok(Self::from(&PlanNode::Stage(StagePlan {
-            uuid,
-            id: 0,
-            state,
-            input: Arc::new(self.plan.clone())
-        })))
-    }
+    // pub fn stage(&self, uuid: String, state: StageState) -> Result<Self> {
+    //     Ok(Self::from(&PlanNode::Stage(StagePlan {
+    //         uuid,
+    //         id: 0,
+    //         state,
+    //         input: Arc::new(self.plan.clone())
+    //     })))
+    // }
 
     /// Apply a expression and merge the fields with exprs.
     pub fn expression(&self, exprs: &[ExpressionAction], desc: &str) -> Result<Self> {

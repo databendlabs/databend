@@ -32,8 +32,8 @@ impl PlanNode {
                         PlanNode::Stage(plan) => {
                             write!(
                                 f,
-                                "RedistributeStage[state: {:?}, id: {}]",
-                                plan.state, plan.id
+                                "RedistributeStage[expr: {:?}]",
+                                plan.scatters_expr,
                             )?;
                             Ok(true)
                         }

@@ -12,6 +12,7 @@ use crate::configs::Config;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::Session;
 use crate::sessions::SessionRef;
+use common_infallible::RwLock;
 
 /// Start services and return the random address.
 pub async fn try_start_service(nums: usize) -> Result<Vec<String>> {
@@ -42,7 +43,8 @@ pub async fn try_create_context_with_nodes(nums: usize) -> Result<FuseQueryConte
             name: format!("node{}", i),
             priority: 10,
             address: addr.clone(),
-            local: false
+            local: false,
+            // client: RwLock::new(None),
         })?;
     }
     Ok(ctx)
@@ -63,7 +65,8 @@ pub async fn try_create_context_with_nodes_and_priority(
             name: format!("node{}", i),
             priority: p[i],
             address: addr.clone(),
-            local: false
+            local: false,
+            // client: RwLock::new(None),
         })?;
     }
     Ok(ctx)

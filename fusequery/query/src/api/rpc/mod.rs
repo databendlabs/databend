@@ -19,12 +19,14 @@ mod flight_service_new;
 mod flight_dispatcher;
 mod flight_data_stream;
 mod flight_scatter;
+mod flight_client_new;
 
 
 pub use flight_service::FlightService;
 pub use flight_service::FlightStream;
 pub use flight_dispatcher::FlightDispatcher;
 pub use flight_dispatcher::StreamInfo;
+pub use flight_client_new::FlightClient;
 
 
 use common_exception::ErrorCodes;
@@ -32,4 +34,8 @@ use tonic::Status;
 
 pub fn to_status(error: ErrorCodes) -> Status {
     Status::internal(error.to_string())
+}
+
+pub fn from_status(status: Status) -> ErrorCodes {
+
 }

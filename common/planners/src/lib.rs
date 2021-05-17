@@ -102,6 +102,5 @@ pub use crate::plan_setting::SettingPlan;
 pub use crate::plan_setting::VarValue;
 pub use crate::plan_sort::SortPlan;
 pub use crate::plan_stage::StagePlan;
-pub use crate::plan_stage::StageState;
 pub use crate::plan_statistics::Statistics;
 pub use crate::plan_use_database::UseDatabasePlan;

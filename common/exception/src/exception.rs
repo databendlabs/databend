@@ -96,6 +96,7 @@ build_exceptions! {
     BadColumnarType(29),
     UnknownColumn(30),
     BadScatterExpression(31),
+    EmptyDataFromServer(32),
 
     UnknownException(1000),
     TokioError(1001)

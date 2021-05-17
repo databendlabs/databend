@@ -72,6 +72,7 @@ mod handlers {
     use crate::api::http::v1::cluster::ClusterNodeRequest;
     use crate::clusters::ClusterRef;
     use crate::clusters::Node;
+    use common_infallible::RwLock;
 
     pub async fn list_node(
         cluster: ClusterRef
@@ -92,7 +93,8 @@ mod handlers {
                 name: req.name,
                 priority: req.priority,
                 address: req.address,
-                local: false
+                local: false,
+                // client: RwLock::new(None),
             })
             .unwrap();
         Ok(warp::http::StatusCode::OK)

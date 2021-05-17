@@ -19,7 +19,6 @@ use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_planners::SettingPlan;
-use common_planners::StageState;
 use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
 use sqlparser::ast::FunctionArg;
@@ -573,9 +572,9 @@ impl PlanParser {
         PlanBuilder::from(&input)
             .aggregate_partial(aggr_expr, &group_expr)
             // TODO self.ctx.get_id().unwrap()
-            .and_then(|builder| {
-                builder.stage(self.ctx.get_id().unwrap(), StageState::AggregatorMerge)
-            })
+            // .and_then(|builder| {
+            //     // builder.stage(self.ctx.get_id().unwrap(), StageState::AggregatorMerge)
+            // })
             .and_then(|builder| builder.aggregate_final(aggr_expr, &group_expr))
             .and_then(|builder| builder.build())
     }

@@ -95,25 +95,25 @@ impl PipelineBuilder {
     }
 
     fn visit_stage_plan(&self, pipeline: &mut Pipeline, plan: &&StagePlan) -> Result<bool> {
-        let executors = PlanScheduler::reschedule(self.ctx.clone(), &plan.input.as_ref())?;
-
-        // If the executors is not empty.
-        if !executors.is_empty() {
-            // Reset.
-            pipeline.reset();
-            self.ctx.reset()?;
-
-            // Add remote transform as the new source.
-            for (address, remote_plan) in executors.iter() {
-                let remote_transform = RemoteTransform::try_create(
-                    self.ctx.clone(),
-                    self.ctx.get_id()?,
-                    address.clone(),
-                    remote_plan.clone()
-                )?;
-                pipeline.add_source(Arc::new(remote_transform))?;
-            }
-        }
+        // let executors = PlanScheduler::reschedule(self.ctx.clone(), &plan.input.as_ref())?;
+        //
+        // // If the executors is not empty.
+        // if !executors.is_empty() {
+        //     // Reset.
+        //     pipeline.reset();
+        //     self.ctx.reset()?;
+        //
+        //     // Add remote transform as the new source.
+        //     for (address, remote_plan) in executors.iter() {
+        //         let remote_transform = RemoteTransform::try_create(
+        //             self.ctx.clone(),
+        //             self.ctx.get_id()?,
+        //             address.clone(),
+        //             remote_plan.clone()
+        //         )?;
+        //         pipeline.add_source(Arc::new(remote_transform))?;
+        //     }
+        // }
         Ok(true)
     }
 

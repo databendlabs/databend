@@ -7,23 +7,24 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 
-use crate::PlanNode;
+use crate::{PlanNode, ExpressionAction};
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub enum StageState {
-    Normal,
-    Through,
-    SortMerge,
-    GroupByMerge,
-    AggregatorMerge
-}
+// #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+// pub enum StageState {
+//     Normal,
+//     Through,
+//     SortMerge,
+//     GroupByMerge,
+//     AggregatorMerge
+// }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct StagePlan {
-    pub uuid: String,
-    pub id: usize,
-    pub state: StageState,
-    pub input: Arc<PlanNode>
+    // pub uuid: String,
+    // pub id: usize,
+    // pub state: StageState,
+    pub input: Arc<PlanNode>,
+    pub scatters_expr: ExpressionAction
 }
 
 impl StagePlan {
