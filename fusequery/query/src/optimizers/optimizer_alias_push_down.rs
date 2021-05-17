@@ -30,7 +30,7 @@ impl IOptimizer for AliasPushDownOptimizer {
     }
 
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
-        let mut rewritten_node = PlanNode::Empty(EmptyPlan {
+        let mut rewritten_plan = PlanNode::Empty(EmptyPlan {
             schema: Arc::new(DataSchema::empty())
         });
 
@@ -40,49 +40,49 @@ impl IOptimizer for AliasPushDownOptimizer {
                 PlanNode::Filter(plan) => {
                     let rewritten_expr =
                         PlanRewriter::rewrite_alias_expr(&projection_map, &plan.predicate)?;
-                    let mut new_node = PlanNode::Filter(FilterPlan {
+                    let mut new_plan = PlanNode::Filter(FilterPlan {
                         predicate: rewritten_expr,
-                        input: rewritten_node.input()
+                        input: Arc::from(PlanNode::Empty(EmptyPlan::create()))
                     });
-                    new_node.set_input(&rewritten_node);
-                    rewritten_node = new_node;
+                    new_plan.set_input(&rewritten_plan);
+                    rewritten_plan = new_plan;
                 }
                 PlanNode::AggregatorPartial(plan) => {
                     let aggr_expr =
                         PlanRewriter::rewrite_alias_exprs(&projection_map, &plan.aggr_expr)?;
                     let group_expr =
                         PlanRewriter::rewrite_alias_exprs(&projection_map, &plan.group_expr)?;
-                    let mut new_node = PlanNode::AggregatorPartial(AggregatorPartialPlan {
+                    let mut new_plan = PlanNode::AggregatorPartial(AggregatorPartialPlan {
                         group_expr,
                         aggr_expr,
-                        input: rewritten_node.input()
+                        input: Arc::from(PlanNode::Empty(EmptyPlan::create()))
                     });
-                    new_node.set_input(&rewritten_node);
-                    rewritten_node = new_node;
+                    new_plan.set_input(&rewritten_plan);
+                    rewritten_plan = new_plan;
                 }
                 PlanNode::AggregatorFinal(plan) => {
                     let aggr_expr =
                         PlanRewriter::rewrite_alias_exprs(&projection_map, &plan.aggr_expr)?;
                     let group_expr =
                         PlanRewriter::rewrite_alias_exprs(&projection_map, &plan.group_expr)?;
-                    let mut new_node = PlanNode::AggregatorFinal(AggregatorFinalPlan {
+                    let mut new_plan = PlanNode::AggregatorFinal(AggregatorFinalPlan {
                         group_expr,
                         aggr_expr,
-                        input: rewritten_node.input(),
+                        input: Arc::from(PlanNode::Empty(EmptyPlan::create())),
                         schema: plan.schema()
                     });
-                    new_node.set_input(&rewritten_node);
-                    rewritten_node = new_node;
+                    new_plan.set_input(&rewritten_plan);
+                    rewritten_plan = new_plan;
                 }
                 _ => {
-                    let mut clone_node = node.clone();
-                    clone_node.set_input(&rewritten_node);
-                    rewritten_node = clone_node;
+                    let mut new_plan = node.clone();
+                    new_plan.set_input(&rewritten_plan);
+                    rewritten_plan = new_plan;
                 }
             }
             Ok(true)
         })?;
 
-        Ok(rewritten_node)
+        Ok(rewritten_plan)
     }
 }
