@@ -269,7 +269,11 @@ impl PlanRewriter {
                     map.insert(field.name().clone(), expr.clone());
                 }
             }
-            other => Self::projections_to_map(other.input().as_ref(), map)?
+            other => {
+                for child in other.children() {
+                    Self::projections_to_map(child.as_ref(), map)?;
+                }
+            }
         }
         Ok(())
     }

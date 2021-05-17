@@ -44,7 +44,7 @@ impl IOptimizer for AliasPushDownOptimizer {
                         predicate: rewritten_expr,
                         input: Arc::from(PlanNode::Empty(EmptyPlan::create()))
                     });
-                    new_plan.set_input(&rewritten_plan);
+                    new_plan.set_child(0, &rewritten_plan);
                     rewritten_plan = new_plan;
                 }
                 PlanNode::AggregatorPartial(plan) => {
@@ -57,7 +57,7 @@ impl IOptimizer for AliasPushDownOptimizer {
                         aggr_expr,
                         input: Arc::from(PlanNode::Empty(EmptyPlan::create()))
                     });
-                    new_plan.set_input(&rewritten_plan);
+                    new_plan.set_child(0, &rewritten_plan);
                     rewritten_plan = new_plan;
                 }
                 PlanNode::AggregatorFinal(plan) => {
@@ -71,12 +71,12 @@ impl IOptimizer for AliasPushDownOptimizer {
                         input: Arc::from(PlanNode::Empty(EmptyPlan::create())),
                         schema: plan.schema()
                     });
-                    new_plan.set_input(&rewritten_plan);
+                    new_plan.set_child(0, &rewritten_plan);
                     rewritten_plan = new_plan;
                 }
                 _ => {
                     let mut new_plan = node.clone();
-                    new_plan.set_input(&rewritten_plan);
+                    new_plan.set_child(0, &rewritten_plan);
                     rewritten_plan = new_plan;
                 }
             }
