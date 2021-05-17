@@ -11,6 +11,7 @@ use common_flights::StoreClient;
 use common_infallible::RwLock;
 use common_planners::CreateDatabasePlan;
 use common_planners::DatabaseEngineType;
+use common_planners::DropDatabasePlan;
 
 use crate::configs::Config;
 use crate::datasources::local::LocalDatabase;
@@ -30,7 +31,7 @@ pub trait IDataSource: Sync + Send {
     fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>>;
     fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>>;
     async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
-    async fn drop_database(&self, db: &str) -> Result<()>;
+    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
 }
 
 // Maintain all the databases of user.
@@ -200,19 +201,19 @@ impl IDataSource for DataSource {
         Ok(())
     }
 
-    async fn drop_database(&self, db: &str) -> Result<()> {
-        let database = self.get_database(db)?;
+    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
+        let database = self.get_database(plan.db.as_str())?;
         match database.engine() {
             DatabaseEngineType::Local => {
-                self.databases.write().remove(db);
+                self.databases.write().remove(plan.db.as_str());
             }
             DatabaseEngineType::Remote => {
                 let mut client = self.try_get_client().await?;
                 client
-                    .drop_database(db.to_string())
+                    .drop_database(plan.clone())
                     .await
                     .map(|_v| {
-                        self.databases.write().remove(db);
+                        self.databases.write().remove(plan.db.as_str());
                     })
                     .map_err(ErrorCodes::from_anyhow)?;
             }

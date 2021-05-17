@@ -11,6 +11,7 @@ use common_arrow::arrow_flight::BasicAuth;
 use common_arrow::arrow_flight::HandshakeRequest;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
+use common_planners::DropDatabasePlan;
 use futures::stream;
 use futures::StreamExt;
 use log::info;
@@ -69,8 +70,11 @@ impl StoreClient {
     }
 
     /// Drop database call.
-    pub async fn drop_database(&mut self, db: String) -> anyhow::Result<DropDatabaseActionResult> {
-        let action = StoreDoAction::DropDatabase(DropDatabaseAction { db });
+    pub async fn drop_database(
+        &mut self,
+        plan: DropDatabasePlan
+    ) -> anyhow::Result<DropDatabaseActionResult> {
+        let action = StoreDoAction::DropDatabase(DropDatabaseAction { plan });
         let rst = self.do_action(&action).await?;
 
         if let StoreDoActionResult::DropDatabase(rst) = rst {
