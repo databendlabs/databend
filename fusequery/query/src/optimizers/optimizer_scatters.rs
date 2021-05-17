@@ -25,10 +25,10 @@ impl IOptimizer for ScattersOptimizer {
 
         plan.walk_postorder(|node| -> Result<bool> {
             match node {
-                PlanNode::AggregatorPartial(plan) => {
+                PlanNode::AggregatorPartial(plan) if !plan.group_expr.is_empty() => {
                     rewritten_node = PlanNode::Stage(StagePlan {
                         input: Arc::new(node.clone()),
-                        scatters_expr: plan.group_expr[0].clone()
+                        scatters_expr: plan.group_expr[0].clone(),
                     })
                 }
                 _ => {
