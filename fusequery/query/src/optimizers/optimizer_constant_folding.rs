@@ -39,14 +39,14 @@ fn constant_folding(schema: DataSchemaRef, expr: ExpressionAction) -> Result<Exp
                     (Some(l), Some(r)) => ExpressionAction::Literal(DataType::Boolean(Some(l == r))),
                     _ => ExpressionAction::Literal(DataType::Boolean(None))
                 },
-                (ExpressionAction::Literal(DataType::Boolean(b)), _) if self.is_boolean_type(&right) => {
+                (ExpressionAction::Literal(DataType::Boolean(b)), _) if is_boolean_type(schema, &right) => {
                     match b {
                         Some(true) => *right,
                         Some(false) => ExpressionAction::Not(right),
                         None => ExpressionAction::Literal(DataType::Boolean(None))
                     }
                 }
-                (_, ExpressionAction::Literal(DataType::Boolean(b))) if self.is_boolean_type(&left) => {
+                (_, ExpressionAction::Literal(DataType::Boolean(b))) if self.is_boolean_type(schema, &left) => {
                     match b {
                         Some(true) => *left,
                         Some(false) => ExpressionAction::Not(left),
@@ -55,7 +55,7 @@ fn constant_folding(schema: DataSchemaRef, expr: ExpressionAction) -> Result<Exp
                 }
                 _ => ExpressionAction::BinaryExpression {
                     left,
-                    op: Operator::Eq,
+                    op: "=".to_string(),
                     right
                 }
             },
@@ -67,14 +67,14 @@ fn constant_folding(schema: DataSchemaRef, expr: ExpressionAction) -> Result<Exp
                     (Some(l), Some(r)) => ExpressionAction::Literal(DataType::Boolean(Some(l != r))),
                     _ => ExpressionAction::Literal(DataType::Boolean(None))
                 },
-                (ExpressionAction::Literal(DataType::Boolean(b)), _) if self.is_boolean_type(&right) => {
+                (ExpressionAction::Literal(DataType::Boolean(b)), _) if self.is_boolean_type(schema, &right) => {
                     match b {
                         Some(true) => ExpressionAction::Not(right),
                         Some(false) => *right,
                         None => ExpressionAction::Literal(DataType::Boolean(None))
                     }
                 }
-                (_, ExpressionAction::Literal(DataType::Boolean(b))) if self.is_boolean_type(&left) => {
+                (_, ExpressionAction::Literal(DataType::Boolean(b))) if self.is_boolean_type(schema, &left) => {
                     match b {
                         Some(true) => ExpressionAction::Not(left),
                         Some(false) => *left,
@@ -83,14 +83,14 @@ fn constant_folding(schema: DataSchemaRef, expr: ExpressionAction) -> Result<Exp
                 }
                 _ => ExpressionAction::BinaryExpression {
                     left,
-                    op: Operator::NotEq,
+                    op: "!=".to_string(),
                     right
                 }
             },
             _ => ExpressionAction::BinaryExpression { left, op, right }
         },
         expr => {
-            // no rewrite possible
+            // do nothing
             expr
         }
     };
