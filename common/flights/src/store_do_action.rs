@@ -34,6 +34,13 @@ pub struct CreateDatabaseActionResult {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct DropDatabaseAction {
+    pub db: String
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct DropDatabaseActionResult {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CreateTableAction {
     pub plan: CreateTablePlan
 }
@@ -60,6 +67,7 @@ pub struct GetTableActionResult {
 pub enum StoreDoAction {
     ReadPlan(ReadPlanAction),
     CreateDatabase(CreateDatabaseAction),
+    DropDatabase(DropDatabaseAction),
     CreateTable(CreateTableAction),
     GetTable(GetTableAction)
 }
@@ -68,6 +76,7 @@ pub enum StoreDoAction {
 pub enum StoreDoActionResult {
     ReadPlan(ReadPlanActionResult),
     CreateDatabase(CreateDatabaseActionResult),
+    DropDatabase(DropDatabaseActionResult),
     CreateTable(CreateTableActionResult),
     GetTable(GetTableActionResult)
 }

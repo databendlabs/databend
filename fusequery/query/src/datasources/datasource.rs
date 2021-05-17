@@ -30,6 +30,7 @@ pub trait IDataSource: Sync + Send {
     fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>>;
     fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>>;
     async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
+    async fn drop_database(&self, db: &str) -> Result<()>;
 }
 
 // Maintain all the databases of user.
@@ -184,17 +185,36 @@ impl IDataSource for DataSource {
             }
             DatabaseEngineType::Remote => {
                 let mut client = self.try_get_client().await?;
-                let _action_rst = client
+                client
                     .create_database(plan.clone())
                     .await
+                    .map(|_v| {
+                        let database = RemoteDatabase::create(self.conf.clone(), plan.db.clone());
+                        self.databases
+                            .write()
+                            .insert(plan.db.clone(), Arc::new(database));
+                    })
                     .map_err(ErrorCodes::from_anyhow)?;
-                // TODO add db id to cache
+            }
+        }
+        Ok(())
+    }
 
-                // Add local cache.
-                let database = RemoteDatabase::create(self.conf.clone(), plan.db.clone());
-                self.databases
-                    .write()
-                    .insert(plan.db.clone(), Arc::new(database));
+    async fn drop_database(&self, db: &str) -> Result<()> {
+        let database = self.get_database(db)?;
+        match database.engine() {
+            DatabaseEngineType::Local => {
+                self.databases.write().remove(db);
+            }
+            DatabaseEngineType::Remote => {
+                let mut client = self.try_get_client().await?;
+                client
+                    .drop_database(db.to_string())
+                    .await
+                    .map(|_v| {
+                        self.databases.write().remove(db);
+                    })
+                    .map_err(ErrorCodes::from_anyhow)?;
             }
         }
         Ok(())

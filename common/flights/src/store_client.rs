@@ -22,6 +22,8 @@ use crate::flight_result_to_str;
 use crate::status_err;
 use crate::store_do_action::CreateDatabaseAction;
 use crate::store_do_action::CreateTableAction;
+use crate::store_do_action::DropDatabaseAction;
+use crate::store_do_action::DropDatabaseActionResult;
 use crate::store_do_action::StoreDoAction;
 use crate::store_do_action::StoreDoActionResult;
 use crate::CreateDatabaseActionResult;
@@ -61,6 +63,17 @@ impl StoreClient {
         let rst = self.do_action(&action).await?;
 
         if let StoreDoActionResult::CreateDatabase(rst) = rst {
+            return Ok(rst);
+        }
+        anyhow::bail!("invalid response")
+    }
+
+    /// Drop database call.
+    pub async fn drop_database(&mut self, db: String) -> anyhow::Result<DropDatabaseActionResult> {
+        let action = StoreDoAction::DropDatabase(DropDatabaseAction { db });
+        let rst = self.do_action(&action).await?;
+
+        if let StoreDoActionResult::DropDatabase(rst) = rst {
             return Ok(rst);
         }
         anyhow::bail!("invalid response")
