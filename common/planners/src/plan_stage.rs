@@ -8,22 +8,21 @@ use common_datavalues::DataSchemaRef;
 
 use crate::{PlanNode, ExpressionAction};
 
-// #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-// pub enum StageState {
-//     Normal,
-//     Through,
-//     SortMerge,
-//     GroupByMerge,
-//     AggregatorMerge
-// }
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub enum StageKind {
+    Normal,
+    Expansive,
+    Convergent,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct StagePlan {
     // pub uuid: String,
     // pub id: usize,
     // pub state: StageState,
+    pub kind: StageKind,
     pub input: Arc<PlanNode>,
-    pub scatters_expr: ExpressionAction
+    pub scatters_expr: ExpressionAction,
 }
 
 impl StagePlan {
