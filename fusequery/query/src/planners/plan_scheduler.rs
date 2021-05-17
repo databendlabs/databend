@@ -119,7 +119,7 @@ impl PlanScheduler {
                         rewritten_node = PlanNode::ReadSource(new_source_plan.clone());
                     } else {
                         let mut clone_node = node.clone();
-                        clone_node.set_input(&rewritten_node)?;
+                        clone_node.set_input(&rewritten_node);
                         rewritten_node = clone_node;
                     }
                     Ok(true)

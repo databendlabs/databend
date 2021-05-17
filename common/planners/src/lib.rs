@@ -64,6 +64,7 @@ mod plan_sort;
 mod plan_stage;
 mod plan_statistics;
 mod plan_use_database;
+mod plan_visitor;
 mod plan_walker;
 
 pub use crate::plan_aggregator_final::AggregatorFinalPlan;
@@ -104,3 +105,4 @@ pub use crate::plan_sort::SortPlan;
 pub use crate::plan_stage::StagePlan;
 pub use crate::plan_statistics::Statistics;
 pub use crate::plan_use_database::UseDatabasePlan;
+pub use crate::plan_visitor::PlanVisitor;

@@ -145,10 +145,10 @@ nav:
       - Show Commands:
           - SHOW DATABASE: sqlstatement/show-commands/show-databases.md
       - System Tables: system/system-tables.md
-      - Contributing: development/contributing.md
-      - RFCs:
-          - FuseQuery Join: rfcs/query/2021-05-01-join-framework-design.md
-          - FuseStore Design: rfcs/store/2021-04-22-store-design.md
+  - RFCs:
+      - FuseQuery Join: rfcs/query/2021-05-01-join-framework-design.md
+      - FuseStore Design: rfcs/store/2021-04-22-store-design.md
+  - Contributing: development/contributing.md
   - Performance: overview/performance.md
 
 # Google Analytics
