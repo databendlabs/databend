@@ -20,11 +20,11 @@ use crate::tests::rand_local_addr;
 async fn test_meta_server_set_get() -> anyhow::Result<()> {
     let addr = rand_local_addr();
 
-    let mn = MetaNode::new(0).await;
-    let rst = mn.boot(addr.clone()).await;
+    let rst = MetaNode::boot(0, addr.clone()).await;
     assert!(rst.is_ok());
+    let mn = rst.unwrap();
 
-    let meta_srv_impl = MetaServiceImpl::create(mn).await;
+    let meta_srv_impl = MetaServiceImpl::create(mn);
     let meta_srv = MetaServiceServer::new(meta_srv_impl);
 
     serve_grpc!(addr, meta_srv);
@@ -35,14 +35,21 @@ async fn test_meta_server_set_get() -> anyhow::Result<()> {
         // add: ok
         let req = ClientRequest {
             txid: None,
-            cmd: Cmd::Add {
+            cmd: Cmd::AddFile {
                 key: "foo".to_string(),
                 value: "bar".to_string()
             }
         };
         let rst = client.write(req).await?.into_inner();
         let resp: ClientResponse = rst.into();
-        assert_eq!("bar".to_string(), resp.result.unwrap());
+        match resp {
+            ClientResponse::String { prev: _, result } => {
+                assert_eq!("bar".to_string(), result.unwrap());
+            }
+            _ => {
+                panic!("not string")
+            }
+        }
 
         // get the stored value
 
@@ -55,27 +62,41 @@ async fn test_meta_server_set_get() -> anyhow::Result<()> {
         // add: conflict with existent.
         let req = ClientRequest {
             txid: None,
-            cmd: Cmd::Add {
+            cmd: Cmd::AddFile {
                 key: "foo".to_string(),
                 value: "bar".to_string()
             }
         };
         let rst = client.write(req).await?.into_inner();
         let resp: ClientResponse = rst.into();
-        assert!(resp.result.is_none());
+        match resp {
+            ClientResponse::String { prev: _, result } => {
+                assert!(result.is_none());
+            }
+            _ => {
+                panic!("not string")
+            }
+        }
     }
     {
         // set: overrde. ok.
         let req = ClientRequest {
             txid: None,
-            cmd: Cmd::Set {
+            cmd: Cmd::SetFile {
                 key: "foo".to_string(),
                 value: "bar2".to_string()
             }
         };
         let rst = client.write(req).await?.into_inner();
         let resp: ClientResponse = rst.into();
-        assert_eq!(Some("bar2".to_string()), resp.result);
+        match resp {
+            ClientResponse::String { prev: _, result } => {
+                assert_eq!(Some("bar2".to_string()), result);
+            }
+            _ => {
+                panic!("not string")
+            }
+        }
 
         // get the stored value
 

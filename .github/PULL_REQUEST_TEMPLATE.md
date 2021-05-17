@@ -1,8 +1,6 @@
 ## Summary
 
-<!--
-Write your motivation for proposed changes here.
--->
+Summary about this PR
 
 ## Changelog
 
@@ -17,12 +15,10 @@ Write your motivation for proposed changes here.
 
 ## Related Issues
 
-<!--
-The issue fixed or related of this patch if have.
--->
+Fixes #issue
 
 ## Test Plan
 
-<!--
-Share your test plan here. If you changed code, please provide us with clear instructions for verifying that your changes work.
--->
+Unit Tests
+Stateless Tests
+

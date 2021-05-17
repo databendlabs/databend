@@ -7,7 +7,7 @@ Retrieves data from a table.
 
 ## Syntax
 
-```sql
+```
 SELECT
     [ALL | DISTINCT]
     select_expr [[AS] alias], ...
@@ -22,11 +22,13 @@ SELECT
     ]
 ```
 
-## Examples
+!!! note
+    numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
 
-### SELECT * FROM ...
-```sql
-mysql> SELECT * FROM numbers(3);
+## SELECT clause
+
+```
+mysql> SELECT number FROM numbers(3);
 +--------+
 | number |
 +--------+
@@ -36,21 +38,10 @@ mysql> SELECT * FROM numbers(3);
 +--------+
 ```
 
-### SELECT * FROM LIMIT
+## FROM clause
 
-```sql
-mysql> SELECT * FROM numbers(3) LIMIT 1;
-+--------+
-| number |
-+--------+
-|      0 |
-+--------+
 ```
-
-### SELECT * FROM ORDER BY ...
-
-```sql
-mysql> SELECT * FROM numbers(3) ORDER BY number asc;
+mysql> SELECT number FROM numbers(3) AS a; 
 +--------+
 | number |
 +--------+
@@ -58,48 +49,112 @@ mysql> SELECT * FROM numbers(3) ORDER BY number asc;
 |      1 |
 |      2 |
 +--------+
+```
 
-mysql> SELECT * FROM numbers(3) ORDER BY number desc;
+## WHERE clause
+
+```
+mysql> SELECT number FROM numbers(3) WHERE number > 1;
 +--------+
 | number |
 +--------+
 |      2 |
-|      1 |
-|      0 |
 +--------+
+1 row in set (0.00 sec)
 ```
 
-### SELECT * FROM GROUP BY ...
+## GROUP BY clause
 
-```sql
-mysql> SELECT number FROM numbers(10) GROUP BY number%3;
+```
+mysql> SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GROUP BY c1, c2;
++------+------+-------------+
+| c1   | c2   | MAX(number) |
++------+------+-------------+
+|    1 |    2 |        9995 |
+|    1 |    1 |        9997 |
+|    0 |    2 |        9998 |
+|    0 |    1 |        9994 |
+|    0 |    0 |        9996 |
+|    1 |    0 |        9999 |
++------+------+-------------+
+6 rows in set (0.00 sec)
+```
+
+## HAVING clause
+
+```
+mysql> SELECT number%2 as c1, number%3 as c2, MAX(number) as max FROM numbers(10000) GROUP BY c1, c2 HAVING max>9996;
++------+------+------+
+| c1   | c2   | max  |
++------+------+------+
+|    1 |    0 | 9999 |
+|    1 |    1 | 9997 |
+|    0 |    2 | 9998 |
++------+------+------+
+3 rows in set (0.00 sec)
+```
+
+## ORDER By clause
+
+```
+mysql> SELECT number FROM numbers(5) ORDER BY number ASC;
 +--------+
 | number |
 +--------+
 |      0 |
 |      1 |
 |      2 |
+|      3 |
+|      4 |
 +--------+
+5 rows in set (0.00 sec)
 
-mysql> SELECT MAX(number) FROM numbers(10) GROUP BY number%3;
-+-------------+
-| max(number) |
-+-------------+
-|           7 |
-|           8 |
-|           9 |
-+-------------+
+mysql> SELECT number FROM numbers(5) ORDER BY number DESC;
++--------+
+| number |
++--------+
+|      4 |
+|      3 |
+|      2 |
+|      1 |
+|      0 |
++--------+
+5 rows in set (0.00 sec)
+
+mysql> SELECT number%2 AS c1, number%3 AS c2  FROM numbers(5) ORDER BY c1 ASC, c2 DESC;
++------+------+
+| c1   | c2   |
++------+------+
+|    0 |    2 |
+|    0 |    1 |
+|    0 |    0 |
+|    1 |    1 |
+|    1 |    0 |
++------+------+
+5 rows in set (0.00 sec)
 ```
 
-### Nested Sub-Selects
+## LIMIT clause
+
+```
+mysql> SELECT number FROM numbers(1000000000) LIMIT 1;
++--------+
+| number |
++--------+
+|      0 |
++--------+
+1 row in set (0.00 sec)
+```
+
+## Nested Sub-Selects
 
 SELECT statements can be nested in queries.
 
-```sql
+```
 SELECT ... [SELECT ...[SELECT [...]]]
 ```
 
-```sql
+```
 mysql> SELECT MIN(number) FROM (SELECT number%3 AS number FROM numbers(10)) GROUP BY number%2;
 +-------------+
 | min(number) |

@@ -29,7 +29,7 @@ impl IProcessor for EmptyProcessor {
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> Result<()> {
         Result::Err(ErrorCodes::IllegalTransformConnectionState(
-            "Cannot call EmptyProcessor connect_to".to_string()
+            "Cannot call EmptyProcessor connect_to"
         ))
     }
 

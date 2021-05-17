@@ -11,7 +11,7 @@ The COUNT() function returns the number of records returned by a select query.
 
 ## Syntax
 
-```sql
+```
 COUNT(expression)
 ```
 
@@ -27,7 +27,10 @@ An integer.
 
 ## Examples
 
-```sql
+!!! note
+    numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
+
+```
 mysql> SELECT count(*) FROM numbers(3);
 +----------+
 | count(*) |

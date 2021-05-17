@@ -28,7 +28,7 @@ async fn test_transform_final_aggregator() -> anyhow::Result<()> {
 
     // Pipeline.
     let source = test_source.number_source_transform_for_test(200000)?;
-    let mut pipeline = Pipeline::create();
+    let mut pipeline = Pipeline::create(ctx.clone());
     pipeline.add_source(Arc::new(source))?;
     pipeline.add_simple_transform(|| {
         Ok(Box::new(AggregatorPartialTransform::try_create(

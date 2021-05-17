@@ -1,0 +1,40 @@
+name: Cancel stale runs
+
+on:
+  workflow_run:
+    workflows: ['Dev']
+    types: ['requested']
+
+jobs:
+  cancel-stale-workflow-runs:
+    name: "Cancel stale workflow runs"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: potiuk/cancel-workflow-runs@master
+        name: "Cancel stale UnitTest runs"
+        with:
+          cancelMode: allDuplicates
+          token: ${{ secrets.GITHUB_TOKEN }}
+          workflowFileName: unit-tests.yml
+          skipEventTypes: '["push", "schedule"]'
+      - uses: potiuk/cancel-workflow-runs@master
+        name: "Cancel stale Performance runs"
+        with:
+          cancelMode: allDuplicates
+          token: ${{ secrets.GITHUB_TOKEN }}
+          workflowFileName: performace-tests-standalone.yml
+          skipEventTypes: '["push", "schedule"]'
+      - uses: potiuk/cancel-workflow-runs@master
+        name: "Cancel stale Stateless Standalone runs"
+        with:
+          cancelMode: allDuplicates
+          token: ${{ secrets.GITHUB_TOKEN }}
+          workflowFileName: stateless-tests-stadnalone.yml
+          skipEventTypes: '["push", "schedule"]'
+      - uses: potiuk/cancel-workflow-runs@master
+        name: "Cancel stale Stateless Cluster runs"
+        with:
+          cancelMode: allDuplicates
+          token: ${{ secrets.GITHUB_TOKEN }}
+          workflowFileName: stateless-tests-cluster.yml
+          skipEventTypes: '["push", "schedule"]'

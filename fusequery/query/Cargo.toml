@@ -16,17 +16,18 @@ path = "src/bin/fuse-query.rs"
 common-arrow = {path = "../../common/arrow"}
 common-datablocks = {path = "../../common/datablocks"}
 common-datavalues = {path = "../../common/datavalues"}
+common-exception = {path = "../../common/exception"}
+common-ext = {path= "../../common/ext"}
 common-flights = {path = "../../common/flights"}
 common-functions = {path = "../../common/functions"}
 common-infallible = {path = "../../common/infallible"}
 common-planners = {path = "../../common/planners"}
 common-progress = {path = "../../common/progress"}
+common-runtime = {path = "../../common/runtime"}
 common-streams = {path = "../../common/streams"}
-common-exception = {path = "../../common/exception"}
-common-ext = {path= "../../common/ext"}
 
 # Github dependencies
-clickhouse-srv = { git = "https://github.com/sundy-li/clickhouse-svr", rev = "90041b9" }
+clickhouse-srv = { git = "https://github.com/sundy-li/clickhouse-svr", rev = "82a8aac" }
 
 # Crates.io dependencies
 ahash = "0.7.2"
@@ -38,8 +39,8 @@ futures = "0.3"
 indexmap = "1.6.1"
 lazy_static = "1.4.0"
 log = "0.4"
-metrics = "0.14.2"
-metrics-exporter-prometheus = "0.3.0"
+metrics = "0.15.1"
+metrics-exporter-prometheus = "0.4.0"
 msql-srv = "0.9"
 num = "0.4"
 num_cpus = "1.0"
@@ -52,7 +53,7 @@ sqlparser = "0.9"
 structopt = "0.3"
 structopt-toml = "0.4.5"
 threadpool = "1.8.1"
-tokio = { version = "1.5", features = ["macros", "rt","rt-multi-thread", "sync"] }
+tokio = { version = "1.6", features = ["macros", "rt","rt-multi-thread", "sync"] }
 tokio-stream = "0.1"
 toml = "0.5.6"
 tonic = "0.4"
@@ -62,6 +63,10 @@ uuid = { version = "0.8", features = ["serde", "v4"] }
 [dev-dependencies]
 pretty_assertions = "0.7"
 criterion = "0.3"
+
+[build-dependencies]
+vergen = "5.1.5"
+run_script = "^0.7.0"
 
 [[bench]]
 name = "bench_main"

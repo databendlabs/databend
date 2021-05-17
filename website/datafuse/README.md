@@ -1,34 +1,25 @@
-# [https://datafuse.dev](https://datafuse.dev)
+[https://datafuse.rs](https://datafuse.rs) 
 
+# How to quickly test the website in local
 
-This website is built using [Docusaurus 2](https://v2.docusaurus.io/), a modern static website generator.
-
-### Installation
-
-```
-$ yarn
-```
-
-### Local Development
-
-```
-$ yarn start
+## Dependencies
+```markdown
+cd website/datafuse
+pip install .
+pip install \
+mkdocs-minify-plugin>=0.3 \
+mkdocs-redirects>=1.0
 ```
 
-This command starts a local development server and open up a browser window. Most changes are reflected live without having to restart the server.
-
-### Build
-
-```
-$ yarn build
+## Run
+```markdown
+mkdocs serve
 ```
 
-This command generates static content into the `build` directory and can be served using any static contents hosting service.
+If you modify the files in [src](src), please run `npm run build` to rebuild material first.
 
-### Deployment
+## Note
 
-```
-$ GIT_USER=<Your GitHub username> USE_SSH=true yarn deploy
-```
+Made with [Material for MkDocs](https://github.com/squidfunk/mkdocs-material)
 
-If you are using GitHub pages for hosting, this command is a convenient way to build the website and push to the `gh-pages` branch.
+

@@ -5,6 +5,8 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
@@ -293,5 +295,58 @@ impl PlanRewriter {
             },
             other => other.clone()
         }
+    }
+
+    /// Check if aggr is in group-by's list
+    /// Case1: group is a column, the name needs to match with aggr
+    /// Case2: aggr is an alias, unfold aggr
+    /// Case3: group and aggr are exactly the same expression
+    pub fn check_aggr_in_group_expr(
+        aggr: &ExpressionAction,
+        group_by_names: &HashSet<String>,
+        input_schema: &DataSchemaRef
+    ) -> Result<bool> {
+        match aggr {
+            ExpressionAction::Alias(alias, plan) => {
+                if group_by_names.contains(alias) {
+                    return Ok(true);
+                } else {
+                    return Self::check_aggr_in_group_expr(plan, group_by_names, input_schema);
+                }
+            }
+            _ => {
+                let aggr_str = format!("{:?}", aggr);
+                if group_by_names.contains(&aggr_str) {
+                    return Ok(true);
+                } else {
+                    let columns = Self::expression_plan_columns(aggr)?;
+                    for col in columns {
+                        let cn = col.to_data_field(input_schema)?.name().clone();
+                        if !group_by_names.contains(&cn) {
+                            return Ok(false);
+                        }
+                    }
+                }
+            }
+        };
+        Ok(true)
+    }
+
+    pub fn exprs_to_fields(
+        exprs: &[ExpressionAction],
+        input_schema: &DataSchemaRef
+    ) -> Result<Vec<DataField>> {
+        exprs
+            .iter()
+            .map(|expr| expr.to_data_field(input_schema))
+            .collect::<Result<_>>()
+    }
+
+    pub fn exprs_to_names(exprs: &[ExpressionAction], names: &mut HashSet<String>) -> Result<()> {
+        for expr in exprs {
+            let name = format!("{:?}", expr);
+            names.insert(name.clone());
+        }
+        Ok(())
     }
 }

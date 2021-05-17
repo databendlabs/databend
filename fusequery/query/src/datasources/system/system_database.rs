@@ -25,6 +25,7 @@ impl SystemDatabase {
         let table_list: Vec<Arc<dyn ITable>> = vec![
             Arc::new(system::OneTable::create()),
             Arc::new(system::FunctionsTable::create()),
+            Arc::new(system::ContributorsTable::create()),
             Arc::new(system::SettingsTable::create()),
             Arc::new(system::NumbersTable::create("numbers")),
             Arc::new(system::NumbersTable::create("numbers_mt")),
@@ -81,7 +82,7 @@ impl IDatabase for SystemDatabase {
 
     async fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
         Result::Err(ErrorCodes::UnImplement(
-            "DataSource Error: cannot create table for system database".to_string()
+            "DataSource Error: cannot create table for system database"
         ))
     }
 }

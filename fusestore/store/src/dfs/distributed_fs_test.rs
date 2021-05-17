@@ -11,8 +11,6 @@ use crate::localfs::LocalFS;
 use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
-use crate::meta_service::MetaServiceImpl;
-use crate::meta_service::MetaServiceServer;
 use crate::tests::rand_local_addr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -24,15 +22,11 @@ async fn test_distributed_fs() -> anyhow::Result<()> {
 
     let meta_addr = rand_local_addr();
 
-    let mn = MetaNode::new(0).await;
-    let rst = mn.boot(meta_addr.clone()).await;
+    let rst = MetaNode::boot(0, meta_addr.clone()).await;
     assert!(rst.is_ok());
+    let mn = rst.unwrap();
 
-    let meta_srv_impl = MetaServiceImpl::create(mn).await;
-    let meta_srv = MetaServiceServer::new(meta_srv_impl);
-    serve_grpc!(meta_addr, meta_srv);
-
-    let dfs = Dfs::create(fs, meta_addr.clone());
+    let dfs = Dfs::create(fs, mn);
     {
         let rst = dfs.add("foo".into(), "bar".as_bytes()).await;
         rst.unwrap();
