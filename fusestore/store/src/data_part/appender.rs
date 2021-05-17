@@ -75,7 +75,7 @@ pub(crate) fn write_in_memory(block: DataBlock) -> Result<Vec<u8>> {
         writer.write(&batch)?;
         writer.close()?;
     }
-    Ok(cursor
+    cursor
         .into_inner()
-        .context("failed to convert cursor into vector of u8")?)
+        .context("failed to convert cursor into vector of u8")
 }
