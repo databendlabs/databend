@@ -33,7 +33,7 @@ impl IOptimizer for ScattersOptimizer {
                 }
                 _ => {
                     let mut clone_node = node.clone();
-                    clone_node.set_input(&rewritten_node)?;
+                    clone_node.set_input(&rewritten_node);
                     rewritten_node = clone_node;
                 }
             };
