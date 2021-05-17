@@ -23,7 +23,8 @@ impl FlightClient {
     pub async fn connect(addr: String) -> Result<FlightClient> {
         // TODO: For different addresses, it should be singleton
         Ok(FlightClient {
-            inner: FlightServiceClient::connect(format!("http://{}", addr)).await?
+            inner: FlightServiceClient::connect(format!("http://{}", addr)).await
+                .map_err(|e| ErrorCodes::UnknownException(e.to_string()))?
         })
         // cache
     }
@@ -39,6 +40,7 @@ impl FlightClient {
 
     // Execute do_action.
     async fn do_action(&mut self, action: Action, timeout: u64) -> Result<Vec<u8>> {
+        let action_type = action.r#type.clone();
         let mut request = Request::new(action);
         request.set_timeout(Duration::from_secs(timeout));
 
@@ -49,7 +51,7 @@ impl FlightClient {
             None => Result::Err(ErrorCodes::EmptyDataFromServer(
                 format!(
                     "Can not receive data from flight server, action: {:?}",
-                    action.r#type
+                    action_type
                 )
             )),
         }

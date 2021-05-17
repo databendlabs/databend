@@ -49,35 +49,34 @@ impl IInterpreter for SelectInterpreter {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = Optimizer::create(self.ctx.clone()).optimize(&self.select.input)?;
 
-        // TODO: 提取打包
-        let query_id = self.ctx.get_id()?;
-        let execute_plan = Self::extract_plan_node_with_stage(plan);
+        // let query_id = self.ctx.get_id()?;
+        // let execute_plan = Self::extract_plan_node_with_stage(plan);
+        //
+        // for index in 1..execute_plan.len() {
+        //     let stage_id = uuid::Uuid::new_v4().to_string();
+        //     let nodes = self.ctx.try_get_cluster()?.get_nodes()?;
+        //
+        //     for node in nodes {
+        //         if let Ok(mut client) = node.try_get_client() {
+        //             if let Result::Err(error) = client.prepare_query_stage(
+        //                 ExecutePlanWithShuffleAction {
+        //                     query_id: query_id.clone(),
+        //                     stage_id: stage_id.clone(),
+        //                     plan: *execute_plan[index].input.clone(),
+        //                     scatters: vec![],
+        //                     scatters_action: execute_plan[index].scatters_expr.clone(),
+        //                 }, 60,
+        //             ).await {
+        //                 // TODO: kill executed plan
+        //
+        //                 return Result::Err(error);
+        //             }
+        //             break;
+        //         }
+        //     }
+        // }
 
-        for index in 1..execute_plan.len() {
-            let stage_id = uuid::Uuid::new_v4().to_string();
-            let nodes = self.ctx.try_get_cluster()?.get_nodes()?;
-
-            for node in nodes {
-                if let Ok(mut client) = node.try_get_client() {
-                    if let Result::Err(error) = client.prepare_query_stage(
-                        ExecutePlanWithShuffleAction {
-                            query_id: query_id.clone(),
-                            stage_id: stage_id.clone(),
-                            plan: *execute_plan[index].input.clone(),
-                            scatters: vec![],
-                            scatters_action: execute_plan[index].scatters_expr.clone(),
-                        }, 60,
-                    ).await {
-                        // TODO: kill executed plan
-
-                        return Result::Err(error);
-                    }
-                    break;
-                }
-            }
-        }
-
-        PipelineBuilder::create(self.ctx.clone(), *execute_plan[0])
+        PipelineBuilder::create(self.ctx.clone(), plan)
             .build()?
             .execute()
             .await

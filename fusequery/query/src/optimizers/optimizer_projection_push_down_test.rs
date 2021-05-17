@@ -56,9 +56,8 @@ mod tests {
         let optimized = project_push_down.optimize(&plan)?;
         let expect = "\
         AggregatorFinal: groupBy=[[c2]], aggr=[[max([value]) as c1, name as c2]]\
-        \n  RedistributeStage[state: AggregatorMerge, id: 0]\
-        \n    AggregatorPartial: groupBy=[[c2]], aggr=[[max([value]) as c1, name as c2]]\
-        \n      ReadDataSource: scan partitions: [1], scan schema: [name:Utf8, value:Utf8], statistics: [read_rows: 0, read_bytes: 0]";
+        \n  AggregatorPartial: groupBy=[[c2]], aggr=[[max([value]) as c1, name as c2]]\
+        \n    ReadDataSource: scan partitions: [1], scan schema: [name:Utf8, value:Utf8], statistics: [read_rows: 0, read_bytes: 0]";
         let actual = format!("{:?}", optimized);
         assert_eq!(expect, actual);
         Ok(())

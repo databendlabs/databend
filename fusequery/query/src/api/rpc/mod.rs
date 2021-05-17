@@ -37,5 +37,5 @@ pub fn to_status(error: ErrorCodes) -> Status {
 }
 
 pub fn from_status(status: Status) -> ErrorCodes {
-
+    ErrorCodes::UnknownException(status.to_string())
 }

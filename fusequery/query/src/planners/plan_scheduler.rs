@@ -18,14 +18,13 @@ pub struct PlanScheduler;
 
 impl PlanScheduler {
     /// Schedule the plan to Local or Remote mode.
-    pub fn reschedule(
-        ctx: FuseQueryContextRef,
-        plan: &PlanNode
-    ) -> Result<Vec<(String, PlanNode)>> {
+    pub fn reschedule(ctx: FuseQueryContextRef, plan: &PlanNode) -> Result<Vec<(String, PlanNode)>> {
         let mut results = vec![];
         let max_threads = ctx.get_max_threads()? as usize;
         let executors = ctx.try_get_cluster()?.get_nodes()?;
 
+        // TODO: 首先找到所有的read source
+        // TODO: 每个source可以根据is_local来决定, 定向推送还是全部推送
         // Get the source plan node by walk
         let mut source_plan = ReadDataSourcePlan::empty();
         {

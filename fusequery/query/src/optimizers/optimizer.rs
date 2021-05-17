@@ -25,7 +25,7 @@ impl Optimizer {
         let optimizers: Vec<Box<dyn IOptimizer>> = vec![
             Box::new(AliasPushDownOptimizer::create(ctx.clone())),
             Box::new(LimitPushDownOptimizer::create(ctx.clone())),
-            Box::new(ProjectionPushDownOptimizer::create(ctx)),
+            Box::new(ProjectionPushDownOptimizer::create(ctx.clone())),
             Box::new(ScattersOptimizer::create(ctx.clone()))
         ];
         Optimizer { optimizers }
