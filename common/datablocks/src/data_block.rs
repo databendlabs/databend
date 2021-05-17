@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::convert::TryInto;
+use std::convert::TryFrom;
 use std::fmt;
 use std::sync::Arc;
 
@@ -101,20 +101,19 @@ impl DataBlock {
     }
 }
 
-impl TryInto<arrow::record_batch::RecordBatch> for DataBlock {
+impl TryFrom<DataBlock> for RecordBatch {
     type Error = ErrorCodes;
 
-    fn try_into(self) -> Result<RecordBatch> {
-        arrow::record_batch::RecordBatch::try_new(self.schema.clone(), self.columns.clone())
-            .map_err(ErrorCodes::from_arrow)
+    fn try_from(v: DataBlock) -> Result<RecordBatch> {
+        RecordBatch::try_new(v.schema.clone(), v.columns.clone()).map_err(ErrorCodes::from_arrow)
     }
 }
 
-impl TryInto<DataBlock> for arrow::record_batch::RecordBatch {
+impl TryFrom<arrow::record_batch::RecordBatch> for DataBlock {
     type Error = ErrorCodes;
 
-    fn try_into(self) -> Result<DataBlock> {
-        Ok(DataBlock::create(self.schema(), Vec::from(self.columns())))
+    fn try_from(v: arrow::record_batch::RecordBatch) -> Result<DataBlock> {
+        Ok(DataBlock::create(v.schema(), Vec::from(v.columns())))
     }
 }
 
