@@ -39,7 +39,7 @@ async fn test_datasource() -> anyhow::Result<()> {
         // Drop database.
         datasource
             .drop_database(DropDatabasePlan {
-                if_not_exists: false,
+                if_exists: false,
                 db: "test_db".to_string()
             })
             .await?;

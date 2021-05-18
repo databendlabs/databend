@@ -9,6 +9,7 @@ mod tests {
     use common_planners::TableEngineType;
     use sqlparser::ast::*;
 
+    use crate::sql::sql_statement::DfDropDatabase;
     use crate::sql::sql_statement::DfUseDatabase;
     use crate::sql::*;
 
@@ -59,27 +60,66 @@ mod tests {
 
     #[test]
     fn create_database() -> Result<()> {
-        let sql = "CREATE DATABASE db1";
-        let expected = DfStatement::CreateDatabase(DfCreateDatabase {
-            if_not_exists: false,
-            name: ObjectName(vec![Ident::new("db1")]),
-            engine: DatabaseEngineType::Remote,
-            options: vec![]
-        });
-        expect_parse_ok(sql, expected)?;
+        {
+            let sql = "CREATE DATABASE db1";
+            let expected = DfStatement::CreateDatabase(DfCreateDatabase {
+                if_not_exists: false,
+                name: ObjectName(vec![Ident::new("db1")]),
+                engine: DatabaseEngineType::Remote,
+                options: vec![]
+            });
+            expect_parse_ok(sql, expected)?;
+        }
 
-        let sql = "CREATE DATABASE db1 ENGINE=Local";
-        let expected = DfStatement::CreateDatabase(DfCreateDatabase {
-            if_not_exists: false,
-            name: ObjectName(vec![Ident::new("db1")]),
-            engine: DatabaseEngineType::Local,
-            options: vec![]
-        });
-        expect_parse_ok(sql, expected)?;
+        {
+            let sql = "CREATE DATABASE IF NOT EXISTS db1";
+            let expected = DfStatement::CreateDatabase(DfCreateDatabase {
+                if_not_exists: true,
+                name: ObjectName(vec![Ident::new("db1")]),
+                engine: DatabaseEngineType::Remote,
+                options: vec![]
+            });
+            expect_parse_ok(sql, expected)?;
+        }
+
+        {
+            let sql = "CREATE DATABASE db1 ENGINE=Local";
+            let expected = DfStatement::CreateDatabase(DfCreateDatabase {
+                if_not_exists: false,
+                name: ObjectName(vec![Ident::new("db1")]),
+                engine: DatabaseEngineType::Local,
+                options: vec![]
+            });
+            expect_parse_ok(sql, expected)?;
+        }
 
         // Error cases: Invalid type
-        let sql = "CREATE DATABASE db1 ENGINE=XX";
-        expect_parse_error(sql, "Expected Engine must one of Local, Remote, found: XX")?;
+        {
+            let sql = "CREATE DATABASE db1 ENGINE=XX";
+            expect_parse_error(sql, "Expected Engine must one of Local, Remote, found: XX")?;
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn drop_database() -> Result<()> {
+        {
+            let sql = "DROP DATABASE db1";
+            let expected = DfStatement::DropDatabase(DfDropDatabase {
+                if_exists: false,
+                name: ObjectName(vec![Ident::new("db1")])
+            });
+            expect_parse_ok(sql, expected)?;
+        }
+        {
+            let sql = "DROP DATABASE IF EXISTS db1";
+            let expected = DfStatement::DropDatabase(DfDropDatabase {
+                if_exists: true,
+                name: ObjectName(vec![Ident::new("db1")])
+            });
+            expect_parse_ok(sql, expected)?;
+        }
 
         Ok(())
     }

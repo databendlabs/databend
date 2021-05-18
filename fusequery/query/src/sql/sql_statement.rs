@@ -44,6 +44,12 @@ pub struct DfCreateDatabase {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct DfDropDatabase {
+    pub if_exists: bool,
+    pub name: ObjectName
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DfUseDatabase {
     pub name: ObjectName
 }
@@ -58,6 +64,7 @@ pub enum DfStatement {
     // Databases.
     ShowDatabases(DfShowDatabases),
     CreateDatabase(DfCreateDatabase),
+    DropDatabase(DfDropDatabase),
     UseDatabase(DfUseDatabase),
 
     // Tables.

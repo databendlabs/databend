@@ -17,11 +17,41 @@ fn test_plan_parser() -> anyhow::Result<()> {
 
     let tests = vec![
         Test {
+            name: "create-database-passed",
+            sql: "CREATE DATABASE db1",
+            expect: "Create database db1, engine: Remote, if_not_exists:false, option: {}",
+            error: "",
+        },
+        Test {
+            name: "create-database-if-not-exists-passed",
+            sql: "CREATE DATABASE IF NOT EXISTS db1",
+            expect: "Create database db1, engine: Remote, if_not_exists:true, option: {}",
+            error: "",
+        },
+        Test {
+            name: "drop-database-passed",
+            sql: "DROP DATABASE db1",
+            expect: "Drop database db1, if_exists:false",
+            error: "",
+        },
+        Test {
+            name: "drop-database-if-exists-passed",
+            sql: "DROP DATABASE IF EXISTS db1",
+            expect: "Drop database db1, if_exists:true",
+            error: "",
+        },
+        Test {
+            name: "create-table-passed",
+            sql: "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' ",
+            expect: "Create table default.t Field { name: \"c1\", data_type: Int32, nullable: false, dict_id: 0, dict_is_ordered: false, metadata: None }, Field { name: \"c2\", data_type: Int64, nullable: false, dict_id: 0, dict_is_ordered: false, metadata: None }, Field { name: \"c3\", data_type: Utf8, nullable: false, dict_id: 0, dict_is_ordered: false, metadata: None }, engine: Parquet, if_not_exists:false, option: {\"location\": \"\\\'foo.parquet\\\'\"}",
+            error: "",
+        },
+        Test {
         name: "cast-passed",
         sql: "select cast('1' as int)",
         expect: "Projection: cast(1 as Int32):Int32\n  Expression: cast(1 as Int32):UInt8 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
         error: "",
-    },
+        },
         Test {
         name: "database-passed",
         sql: "select database()",

@@ -26,6 +26,7 @@ use crate::datasources::ITableFunction;
 #[async_trait::async_trait]
 pub trait IDataSource: Sync + Send {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn IDatabase>>;
+    fn check_database(&self, db_name: &str) -> bool;
     fn get_databases(&self) -> Result<Vec<String>>;
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>>;
     fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>>;
@@ -126,12 +127,14 @@ impl IDataSource for DataSource {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn IDatabase>> {
         let db_lock = self.databases.read();
         let database = db_lock.get(db_name).ok_or_else(|| {
-            ErrorCodes::UnknownDatabase(format!(
-                "DataSource Error: Unknown database: '{}'",
-                db_name
-            ))
+            ErrorCodes::UnknownDatabase(format!("Unknown database: '{}'", db_name))
         })?;
         Ok(database.clone())
+    }
+
+    fn check_database(&self, db_name: &str) -> bool {
+        let db_lock = self.databases.read();
+        db_lock.get(db_name).is_some()
     }
 
     fn get_databases(&self) -> Result<Vec<String>> {
@@ -145,10 +148,7 @@ impl IDataSource for DataSource {
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
         let db_lock = self.databases.read();
         let database = db_lock.get(db_name).ok_or_else(|| {
-            ErrorCodes::UnknownDatabase(format!(
-                "DataSource Error: Unknown database: '{}'",
-                db_name
-            ))
+            ErrorCodes::UnknownDatabase(format!("Unknown database: '{}'", db_name))
         })?;
 
         let table = database.get_table(table_name)?;
@@ -169,16 +169,20 @@ impl IDataSource for DataSource {
     fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>> {
         let table_func_lock = self.table_functions.read();
         let table = table_func_lock.get(name).ok_or_else(|| {
-            ErrorCodes::UnknownTableFunction(format!(
-                "DataSource Error: Unknown table function: '{}'",
-                name
-            ))
+            ErrorCodes::UnknownTableFunction(format!("Unknown table function: '{}'", name))
         })?;
 
         Ok(table.clone())
     }
 
     async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
+        if self.check_database(plan.db.as_str()) && !plan.if_not_exists {
+            return Err(ErrorCodes::UnknownDatabase(format!(
+                "Database: '{}' already exists.",
+                plan.db
+            )));
+        }
+
         match plan.engine {
             DatabaseEngineType::Local => {
                 let database = LocalDatabase::create();
@@ -202,6 +206,10 @@ impl IDataSource for DataSource {
     }
 
     async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
+        if !self.check_database(plan.db.as_str()) && plan.if_exists {
+            return Ok(());
+        }
+
         let database = self.get_database(plan.db.as_str())?;
         match database.engine() {
             DatabaseEngineType::Local => {
@@ -217,7 +225,8 @@ impl IDataSource for DataSource {
                     })
                     .map_err(ErrorCodes::from_anyhow)?;
             }
-        }
+        };
+
         Ok(())
     }
 }

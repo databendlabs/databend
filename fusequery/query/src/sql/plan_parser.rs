@@ -13,6 +13,7 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
+use common_planners::DropDatabasePlan;
 use common_planners::ExplainPlan;
 use common_planners::ExpressionAction;
 use common_planners::PlanBuilder;
@@ -30,6 +31,7 @@ use crate::datasources::ITable;
 use crate::functions::ContextFunction;
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
+use crate::sql::sql_statement::DfDropDatabase;
 use crate::sql::sql_statement::DfUseDatabase;
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfExplain;
@@ -65,6 +67,7 @@ impl PlanParser {
                 self.build_from_sql("SELECT name FROM system.databases ORDER BY name")
             }
             DfStatement::CreateDatabase(v) => self.sql_create_database_to_plan(&v),
+            DfStatement::DropDatabase(v) => self.sql_drop_database_to_plan(&v),
             DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(&v),
             DfStatement::CreateTable(v) => self.sql_create_table_to_plan(&v),
 
@@ -103,11 +106,12 @@ impl PlanParser {
         }))
     }
 
+    /// DfCreateDatabase to plan.
     pub fn sql_create_database_to_plan(&self, create: &DfCreateDatabase) -> Result<PlanNode> {
         if create.name.0.is_empty() {
             return Result::Err(ErrorCodes::SyntexException("Create database name is empty"));
         }
-        let create_database_name = create.name.0[0].value.clone();
+        let name = create.name.0[0].value.clone();
 
         let mut options = HashMap::new();
         for p in create.options.iter() {
@@ -116,9 +120,22 @@ impl PlanParser {
 
         Ok(PlanNode::CreateDatabase(CreateDatabasePlan {
             if_not_exists: create.if_not_exists,
-            db: create_database_name,
+            db: name,
             engine: create.engine,
             options
+        }))
+    }
+
+    /// DfDropDatabase to plan.
+    pub fn sql_drop_database_to_plan(&self, drop: &DfDropDatabase) -> Result<PlanNode> {
+        if drop.name.0.is_empty() {
+            return Result::Err(ErrorCodes::SyntexException("Drop database name is empty"));
+        }
+        let name = drop.name.0[0].value.clone();
+
+        Ok(PlanNode::DropDatabase(DropDatabasePlan {
+            if_exists: drop.if_exists,
+            db: name
         }))
     }
 
