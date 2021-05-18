@@ -53,6 +53,7 @@ impl ITable for NumbersTable {
         match self.table {
             "numbers" => "SystemNumbers",
             "numbers_mt" => "SystemNumbersMt",
+            "numbers_local" => "SystemNumbersLocal",
             _ => unreachable!()
         }
     }
@@ -67,7 +68,7 @@ impl ITable for NumbersTable {
 
     // As remote for performance test.
     fn is_local(&self) -> bool {
-        false
+        self.table == "numbers_local"
     }
 
     fn read_plan(&self, ctx: FuseQueryContextRef, scan: &ScanPlan) -> Result<ReadDataSourcePlan> {

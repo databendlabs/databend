@@ -29,6 +29,7 @@ impl SystemDatabase {
             Arc::new(system::SettingsTable::create()),
             Arc::new(system::NumbersTable::create("numbers")),
             Arc::new(system::NumbersTable::create("numbers_mt")),
+            Arc::new(system::NumbersTable::create("numbers_local")),
             Arc::new(system::TablesTable::create()),
             Arc::new(system::ClustersTable::create()),
             Arc::new(system::DatabasesTable::create()),
@@ -42,6 +43,7 @@ impl SystemDatabase {
         let table_function_list: Vec<Arc<dyn ITableFunction>> = vec![
             Arc::new(system::NumbersTable::create("numbers")),
             Arc::new(system::NumbersTable::create("numbers_mt")),
+            Arc::new(system::NumbersTable::create("numbers_local")),
         ];
         let mut table_functions: HashMap<String, Arc<dyn ITableFunction>> = HashMap::default();
         for tbl_func in table_function_list.iter() {

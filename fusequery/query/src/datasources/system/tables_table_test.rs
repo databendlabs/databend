@@ -20,19 +20,20 @@ async fn test_tables_table() -> anyhow::Result<()> {
     assert_eq!(block.num_columns(), 3);
 
     let expected = vec![
-        "+----------+--------------+--------------------+",
-        "| database | name         | engine             |",
-        "+----------+--------------+--------------------+",
-        "| system   | clusters     | SystemClusters     |",
-        "| system   | contributors | SystemContributors |",
-        "| system   | databases    | SystemDatabases    |",
-        "| system   | functions    | SystemFunctions    |",
-        "| system   | numbers      | SystemNumbers      |",
-        "| system   | numbers_mt   | SystemNumbersMt    |",
-        "| system   | one          | SystemOne          |",
-        "| system   | settings     | SystemSettings     |",
-        "| system   | tables       | SystemTables       |",
-        "+----------+--------------+--------------------+",
+        "+----------+---------------+--------------------+",
+        "| database | name          | engine             |",
+        "+----------+---------------+--------------------+",
+        "| system   | clusters      | SystemClusters     |",
+        "| system   | contributors  | SystemContributors |",
+        "| system   | databases     | SystemDatabases    |",
+        "| system   | functions     | SystemFunctions    |",
+        "| system   | numbers       | SystemNumbers      |",
+        "| system   | numbers_local | SystemNumbersLocal |",
+        "| system   | numbers_mt    | SystemNumbersMt    |",
+        "| system   | one           | SystemOne          |",
+        "| system   | settings      | SystemSettings     |",
+        "| system   | tables        | SystemTables       |",
+        "+----------+---------------+--------------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
