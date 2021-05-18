@@ -8,3 +8,4 @@ ignore:
   - "*/sessions/*"
   - "*/metrics/*"
   - "*/admins/*"
+  - "*/target/*"
