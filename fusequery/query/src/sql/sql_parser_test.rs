@@ -169,6 +169,28 @@ mod tests {
     }
 
     #[test]
+    fn drop_table() -> Result<()> {
+        {
+            let sql = "DROP TABLE t1";
+            let expected = DfStatement::DropTable(DfDropTable {
+                if_exists: false,
+                name: ObjectName(vec![Ident::new("t1")])
+            });
+            expect_parse_ok(sql, expected)?;
+        }
+        {
+            let sql = "DROP TABLE IF EXISTS t1";
+            let expected = DfStatement::DropTable(DfDropTable {
+                if_exists: true,
+                name: ObjectName(vec![Ident::new("t1")])
+            });
+            expect_parse_ok(sql, expected)?;
+        }
+
+        Ok(())
+    }
+
+    #[test]
     fn show_queries() -> Result<()> {
         // positive case
         expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables))?;

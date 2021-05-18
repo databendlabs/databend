@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_planners::CreateTablePlan;
+use common_planners::DropTablePlan;
 
 use crate::datasources::ITable;
 use crate::datasources::ITableFunction;
@@ -28,4 +29,5 @@ pub trait IDatabase: Sync + Send {
 
     /// DDL
     async fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
+    async fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
 }

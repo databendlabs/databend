@@ -8,6 +8,7 @@ use std::sync::Arc;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::CreateTablePlan;
+use common_planners::DropTablePlan;
 
 use crate::datasources::system;
 use crate::datasources::IDatabase;
@@ -70,9 +71,10 @@ impl IDatabase for SystemDatabase {
     }
 
     fn get_table(&self, table_name: &str) -> Result<Arc<dyn ITable>> {
-        let table = self.tables.get(table_name).ok_or_else(|| {
-            ErrorCodes::UnknownTable(format!("DataSource Error: Unknown table: '{}'", table_name))
-        })?;
+        let table = self
+            .tables
+            .get(table_name)
+            .ok_or_else(|| ErrorCodes::UnknownTable(format!("Unknown table: '{}'", table_name)))?;
         Ok(table.clone())
     }
 
@@ -86,7 +88,13 @@ impl IDatabase for SystemDatabase {
 
     async fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
         Result::Err(ErrorCodes::UnImplement(
-            "DataSource Error: cannot create table for system database"
+            "Cannot create table for system database"
+        ))
+    }
+
+    async fn drop_table(&self, _plan: DropTablePlan) -> Result<()> {
+        Result::Err(ErrorCodes::UnImplement(
+            "Cannot drop table for system database"
         ))
     }
 }

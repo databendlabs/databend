@@ -188,7 +188,7 @@ impl IDataSource for DataSource {
                 client
                     .create_database(plan.clone())
                     .await
-                    .map(|_v| {
+                    .map(|_| {
                         let database = RemoteDatabase::create(self.conf.clone(), plan.db.clone());
                         self.databases
                             .write()
@@ -202,8 +202,15 @@ impl IDataSource for DataSource {
 
     async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
         let db_name = plan.db.as_str();
-        if self.databases.read().get(db_name).is_none() && plan.if_exists {
-            return Ok(());
+        if self.databases.read().get(db_name).is_none() {
+            return if plan.if_exists {
+                Ok(())
+            } else {
+                Err(ErrorCodes::UnknownDatabase(format!(
+                    "Unknown database: '{}'",
+                    plan.db
+                )))
+            };
         }
 
         let database = self.get_database(db_name)?;
@@ -214,7 +221,7 @@ impl IDataSource for DataSource {
             client
                 .drop_database(plan.clone())
                 .await
-                .map(|_v| {
+                .map(|_| {
                     self.databases.write().remove(plan.db.as_str());
                 })
                 .map_err(ErrorCodes::from_anyhow)?;

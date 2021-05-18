@@ -23,15 +23,16 @@ use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 
-use crate::sql::sql_statement::DfDropDatabase;
-use crate::sql::sql_statement::DfShowDatabases;
-use crate::sql::sql_statement::DfUseDatabase;
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateTable;
+use crate::sql::DfDropDatabase;
+use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
+use crate::sql::DfShowDatabases;
 use crate::sql::DfShowSettings;
 use crate::sql::DfShowTables;
 use crate::sql::DfStatement;
+use crate::sql::DfUseDatabase;
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
@@ -305,6 +306,7 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::DATABASE => self.parse_drop_database(),
+                Keyword::TABLE => self.parse_drop_table(),
                 _ => self.expected("drop statement", Token::Word(w))
             },
             unexpected => self.expected("drop statement", unexpected)
@@ -322,6 +324,19 @@ impl<'a> DfParser<'a> {
         };
 
         Ok(DfStatement::DropDatabase(drop))
+    }
+
+    /// Drop table.
+    fn parse_drop_table(&mut self) -> Result<DfStatement, ParserError> {
+        let if_not_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let table_name = self.parser.parse_object_name()?;
+
+        let drop = DfDropTable {
+            if_exists: if_not_exists,
+            name: table_name
+        };
+
+        Ok(DfStatement::DropTable(drop))
     }
 
     // Parse 'use database' db name.

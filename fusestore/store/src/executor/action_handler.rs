@@ -80,6 +80,9 @@ impl ActionHandler {
                 Err(Status::internal("Store drop database unimplemented"))
             }
             StoreDoAction::CreateTable(a) => self.create_table(a).await,
+            StoreDoAction::DropTable(_) => {
+                Err(Status::internal("Store drop database unimplemented"))
+            }
             StoreDoAction::GetTable(a) => self.get_table(a).await
         }
     }

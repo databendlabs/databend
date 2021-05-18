@@ -14,6 +14,7 @@ use common_exception::Result;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
+use common_planners::DropTablePlan;
 use common_planners::ExplainPlan;
 use common_planners::ExpressionAction;
 use common_planners::PlanBuilder;
@@ -34,6 +35,7 @@ use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::sql_statement::DfDropDatabase;
 use crate::sql::sql_statement::DfUseDatabase;
 use crate::sql::DfCreateDatabase;
+use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
@@ -68,8 +70,9 @@ impl PlanParser {
             }
             DfStatement::CreateDatabase(v) => self.sql_create_database_to_plan(&v),
             DfStatement::DropDatabase(v) => self.sql_drop_database_to_plan(&v),
-            DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(&v),
             DfStatement::CreateTable(v) => self.sql_create_table_to_plan(&v),
+            DfStatement::DropTable(v) => self.sql_drop_table_to_plan(&v),
+            DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(&v),
 
             // TODO: support like and other filters in show queries
             DfStatement::ShowTables(_) => self.build_from_sql(
@@ -184,6 +187,24 @@ impl PlanParser {
             schema,
             engine: create.engine,
             options
+        }))
+    }
+
+    /// DfDropTable to plan.
+    pub fn sql_drop_table_to_plan(&self, drop: &DfDropTable) -> Result<PlanNode> {
+        let mut db = self.ctx.get_current_database();
+        if drop.name.0.is_empty() {
+            return Result::Err(ErrorCodes::SyntexException("Drop table name is empty"));
+        }
+        let mut table = drop.name.0[0].value.clone();
+        if drop.name.0.len() > 1 {
+            db = table;
+            table = drop.name.0[1].value.clone();
+        }
+        Ok(PlanNode::DropTable(DropTablePlan {
+            if_exists: drop.if_exists,
+            db,
+            table
         }))
     }
 

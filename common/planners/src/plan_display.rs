@@ -152,6 +152,11 @@ impl PlanNode {
                             write!(f, " option: {:?}", plan.options)?;
                             Ok(false)
                         }
+                        PlanNode::DropTable(plan) => {
+                            write!(f, "Drop table {:}.{:},", plan.db, plan.table)?;
+                            write!(f, " if_exists:{:}", plan.if_exists)?;
+                            Ok(false)
+                        }
                         _ => Ok(false),
                     }
                 })
