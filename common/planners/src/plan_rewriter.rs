@@ -117,7 +117,12 @@ pub trait PlanRewriter<'plan> {
     }
 
     fn rewrite_expression(&mut self, plan: &'plan ExpressionPlan) -> Result<PlanNode> {
-        self.rewrite_plan_node(plan.input.as_ref())
+        Ok(PlanNode::Expression(ExpressionPlan {
+            schema: plan.schema.clone(),
+            desc: plan.desc.clone(),
+            exprs: plan.exprs.clone(),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
+        }))
     }
 
     fn rewrite_filter(&mut self, plan: &'plan FilterPlan) -> Result<PlanNode> {
