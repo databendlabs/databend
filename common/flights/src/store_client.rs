@@ -11,6 +11,8 @@ use common_arrow::arrow_flight::BasicAuth;
 use common_arrow::arrow_flight::HandshakeRequest;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
+use common_planners::DropDatabasePlan;
+use common_planners::DropTablePlan;
 use futures::stream;
 use futures::StreamExt;
 use log::info;
@@ -22,10 +24,14 @@ use crate::flight_result_to_str;
 use crate::status_err;
 use crate::store_do_action::CreateDatabaseAction;
 use crate::store_do_action::CreateTableAction;
+use crate::store_do_action::DropDatabaseAction;
+use crate::store_do_action::DropDatabaseActionResult;
 use crate::store_do_action::StoreDoAction;
 use crate::store_do_action::StoreDoActionResult;
 use crate::CreateDatabaseActionResult;
 use crate::CreateTableActionResult;
+use crate::DropTableAction;
+use crate::DropTableActionResult;
 use crate::GetTableAction;
 use crate::GetTableActionResult;
 
@@ -66,6 +72,20 @@ impl StoreClient {
         anyhow::bail!("invalid response")
     }
 
+    /// Drop database call.
+    pub async fn drop_database(
+        &mut self,
+        plan: DropDatabasePlan
+    ) -> anyhow::Result<DropDatabaseActionResult> {
+        let action = StoreDoAction::DropDatabase(DropDatabaseAction { plan });
+        let rst = self.do_action(&action).await?;
+
+        if let StoreDoActionResult::DropDatabase(rst) = rst {
+            return Ok(rst);
+        }
+        anyhow::bail!("invalid response")
+    }
+
     /// Create table call.
     pub async fn create_table(
         &mut self,
@@ -75,6 +95,20 @@ impl StoreClient {
         let rst = self.do_action(&action).await?;
 
         if let StoreDoActionResult::CreateTable(rst) = rst {
+            return Ok(rst);
+        }
+        anyhow::bail!("invalid response")
+    }
+
+    /// Drop table call.
+    pub async fn drop_table(
+        &mut self,
+        plan: DropTablePlan
+    ) -> anyhow::Result<DropTableActionResult> {
+        let action = StoreDoAction::DropTable(DropTableAction { plan });
+        let rst = self.do_action(&action).await?;
+
+        if let StoreDoActionResult::DropTable(rst) = rst {
             return Ok(rst);
         }
         anyhow::bail!("invalid response")

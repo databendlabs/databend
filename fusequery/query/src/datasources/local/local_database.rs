@@ -9,6 +9,7 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::CreateTablePlan;
+use common_planners::DropTablePlan;
 use common_planners::TableEngineType;
 
 use crate::datasources::local::CsvTable;
@@ -40,11 +41,15 @@ impl IDatabase for LocalDatabase {
         "local"
     }
 
+    fn is_local(&self) -> bool {
+        true
+    }
+
     fn get_table(&self, table_name: &str) -> Result<Arc<dyn ITable>> {
         let table_lock = self.tables.read();
-        let table = table_lock.get(table_name).ok_or_else(|| {
-            ErrorCodes::UnknownTable(format!("DataSource Error: Unknown table: '{}'", table_name))
-        })?;
+        let table = table_lock
+            .get(table_name)
+            .ok_or_else(|| ErrorCodes::UnknownTable(format!("Unknown table: '{}'", table_name)))?;
         Ok(table.clone())
     }
 
@@ -57,7 +62,19 @@ impl IDatabase for LocalDatabase {
     }
 
     async fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
-        let table_name = plan.table.clone();
+        let clone = plan.clone();
+        let db_name = clone.db.as_str();
+        let table_name = clone.table.as_str();
+        if self.tables.read().get(table_name).is_some() {
+            return if plan.if_not_exists {
+                Ok(())
+            } else {
+                return Err(ErrorCodes::UnImplement(format!(
+                    "Table: '{}.{}' already exists.",
+                    db_name, table_name,
+                )));
+            };
+        }
 
         let table = match &plan.engine {
             TableEngineType::Parquet => {
@@ -71,13 +88,33 @@ impl IDatabase for LocalDatabase {
             }
             _ => {
                 return Result::Err(ErrorCodes::UnImplement(format!(
-                    "Local database does not support {:?} table engine",
+                    "Local database does not support '{:?}' table engine",
                     plan.engine
                 )));
             }
         };
 
-        self.tables.write().insert(table_name, Arc::from(table));
+        self.tables
+            .write()
+            .insert(table_name.to_string(), Arc::from(table));
+        Ok(())
+    }
+
+    async fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
+        let table_name = plan.table.as_str();
+        if self.tables.read().get(table_name).is_none() {
+            return if plan.if_exists {
+                Ok(())
+            } else {
+                Err(ErrorCodes::UnknownTable(format!(
+                    "Unknown table: '{}.{}'",
+                    plan.db, plan.table
+                )))
+            };
+        }
+
+        let mut tables = self.tables.write();
+        tables.remove(table_name);
         Ok(())
     }
 }

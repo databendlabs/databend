@@ -131,6 +131,18 @@ impl PlanNode {
                             write!(f, "{:?}", plan.input())?;
                             Ok(false)
                         }
+                        PlanNode::CreateDatabase(plan) => {
+                            write!(f, "Create database {:},", plan.db)?;
+                            write!(f, " engine: {},", plan.engine.to_string())?;
+                            write!(f, " if_not_exists:{:},", plan.if_not_exists)?;
+                            write!(f, " option: {:?}", plan.options)?;
+                            Ok(false)
+                        }
+                        PlanNode::DropDatabase(plan) => {
+                            write!(f, "Drop database {:},", plan.db)?;
+                            write!(f, " if_exists:{:}", plan.if_exists)?;
+                            Ok(false)
+                        }
                         PlanNode::CreateTable(plan) => {
                             write!(f, "Create table {:}.{:}", plan.db, plan.table)?;
                             write!(f, " {:},", plan.schema)?;
@@ -138,6 +150,11 @@ impl PlanNode {
                             write!(f, " engine: {},", plan.engine.to_string())?;
                             write!(f, " if_not_exists:{:},", plan.if_not_exists)?;
                             write!(f, " option: {:?}", plan.options)?;
+                            Ok(false)
+                        }
+                        PlanNode::DropTable(plan) => {
+                            write!(f, "Drop table {:}.{:},", plan.db, plan.table)?;
+                            write!(f, " if_exists:{:}", plan.if_exists)?;
                             Ok(false)
                         }
                         _ => Ok(false),

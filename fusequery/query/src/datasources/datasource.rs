@@ -11,6 +11,7 @@ use common_flights::StoreClient;
 use common_infallible::RwLock;
 use common_planners::CreateDatabasePlan;
 use common_planners::DatabaseEngineType;
+use common_planners::DropDatabasePlan;
 
 use crate::configs::Config;
 use crate::datasources::local::LocalDatabase;
@@ -30,6 +31,7 @@ pub trait IDataSource: Sync + Send {
     fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>>;
     fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>>;
     async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
+    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
 }
 
 // Maintain all the databases of user.
@@ -124,25 +126,9 @@ impl IDataSource for DataSource {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn IDatabase>> {
         let db_lock = self.databases.read();
         let database = db_lock.get(db_name).ok_or_else(|| {
-            ErrorCodes::UnknownDatabase(format!(
-                "DataSource Error: Unknown database: '{}'",
-                db_name
-            ))
+            ErrorCodes::UnknownDatabase(format!("Unknown database: '{}'", db_name))
         })?;
         Ok(database.clone())
-    }
-
-    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
-        let db_lock = self.databases.read();
-        let database = db_lock.get(db_name).ok_or_else(|| {
-            ErrorCodes::UnknownDatabase(format!(
-                "DataSource Error: Unknown database: '{}'",
-                db_name
-            ))
-        })?;
-
-        let table = database.get_table(table_name)?;
-        Ok(table.clone())
     }
 
     fn get_databases(&self) -> Result<Vec<String>> {
@@ -151,6 +137,16 @@ impl IDataSource for DataSource {
             results.push(k.clone());
         }
         Ok(results)
+    }
+
+    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
+        let db_lock = self.databases.read();
+        let database = db_lock.get(db_name).ok_or_else(|| {
+            ErrorCodes::UnknownDatabase(format!("Unknown database: '{}'", db_name))
+        })?;
+
+        let table = database.get_table(table_name)?;
+        Ok(table.clone())
     }
 
     fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>> {
@@ -167,16 +163,21 @@ impl IDataSource for DataSource {
     fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>> {
         let table_func_lock = self.table_functions.read();
         let table = table_func_lock.get(name).ok_or_else(|| {
-            ErrorCodes::UnknownTableFunction(format!(
-                "DataSource Error: Unknown table function: '{}'",
-                name
-            ))
+            ErrorCodes::UnknownTableFunction(format!("Unknown table function: '{}'", name))
         })?;
 
         Ok(table.clone())
     }
 
     async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
+        let db_name = plan.db.as_str();
+        if self.databases.read().get(db_name).is_some() && !plan.if_not_exists {
+            return Err(ErrorCodes::UnknownDatabase(format!(
+                "Database: '{}' already exists.",
+                plan.db
+            )));
+        }
+
         match plan.engine {
             DatabaseEngineType::Local => {
                 let database = LocalDatabase::create();
@@ -184,19 +185,48 @@ impl IDataSource for DataSource {
             }
             DatabaseEngineType::Remote => {
                 let mut client = self.try_get_client().await?;
-                let _action_rst = client
+                client
                     .create_database(plan.clone())
                     .await
+                    .map(|_| {
+                        let database = RemoteDatabase::create(self.conf.clone(), plan.db.clone());
+                        self.databases
+                            .write()
+                            .insert(plan.db.clone(), Arc::new(database));
+                    })
                     .map_err(ErrorCodes::from_anyhow)?;
-                // TODO add db id to cache
-
-                // Add local cache.
-                let database = RemoteDatabase::create(self.conf.clone(), plan.db.clone());
-                self.databases
-                    .write()
-                    .insert(plan.db.clone(), Arc::new(database));
             }
         }
+        Ok(())
+    }
+
+    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
+        let db_name = plan.db.as_str();
+        if self.databases.read().get(db_name).is_none() {
+            return if plan.if_exists {
+                Ok(())
+            } else {
+                Err(ErrorCodes::UnknownDatabase(format!(
+                    "Unknown database: '{}'",
+                    plan.db
+                )))
+            };
+        }
+
+        let database = self.get_database(db_name)?;
+        if database.is_local() {
+            self.databases.write().remove(db_name);
+        } else {
+            let mut client = self.try_get_client().await?;
+            client
+                .drop_database(plan.clone())
+                .await
+                .map(|_| {
+                    self.databases.write().remove(plan.db.as_str());
+                })
+                .map_err(ErrorCodes::from_anyhow)?;
+        };
+
         Ok(())
     }
 }

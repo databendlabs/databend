@@ -132,6 +132,7 @@ nav:
     - SQL Reference:
       - Data Definition Language:
           - CREATE DATABASE: sqlstatement/data-definition-language-ddl/ddl-create-database.md
+          - DROP DATABASE: sqlstatement/data-definition-language-ddl/ddl-drop-database.md
       - Data Manipulation Language:
           - SELECT: sqlstatement/data-manipulation-language-dml/dml-select.md
       - Aggregate Functions:

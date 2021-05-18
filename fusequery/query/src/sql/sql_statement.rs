@@ -36,11 +36,23 @@ pub struct DfCreateTable {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct DfDropTable {
+    pub if_exists: bool,
+    pub name: ObjectName
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DfCreateDatabase {
     pub if_not_exists: bool,
     pub name: ObjectName,
     pub engine: DatabaseEngineType,
     pub options: Vec<SqlOption>
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DfDropDatabase {
+    pub if_exists: bool,
+    pub name: ObjectName
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -58,11 +70,13 @@ pub enum DfStatement {
     // Databases.
     ShowDatabases(DfShowDatabases),
     CreateDatabase(DfCreateDatabase),
+    DropDatabase(DfDropDatabase),
     UseDatabase(DfUseDatabase),
 
     // Tables.
     ShowTables(DfShowTables),
     CreateTable(DfCreateTable),
+    DropTable(DfDropTable),
 
     // Settings.
     ShowSettings(DfShowSettings)
