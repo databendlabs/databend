@@ -634,12 +634,15 @@ impl Network {
         Network { sto }
     }
 
+    #[tracing::instrument(level = "info", skip(self), fields(myid=self.sto.id))]
     pub async fn make_client(
         &self,
         node_id: &NodeId
     ) -> anyhow::Result<MetaServiceClient<Channel>> {
         let addr = self.sto.get_node_addr(node_id).await?;
+        tracing::info!("connect: id={}: {}", node_id, addr);
         let client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
+        tracing::info!("connected: id={}: {}", node_id, addr);
         Ok(client)
     }
 }
@@ -828,13 +831,20 @@ impl MetaNode {
         let meta_srv_impl = MetaServiceImpl::create(mn.clone());
         let meta_srv = MetaServiceServer::new(meta_srv_impl);
 
+        let addr_str = addr.to_string();
         let addr = addr.parse::<std::net::SocketAddr>()?;
+        let node_id = mn.sto.id;
 
         let srv = tonic::transport::Server::builder().add_service(meta_srv);
 
         let h = tokio::spawn(async move {
             srv.serve_with_shutdown(addr, async move {
                 let _ = rx.changed().await;
+                tracing::info!(
+                    "signal received, shutting down: id={} {} ",
+                    node_id,
+                    addr_str
+                );
             })
             .await
             .map_err(|e| anyhow::anyhow!("MetaNode service error: {:?}", e))?;

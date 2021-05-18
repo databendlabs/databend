@@ -18,6 +18,7 @@ use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::NodeId;
 use crate::meta_service::RaftTxId;
+use crate::tests::Seq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_add() -> anyhow::Result<()> {
@@ -168,10 +169,10 @@ async fn test_state_machine_apply_set() -> anyhow::Result<()> {
 async fn test_meta_node_boot() -> anyhow::Result<()> {
     crate::tests::init_tracing();
 
-    // Start a single node meta service cluster.
-    // Test the single node is recorded by this cluster.
+    // - Start a single node meta service cluster.
+    // - Test the single node is recorded by this cluster.
 
-    let addr = "127.0.0.1:9000".to_string();
+    let addr = new_addr();
     let resp = MetaNode::boot(0, addr.clone()).await;
     assert!(resp.is_ok());
 
@@ -184,19 +185,8 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_node_add_non_voter() -> anyhow::Result<()> {
-    crate::tests::init_tracing();
-
-    // Start a meta service cluster with one voter(leader) and one non-voter.
-    let (mn0, mn1) = setup_leader_non_voter().await?;
-    mn0.stop().await?;
-    mn1.stop().await?;
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
-    // Start a leader then shutdown.
+    // - Start a leader then shutdown.
 
     crate::tests::init_tracing();
 
@@ -223,15 +213,30 @@ async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_node_sync_to_non_voter() -> anyhow::Result<()> {
-    // Start a leader and a non-voter;
-    // Write to leader, check on non-voter.
+    // - Start a leader and a non-voter;
+    // - Write to leader, check on non-voter.
 
     crate::tests::init_tracing();
-    let (_nid0, mn0) = setup_leader().await?;
-    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1, "127.0.0.1:19007").await?;
-    check_write_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
 
-    mn0.stop().await?;
+    let (_nid0, mn0) = setup_leader().await?;
+    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1, &new_addr()).await?;
+
+    assert_write_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_node_3_members() -> anyhow::Result<()> {
+    // - Start a cluster with 3 replicas
+    // - Write to leader, check data is replicated.
+
+    // crate::tests::init_tracing();
+    //
+    // let (_nid0, mn0) = setup_leader().await?;
+    // let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1, "127.0.0.1:19007").await?;
+    //
+    // assert_write_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
 
     Ok(())
 }
@@ -246,11 +251,13 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     crate::tests::init_tracing();
 
     let (_nid0, mn0) = setup_leader().await?;
-    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1, "127.0.0.1:19008").await?;
+    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1, &new_addr()).await?;
     let sto0 = mn0.sto.clone();
     let sto1 = mn1.sto.clone();
 
-    check_write_synced(vec![mn0.clone(), mn1.clone()], "key1").await?;
+    let meta_nodes = vec![mn0.clone(), mn1.clone()];
+
+    assert_write_synced(meta_nodes.clone(), "key1").await?;
 
     // stop
     tracing::info!("shutting down all");
@@ -260,42 +267,38 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     let n = mn1.stop().await?;
     assert_eq!(3, n);
 
+    tracing::info!("restart all");
+
     // restart
     let mn0 = MetaNode::builder().node_id(0).sto(sto0).build().await?;
     let mut rx0 = mn0.raft.metrics();
     let mn1 = MetaNode::builder().node_id(1).sto(sto1).build().await?;
     let mut rx1 = mn1.raft.metrics();
 
-    // TODO check old data
+    let meta_nodes = vec![mn0.clone(), mn1.clone()];
+
     wait_for("n0 -> leader", &mut rx0, |x| x.state == State::Leader).await;
     wait_for("n1 -> non-voter", &mut rx1, |x| x.state == State::NonVoter).await;
-
     wait_for("n1.current_leader -> 0", &mut rx1, |x| {
         x.current_leader == Some(0)
     })
     .await;
 
-    check_write_synced(vec![mn0.clone(), mn1.clone()], "key2").await?;
+    assert_write_synced(meta_nodes.clone(), "key2").await?;
+
+    // check old data
+    assert_get_file(meta_nodes, "key1", "key1").await?;
 
     Ok(())
 }
 
-async fn setup_leader_non_voter() -> anyhow::Result<(Arc<MetaNode>, Arc<MetaNode>)> {
-    // Setup a cluster in which there is a leader and a non-voter.
-    // asserts states are consistent
-
-    let (_nid0, mn0) = setup_leader().await?;
-    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1, "127.0.0.1:19001").await?;
-
-    Ok((mn0, mn1))
-}
 async fn setup_leader() -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
     // Setup a cluster in which there is a leader and a non-voter.
     // asserts states are consistent
 
     // node-0: voter, becomes leader.
     let nid0 = 0;
-    let addr0 = "127.0.0.1:19000".to_string();
+    let addr0 = new_addr();
 
     // boot up a single-node cluster
     let mn0 = MetaNode::boot(nid0, addr0.clone()).await?;
@@ -303,7 +306,7 @@ async fn setup_leader() -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
 
     {
         // ensure n0 is ready
-        check_connection(&addr0).await?;
+        assert_connection(&addr0).await?;
 
         // assert that boot() adds the node to meta.
         let got = mn0.get_node(&nid0).await;
@@ -323,8 +326,8 @@ async fn setup_non_voter(
     id: NodeId,
     addr: &str
 ) -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
-    let mn1 = MetaNode::boot_non_voter(id, addr).await?;
-    let mut rx1 = mn1.raft.metrics();
+    let mn = MetaNode::boot_non_voter(id, addr).await?;
+    let mut rx = mn.raft.metrics();
 
     {
         // add node-1 to cluster as non-voter
@@ -340,22 +343,24 @@ async fn setup_non_voter(
     }
 
     {
-        // ensure n1 is ready
-        check_connection(addr).await?;
-        wait_for(&format!("n{} -> non-voter", id), &mut rx1, |x| {
+        // ensure the MetaNode is ready
+        assert_connection(addr).await?;
+
+        wait_for(&format!("n{} -> non-voter", id), &mut rx, |x| {
             x.state == State::NonVoter
         })
         .await;
-        wait_for(&format!("n{}.current_leader -> 0", id), &mut rx1, |x| {
+
+        wait_for(&format!("n{}.current_leader -> 0", id), &mut rx, |x| {
             x.current_leader == Some(0)
         })
         .await;
     }
 
-    Ok((id, mn1))
+    Ok((id, mn))
 }
 
-async fn check_write_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> anyhow::Result<()> {
+async fn assert_write_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> anyhow::Result<()> {
     let leader = meta_nodes[0].clone();
 
     let last_applied = leader.raft.metrics().borrow().last_applied;
@@ -373,9 +378,18 @@ async fn check_write_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> anyhow
             .await?;
     }
 
-    // wait for leader and others for applied index upto date
+    assert_applied_index(meta_nodes.clone(), last_applied + 1).await?;
+    assert_get_file(meta_nodes.clone(), key, key).await?;
+
+    Ok(())
+}
+
+async fn assert_applied_index(meta_nodes: Vec<Arc<MetaNode>>, at_least: u64) -> anyhow::Result<()> {
+    // wait for nodes for applied index to be upto date: applied >= at_least.
+
     for i in 0..meta_nodes.len() {
         let mn = meta_nodes[i].clone();
+
         // raft.metrics is the status of the cluster, not the status about a node.
         // E.g., if leader applied 4th log, the next append_entry request updates the applied index to 4 on a follower or non-voter,
         // no matter whether it actually applied the 4th log.
@@ -383,22 +397,28 @@ async fn check_write_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> anyhow
         wait_for_applied(
             &format!("n{}", i,),
             &mut mn.sto.applied_rx.clone(),
-            last_applied + 1
+            at_least
         )
         .await;
     }
-
-    // check data written on leader and all other nodes
-    for i in 0..meta_nodes.len() {
-        let mn = meta_nodes[i].clone();
-        let val = mn.get_file(key).await;
-        assert_eq!(key.to_string(), val.unwrap(), "n{} applied value", i);
-    }
-
     Ok(())
 }
 
-async fn check_connection(addr: &str) -> anyhow::Result<()> {
+async fn assert_get_file(
+    meta_nodes: Vec<Arc<MetaNode>>,
+    key: &str,
+    value: &str
+) -> anyhow::Result<()> {
+    for i in 0..meta_nodes.len() {
+        let mn = meta_nodes[i].clone();
+
+        let got = mn.get_file(key).await;
+        assert_eq!(value.to_string(), got.unwrap(), "n{} applied value", i);
+    }
+    Ok(())
+}
+
+async fn assert_connection(addr: &str) -> anyhow::Result<()> {
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
     let req = tonic::Request::new(GetReq { key: "foo".into() });
@@ -438,4 +458,10 @@ async fn wait_for_applied(msg: &str, rx: &mut Receiver<u64>, at_least: u64) -> u
         let changed = rx.changed().await;
         assert!(changed.is_ok());
     }
+}
+
+fn new_addr() -> String {
+    let addr = format!("127.0.0.1:{}", 19000 + *Seq::default());
+    tracing::info!("new_addr: {}", addr);
+    addr
 }
