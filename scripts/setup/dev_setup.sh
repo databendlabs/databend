@@ -1,12 +1,10 @@
 #!/bin/bash
-
 # Copyright (c) The Diem Core Contributors.
-# Copyright 2020-2021 The FuseQuery Authors.
-#
+# Copyright 2020-2021 The Datafuse Authors.
 # SPDX-License-Identifier: Apache-2.0.
 
 SCRIPT_PATH="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"
-cd "$SCRIPT_PATH/.." || exit
+cd "$SCRIPT_PATH/../.." || exit
 
 function add_to_profile {
   eval "$1"
@@ -284,7 +282,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "false" ]] && \
 fi
 
 if [ ! -f rust-toolchain ]; then
-	echo "Unknown location. Please run this from the fuse-query repository. Abort."
+	echo "Unknown location. Please run this from the datafuse repository. Abort."
 	exit 1
 fi
 

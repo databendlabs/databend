@@ -18,8 +18,4 @@ jobs:
         run: cargo build --verbose
       - name: Run Stateless Tests with Cluster mode
         run: |
-          echo "Starting Cluster fuse-query"
-          scripts/ci/fusequery-cluster-3-nodes.sh
-          echo "Starting fuse-test"
-          cd tests
-          ./fuse-test '^0[^4]_' --skip-dir '1_performance'
+          ./scripts/ci/ci-stateless-tests-cluster.sh

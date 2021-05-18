@@ -19,8 +19,4 @@ jobs:
 
       - name: Run Performance Tests with Standalone mode
         run: |
-          echo "Starting Standalone fuse-query"
-          scripts/ci/fusequery-standalone.sh release
-          echo "Starting performance test"
-          cd tests
-          ./fuse-test --print-time --run-dir '1_performance'
+          ./scripts/ci/ci-performance-tests-standalone.sh
