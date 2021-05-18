@@ -9,17 +9,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           components: rustfmt
           override: true
+
       - name: Build
         run: cargo build --verbose
+
       - name: Run Stateless Tests with Standalone mode
         run: |
-          echo "Starting Standalone fuse-query"
-          scripts/ci/fusequery-standalone.sh
-          echo "Starting fuse-test"
-          cd tests
-          ./fuse-test --skip-dir '1_performance'
+          bash ./scripts/ci/ci-stateless-tests-standalone.sh

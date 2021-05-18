@@ -2,7 +2,7 @@ HUB ?= datafusedev
 TAG ?= latest
 # Setup dev toolchain
 setup:
-	bash ./scripts/dev_setup.sh
+	bash ./scripts/setup/dev_setup.sh
 
 test:
 	cargo test
@@ -38,9 +38,6 @@ docker:
 runhelm:
 	helm upgrade --install datafuse ./charts/datafuse \
 		--set image.repository=${HUB}/fuse-query --set image.tag=${TAG} --set configs.mysqlPort=3308
-
-coverage:
-	bash ./scripts/dev_codecov.sh
 
 clean:
 	cargo clean
