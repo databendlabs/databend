@@ -21,12 +21,4 @@ impl FilterPlan {
     pub fn schema(&self) -> DataSchemaRef {
         self.input.schema()
     }
-
-    pub fn child(&self) -> Arc<PlanNode> {
-        self.input.clone()
-    }
-
-    pub fn set_child(&mut self, input: &PlanNode) {
-        self.input = Arc::new(input.clone());
-    }
 }

@@ -124,11 +124,11 @@ impl PlanNode {
                             Ok(false)
                         }
                         PlanNode::Explain(plan) => {
-                            write!(f, "{:?}", plan.child())?;
+                            write!(f, "{:?}", plan.input)?;
                             Ok(false)
                         }
                         PlanNode::Select(plan) => {
-                            write!(f, "{:?}", plan.child())?;
+                            write!(f, "{:?}", plan.input)?;
                             Ok(false)
                         }
                         PlanNode::CreateDatabase(plan) => {

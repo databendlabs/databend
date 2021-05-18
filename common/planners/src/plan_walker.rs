@@ -25,7 +25,7 @@ impl<'plan, 'a, E> PlanVisitor<'plan> for PreOrderWalker<'a, E> {
         }
         match (self.callback)(node) {
             Ok(true) => {
-                for n in node.children() {
+                for n in node.inputs() {
                     self.visit_plan_node(n.as_ref());
                 }
             }
@@ -60,7 +60,7 @@ impl<'plan, 'a, E> PlanVisitor<'plan> for PostOrderWalker<'a, E> {
         if let PlanNode::Empty(_) = node {
             return;
         }
-        for n in node.children() {
+        for n in node.inputs() {
             self.visit_plan_node(n.as_ref());
         }
         if let Ok(true) = self.state {

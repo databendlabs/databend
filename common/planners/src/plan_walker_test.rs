@@ -18,7 +18,7 @@ fn test_plan_walker() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // PreOrder.
     {
         let mut actual: Vec<String> = vec![];
-        for child in plan.children() {
+        for child in plan.inputs() {
             child.walk_preorder(|plan| -> Result<bool, Box<dyn std::error::Error>> {
                 actual.push(plan.name().to_string());
                 return Ok(true);
@@ -36,7 +36,7 @@ fn test_plan_walker() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // PostOrder.
     {
         let mut actual: Vec<String> = vec![];
-        for child in plan.children() {
+        for child in plan.inputs() {
             child.walk_postorder(|plan| -> Result<bool, Box<dyn std::error::Error>> {
                 actual.push(plan.name().to_string());
                 return Ok(true);

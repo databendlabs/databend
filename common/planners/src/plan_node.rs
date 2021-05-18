@@ -103,43 +103,25 @@ impl PlanNode {
         }
     }
 
-    pub fn children(&self) -> Vec<Arc<PlanNode>> {
+    pub fn inputs(&self) -> Vec<Arc<PlanNode>> {
         match self {
-            PlanNode::Stage(v) => vec![v.child().clone()],
-            PlanNode::Projection(v) => vec![v.child().clone()],
-            PlanNode::Expression(v) => vec![v.child().clone()],
-            PlanNode::AggregatorPartial(v) => vec![v.child().clone()],
-            PlanNode::AggregatorFinal(v) => vec![v.child().clone()],
-            PlanNode::Filter(v) => vec![v.child().clone()],
-            PlanNode::Having(v) => vec![v.child().clone()],
-            PlanNode::Limit(v) => vec![v.child().clone()],
-            PlanNode::Explain(v) => vec![v.child().clone()],
-            PlanNode::Select(v) => vec![v.child().clone()],
-            PlanNode::Sort(v) => vec![v.child().clone()],
+            PlanNode::Stage(v) => vec![v.input.clone()],
+            PlanNode::Projection(v) => vec![v.input.clone()],
+            PlanNode::Expression(v) => vec![v.input.clone()],
+            PlanNode::AggregatorPartial(v) => vec![v.input.clone()],
+            PlanNode::AggregatorFinal(v) => vec![v.input.clone()],
+            PlanNode::Filter(v) => vec![v.input.clone()],
+            PlanNode::Having(v) => vec![v.input.clone()],
+            PlanNode::Limit(v) => vec![v.input.clone()],
+            PlanNode::Explain(v) => vec![v.input.clone()],
+            PlanNode::Select(v) => vec![v.input.clone()],
+            PlanNode::Sort(v) => vec![v.input.clone()],
 
             _ => vec![]
         }
     }
 
-    pub fn child(&self, n: usize) -> Arc<PlanNode> {
-        self.children()[n].clone()
-    }
-
-    pub fn set_child(&mut self, _n: usize, node: &PlanNode) {
-        match self {
-            PlanNode::Stage(v) => v.set_child(node),
-            PlanNode::Projection(v) => v.set_child(node),
-            PlanNode::Expression(v) => v.set_child(node),
-            PlanNode::AggregatorPartial(v) => v.set_child(node),
-            PlanNode::AggregatorFinal(v) => v.set_child(node),
-            PlanNode::Filter(v) => v.set_child(node),
-            PlanNode::Having(v) => v.set_child(node),
-            PlanNode::Limit(v) => v.set_child(node),
-            PlanNode::Explain(v) => v.set_child(node),
-            PlanNode::Select(v) => v.set_child(node),
-            PlanNode::Sort(v) => v.set_child(node),
-
-            _ => {}
-        }
+    pub fn input(&self, n: usize) -> Arc<PlanNode> {
+        self.inputs()[n].clone()
     }
 }
