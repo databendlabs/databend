@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
+use std::sync::Arc;
 
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
@@ -20,9 +21,6 @@ pub trait IAggreagteFunction: fmt::Display + Sync + Send + DynClone {
     fn accumulate_result(&self) -> Result<Vec<DataValue>>;
     fn merge(&mut self, _states: &[DataValue]) -> Result<()>;
     fn merge_result(&self) -> Result<DataValue>;
-}
-
-pub trait AggregateFunctionCtx {
 }
 
 dyn_clone::clone_trait_object!(IAggreagteFunction);

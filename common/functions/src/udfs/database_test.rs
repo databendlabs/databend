@@ -18,27 +18,26 @@ fn test_database_function() -> anyhow::Result<()> {
         name: &'static str,
         display: &'static str,
         nullable: bool,
-        block: DataBlock,
+        columns: Vec<DataColumnarValue>,
         expect: DataArrayRef,
         error: &'static str,
         func: Box<dyn IFunction>
     }
 
-    let database = LiteralFunction::try_create(DataValue::Utf8(Some("default".to_string())))?;
-
     let tests = vec![Test {
         name: "database-function-passed",
         display: "database()",
         nullable: false,
-        func: DatabaseFunction::try_create("database", &[database.clone()])?,
-        block: DataBlock::empty(),
+        func: DatabaseFunction::try_create("database")?,
+        columns: vec![Arc::new(Int64Array::from(vec![4])).into()],
         expect: Arc::new(StringArray::from(vec!["default"])),
         error: ""
     }];
 
     for t in tests {
+        let rows = t.columns[0].len();
         let func = t.func;
-        match func.eval(&t.block) {
+        match func.eval(&t.columns, rows) {
             Ok(v) => {
                 // Display check.
                 let expect_display = t.display.to_string();

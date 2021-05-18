@@ -17,10 +17,10 @@ pub enum Recursion<V: ExpressionVisitor> {
 }
 
 /// Encode the traversal of an expression tree. When passed to
-/// `Expr::accept`, `ExprVisitor::visit` is invoked
+/// `Expr::accept`, `ExpressionVisitor::visit` is invoked
 /// recursively on all nodes of an expression tree. See the comments
 /// on `Expr::accept` for details on its use
-pub trait ExprVisitor: Sized {
+pub trait ExpressionVisitor: Sized {
     /// Invoked before any children of `expr` are visisted.
     fn pre_visit(self, expr: &ExpressionAction) -> Result<Recursion<Self>>;
 
@@ -75,14 +75,14 @@ impl ExpressionAction {
                 for arg in args {
                     visitor = arg.accept(visitor)?;
                 }
-                visitor
+                Ok(visitor)
             }
             ExpressionAction::AggregateFunction { op, args } => {
                 let mut visitor = visitor;
                 for arg in args {
                     visitor = arg.accept(visitor)?;
                 }
-                visitor
+                Ok(visitor)
             }
             ExpressionAction::Cast { expr, data_type } => expr.accept(visitor),
             ExpressionAction::Sort { expr, .. } => expr.accept(visitor),

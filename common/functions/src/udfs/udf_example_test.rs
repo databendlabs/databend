@@ -18,7 +18,7 @@ fn test_udf_example_function() -> anyhow::Result<()> {
         name: &'static str,
         display: &'static str,
         nullable: bool,
-        block: DataBlock,
+        columns: Vec<DataColumnarValue>,
         expect: DataArrayRef,
         error: &'static str,
         func: Box<dyn IFunction>
@@ -37,17 +37,17 @@ fn test_udf_example_function() -> anyhow::Result<()> {
         display: "example()",
         nullable: false,
         func: UdfExampleFunction::try_create("example", &[field_a.clone(), field_b.clone()])?,
-        block: DataBlock::create(schema.clone(), vec![
-            Arc::new(BooleanArray::from(vec![true, true, true, false])),
-            Arc::new(BooleanArray::from(vec![true, false, true, true])),
-        ]),
+        columns: vec![
+            Arc::new(BooleanArray::from(vec![true, true, true, false])).into(),
+            Arc::new(BooleanArray::from(vec![true, false, true, true])).into(),
+        ],
         expect: Arc::new(BooleanArray::from(vec![true, true, true, true])),
         error: ""
     }];
 
     for t in tests {
         let func = t.func;
-        if let Err(e) = func.eval(&t.block) {
+        if let Err(e) = func.eval(&t.columns, t.columns[0].len) {
             assert_eq!(t.error, e.to_string());
         }
 
@@ -58,12 +58,13 @@ fn test_udf_example_function() -> anyhow::Result<()> {
 
         // Nullable check.
         let expect_null = t.nullable;
-        let actual_null = func.nullable(t.block.schema())?;
+        let actual_null = func.nullable(&schema)?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&t.block)?;
+        let ref v = func.eval(&t.columns, t.columns[0].len)?;
         // Type check.
-        let expect_type = func.return_type(t.block.schema())?;
+        let arg_types = vec![];
+        let expect_type = func.return_type(&arg_types)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
         assert_eq!(v.to_array()?.as_ref(), t.expect.as_ref());

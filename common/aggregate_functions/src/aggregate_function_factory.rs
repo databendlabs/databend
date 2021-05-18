@@ -11,10 +11,10 @@ use indexmap::IndexMap;
 use lazy_static::lazy_static;
 
 use crate::aggregator::AggregatorFunction;
-use crate::{IAggreagteFunction, AggregateFunctionCtx};
+use crate::IAggreagteFunction;
 
 pub struct AggregateFunctionFactory;
-pub type FactoryFunc = fn(name: &str, ctx: Arc<dyn AggregateFunctionCtx>) -> Result<Box<dyn IAggreagteFunction>>;
+pub type FactoryFunc = fn(name: &str) -> Result<Box<dyn IAggreagteFunction>>;
 
 pub type FactoryFuncRef = Arc<RwLock<IndexMap<&'static str, FactoryFunc>>>;
 
@@ -28,12 +28,12 @@ lazy_static! {
 }
 
 impl AggregateFunctionFactory {
-    pub fn get(name: &str, ctx: Arc<dyn AggregateFunctionCtx>) -> Result<Box<dyn IAggreagteFunction>> {
+    pub fn get(name: &str) -> Result<Box<dyn IAggreagteFunction>> {
         let map = FACTORY.read();
         let creator = map.get(&*name.to_lowercase()).ok_or_else(|| {
             ErrorCodes::UnknownFunction(format!("Unsupported AggregateFunction: {}", name))
         })?;
-        (creator)(name, ctx)
+        (creator)(name)
     }
 
     pub fn check(name: &str) -> bool {

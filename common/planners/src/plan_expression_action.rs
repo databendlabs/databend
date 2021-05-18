@@ -3,20 +3,21 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
+use std::sync::Arc;
 
+use common_aggregate_functions::AggregateFunctionFactory;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_exception::{Result, ErrorCodes};
-use common_functions::{AliasFunction, FunctionCtx};
+use common_exception::ErrorCodes;
+use common_exception::Result;
+use common_functions::AliasFunction;
 use common_functions::CastFunction;
 use common_functions::ColumnFunction;
 use common_functions::FunctionFactory;
 use common_functions::IFunction;
 use common_functions::LiteralFunction;
-use std::sync::Arc;
-use common_aggregate_functions::{AggregateFunctionFactory, AggregateFunctionCtx};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum ExpressionAction {
@@ -31,13 +32,13 @@ pub enum ExpressionAction {
     /// Note: BinaryFunction is a also kind of functions function
     ScalarFunction {
         op: String,
-        args: Vec<ExpressionAction>
+        args: Vec<ExpressionAction>,
     },
 
     /// AggregateFunction with a set of arguments.
     AggregateFunction {
         op: String,
-        args: Vec<ExpressionAction>
+        args: Vec<ExpressionAction>,
     },
 
     /// A sort expression, that can be used to sort values.
@@ -47,7 +48,7 @@ pub enum ExpressionAction {
         /// The direction of the sort
         asc: bool,
         /// Whether to put Nulls before all other data values
-        nulls_first: bool
+        nulls_first: bool,
     },
     /// All fields(*) in a schema.
     Wildcard,
@@ -57,49 +58,61 @@ pub enum ExpressionAction {
         /// The expression being cast
         expr: Box<ExpressionAction>,
         /// The `DataType` the expression will yield
-        data_type: DataType
-    }
+        data_type: DataType,
+    },
 }
 
 impl ExpressionAction {
-    pub fn column_name(&self) -> &str {
-        format!("{:?}", self).as_str()
+    pub fn column_name(&self) -> String {
+        match self {
+            ExpressionAction::Alias(name, expr) => name.clone(),
+            _ => format!("{:?}", self)
+        }
     }
 
     pub fn to_data_field(&self, input_schema: &DataSchemaRef) -> Result<DataField> {
         let name = self.column_name();
-        self.return_type(&input_schema).and_then(|return_type| {
-            function.nullable(&input_schema).map(|nullable| {
-                DataField::new(name, return_type, nullable)
-            })
+        self.to_data_type(&input_schema).and_then(|return_type| {
+            self.nullable(&input_schema)
+                .map(|nullable| DataField::new(&name, return_type, nullable))
         })
     }
 
-    pub fn to_data_type<S>(&self, input_schema: &DataSchemaRef, ctx: Arc<S>) -> Result<DataType>
-    where S: FunctionCtx + AggregateFunctionCtx {
+    // TODO
+    pub fn nullable(&self, input_schema: &DataSchemaRef) -> Result<bool> {
+        Ok(false)
+    }
+
+    pub fn to_data_type(&self, input_schema: &DataSchemaRef) -> Result<DataType> {
         match self {
-            ExpressionAction::Alias(_, expr) => expr.to_data_type(input_schema, ctx.clone()),
-            ExpressionAction::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
+            ExpressionAction::Alias(_, expr) => expr.to_data_type(input_schema),
+            ExpressionAction::Column(s) => Ok(input_schema
+                .field_with_name(s)
+                .map_err(ErrorCodes::from_arrow)?
+                .data_type()
+                .clone()),
             ExpressionAction::Literal(v) => Ok(v.data_type()),
             ExpressionAction::ScalarFunction { op, args } => {
                 let mut arg_types = Vec::with_capacity(args.len());
                 for arg in args {
-                    args_types.push(arg.to_data_type(input_schema, ctx.clone())?);
+                    arg_types.push(arg.to_data_type(input_schema)?);
                 }
-                let func = FunctionFactory::get(op, ctx.clone())?;
+                let func = FunctionFactory::get(op)?;
                 func.return_type(&arg_types)
             }
             ExpressionAction::AggregateFunction { op, args } => {
                 let mut arg_types = Vec::with_capacity(args.len());
                 for arg in args {
-                    args_types.push(arg.to_data_type(input_schema, ctx.clone())?);
+                    arg_types.push(arg.to_data_type(input_schema)?);
                 }
-                let func = AggregateFunctionFactory::get(op, ctx.clone())?;
+                let func = AggregateFunctionFactory::get(op)?;
                 func.return_type(&arg_types)
             }
-            ExpressionAction::Wildcard => Result::Err(ErrorCodes::IllegalDataType("Wildcard expressions are not valid to get return type")),
-            ExpressionAction::Cast {expr, data_type } => Ok(data_type.clone()),
-            ExpressionAction::Sort { expr, .. } => expr.to_data_type(input_schema, ctx.clone())?,
+            ExpressionAction::Wildcard => Result::Err(ErrorCodes::IllegalDataType(
+                "Wildcard expressions are not valid to get return type"
+            )),
+            ExpressionAction::Cast { expr, data_type } => Ok(data_type.clone()),
+            ExpressionAction::Sort { expr, .. } => expr.to_data_type(input_schema)
         }
     }
 

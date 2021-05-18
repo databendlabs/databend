@@ -15,10 +15,10 @@ use crate::comparisons::ComparisonFunction;
 use crate::logics::LogicFunction;
 use crate::strings::StringFunction;
 use crate::udfs::UdfFunction;
-use crate::{IFunction, FunctionCtx};
+use crate::IFunction;
 
 pub struct FunctionFactory;
-pub type FactoryFunc = fn(name: &str, ctx: Arc<dyn FunctionCtx>) -> Result<Box<dyn IFunction>>;
+pub type FactoryFunc = fn(name: &str) -> Result<Box<dyn IFunction>>;
 
 pub type FactoryFuncRef = Arc<RwLock<IndexMap<&'static str, FactoryFunc>>>;
 
@@ -35,12 +35,12 @@ lazy_static! {
 }
 
 impl FunctionFactory {
-    pub fn get(name: &str, ctx: Arc<dyn FunctionCtx>) -> Result<Box<dyn IFunction>> {
+    pub fn get(name: &str) -> Result<Box<dyn IFunction>> {
         let map = FACTORY.read();
         let creator = map.get(&*name.to_lowercase()).ok_or_else(|| {
             ErrorCodes::UnknownFunction(format!("Unsupported Function: {}", name))
         })?;
-        (creator)(name, ctx)
+        (creator)(name)
     }
 
     pub fn check(name: &str) -> bool {

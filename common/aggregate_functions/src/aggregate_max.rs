@@ -3,9 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::{DataArrayAggregate, DataColumnarValue};
+use common_datavalues::DataArrayAggregate;
+use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -14,22 +16,21 @@ use common_datavalues::DataValueAggregateOperator;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
-use crate::{IAggreagteFunction, AggregateFunctionCtx};
-use std::sync::Arc;
+use crate::IAggreagteFunction;
 
 #[derive(Clone)]
 pub struct AggregateMaxFunction {
     display_name: String,
     depth: usize,
-    state: DataValue,
+    state: DataValue
 }
 
 impl AggregateMaxFunction {
-    pub fn try_create(display_name: &str, ctx: Arc<dyn AggregateFunctionCtx>) -> Result<Box<dyn IAggreagteFunction>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggreagteFunction>> {
         Ok(Box::new(AggregateMaxFunction {
             display_name: display_name.to_string(),
             depth: 0,
-            state: DataValue::Null,
+            state: DataValue::Null
         }))
     }
 }
@@ -57,8 +58,8 @@ impl IAggreagteFunction for AggregateMaxFunction {
             self.state.clone(),
             DataArrayAggregate::data_array_aggregate_op(
                 DataValueAggregateOperator::Max,
-                columns[0].to_array()?,
-            )?,
+                columns[0].to_array()?
+            )?
         )?;
         Ok(())
     }
@@ -72,7 +73,7 @@ impl IAggreagteFunction for AggregateMaxFunction {
         self.state = DataValueAggregate::data_value_aggregate_op(
             DataValueAggregateOperator::Max,
             self.state.clone(),
-            val,
+            val
         )?;
         Ok(())
     }
@@ -84,6 +85,6 @@ impl IAggreagteFunction for AggregateMaxFunction {
 
 impl fmt::Display for AggregateMaxFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}({})", self.display_name, self.arg)
+        write!(f, "{}", self.display_name)
     }
 }

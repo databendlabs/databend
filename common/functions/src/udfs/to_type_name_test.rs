@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+
 #[test]
 fn test_to_type_name_function() -> anyhow::Result<()> {
     use std::sync::Arc;
@@ -18,7 +20,7 @@ fn test_to_type_name_function() -> anyhow::Result<()> {
         name: &'static str,
         display: &'static str,
         nullable: bool,
-        block: DataBlock,
+        columns: Vec<DataColumnarValue>,
         expect: DataArrayRef,
         error: &'static str,
         func: Box<dyn IFunction>
@@ -26,16 +28,12 @@ fn test_to_type_name_function() -> anyhow::Result<()> {
 
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Boolean, false)]);
 
-    let field_a = ColumnFunction::try_create("a")?;
-
     let tests = vec![Test {
         name: "to_type_name-example-passed",
         display: "toTypeName(a)",
         nullable: false,
-        func: ToTypeNameFunction::try_create("toTypeName", &[field_a.clone()])?,
-        block: DataBlock::create(schema.clone(), vec![Arc::new(BooleanArray::from(vec![
-            true, true, true, false,
-        ]))]),
+        func: ToTypeNameFunction::try_create("toTypeName")?,
+        columns: vec![Arc::new(BooleanArray::from(vec![true, true, true, false])).into()],
         expect: Arc::new(StringArray::from(vec![
             "Boolean", "Boolean", "Boolean", "Boolean",
         ])),
@@ -43,9 +41,11 @@ fn test_to_type_name_function() -> anyhow::Result<()> {
     }];
 
     for t in tests {
+        let rows = t.columns[0].len();
+
         let func = t.func;
         println!("{:?}", t.name);
-        if let Err(e) = func.eval(&t.block) {
+        if let Err(e) = func.eval(&t.columns, rows) {
             assert_eq!(t.error, e.to_string());
         }
 
@@ -56,12 +56,18 @@ fn test_to_type_name_function() -> anyhow::Result<()> {
 
         // Nullable check.
         let expect_null = t.nullable;
-        let actual_null = func.nullable(t.block.schema())?;
+        let actual_null = func.nullable(&schema)?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&t.block)?;
+        let ref v = func.eval(&t.columns, rows)?;
         // Type check.
-        let expect_type = func.return_type(t.block.schema())?;
+        let args = t
+            .arg_names
+            .iter()
+            .map(|name| schema.field_with_name(name)?.data_type())
+            .collect::<Result<Vec<DataType>>>()?;
+
+        let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
         assert_eq!(v.to_array()?.as_ref(), t.expect.as_ref());

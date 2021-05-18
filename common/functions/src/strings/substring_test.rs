@@ -5,7 +5,7 @@
 use common_exception::Result;
 
 use crate::strings::SubstringFunction;
-use crate::{ColumnFunction, MockFunctionCtx};
+use crate::ColumnFunction;
 use crate::IFunction;
 use crate::LiteralFunction;
 
@@ -35,8 +35,6 @@ fn test_substring_function() -> Result<()> {
         DataField::new("c", DataType::UInt64, false),
     ]);
 
-    let ctx = Arc::new(MockFunctionCtx);
-
     let tests = vec![
         Test {
             name: "substring-abcde-passed",
@@ -48,7 +46,7 @@ fn test_substring_function() -> Result<()> {
                 Arc::new(UInt64Array::from(vec![2])).into(),
                 Arc::new(UInt64Array::from(vec![3])).into(),
             ],
-            func: SubstringFunction::try_create("substring", ctx.clone())?,
+            func: SubstringFunction::try_create("substring")?,
             expect: Arc::new(StringArray::from(vec!["bcd"])),
             error: ""
         },
@@ -62,7 +60,7 @@ fn test_substring_function() -> Result<()> {
                 Arc::new(UInt64Array::from(vec![1])).into(),
                 Arc::new(UInt64Array::from(vec![3])).into(),
             ],
-            func: SubstringFunction::try_create("substring", ctx.clone())?,
+            func: SubstringFunction::try_create("substring")?,
             expect: Arc::new(StringArray::from(vec!["abc"])),
             error: ""
         },
@@ -76,7 +74,7 @@ fn test_substring_function() -> Result<()> {
                 Arc::new(UInt64Array::from(vec![2])).into(),
             ],
 
-            func: SubstringFunction::try_create("substring", ctx.clone())?,
+            func: SubstringFunction::try_create("substring")?,
             expect: Arc::new(StringArray::from(vec!["bcde"])),
             error: ""
         },
@@ -84,10 +82,11 @@ fn test_substring_function() -> Result<()> {
 
     for t in tests {
         let func = t.func;
-        if let Err(e) = func.eval(&t.block) {
+        let rows = t.columns[0].len();
+        if let Err(e) = func.eval(&t.columns, rows) {
             assert_eq!(t.error, e.to_string());
         }
-        func.eval(&t.block)?;
+        func.eval(&t.columns, rows)?;
 
         // Display check.
         let expect_display = t.display.to_string();
@@ -96,12 +95,16 @@ fn test_substring_function() -> Result<()> {
 
         // Nullable check.
         let expect_null = t.nullable;
-        let actual_null = func.nullable(t.block.schema())?;
+        let actual_null = func.nullable(&schema)?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&t.block, t.columns[0].len())?;
+        let ref v = func.eval(&t.columns, rows)?;
 
-        let args = t.arg_names.iter().map(|name| schema.field_with_name(name)?.data_type()).collect::<Result<Vec<DataType>>>()?;
+        let args = t
+            .arg_names
+            .iter()
+            .map(|name| schema.field_with_name(name)?.data_type())
+            .collect::<Result<Vec<DataType>>>()?;
 
         // Type check.
         let expect_type = func.return_type(&args)?;

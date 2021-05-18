@@ -68,7 +68,7 @@ impl ExpressionAction {
         let expr = match self {
             ExpressionAction::Alias(name, expr) => {
                 let expr = expr.rewrite(rewriter)?;
-                ExpressionAction::Alias(name, Box::new(expr))?
+                ExpressionAction::Alias(name, Box::new(expr))
             },
             ExpressionAction::ScalarFunction { op, args } => {
                 let mut new_args = Vec::with_capacity(args.len());

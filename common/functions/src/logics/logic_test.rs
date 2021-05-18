@@ -39,7 +39,7 @@ fn test_logic_function() -> anyhow::Result<()> {
             func_name: "AndFunction",
             display: "a and b",
             nullable: false,
-            func: LogicAndFunction::try_create_func("", ctx.clone())?,
+            func: LogicAndFunction::try_create_func("".clone())?,
             arg_names: vec!["a", "b"],
             columns: vec![
                 Arc::new(BooleanArray::from(vec![true, true, true, false])).into(),
@@ -53,7 +53,7 @@ fn test_logic_function() -> anyhow::Result<()> {
             func_name: "OrFunction",
             display: "a or b",
             nullable: false,
-            func: LogicOrFunction::try_create_func("", ctx.clone())?,
+            func: LogicOrFunction::try_create_func("".clone())?,
             arg_names: vec!["a", "b"],
             columns: vec![
                 Arc::new(BooleanArray::from(vec![true, true, true, false])).into(),
@@ -66,7 +66,8 @@ fn test_logic_function() -> anyhow::Result<()> {
 
     for t in tests {
         let func = t.func;
-        if let Err(e) = func.eval(&t.block) {
+        let rows = t.columns[0].len();
+        if let Err(e) = func.eval(&t.columns, rows) {
             assert_eq!(t.error, e.to_string());
         }
 
@@ -80,9 +81,13 @@ fn test_logic_function() -> anyhow::Result<()> {
         let actual_null = func.nullable(&schema)?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&t.block)?;
+        let ref v = func.eval(&t.columns, rows)?;
         // Type check.
-        let args = t.arg_names.iter().map(|name| schema.field_with_name(name)?.data_type()).collect::<Result<Vec<DataType>>>()?;
+        let args = t
+            .arg_names
+            .iter()
+            .map(|name| schema.field_with_name(name)?.data_type())
+            .collect::<Result<Vec<DataType>>>()?;
         let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);

@@ -3,17 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::{DataSchema, DataColumnarValue};
+use common_datavalues::DataColumnarValue;
+use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
-use crate::{AggregateFunctionCtx, IAggreagteFunction};
-use std::sync::Arc;
+use crate::IAggreagteFunction;
 
 #[derive(Clone)]
 pub struct AggregateCountFunction {
@@ -23,10 +24,7 @@ pub struct AggregateCountFunction {
 }
 
 impl AggregateCountFunction {
-    pub fn try_create(
-        display_name: &str,
-        ctx: Arc<dyn AggregateFunctionCtx>
-    ) -> Result<Box<dyn IAggreagteFunction>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggreagteFunction>> {
         Ok(Box::new(AggregateCountFunction {
             display_name: display_name.to_string(),
             depth: 0,
@@ -82,6 +80,6 @@ impl IAggreagteFunction for AggregateCountFunction {
 
 impl fmt::Display for AggregateCountFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}({})", self.display_name, self.arg)
+        write!(f, "{}", self.display_name)
     }
 }

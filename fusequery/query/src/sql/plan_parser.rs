@@ -262,10 +262,12 @@ impl PlanParser {
                 res.and_then(|res| item.map(|item| res || item))
             });
 
-
         // Before group by
 
-        println!("proj {:?}, agg: {:?}, group: {:?}", projection_exprs, projection_exprs, select.group_by);
+        println!(
+            "proj {:?}, agg: {:?}, group: {:?}",
+            projection_exprs, projection_exprs, select.group_by
+        );
         // Projection.
         let plan = if !select.group_by.is_empty() || has_aggregator? {
             self.aggregate(&plan, &projection_exprs, &select.group_by)
@@ -451,10 +453,12 @@ impl PlanParser {
                 Ok(ExpressionAction::Column(v.clone().value))
             }
             sqlparser::ast::Expr::BinaryOp { left, op, right } => {
-                Ok(ExpressionAction::BinaryExpression {
+                Ok(ExpressionAction::ScalarFunction {
                     op: format!("{}", op),
-                    left: Box::new(self.sql_to_rex(left, schema)?),
-                    right: Box::new(self.sql_to_rex(right, schema)?)
+                    args: vec![
+                        Box::new(self.sql_to_rex(left, schema)?),
+                        Box::new(self.sql_to_rex(right, schema)?),
+                    ]
                 })
             }
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema),

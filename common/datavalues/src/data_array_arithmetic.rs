@@ -33,18 +33,13 @@ impl DataArrayArithmetic {
         right: &DataColumnarValue
     ) -> Result<DataArrayRef> {
         let (left_array, right_array) = match (left, right) {
-            (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
-                (left_array.clone(), right_array.clone())
-            }
-            (DataColumnarValue::Array(array), DataColumnarValue::Constant(scalar, _)) => {
-                (array.clone(), scalar.to_array_with_size(array.len())?)
-            }
-            (DataColumnarValue::Constant(scalar, _), DataColumnarValue::Array(array)) => {
-                (scalar.to_array_with_size(array.len())?, array.clone())
-            }
-            (DataColumnarValue::Constant(left_scalar, rows), DataColumnarValue::Constant(right_scalar, _)) => (
-                left_scalar.to_array_with_size(*rows)?,
-                right_scalar.to_array_with_size(*rows)?
+            (DataColumnarValue::Constant(left_scalar, _), DataColumnarValue::Constant(right_scalar, _)) => (
+                left_scalar.to_array_with_size(1)?,
+                right_scalar.to_array_with_size(1)?
+            ),
+            _ => (
+                left.to_array()?,
+                right.to_array()?
             )
         };
 

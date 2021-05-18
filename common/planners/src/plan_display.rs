@@ -4,6 +4,7 @@
 
 use std::fmt;
 use std::fmt::Display;
+use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 

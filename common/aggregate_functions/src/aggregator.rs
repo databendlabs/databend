@@ -2,14 +2,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::Result;
-
-use crate::{AggregateFunctionCtx, IAggreagteFunction, AggregateCountFunction, AggregateMaxFunction, AggregateMinFunction, AggregateSumFunction, AggregateAvgFunction};
-
 use std::sync::Arc;
-use indexmap::map::IndexMap;
+
+use common_exception::Result;
 use common_infallible::RwLock;
+use indexmap::map::IndexMap;
+
 use crate::aggregate_function_factory::FactoryFuncRef;
+use crate::AggregateAvgFunction;
+use crate::AggregateCountFunction;
+use crate::AggregateMaxFunction;
+use crate::AggregateMinFunction;
+use crate::AggregateSumFunction;
+use crate::IAggreagteFunction;
 
 pub struct AggregatorFunction;
 

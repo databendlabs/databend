@@ -26,6 +26,7 @@ fn test_cast_function() -> Result<()> {
         func: Box<dyn IFunction>
     }
 
+
     let tests = vec![
         Test {
             name: "cast-int64-to-int8-passed",
@@ -52,6 +53,7 @@ fn test_cast_function() -> Result<()> {
     ];
 
     for t in tests {
+        let rows = t.columns[0].len();
         let func = t.func;
         if let Err(e) = func.eval(&t.columns) {
             assert_eq!(t.error, e.to_string());
@@ -64,10 +66,10 @@ fn test_cast_function() -> Result<()> {
 
         // Nullable check.
         let expect_null = t.nullable;
-        let actual_null = func.nullable(t.block.schema())?;
+        let actual_null = func.nullable(&DataSchema::empty())?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&t.columns)?;
+        let ref v = func.eval(&t.columns, rows)?;
         // Type check.
         let args = vec![t.cast_type];
         let expect_type = func.return_type(&args)?;

@@ -3,9 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::{DataArrayAggregate, DataColumnarValue};
+use common_datavalues::DataArrayAggregate;
+use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -15,8 +17,7 @@ use common_datavalues::DataValueArithmeticOperator;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
-use crate::{IAggreagteFunction, AggregateFunctionCtx};
-use std::sync::Arc;
+use crate::IAggreagteFunction;
 
 #[derive(Clone)]
 pub struct AggregateSumFunction {
@@ -26,10 +27,7 @@ pub struct AggregateSumFunction {
 }
 
 impl AggregateSumFunction {
-    pub fn try_create(
-        display_name: &str,
-        ctx: Arc<dyn AggregateFunctionCtx>
-    ) -> Result<Box<dyn IAggreagteFunction>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggreagteFunction>> {
         Ok(Box::new(AggregateSumFunction {
             display_name: display_name.to_string(),
             depth: 0,
@@ -89,6 +87,6 @@ impl IAggreagteFunction for AggregateSumFunction {
 
 impl fmt::Display for AggregateSumFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}({})", self.display_name, self.arg)
+        write!(f, "{}", self.display_name)
     }
 }

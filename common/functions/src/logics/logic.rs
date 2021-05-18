@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayLogic;
@@ -15,13 +16,12 @@ use common_exception::Result;
 
 use crate::logics::LogicAndFunction;
 use crate::logics::LogicOrFunction;
-use crate::{FactoryFuncRef, FunctionCtx};
+use crate::FactoryFuncRef;
 use crate::IFunction;
-use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct LogicFunction {
-    op: DataValueLogicOperator,
+    op: DataValueLogicOperator
 }
 
 impl LogicFunction {
@@ -32,13 +32,8 @@ impl LogicFunction {
         Ok(())
     }
 
-    pub fn try_create_func(
-        op: DataValueLogicOperator,
-        ctx: Arc<dyn FunctionCtx>,
-    ) -> Result<Box<dyn IFunction>> {
-        Ok(Box::new(LogicFunction {
-            op,
-        }))
+    pub fn try_create_func(op: DataValueLogicOperator) -> Result<Box<dyn IFunction>> {
+        Ok(Box::new(LogicFunction { op }))
     }
 }
 
@@ -57,17 +52,13 @@ impl IFunction for LogicFunction {
 
     fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
         Ok(DataColumnarValue::Array(
-            DataArrayLogic::data_array_logic_op(
-                self.op.clone(),
-                columns[0].as_ref(),
-                columns[1].as_ref(),
-            )?
+            DataArrayLogic::data_array_logic_op(self.op.clone(), &columns[0], &columns[1])?
         ))
     }
 }
 
 impl fmt::Display for LogicFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {} {}", self.left, self.op, self.right)
+        write!(f, "{}", self.op)
     }
 }

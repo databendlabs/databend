@@ -15,17 +15,13 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct AliasFunction {
-    depth: usize,
     alias: String,
-    func: Box<dyn IFunction>,
 }
 
 impl AliasFunction {
     pub fn try_create(alias: String) -> Result<Box<dyn IFunction>> {
         Ok(Box::new(AliasFunction {
-            depth: 0,
             alias,
-            func,
         }))
     }
 }
@@ -40,7 +36,7 @@ impl IFunction for AliasFunction {
     }
 
     fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
-        self.func.nullable(input_schema)
+        Ok(true)
     }
 
     fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {

@@ -32,15 +32,12 @@ fn test_comparison_function() -> Result<()> {
         DataField::new("b", DataType::Int64, false),
     ]);
 
-    let field_a = ColumnFunction::try_create("a").unwrap();
-    let field_b = ColumnFunction::try_create("b").unwrap();
-    let ctx = Arc::new(MockFunctionCtx);
     let tests = vec![
         Test {
             name: "eq-passed",
             display: "a = b",
             nullable: false,
-            func: ComparisonEqFunction::try_create_func("", ctx.clone())?,
+            func: ComparisonEqFunction::try_create_func()?,
             arg_names: vec!["a", "b"],
             columns: vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into().into(),
@@ -53,7 +50,7 @@ fn test_comparison_function() -> Result<()> {
             name: "gt-passed",
             display: "a > b",
             nullable: false,
-            func: ComparisonGtFunction::try_create_func("", ctx.clone())?,
+            func: ComparisonGtFunction::try_create_func()?,
             arg_names: vec!["a", "b"],
             columns: vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
@@ -66,7 +63,7 @@ fn test_comparison_function() -> Result<()> {
             name: "gt-eq-passed",
             display: "a >= b",
             nullable: false,
-            func: ComparisonGtEqFunction::try_create_func("", ctx.clone())?,
+            func: ComparisonGtEqFunction::try_create_func()?,
             arg_names: vec!["a", "b"],
             columns: vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
@@ -79,7 +76,7 @@ fn test_comparison_function() -> Result<()> {
             name: "lt-passed",
             display: "a < b",
             nullable: false,
-            func: ComparisonLtFunction::try_create_func("", ctx.clone())?,
+            func: ComparisonLtFunction::try_create_func()?,
             arg_names: vec!["a", "b"],
             columns: vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
@@ -92,11 +89,13 @@ fn test_comparison_function() -> Result<()> {
             name: "lt-eq-passed",
             display: "a <= b",
             nullable: false,
-            func: ComparisonLtEqFunction::try_create_func("", ctx.clone())?,
+            func: ComparisonLtEqFunction::try_create_func()?,
             arg_names: vec!["a", "b"],
             columns: vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into().into(),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).if_not_exists.into(),
+                Arc::new(Int64Array::from(vec![1, 2, 3, 4]))
+                    .if_not_exists
+                    .into(),
             ],
             expect: Arc::new(BooleanArray::from(vec![false, false, true, true])),
             error: ""
@@ -105,7 +104,7 @@ fn test_comparison_function() -> Result<()> {
             name: "not-eq-passed",
             display: "a != b",
             nullable: false,
-            func: ComparisonNotEqFunction::try_create_func("", ctx.clone())?,
+            func: ComparisonNotEqFunction::try_create_func()?,
             arg_names: vec!["a", "b"],
             columns: vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
@@ -117,25 +116,30 @@ fn test_comparison_function() -> Result<()> {
     ];
 
     for t in tests {
+        let rows = t.columns[0].len();
         let func = t.func;
-        if let Err(e) = func.eval(&t.block) {
+        if let Err(e) = func.eval(&t.columns, rows) {
             assert_eq!(t.error, e.to_string());
         }
-        func.eval(&t.block)?;
+        func.eval(&t.columns, rows)?;
 
         // Display check.
         let expect_display = t.display.to_string();
         let actual_display = format!("{}", func);
         assert_eq!(expect_display, actual_display);
 
-        let args = t.arg_names.iter().map(|name| schema.field_with_name(name)?.data_type()).collect::<Result<Vec<DataType>>>()?;
+        let args = t
+            .arg_names
+            .iter()
+            .map(|name| schema.field_with_name(name)?.data_type())
+            .collect::<Result<Vec<DataType>>>()?;
 
         // Nullable check.
         let expect_null = t.nullable;
         let actual_null = func.nullable(&schema)?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&t.columns)?;
+        let ref v = func.eval(&t.columns, rows)?;
         // Type check.
         let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();

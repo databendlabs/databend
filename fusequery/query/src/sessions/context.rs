@@ -27,8 +27,6 @@ use crate::datasources::IDataSource;
 use crate::datasources::ITable;
 use crate::datasources::ITableFunction;
 use crate::sessions::Settings;
-use common_functions::FunctionCtx;
-use common_aggregate_functions::AggregateFunctionCtx;
 
 #[derive(Clone)]
 pub struct FuseQueryContext {
@@ -213,19 +211,8 @@ impl FuseQueryContext {
     }
 }
 
-
 impl std::fmt::Debug for FuseQueryContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.settings)
     }
-}
-
-impl FunctionCtx for FuseQueryContext {
-    fn current_database(&self) -> &str {
-        self.get_current_database().as_str()
-    }
-}
-
-impl AggregateFunctionCtx for FuseQueryContext {
-
 }

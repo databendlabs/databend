@@ -17,7 +17,11 @@ use common_datavalues::UInt64Array;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
+<<<<<<< HEAD
 use crate::FunctionCtx;
+=======
+
+>>>>>>> [functions] remove FunctionCtx
 use crate::IFunction;
 
 #[derive(Clone)]
@@ -26,7 +30,11 @@ pub struct SubstringFunction {
 }
 
 impl SubstringFunction {
+<<<<<<< HEAD
     pub fn try_create(display_name: &str, ctx: Arc<dyn FunctionCtx>) -> Result<Box<dyn IFunction>> {
+=======
+    pub fn try_create(display_name: &str) -> Result<Box<dyn IFunction>> {
+>>>>>>> [functions] remove FunctionCtx
         Ok(Box::new(SubstringFunction {
             display_name: display_name.to_string()
         }))
@@ -54,46 +62,27 @@ impl IFunction for SubstringFunction {
             .downcast_ref::<Int64Array>()
             .unwrap()
             .value(0);
+
         let end = {
             if columns.len() >= 3 {
-                let v = columns[2]
-                    .to_array()?
-                    .as_any()
-                    .downcast_ref::<UInt64Array>()
-                    .unwrap();
+                let array = columns[2].to_array()?;
+                let v = array.as_any().downcast_ref::<UInt64Array>().unwrap();
                 Some(v.value(0))
             } else {
                 None
             }
         };
 
-        if let DataColumnarValue::Constant(from) = from {
-            match from {
-                DataValue::Int64(Some(from)) => {
-                    from_scalar = from - 1;
-                }
-                DataValue::UInt64(Some(from)) => {
-                    from_scalar = (from as i64) - 1;
-                }
-                _ => {}
-            }
-        }
-
-        let len = self.len.eval(block)?;
-        let mut len_scalar = None;
-        if let DataColumnarValue::Scalar(DataValue::UInt64(len)) = len {
-            len_scalar = len;
-        }
-
         let value = columns[0].to_array()?;
         Ok(DataColumnarValue::Array(
-            compute::kernels::substring::substring(&value, from, &end)?
+            compute::kernels::substring::substring(value.as_ref(), from, &end)
+                .map_err(ErrorCodes::from_arrow)?
         ))
     }
 }
 
 impl fmt::Display for SubstringFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SUBSTRING({},{},{})", self.expr, self.from, self.len)
+        write!(f, "SUBSTRING")
     }
 }

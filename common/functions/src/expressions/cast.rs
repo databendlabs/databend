@@ -10,7 +10,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_exception::Result;
 
 use crate::function::IFunction;
@@ -20,15 +19,13 @@ pub const DEFAULT_DATAFUSE_CAST_OPTIONS: CastOptions = CastOptions { safe: false
 
 #[derive(Clone)]
 pub struct CastFunction {
-    /// The expression to cast
-    expr: Box<dyn IFunction>,
     /// The data type to cast to
     cast_type: DataType
 }
 
 impl CastFunction {
     pub fn create(cast_type: DataType) -> Box<dyn IFunction> {
-        Box::new(Self { expr, cast_type })
+        Box::new(Self { cast_type })
     }
 }
 
@@ -42,7 +39,7 @@ impl IFunction for CastFunction {
     }
 
     fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
-        self.expr.nullable(input_schema)
+        Ok(true)
     }
 
     fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
@@ -56,10 +53,9 @@ impl IFunction for CastFunction {
         ))
     }
 }
-    }
 
 impl fmt::Display for CastFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "CAST({})", self.expr)
+        write!(f, "CAST")
     }
 }

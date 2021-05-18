@@ -29,7 +29,7 @@ impl IFunction for LiteralFunction {
         "LiteralFunction"
     }
 
-    fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
+    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
         Ok(self.value.data_type())
     }
 

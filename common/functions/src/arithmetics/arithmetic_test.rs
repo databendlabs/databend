@@ -24,7 +24,7 @@ fn test_arithmetic_function() -> Result<()> {
         columns: Vec<DataColumnarValue>,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>,
+        func: Box<dyn IFunction>
     }
 
     let schema = DataSchemaRefExt::create(vec![
@@ -37,98 +37,97 @@ fn test_arithmetic_function() -> Result<()> {
     let field_b = ColumnFunction::try_create("b")?;
     let field_c = ColumnFunction::try_create("c")?;
 
-    let ctx = Arc::new(MockFunctionCtx {});
-
     let tests = vec![
         Test {
             name: "add-int64-passed",
             display: "plus(a, b)",
             nullable: false,
             arg_names: vec!["a", "b"],
-            func: ArithmeticPlusFunction::try_create_func("", ctx.clone())?,
+            func: ArithmeticPlusFunction::try_create_func("")?,
             columns: vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2, 1])).into(),
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
             ],
             expect: Arc::new(Int64Array::from(vec![5, 5, 5, 5])),
-            error: "",
+            error: ""
         },
         Test {
             name: "add-diff-passed",
             display: "plus(c, a)",
             nullable: false,
             arg_names: vec!["c", "b"],
-            func: ArithmeticPlusFunction::try_create_func("", ctx.clone())?,
+            func: ArithmeticPlusFunction::try_create_func("")?,
             columns: vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2, 1])).into(),
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
             ],
             expect: Arc::new(Int64Array::from(vec![5, 5, 5, 5])),
-            error: "",
+            error: ""
         },
         Test {
             name: "sub-int64-passed",
             display: "minus(a, b)",
             arg_names: vec!["a", "b"],
             nullable: false,
-            func: ArithmeticMinusFunction::try_create_func("", ctx.clone())?,
+            func: ArithmeticMinusFunction::try_create_func("")?,
             columns: vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2])).into(),
                 Arc::new(Int64Array::from(vec![1, 2, 3])).into(),
                 Arc::new(Int64Array::from(vec![1, 2, 3])).into(),
             ],
             expect: Arc::new(Int64Array::from(vec![3, 1, -1])),
-            error: "",
+            error: ""
         },
         Test {
             name: "mul-int64-passed",
             display: "multiply(a, b)",
             arg_names: vec!["a", "b"],
             nullable: false,
-            func: ArithmeticMulFunction::try_create_func("", ctx.clone())?,
+            func: ArithmeticMulFunction::try_create_func("")?,
             columns: vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2])).into(),
                 Arc::new(Int64Array::from(vec![1, 2, 3])).into(),
                 Arc::new(Int64Array::from(vec![1, 2, 3])).into(),
             ],
             expect: Arc::new(Int64Array::from(vec![4, 6, 6])),
-            error: "",
+            error: ""
         },
         Test {
             name: "div-int64-passed",
             display: "divide(a, b)",
             arg_names: vec!["a", "b"],
             nullable: false,
-            func: ArithmeticDivFunction::try_create_func("", ctx.clone())?,
+            func: ArithmeticDivFunction::try_create_func("")?,
             columns: vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2])).into(),
                 Arc::new(Int64Array::from(vec![1, 2, 3])).into(),
                 Arc::new(Int64Array::from(vec![1, 2, 3])).into(),
             ],
             expect: Arc::new(Float64Array::from(vec![4.0, 1.5, 0.6666666666666666])),
-            error: "",
+            error: ""
         },
         Test {
             name: "mod-int64-passed",
             display: "modulo(a, b)",
             arg_names: vec!["a", "b"],
             nullable: false,
-            func: ArithmeticModuloFunction::try_create_func("", ctx.clone())?,
+            func: ArithmeticModuloFunction::try_create_func("")?,
             columns: vec![
                 Arc::new(Int64Array::from(vec![4, 3, 2])).into(),
                 Arc::new(Int64Array::from(vec![1, 2, 3])).into(),
                 Arc::new(Int64Array::from(vec![1, 2, 3])).into(),
             ],
             expect: Arc::new(Int64Array::from(vec![0, 1, 2])),
-            error: "",
+            error: ""
         },
     ];
 
     for t in tests {
+        let rows = t.columns[0].len();
         let func = t.func;
-        if let Err(e) = func.eval(&t.block) {
+        if let Err(e) = func.eval(&t.columns, rows) {
             assert_eq!(t.error, e.to_string());
         }
 
@@ -142,10 +141,14 @@ fn test_arithmetic_function() -> Result<()> {
         let actual_null = func.nullable(&schema)?;
         assert_eq!(expect_null, actual_null);
 
-        let args = t.arg_names.iter().map(|name| schema.field_with_name(name)?.data_type()).collect::<Result<Vec<DataType>>>()?;
+        let args = t
+            .arg_names
+            .iter()
+            .map(|name| schema.field_with_name(name)?.data_type())
+            .collect::<Result<Vec<DataType>>>()?;
 
         let expect_type = func.return_type(&args)?.clone();
-        let ref v = func.eval(&t.columns)?;
+        let ref v = func.eval(&t.columns, rows)?;
         let actual_type = v.data_type().clone();
         assert_eq!(expect_type, actual_type);
 

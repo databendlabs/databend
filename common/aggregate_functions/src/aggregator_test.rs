@@ -33,19 +33,14 @@ fn test_aggregator_function() -> Result<()> {
         Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
     ];
 
-    let ctx = Arc::new(MockAggregateFunctionCtx);
-
     let tests = vec![
         Test {
             name: "count-passed",
             eval_nums: 1,
-            types: vec![
-                DataType::Int64,
-                DataType::Int64,
-            ],
+            types: vec![DataType::Int64, DataType::Int64],
             display: "count(a)",
             nullable: false,
-            func: AggregatorCountFunction::try_create("count", ctx.clone())?,
+            func: AggregatorCountFunction::try_create("count")?,
             columns: columns.clone(),
             expect: DataValue::UInt64(Some(4)),
             error: ""
@@ -53,13 +48,10 @@ fn test_aggregator_function() -> Result<()> {
         Test {
             name: "max-passed",
             eval_nums: 2,
-            types: vec![
-                DataType::Int64,
-                DataType::Int64,
-            ],
+            types: vec![DataType::Int64, DataType::Int64],
             display: "max(a)",
             nullable: false,
-            func: AggregatorMaxFunction::try_create("max", ctx.clone())?,
+            func: AggregatorMaxFunction::try_create("max")?,
             columns: columns.clone(),
             expect: DataValue::Int64(Some(4)),
             error: ""
@@ -67,13 +59,10 @@ fn test_aggregator_function() -> Result<()> {
         Test {
             name: "min-passed",
             eval_nums: 2,
-            types: vec![
-                DataType::Int64,
-                DataType::Int64,
-            ],
+            types: vec![DataType::Int64, DataType::Int64],
             display: "min(a)",
             nullable: false,
-            func: AggregatorMinFunction::try_create("min", ctx.clone())?,
+            func: AggregatorMinFunction::try_create("min")?,
             columns: columns.clone(),
             expect: DataValue::Int64(Some(1)),
             error: ""
@@ -81,13 +70,10 @@ fn test_aggregator_function() -> Result<()> {
         Test {
             name: "avg-passed",
             eval_nums: 1,
-            types: vec![
-                DataType::Int64,
-                DataType::Int64,
-            ],
+            types: vec![DataType::Int64, DataType::Int64],
             display: "avg(a)",
             nullable: false,
-            func: AggregatorAvgFunction::try_create("avg", ctx.clone())?,
+            func: AggregatorAvgFunction::try_create("avg")?,
             columns: columns.clone(),
             expect: DataValue::Float64(Some(2.5)),
             error: ""
@@ -95,13 +81,10 @@ fn test_aggregator_function() -> Result<()> {
         Test {
             name: "sum-passed",
             eval_nums: 1,
-            types: vec![
-                DataType::Int64,
-                DataType::Int64,
-            ],
+            types: vec![DataType::Int64, DataType::Int64],
             display: "sum(a)",
             nullable: false,
-            func: AggregatorSumFunction::try_create("sum", ctx.clone())?,
+            func: AggregatorSumFunction::try_create("sum")?,
             columns: columns.clone(),
             expect: DataValue::Int64(Some(10)),
             error: ""
@@ -109,15 +92,17 @@ fn test_aggregator_function() -> Result<()> {
     ];
 
     for t in tests {
+        let rows = t.columns[0].len();
+
         let mut func1 = t.func.clone();
         for _ in 0..t.eval_nums {
-            func1.accumulate(&t.columns, t.columns[0].len())?;
+            func1.accumulate(&t.columns, rows)?;
         }
         let state1 = func1.accumulate_result()?;
 
         let mut func2 = t.func.clone();
         for _ in 1..t.eval_nums {
-            func2.accumulate(&t.columns, t.columns[0].len())?;
+            func2.accumulate(&t.columns, rows)?;
         }
         let state2 = func2.accumulate_result()?;
 

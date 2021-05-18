@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
+use std::sync::Arc;
 
-use common_datavalues::{DataArrayAggregate, DataColumnarValue};
+use common_datavalues::DataArrayAggregate;
+use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -14,8 +16,7 @@ use common_datavalues::DataValueArithmeticOperator;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
-use crate::{AggregateFunctionCtx, IAggreagteFunction};
-use std::sync::Arc;
+use crate::IAggreagteFunction;
 
 #[derive(Clone)]
 pub struct AggregateAvgFunction {
@@ -25,10 +26,7 @@ pub struct AggregateAvgFunction {
 }
 
 impl AggregateAvgFunction {
-    pub fn try_create(
-        display_name: &str,
-        ctx: Arc<dyn AggregateFunctionCtx>
-    ) -> Result<Box<dyn IAggreagteFunction>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggreagteFunction>> {
         Ok(Box::new(AggregateAvgFunction {
             display_name: display_name.to_string(),
             depth: 0,
@@ -114,6 +112,6 @@ impl IAggreagteFunction for AggregateAvgFunction {
 
 impl fmt::Display for AggregateAvgFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}({})", self.display_name, self.arg)
+        write!(f, "{}", self.display_name)
     }
 }

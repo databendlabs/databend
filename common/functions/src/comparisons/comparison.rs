@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayComparison;
@@ -20,9 +21,8 @@ use crate::comparisons::ComparisonGtFunction;
 use crate::comparisons::ComparisonLtEqFunction;
 use crate::comparisons::ComparisonLtFunction;
 use crate::comparisons::ComparisonNotEqFunction;
-use crate::{FactoryFuncRef, FunctionCtx};
+use crate::FactoryFuncRef;
 use crate::IFunction;
-use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
@@ -43,13 +43,8 @@ impl ComparisonFunction {
         Ok(())
     }
 
-    pub fn try_create_func(
-        op: DataValueComparisonOperator,
-        _ctx: Arc<dyn FunctionCtx>,
-    ) -> Result<Box<dyn IFunction>> {
-        Ok(Box::new(ComparisonFunction {
-            op
-        }))
+    pub fn try_create_func(op: DataValueComparisonOperator) -> Result<Box<dyn IFunction>> {
+        Ok(Box::new(ComparisonFunction { op }))
     }
 }
 
@@ -67,20 +62,18 @@ impl IFunction for ComparisonFunction {
     }
 
     fn eval(&self, columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
-        let result = DataArrayComparison::data_array_comparison_op(self.op.clone(), columns[0].as_ref(), columns[1].as_ref())?;
+        let result = DataArrayComparison::data_array_comparison_op(
+            self.op.clone(),
+            &columns[0],
+            &columns[1]
+        )?;
 
-        match (columns[0].as_ref(), columns[1].as_ref()) {
-            (DataColumnarValue::Constant(_), DataColumnarValue::Constant(_)) => {
-                let data_value = DataValue::try_from_array(&result, 0)?;
-                Ok(DataColumnarValue::Constant(data_value, input_rows))
-            }
-            _ => Ok(DataColumnarValue::Array(result))
-        }
+        Ok(result.into())
     }
 }
 
 impl fmt::Display for ComparisonFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {} {}", self.left, self.op, self.right)
+        write!(f, "ComparisonFunction({})", self.op)
     }
 }

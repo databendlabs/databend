@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayArithmetic;
@@ -20,14 +21,13 @@ use crate::arithmetics::ArithmeticMinusFunction;
 use crate::arithmetics::ArithmeticModuloFunction;
 use crate::arithmetics::ArithmeticMulFunction;
 use crate::arithmetics::ArithmeticPlusFunction;
-use crate::{FactoryFuncRef, FunctionCtx};
+use crate::FactoryFuncRef;
 use crate::IFunction;
-use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct ArithmeticFunction {
     depth: usize,
-    op: DataValueArithmeticOperator,
+    op: DataValueArithmeticOperator
 }
 
 impl ArithmeticFunction {
@@ -46,14 +46,8 @@ impl ArithmeticFunction {
         Ok(())
     }
 
-    pub fn try_create_func(
-        op: DataValueArithmeticOperator,
-        _ctx: Arc<dyn FunctionCtx>,
-    ) -> Result<Box<dyn IFunction>> {
-        Ok(Box::new(ArithmeticFunction {
-            depth: 0,
-            op,
-        }))
+    pub fn try_create_func(op: DataValueArithmeticOperator) -> Result<Box<dyn IFunction>> {
+        Ok(Box::new(ArithmeticFunction { depth: 0, op }))
     }
 }
 
@@ -63,24 +57,24 @@ impl IFunction for ArithmeticFunction {
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        common_datavalues::numerical_arithmetic_coercion(
-            &self.op,
-            &args[0],
-            &args[1],
-        )
+        common_datavalues::numerical_arithmetic_coercion(&self.op, &args[0], &args[1])
     }
 
     fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
-        let result = DataArrayArithmetic::data_array_arithmetic_op(self.op.clone(), columns[0].as_ref(), columns[1].as_ref())?;
+    fn eval(&self, columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
+        let result = DataArrayArithmetic::data_array_arithmetic_op(
+            self.op.clone(),
+            &columns[0],
+            &columns[1]
+        )?;
 
-        match (left, right) {
-            (DataColumnarValue::Constant(_), DataColumnarValue::Constant(_)) => {
+        match (&columns[0], &columns[1]) {
+            (DataColumnarValue::Constant(_, _), DataColumnarValue::Constant(_, _)) => {
                 let data_value = DataValue::try_from_array(&result, 0)?;
-                Ok(DataColumnarValue::Constant(data_value))
+                Ok(DataColumnarValue::Constant(data_value, input_rows))
             }
             _ => Ok(DataColumnarValue::Array(result))
         }
@@ -89,6 +83,6 @@ impl IFunction for ArithmeticFunction {
 
 impl fmt::Display for ArithmeticFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}({}, {})", self.op, self.left, self.right)
+        write!(f, "ArithmeticFunction({})", self.op)
     }
 }
