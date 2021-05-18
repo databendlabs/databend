@@ -144,7 +144,8 @@ nav:
       - Information Functions:
           - DATABASE: sqlstatement/information-functions/database.md
       - Show Commands:
-          - SHOW DATABASE: sqlstatement/show-commands/show-databases.md
+          - SHOW DATABASES: sqlstatement/show-commands/show-databases.md
+          - SHOW TABLES: sqlstatement/show-commands/show-tables.md
       - System Tables: system/system-tables.md
   - RFCs:
       - FuseQuery Join: rfcs/query/2021-05-01-join-framework-design.md
