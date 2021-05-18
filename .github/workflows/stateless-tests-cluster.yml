@@ -9,13 +9,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           components: rustfmt
           override: true
+
       - name: Build
         run: cargo build --verbose
+
       - name: Run Stateless Tests with Cluster mode
         run: |
-          ./scripts/ci/ci-stateless-tests-cluster.sh
+          bash ./scripts/ci/ci-stateless-tests-cluster.sh

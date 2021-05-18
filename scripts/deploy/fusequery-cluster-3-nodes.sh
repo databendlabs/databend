@@ -9,19 +9,19 @@ killall fuse-query
 sleep 1
 
 echo 'start cluster-1'
-nohup target/debug/fuse-query -c scripts/ci/config/fusequery-cluster-1.toml &
+nohup target/debug/fuse-query -c scripts/deploy/config/fusequery-cluster-1.toml &
 
 echo "Waiting on cluster-1..."
 timeout 10 sh -c 'until nc -z $0 $1; do sleep 1; done' 0.0.0.0 9091
 
 echo 'start cluster-2'
-nohup target/debug/fuse-query -c scripts/ci/config/fusequery-cluster-2.toml &
+nohup target/debug/fuse-query -c scripts/deploy/config/fusequery-cluster-2.toml &
 
 echo "Waiting on cluster-2..."
 timeout 10 sh -c 'until nc -z $0 $1; do sleep 1; done' 0.0.0.0 9092
 
 echo 'start cluster-3'
-nohup target/debug/fuse-query -c scripts/ci/config/fusequery-cluster-3.toml &
+nohup target/debug/fuse-query -c scripts/deploy/config/fusequery-cluster-3.toml &
 
 echo "Waiting on cluster-3..."
 timeout 10 sh -c 'until nc -z $0 $1; do sleep 1; done' 0.0.0.0 9093
