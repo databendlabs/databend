@@ -26,7 +26,6 @@ use crate::datasources::ITableFunction;
 #[async_trait::async_trait]
 pub trait IDataSource: Sync + Send {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn IDatabase>>;
-    fn check_database(&self, db_name: &str) -> bool;
     fn get_databases(&self) -> Result<Vec<String>>;
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>>;
     fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>>;
@@ -132,11 +131,6 @@ impl IDataSource for DataSource {
         Ok(database.clone())
     }
 
-    fn check_database(&self, db_name: &str) -> bool {
-        let db_lock = self.databases.read();
-        db_lock.get(db_name).is_some()
-    }
-
     fn get_databases(&self) -> Result<Vec<String>> {
         let mut results = vec![];
         for (k, _v) in self.databases.read().iter() {
@@ -176,7 +170,8 @@ impl IDataSource for DataSource {
     }
 
     async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
-        if self.check_database(plan.db.as_str()) && !plan.if_not_exists {
+        let db_name = plan.db.as_str();
+        if self.databases.read().get(db_name).is_some() && !plan.if_not_exists {
             return Err(ErrorCodes::UnknownDatabase(format!(
                 "Database: '{}' already exists.",
                 plan.db
@@ -206,25 +201,23 @@ impl IDataSource for DataSource {
     }
 
     async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
-        if !self.check_database(plan.db.as_str()) && plan.if_exists {
+        let db_name = plan.db.as_str();
+        if self.databases.read().get(db_name).is_none() && plan.if_exists {
             return Ok(());
         }
 
-        let database = self.get_database(plan.db.as_str())?;
-        match database.engine() {
-            DatabaseEngineType::Local => {
-                self.databases.write().remove(plan.db.as_str());
-            }
-            DatabaseEngineType::Remote => {
-                let mut client = self.try_get_client().await?;
-                client
-                    .drop_database(plan.clone())
-                    .await
-                    .map(|_v| {
-                        self.databases.write().remove(plan.db.as_str());
-                    })
-                    .map_err(ErrorCodes::from_anyhow)?;
-            }
+        let database = self.get_database(db_name)?;
+        if database.is_local() {
+            self.databases.write().remove(db_name);
+        } else {
+            let mut client = self.try_get_client().await?;
+            client
+                .drop_database(plan.clone())
+                .await
+                .map(|_v| {
+                    self.databases.write().remove(plan.db.as_str());
+                })
+                .map_err(ErrorCodes::from_anyhow)?;
         };
 
         Ok(())

@@ -9,7 +9,6 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::CreateTablePlan;
-use common_planners::DatabaseEngineType;
 use common_planners::TableEngineType;
 
 use crate::datasources::local::CsvTable;
@@ -37,8 +36,12 @@ impl IDatabase for LocalDatabase {
         "local"
     }
 
-    fn engine(&self) -> DatabaseEngineType {
-        DatabaseEngineType::Local
+    fn engine(&self) -> &str {
+        "local"
+    }
+
+    fn is_local(&self) -> bool {
+        true
     }
 
     fn get_table(&self, table_name: &str) -> Result<Arc<dyn ITable>> {

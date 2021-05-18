@@ -10,7 +10,6 @@ use common_exception::Result;
 use common_flights::StoreClient;
 use common_infallible::RwLock;
 use common_planners::CreateTablePlan;
-use common_planners::DatabaseEngineType;
 
 use crate::configs::Config;
 use crate::datasources::remote::remote_table::RemoteTable;
@@ -55,8 +54,12 @@ impl IDatabase for RemoteDatabase {
         self.name.as_str()
     }
 
-    fn engine(&self) -> DatabaseEngineType {
-        DatabaseEngineType::Remote
+    fn engine(&self) -> &str {
+        "remote"
+    }
+
+    fn is_local(&self) -> bool {
+        false
     }
 
     fn get_table(&self, _table_name: &str) -> Result<Arc<dyn ITable>> {

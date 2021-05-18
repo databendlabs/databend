@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_planners::CreateTablePlan;
-use common_planners::DatabaseEngineType;
 
 use crate::datasources::ITable;
 use crate::datasources::ITableFunction;
@@ -15,9 +14,8 @@ use crate::datasources::ITableFunction;
 pub trait IDatabase: Sync + Send {
     /// Database name.
     fn name(&self) -> &str;
-
-    /// Database engine type: Local or Remote.
-    fn engine(&self) -> DatabaseEngineType;
+    fn engine(&self) -> &str;
+    fn is_local(&self) -> bool;
 
     /// Get one table by name.
     fn get_table(&self, table_name: &str) -> Result<Arc<dyn ITable>>;
