@@ -49,13 +49,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          override: true
-          components: rustfmt
-          target: ${{ matrix.target }}
-
       - name: Cargo build
         uses: actions-rs/cargo@v1
         with:

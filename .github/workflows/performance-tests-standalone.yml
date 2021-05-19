@@ -10,13 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          components: rustfmt
-          override: true
-
-      - name: Build Release
+      - uses: actions-rs/cargo@v1
         run: RUST_BACKTRACE=full RUSTFLAGS="-C target-cpu=native" cargo build --bin=fuse-query --release
 
       - name: Run Performance Tests with Standalone mode
