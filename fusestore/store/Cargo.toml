@@ -26,8 +26,8 @@ common-planners = {path = "../../common/planners"}
 
 # Crates.io dependencies
 anyhow = "1.0.40"
-#a bug fix on this repo: https://github.com/async-raft/async-raft/pull/114
-async-raft = { git = "https://github.com/drmingdrmer/async-raft", branch = "fix-non-voter-restart" }
+# track self maintained branch with hot fixes
+async-raft = { git = "https://github.com/drmingdrmer/async-raft", branch = "rc" }
 #async-raft = "0.6.0"
 async-trait = "0.1"
 env_logger = "0.8"
