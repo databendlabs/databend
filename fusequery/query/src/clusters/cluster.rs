@@ -46,7 +46,7 @@ impl Cluster {
             // The value of "priority" must be in [0,10].
             priority: n.priority,
             address: n.address.clone(),
-            local: false
+            local: n.local
         };
         if node.address == self.cfg.flight_api_address {
             node.local = true;

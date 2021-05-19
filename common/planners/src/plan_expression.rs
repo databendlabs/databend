@@ -9,7 +9,7 @@ use common_datavalues::DataSchemaRef;
 use crate::ExpressionAction;
 use crate::PlanNode;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct ExpressionPlan {
     pub exprs: Vec<ExpressionAction>,
     pub schema: DataSchemaRef,

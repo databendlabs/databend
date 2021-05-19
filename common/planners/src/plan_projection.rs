@@ -11,7 +11,7 @@ use crate::PlanNode;
 
 /// Evaluates an arbitrary list of expressions (essentially a
 /// SELECT with an expression list) on its input.
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct ProjectionPlan {
     /// The list of expressions
     pub expr: Vec<ExpressionAction>,

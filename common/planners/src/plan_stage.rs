@@ -15,7 +15,7 @@ pub enum StageKind {
     Convergent,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct StagePlan {
     // pub uuid: String,
     // pub id: usize,

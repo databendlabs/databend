@@ -37,6 +37,14 @@ impl PlanNode {
                             )?;
                             Ok(true)
                         }
+                        PlanNode::Remote(plan) => {
+                            write!(
+                                f,
+                                "Remote[fetch_nodes: {:?}]",
+                                plan.fetch_nodes
+                            )?;
+                            Ok(true)
+                        }
                         PlanNode::Projection(plan) => {
                             write!(f, "Projection: ")?;
                             for i in 0..plan.expr.len() {

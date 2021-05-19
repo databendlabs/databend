@@ -26,7 +26,7 @@ use crate::SortPlan;
 use crate::StagePlan;
 use crate::UseDatabasePlan;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum PlanNode {
     Empty(EmptyPlan),
     Stage(StagePlan),

@@ -27,6 +27,7 @@ impl PlanScheduler {
             return Ok((plan.clone(), vec![]));
         }
 
+        let mut last_stage = None;
         let cluster_nodes = cluster.get_nodes()?;
         let mut builders = vec![];
         let mut get_node_plan: Arc<Box<dyn GetNodePlan>> = Arc::new(Box::new(EmptyGetNodePlan));
@@ -36,6 +37,7 @@ impl PlanScheduler {
                 PlanNode::Stage(plan) => {
                     let stage_id = uuid::Uuid::new_v4().to_string();
 
+                    last_stage = Some(plan.clone());
                     builders.push(ExecutionPlanBuilder::create(ctx.get_id()?, stage_id.clone(), plan, &get_node_plan));
                     get_node_plan = RemoteGetNodePlan::create(ctx.get_id()?, stage_id.clone(), plan);
                 },
@@ -45,60 +47,29 @@ impl PlanScheduler {
             Ok(true)
         })?;
 
-        if !builders.is_empty() {
-            let local_node = (&cluster_nodes).iter().find(|node| node.local);
-
-            if local_node.is_none() {
-                return Result::Err(ErrorCodes::NotFountLocalNode(""));
+        if let Some(stage_plan) = last_stage {
+            if stage_plan.kind != StageKind::Convergent {
+                return Result::Err(ErrorCodes::PlanScheduleError("The final stage plan must be convergent"));
             }
-
-            return match plan {
-                PlanNode::Stage(v) => {
-                    if let Some(builder) = builders.pop() {
-                        if v.kind != StageKind::Convergent {
-                            return Err(ErrorCodes::PlanScheduleError(""));
-                        }
-
-                        let local_plan = builder.build(&local_node.unwrap().name, &cluster_nodes);
-
-                        if local_plan.is_none() {
-                            return Err(ErrorCodes::LogicalError(""));
-                        }
-
-                        let mut remote_plans = vec![];
-                        for node in &cluster_nodes {
-                            for builder in &builders {
-                                if let Some(action) = builder.build(&node.name, &cluster_nodes) {
-                                    remote_plans.push((node.clone(), action));
-                                }
-                            }
-                        }
-
-                        return Ok((local_plan.unwrap().plan.clone(), remote_plans));
-                    }
-
-                    Err(ErrorCodes::LogicalError(""))
-                }
-                _ => {
-                    let local_plan = get_node_plan.get_plan(&local_node.unwrap().name, &cluster_nodes)?;
-                    let mut remote_plans = vec![];
-                    for node in &cluster_nodes {
-                        for builder in &builders {
-                            if let Some(action) = builder.build(&node.name, &cluster_nodes) {
-                                remote_plans.push((node.clone(), action));
-                            }
-                        }
-                    }
-
-                    Ok((local_plan, remote_plans))
-                }
-            };
         }
 
-        // info!("Schedule plans to [{:?}] executors", results.len());
+        let local_node = (&cluster_nodes).iter().find(|node| node.local);
 
-        // All PlanNodes are executed locally
-        Ok((plan.clone(), vec![]))
+        if local_node.is_none() {
+            return Result::Err(ErrorCodes::NotFountLocalNode("The PlanScheduler must be in the query cluster"));
+        }
+
+        let local_plan = get_node_plan.get_plan(&local_node.unwrap().name, &cluster_nodes)?;
+        let mut remote_plans = vec![];
+        for node in &cluster_nodes {
+            for builder in &builders {
+                if let Some(action) = builder.build(&node.name, &cluster_nodes) {
+                    remote_plans.push((node.clone(), action));
+                }
+            }
+        }
+
+        Ok((local_plan, remote_plans))
     }
 }
 
@@ -153,7 +124,7 @@ impl GetNodePlan for RemoteGetNodePlan {
                     }
                 }
 
-                Err(ErrorCodes::NotFountLocalNode(""))
+                Err(ErrorCodes::NotFountLocalNode("The PlanScheduler must be in the query cluster"))
             }
             _ => {
                 let all_nodes_name = cluster_nodes.iter().map(|node| node.name.clone()).collect::<Vec<_>>();

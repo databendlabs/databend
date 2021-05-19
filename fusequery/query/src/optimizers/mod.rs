@@ -19,3 +19,4 @@ pub use optimizer::IOptimizer;
 pub use optimizer::Optimizer;
 pub use optimizer_alias_push_down::AliasPushDownOptimizer;
 pub use optimizer_projection_push_down::ProjectionPushDownOptimizer;
+pub use optimizer_scatters::ScattersOptimizer;

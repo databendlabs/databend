@@ -11,7 +11,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
-use crate::col;
+use crate::{col, StageKind};
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::EmptyPlan;
@@ -57,14 +57,14 @@ impl PlanBuilder {
     }
 
     /// Apply a stage.
-    // pub fn stage(&self, uuid: String, state: StageState) -> Result<Self> {
-    //     Ok(Self::from(&PlanNode::Stage(StagePlan {
-    //         uuid,
-    //         id: 0,
-    //         state,
-    //         input: Arc::new(self.plan.clone())
-    //     })))
-    // }
+    #[cfg(test)]
+    pub fn stage(&self, kind: StageKind, scatters_expr: ExpressionAction) -> Result<Self> {
+        Ok(Self::from(&PlanNode::Stage(StagePlan {
+            kind,
+            scatters_expr,
+            input: Arc::new(self.plan.clone()),
+        })))
+    }
 
     /// Apply a expression and merge the fields with exprs.
     pub fn expression(&self, exprs: &[ExpressionAction], desc: &str) -> Result<Self> {

@@ -15,7 +15,7 @@ pub enum ExplainType {
     Pipeline
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct ExplainPlan {
     pub typ: ExplainType,
     pub input: Arc<PlanNode>
