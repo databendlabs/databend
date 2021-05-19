@@ -56,79 +56,13 @@ impl FlightService for FuseQueryService {
     type HandshakeStream = FlightStream<HandshakeResponse>;
 
     async fn handshake(&self, request: StreamRequest<HandshakeRequest>) -> Response<Self::HandshakeStream> {
-        unimplemented!()
+        Result::Err(Status::unimplemented("FuseQuery does not implement handshake."))
     }
 
     type ListFlightsStream = FlightStream<FlightInfo>;
 
     async fn list_flights(&self, request: Request<Criteria>) -> Response<Self::ListFlightsStream> {
-        unimplemented!()
-        // let criteria = request.into_inner();
-        // let expression = criteria.expression.into_string()?;
-        //
-        // fn get_flight(query_id: &String, stage_id: &String, flight_id: &String) -> FlightInfo {
-        //     FlightInfo {
-        //         schema:,
-        //         endpoint: vec![],
-        //         flight_descriptor: None,
-        //         total_records: -1,
-        //         total_bytes: -1,
-        //     }
-        // }
-        //
-        // fn get_flights(query_id: &String, v: (&String, &StagePtr), expressions: &Vec<&str>) -> Vec<FlightInfo> {
-        //     let (stage_id, stage) = v;
-        //     if expressions.len() < 3 {
-        //         return stage.flights
-        //             .iter()
-        //             .map(|(id, _)| get_flight(query_id, stage_id, id))
-        //             .collect_vec();
-        //     }
-        //
-        //     stage.flights
-        //         .iter()
-        //         .filter(|(id, _)| id.starts_with(expressions[2]))
-        //         .map(|(id, _)| get_flight(query_id, stage_id, id))
-        //         .collect_vec()
-        // }
-        //
-        // fn get_stage_flights(v: (&String, &QueryInfoPtr), expressions: &Vec<&str>) -> Vec<FlightInfo> {
-        //     let (query_id, query) = v;
-        //     if expressions.len() < 2 {
-        //         return query.stages
-        //             .iter()
-        //             .flat_map(|v| get_flights(query_id, v, expressions))
-        //             .collect_vec();
-        //     }
-        //
-        //     query.stages
-        //         .iter()
-        //         .filter(|(id, _)| id.starts_with(expressions[1]))
-        //         .flat_map(|v| get_flights(query_id, v, expressions))
-        //         .collect_vec()
-        // }
-        //
-        // fn get_queries_flights(queries: &Queries, expressions: &Vec<&str>) -> Vec<FlightInfo> {
-        //     match expressions.len() {
-        //         0 => {
-        //             queries
-        //                 .read()
-        //                 .iter()
-        //                 .flat_map(|v| get_stage_flights(v, expressions))
-        //         },
-        //         _ => {
-        //             queries
-        //                 .read()
-        //                 .iter()
-        //                 .filter(|(id, _)| id.starts_with(expressions[0]))
-        //                 .flat_map(|v| get_stage_flights(v, expressions))
-        //         }
-        //     }.collect_vec()
-        // }
-        //
-        // let expressions = expression.trim_start_matches("/").split("/").collect_vec();
-        // let stream = futures::stream::iter(flightsget_queries_flights(&self.queries, &expressions).iter().map(Result::Ok));
-        // Ok(Response::new(Box::pin(stream) as Self::DoActionStream))
+        Result::Err(Status::unimplemented("FuseQuery does not implement list_flights."))
     }
 
     async fn get_flight_info(&self, request: Request<FlightDescriptor>) -> Response<FlightInfo> {

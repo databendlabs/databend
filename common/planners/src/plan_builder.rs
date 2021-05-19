@@ -56,16 +56,6 @@ impl PlanBuilder {
         }))
     }
 
-    /// Apply a stage.
-    #[cfg(test)]
-    pub fn stage(&self, kind: StageKind, scatters_expr: ExpressionAction) -> Result<Self> {
-        Ok(Self::from(&PlanNode::Stage(StagePlan {
-            kind,
-            scatters_expr,
-            input: Arc::new(self.plan.clone()),
-        })))
-    }
-
     /// Apply a expression and merge the fields with exprs.
     pub fn expression(&self, exprs: &[ExpressionAction], desc: &str) -> Result<Self> {
         let input_schema = self.plan.schema();

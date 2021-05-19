@@ -571,10 +571,6 @@ impl PlanParser {
         // S2: Apply a final aggregator plan.
         PlanBuilder::from(&input)
             .aggregate_partial(aggr_expr, &group_expr)
-            // TODO self.ctx.get_id().unwrap()
-            // .and_then(|builder| {
-            //     // builder.stage(self.ctx.get_id().unwrap(), StageState::AggregatorMerge)
-            // })
             .and_then(|builder| builder.aggregate_final(aggr_expr, &group_expr))
             .and_then(|builder| builder.build())
     }

@@ -17,9 +17,6 @@ pub enum StageKind {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct StagePlan {
-    // pub uuid: String,
-    // pub id: usize,
-    // pub state: StageState,
     pub kind: StageKind,
     pub input: Arc<PlanNode>,
     pub scatters_expr: ExpressionAction,

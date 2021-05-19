@@ -27,8 +27,6 @@ mod plan_scan_test;
 #[cfg(test)]
 mod plan_select_test;
 #[cfg(test)]
-mod plan_stage_test;
-#[cfg(test)]
 mod plan_walker_test;
 
 mod test;

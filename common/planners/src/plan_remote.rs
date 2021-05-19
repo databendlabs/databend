@@ -12,9 +12,7 @@ use crate::{PlanNode, ExpressionAction};
 pub struct RemotePlan {
     pub schema: DataSchemaRef,
     pub fetch_name: String,
-    pub fetch_nodes: Vec<String>,
-    // pub input: Arc<PlanNode>,
-    // pub scatters_expr: ExpressionAction,
+    pub fetch_nodes: Vec<String>
 }
 
 impl RemotePlan {

@@ -53,6 +53,7 @@ impl IInterpreter for SelectInterpreter {
         let (local_plan, remote_actions) = PlanScheduler::reschedule(self.ctx.clone(), &plan)?;
 
         fn prepare_error_handler(error: ErrorCodes, end: usize) -> Result<SendableDataBlockStream> {
+            // TODO: kill prepared query stage
             Result::Err(error)
         }
 

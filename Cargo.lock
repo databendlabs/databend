@@ -1252,7 +1252,6 @@ dependencies = [
  "ahash",
  "anyhow",
  "async-trait",
- "byteorder",
  "clickhouse-srv",
  "common-arrow",
  "common-datablocks",
