@@ -79,7 +79,7 @@ impl DataBlock {
         if name == "*" {
             Ok(&self.columns[0])
         } else {
-            let idx = self.schema.index_of(name).map_err(ErrorCodes::from_arrow)?;
+            let idx = self.schema.index_of(name)?;
             Ok(&self.columns[idx])
         }
     }
@@ -105,7 +105,7 @@ impl TryFrom<DataBlock> for RecordBatch {
     type Error = ErrorCodes;
 
     fn try_from(v: DataBlock) -> Result<RecordBatch> {
-        RecordBatch::try_new(v.schema.clone(), v.columns.clone()).map_err(ErrorCodes::from_arrow)
+        Ok(RecordBatch::try_new(v.schema.clone(), v.columns.clone())?)
     }
 }
 

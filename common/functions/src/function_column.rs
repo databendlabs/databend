@@ -38,9 +38,7 @@ impl IFunction for ColumnFunction {
         let field = if self.value == "*" {
             input_schema.field(0)
         } else {
-            input_schema
-                .field_with_name(self.value.as_str())
-                .map_err(ErrorCodes::from_arrow)?
+            input_schema.field_with_name(self.value.as_str())?
         };
 
         Ok(field.data_type().clone())
@@ -50,9 +48,7 @@ impl IFunction for ColumnFunction {
         let field = if self.value == "*" {
             input_schema.field(0)
         } else {
-            input_schema
-                .field_with_name(self.value.as_str())
-                .map_err(ErrorCodes::from_arrow)?
+            input_schema.field_with_name(self.value.as_str())?
         };
         Ok(field.is_nullable())
     }

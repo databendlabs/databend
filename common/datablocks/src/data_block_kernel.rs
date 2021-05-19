@@ -19,9 +19,7 @@ pub struct SortColumnDescription {
 impl DataBlock {
     pub fn block_take_by_indices(raw: &DataBlock, indices: &[u32]) -> Result<DataBlock> {
         let mut batch_indices: UInt32Builder = UInt32Builder::new(0);
-        batch_indices
-            .append_slice(indices)
-            .map_err(ErrorCodes::from_arrow)?;
+        batch_indices.append_slice(indices)?;
         let batch_indices = batch_indices.finish();
 
         let takes = raw
@@ -51,7 +49,7 @@ impl DataBlock {
             for block in blocks.iter() {
                 arr.push(block.column(i).as_ref());
             }
-            values.push(compute::concat(&arr).map_err(ErrorCodes::from_arrow)?);
+            values.push(compute::concat(&arr)?);
         }
 
         Ok(DataBlock::create(first_block.schema().clone(), values))
@@ -75,14 +73,12 @@ impl DataBlock {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let indices =
-            compute::lexsort_to_indices(&order_columns, limit).map_err(ErrorCodes::from_arrow)?;
+        let indices = compute::lexsort_to_indices(&order_columns, limit)?;
         let columns = block
             .columns()
             .iter()
             .map(|c| compute::take(c.as_ref(), &indices, None))
-            .collect::<anyhow::Result<Vec<_>, _>>()
-            .map_err(ErrorCodes::from_arrow)?;
+            .collect::<anyhow::Result<Vec<_>, _>>()?;
 
         Ok(DataBlock::create(block.schema().clone(), columns))
     }

@@ -39,14 +39,14 @@ impl CsvTableStream {
 
         let part = partitions[0].clone();
         let names: Vec<_> = part.name.split('-').collect();
-        let begin: usize = names[1].parse().map_err(ErrorCodes::from_parse_int)?;
-        let end: usize = names[2].parse().map_err(ErrorCodes::from_parse_int)?;
+        let begin: usize = names[1].parse()?;
+        let end: usize = names[2].parse()?;
         let bounds = Some((begin, end));
         let block_size = end - begin;
 
         let file = File::open(self.file.clone())
             .with_context(|| format!("Failed to read csv file:{}", self.file.clone()))
-            .map_err(ErrorCodes::from_anyhow)?;
+            .map_err(ErrorCodes::from)?;
         let mut reader: csv::Reader<File> = csv::Reader::new(
             file,
             self.schema.clone(),
@@ -61,7 +61,7 @@ impl CsvTableStream {
             .next()
             .map(|record| {
                 record
-                    .map_err(ErrorCodes::from_arrow)
+                    .map_err(ErrorCodes::from)
                     .and_then(|record| record.try_into())
             })
             .map(|data_block| data_block.map(Some))

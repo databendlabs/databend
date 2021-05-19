@@ -83,7 +83,7 @@ impl ITable for CsvTable {
         let lines_count = Common::count_lines(
             File::open(file.clone())
                 .with_context(|| format!("Cannot find file:{}", file))
-                .map_err(ErrorCodes::from_anyhow)?
+                .map_err(ErrorCodes::from)?
         )
         .map_err(|e| ErrorCodes::CannotReadFile(e.to_string()))?;
 

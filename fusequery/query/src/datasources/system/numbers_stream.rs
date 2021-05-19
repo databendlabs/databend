@@ -16,7 +16,6 @@ use common_arrow::arrow::datatypes::DataType;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::UInt64Array;
-use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_streams::ProgressStream;
 use futures::stream::Stream;
@@ -59,8 +58,8 @@ impl NumbersStream {
 
             for part in partitions {
                 let names: Vec<_> = part.name.split('-').collect();
-                let begin: u64 = names[1].parse().map_err(ErrorCodes::from_parse_int)?;
-                let end: u64 = names[2].parse().map_err(ErrorCodes::from_parse_int)?;
+                let begin: u64 = names[1].parse()?;
+                let end: u64 = names[2].parse()?;
 
                 let diff = end - begin;
                 let block_nums = diff / block_size;

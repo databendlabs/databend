@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_arrow::arrow::util::display::array_value_to_string;
-use common_exception::ErrorCodes;
 use common_exception::Result;
 use prettytable::format;
 use prettytable::Cell;
@@ -89,9 +88,7 @@ fn create_table(results: &[DataBlock]) -> Result<Table> {
             let mut cells = Vec::new();
             for col in 0..batch.num_columns() {
                 let column = batch.column(col);
-                cells.push(Cell::new(
-                    &array_value_to_string(&column, row).map_err(ErrorCodes::from_arrow)?
-                ));
+                cells.push(Cell::new(&array_value_to_string(&column, row)?));
             }
             table.add_row(Row::new(cells));
         }

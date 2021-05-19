@@ -71,7 +71,7 @@ impl DataSource {
             let password = self.conf.store_api_password.clone();
             let client = StoreClient::try_create(&store_addr, &username, &password)
                 .await
-                .map_err(ErrorCodes::from_anyhow)?;
+                .map_err(ErrorCodes::from)?;
             *self.store_client.write() = Some(client);
         }
         Ok(self.store_client.read().as_ref().unwrap().clone())
@@ -185,16 +185,12 @@ impl IDataSource for DataSource {
             }
             DatabaseEngineType::Remote => {
                 let mut client = self.try_get_client().await?;
-                client
-                    .create_database(plan.clone())
-                    .await
-                    .map(|_| {
-                        let database = RemoteDatabase::create(self.conf.clone(), plan.db.clone());
-                        self.databases
-                            .write()
-                            .insert(plan.db.clone(), Arc::new(database));
-                    })
-                    .map_err(ErrorCodes::from_anyhow)?;
+                client.create_database(plan.clone()).await.map(|_| {
+                    let database = RemoteDatabase::create(self.conf.clone(), plan.db.clone());
+                    self.databases
+                        .write()
+                        .insert(plan.db.clone(), Arc::new(database));
+                })?;
             }
         }
         Ok(())
@@ -218,13 +214,9 @@ impl IDataSource for DataSource {
             self.databases.write().remove(db_name);
         } else {
             let mut client = self.try_get_client().await?;
-            client
-                .drop_database(plan.clone())
-                .await
-                .map(|_| {
-                    self.databases.write().remove(plan.db.as_str());
-                })
-                .map_err(ErrorCodes::from_anyhow)?;
+            client.drop_database(plan.clone()).await.map(|_| {
+                self.databases.write().remove(plan.db.as_str());
+            })?;
         };
 
         Ok(())

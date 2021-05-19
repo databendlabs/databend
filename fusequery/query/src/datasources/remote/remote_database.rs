@@ -42,7 +42,7 @@ impl RemoteDatabase {
             let password = self.conf.store_api_password.clone();
             let client = StoreClient::try_create(&store_addr, &username, &password)
                 .await
-                .map_err(ErrorCodes::from_anyhow)?;
+                .map_err(ErrorCodes::from)?;
             *self.store_client.write() = Some(client);
         }
         Ok(self.store_client.read().as_ref().unwrap().clone())
@@ -95,14 +95,10 @@ impl IDatabase for RemoteDatabase {
         let clone = plan.clone();
         let mut client = self.try_get_client().await?;
         let table = RemoteTable::try_create(plan.db, plan.table, plan.schema, plan.options)?;
-        client
-            .create_table(clone)
-            .await
-            .map(|_| {
-                let mut tables = self.tables.write();
-                tables.insert(table.name().to_string(), Arc::from(table));
-            })
-            .map_err(ErrorCodes::from_anyhow)?;
+        client.create_table(clone).await.map(|_| {
+            let mut tables = self.tables.write();
+            tables.insert(table.name().to_string(), Arc::from(table));
+        })?;
         Ok(())
     }
 
@@ -121,14 +117,10 @@ impl IDatabase for RemoteDatabase {
 
         // Call remote create.
         let mut client = self.try_get_client().await?;
-        client
-            .drop_table(plan.clone())
-            .await
-            .map(|_| {
-                let mut tables = self.tables.write();
-                tables.remove(table_name);
-            })
-            .map_err(ErrorCodes::from_anyhow)?;
+        client.drop_table(plan.clone()).await.map(|_| {
+            let mut tables = self.tables.write();
+            tables.remove(table_name);
+        })?;
         Ok(())
     }
 }
