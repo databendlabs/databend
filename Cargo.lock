@@ -128,8 +128,8 @@ dependencies = [
 
 [[package]]
 name = "async-raft"
-version = "0.6.0"
-source = "git+https://github.com/drmingdrmer/async-raft?branch=fix-non-voter-restart#786f091dd691c3189c477a5e0050eef60ef0f9b3"
+version = "0.6.1"
+source = "git+https://github.com/drmingdrmer/async-raft?branch=rc#3dce97c5a42e6ddbd3e13b058dc657315ceae897"
 dependencies = [
  "anyhow",
  "async-trait",
