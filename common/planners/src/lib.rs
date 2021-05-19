@@ -97,6 +97,7 @@ pub use crate::plan_partition::Partitions;
 pub use crate::plan_projection::ProjectionPlan;
 pub use crate::plan_read_datasource::ReadDataSourcePlan;
 pub use crate::plan_rewriter::PlanRewriter;
+pub use crate::plan_rewriter::RewriteHelper;
 pub use crate::plan_scan::ScanPlan;
 pub use crate::plan_select::SelectPlan;
 pub use crate::plan_setting::SettingPlan;

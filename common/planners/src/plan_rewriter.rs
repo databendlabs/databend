@@ -4,16 +4,206 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
+use crate::AggregatorFinalPlan;
+use crate::AggregatorPartialPlan;
+use crate::CreateDatabasePlan;
+use crate::CreateTablePlan;
+use crate::DropDatabasePlan;
+use crate::DropTablePlan;
+use crate::EmptyPlan;
+use crate::ExplainPlan;
 use crate::ExpressionAction;
+use crate::ExpressionPlan;
+use crate::FilterPlan;
+use crate::HavingPlan;
+use crate::LimitPlan;
 use crate::PlanNode;
+use crate::ProjectionPlan;
+use crate::ReadDataSourcePlan;
+use crate::ScanPlan;
+use crate::SelectPlan;
+use crate::SettingPlan;
+use crate::SortPlan;
+use crate::StagePlan;
+use crate::UseDatabasePlan;
 
-pub struct PlanRewriter {}
+/// `PlanRewriter` is a visitor that can help to rewrite `PlanNode`
+/// By default, a `PlanRewriter` will traverse the plan tree in pre-order and return rewritten plan tree.
+/// Every `rewrite_xxx` method should return a new `PlanNode`(in default implementation it will return a clone of given plan node)
+/// so its parent can replace original children with rewritten children.
+/// # Example
+/// `PlanRewriter` is useful when you want to rewrite a part of a plan tree.
+/// For example, if we'd like to rewrite all the `Filter` nodes in a plan tree and keep rest nodes as they are, we can implement a rewriter like:
+/// ```ignore
+/// struct FilterRewriter {};
+/// impl<'plan> PlanRewriter<'plan> for FilterRewriter {
+///     fn rewrite_filter(&mut self, plan: &PlanNode) -> Result<PlanNode> {
+///         // Do what you want to do and return the new Filter node
+///     }
+/// }
+///
+/// let plan = build_some_plan();
+/// let mut rewriter = FilterRewriter {};
+/// let new_plan = rewriter.rewrite_plan_node(&plan)?; // new_plan is the rewritten plan
+/// ```
+pub trait PlanRewriter<'plan> {
+    fn rewrite_plan_node(&mut self, plan: &'plan PlanNode) -> Result<PlanNode> {
+        match plan {
+            PlanNode::AggregatorPartial(plan) => self.rewrite_aggregate_partial(plan),
+            PlanNode::AggregatorFinal(plan) => self.rewrite_aggregate_final(plan),
+            PlanNode::Empty(plan) => self.rewrite_empty(plan),
+            PlanNode::Projection(plan) => self.rewrite_projection(plan),
+            PlanNode::Filter(plan) => self.rewrite_filter(plan),
+            PlanNode::Sort(plan) => self.rewrite_sort(plan),
+            PlanNode::Limit(plan) => self.rewrite_limit(plan),
+            PlanNode::Scan(plan) => self.rewrite_scan(plan),
+            PlanNode::ReadSource(plan) => self.rewrite_read_data_source(plan),
+            PlanNode::Select(plan) => self.rewrite_select(plan),
+            PlanNode::Explain(plan) => self.rewrite_explain(plan),
+            PlanNode::CreateTable(plan) => self.rewrite_create_table(plan),
+            PlanNode::CreateDatabase(plan) => self.rewrite_create_database(plan),
+            PlanNode::UseDatabase(plan) => self.rewrite_use_database(plan),
+            PlanNode::SetVariable(plan) => self.rewrite_set_variable(plan),
+            PlanNode::Stage(plan) => self.rewrite_stage(plan),
+            PlanNode::Having(plan) => self.rewrite_having(plan),
+            PlanNode::Expression(plan) => self.rewrite_expression(plan),
+            PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
+            PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan)
+        }
+    }
+
+    fn rewrite_aggregate_partial(
+        &mut self,
+        plan: &'plan AggregatorPartialPlan
+    ) -> Result<PlanNode> {
+        Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan {
+            aggr_expr: plan.aggr_expr.clone(),
+            group_expr: plan.group_expr.clone(),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
+        }))
+    }
+
+    fn rewrite_aggregate_final(&mut self, plan: &'plan AggregatorFinalPlan) -> Result<PlanNode> {
+        Ok(PlanNode::AggregatorFinal(AggregatorFinalPlan {
+            schema: plan.schema.clone(),
+            aggr_expr: plan.aggr_expr.clone(),
+            group_expr: plan.group_expr.clone(),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
+        }))
+    }
+
+    fn rewrite_empty(&mut self, plan: &'plan EmptyPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Empty(plan.clone()))
+    }
+
+    fn rewrite_stage(&mut self, plan: &'plan StagePlan) -> Result<PlanNode> {
+        Ok(PlanNode::Stage(StagePlan {
+            uuid: plan.uuid.clone(),
+            id: plan.id,
+            state: plan.state.clone(),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
+        }))
+    }
+
+    fn rewrite_projection(&mut self, plan: &'plan ProjectionPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Projection(ProjectionPlan {
+            schema: plan.schema.clone(),
+            expr: plan.expr.clone(),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
+        }))
+    }
+
+    fn rewrite_expression(&mut self, plan: &'plan ExpressionPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Expression(ExpressionPlan {
+            schema: plan.schema.clone(),
+            desc: plan.desc.clone(),
+            exprs: plan.exprs.clone(),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
+        }))
+    }
+
+    fn rewrite_filter(&mut self, plan: &'plan FilterPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Filter(FilterPlan {
+            predicate: plan.predicate.clone(),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
+        }))
+    }
+
+    fn rewrite_having(&mut self, plan: &'plan HavingPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Having(HavingPlan {
+            predicate: plan.predicate.clone(),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
+        }))
+    }
+
+    fn rewrite_sort(&mut self, plan: &'plan SortPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Sort(SortPlan {
+            order_by: plan.order_by.clone(),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
+        }))
+    }
+
+    fn rewrite_limit(&mut self, plan: &'plan LimitPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Limit(LimitPlan {
+            n: plan.n,
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
+        }))
+    }
+
+    fn rewrite_scan(&mut self, plan: &'plan ScanPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Scan(plan.clone()))
+    }
+
+    fn rewrite_read_data_source(&mut self, plan: &'plan ReadDataSourcePlan) -> Result<PlanNode> {
+        Ok(PlanNode::ReadSource(plan.clone()))
+    }
+
+    fn rewrite_select(&mut self, plan: &'plan SelectPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Select(SelectPlan {
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
+        }))
+    }
+
+    fn rewrite_explain(&mut self, plan: &'plan ExplainPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Explain(ExplainPlan {
+            typ: plan.typ.clone(),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
+        }))
+    }
+
+    fn rewrite_create_table(&mut self, plan: &'plan CreateTablePlan) -> Result<PlanNode> {
+        Ok(PlanNode::CreateTable(plan.clone()))
+    }
+
+    fn rewrite_create_database(&mut self, plan: &'plan CreateDatabasePlan) -> Result<PlanNode> {
+        Ok(PlanNode::CreateDatabase(plan.clone()))
+    }
+
+    fn rewrite_use_database(&mut self, plan: &'plan UseDatabasePlan) -> Result<PlanNode> {
+        Ok(PlanNode::UseDatabase(plan.clone()))
+    }
+
+    fn rewrite_set_variable(&mut self, plan: &'plan SettingPlan) -> Result<PlanNode> {
+        Ok(PlanNode::SetVariable(plan.clone()))
+    }
+
+    fn rewrite_drop_table(&mut self, plan: &'plan DropTablePlan) -> Result<PlanNode> {
+        Ok(PlanNode::DropTable(plan.clone()))
+    }
+
+    fn rewrite_drop_database(&mut self, plan: &'plan DropDatabasePlan) -> Result<PlanNode> {
+        Ok(PlanNode::DropDatabase(plan.clone()))
+    }
+}
+
+pub struct RewriteHelper {}
 
 struct QueryAliasData {
     aliases: HashMap<String, ExpressionAction>,
@@ -22,7 +212,7 @@ struct QueryAliasData {
     current_alias: String
 }
 
-impl PlanRewriter {
+impl RewriteHelper {
     /// Recursively extract the aliases in projection exprs
     ///
     /// SELECT (x+1) as y, y*y FROM ..
@@ -30,7 +220,7 @@ impl PlanRewriter {
     /// SELECT (x+1) as y, (x+1)*(x+1) FROM ..
     pub fn rewrite_projection_aliases(exprs: &[ExpressionAction]) -> Result<Vec<ExpressionAction>> {
         let mut mp = HashMap::new();
-        PlanRewriter::alias_exprs_to_map(&exprs, &mut mp)?;
+        RewriteHelper::alias_exprs_to_map(&exprs, &mut mp)?;
 
         let mut data = QueryAliasData {
             aliases: mp,
@@ -40,7 +230,7 @@ impl PlanRewriter {
 
         exprs
             .iter()
-            .map(|expr| PlanRewriter::expr_rewrite_alias(expr, &mut data))
+            .map(|expr| RewriteHelper::expr_rewrite_alias(expr, &mut data))
             .collect()
     }
 
@@ -92,7 +282,7 @@ impl PlanRewriter {
 
                     data.current_alias = field.clone();
                     data.inside_aliases.insert(field.clone());
-                    let c = PlanRewriter::expr_rewrite_alias(&e, data)?;
+                    let c = RewriteHelper::expr_rewrite_alias(&e, data)?;
                     data.inside_aliases.remove(field);
                     data.current_alias = previous_alias;
 
@@ -102,8 +292,8 @@ impl PlanRewriter {
             }
 
             ExpressionAction::BinaryExpression { left, op, right } => {
-                let left_new = PlanRewriter::expr_rewrite_alias(left, data)?;
-                let right_new = PlanRewriter::expr_rewrite_alias(right, data)?;
+                let left_new = RewriteHelper::expr_rewrite_alias(left, data)?;
+                let right_new = RewriteHelper::expr_rewrite_alias(right, data)?;
 
                 Ok(ExpressionAction::BinaryExpression {
                     left: Box::new(left_new),
@@ -115,7 +305,7 @@ impl PlanRewriter {
             ExpressionAction::Function { op, args } => {
                 let new_args: Result<Vec<ExpressionAction>> = args
                     .iter()
-                    .map(|v| PlanRewriter::expr_rewrite_alias(v, data))
+                    .map(|v| RewriteHelper::expr_rewrite_alias(v, data))
                     .collect();
 
                 match new_args {
@@ -138,14 +328,14 @@ impl PlanRewriter {
                 let previous_alias = data.current_alias.clone();
                 data.current_alias = alias.clone();
                 data.inside_aliases.insert(alias.clone());
-                let new_expr = PlanRewriter::expr_rewrite_alias(plan, data)?;
+                let new_expr = RewriteHelper::expr_rewrite_alias(plan, data)?;
                 data.inside_aliases.remove(alias);
                 data.current_alias = previous_alias;
 
                 Ok(ExpressionAction::Alias(alias.clone(), Box::new(new_expr)))
             }
             ExpressionAction::Cast { expr, data_type } => {
-                let new_expr = PlanRewriter::expr_rewrite_alias(expr, data)?;
+                let new_expr = RewriteHelper::expr_rewrite_alias(expr, data)?;
                 Ok(ExpressionAction::Cast {
                     expr: Box::new(new_expr),
                     data_type: data_type.clone()
@@ -269,7 +459,11 @@ impl PlanRewriter {
                     map.insert(field.name().clone(), expr.clone());
                 }
             }
-            other => Self::projections_to_map(other.input().as_ref(), map)?
+            other => {
+                for child in other.inputs() {
+                    Self::projections_to_map(child.as_ref(), map)?;
+                }
+            }
         }
         Ok(())
     }

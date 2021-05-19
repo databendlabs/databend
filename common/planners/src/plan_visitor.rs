@@ -61,7 +61,7 @@ use crate::UseDatabasePlan;
 /// impl<'plan> PlanVisitor<'plan> for PreOrder {
 ///     fn visit_plan_node(&mut self, plan: &PlanNode) {
 ///         self.process(plan); // Process current node first
-///         PlanVisitor::visit_plan_node(self, plan.input().as_ref()); // Then process children
+///         PlanVisitor::visit_plan_node(self, plan.child().as_ref()); // Then process children
 ///     }
 /// }
 /// ```

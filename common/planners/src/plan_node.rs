@@ -4,7 +4,6 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
 use crate::AggregatorFinalPlan;
@@ -104,41 +103,25 @@ impl PlanNode {
         }
     }
 
-    pub fn input(&self) -> Arc<PlanNode> {
+    pub fn inputs(&self) -> Vec<Arc<PlanNode>> {
         match self {
-            PlanNode::Stage(v) => v.input(),
-            PlanNode::Projection(v) => v.input(),
-            PlanNode::Expression(v) => v.input(),
-            PlanNode::AggregatorPartial(v) => v.input(),
-            PlanNode::AggregatorFinal(v) => v.input(),
-            PlanNode::Filter(v) => v.input(),
-            PlanNode::Having(v) => v.input(),
-            PlanNode::Limit(v) => v.input(),
-            PlanNode::Explain(v) => v.input(),
-            PlanNode::Select(v) => v.input(),
-            PlanNode::Sort(v) => v.input(),
+            PlanNode::Stage(v) => vec![v.input.clone()],
+            PlanNode::Projection(v) => vec![v.input.clone()],
+            PlanNode::Expression(v) => vec![v.input.clone()],
+            PlanNode::AggregatorPartial(v) => vec![v.input.clone()],
+            PlanNode::AggregatorFinal(v) => vec![v.input.clone()],
+            PlanNode::Filter(v) => vec![v.input.clone()],
+            PlanNode::Having(v) => vec![v.input.clone()],
+            PlanNode::Limit(v) => vec![v.input.clone()],
+            PlanNode::Explain(v) => vec![v.input.clone()],
+            PlanNode::Select(v) => vec![v.input.clone()],
+            PlanNode::Sort(v) => vec![v.input.clone()],
 
-            _ => Arc::new(PlanNode::Empty(EmptyPlan {
-                schema: Arc::new(DataSchema::empty())
-            }))
+            _ => vec![]
         }
     }
 
-    pub fn set_input(&mut self, node: &PlanNode) {
-        match self {
-            PlanNode::Stage(v) => v.set_input(node),
-            PlanNode::Projection(v) => v.set_input(node),
-            PlanNode::Expression(v) => v.set_input(node),
-            PlanNode::AggregatorPartial(v) => v.set_input(node),
-            PlanNode::AggregatorFinal(v) => v.set_input(node),
-            PlanNode::Filter(v) => v.set_input(node),
-            PlanNode::Having(v) => v.set_input(node),
-            PlanNode::Limit(v) => v.set_input(node),
-            PlanNode::Explain(v) => v.set_input(node),
-            PlanNode::Select(v) => v.set_input(node),
-            PlanNode::Sort(v) => v.set_input(node),
-
-            _ => {}
-        }
+    pub fn input(&self, n: usize) -> Arc<PlanNode> {
+        self.inputs()[n].clone()
     }
 }
