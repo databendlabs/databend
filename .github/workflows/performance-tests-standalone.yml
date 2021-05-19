@@ -10,6 +10,10 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Rust setup
+        run: |
+          bash ./scripts/setup/dev_setup.sh
+
       - uses: actions-rs/cargo@v1
         run: RUST_BACKTRACE=full RUSTFLAGS="-C target-cpu=native" cargo build --bin=fuse-query --release
 

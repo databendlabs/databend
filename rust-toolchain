@@ -1,3 +1,1 @@
-[toolchain]
-channel = "nightly-2021-05-06"
-components = [ "clippy", "rustfmt" ]
+nightly-2021-05-06

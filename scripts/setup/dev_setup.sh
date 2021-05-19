@@ -102,69 +102,14 @@ function install_pkg_config {
   fi
 }
 
-function install_shellcheck {
-  if ! command -v shellcheck &> /dev/null; then
-    if [[ $(uname -s) == "Darwin" ]]; then
-      install_pkg shellcheck brew
-    else
-      install_pkg xz "$PACKAGE_MANAGER"
-      MACHINE=$(uname -m);
-      TMPFILE=$(mktemp)
-      rm "$TMPFILE"
-      mkdir -p "$TMPFILE"/
-      curl -sL -o "$TMPFILE"/out.xz "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.$(uname -s | tr '[:upper:]' '[:lower:]').${MACHINE}.tar.xz"
-      tar -xf "$TMPFILE"/out.xz -C "$TMPFILE"/
-      cp "${TMPFILE}/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" "${HOME}/bin/shellcheck"
-      rm -rf "$TMPFILE"
-      chmod +x "${HOME}"/bin/shellcheck
-    fi
-  fi
-}
-
-function install_openssl_dev {
-  PACKAGE_MANAGER=$1
-  #Differently named packages for openssl dev
-  if [[ "$PACKAGE_MANAGER" == "apk" ]]; then
-    install_pkg openssl-dev "$PACKAGE_MANAGER"
-  fi
-  if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
-    install_pkg libssl-dev "$PACKAGE_MANAGER"
-  fi
-  if [[ "$PACKAGE_MANAGER" == "yum" ]] || [[ "$PACKAGE_MANAGER" == "dnf" ]]; then
-    install_pkg openssl-devel "$PACKAGE_MANAGER"
-  fi
-  if [[ "$PACKAGE_MANAGER" == "pacman" ]] || [[ "$PACKAGE_MANAGER" == "brew" ]]; then
-    install_pkg openssl "$PACKAGE_MANAGER"
-  fi
-}
-
-function install_gcc_powerpc_linux_gnu {
-  PACKAGE_MANAGER=$1
-  #Differently named packages for gcc-powerpc-linux-gnu
-  if [[ "$PACKAGE_MANAGER" == "apt-get" ]] || [[ "$PACKAGE_MANAGER" == "yum" ]]; then
-    install_pkg gcc-powerpc-linux-gnu "$PACKAGE_MANAGER"
-  fi
-  #if [[ "$PACKAGE_MANAGER" == "pacman" ]]; then
-  #  install_pkg powerpc-linux-gnu-gcc "$PACKAGE_MANAGER"
-  #fi
-  #if [[ "$PACKAGE_MANAGER" == "apk" ]] || [[ "$PACKAGE_MANAGER" == "brew" ]]; then
-  #  TODO
-  #fi
-}
-
 function install_toolchain {
   version=$1
-  FOUND=$(rustup show | grep -c "$version" )
-  if [[ "$FOUND" == "0" ]]; then
-    echo "Installing ${version} of rust toolchain"
-    rustup install "$version"
-    rustup set profile minimal
-    rustup component add rustfmt --toolchain "$version"
-    rustup default "$version"
-
-  else
-    echo "${version} rust toolchain already installed"
-  fi
+  echo "Installing ${version} of rust toolchain"
+  rustup install "$version"
+  rustup set profile minimal
+  rustup component add rustfmt --toolchain "$version"
+  rustup component add clippy --toolchain "$version"
+  rustup default "$version"
 }
 
 function usage {
@@ -347,18 +292,10 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
   install_pkg cmake "$PACKAGE_MANAGER"
   install_pkg clang "$PACKAGE_MANAGER"
   install_pkg llvm "$PACKAGE_MANAGER"
-
-  install_gcc_powerpc_linux_gnu "$PACKAGE_MANAGER"
-  install_openssl_dev "$PACKAGE_MANAGER"
   install_pkg_config "$PACKAGE_MANAGER"
 
   install_rustup "$BATCH_MODE"
   install_toolchain "$(cat ./rust-toolchain)"
-
-  # Add all the components that we need
-  rustup component add rustfmt
-  rustup component add clippy
-  rustup component add miri
 
   install_pkg lcov "$PACKAGE_MANAGER"
 fi

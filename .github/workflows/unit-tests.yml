@@ -11,6 +11,10 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v2
 
+      - name: Rust setup
+        run: |
+          bash ./scripts/setup/dev_setup.sh
+
       - name: Run test
         uses: actions-rs/cargo@v1
         with:

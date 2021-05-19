@@ -11,6 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Rust setup
+        run: |
+          bash ./scripts/setup/dev_setup.sh
+
       - name: Run clippy
         uses: actions-rs/cargo@v1
         with:

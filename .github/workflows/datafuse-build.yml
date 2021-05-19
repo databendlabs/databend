@@ -13,5 +13,9 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Rust setup
+        run: |
+          bash ./scripts/setup/dev_setup.sh
+
       - name: Build
         run: cargo build --verbose

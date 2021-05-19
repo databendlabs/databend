@@ -49,6 +49,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: Rust setup
+        run: |
+          bash ./scripts/setup/dev_setup.sh
+
       - name: Cargo build
         uses: actions-rs/cargo@v1
         with:
