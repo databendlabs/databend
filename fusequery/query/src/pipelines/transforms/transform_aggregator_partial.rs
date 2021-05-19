@@ -14,7 +14,6 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::StringArray;
-use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_functions::IFunction;
 use common_planners::ExpressionAction;
@@ -90,7 +89,7 @@ impl IProcessor for AggregatorPartialTransform {
 
             // Column.
             let states = DataValue::Struct(func.accumulate_result()?);
-            let ser = serde_json::to_string(&states).map_err(ErrorCodes::from_serde)?;
+            let ser = serde_json::to_string(&states)?;
             let col = Arc::new(StringArray::from(vec![ser.as_str()]));
             columns.push(col);
         }

@@ -82,8 +82,7 @@ impl IFunction for SubstringFunction {
 
         match value {
             DataColumnarValue::Array(v) => Ok(DataColumnarValue::Array(
-                compute::kernels::substring::substring(v.deref(), from_scalar, &len_scalar)
-                    .map_err(ErrorCodes::from_arrow)?
+                compute::kernels::substring::substring(v.deref(), from_scalar, &len_scalar)?
             )),
             DataColumnarValue::Scalar(v) => {
                 let scalar_array = v.to_array()?;
@@ -91,8 +90,7 @@ impl IFunction for SubstringFunction {
                     scalar_array.deref(),
                     from_scalar,
                     &len_scalar
-                )
-                .map_err(ErrorCodes::from_arrow)?;
+                )?;
                 let substring_scalar = DataValue::try_from_array(&substring_array, 0)?;
                 Ok(DataColumnarValue::Scalar(substring_scalar))
             }

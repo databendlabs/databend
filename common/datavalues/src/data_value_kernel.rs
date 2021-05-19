@@ -308,11 +308,7 @@ impl DataValue {
                     Ok(DataValue::Int64(Some(n)))
                 }
             }
-            Err(_) => Ok(DataValue::Float64(Some(
-                literal
-                    .parse::<f64>()
-                    .map_err(ErrorCodes::from_parse_float)?
-            )))
+            Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?)))
         }
     }
 }

@@ -100,7 +100,7 @@ impl ClickHouseStream {
                 }
 
                 _ => {
-                    return Err(ErrorCodes::from_anyhow(anyhow!(
+                    return Err(ErrorCodes::from(anyhow!(
                         "Unsupported column type:{:?}",
                         column.data_type()
                     )))
