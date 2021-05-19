@@ -114,21 +114,28 @@ Note:
 
 ### Learn Datafuse
 
-* [Architecture](website/datafuse/docs/overview/architecture.md)
-* [Performance](website/datafuse/docs/overview/performance.md)
-* [SQL](website/datafuse/docs/sqlstatement/)
-* [Functions](website/datafuse/docs/functions/)
+* [Architecture](https://datafuse.rs/overview/architecture/)
+* [Performance](https://datafuse.rs/overview/performance/)
+* [SQL](https://datafuse.rs/overview/architecture/)
+* [Functions](https://datafuse.rs/overview/architecture/)
 
 ### Try Datafuse
 
-* [How to Run](website/datafuse/docs/overview/building-and-running.md)
+* [How to Run](https://datafuse.rs/overview/building-and-running/)
 * [How to Run 3-node cluster](scripts/deploy/fusequery-cluster-3-nodes.sh)
+
+
+## Release Status
+
+Datafuse is currently in **Alpha** and is not ready to be used in production.
+
+We are doing our best to release R1.
 
 ## Contributing
 
-* [Contribution Guide](website/datafuse/docs/development/contributing.md)
-* [Coding Guidelines](website/datafuse/docs/development/coding-guidelines.md)
-* [How to Profile](website/datafuse/docs/development/how-to-profile.md)
+* [Contribution Guide](https://datafuse.rs/development/contributing/)
+* [Coding Guidelines](https://datafuse.rs/development/coding-guidelines/)
+* [How to Profile](https://datafuse.rs/development/how-to-profile/)
 
 ## Roadmap
 
