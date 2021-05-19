@@ -1278,7 +1278,7 @@ dependencies = [
  "indexmap",
  "lazy_static",
  "log",
- "metrics 0.15.1",
+ "metrics",
  "metrics-exporter-prometheus",
  "msql-srv",
  "num 0.4.0",
@@ -1323,7 +1323,7 @@ dependencies = [
  "lazy_static",
  "log",
  "maplit",
- "metrics 0.15.1",
+ "metrics",
  "metrics-exporter-prometheus",
  "num 0.4.0",
  "num_cpus",
@@ -2024,22 +2024,11 @@ dependencies = [
 
 [[package]]
 name = "metrics"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c53c23fff9a59f261498953cf41dc9ffc2522fd79723bdf283c1e88dc1633624"
-dependencies = [
- "metrics-macros 0.3.0",
- "proc-macro-hack",
- "t1ha",
-]
-
-[[package]]
-name = "metrics"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c0a7fa53d812d26e59d2baf7a6f77442041454ab32908eb304447f00f0dd4de"
 dependencies = [
- "metrics-macros 0.4.0",
+ "metrics-macros",
  "proc-macro-hack",
  "t1ha",
 ]
@@ -2052,26 +2041,12 @@ checksum = "423ac561fc3300388e62947ce7f944ba6d40468afe9916ce5b7774171d8b38b8"
 dependencies = [
  "hyper",
  "ipnet",
- "metrics 0.16.0",
+ "metrics",
  "metrics-util",
  "parking_lot",
  "quanta",
  "thiserror",
  "tokio",
-]
-
-[[package]]
-name = "metrics-macros"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b22572ba9964744e261d34553568683b76db277bcd309ebf7215e28e0982505d"
-dependencies = [
- "lazy_static",
- "proc-macro-hack",
- "proc-macro2",
- "quote",
- "regex",
- "syn",
 ]
 
 [[package]]
@@ -2101,7 +2076,7 @@ dependencies = [
  "dashmap",
  "hashbrown 0.11.2",
  "indexmap",
- "metrics 0.16.0",
+ "metrics",
  "num_cpus",
  "ordered-float 2.1.1",
  "parking_lot",
