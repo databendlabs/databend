@@ -89,7 +89,7 @@ impl QueryClient {
                     }
 
                     fetch_impl(flight_data, &schema)
-                        .map_err(ErrorCodes::from_anyhow)
+                        .map_err(ErrorCodes::from)
                         .and_then(|batch| batch.try_into())
                 });
                 Ok(Box::pin(block_stream))

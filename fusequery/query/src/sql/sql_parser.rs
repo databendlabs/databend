@@ -23,14 +23,16 @@ use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 
-use crate::sql::sql_statement::DfShowDatabases;
-use crate::sql::sql_statement::DfUseDatabase;
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateTable;
+use crate::sql::DfDropDatabase;
+use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
+use crate::sql::DfShowDatabases;
 use crate::sql::DfShowSettings;
 use crate::sql::DfShowTables;
 use crate::sql::DfStatement;
+use crate::sql::DfUseDatabase;
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
@@ -64,7 +66,7 @@ impl<'a> DfParser<'a> {
     /// Parse a SQL statement and produce a set of statements with dialect
     pub fn parse_sql(sql: &str) -> Result<Vec<DfStatement>, ErrorCodes> {
         let dialect = &GenericDialect {};
-        DfParser::parse_sql_with_dialect(sql, dialect).map_err(ErrorCodes::from_parser)
+        Ok(DfParser::parse_sql_with_dialect(sql, dialect)?)
     }
 
     /// Parse a SQL statement and produce a set of statements
@@ -106,10 +108,12 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => {
                 match w.keyword {
                     Keyword::CREATE => {
-                        // move one token forward
                         self.parser.next_token();
-                        // use custom parsing
                         self.parse_create()
+                    }
+                    Keyword::DROP => {
+                        self.parser.next_token();
+                        self.parse_drop()
                     }
                     Keyword::EXPLAIN => {
                         self.parser.next_token();
@@ -295,6 +299,44 @@ impl<'a> DfParser<'a> {
         };
 
         Ok(DfStatement::CreateDatabase(create))
+    }
+
+    /// Drop database/table.
+    fn parse_drop(&mut self) -> Result<DfStatement, ParserError> {
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::DATABASE => self.parse_drop_database(),
+                Keyword::TABLE => self.parse_drop_table(),
+                _ => self.expected("drop statement", Token::Word(w))
+            },
+            unexpected => self.expected("drop statement", unexpected)
+        }
+    }
+
+    /// Drop database.
+    fn parse_drop_database(&mut self) -> Result<DfStatement, ParserError> {
+        let if_not_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let db_name = self.parser.parse_object_name()?;
+
+        let drop = DfDropDatabase {
+            if_exists: if_not_exists,
+            name: db_name
+        };
+
+        Ok(DfStatement::DropDatabase(drop))
+    }
+
+    /// Drop table.
+    fn parse_drop_table(&mut self) -> Result<DfStatement, ParserError> {
+        let if_not_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let table_name = self.parser.parse_object_name()?;
+
+        let drop = DfDropTable {
+            if_exists: if_not_exists,
+            name: table_name
+        };
+
+        Ok(DfStatement::DropTable(drop))
     }
 
     // Parse 'use database' db name.

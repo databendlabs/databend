@@ -164,7 +164,9 @@ impl FlightDispatcher {
 
             if let Err(error) = Self::receive_data_and_push(pipeline, flight_scatter, &streams_data_sender).await {
                 for sender in streams_data_sender {
-                    if let Err(send_error) = sender.send(Err(error.clone())).await {
+                    // TODO: backtrace
+                    let clone_error = ErrorCodes::create(error.code(), error.message(), None);
+                    if let Err(send_error) = sender.send(Err(clone_error)).await {
                         // TODO: log to error
                     }
                 }

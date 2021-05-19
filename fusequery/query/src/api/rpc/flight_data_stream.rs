@@ -25,7 +25,7 @@ impl FlightDataStream {
     #[inline]
     pub fn from_remote(schema: SchemaRef, inner: Streaming<FlightData>) -> impl Stream<Item=Result<DataBlock, ErrorCodes>> {
         let schema = schema.clone();
-        inner.map(move |flight_data| {
+        inner.map(move |flight_data| -> Result<DataBlock, ErrorCodes> {
             match flight_data {
                 Err(status) => Err(ErrorCodes::UnknownException(status.message())),
                 Ok(flight_data) => {
@@ -33,8 +33,8 @@ impl FlightDataStream {
                         DataBlock::create(record_batch.schema(), record_batch.columns().to_vec())
                     }
 
-                    flight_data_to_arrow_batch(&flight_data, schema.clone(), &[])
-                        .map(create_data_block).map_err(ErrorCodes::from_arrow)
+                    Ok(flight_data_to_arrow_batch(&flight_data, schema.clone(), &[])
+                        .map(create_data_block)?)
                 }
             }
         })
@@ -51,8 +51,8 @@ impl FlightDataStream {
                         DataBlock::create(record_batch.schema(), record_batch.columns().to_vec())
                     }
 
-                    flight_data_to_arrow_batch(&flight_data, schema.clone(), &[])
-                        .map(create_data_block).map_err(ErrorCodes::from_arrow)
+                    Ok(flight_data_to_arrow_batch(&flight_data, schema.clone(), &[])
+                        .map(create_data_block)?)
                 }
             }
         })

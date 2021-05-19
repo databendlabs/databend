@@ -39,8 +39,8 @@ futures = "0.3"
 indexmap = "1.6.1"
 lazy_static = "1.4.0"
 log = "0.4"
-metrics = "0.15.1"
-metrics-exporter-prometheus = "0.4.0"
+metrics = "0.16.0"
+metrics-exporter-prometheus = "0.5.0"
 msql-srv = "0.9"
 num = "0.4"
 num_cpus = "1.0"
@@ -65,7 +65,7 @@ pretty_assertions = "0.7"
 criterion = "0.3"
 
 [build-dependencies]
-vergen = "5.1.5"
+vergen = "5.1.6"
 run_script = "^0.7.0"
 
 [[bench]]

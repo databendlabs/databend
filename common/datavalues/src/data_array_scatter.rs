@@ -144,9 +144,9 @@ impl DataArrayScatter {
 
         for index in 0..binary_data.len() {
             if !binary_data.is_null(index) {
-                scattered_data_builder[indices[index] as usize].append_value(binary_data.value(index)).map_err(ErrorCodes::from_arrow)?;
+                scattered_data_builder[indices[index] as usize].append_value(binary_data.value(index))?;
             } else {
-                scattered_data_builder[indices[index] as usize].append_null().map_err(ErrorCodes::from_arrow)?;
+                scattered_data_builder[indices[index] as usize].append_null()?;
             }
         }
 
@@ -175,9 +175,9 @@ impl DataArrayScatter {
 
         for index in 0..binary_data.len() {
             if !binary_data.is_null(index) {
-                scattered_data_builder[indices[index] as usize].append_value(binary_data.value(index)).map_err(ErrorCodes::from_arrow)?;
+                scattered_data_builder[indices[index] as usize].append_value(binary_data.value(index))?;
             } else {
-                scattered_data_builder[indices[index] as usize].append_null().map_err(ErrorCodes::from_arrow)?;
+                scattered_data_builder[indices[index] as usize].append_null()?;
             }
         }
 
@@ -206,10 +206,9 @@ impl DataArrayScatter {
 
         for index in 0..binary_data.len() {
             if !binary_data.is_null(index) {
-                scattered_data_builder[indices[index] as usize].append_value(binary_data.value(index))
-                    .map_err(ErrorCodes::from_arrow)?;
+                scattered_data_builder[indices[index] as usize].append_value(binary_data.value(index))?;
             } else {
-                scattered_data_builder[indices[index] as usize].append_null().map_err(ErrorCodes::from_arrow)?;
+                scattered_data_builder[indices[index] as usize].append_null()?;
             }
         }
 

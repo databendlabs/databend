@@ -39,9 +39,7 @@ macro_rules! apply_parse_value {
     };
 
     ($VALUE: expr, $TYPE: tt) => {
-        $VALUE
-            .parse::<$TYPE>()
-            .map_err(ErrorCodes::from_parse_int)?
+        $VALUE.parse::<$TYPE>().map_err(ErrorCodes::from)?
     };
 }
 

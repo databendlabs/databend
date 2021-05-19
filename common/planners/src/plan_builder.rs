@@ -23,8 +23,8 @@ use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::LimitPlan;
 use crate::PlanNode;
-use crate::PlanRewriter;
 use crate::ProjectionPlan;
+use crate::RewriteHelper;
 use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SortPlan;
@@ -62,7 +62,7 @@ impl PlanBuilder {
 
         // Get the projection expressions(Including rewrite).
         let mut projection_exprs = vec![];
-        let exprs = PlanRewriter::rewrite_projection_aliases(exprs)?;
+        let exprs = RewriteHelper::rewrite_projection_aliases(exprs)?;
         exprs.iter().for_each(|v| match v {
             ExpressionAction::Wildcard => {
                 for i in 0..input_schema.fields().len() {
@@ -73,7 +73,7 @@ impl PlanBuilder {
         });
 
         // Merge fields.
-        let fields = PlanRewriter::exprs_to_fields(&projection_exprs, &input_schema)?;
+        let fields = RewriteHelper::exprs_to_fields(&projection_exprs, &input_schema)?;
         let mut merged = input_schema.fields().clone();
         for field in fields {
             if !merged.iter().any(|x| x.name() == field.name()) && field.name() != "*" {
@@ -91,7 +91,7 @@ impl PlanBuilder {
 
     /// Apply a projection.
     pub fn project(&self, exprs: &[ExpressionAction]) -> Result<Self> {
-        let exprs = PlanRewriter::rewrite_projection_aliases(exprs)?;
+        let exprs = RewriteHelper::rewrite_projection_aliases(exprs)?;
         let input_schema = self.plan.schema();
 
         let mut projection_exprs = vec![];
@@ -104,7 +104,7 @@ impl PlanBuilder {
             _ => projection_exprs.push(v.clone())
         });
 
-        let fields = PlanRewriter::exprs_to_fields(&projection_exprs, &input_schema)?;
+        let fields = RewriteHelper::exprs_to_fields(&projection_exprs, &input_schema)?;
 
         Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
             input: Arc::new(self.plan.clone()),
@@ -120,13 +120,13 @@ impl PlanBuilder {
         group_expr: &[ExpressionAction]
     ) -> Result<Self> {
         let input_schema = self.plan.schema();
-        let rewrite_aggr_exprs = PlanRewriter::rewrite_projection_aliases(aggr_expr)?;
+        let rewrite_aggr_exprs = RewriteHelper::rewrite_projection_aliases(aggr_expr)?;
         let aggr_projection_fields =
-            PlanRewriter::exprs_to_fields(&rewrite_aggr_exprs, &input_schema)?;
+            RewriteHelper::exprs_to_fields(&rewrite_aggr_exprs, &input_schema)?;
 
         // Aggregator check.
         let mut group_by_names = HashSet::new();
-        PlanRewriter::exprs_to_names(&group_expr, &mut group_by_names)?;
+        RewriteHelper::exprs_to_names(&group_expr, &mut group_by_names)?;
         for aggr in &rewrite_aggr_exprs {
             match aggr {
                 // do not check literal expressions
@@ -144,7 +144,7 @@ impl PlanBuilder {
                 _ => {
                     if !aggr.has_aggregator()? {
                         // Check if aggr is in group-by's list
-                        let in_group_by = PlanRewriter::check_aggr_in_group_expr(
+                        let in_group_by = RewriteHelper::check_aggr_in_group_expr(
                             &aggr,
                             &group_by_names,
                             &input_schema

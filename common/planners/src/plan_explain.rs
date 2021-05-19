@@ -26,11 +26,7 @@ impl ExplainPlan {
         self.input.schema()
     }
 
-    pub fn input(&self) -> Arc<PlanNode> {
-        self.input.clone()
-    }
-
-    pub fn set_input(&mut self, input: &PlanNode) {
-        self.input = Arc::new(input.clone());
+    pub fn set_input(&mut self, node: &PlanNode) {
+        self.input = Arc::new(node.clone());
     }
 }

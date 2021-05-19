@@ -203,7 +203,7 @@ impl FlightService for FuseQueryService {
                     Err(utf_8_error) => Err(Status::invalid_argument(utf_8_error.to_string())),
                     Ok(prepare_stage_info_str) => {
                         let action = serde_json::from_str::<ExecutePlanWithShuffleAction>(prepare_stage_info_str)
-                            .map_err(ErrorCodes::from_serde).map_err(to_status)?;
+                            .map_err(ErrorCodes::from).map_err(to_status)?;
 
                         let (response_sender, mut receiver) = channel(1);
                         self.dispatcher_sender.send(DispatcherRequest::PrepareQueryStage(PrepareStageInfo::create(action.query_id, action.stage_id, action.plan, action.scatters, action.scatters_action), response_sender)).await;

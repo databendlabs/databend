@@ -23,7 +23,7 @@ macro_rules! compute_op {
         let ll = downcast_array!($LEFT, $DT)?;
         let rr = downcast_array!($RIGHT, $DT)?;
         Ok(Arc::new(
-            common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCodes::from_arrow)?
+            common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCodes::from)?
         ))
     }};
 }
@@ -35,7 +35,7 @@ macro_rules! compute_utf8_op {
         let rr = downcast_array!($RIGHT, $DT)?;
         Ok(Arc::new(
             (paste::expr! {common_arrow::arrow::compute::[<$OP _utf8>]}(&ll, &rr))
-                .map_err(ErrorCodes::from_arrow)?
+                .map_err(ErrorCodes::from)?
         ))
     }};
 }
@@ -46,7 +46,7 @@ macro_rules! compute_self_defined_op {
         let ll = downcast_array!($LEFT, $DT)?;
         let rr = downcast_array!($RIGHT, $DT)?;
         Ok(Arc::new(
-            common_arrow::arrow::compute::math_op(&ll, &rr, $OP).map_err(ErrorCodes::from_arrow)?
+            common_arrow::arrow::compute::math_op(&ll, &rr, $OP).map_err(ErrorCodes::from)?
         ))
     }};
 }
@@ -134,9 +134,9 @@ macro_rules! compute_op_scalar {
         Ok(Arc::new(
             (paste::expr! {common_arrow::arrow::compute::[<$OP _scalar>]}(
                 &ll,
-                $RIGHT.try_into().map_err(ErrorCodes::from_anyhow)?
+                $RIGHT.try_into().map_err(ErrorCodes::from)?
             ))
-            .map_err(ErrorCodes::from_arrow)?
+            .map_err(ErrorCodes::from)?
         ))
     }};
 }
@@ -151,7 +151,7 @@ macro_rules! compute_utf8_op_scalar {
                     &ll,
                     &string_value
                 ))
-                .map_err(ErrorCodes::from_arrow)?
+                .map_err(ErrorCodes::from)?
             ))
         } else {
             Result::Err(ErrorCodes::BadDataValueType(format!(
@@ -309,7 +309,7 @@ macro_rules! array_boolean_op {
         let ll = downcast_array!($LEFT, $DT)?;
         let rr = downcast_array!($RIGHT, $DT)?;
         Ok(Arc::new(
-            common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCodes::from_arrow)?
+            common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCodes::from)?
         ))
     }};
 }
@@ -387,11 +387,11 @@ macro_rules! try_build_array {
         let mut builder = $VALUE_BUILDER_TY::new(len);
         for scalar_value in $VALUES {
             match scalar_value {
-                DataValue::$SCALAR_TY(Some(v)) => builder
-                    .append_value(v.clone())
-                    .map_err(ErrorCodes::from_arrow)?,
+                DataValue::$SCALAR_TY(Some(v)) => {
+                    builder.append_value(v.clone()).map_err(ErrorCodes::from)?
+                }
                 DataValue::$SCALAR_TY(None) => {
-                    builder.append_null().map_err(ErrorCodes::from_arrow)?;
+                    builder.append_null().map_err(ErrorCodes::from)?;
                 }
                 _ => {
                     return Result::Err(ErrorCodes::BadDataValueType(

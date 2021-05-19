@@ -100,8 +100,7 @@ impl DataArrayMerge {
             .iter()
             .zip(rhs.iter())
             .map(|(l, r)| build_compare(l.as_ref(), r.as_ref()))
-            .collect::<common_arrow::arrow::error::Result<Vec<DynComparator>>>()
-            .map_err(ErrorCodes::from_arrow)?;
+            .collect::<common_arrow::arrow::error::Result<Vec<DynComparator>>>()?;
 
         // prepare a comparison function taking into account nulls and sort options
         let cmp = |left, right| {

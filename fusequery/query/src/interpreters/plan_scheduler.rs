@@ -87,7 +87,7 @@ impl GetNodePlan for DefaultGetNodePlan {
     fn get_plan(&self, node_name: &String, cluster_nodes: &Vec<Node>) -> Result<PlanNode> {
         let mut clone_node = self.0.clone();
         if let Ok(input) = self.1.get_plan(node_name, cluster_nodes) {
-            clone_node.set_input(&input);
+            clone_node.set_inputs(vec![&input]);
         }
 
         Ok(clone_node)

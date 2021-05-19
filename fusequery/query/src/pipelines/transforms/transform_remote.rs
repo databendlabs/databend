@@ -81,7 +81,7 @@ impl IProcessor for RemoteTransform {
                 &self.plan
             )
             .await
-            .map_err(ErrorCodes::from_anyhow)?
+            .map_err(ErrorCodes::from)?
         ))
     }
 }

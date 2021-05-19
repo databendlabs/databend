@@ -134,7 +134,7 @@ impl IOptimizer for ScattersOptimizer {
                     rewritten_node = self.optimize_aggregator(plan, rewritten_node.clone(), &mut status_rpn)?,
                 _ => {
                     let mut clone_node = node.clone();
-                    clone_node.set_input(&rewritten_node);
+                    clone_node.set_inputs(vec![&rewritten_node]);
                     rewritten_node = clone_node;
                 }
             };

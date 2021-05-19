@@ -9,18 +9,14 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          components: rustfmt
-          override: true
-      - name: Build Release
+
+      - name: Rust setup
+        run: |
+          bash ./scripts/setup/dev_setup.sh
+
+      - uses: actions-rs/cargo@v1
         run: RUST_BACKTRACE=full RUSTFLAGS="-C target-cpu=native" cargo build --bin=fuse-query --release
 
       - name: Run Performance Tests with Standalone mode
         run: |
-          echo "Starting Standalone fuse-query"
-          scripts/ci/fusequery-standalone.sh release
-          echo "Starting performance test"
-          cd tests
-          ./fuse-test --print-time --run-dir '1_performance'
+          bash ./scripts/ci/ci-performance-tests-standalone.sh

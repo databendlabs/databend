@@ -32,7 +32,7 @@ impl FlightClient {
     pub async fn prepare_query_stage(&mut self, action: ExecutePlanWithShuffleAction, timeout: u64) -> Result<()> {
         self.do_action(Action {
             r#type: "PrepareQueryStage".to_string(),
-            body: serde_json::to_string(&action).map_err(ErrorCodes::from_serde)?.as_bytes().to_vec(),
+            body: serde_json::to_string(&action)?.as_bytes().to_vec(),
         }, timeout).await?;
 
         Ok(())

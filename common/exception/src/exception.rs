@@ -99,6 +99,7 @@ build_exceptions! {
     EmptyDataFromServer(32),
     NotFountLocalNode(33),
     PlanScheduleError(34),
+    BadPlanInputs(35),
 
     UnknownException(1000),
     TokioError(1001)
@@ -157,19 +158,9 @@ impl Debug for OtherErrors {
     }
 }
 
-impl Clone for ErrorCodes {
-    fn clone(&self) -> Self {
-        ErrorCodes {
-            code: self.code.clone(),
-            display_text: self.display_text.clone(),
-            cause: None,
-            backtrace: self.backtrace.clone(),
-        }
-    }
-}
 
-impl ErrorCodes {
-    pub fn from_anyhow(error: anyhow::Error) -> ErrorCodes {
+impl From<anyhow::Error> for ErrorCodes {
+    fn from(error: anyhow::Error) -> Self {
         ErrorCodes {
             code: 1002,
             display_text: String::from(""),
@@ -177,49 +168,54 @@ impl ErrorCodes {
             backtrace: None,
         }
     }
+}
 
-    pub fn from_parse_int(error: std::num::ParseIntError) -> ErrorCodes {
+impl From<std::num::ParseIntError> for ErrorCodes {
+    fn from(error: std::num::ParseIntError) -> Self {
+        ErrorCodes::from_std_error(error)
+    }
+}
+
+impl From<std::num::ParseFloatError> for ErrorCodes {
+    fn from(error: std::num::ParseFloatError) -> Self {
+        ErrorCodes::from_std_error(error)
+    }
+}
+
+impl From<common_arrow::arrow::error::ArrowError> for ErrorCodes {
+    fn from(error: common_arrow::arrow::error::ArrowError) -> Self {
+        ErrorCodes::from_std_error(error)
+    }
+}
+
+impl From<serde_json::Error> for ErrorCodes {
+    fn from(error: serde_json::Error) -> Self {
+        ErrorCodes::from_std_error(error)
+    }
+}
+
+impl From<sqlparser::parser::ParserError> for ErrorCodes {
+    fn from(error: sqlparser::parser::ParserError) -> Self {
+        ErrorCodes::from_std_error(error)
+    }
+}
+
+impl ErrorCodes {
+    pub fn from_std_error<T: std::error::Error>(error: T) -> Self {
         ErrorCodes {
             code: 1002,
             display_text: format!("{}", error),
             cause: None,
-            backtrace: Some(Backtrace::new())
+            backtrace: Some(Backtrace::new()),
         }
     }
 
-    pub fn from_parse_float(error: std::num::ParseFloatError) -> ErrorCodes {
+    pub fn create(code: u16, display_text: String, backtrace: Option<Backtrace>) -> ErrorCodes {
         ErrorCodes {
-            code: 1002,
-            display_text: format!("{}", error),
+            code,
+            display_text,
             cause: None,
-            backtrace: Some(Backtrace::new())
-        }
-    }
-
-    pub fn from_arrow(error: common_arrow::arrow::error::ArrowError) -> ErrorCodes {
-        ErrorCodes {
-            code: 1002,
-            display_text: format!("{}", error),
-            cause: None,
-            backtrace: Some(Backtrace::new())
-        }
-    }
-
-    pub fn from_serde(error: serde_json::Error) -> ErrorCodes {
-        ErrorCodes {
-            code: 1002,
-            display_text: format!("{}", error),
-            cause: None,
-            backtrace: Some(Backtrace::new())
-        }
-    }
-
-    pub fn from_parser(error: sqlparser::parser::ParserError) -> ErrorCodes {
-        ErrorCodes {
-            code: 1002,
-            display_text: format!("{}", error),
-            cause: None,
-            backtrace: Some(Backtrace::new())
+            backtrace,
         }
     }
 }

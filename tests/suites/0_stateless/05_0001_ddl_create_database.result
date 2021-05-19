@@ -15,3 +15,12 @@ SELECT COUNT(1) from system.tables where name = 't' and database = 'db'
 +----------+
 |        1 |
 +----------+
+--------------
+CREATE DATABASE IF NOT EXISTS db ENGINE = Local
+--------------
+
+--------------
+CREATE DATABASE db ENGINE = Local
+--------------
+
+ERROR 1105 (HY000) at line 6: Code: 3, displayText = Database: 'db' already exists..

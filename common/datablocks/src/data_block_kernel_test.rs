@@ -171,7 +171,7 @@ fn test_scatter_block() -> anyhow::Result<()> {
     ]);
 
     let mut builder = UInt64Builder::new(3);
-    builder.append_slice(&[0, 1, 0]).map_err(ErrorCodes::from_arrow)?;
+    builder.append_slice(&[0, 1, 0])?;
     let indices: DataArrayRef = Arc::new(builder.finish());
 
     let scattered = DataBlock::scatter_block(&raw, &indices, 2)?;

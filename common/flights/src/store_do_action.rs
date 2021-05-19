@@ -11,6 +11,8 @@ use common_arrow::arrow_flight::Action;
 use common_datavalues::DataSchemaRef;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
+use common_planners::DropDatabasePlan;
+use common_planners::DropTablePlan;
 use common_planners::ScanPlan;
 use prost::Message;
 use tonic::Request;
@@ -34,6 +36,13 @@ pub struct CreateDatabaseActionResult {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct DropDatabaseAction {
+    pub plan: DropDatabasePlan
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct DropDatabaseActionResult {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CreateTableAction {
     pub plan: CreateTablePlan
 }
@@ -41,6 +50,13 @@ pub struct CreateTableAction {
 pub struct CreateTableActionResult {
     pub table_id: i64
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct DropTableAction {
+    pub plan: DropTablePlan
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct DropTableActionResult {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetTableAction {
@@ -60,7 +76,9 @@ pub struct GetTableActionResult {
 pub enum StoreDoAction {
     ReadPlan(ReadPlanAction),
     CreateDatabase(CreateDatabaseAction),
+    DropDatabase(DropDatabaseAction),
     CreateTable(CreateTableAction),
+    DropTable(DropTableAction),
     GetTable(GetTableAction)
 }
 
@@ -68,7 +86,9 @@ pub enum StoreDoAction {
 pub enum StoreDoActionResult {
     ReadPlan(ReadPlanActionResult),
     CreateDatabase(CreateDatabaseActionResult),
+    DropDatabase(DropDatabaseActionResult),
     CreateTable(CreateTableActionResult),
+    DropTable(DropTableActionResult),
     GetTable(GetTableActionResult)
 }
 
