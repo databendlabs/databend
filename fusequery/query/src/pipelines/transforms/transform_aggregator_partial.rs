@@ -24,9 +24,10 @@ use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
+use common_aggregate_functions::IAggreagteFunction;
 
 pub struct AggregatorPartialTransform {
-    funcs: Vec<Box<dyn IFunction>>,
+    funcs: Vec<Box<dyn IAggreagteFunction>>,
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>
 }

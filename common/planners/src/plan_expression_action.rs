@@ -119,6 +119,15 @@ impl ExpressionAction {
     pub fn has_aggregator(&self) -> Result<bool> {
         Ok(false)
     }
+
+    pub fn to_aggregate_function(&self) -> Result<Box<dyn AggregateFunction>> {
+        match self {
+            ExpressionAction::AggregateFunction { op, args } => AggregateFunctionFactory::get(op),
+            _ => Result::Err(ErrorCodes::IllegalAggregateExp(
+                format!("Expression {:?} is not an aggregate function", self)),
+            ),
+        }
+    }
 }
 
 // Also used as expression column name
