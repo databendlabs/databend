@@ -1,0 +1,44 @@
+# labeler "full" schema
+
+# enable labeler on issues, prs, or both.
+enable:
+  issues: true
+  prs: true
+# comments object allows you to specify a different message for issues and prs
+
+comments:
+  prs: |
+    Thanks for the contribution!
+    I have applied any labels matching special text in your title and description.
+
+    Please review the labels and make any necessary changes.
+
+# Labels is an object where:
+# - keys are labels
+# - values are objects of { include: [ pattern ], exclude: [ pattern ] }
+#    - pattern must be a valid regex, and is applied globally to
+#      title + description of issues and/or prs (see enabled config above)
+#    - 'include' patterns will associate a label if any of these patterns match
+#    - 'exclude' patterns will ignore this label if any of these patterns match
+labels:
+  'New Feature':
+    include:
+      - '\bNew Feature?\b'
+    exclude: []
+  'Bug Fix':
+    include:
+      - '\bBug Fix?\b'
+    exclude: []
+  'Improvement':
+    include:
+      - '\bImprovement?\b'
+    exclude:
+      - '\bPerformance Improvement?\b'
+  'Performance Improvement':
+    include:
+      - '\bPerformance Improvement?\b'
+    exclude: []
+  'Build/Testing/CI':
+    include:
+      - '\bBuild/Testing/CI?\b'
+    exclude: []

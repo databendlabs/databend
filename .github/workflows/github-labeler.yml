@@ -1,0 +1,14 @@
+name: AutoLabeler
+on: [push, pull_request_target]
+
+jobs:
+
+  labeler:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check Labels
+      id: labeler
+      uses: jimschubert/labeler-action@v1
+      with:
+        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
