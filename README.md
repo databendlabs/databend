@@ -78,7 +78,6 @@ Note:
 * ClickHouse system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/bba7ec2c23da8017eced7118b59fc7d5)
 * FuseQuery system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/8c37f5390e129cfc9d648ff930d9ef03)
 
-
 ## Status
 
 #### General
@@ -109,33 +108,16 @@ Note:
 - [ ] Joins (WIP)
 - [ ] Window (TODO)
 
-
 ## Getting Started
 
-### Learn Datafuse
-
+* [Quick Start](https://datafuse.rs/overview/architecture/)
 * [Architecture](https://datafuse.rs/overview/architecture/)
 * [Performance](https://datafuse.rs/overview/performance/)
-* [SQL](https://datafuse.rs/overview/architecture/)
-* [Functions](https://datafuse.rs/overview/architecture/)
-
-### Try Datafuse
-
-* [How to Run](https://datafuse.rs/overview/building-and-running/)
-* [How to Run 3-node cluster](scripts/deploy/fusequery-cluster-3-nodes.sh)
-
-
-## Release Status
-
-Datafuse is currently in **Alpha** and is not ready to be used in production.
-
-We are doing our best to release R1.
 
 ## Contributing
 
 * [Contribution Guide](https://datafuse.rs/development/contributing/)
 * [Coding Guidelines](https://datafuse.rs/development/coding-guidelines/)
-* [How to Profile](https://datafuse.rs/development/how-to-profile/)
 
 ## Roadmap
 
@@ -145,6 +127,12 @@ We are doing our best to release R1.
 - [x] 0.4 Support order by (2021.04)
 - [ ] 0.5 Support join
 - [ ] 1.0 Support TPC-H benchmark
+
+## Release Status
+
+Datafuse is currently in **Alpha** and is not ready to be used in production.
+
+We are doing our best to release R1.
 
 ## License
 
