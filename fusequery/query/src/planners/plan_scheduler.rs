@@ -14,6 +14,23 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct PlanScheduler;
 
+/// ReadSourceRewriter will replace all ReadDataSourcePlan in a plan tree with given `new_source_plan`
+struct ReadSourceRewriter {
+    new_source_plan: ReadDataSourcePlan
+}
+
+impl<'plan> PlanRewriter<'plan> for ReadSourceRewriter {
+    fn rewrite_read_data_source(&mut self, _plan: &ReadDataSourcePlan) -> Result<PlanNode> {
+        Ok(PlanNode::ReadSource(self.new_source_plan.clone()))
+    }
+}
+
+impl ReadSourceRewriter {
+    fn rewrite(mut self, plan: &PlanNode) -> Result<PlanNode> {
+        self.rewrite_plan_node(plan)
+    }
+}
+
 impl PlanScheduler {
     /// Schedule the plan to Local or Remote mode.
     pub fn reschedule(
@@ -107,23 +124,6 @@ impl PlanScheduler {
                     &all_parts[num_chunks_so_far..num_chunks_so_far + chunk_size]
                 );
                 num_chunks_so_far += chunk_size;
-
-                struct ReadSourceRewriter {
-                    new_source_plan: ReadDataSourcePlan
-                }
-                impl<'plan> PlanRewriter<'plan> for ReadSourceRewriter {
-                    fn rewrite_read_data_source(
-                        &mut self,
-                        _plan: &ReadDataSourcePlan
-                    ) -> Result<PlanNode> {
-                        Ok(PlanNode::ReadSource(self.new_source_plan.clone()))
-                    }
-                }
-                impl ReadSourceRewriter {
-                    fn rewrite(mut self, plan: &PlanNode) -> Result<PlanNode> {
-                        self.rewrite_plan_node(plan)
-                    }
-                }
 
                 // Walk and rewrite the plan from the source.
                 let rewriter = ReadSourceRewriter { new_source_plan };
