@@ -1,5 +1,9 @@
 name: AutoLabeler
-on: [push, pull_request_target]
+on: 
+  issues:
+    types: [opened, edited, milestoned]
+  pull_request:
+    types: [opened, edited, milestoned]
 
 jobs:
 
