@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
+use common_exception::{Result, ErrorCodes};
 use common_planners::{SelectPlan, PlanNode, StagePlan};
 use common_streams::SendableDataBlockStream;
 
@@ -52,32 +52,22 @@ impl IInterpreter for SelectInterpreter {
 
         let (local_plan, remote_actions) = PlanScheduler::reschedule(self.ctx.clone(), &plan)?;
 
-        // let query_id = self.ctx.get_id()?;
-        // let execute_plan = Self::extract_plan_node_with_stage(plan);
-        //
-        // for index in 1..execute_plan.len() {
-        //     let stage_id = uuid::Uuid::new_v4().to_string();
-        //     let nodes = self.ctx.try_get_cluster()?.get_nodes()?;
-        //
-        //     for node in nodes {
-        //         if let Ok(mut client) = node.try_get_client() {
-        //             if let Result::Err(error) = client.prepare_query_stage(
-        //                 ExecutePlanWithShuffleAction {
-        //                     query_id: query_id.clone(),
-        //                     stage_id: stage_id.clone(),
-        //                     plan: *execute_plan[index].input.clone(),
-        //                     scatters: vec![],
-        //                     scatters_action: execute_plan[index].scatters_expr.clone(),
-        //                 }, 60,
-        //             ).await {
-        //                 // TODO: kill executed plan
-        //
-        //                 return Result::Err(error);
-        //             }
-        //             break;
-        //         }
-        //     }
-        // }
+        fn prepare_error_handler(error: ErrorCodes, end: usize) -> Result<SendableDataBlockStream> {
+            Result::Err(error)
+        }
+
+        let timeout = self.ctx.get_flight_client_timeout()?;
+        for index in 0..remote_actions.len() {
+            let (node, action) = &remote_actions[index];
+            match node.try_get_client() {
+                Err(error) => return prepare_error_handler(error, index),
+                Ok(mut flight_client) => {
+                    if let Err(error) = flight_client.prepare_query_stage(action.clone(), timeout).await {
+                        return prepare_error_handler(error, index);
+                    }
+                }
+            }
+        }
 
         PipelineBuilder::create(self.ctx.clone(), local_plan)
             .build()?
