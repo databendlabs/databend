@@ -7,7 +7,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
-use crate::AggregatorFinalPlan;
+use crate::{AggregatorFinalPlan, RemotePlan};
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
@@ -30,6 +30,7 @@ use crate::UseDatabasePlan;
 pub enum PlanNode {
     Empty(EmptyPlan),
     Stage(StagePlan),
+    Remote(RemotePlan),
     Projection(ProjectionPlan),
     Expression(ExpressionPlan),
     AggregatorPartial(AggregatorPartialPlan),
@@ -54,6 +55,7 @@ impl PlanNode {
         match self {
             PlanNode::Empty(v) => v.schema(),
             PlanNode::Stage(v) => v.schema(),
+            PlanNode::Remote(v) => v.schema(),
             PlanNode::Scan(v) => v.schema(),
             PlanNode::Projection(v) => v.schema(),
             PlanNode::Expression(v) => v.schema(),
@@ -78,6 +80,7 @@ impl PlanNode {
             PlanNode::Empty(_) => "EmptyPlan",
             PlanNode::Stage(_) => "StagePlan",
             PlanNode::Scan(_) => "ScanPlan",
+            PlanNode::Remote(_) => "RemotePlan",
             PlanNode::Projection(_) => "ProjectionPlan",
             PlanNode::Expression(_) => "ExpressionPlan",
             PlanNode::AggregatorPartial(_) => "AggregatorPartialPlan",

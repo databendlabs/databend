@@ -97,6 +97,8 @@ build_exceptions! {
     UnknownColumn(30),
     BadScatterExpression(31),
     EmptyDataFromServer(32),
+    NotFountLocalNode(33),
+    PlanScheduleError(34),
 
     UnknownException(1000),
     TokioError(1001)

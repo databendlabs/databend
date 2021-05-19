@@ -32,7 +32,7 @@ use crate::pipelines::transforms::RemoteTransform;
 use crate::pipelines::transforms::SortMergeTransform;
 use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
-use crate::planners::PlanScheduler;
+// use crate::planners::PlanScheduler;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct PipelineBuilder {

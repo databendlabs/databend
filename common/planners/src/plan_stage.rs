@@ -8,7 +8,7 @@ use common_datavalues::DataSchemaRef;
 
 use crate::{PlanNode, ExpressionAction};
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum StageKind {
     Normal,
     Expansive,

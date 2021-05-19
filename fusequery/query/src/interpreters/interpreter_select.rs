@@ -15,6 +15,7 @@ use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
 use crate::api::FlightClient;
 use common_flights::ExecutePlanWithShuffleAction;
+use crate::planners::PlanScheduler;
 
 pub struct SelectInterpreter {
     ctx: FuseQueryContextRef,
@@ -49,6 +50,8 @@ impl IInterpreter for SelectInterpreter {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = Optimizer::create(self.ctx.clone()).optimize(&self.select.input)?;
 
+        let (local_plan, remote_plans) = PlanScheduler::reschedule(self.ctx.clone(), &plan)?;
+
         // let query_id = self.ctx.get_id()?;
         // let execute_plan = Self::extract_plan_node_with_stage(plan);
         //
@@ -76,7 +79,7 @@ impl IInterpreter for SelectInterpreter {
         //     }
         // }
 
-        PipelineBuilder::create(self.ctx.clone(), plan)
+        PipelineBuilder::create(self.ctx.clone(), local_plan)
             .build()?
             .execute()
             .await
