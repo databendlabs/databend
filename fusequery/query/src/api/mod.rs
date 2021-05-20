@@ -12,3 +12,5 @@ mod rpc_service;
 pub use rpc::FlightClient;
 pub use http_service::HttpService;
 pub use rpc_service::RpcService;
+
+pub use rpc::ExecutePlanWithShuffleAction;

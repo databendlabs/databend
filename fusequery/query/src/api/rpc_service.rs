@@ -6,10 +6,11 @@ use anyhow::anyhow;
 use anyhow::Result;
 use tonic::transport::Server;
 
-use crate::api::rpc::FlightService;
+use crate::api::rpc::{FuseQueryService, FlightDispatcher};
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::sessions::SessionRef;
+use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
 
 pub struct RpcService {
     conf: Config,
@@ -32,15 +33,18 @@ impl RpcService {
             .flight_api_address
             .parse::<std::net::SocketAddr>()?;
 
-        // Flight service:
-        let flight_srv = FlightService::create(
+        let flight_dispatcher = FlightDispatcher::new(
             self.conf.clone(),
             self.cluster.clone(),
-            self.session_manager.clone()
+            self.session_manager.clone(),
         );
 
+        // Flight service:
+        let dispatcher_request_sender = flight_dispatcher.run();
+        let service = FuseQueryService::create(dispatcher_request_sender);
+
         Server::builder()
-            .add_service(flight_srv.make_server())
+            .add_service(FlightServiceServer::new(service))
             .serve(addr)
             .await
             .map_err(|e| anyhow!("Flight make sever error: {:?}", e))

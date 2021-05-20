@@ -5,7 +5,7 @@
 use common_exception::{Result, ErrorCodes};
 use tonic::transport::channel::Channel;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
-use common_flights::ExecutePlanWithShuffleAction;
+use crate::api::rpc::actions::ExecutePlanWithShuffleAction;
 use tonic::Request;
 use common_arrow::arrow_flight::{Action, Ticket};
 use tokio::time::Duration;

@@ -4,9 +4,6 @@
 
 mod common;
 mod flight_token;
-mod query_client;
-mod query_do_action;
-mod query_do_get;
 mod store_client;
 mod store_do_action;
 mod store_do_get;
@@ -15,11 +12,6 @@ pub use common::flight_result_to_str;
 pub use common::status_err;
 pub use flight_token::FlightClaim;
 pub use flight_token::FlightToken;
-pub use query_client::QueryClient;
-pub use query_do_action::QueryDoAction;
-pub use query_do_action::ExecutePlanWithShuffleAction;
-pub use query_do_get::ExecutePlanAction;
-pub use query_do_get::QueryDoGet;
 pub use store_client::StoreClient;
 pub use store_do_action::CreateDatabaseAction;
 pub use store_do_action::CreateDatabaseActionResult;

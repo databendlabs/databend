@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_flights::QueryClient;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 

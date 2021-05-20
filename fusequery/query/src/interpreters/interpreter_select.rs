@@ -14,7 +14,7 @@ use crate::optimizers::Optimizer;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
 use crate::api::FlightClient;
-use common_flights::ExecutePlanWithShuffleAction;
+use crate::api::ExecutePlanWithShuffleAction;
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use std::collections::HashSet;
 

@@ -26,15 +26,19 @@ use common_arrow::arrow_flight::Ticket;
 use common_arrow::arrow_flight::Result as FlightResult;
 
 use crate::api::rpc::flight_dispatcher::{Request as DispatcherRequest, PrepareStageInfo};
-use crate::api::rpc::{FlightStream, StreamInfo, FlightDispatcher, to_status};
+use crate::api::rpc::{StreamInfo, FlightDispatcher, to_status};
 use tokio_stream::wrappers::ReceiverStream;
 use common_exception::ErrorCodes;
-use tokio_stream::StreamExt;
+use tokio_stream::{StreamExt, Stream};
 use common_arrow::arrow_flight::flight_descriptor::DescriptorType;
 use common_arrow::arrow_flight::utils::flight_schema_from_arrow_schema;
 use common_datavalues::DataSchemaRef;
 use common_arrow::arrow::datatypes::SchemaRef;
-use common_flights::ExecutePlanWithShuffleAction;
+use crate::api::rpc::actions::ExecutePlanWithShuffleAction;
+use std::pin::Pin;
+
+pub type FlightStream<T> =
+    Pin<Box<dyn Stream<Item=Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct FuseQueryService {
     dispatcher_sender: Sender<DispatcherRequest>,

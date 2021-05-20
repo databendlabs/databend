@@ -3,9 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[cfg(test)]
-mod flight_service_test;
-
-#[cfg(test)]
 mod flight_dispatcher_test;
 
 #[cfg(test)]
@@ -13,20 +10,21 @@ mod flight_service_new_test;
 
 #[macro_use]
 mod macros;
-mod flight_service;
 mod metrics;
 mod flight_service_new;
 mod flight_dispatcher;
 mod flight_data_stream;
 mod flight_scatter;
 mod flight_client_new;
+mod actions;
 
+pub use actions::ExecutePlanWithShuffleAction;
 
-pub use flight_service::FlightService;
-pub use flight_service::FlightStream;
 pub use flight_dispatcher::FlightDispatcher;
 pub use flight_dispatcher::StreamInfo;
 pub use flight_client_new::FlightClient;
+pub use flight_service_new::FlightStream;
+pub use flight_service_new::FuseQueryService;
 
 
 use common_exception::ErrorCodes;

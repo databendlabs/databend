@@ -13,7 +13,7 @@ use common_planners::ReadDataSourcePlan;
 use log::info;
 
 use crate::sessions::FuseQueryContextRef;
-use common_flights::ExecutePlanWithShuffleAction;
+use crate::api::ExecutePlanWithShuffleAction;
 use crate::clusters::{ClusterRef, Node};
 
 pub struct PlanScheduler;

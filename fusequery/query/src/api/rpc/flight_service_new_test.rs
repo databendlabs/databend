@@ -12,7 +12,7 @@ use tokio_stream::StreamExt;
 use common_planners::{PlanNode, EmptyPlan};
 use std::sync::Arc;
 use common_arrow::arrow::datatypes::{Schema, Field};
-use common_flights::ExecutePlanWithShuffleAction;
+use crate::api::rpc::actions::ExecutePlanWithShuffleAction;
 use common_arrow::parquet::data_type::AsBytes;
 use common_arrow::arrow_flight::flight_descriptor::DescriptorType;
 use common_datavalues::DataType;
