@@ -118,4 +118,3 @@ impl Debug for NoBacktraceErrorCodes {
 }
 
 impl Reject for NoBacktraceErrorCodes {}
-

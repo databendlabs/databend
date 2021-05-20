@@ -1,8 +1,11 @@
 use std::net::{SocketAddr, Ipv4Addr, SocketAddrV4, SocketAddrV6};
 use common_exception::ErrorCodes;
 use common_exception::Result;
+use serde::{Serializer, Deserializer};
+use serde::de::{Visitor, Error};
+use std::fmt::Formatter;
 
-#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Address {
     SocketAddress(SocketAddr),
     Named((String, u16)),
@@ -41,5 +44,32 @@ impl Address {
             Self::SocketAddress(addr) => addr.port(),
             Self::Named((_, port)) => port.clone()
         }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::SocketAddress(addr) => addr.to_string(),
+            Self::Named((hostname, port)) => format!("{}:{}", hostname, port)
+        }
+    }
+}
+
+impl serde::Serialize for Address {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+        where S: Serializer
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Address {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+        where D: Deserializer<'de>
+    {
+        String::deserialize(deserializer).and_then(|address|
+            match Address::create(&address) {
+                Ok(address) => Ok(address),
+                Err(error_code) => Err(D::Error::custom(error_code))
+            })
     }
 }
