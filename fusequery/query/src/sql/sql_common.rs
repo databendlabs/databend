@@ -50,28 +50,28 @@ impl SQLCommon {
         fractional_seconds_precision: &Option<u64>
     ) -> Result<ExpressionAction> {
         if leading_field.is_some() {
-            return Result::Err(ErrorCodes::SyntexException(format!(
+            return Result::Err(ErrorCodes::SyntaxException(format!(
                 "Unsupported Interval Expression with leading_field {:?}",
                 leading_field
             )));
         }
 
         if leading_precision.is_some() {
-            return Result::Err(ErrorCodes::SyntexException(format!(
+            return Result::Err(ErrorCodes::SyntaxException(format!(
                 "Unsupported Interval Expression with leading_precision {:?}",
                 leading_precision
             )));
         }
 
         if last_field.is_some() {
-            return Result::Err(ErrorCodes::SyntexException(format!(
+            return Result::Err(ErrorCodes::SyntaxException(format!(
                 "Unsupported Interval Expression with last_field {:?}",
                 last_field
             )));
         }
 
         if fractional_seconds_precision.is_some() {
-            return Result::Err(ErrorCodes::SyntexException(format!(
+            return Result::Err(ErrorCodes::SyntaxException(format!(
                 "Unsupported Interval Expression with fractional_seconds_precision {:?}",
                 fractional_seconds_precision
             )));
@@ -105,7 +105,7 @@ impl SQLCommon {
             let interval_period = match f32::from_str(interval_period_str) {
                 Ok(n) => n,
                 Err(_) => {
-                    return Result::Err(ErrorCodes::SyntexException(format!(
+                    return Result::Err(ErrorCodes::SyntaxException(format!(
                         "Unsupported Interval Expression with value {:?}",
                         value
                     )))
@@ -113,7 +113,7 @@ impl SQLCommon {
             };
 
             if interval_period > (i32::MAX as f32) {
-                return Result::Err(ErrorCodes::SyntexException(format!(
+                return Result::Err(ErrorCodes::SyntaxException(format!(
                     "Interval field value out of range: {:?}",
                     value
                 )));
@@ -130,7 +130,7 @@ impl SQLCommon {
                 "seconds" | "second" => Ok((0, 0, interval_period * MILLIS_PER_SECOND)),
                 "milliseconds" | "millisecond" => Ok((0, 0, interval_period)),
                 _ => {
-                    return Result::Err(ErrorCodes::SyntexException(format!(
+                    return Result::Err(ErrorCodes::SyntaxException(format!(
                         "Invalid input syntax for type interval: {:?}",
                         value
                     )))
@@ -158,7 +158,7 @@ impl SQLCommon {
             result_month += diff_month as i64;
 
             if result_month > (i32::MAX as i64) {
-                return Result::Err(ErrorCodes::SyntexException(format!(
+                return Result::Err(ErrorCodes::SyntaxException(format!(
                     "Interval field value out of range: {:?}",
                     value
                 )));
@@ -167,7 +167,7 @@ impl SQLCommon {
             result_days += diff_days as i64;
 
             if result_days > (i32::MAX as i64) {
-                return Result::Err(ErrorCodes::SyntexException(format!(
+                return Result::Err(ErrorCodes::SyntaxException(format!(
                     "Interval field value out of range: {:?}",
                     value
                 )));
@@ -176,7 +176,7 @@ impl SQLCommon {
             result_millis += diff_millis as i64;
 
             if result_millis > (i32::MAX as i64) {
-                return Result::Err(ErrorCodes::SyntexException(format!(
+                return Result::Err(ErrorCodes::SyntaxException(format!(
                     "Interval field value out of range: {:?}",
                     value
                 )));
@@ -190,7 +190,7 @@ impl SQLCommon {
         // It's not possible to store complex intervals
         // It's possible to do select (NOW() + INTERVAL '1 year') + INTERVAL '1 day'; as workaround
         if result_month != 0 && (result_days != 0 || result_millis != 0) {
-            return Result::Err(ErrorCodes::SyntexException(
+            return Result::Err(ErrorCodes::SyntaxException(
                 format!(
                     "DF does not support intervals that have both a Year/Month part as well as Days/Hours/Mins/Seconds: {:?}. Hint: try breaking the interval into two parts, one with Year/Month and the other with Days/Hours/Mins/Seconds - e.g. (NOW() + INTERVAL '1 year') + INTERVAL '1 day'",
                     value
