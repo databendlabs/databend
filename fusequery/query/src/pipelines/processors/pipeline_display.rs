@@ -67,20 +67,15 @@ impl Pipeline {
                             }
                             "RemoteTransform" => {
                                 let name = processor.name();
-                                let remote = processor
-                                    .as_any()
-                                    .downcast_ref::<RemoteTransform>()
-                                    .ok_or_else(|| {
-                                    anyhow!("Display pipeline downcast {} error", name)
-                                })?;
-                                let local_pipeline = PipelineBuilder::create(
-                                    remote.ctx.clone(),
-                                    remote.plan.clone()
-                                )
-                                .build()?;
-                                let pipeline_display =
-                                    format!("{:?}", local_pipeline).replace("\n ", " ->");
-                                write!(f, "{} × {} processor(s): {}", name, ways, pipeline_display)?
+                                // let remote = processor
+                                //     .as_any()
+                                //     .downcast_ref::<RemoteTransform>()
+                                //     .ok_or_else(|| {
+                                //     anyhow!("Display pipeline downcast {} error", name)
+                                // })?;
+
+                                // TODO: We should output for every remote
+                                write!(f, "{} × {} processor(s)", name, ways/*, pipeline_display*/)?
                             }
                             _ => {
                                 write!(

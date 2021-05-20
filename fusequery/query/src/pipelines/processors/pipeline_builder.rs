@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::AggregatorFinalPlan;
+use common_planners::{AggregatorFinalPlan, RemotePlan};
 use common_planners::AggregatorPartialPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
@@ -32,7 +32,6 @@ use crate::pipelines::transforms::RemoteTransform;
 use crate::pipelines::transforms::SortMergeTransform;
 use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
-// use crate::planners::PlanScheduler;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct PipelineBuilder {
@@ -64,6 +63,7 @@ impl PipelineBuilder {
             match node {
                 PlanNode::Select(_) => Ok(true),
                 PlanNode::Stage(plan) => self.visit_stage_plan(&mut pipeline, &plan),
+                PlanNode::Remote(plan) => self.visit_remote_plan(&mut pipeline, &plan),
                 PlanNode::Expression(plan) => {
                     PipelineBuilder::visit_expression_plan(&mut pipeline, plan)
                 }
@@ -98,11 +98,24 @@ impl PipelineBuilder {
         Result::Err(ErrorCodes::LogicalError("Logical Error: visit_stage_plan in pipeline_builder"))
     }
 
+    fn visit_remote_plan(&self, pipeline: &mut Pipeline, plan: &&RemotePlan) -> Result<bool> {
+        for fetch_node in &plan.fetch_nodes {
+            pipeline.add_source(Arc::new(RemoteTransform::try_create(
+                self.ctx.clone(),
+                plan.fetch_name.clone(),
+                fetch_node.clone(),
+                plan.schema.clone(),
+            )?))?;
+        }
+
+        Ok(true)
+    }
+
     fn visit_expression_plan(pipeline: &mut Pipeline, plan: &ExpressionPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ExpressionTransform::try_create(
                 plan.schema.clone(),
-                plan.exprs.clone()
+                plan.exprs.clone(),
             )?))
         })?;
         Ok(true)

@@ -63,7 +63,7 @@ impl PlanScheduler {
         let mut remote_plans = vec![];
         for node in &cluster_nodes {
             for builder in &builders {
-                if let Some(action) = builder.build(&node.name, &cluster_nodes) {
+                if let Some(action) = builder.build(&node.name, &cluster_nodes)? {
                     remote_plans.push((node.clone(), action));
                 }
             }
@@ -147,47 +147,47 @@ impl ExecutionPlanBuilder {
         )))
     }
 
-    pub fn build(&self, node_name: &String, cluster_nodes: &Vec<Node>) -> Option<ExecutePlanWithShuffleAction> {
+    pub fn build(&self, node_name: &String, cluster_nodes: &Vec<Node>) -> Result<Option<ExecutePlanWithShuffleAction>> {
         match self.2.kind {
             StageKind::Expansive => {
                 let all_nodes_name = cluster_nodes.iter().map(|node| node.name.clone()).collect::<Vec<_>>();
                 for cluster_node in cluster_nodes {
                     if cluster_node.name == *node_name && cluster_node.local {
-                        return Some(ExecutePlanWithShuffleAction {
+                        return Ok(Some(ExecutePlanWithShuffleAction {
                             query_id: self.0.clone(),
                             stage_id: self.1.clone(),
-                            plan: self.3.get_plan(node_name, cluster_nodes).unwrap(),
+                            plan: self.3.get_plan(node_name, cluster_nodes)?,
                             scatters: all_nodes_name.clone(),
                             scatters_action: self.2.scatters_expr.clone(),
-                        });
+                        }));
                     }
                 }
-                None
+                Ok(None)
             },
             StageKind::Convergent => {
                 for cluster_node in cluster_nodes {
                     if cluster_node.local {
-                        return Some(ExecutePlanWithShuffleAction {
+                        return Ok(Some(ExecutePlanWithShuffleAction {
                             query_id: self.0.clone(),
                             stage_id: self.1.clone(),
-                            plan: self.3.get_plan(node_name, cluster_nodes).unwrap(),
+                            plan: self.3.get_plan(node_name, cluster_nodes)?,
                             scatters: vec![cluster_node.name.clone()],
                             scatters_action: self.2.scatters_expr.clone(),
-                        })
+                        }))
                     }
                 }
 
-                None
+                Ok(None)
             }
             StageKind::Normal => {
                 let all_nodes_name = cluster_nodes.iter().map(|node| node.name.clone()).collect::<Vec<_>>();
-                Some(ExecutePlanWithShuffleAction {
+                Ok(Some(ExecutePlanWithShuffleAction {
                     query_id: self.0.clone(),
                     stage_id: self.1.clone(),
-                    plan: self.3.get_plan(node_name, cluster_nodes).unwrap(),
+                    plan: self.3.get_plan(node_name, cluster_nodes)?,
                     scatters: all_nodes_name.clone(),
                     scatters_action: self.2.scatters_expr.clone(),
-                })
+                }))
             }
         }
     }

@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::Result;
+use common_exception::{Result, ErrorCodes};
 use common_infallible::Mutex;
 
 use crate::clusters::node::Node;
@@ -58,6 +58,10 @@ impl Cluster {
     pub fn remove_node(&self, id: String) -> Result<()> {
         self.nodes.lock().remove(&*id);
         Ok(())
+    }
+
+    pub fn get_node_by_name(&self, name: String) -> Result<Node> {
+        Result::Err(ErrorCodes::UnImplement(""))
     }
 
     pub fn get_nodes(&self) -> Result<Vec<Node>> {

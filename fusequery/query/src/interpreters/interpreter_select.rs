@@ -16,6 +16,7 @@ use crate::sessions::FuseQueryContextRef;
 use crate::api::FlightClient;
 use common_flights::ExecutePlanWithShuffleAction;
 use crate::interpreters::plan_scheduler::PlanScheduler;
+use std::collections::HashSet;
 
 pub struct SelectInterpreter {
     ctx: FuseQueryContextRef,
@@ -52,10 +53,19 @@ impl IInterpreter for SelectInterpreter {
 
         let (local_plan, remote_actions) = PlanScheduler::reschedule(self.ctx.clone(), &plan)?;
 
-        fn prepare_error_handler(error: ErrorCodes, end: usize) -> Result<SendableDataBlockStream> {
-            // TODO: kill prepared query stage
+        let remote_actions_ref = &remote_actions;
+        let prepare_error_handler = move |error: ErrorCodes, end: usize| {
+            let mut killed_set = HashSet::new();
+            for index in 0..end {
+                let (node, _) = &remote_actions_ref[index];
+                if let None = killed_set.get(&node.name) {
+                    // TODO: kill prepared query stage
+                    killed_set.insert(node.name.clone());
+                }
+            }
+
             Result::Err(error)
-        }
+        };
 
         let timeout = self.ctx.get_flight_client_timeout()?;
         for index in 0..remote_actions.len() {
