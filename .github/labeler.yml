@@ -21,23 +21,32 @@ comments:
 #    - 'include' patterns will associate a label if any of these patterns match
 #    - 'exclude' patterns will ignore this label if any of these patterns match
 labels:
-  'New Feature':
+  'pr-feature':
     include:
       - '\bNew Feature?\b'
     exclude: []
-  'Bug Fix':
+  'pr-bugfix':
     include:
       - '\bBug Fix?\b'
     exclude: []
-  'Improvement':
+  'pr-improvement':
     include:
       - '\bImprovement?\b'
     exclude: []
-  'Performance Improvement':
+  'pr-performance':
     include:
       - '\bPerformance Improvement?\b'
     exclude: []
-  'Build/Testing/CI':
+  'pr-build':
     include:
       - '\bBuild/Testing/CI?\b'
+    exclude: []
+  'pr-doc-fix':
+    include:
+      - '\bDocumentation?\b'
+      - '\bWebsite?\b'
+    exclude: []
+  'pr-other':
+    include:
+      - '\bOther?\b'
     exclude: []
