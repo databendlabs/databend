@@ -5,6 +5,11 @@ use common_exception::{Result, ErrorCodes};
 use crate::api::FlightClient;
 use common_infallible::RwLock;
 use std::sync::Arc;
+use futures::Future;
+use super::address::Address;
+use common_flights::ExecutePlanWithShuffleAction;
+use common_streams::SendableDataBlockStream;
+use common_datavalues::DataSchemaRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Node {
@@ -12,9 +17,9 @@ pub struct Node {
     // Node priority is in [0,10]
     // larger value means higher priority
     pub priority: u8,
-    pub address: String,
+    pub address: Address,
     pub local: bool,
-    // pub client: RwLock<Option<Arc<FlightClient>>>,
+    pub sequence: usize,
 }
 
 impl Node {
@@ -22,11 +27,11 @@ impl Node {
         self.local
     }
 
-    pub fn try_get_client(&self) -> Result<FlightClient> {
-        // let client = self.client.write();
-        // if let None = client {
-        //     *client = Some(Arc::new(FlightClient::connect("".to_string())))
-        // }
+    pub async fn prepare_query_stage(&self, action: ExecutePlanWithShuffleAction, timeout: u64) -> Result<()> {
+        Ok(())
+    }
+
+    pub async fn fetch_stream(&self, stream_name: String, schema: DataSchemaRef, timeout: u64) -> Result<SendableDataBlockStream> {
         Err(ErrorCodes::UnImplement(""))
     }
 }

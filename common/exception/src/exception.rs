@@ -100,6 +100,10 @@ build_exceptions! {
     NotFountLocalNode(33),
     PlanScheduleError(34),
     BadPlanInputs(35),
+    DuplicateClusterNode(36),
+    NotFoundClusterNode(37),
+    BadAddressFormat(38),
+    DnsParseError(39),
 
     UnknownException(1000),
     TokioError(1001)

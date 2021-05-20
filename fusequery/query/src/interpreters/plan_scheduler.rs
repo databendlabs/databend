@@ -20,7 +20,7 @@ pub struct PlanScheduler;
 
 impl PlanScheduler {
     /// Schedule the plan to Local or Remote mode.
-    pub fn reschedule(ctx: FuseQueryContextRef, plan: &PlanNode) -> Result<(PlanNode, Vec<(Node, ExecutePlanWithShuffleAction)>)> {
+    pub fn reschedule(ctx: FuseQueryContextRef, plan: &PlanNode) -> Result<(PlanNode, Vec<(Arc<Node>, ExecutePlanWithShuffleAction)>)> {
         let cluster = ctx.try_get_cluster()?;
 
         if cluster.is_empty()? {
@@ -74,7 +74,7 @@ impl PlanScheduler {
 }
 
 trait GetNodePlan {
-    fn get_plan(&self, node_name: &String, cluster_nodes: &Vec<Node>) -> Result<PlanNode>;
+    fn get_plan(&self, node_name: &String, cluster_nodes: &Vec<Arc<Node>>) -> Result<PlanNode>;
 }
 
 struct EmptyGetNodePlan;
@@ -84,7 +84,7 @@ struct RemoteGetNodePlan(String, String, StagePlan);
 struct DefaultGetNodePlan(PlanNode, Arc<Box<dyn GetNodePlan>>);
 
 impl GetNodePlan for DefaultGetNodePlan {
-    fn get_plan(&self, node_name: &String, cluster_nodes: &Vec<Node>) -> Result<PlanNode> {
+    fn get_plan(&self, node_name: &String, cluster_nodes: &Vec<Arc<Node>>) -> Result<PlanNode> {
         let mut clone_node = self.0.clone();
         if let Ok(input) = self.1.get_plan(node_name, cluster_nodes) {
             clone_node.set_inputs(vec![&input]);
@@ -95,7 +95,7 @@ impl GetNodePlan for DefaultGetNodePlan {
 }
 
 impl GetNodePlan for EmptyGetNodePlan {
-    fn get_plan(&self, _node_name: &String, _cluster_nodes: &Vec<Node>) -> Result<PlanNode> {
+    fn get_plan(&self, _node_name: &String, _cluster_nodes: &Vec<Arc<Node>>) -> Result<PlanNode> {
         Ok(PlanNode::Empty(EmptyPlan {
             schema: Arc::new(DataSchema::empty())
         }))
@@ -111,7 +111,7 @@ impl RemoteGetNodePlan {
 }
 
 impl GetNodePlan for RemoteGetNodePlan {
-    fn get_plan(&self, node_name: &String, cluster_nodes: &Vec<Node>) -> Result<PlanNode> {
+    fn get_plan(&self, node_name: &String, cluster_nodes: &Vec<Arc<Node>>) -> Result<PlanNode> {
         match self.2.kind {
             StageKind::Expansive => {
                 for cluster_node in cluster_nodes {
@@ -147,7 +147,7 @@ impl ExecutionPlanBuilder {
         )))
     }
 
-    pub fn build(&self, node_name: &String, cluster_nodes: &Vec<Node>) -> Result<Option<ExecutePlanWithShuffleAction>> {
+    pub fn build(&self, node_name: &String, cluster_nodes: &Vec<Arc<Node>>) -> Result<Option<ExecutePlanWithShuffleAction>> {
         match self.2.kind {
             StageKind::Expansive => {
                 let all_nodes_name = cluster_nodes.iter().map(|node| node.name.clone()).collect::<Vec<_>>();

@@ -15,6 +15,7 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
 use crate::sessions::FuseQueryContextRef;
 use common_datavalues::DataSchemaRef;
+use crate::api::FlightClient;
 
 pub struct RemoteTransform {
     fetch_name: String,
@@ -31,6 +32,15 @@ impl RemoteTransform {
         schema: DataSchemaRef,
     ) -> Result<Self> {
         Ok(Self { fetch_name, fetch_node_name, schema, ctx })
+    }
+
+    async fn fetch_stream(
+        flight_client: &mut FlightClient,
+        fetch_stream_name: String,
+        schema: DataSchemaRef,
+        timeout: u64,
+    ) -> Result<SendableDataBlockStream> {
+        flight_client.fetch_stream(fetch_stream_name, schema, timeout).await
     }
 }
 
@@ -58,7 +68,6 @@ impl IProcessor for RemoteTransform {
         let mut fetch_node = cluster.get_node_by_name(self.fetch_node_name.clone())?;
 
         let timeout = self.ctx.get_flight_client_timeout()?;
-        let mut flight_client = fetch_node.try_get_client()?;
-        flight_client.fetch_stream(self.fetch_name.clone(), self.schema.clone(), timeout).await
+        fetch_node.fetch_stream(self.fetch_name.clone(), self.schema.clone(), timeout).await
     }
 }

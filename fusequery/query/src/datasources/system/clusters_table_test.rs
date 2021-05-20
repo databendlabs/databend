@@ -19,7 +19,7 @@ async fn test_clusters_table() -> Result<()> {
     let stream = table.read(ctx).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 3);
+    assert_eq!(block.num_columns(), 4);
 
     Ok(())
 }

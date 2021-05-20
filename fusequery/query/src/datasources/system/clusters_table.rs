@@ -6,7 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
+use common_datavalues::{DataField, UInt16Array};
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
@@ -22,9 +22,11 @@ use common_streams::SendableDataBlockStream;
 
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
+use clickhouse_srv::types::SqlType::UInt16;
+use std::iter::FromIterator;
 
 pub struct ClustersTable {
-    schema: DataSchemaRef
+    schema: DataSchemaRef,
 }
 
 impl ClustersTable {
@@ -32,7 +34,8 @@ impl ClustersTable {
         ClustersTable {
             schema: DataSchemaRefExt::create(vec![
                 DataField::new("name", DataType::Utf8, false),
-                DataField::new("address", DataType::Utf8, false),
+                DataField::new("host", DataType::Utf8, false),
+                DataField::new("port", DataType::UInt16, false),
                 DataField::new("priority", DataType::UInt8, false),
             ])
         }
@@ -78,11 +81,14 @@ impl ITable for ClustersTable {
     async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
         let nodes = ctx.try_get_cluster()?.get_nodes()?;
         let names: Vec<&str> = nodes.iter().map(|x| x.name.as_str()).collect();
-        let addresses: Vec<&str> = nodes.iter().map(|x| x.address.as_str()).collect();
+        let hosts = nodes.iter().map(|x| x.address.hostname()).collect::<Vec<_>>();
+        let hostnames = hosts.iter().map(|x| x.as_str()).collect::<Vec<&str>>();
+        let ports: Vec<u16> = nodes.iter().map(|x| x.address.port()).collect();
         let priorities: Vec<u8> = nodes.iter().map(|x| x.priority).collect();
         let block = DataBlock::create(self.schema.clone(), vec![
             Arc::new(StringArray::from(names)),
-            Arc::new(StringArray::from(addresses)),
+            Arc::new(StringArray::from(hostnames)),
+            Arc::new(UInt16Array::from(ports)),
             Arc::new(UInt8Array::from(priorities)),
         ]);
         Ok(Box::pin(DataBlockStream::create(

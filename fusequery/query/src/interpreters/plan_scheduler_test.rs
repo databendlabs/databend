@@ -13,9 +13,9 @@ use crate::sessions::FuseQueryContextRef;
 use common_datavalues::{DataValue, DataSchema};
 use std::sync::Arc;
 
-#[test]
-fn test_scheduler_plan_without_stage() -> Result<()> {
-    let (context, cluster) = create_env()?;
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_scheduler_plan_without_stage() -> Result<()> {
+    let (context, cluster) = create_env().await?;
     let (local_plan, remote_plans) = PlanScheduler::reschedule(
         context.clone(),
         &PlanNode::Empty(EmptyPlan::create()),
@@ -27,9 +27,9 @@ fn test_scheduler_plan_without_stage() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_scheduler_plan_with_one_normal_stage() -> Result<()> {
-    let (context, cluster) = create_env()?;
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_scheduler_plan_with_one_normal_stage() -> Result<()> {
+    let (context, cluster) = create_env().await?;
     let reschedule_res = PlanScheduler::reschedule(
         context.clone(),
         &PlanNode::Stage(StagePlan {
@@ -51,9 +51,9 @@ fn test_scheduler_plan_with_one_normal_stage() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_scheduler_plan_with_one_expansive_stage() -> Result<()> {
-    let (context, cluster) = create_env()?;
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_scheduler_plan_with_one_expansive_stage() -> Result<()> {
+    let (context, cluster) = create_env().await?;
     let reschedule_res = PlanScheduler::reschedule(
         context.clone(),
         &PlanNode::Stage(StagePlan {
@@ -75,8 +75,8 @@ fn test_scheduler_plan_with_one_expansive_stage() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
     /*
      *  +------------------+
      *  |                  |
@@ -93,7 +93,7 @@ fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
      *  |                  |
      *  +------------------+
     */
-    let (context, cluster) = create_env()?;
+    let (context, cluster) = create_env().await?;
     let (local_plan, remote_actions) = PlanScheduler::reschedule(
         context.clone(),
         &PlanNode::Stage(StagePlan {
@@ -125,8 +125,8 @@ fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()> {
     /*
      *                  +-----------+       +-----------+
      *        +-------->|RemotePlan +------>|SelectPlan +-----------+
@@ -141,7 +141,7 @@ fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()> {
      *        +-------->|RemotePlan +------>|SelectPlan +-----------+
      *                  +-----------+       +-----------+
     */
-    let (context, cluster) = create_env()?;
+    let (context, cluster) = create_env().await?;
     let (local_plan, remote_actions) = PlanScheduler::reschedule(
         context.clone(),
         &PlanNode::Select(SelectPlan {
@@ -195,8 +195,8 @@ fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     /*
      *   +-----------+      +-----------+       +-----------+
      *   |EmptyStage +----->|RemotePlan +------>|SelectPlan +-----------+
@@ -211,7 +211,7 @@ fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
      *   |EmptyStage +----->|RemotePlan +------>|SelectPlan +-----------+
      *   +-----------+      +-----------+       +-----------+
     */
-    let (context, cluster) = create_env()?;
+    let (context, cluster) = create_env().await?;
     let (local_plan, remote_actions) = PlanScheduler::reschedule(
         context.clone(),
         &PlanNode::Select(SelectPlan {
@@ -270,22 +270,12 @@ fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     Ok(())
 }
 
-fn create_env() -> Result<(FuseQueryContextRef, ClusterRef)> {
+async fn create_env() -> Result<(FuseQueryContextRef, ClusterRef)> {
     let ctx = crate::tests::try_create_context()?;
-    let cluster = Cluster::create(Config::default());
-    cluster.add_node(&Node {
-        name: String::from("dummy"),
-        priority: 1,
-        address: String::from("dummy"),
-        local: false,
-    });
+    let cluster = Cluster::create_global(Config::default());
 
-    cluster.add_node(&Node {
-        name: String::from("dummy_local"),
-        priority: 1,
-        address: String::from("dummy_local"),
-        local: true,
-    });
+    cluster.add_node(&String::from("dummy_local"), 1, &String::from("localhost:9090")).await?;
+    cluster.add_node(&String::from("dummy"), 1, &String::from("github.com:9090")).await?;
     ctx.with_cluster(cluster.clone());
 
     Ok((ctx, cluster))

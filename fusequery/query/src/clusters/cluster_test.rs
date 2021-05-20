@@ -4,8 +4,8 @@
 
 use common_exception::Result;
 
-#[test]
-fn test_cluster() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_cluster() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     use crate::clusters::cluster::Cluster;
@@ -13,21 +13,8 @@ fn test_cluster() -> Result<()> {
 
     let cluster = Cluster::empty();
 
-    let node1 = Node {
-        name: "node1".to_string(),
-        priority: 5,
-        address: "127.0.0.1:9001".to_string(),
-        local: false
-    };
-    cluster.add_node(&node1)?;
-
-    let node2 = Node {
-        name: "node2".to_string(),
-        priority: 5,
-        address: "127.0.0.1:9002".to_string(),
-        local: false
-    };
-    cluster.add_node(&node2)?;
+    cluster.add_node(&String::from("node1"), 5, &String::from("127.0.0.1:9001")).await?;
+    cluster.add_node(&String::from("node2"), 5, &String::from("127.0.0.1:9002")).await?;
 
     let cluster_clone = cluster.clone();
     cluster_clone.remove_node("node1".to_string())?;

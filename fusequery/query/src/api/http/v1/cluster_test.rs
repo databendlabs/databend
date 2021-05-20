@@ -13,7 +13,7 @@ async fn test_cluster() -> Result<()> {
     use crate::configs::Config;
 
     let conf = Config::default();
-    let cluster = Cluster::create(conf.clone());
+    let cluster = Cluster::create_global(conf.clone());
     let filter = cluster_handler(cluster);
 
     // Add node.
@@ -63,7 +63,7 @@ async fn test_cluster() -> Result<()> {
             .path("/v1/cluster/list")
             .reply(&filter);
         assert_eq!(
-            "[{\"name\":\"9090\",\"priority\":8,\"address\":\"127.0.0.1:9090\",\"local\":true}]",
+            "[{\"name\":\"9090\",\"priority\":8,\"address\":{\"SocketAddress\":\"127.0.0.1:9090\"},\"local\":true,\"sequence\":0}]",
             res.await.body()
         );
     }

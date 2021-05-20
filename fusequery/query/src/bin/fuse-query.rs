@@ -32,7 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", conf.clone());
     info!("FuseQuery v-{}", conf.version);
 
-    let cluster = Cluster::create(conf.clone());
+    let cluster = Cluster::create_global(conf.clone());
     let session_manager = Session::create();
 
     // MySQL handler.

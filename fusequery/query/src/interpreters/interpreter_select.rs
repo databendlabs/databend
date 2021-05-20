@@ -27,19 +27,6 @@ impl SelectInterpreter {
     pub fn try_create(ctx: FuseQueryContextRef, select: SelectPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(SelectInterpreter { ctx, select }))
     }
-
-    fn extract_plan_node_with_stage(plan: PlanNode) -> Vec<StagePlan> {
-        let mut execute_plan = vec![];
-        plan.walk_preorder(|node| -> Result<bool> {
-            if let PlanNode::Stage(stage_plan) = node {
-                execute_plan.push(stage_plan.clone());
-            }
-
-            Ok(true)
-        });
-
-        execute_plan
-    }
 }
 
 #[async_trait::async_trait]
@@ -70,13 +57,8 @@ impl IInterpreter for SelectInterpreter {
         let timeout = self.ctx.get_flight_client_timeout()?;
         for index in 0..remote_actions.len() {
             let (node, action) = &remote_actions[index];
-            match node.try_get_client() {
-                Err(error) => return prepare_error_handler(error, index),
-                Ok(mut flight_client) => {
-                    if let Err(error) = flight_client.prepare_query_stage(action.clone(), timeout).await {
-                        return prepare_error_handler(error, index);
-                    }
-                }
+            if let Err(error) = node.prepare_query_stage(action.clone(), timeout).await {
+                return prepare_error_handler(error, index);
             }
         }
 

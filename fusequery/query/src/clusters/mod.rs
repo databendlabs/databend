@@ -7,6 +7,7 @@ mod cluster_test;
 
 mod cluster;
 mod node;
+mod address;
 
 pub use cluster::Cluster;
 pub use cluster::ClusterRef;

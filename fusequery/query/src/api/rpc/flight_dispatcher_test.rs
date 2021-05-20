@@ -176,7 +176,7 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
 fn create_dispatcher() -> (FlightDispatcher, Sender<Request>) {
     let conf = Config::default();
     let sessions = Session::create();
-    let cluster = Cluster::create(conf.clone());
+    let cluster = Cluster::create_global(conf.clone());
     let dispatcher = FlightDispatcher::new(conf, cluster, sessions);
     let sender = dispatcher.run();
     (dispatcher, sender)
