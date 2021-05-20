@@ -112,7 +112,7 @@ impl Cluster {
 fn create_dns_resolver() -> Result<TokioAsyncResolver> {
     match TokioAsyncResolver::tokio_from_system_conf() {
         Ok(resolver) => Ok(resolver),
-        Err(error) => Result::Err(ErrorCodes::DnsParseError("")),
+        Err(error) => Result::Err(ErrorCodes::DnsParseError(format!("DNS resolver create error: {}", error))),
     }
 }
 
@@ -126,10 +126,10 @@ async fn is_local(address: &Address, expect_port: u16) -> Result<bool> {
         Address::Named((host, port)) => {
             let dns_resolver = create_dns_resolver()?;
             match dns_resolver.lookup_ip(host.as_str()).await {
-                Err(error) => Result::Err(ErrorCodes::DnsParseError("")),
+                Err(error) => Result::Err(ErrorCodes::DnsParseError(format!("DNS resolver lookup error: {}", error))),
                 Ok(resolved_ip) => match resolved_ip.iter().next() {
                     Some(resolved_ip) => is_local_impl(resolved_ip),
-                    None => Result::Err(ErrorCodes::DnsParseError("")),
+                    None => Result::Err(ErrorCodes::DnsParseError("Resolved hostname must be IPv4 or IPv6")),
                 },
             }
         },
