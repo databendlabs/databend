@@ -37,11 +37,11 @@ fn test_comparison_function() -> Result<()> {
             name: "eq-passed",
             display: "a = b",
             nullable: false,
-            func: ComparisonEqFunction::try_create_func()?,
+            func: ComparisonEqFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into().into(),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into().into(),
+                (Arc::new(Int64Array::from(vec![4, 3, 2, 4])) as DataArrayRef).into(),
+                (Arc::new(Int64Array::from(vec![1, 2, 3, 4])) as DataArrayRef).into(),
             ],
             expect: Arc::new(BooleanArray::from(vec![false, false, false, true])),
             error: ""
@@ -50,11 +50,11 @@ fn test_comparison_function() -> Result<()> {
             name: "gt-passed",
             display: "a > b",
             nullable: false,
-            func: ComparisonGtFunction::try_create_func()?,
+            func: ComparisonGtFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
+                (Arc::new(Int64Array::from(vec![4, 3, 2, 4])) as DataArrayRef).into(),
+                (Arc::new(Int64Array::from(vec![1, 2, 3, 4])) as DataArrayRef).into(),
             ],
             expect: Arc::new(BooleanArray::from(vec![true, true, false, false])),
             error: ""
@@ -63,11 +63,11 @@ fn test_comparison_function() -> Result<()> {
             name: "gt-eq-passed",
             display: "a >= b",
             nullable: false,
-            func: ComparisonGtEqFunction::try_create_func()?,
+            func: ComparisonGtEqFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
+                (Arc::new(Int64Array::from(vec![4, 3, 2, 4])) as DataArrayRef).into(),
+                (Arc::new(Int64Array::from(vec![1, 2, 3, 4])) as DataArrayRef).into(),
             ],
             expect: Arc::new(BooleanArray::from(vec![true, true, false, true])),
             error: ""
@@ -76,11 +76,11 @@ fn test_comparison_function() -> Result<()> {
             name: "lt-passed",
             display: "a < b",
             nullable: false,
-            func: ComparisonLtFunction::try_create_func()?,
+            func: ComparisonLtFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
+                (Arc::new(Int64Array::from(vec![4, 3, 2, 4])) as DataArrayRef).into(),
+                (Arc::new(Int64Array::from(vec![1, 2, 3, 4])) as DataArrayRef).into(),
             ],
             expect: Arc::new(BooleanArray::from(vec![false, false, true, false])),
             error: ""
@@ -89,13 +89,11 @@ fn test_comparison_function() -> Result<()> {
             name: "lt-eq-passed",
             display: "a <= b",
             nullable: false,
-            func: ComparisonLtEqFunction::try_create_func()?,
+            func: ComparisonLtEqFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into().into(),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4]))
-                    .if_not_exists
-                    .into(),
+                (Arc::new(Int64Array::from(vec![4, 3, 2, 4])) as DataArrayRef).into(),
+                (Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
             ],
             expect: Arc::new(BooleanArray::from(vec![false, false, true, true])),
             error: ""
@@ -104,11 +102,11 @@ fn test_comparison_function() -> Result<()> {
             name: "not-eq-passed",
             display: "a != b",
             nullable: false,
-            func: ComparisonNotEqFunction::try_create_func()?,
+            func: ComparisonNotEqFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
+                (Arc::new(Int64Array::from(vec![4, 3, 2, 4])) as DataArrayRef).into(),
+                (Arc::new(Int64Array::from(vec![1, 2, 3, 4])) as DataArrayRef).into(),
             ],
             expect: Arc::new(BooleanArray::from(vec![true, true, true, false])),
             error: ""
@@ -131,7 +129,7 @@ fn test_comparison_function() -> Result<()> {
         let args = t
             .arg_names
             .iter()
-            .map(|name| schema.field_with_name(name)?.data_type())
+            .map(|name| schema.field_with_name(name).map(|f| f.data_type().clone()))
             .collect::<Result<Vec<DataType>>>()?;
 
         // Nullable check.

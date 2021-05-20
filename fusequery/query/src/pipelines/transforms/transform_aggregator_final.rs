@@ -19,9 +19,10 @@ use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
+use common_aggregate_functions::{IAggreagteFunction, AggregateFunctionFactory};
 
 pub struct AggregatorFinalTransform {
-    funcs: Vec<Box<dyn IFunction>>,
+    funcs: Vec<(Box<dyn IAggreagteFunction>)>,
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>
 }
@@ -30,9 +31,16 @@ impl AggregatorFinalTransform {
     pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionAction>) -> Result<Self> {
         let mut funcs = Vec::with_capacity(exprs.len());
         for expr in &exprs {
-            funcs.push(expr.to_function()?);
+            match expr {
+                ExpressionAction::AggregateFunction { op, args } => {
+                    let func = AggregateFunctionFactory::get(op)?;
+                    funcs.push(func);
+                },
+                _ => {
+                    return Err(ErrorCodes::LogicalError(format!("Expression must be aggregate function in AggregatorFinalTfusequery/query/src/pipelines/processors/pipeline_builder.rsransform, but got {:?}", expr)))
+                }
+            }
         }
-
         Ok(AggregatorFinalTransform {
             funcs,
             schema,

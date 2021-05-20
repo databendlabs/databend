@@ -2,17 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_arrow::arrow::array::ArrayRef;
 use common_exception::Result;
 
 #[test]
-fn test_aggregator_function() -> Result<()> {
+fn test_Aggregate_function() -> Result<()> {
     use std::sync::Arc;
 
     use common_datablocks::DataBlock;
     use common_datavalues::*;
     use pretty_assertions::assert_eq;
 
-    use crate::aggregators::*;
     use crate::*;
 
     #[allow(dead_code)]
@@ -28,10 +28,14 @@ fn test_aggregator_function() -> Result<()> {
         func: Box<dyn IAggreagteFunction>
     }
 
-    let columns = vec![
-        Arc::new(Int64Array::from(vec![4, 3, 2, 1])).into(),
-        Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
+    let columns: Vec<ArrayRef> = vec![
+        Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
+        Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
     ];
+    let columns = columns
+        .iter()
+        .map(|a| a.clone().into())
+        .collect::<Vec<DataColumnarValue>>();
 
     let tests = vec![
         Test {
@@ -40,7 +44,7 @@ fn test_aggregator_function() -> Result<()> {
             types: vec![DataType::Int64, DataType::Int64],
             display: "count(a)",
             nullable: false,
-            func: AggregatorCountFunction::try_create("count")?,
+            func: AggregateCountFunction::try_create("count")?,
             columns: columns.clone(),
             expect: DataValue::UInt64(Some(4)),
             error: ""
@@ -51,7 +55,7 @@ fn test_aggregator_function() -> Result<()> {
             types: vec![DataType::Int64, DataType::Int64],
             display: "max(a)",
             nullable: false,
-            func: AggregatorMaxFunction::try_create("max")?,
+            func: AggregateMaxFunction::try_create("max")?,
             columns: columns.clone(),
             expect: DataValue::Int64(Some(4)),
             error: ""
@@ -62,7 +66,7 @@ fn test_aggregator_function() -> Result<()> {
             types: vec![DataType::Int64, DataType::Int64],
             display: "min(a)",
             nullable: false,
-            func: AggregatorMinFunction::try_create("min")?,
+            func: AggregateMinFunction::try_create("min")?,
             columns: columns.clone(),
             expect: DataValue::Int64(Some(1)),
             error: ""
@@ -73,7 +77,7 @@ fn test_aggregator_function() -> Result<()> {
             types: vec![DataType::Int64, DataType::Int64],
             display: "avg(a)",
             nullable: false,
-            func: AggregatorAvgFunction::try_create("avg")?,
+            func: AggregateAvgFunction::try_create("avg")?,
             columns: columns.clone(),
             expect: DataValue::Float64(Some(2.5)),
             error: ""
@@ -84,7 +88,7 @@ fn test_aggregator_function() -> Result<()> {
             types: vec![DataType::Int64, DataType::Int64],
             display: "sum(a)",
             nullable: false,
-            func: AggregatorSumFunction::try_create("sum")?,
+            func: AggregateSumFunction::try_create("sum")?,
             columns: columns.clone(),
             expect: DataValue::Int64(Some(10)),
             error: ""

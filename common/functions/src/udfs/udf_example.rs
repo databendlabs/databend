@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
-use std::sync::Arc;
 
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;

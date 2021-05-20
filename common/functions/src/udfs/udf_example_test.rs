@@ -1,3 +1,5 @@
+use common_datavalues::DataColumnarValue;
+
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
@@ -5,10 +7,6 @@
 #[test]
 fn test_udf_example_function() -> anyhow::Result<()> {
     use std::sync::Arc;
-
-    use common_datablocks::*;
-    use common_datavalues::*;
-    use pretty_assertions::assert_eq;
 
     use crate::udfs::*;
     use crate::*;
@@ -36,10 +34,10 @@ fn test_udf_example_function() -> anyhow::Result<()> {
         name: "udf-example-passed",
         display: "example()",
         nullable: false,
-        func: UdfExampleFunction::try_create("example", &[field_a.clone(), field_b.clone()])?,
+        func: UdfExampleFunction::try_create("example"])?,
         columns: vec![
-            Arc::new(BooleanArray::from(vec![true, true, true, false])).into(),
-            Arc::new(BooleanArray::from(vec![true, false, true, true])).into(),
+            Arc::new(BooleanArray::from(vec![true, true, true, false]).into()),
+            Arc::new(BooleanArray::from(vec![true, false, true, true]).into()),
         ],
         expect: Arc::new(BooleanArray::from(vec![true, true, true, true])),
         error: ""

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use common_arrow::arrow;
 use common_datablocks::DataBlock;
 use common_datavalues as datavalues;
-use common_datavalues::BooleanArray;
+use common_datavalues::{BooleanArray, DataSchemaRef};
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_functions::IFunction;
@@ -19,13 +19,17 @@ use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
+use crate::pipelines::transforms::ExpressionExecutor;
 
 pub struct FilterTransform {
-    func: Box<dyn IFunction>,
-    input: Arc<dyn IProcessor>
+    input_schema: DataSchemaRef,
+    input: Arc<dyn IProcessor>,
+    executor: Arc<ExpressionExecutor>,
+    predicate: ExpressionAction,
 }
 
 impl FilterTransform {
+<<<<<<< HEAD
     pub fn try_create(predicate: ExpressionAction, having: bool) -> Result<Self> {
         let func = predicate.to_function()?;
         if !having && func.is_aggregator() {
@@ -34,10 +38,17 @@ impl FilterTransform {
                 predicate
             )));
         }
+=======
+    pub fn try_create(input_schema: DataSchemaRef, predicate: ExpressionAction, having: bool) -> Result<Self> {
+        let mut executor = ExpressionExecutor::try_create(input_schema.clone(), vec![predicate.clone()], false)?;
+        executor.validate()?;
+>>>>>>> [transform] wip
 
         Ok(FilterTransform {
-            func,
-            input: Arc::new(EmptyProcessor::create())
+            input_schema,
+            input: Arc::new(EmptyProcessor::create()),
+            executor: Arc::new(executor),
+            predicate,
         })
     }
 }
@@ -62,18 +73,17 @@ impl IProcessor for FilterTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let func = self.func.clone();
         let input_stream = self.input.execute().await?;
+        let executor = self.executor.clone();
+        let column_name = self.predicate.column_name();
 
-        let executor = |func: Box<dyn IFunction>, block: Result<DataBlock>| -> Result<DataBlock> {
+        let execute_fn = |block: Result<DataBlock>| -> Result<DataBlock> {
             let block = block?;
-            let rows = block.num_rows();
-            let filter_fn = func.clone();
-
-            // Filter function eval result to array
-            let filter_array = filter_fn.eval(&block)?.to_array()?;
+            let filter_block =  executor.execute(&block)?;
+            let filter_array = filter_block.try_column_by_name(&column_name)?;
             // Downcast to boolean array
             let filter_array = datavalues::downcast_array!(filter_array, BooleanArray)?;
+
             // Convert to arrow record_batch
             let batch = block.try_into()?;
             let batch = arrow::compute::filter_record_batch(&batch, filter_array)?;
@@ -81,7 +91,7 @@ impl IProcessor for FilterTransform {
         };
 
         let stream =
-            input_stream.filter_map(move |v| executor(func.clone(), v).map(Some).transpose());
+            input_stream.filter_map(move |v| execute_fn(v).map(Some).transpose());
         Ok(Box::pin(stream))
     }
 }

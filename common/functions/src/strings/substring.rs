@@ -3,25 +3,24 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
-use std::ops::Deref;
-use std::sync::Arc;
 
 use common_arrow::arrow::array::Int64Array;
 use common_arrow::arrow::compute;
-use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_datavalues::UInt64Array;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 use crate::FunctionCtx;
 =======
 
 >>>>>>> [functions] remove FunctionCtx
+=======
+>>>>>>> [transform] wip
 use crate::IFunction;
 
 #[derive(Clone)]
@@ -30,11 +29,7 @@ pub struct SubstringFunction {
 }
 
 impl SubstringFunction {
-<<<<<<< HEAD
-    pub fn try_create(display_name: &str, ctx: Arc<dyn FunctionCtx>) -> Result<Box<dyn IFunction>> {
-=======
     pub fn try_create(display_name: &str) -> Result<Box<dyn IFunction>> {
->>>>>>> [functions] remove FunctionCtx
         Ok(Box::new(SubstringFunction {
             display_name: display_name.to_string()
         }))

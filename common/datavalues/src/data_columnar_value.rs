@@ -36,7 +36,7 @@ impl DataColumnarValue {
     pub fn len(&self) -> usize {
         match self {
             DataColumnarValue::Array(array) => array.len(),
-            DataColumnarValue::Constant(_, size) => *size,
+            DataColumnarValue::Constant(_, size) => *size
         }
     }
 }

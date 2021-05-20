@@ -22,9 +22,10 @@ use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
+use common_aggregate_functions::IAggreagteFunction;
 
 // Table for <group_key, indices>
-type GroupFuncTable = RwLock<HashMap<Vec<u8>, Vec<Box<dyn IFunction>>, ahash::RandomState>>;
+type GroupFuncTable = RwLock<HashMap<Vec<u8>, Vec<Box<dyn IAggreagteFunction>>, ahash::RandomState>>;
 
 pub struct GroupByFinalTransform {
     aggr_exprs: Vec<ExpressionAction>,
@@ -71,8 +72,9 @@ impl IProcessor for GroupByFinalTransform {
         let aggr_funcs = self
             .aggr_exprs
             .iter()
-            .map(|x| x.to_function())
-            .collect::<common_exception::Result<Vec<_>>>()?;
+            .map(|x| x.to_aggregate_function())
+            .collect::<Result<Vec<_>>>()?;
+
         let aggr_funcs_length = aggr_funcs.len();
 
         let start = Instant::now();

@@ -102,24 +102,12 @@ impl PlanBuilder {
 
     /// Apply a projection.
     pub fn project(&self, exprs: &[ExpressionAction]) -> Result<Self> {
-        let exprs = RewriteHelper::rewrite_projection_aliases(exprs)?;
         let input_schema = self.plan.schema();
-
-        let mut projection_exprs = vec![];
-        exprs.iter().for_each(|v| match v {
-            ExpressionAction::Wildcard => {
-                for i in 0..input_schema.fields().len() {
-                    projection_exprs.push(col(input_schema.fields()[i].name()))
-                }
-            }
-            _ => projection_exprs.push(v.clone())
-        });
-
-        let fields = RewriteHelper::exprs_to_fields(&projection_exprs, &input_schema)?;
+        let fields = PlanRewriter::exprs_to_fields(exprs, &input_schema)?;
 
         Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
             input: Arc::new(self.plan.clone()),
-            expr: projection_exprs,
+            expr: exprs.to_owned(),
             schema: DataSchemaRefExt::create(fields)
         })))
     }
@@ -137,40 +125,26 @@ impl PlanBuilder {
 
         // Aggregator check.
         let mut group_by_names = HashSet::new();
-        RewriteHelper::exprs_to_names(&group_expr, &mut group_by_names)?;
-        for aggr in &rewrite_aggr_exprs {
-            match aggr {
-                // do not check literal expressions
-                ExpressionAction::Literal(_) => continue,
-                ExpressionAction::Function { op: _, args } => {
-                    for arg in args {
-                        if arg.has_aggregator()? {
-                            return Result::Err(ErrorCodes::IllegalAggregateExp(format!(
-                                "Aggregate function {:?} is found inside another aggregate function in query: While processing {:?}",
-                                arg, arg
-                            )));
-                        }
-                    }
-                }
-                _ => {
-                    if !aggr.has_aggregator()? {
-                        // Check if aggr is in group-by's list
-                        let in_group_by = RewriteHelper::check_aggr_in_group_expr(
-                            &aggr,
-                            &group_by_names,
-                            &input_schema
-                        )?;
-                        if !in_group_by {
-                            return Result::Err(ErrorCodes::IllegalAggregateExp(format!(
-                                "Column `{:?}` is not under aggregate function and not in GROUP BY: While processing {:#}",
-                                aggr,
-                                aggr_expr.iter().map(|aggr| format!("{:#?}", aggr)).collect::<Vec<_>>().join(", ")
-                            )));
-                        }
-                    }
-                }
-            }
-        }
+        PlanRewriter::exprs_to_names(&group_expr, &mut group_by_names)?;
+
+        // TODO
+        // for aggr in aggr_expr {
+        //     // do not check literal expressions
+        //     if let ExpressionAction::Literal(_) = aggr {
+        //         continue;
+        //     } else if !aggr.has_aggregator()? {
+        //         // Check if aggr is in group-by's list
+        //         let in_group_by =
+        //             PlanRewriter::check_aggr_in_group_expr(&aggr, &group_by_names, &input_schema)?;
+        //         if !in_group_by {
+        //             return Result::Err(ErrorCodes::IllegalAggregateExp(format!(
+        //                 "Column `{:?}` is not under aggregate function and not in GROUP BY: While processing {:#}",
+        //                 aggr,
+        //                 aggr_expr.iter().map(|aggr| format!("{:#?}", aggr)).collect::<Vec<_>>().join(", ")
+        //             )));
+        //         }
+        //     }
+        // }
 
         Ok(match mode {
             AggregateMode::Partial => {

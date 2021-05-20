@@ -6,6 +6,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_aggregate_functions::AggregateFunctionFactory;
+use common_aggregate_functions::IAggreagteFunction;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
@@ -32,13 +33,13 @@ pub enum ExpressionAction {
     /// Note: BinaryFunction is a also kind of functions function
     ScalarFunction {
         op: String,
-        args: Vec<ExpressionAction>,
+        args: Vec<ExpressionAction>
     },
 
     /// AggregateFunction with a set of arguments.
     AggregateFunction {
         op: String,
-        args: Vec<ExpressionAction>,
+        args: Vec<ExpressionAction>
     },
 
     /// A sort expression, that can be used to sort values.
@@ -48,7 +49,7 @@ pub enum ExpressionAction {
         /// The direction of the sort
         asc: bool,
         /// Whether to put Nulls before all other data values
-        nulls_first: bool,
+        nulls_first: bool
     },
     /// All fields(*) in a schema.
     Wildcard,
@@ -58,8 +59,8 @@ pub enum ExpressionAction {
         /// The expression being cast
         expr: Box<ExpressionAction>,
         /// The `DataType` the expression will yield
-        data_type: DataType,
-    },
+        data_type: DataType
+    }
 }
 
 impl ExpressionAction {
@@ -116,16 +117,17 @@ impl ExpressionAction {
         }
     }
 
-    pub fn has_aggregator(&self) -> Result<bool> {
-        Ok(false)
-    }
-
-    pub fn to_aggregate_function(&self) -> Result<Box<dyn AggregateFunction>> {
+    pub fn to_aggregate_function(&self) -> Result<(Box<dyn IAggreagteFunction>, Vec<String>)> {
         match self {
-            ExpressionAction::AggregateFunction { op, args } => AggregateFunctionFactory::get(op),
-            _ => Result::Err(ErrorCodes::IllegalAggregateExp(
-                format!("Expression {:?} is not an aggregate function", self)),
-            ),
+            ExpressionAction::AggregateFunction { op, args } => {
+                let func = AggregateFunctionFactory::get(op)?;
+                let args = args.iter().map(|arg| arg.column_name()).collect();
+                Ok((func, args))
+            }
+            _ => Result::Err(ErrorCodes::IllegalAggregateExp(format!(
+                "Expression {:?} is not an aggregate function",
+                self
+            )))
         }
     }
 }

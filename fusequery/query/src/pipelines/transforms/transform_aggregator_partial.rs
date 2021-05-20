@@ -6,8 +6,11 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_aggregate_functions::AggregateFunctionFactory;
+use common_aggregate_functions::IAggreagteFunction;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
+use common_datavalues::DataColumnarValue;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
@@ -24,24 +27,34 @@ use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
-use common_aggregate_functions::IAggreagteFunction;
 
 pub struct AggregatorPartialTransform {
-    funcs: Vec<Box<dyn IAggreagteFunction>>,
+    funcs: Vec<(Box<dyn IAggreagteFunction>, String, Vec<String>)>,
     schema: DataSchemaRef,
+    output_schema: DataSchemaRef,
+    exprs: Vec<ExpressionAction>,
     input: Arc<dyn IProcessor>
 }
 
 impl AggregatorPartialTransform {
     pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionAction>) -> Result<Self> {
         let mut funcs = Vec::with_capacity(exprs.len());
+        let mut fields = Vec::with_capacity(exprs.len());
+
         for expr in &exprs {
-            funcs.push(expr.to_function()?);
+            let column_name = expr.column_name();
+            let field = DataField::new(&column_name, DataType::Utf8, false);
+            // Field.
+            fields.push(field);
+            funcs.push(expr.to_aggregate_function()?);
         }
+        let output_schema = DataSchemaRefExt::create(fields);
 
         Ok(AggregatorPartialTransform {
             funcs,
             schema,
+            output_schema,
+            exprs,
             input: Arc::new(EmptyProcessor::create())
         })
     }
@@ -73,30 +86,30 @@ impl IProcessor for AggregatorPartialTransform {
         let start = Instant::now();
         while let Some(block) = stream.next().await {
             let block = block?;
+            let rows = block.num_rows();
 
-            for func in funcs.iter_mut() {
-                func.accumulate(&block)?;
+            for func_args in funcs.iter_mut() {
+                let mut arg_columns = vec![];
+                for arg_name in func_args.iter() {
+                    arg_columns.push(block.try_column_by_name(name)?.into());
+                }
+                func_args.0.accumulate(&arg_columns, rows);
             }
         }
         let delta = start.elapsed();
         info!("Aggregator partial cost: {:?}", delta);
 
-        let mut fields = Vec::with_capacity(funcs.len());
-        let mut columns: Vec<DataArrayRef> = Vec::with_capacity(funcs.len());
-        for func in &funcs {
-            // Field.
-            let field = DataField::new(format!("{}", func).as_str(), DataType::Utf8, false);
-            fields.push(field);
-
+        let mut columns: Vec<DataArrayRef> = vec![];
+        for func in funcs.iter() {
             // Column.
-            let states = DataValue::Struct(func.accumulate_result()?);
+            let states = DataValue::Struct(func.0.accumulate_result()?);
             let ser = serde_json::to_string(&states)?;
             let col = Arc::new(StringArray::from(vec![ser.as_str()]));
             columns.push(col);
         }
 
-        let schema = DataSchemaRefExt::create(fields);
-        let block = DataBlock::create(schema, columns);
+        let block = DataBlock::create(self.output_schema.clone(), columns);
+
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,

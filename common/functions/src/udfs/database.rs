@@ -3,14 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
-use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::IFunction;
@@ -20,7 +16,7 @@ pub struct DatabaseFunction {}
 
 // we bind database as first argument in eval
 impl DatabaseFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(_display_name: &str) -> Result<Box<dyn IFunction>> {
         Ok(Box::new(DatabaseFunction {}))
     }
 }
@@ -30,7 +26,7 @@ impl IFunction for DatabaseFunction {
         "DatabaseFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Utf8)
     }
 

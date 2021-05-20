@@ -375,7 +375,7 @@ fn test_array_scalar_arithmetic() {
     for t in tests {
         let result = DataArrayArithmetic::data_array_arithmetic_op(
             t.op.clone(),
-            &DataColumnarValue::Array(t.array),
+            &DataColumnarValue::Array(t.array.clone()),
             &DataColumnarValue::Constant(t.scalar, t.array.len())
         );
         match result {

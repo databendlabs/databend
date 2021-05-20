@@ -20,10 +20,11 @@ fn test_column_function() -> anyhow::Result<()> {
     // Ok.
     {
         let col = ColumnFunction::try_create("a")?;
-        let columns = vec![DataColumnarValue::Array(block.try_column_by_name("a")?.clone())];
-        let _ = col.eval(&columns)?;
+        let columns = vec![DataColumnarValue::Array(
+            block.try_column_by_name("a")?.clone()
+        )];
+        let _ = col.eval(&columns, block.num_rows())?;
     }
-
 
     Ok(())
 }

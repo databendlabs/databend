@@ -8,7 +8,6 @@ use common_datavalues::DataValueComparisonOperator;
 use common_exception::Result;
 
 use crate::comparisons::ComparisonFunction;
-
 use crate::IFunction;
 
 pub struct ComparisonGtFunction;

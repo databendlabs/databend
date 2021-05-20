@@ -29,6 +29,7 @@ async fn test_transform_expression() -> anyhow::Result<()> {
     {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ExpressionTransform::try_create(
+                plan.input.schema(),
                 plan.schema.clone(),
                 plan.exprs.clone()
             )?))

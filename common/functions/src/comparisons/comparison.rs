@@ -53,7 +53,7 @@ impl IFunction for ComparisonFunction {
         "ComparisonFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Boolean)
     }
 
@@ -61,7 +61,7 @@ impl IFunction for ComparisonFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
+    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
         let result = DataArrayComparison::data_array_comparison_op(
             self.op.clone(),
             &columns[0],

@@ -13,16 +13,25 @@ use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
+use common_planners::ExpressionAction;
+use crate::pipelines::transforms::ExpressionExecutor;
 
 pub struct ProjectionTransform {
-    schema: DataSchemaRef,
+    input_schema: DataSchemaRef,
+    output_schema: DataSchemaRef,
+
+    executor: Arc<ExpressionExecutor>,
     input: Arc<dyn IProcessor>
 }
 
 impl ProjectionTransform {
-    pub fn try_create(schema: DataSchemaRef) -> Result<Self> {
+    pub fn try_create(input_schema: DataSchemaRef, output_schema: DataSchemaRef, exprs: Vec<ExpressionAction>) -> Result<Self> {
+        let mut executor = ExpressionExecutor::try_create(input_schema.clone(), exprs, false)?;
+
         Ok(ProjectionTransform {
-            schema,
+            input_schema,
+            output_schema,
+            executor: Arc::new(executor),
             input: Arc::new(EmptyProcessor::create())
         })
     }
@@ -48,23 +57,11 @@ impl IProcessor for ProjectionTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let projected_schema = self.schema.clone();
-        let input_stream = self.input.execute().await?;
 
-        let executor = |schema: DataSchemaRef, block: Result<DataBlock>| -> Result<DataBlock> {
-            let block = block?;
-            let fields = schema.fields();
-
-            let mut columns = Vec::with_capacity(fields.len());
-            for field in fields {
-                let column = block.try_column_by_name(field.name().as_str())?;
-                columns.push(column.clone());
-            }
-            Ok(DataBlock::create(schema, columns))
-        };
-
-        let stream = input_stream
-            .filter_map(move |v| executor(projected_schema.clone(), v).map(Some).transpose());
+        let executor = self.executor.clone();
+        let stream = self.input.filter_map(move |v| {
+            executor.execute(v)
+        });
         Ok(Box::pin(stream))
     }
 }
