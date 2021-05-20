@@ -69,7 +69,7 @@ build_exceptions! {
     UnImplement(2),
     UnknownDatabase(3),
     UnknownSetting(4),
-    SyntexException(5),
+    SyntaxException(5),
     BadArguments(6),
     IllegalDataType(7),
     UnknownFunction(8),

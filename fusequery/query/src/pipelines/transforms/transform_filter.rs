@@ -29,7 +29,7 @@ impl FilterTransform {
     pub fn try_create(predicate: ExpressionAction, having: bool) -> Result<Self> {
         let func = predicate.to_function()?;
         if !having && func.is_aggregator() {
-            return Result::Err(ErrorCodes::SyntexException(format!(
+            return Result::Err(ErrorCodes::SyntaxException(format!(
                 "Aggregate function {:?} is found in WHERE in query",
                 predicate
             )));
