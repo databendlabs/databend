@@ -32,8 +32,7 @@ labels:
   'Improvement':
     include:
       - '\bImprovement?\b'
-    exclude:
-      - '\bPerformance Improvement?\b'
+    exclude: []
   'Performance Improvement':
     include:
       - '\bPerformance Improvement?\b'
