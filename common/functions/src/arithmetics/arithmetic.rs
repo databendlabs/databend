@@ -3,17 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
-use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataArrayArithmetic;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
-use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::arithmetics::ArithmeticDivFunction;
@@ -60,7 +56,7 @@ impl IFunction for ArithmeticFunction {
         common_datavalues::numerical_arithmetic_coercion(&self.op, &args[0], &args[1])
     }
 
-    fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
+    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 

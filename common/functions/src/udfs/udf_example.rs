@@ -30,7 +30,7 @@ impl IFunction for UdfExampleFunction {
         "UdfExampleFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Boolean)
     }
 
@@ -38,7 +38,7 @@ impl IFunction for UdfExampleFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
+    fn eval(&self, _columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
         Ok(DataColumnarValue::Constant(
             DataValue::Boolean(Some(true)),
             input_rows

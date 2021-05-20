@@ -93,11 +93,7 @@ impl ExpressionChain {
                 self.actions.push(ActionNode::Alias(alias));
             }
             ExpressionAction::Column(c) => {
-                let arg_type = self
-                    .schema
-                    .field_with_name(c)
-                    .map_err(ErrorCodes::from_arrow)?
-                    .data_type();
+                let arg_type = self.schema.field_with_name(c)?.data_type();
                 let input = ActionInput {
                     name: expr.column_name(),
                     return_type: arg_type.clone()

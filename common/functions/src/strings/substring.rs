@@ -10,17 +10,8 @@ use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::UInt64Array;
-use common_exception::ErrorCodes;
 use common_exception::Result;
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-use crate::FunctionCtx;
-=======
-
->>>>>>> [functions] remove FunctionCtx
-=======
->>>>>>> [transform] wip
 use crate::IFunction;
 
 #[derive(Clone)]
@@ -45,11 +36,11 @@ impl IFunction for SubstringFunction {
         Ok(DataType::Utf8)
     }
 
-    fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
+    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
+    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
         // TODO: make this function support column value as arguments rather than literal
         let from = columns[1]
             .to_array()?
@@ -70,8 +61,7 @@ impl IFunction for SubstringFunction {
 
         let value = columns[0].to_array()?;
         Ok(DataColumnarValue::Array(
-            compute::kernels::substring::substring(value.as_ref(), from, &end)
-                .map_err(ErrorCodes::from_arrow)?
+            compute::kernels::substring::substring(value.as_ref(), from, &end)?
         ))
     }
 }

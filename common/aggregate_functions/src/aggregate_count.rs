@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
-use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
@@ -38,7 +36,7 @@ impl IAggreagteFunction for AggregateCountFunction {
         "AggregateCountFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::UInt64)
     }
 
@@ -50,7 +48,7 @@ impl IAggreagteFunction for AggregateCountFunction {
         self.depth = depth;
     }
 
-    fn accumulate(&mut self, columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
+    fn accumulate(&mut self, _columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
         self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),

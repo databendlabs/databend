@@ -7,8 +7,6 @@ use common_exception::Result;
 
 #[test]
 fn test_arithmetic_function() -> Result<()> {
-    use std::sync::Arc;
-
     use common_datablocks::DataBlock;
     use common_datavalues::*;
     use pretty_assertions::assert_eq;

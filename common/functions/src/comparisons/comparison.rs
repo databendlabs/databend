@@ -3,16 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
-use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataArrayComparison;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_datavalues::DataValueComparisonOperator;
-use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::comparisons::ComparisonEqFunction;

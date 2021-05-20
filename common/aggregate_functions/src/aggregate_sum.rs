@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
-use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataArrayAggregate;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
@@ -14,7 +12,6 @@ use common_datavalues::DataValue;
 use common_datavalues::DataValueAggregateOperator;
 use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
-use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::IAggreagteFunction;
@@ -53,7 +50,7 @@ impl IAggreagteFunction for AggregateSumFunction {
         self.depth = depth;
     }
 
-    fn accumulate(&mut self, columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
+    fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
         self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),

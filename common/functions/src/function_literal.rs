@@ -4,7 +4,6 @@
 
 use std::fmt;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
@@ -29,7 +28,7 @@ impl IFunction for LiteralFunction {
         "LiteralFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(self.value.data_type())
     }
 
@@ -37,7 +36,7 @@ impl IFunction for LiteralFunction {
         Ok(self.value.is_null())
     }
 
-    fn eval(&self, columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
+    fn eval(&self, _columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
         Ok(DataColumnarValue::Constant(self.value.clone(), input_rows))
     }
 }

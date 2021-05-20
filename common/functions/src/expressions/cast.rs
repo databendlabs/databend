@@ -6,7 +6,6 @@ use std::fmt;
 
 use common_arrow::arrow::compute;
 use common_arrow::arrow::compute::CastOptions;
-use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
@@ -38,7 +37,7 @@ impl IFunction for CastFunction {
         Ok(self.cast_type.clone())
     }
 
-    fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
+    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(true)
     }
 

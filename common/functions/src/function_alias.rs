@@ -4,25 +4,21 @@
 
 use std::fmt;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_exception::Result;
 
 use crate::IFunction;
 
 #[derive(Clone)]
 pub struct AliasFunction {
-    alias: String,
+    alias: String
 }
 
 impl AliasFunction {
     pub fn try_create(alias: String) -> Result<Box<dyn IFunction>> {
-        Ok(Box::new(AliasFunction {
-            alias,
-        }))
+        Ok(Box::new(AliasFunction { alias }))
     }
 }
 
@@ -35,7 +31,7 @@ impl IFunction for AliasFunction {
         Ok(args[0].clone())
     }
 
-    fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
+    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(true)
     }
 

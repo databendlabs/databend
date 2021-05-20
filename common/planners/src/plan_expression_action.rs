@@ -87,11 +87,7 @@ impl ExpressionAction {
     pub fn to_data_type(&self, input_schema: &DataSchemaRef) -> Result<DataType> {
         match self {
             ExpressionAction::Alias(_, expr) => expr.to_data_type(input_schema),
-            ExpressionAction::Column(s) => Ok(input_schema
-                .field_with_name(s)
-                .map_err(ErrorCodes::from_arrow)?
-                .data_type()
-                .clone()),
+            ExpressionAction::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
             ExpressionAction::Literal(v) => Ok(v.data_type()),
             ExpressionAction::ScalarFunction { op, args } => {
                 let mut arg_types = Vec::with_capacity(args.len());

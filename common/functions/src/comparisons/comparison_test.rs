@@ -6,7 +6,7 @@ use common_exception::Result;
 
 #[test]
 fn test_comparison_function() -> Result<()> {
-    use std::sync::Arc;
+
 
     use common_datablocks::*;
     use common_datavalues::*;

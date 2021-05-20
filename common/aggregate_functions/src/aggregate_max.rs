@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
-use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataArrayAggregate;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
@@ -13,7 +11,6 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DataValueAggregate;
 use common_datavalues::DataValueAggregateOperator;
-use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::IAggreagteFunction;
@@ -52,7 +49,7 @@ impl IAggreagteFunction for AggregateMaxFunction {
         self.depth = depth;
     }
 
-    fn accumulate(&mut self, columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
+    fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
         self.state = DataValueAggregate::data_value_aggregate_op(
             DataValueAggregateOperator::Max,
             self.state.clone(),

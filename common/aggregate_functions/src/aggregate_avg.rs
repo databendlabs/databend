@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
-use std::sync::Arc;
 
 use common_datavalues::DataArrayAggregate;
 use common_datavalues::DataColumnarValue;
@@ -13,7 +12,6 @@ use common_datavalues::DataValue;
 use common_datavalues::DataValueAggregateOperator;
 use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
-use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::IAggreagteFunction;
@@ -40,7 +38,7 @@ impl IAggreagteFunction for AggregateAvgFunction {
         "AggregateAvgFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Float64)
     }
 

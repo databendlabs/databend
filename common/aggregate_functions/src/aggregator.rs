@@ -2,11 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
 use common_exception::Result;
-use common_infallible::RwLock;
-use indexmap::map::IndexMap;
 
 use crate::aggregate_function_factory::FactoryFuncRef;
 use crate::AggregateAvgFunction;
@@ -14,7 +10,6 @@ use crate::AggregateCountFunction;
 use crate::AggregateMaxFunction;
 use crate::AggregateMinFunction;
 use crate::AggregateSumFunction;
-use crate::IAggreagteFunction;
 
 pub struct AggregatorFunction;
 
