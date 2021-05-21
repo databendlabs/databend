@@ -144,7 +144,7 @@ async fn test_scatter_optimizer() -> Result<()> {
 
     for test in tests {
         let ctx = crate::tests::try_create_context()?;
-        let cluster = Cluster::create_global(Config::default());
+        let cluster = Cluster::create_global(Config::default())?;
         cluster.add_node(&String::from("Github"), 1, &String::from("www.github.com:9090")).await?;
 
         ctx.with_cluster(cluster.clone());

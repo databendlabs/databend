@@ -69,7 +69,7 @@ async fn start_one_service() -> Result<(String, SessionRef)> {
     let mut conf = Config::default();
     conf.flight_api_address = addr.clone();
 
-    let cluster = Cluster::create_global(conf.clone());
+    let cluster = Cluster::create_global(conf.clone())?;
     let session_manager = Session::create();
     let srv = RpcService::create(conf, cluster, session_manager.clone());
     tokio::spawn(async move {

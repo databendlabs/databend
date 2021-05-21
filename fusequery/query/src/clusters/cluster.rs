@@ -20,28 +20,28 @@ use pnet::datalink::NetworkInterface;
 pub type ClusterRef = Arc<Cluster>;
 
 pub struct Cluster {
-    cfg: Config,
+    local_port: u16,
     nodes: Mutex<HashMap<String, Arc<Node>>>,
 }
 
 impl Cluster {
-    pub fn create_global(cfg: Config) -> ClusterRef {
-        Arc::new(Cluster {
-            cfg,
+    pub fn create_global(cfg: Config) -> Result<ClusterRef> {
+        Ok(Arc::new(Cluster {
             nodes: Mutex::new(HashMap::new()),
-        })
+            local_port: Address::create(&cfg.flight_api_address)?.port(),
+        }))
     }
 
     pub fn empty() -> ClusterRef {
         Arc::new(Cluster {
-            cfg: Config::default(),
+            local_port: 9090,
             nodes: Mutex::new(HashMap::new()),
         })
     }
 
     pub fn make_query_cluster(&self) -> ClusterRef {
         Arc::new(Cluster {
-            cfg: self.cfg.clone(),
+            local_port: 9090,
             nodes: Mutex::new(self.nodes.lock().clone()),
         })
     }
@@ -52,9 +52,7 @@ impl Cluster {
 
     pub async fn add_node(&self, name: &String, priority: u8, address: &String) -> Result<()> {
         let address = Address::create(address)?;
-        let listener_address = Address::create(&self.cfg.flight_api_address)?;
-        let local = is_local(&address, listener_address.port()).await?;
-
+        let address_is_local = is_local(&address, self.local_port).await?;
         let mut nodes = self.nodes.lock();
         let new_node_sequence = nodes.len();
 
@@ -66,7 +64,7 @@ impl Cluster {
                 )))
             },
             Vacant(entry) => {
-                entry.insert(Node::create(name.clone(), priority, address.clone(), local, new_node_sequence));
+                entry.insert(Arc::new(Node::create(name.clone(), priority, address.clone(), address_is_local, new_node_sequence)?));
 
                 Ok(())
             },

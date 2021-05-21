@@ -16,7 +16,7 @@ pub struct ErrorCodes {
     code: u16,
     display_text: String,
     cause: Option<Box<dyn std::error::Error + Sync + Send>>,
-    backtrace: Option<Backtrace>,
+    pub backtrace: Option<Backtrace>,
 }
 
 impl ErrorCodes {
@@ -104,6 +104,7 @@ build_exceptions! {
     NotFoundClusterNode(37),
     BadAddressFormat(38),
     DnsParseError(39),
+    CannotConnectNode(40),
 
     UnknownException(1000),
     TokioError(1001)

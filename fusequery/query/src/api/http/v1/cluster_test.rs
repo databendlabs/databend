@@ -13,7 +13,7 @@ async fn test_cluster() -> Result<()> {
     use crate::configs::Config;
 
     let conf = Config::default();
-    let cluster = Cluster::create_global(conf.clone());
+    let cluster = Cluster::create_global(conf.clone())?;
     let filter = cluster_handler(cluster);
 
     // Add node.

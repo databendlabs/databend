@@ -57,7 +57,9 @@ impl IInterpreter for SelectInterpreter {
         let timeout = self.ctx.get_flight_client_timeout()?;
         for index in 0..remote_actions.len() {
             let (node, action) = &remote_actions[index];
-            if let Err(error) = node.prepare_query_stage(action.clone(), timeout).await {
+
+            let mut flight_client = node.get_flight_client()?;
+            if let Err(error) = flight_client.prepare_query_stage(action.clone(), timeout).await {
                 return prepare_error_handler(error, index);
             }
         }

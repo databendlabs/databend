@@ -25,7 +25,7 @@ use common_datavalues::DataValue;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_stream_with_non_exists_stream() -> Result<()> {
     let stream_id = "query_id/stage_id/stream_id".to_string();
-    let (dispatcher, request_sender) = create_dispatcher();
+    let (dispatcher, request_sender) = create_dispatcher()?;
 
     let (sender_v, mut receiver) = channel(1);
     request_sender.send(Request::GetStream(stream_id.clone(), sender_v)).await;
@@ -60,7 +60,7 @@ async fn test_prepare_stage_with_no_scatter() -> Result<()> {
             )))
         };
 
-        let (dispatcher, request_sender) = create_dispatcher();
+        let (dispatcher, request_sender) = create_dispatcher()?;
 
         let (prepare_stage_sender, mut prepare_stage_receiver) = channel(1);
 
@@ -118,7 +118,7 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
             )))
         };
 
-        let (dispatcher, request_sender) = create_dispatcher();
+        let (dispatcher, request_sender) = create_dispatcher()?;
         let (prepare_stage_sender, mut prepare_stage_receiver) = channel(1);
 
         let (schema, prepare_query_stage) = create_prepare_query_stage(prepare_stage_sender)?;
@@ -173,13 +173,13 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
     Ok(())
 }
 
-fn create_dispatcher() -> (FlightDispatcher, Sender<Request>) {
+fn create_dispatcher() -> Result<(FlightDispatcher, Sender<Request>)> {
     let conf = Config::default();
     let sessions = Session::create();
-    let cluster = Cluster::create_global(conf.clone());
+    let cluster = Cluster::create_global(conf.clone())?;
     let dispatcher = FlightDispatcher::new(conf, cluster, sessions);
     let sender = dispatcher.run();
-    (dispatcher, sender)
+    Ok((dispatcher, sender))
 }
 
 fn generate_uuids(size: usize) -> (Option<String>, Option<String>, Option<String>) {

@@ -272,7 +272,7 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
 
 async fn create_env() -> Result<(FuseQueryContextRef, ClusterRef)> {
     let ctx = crate::tests::try_create_context()?;
-    let cluster = Cluster::create_global(Config::default());
+    let cluster = Cluster::create_global(Config::default())?;
 
     cluster.add_node(&String::from("dummy_local"), 1, &String::from("localhost:9090")).await?;
     cluster.add_node(&String::from("dummy"), 1, &String::from("github.com:9090")).await?;
