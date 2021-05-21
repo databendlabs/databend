@@ -10,8 +10,6 @@ use serde::de::{Error, MapAccess, Unexpected, Visitor};
 use serde::ser::SerializeStruct;
 use tokio_stream::StreamExt;
 use tonic::transport::{Channel, Endpoint, Uri};
-use tower::buffer::Buffer;
-use tower::util::Either;
 use warp::hyper::client::HttpConnector;
 
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
