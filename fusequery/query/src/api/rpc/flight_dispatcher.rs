@@ -198,7 +198,7 @@ impl FlightDispatcher {
         let options = IpcWriteOptions::default();
         let mut pipeline_stream = pipeline.execute().await?;
 
-        if senders.len() <= 1 {
+        if senders.len() == 1 {
             while let Some(item) = pipeline_stream.next().await {
                 let block = item?;
 

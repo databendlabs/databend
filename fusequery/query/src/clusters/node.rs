@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use std::fmt::Formatter;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -14,9 +18,7 @@ use warp::hyper::client::HttpConnector;
 
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_datavalues::DataSchemaRef;
-// Copyright 2020-2021 The Datafuse Authors.
-//
-// SPDX-License-Identifier: Apache-2.0.
+
 use common_exception::{ErrorCodes, Result};
 use common_infallible::{Mutex, RwLock};
 use common_streams::SendableDataBlockStream;
@@ -63,7 +65,7 @@ impl Node {
 
     pub fn get_flight_client(&self) -> Result<FlightClient> {
         let channel = self.channel_generator.lock().generate();
-        channel.map(|channel| FlightClient::new(FlightServiceClient::new(channel.clone())))
+        channel.map(|channel| FlightClient::new(FlightServiceClient::new(channel)))
     }
 }
 
@@ -172,5 +174,3 @@ impl ChannelGenerator {
         }
     }
 }
-
-
