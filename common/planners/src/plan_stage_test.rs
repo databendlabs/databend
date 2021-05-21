@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::*;
 use crate::test::Test;
+use crate::*;
 
 #[test]
 fn test_stage_plan() -> anyhow::Result<()> {

@@ -32,6 +32,13 @@ use sqlparser::ast::Statement;
 use crate::datasources::ITable;
 use crate::functions::ContextFunction;
 use crate::sessions::FuseQueryContextRef;
+use crate::sql::expr_common::can_columns_satisfy_exprs;
+use crate::sql::expr_common::expand_aggregate_arg_exprs;
+use crate::sql::expr_common::expr_as_column_expr;
+use crate::sql::expr_common::extract_aliases;
+use crate::sql::expr_common::find_aggregate_exprs;
+use crate::sql::expr_common::rebase_expr;
+use crate::sql::expr_common::resolve_aliases_to_exprs;
 use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::sql_statement::DfDropDatabase;
 use crate::sql::sql_statement::DfUseDatabase;
@@ -229,11 +236,10 @@ impl PlanParser {
         limit: &Option<sqlparser::ast::Expr>,
         order_by: &[OrderByExpr]
     ) -> Result<PlanNode> {
-        // From.
-        let plan = self.plan_tables_with_joins(&select.from)?;
-
-        // Filter (also known as selection) first
-        let plan = self.filter(&plan, &select.selection)?;
+        // From then Filter (also known as selection) first
+        let plan = self
+            .plan_tables_with_joins(&select.from)
+            .and_then(|input| self.filter(&input, &select.selection))?;
 
         // Projection expressions.
         let projection_exprs = select
@@ -242,47 +248,139 @@ impl PlanParser {
             .map(|e| self.sql_select_to_rex(&e, &plan.schema()))
             .collect::<Result<Vec<ExpressionAction>>>()?;
 
+        // aliase replacement for group by, having, sorting
+        let aliases = extract_aliases(&projection_exprs);
+
+        // Group by
+        let group_by_exprs = select
+            .group_by
+            .iter()
+            .map(|e| {
+                self.sql_to_rex(e, &plan.schema())
+                    .and_then(|expr| resolve_aliases_to_exprs(&expr, &aliases))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        // Optionally the HAVING expression.
+        let having_expr_opt = select
+            .having
+            .as_ref()
+            .map::<Result<ExpressionAction>, _>(|having_expr| {
+                let having_expr = self.sql_to_rex(having_expr, &plan.schema())?;
+                let having_expr = resolve_aliases_to_exprs(&having_expr, &aliases)?;
+
+                Ok(having_expr)
+            })
+            .transpose()?;
+
         // OrderBy expressions.
         let order_by_exprs = order_by
             .iter()
             .map(|e| -> Result<ExpressionAction> {
                 Ok(ExpressionAction::Sort {
-                    expr: Box::new(self.sql_to_rex(&e.expr, &plan.schema())?),
+                    expr: Box::new(
+                        self.sql_to_rex(&e.expr, &plan.schema())
+                            .and_then(|expr| resolve_aliases_to_exprs(&expr, &aliases))?
+                    ),
                     asc: e.asc.unwrap_or(true),
                     nulls_first: e.nulls_first.unwrap_or(true)
                 })
             })
             .collect::<Result<Vec<ExpressionAction>>>()?;
 
+        // The outer expressions we will search through for
+        // aggregates. Aggregates may be sourced from the SELECT, order by, having ...
+        let mut aggr_expr_haystack = projection_exprs.clone();
+        // from order by
+        aggr_expr_haystack.extend_from_slice(&order_by_exprs);
+        // ... or from the HAVING.
+        if let Some(having_expr) = &having_expr_opt {
+            aggr_expr_haystack.push(having_expr.clone());
+        }
+
+        // All of the aggregate expressions (deduplicated).
+        let aggr_exprs = find_aggregate_exprs(&aggr_expr_haystack);
         // Aggregator check.
-        let has_aggregator = projection_exprs
-            .iter()
-            .map(|expr| expr.has_aggregator())
-            .fold(Ok(false), |res, item| {
-                // Zip and `||` fold
-                res.and_then(|res| item.map(|item| res || item))
-            });
+        let has_aggregator = aggr_exprs.len() + group_by_exprs.len() > 0;
 
         // Before group by
-
         println!(
             "proj {:?}, agg: {:?}, group: {:?}",
-            projection_exprs, projection_exprs, select.group_by
+            projection_exprs, aggr_exprs, group_by_exprs
         );
-        // Projection.
-        let plan = if !select.group_by.is_empty() || has_aggregator? {
-            self.aggregate(&plan, &projection_exprs, &select.group_by)
-                .and_then(|input| self.sort(&input, order_by))?
+
+        let (plan, select_exprs_post_aggr, having_expr_post_aggr_opt) = if has_aggregator {
+            let aggr_projection_exprs = group_by_exprs
+                .iter()
+                .chain(aggr_exprs.iter())
+                .cloned()
+                .collect::<Vec<_>>();
+
+            let before_agg_exprs = expand_aggregate_arg_exprs(&aggr_projection_exprs);
+            let plan = self
+                .expression(&plan, &before_agg_exprs, "Before GroupBy")
+                .and_then(|input| self.aggregate(&input, &aggr_exprs, &group_by_exprs))?;
+
+            // After aggregation, these are all of the columns that will be
+            // available to next phases of planning.
+            let column_exprs_post_aggr = aggr_projection_exprs
+                .iter()
+                .map(|expr| expr_as_column_expr(expr))
+                .collect::<Result<Vec<_>>>()?;
+
+            // Rewrite the SELECT expression to use the columns produced by the
+            // aggregation.
+            let select_exprs_post_aggr = projection_exprs
+                .iter()
+                .map(|expr| rebase_expr(expr, &aggr_projection_exprs))
+                .collect::<Result<Vec<_>>>()?;
+
+            if !can_columns_satisfy_exprs(&column_exprs_post_aggr, &select_exprs_post_aggr)? {
+                return Err(ErrorCodes::SyntaxException(
+                    "Projection references non-aggregate values"
+                ));
+            }
+
+            // Rewrite the HAVING expression to use the columns produced by the
+            // aggregation.
+            let having_expr_post_aggr_opt = if let Some(having_expr) = &having_expr_opt {
+                let having_expr_post_aggr = rebase_expr(having_expr, &aggr_projection_exprs)?;
+                if !can_columns_satisfy_exprs(&column_exprs_post_aggr, &[
+                    having_expr_post_aggr.clone()
+                ])? {
+                    return Err(ErrorCodes::SyntaxException(
+                        "Having references non-aggregate values"
+                    ));
+                }
+                Some(having_expr_post_aggr)
+            } else {
+                None
+            };
+
+            (plan, select_exprs_post_aggr, having_expr_post_aggr_opt)
         } else {
-            self.expression(&plan, &projection_exprs, "Before Projection")
-                .and_then(|input| self.expression(&input, &order_by_exprs, "Before OrderBy"))
-                .and_then(|input| self.sort(&input, order_by))
-                .and_then(|input| self.project(&input, &projection_exprs))?
+            let plan = self
+                .expression(&plan, &projection_exprs, "Before Projection")
+                .and_then(|input| self.expression(&input, &order_by_exprs, "Before OrderBy"))?;
+
+            (plan, projection_exprs, having_expr_opt)
         };
 
-        // Having.
-        let plan = self.having(&plan, &select.having)?;
+        // // Projection.
+        // let plan = if has_aggregator {
+        //     self.aggregate(&plan, &projection_exprs, &select.group_by)
+        //         .and_then(|input| self.sort(&input, order_by))?
+        // } else {
+        //     self.expression(&plan, &projection_exprs, "Before Projection")
+        //         .and_then(|input| self.expression(&input, &order_by_exprs, "Before OrderBy"))
+        //         .and_then(|input| self.sort(&input, order_by))
+        //         .and_then(|input| self.project(&input, &projection_exprs))?
+        // };
 
+        // Having.
+        let plan = self.having(&plan, having_expr_post_aggr_opt)?;
+        // Projection
+        let plan = self.project(&plan, &select_exprs_post_aggr)?;
         // Limit.
         let plan = self.limit(&plan, limit)?;
 
@@ -488,16 +586,10 @@ impl PlanParser {
 
                 let op = e.name.to_string();
                 if let Ok(_) = AggregateFunctionFactory::get(&op) {
-                    return Ok(ExpressionAction::AggregateFunction {
-                        op,
-                        args
-                    });
+                    return Ok(ExpressionAction::AggregateFunction { op, args });
                 }
 
-                Ok(ExpressionAction::ScalarFunction {
-                    op,
-                    args
-                })
+                Ok(ExpressionAction::ScalarFunction { op, args })
             }
             sqlparser::ast::Expr::Wildcard => Ok(ExpressionAction::Wildcard),
             sqlparser::ast::Expr::TypedString { data_type, value } => {
@@ -583,22 +675,13 @@ impl PlanParser {
     }
 
     /// Apply a having to the plan
-    fn having(
-        &self,
-        plan: &PlanNode,
-        predicate: &Option<sqlparser::ast::Expr>
-    ) -> Result<PlanNode> {
-        match *predicate {
-            Some(ref predicate_expr) => {
-                self.sql_to_rex(predicate_expr, &plan.schema())
-                    .and_then(|filter_expr| {
-                        PlanBuilder::from(&plan)
-                            .having(filter_expr)
-                            .and_then(|builder| builder.build())
-                    })
-            }
-            _ => Ok(plan.clone())
+    fn having(&self, plan: &PlanNode, expr: Option<ExpressionAction>) -> Result<PlanNode> {
+        if let Some(expr) = expr {
+            return PlanBuilder::from(&plan)
+                .having(expr)
+                .and_then(|builder| builder.build());
         }
+        Ok(plan.clone())
     }
 
     /// Wrap a plan in a projection
@@ -612,24 +695,19 @@ impl PlanParser {
     fn aggregate(
         &self,
         input: &PlanNode,
-        aggr_expr: &[ExpressionAction],
-        group_by: &[sqlparser::ast::Expr]
+        aggr_exprs: &[ExpressionAction],
+        group_by_exprs: &[ExpressionAction]
     ) -> Result<PlanNode> {
-        let group_expr = group_by
-            .iter()
-            .map(|e| self.sql_to_rex(&e, &input.schema()))
-            .collect::<Result<Vec<ExpressionAction>>>()?;
-
         // S0: Apply a partial aggregator plan.
         // S1: Apply a fragment plan for distributed planners split.
         // S2: Apply a final aggregator plan.
         PlanBuilder::from(&input)
-            .aggregate_partial(aggr_expr, &group_expr)
+            .aggregate_partial(aggr_exprs, group_by_exprs)
             // TODO self.ctx.get_id().unwrap()
             .and_then(|builder| {
                 builder.stage(self.ctx.get_id().unwrap(), StageState::AggregatorMerge)
             })
-            .and_then(|builder| builder.aggregate_final(aggr_expr, &group_expr))
+            .and_then(|builder| builder.aggregate_final(aggr_exprs, group_by_exprs))
             .and_then(|builder| builder.build())
     }
 

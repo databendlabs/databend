@@ -7,12 +7,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_aggregate_functions::IAggreagteFunction;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_functions::IFunction;
 use common_infallible::RwLock;
 use common_planners::ExpressionAction;
 use common_streams::DataBlockStream;
@@ -22,10 +22,10 @@ use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
-use common_aggregate_functions::IAggreagteFunction;
 
 // Table for <group_key, indices>
-type GroupFuncTable = RwLock<HashMap<Vec<u8>, Vec<Box<dyn IAggreagteFunction>>, ahash::RandomState>>;
+type GroupFuncTable =
+    RwLock<HashMap<Vec<u8>, Vec<Box<dyn IAggreagteFunction>>, ahash::RandomState>>;
 
 pub struct GroupByFinalTransform {
     aggr_exprs: Vec<ExpressionAction>,

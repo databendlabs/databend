@@ -9,6 +9,8 @@ mod plan_builder_test;
 #[cfg(test)]
 mod plan_display_test;
 #[cfg(test)]
+mod plan_explain_test;
+#[cfg(test)]
 mod plan_expression_action_test;
 #[cfg(test)]
 mod plan_expression_test;
@@ -39,7 +41,6 @@ mod plan_database_drop;
 mod plan_display;
 mod plan_empty;
 mod plan_explain;
-mod plan_explain_test;
 mod plan_expression;
 mod plan_expression_action;
 mod plan_expression_action_column;
@@ -87,7 +88,11 @@ pub use crate::plan_expression_action_function::avg;
 pub use crate::plan_expression_action_function::modular;
 pub use crate::plan_expression_action_function::sum;
 pub use crate::plan_expression_action_literal::lit;
+pub use crate::plan_expression_action_rewriter::ExprRewriter;
 pub use crate::plan_expression_action_sort::sort;
+pub use crate::plan_expression_action_visitor::ExpressionVisitor;
+pub use crate::plan_expression_action_visitor::Recursion;
+pub use crate::plan_expression_chain::*;
 pub use crate::plan_filter::FilterPlan;
 pub use crate::plan_having::HavingPlan;
 pub use crate::plan_limit::LimitPlan;
@@ -112,6 +117,5 @@ pub use crate::plan_table_create::TableOptions;
 pub use crate::plan_table_drop::DropTablePlan;
 pub use crate::plan_use_database::UseDatabasePlan;
 pub use crate::plan_visitor::PlanVisitor;
-pub use crate::plan_expression_chain::*;
 
 mod test;

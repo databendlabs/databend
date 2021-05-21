@@ -13,7 +13,6 @@ use common_datavalues::BooleanArray;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_functions::IFunction;
 use common_planners::ExpressionAction;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
@@ -23,7 +22,6 @@ use crate::pipelines::processors::IProcessor;
 use crate::pipelines::transforms::ExpressionExecutor;
 
 pub struct FilterTransform {
-    input_schema: DataSchemaRef,
     input: Arc<dyn IProcessor>,
     executor: Arc<ExpressionExecutor>,
     predicate: ExpressionAction
@@ -37,7 +35,7 @@ impl FilterTransform {
         having: bool
     ) -> Result<Self> {
         let executor = ExpressionExecutor::try_create(
-            input_schema.clone(),
+            input_schema,
             output_schema,
             vec![predicate.clone()],
             false
@@ -45,7 +43,6 @@ impl FilterTransform {
         executor.validate()?;
 
         Ok(FilterTransform {
-            input_schema,
             input: Arc::new(EmptyProcessor::create()),
             executor: Arc::new(executor),
             predicate

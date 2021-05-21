@@ -81,12 +81,12 @@ pub trait PlanRewriter<'plan> {
 
     fn rewrite_aggregate_partial(
         &mut self,
-        plan: &'plan AggregatorPartialPlan,
+        plan: &'plan AggregatorPartialPlan
     ) -> Result<PlanNode> {
         Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan {
             aggr_expr: plan.aggr_expr.clone(),
             group_expr: plan.group_expr.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
@@ -95,7 +95,7 @@ pub trait PlanRewriter<'plan> {
             schema: plan.schema.clone(),
             aggr_expr: plan.aggr_expr.clone(),
             group_expr: plan.group_expr.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
@@ -108,7 +108,7 @@ pub trait PlanRewriter<'plan> {
             uuid: plan.uuid.clone(),
             id: plan.id,
             state: plan.state.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
@@ -116,7 +116,7 @@ pub trait PlanRewriter<'plan> {
         Ok(PlanNode::Projection(ProjectionPlan {
             schema: plan.schema.clone(),
             expr: plan.expr.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
@@ -125,35 +125,35 @@ pub trait PlanRewriter<'plan> {
             schema: plan.schema.clone(),
             desc: plan.desc.clone(),
             exprs: plan.exprs.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
     fn rewrite_filter(&mut self, plan: &'plan FilterPlan) -> Result<PlanNode> {
         Ok(PlanNode::Filter(FilterPlan {
             predicate: plan.predicate.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
     fn rewrite_having(&mut self, plan: &'plan HavingPlan) -> Result<PlanNode> {
         Ok(PlanNode::Having(HavingPlan {
             predicate: plan.predicate.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
     fn rewrite_sort(&mut self, plan: &'plan SortPlan) -> Result<PlanNode> {
         Ok(PlanNode::Sort(SortPlan {
             order_by: plan.order_by.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
     fn rewrite_limit(&mut self, plan: &'plan LimitPlan) -> Result<PlanNode> {
         Ok(PlanNode::Limit(LimitPlan {
             n: plan.n,
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
@@ -174,7 +174,7 @@ pub trait PlanRewriter<'plan> {
     fn rewrite_explain(&mut self, plan: &'plan ExplainPlan) -> Result<PlanNode> {
         Ok(PlanNode::Explain(ExplainPlan {
             typ: plan.typ.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
@@ -209,7 +209,7 @@ struct QueryAliasData {
     aliases: HashMap<String, ExpressionAction>,
     inside_aliases: HashSet<String>,
     // deepest alias current step in
-    current_alias: String,
+    current_alias: String
 }
 
 impl RewriteHelper {
@@ -225,7 +225,7 @@ impl RewriteHelper {
         let mut data = QueryAliasData {
             aliases: mp,
             inside_aliases: HashSet::new(),
-            current_alias: "".into(),
+            current_alias: "".into()
         };
 
         exprs
@@ -236,7 +236,7 @@ impl RewriteHelper {
 
     fn alias_exprs_to_map(
         exprs: &[ExpressionAction],
-        mp: &mut HashMap<String, ExpressionAction>,
+        mp: &mut HashMap<String, ExpressionAction>
     ) -> Result<()> {
         for expr in exprs.iter() {
             if let ExpressionAction::Alias(alias, alias_expr) = expr {
@@ -259,7 +259,7 @@ impl RewriteHelper {
 
     fn expr_rewrite_alias(
         expr: &ExpressionAction,
-        data: &mut QueryAliasData,
+        data: &mut QueryAliasData
     ) -> Result<ExpressionAction> {
         match expr {
             ExpressionAction::Column(field) => {
@@ -298,7 +298,7 @@ impl RewriteHelper {
                 Ok(ExpressionAction::BinaryExpression {
                     op: op.clone(),
                     left: Box::new(left),
-                    right: Box::new(right),
+                    right: Box::new(right)
                 })
             }
 
@@ -311,7 +311,7 @@ impl RewriteHelper {
                 match new_args {
                     Ok(v) => Ok(ExpressionAction::ScalarFunction {
                         op: op.clone(),
-                        args: v,
+                        args: v
                     }),
                     Err(v) => Err(v)
                 }
@@ -326,7 +326,7 @@ impl RewriteHelper {
                 match new_args {
                     Ok(v) => Ok(ExpressionAction::AggregateFunction {
                         op: op.clone(),
-                        args: v,
+                        args: v
                     }),
                     Err(v) => Err(v)
                 }
@@ -353,7 +353,7 @@ impl RewriteHelper {
                 let new_expr = RewriteHelper::expr_rewrite_alias(expr, data)?;
                 Ok(ExpressionAction::Cast {
                     expr: Box::new(new_expr),
-                    data_type: data_type.clone(),
+                    data_type: data_type.clone()
                 })
             }
             ExpressionAction::Wildcard
@@ -368,7 +368,7 @@ impl RewriteHelper {
     /// SELECT a as b ... where a>1
     pub fn rewrite_alias_expr(
         projection_map: &HashMap<String, ExpressionAction>,
-        expr: &ExpressionAction,
+        expr: &ExpressionAction
     ) -> Result<ExpressionAction> {
         let expressions = Self::expression_plan_children(expr)?;
 
@@ -388,7 +388,7 @@ impl RewriteHelper {
     /// replaces expressions columns by its name on the projection.
     pub fn rewrite_alias_exprs(
         projection_map: &HashMap<String, ExpressionAction>,
-        exprs: &[ExpressionAction],
+        exprs: &[ExpressionAction]
     ) -> Result<Vec<ExpressionAction>> {
         exprs
             .iter()
@@ -457,7 +457,7 @@ impl RewriteHelper {
     /// Collect all unique projection fields to a map.
     fn projections_to_map(
         plan: &PlanNode,
-        map: &mut HashMap<String, ExpressionAction>,
+        map: &mut HashMap<String, ExpressionAction>
     ) -> Result<()> {
         match plan {
             PlanNode::Projection(v) => {
@@ -494,7 +494,7 @@ impl RewriteHelper {
 
     fn rebuild_from_exprs(
         expr: &ExpressionAction,
-        expressions: &[ExpressionAction],
+        expressions: &[ExpressionAction]
     ) -> ExpressionAction {
         match expr {
             ExpressionAction::Alias(alias, _) => {
@@ -502,18 +502,18 @@ impl RewriteHelper {
             }
             ExpressionAction::Column(_) => expr.clone(),
             ExpressionAction::Literal(_) => expr.clone(),
-            ExpressionAction::BinaryExpression { op, left, right} => ExpressionAction::BinaryExpression {
+            ExpressionAction::BinaryExpression { op, .. } => ExpressionAction::BinaryExpression {
                 left: Box::new(expressions[0].clone()),
                 op: op.clone(),
                 right: Box::new(expressions[1].clone())
             },
             ExpressionAction::ScalarFunction { op, .. } => ExpressionAction::ScalarFunction {
                 op: op.clone(),
-                args: expressions.to_vec(),
+                args: expressions.to_vec()
             },
             ExpressionAction::AggregateFunction { op, .. } => ExpressionAction::AggregateFunction {
                 op: op.clone(),
-                args: expressions.to_vec(),
+                args: expressions.to_vec()
             },
             other => other.clone()
         }
@@ -526,7 +526,7 @@ impl RewriteHelper {
     pub fn check_aggr_in_group_expr(
         aggr: &ExpressionAction,
         group_by_names: &HashSet<String>,
-        input_schema: &DataSchemaRef,
+        input_schema: &DataSchemaRef
     ) -> Result<bool> {
         match aggr {
             ExpressionAction::Alias(alias, plan) => {
@@ -556,7 +556,7 @@ impl RewriteHelper {
 
     pub fn exprs_to_fields(
         exprs: &[ExpressionAction],
-        input_schema: &DataSchemaRef,
+        input_schema: &DataSchemaRef
     ) -> Result<Vec<DataField>> {
         exprs
             .iter()

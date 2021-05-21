@@ -2,10 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::ExpressionAction;
-use common_exception::{Result, ErrorCodes};
-use common_functions::FunctionFactory;
+use common_exception::Result;
 
+use crate::ExpressionAction;
 
 /// Controls how the visitor recursion should proceed.
 pub enum Recursion<V: ExpressionVisitor> {
@@ -13,7 +12,7 @@ pub enum Recursion<V: ExpressionVisitor> {
     Continue(V),
     /// Do not visit the children of this expression, though the walk
     /// of parents of this expression will not be affected
-    Stop(V),
+    Stop(V)
 }
 
 /// Encode the traversal of an expression tree. When passed to
@@ -64,33 +63,33 @@ impl ExpressionAction {
         let visitor = match visitor.pre_visit(self)? {
             Recursion::Continue(visitor) => visitor,
             // If the recursion should stop, do not visit children
-            Recursion::Stop(visitor) => return Ok(visitor),
+            Recursion::Stop(visitor) => return Ok(visitor)
         };
 
         // recurse (and cover all expression types)
         let visitor = match self {
             ExpressionAction::Alias(_, expr) => expr.accept(visitor),
-            ExpressionAction::BinaryExpression { op, left, right } => {
+            ExpressionAction::BinaryExpression { left, right, .. } => {
                 let mut visitor = visitor;
                 visitor = left.accept(visitor)?;
                 visitor = right.accept(visitor)?;
                 Ok(visitor)
             }
-            ExpressionAction::ScalarFunction { op, args } => {
+            ExpressionAction::ScalarFunction { args, .. } => {
                 let mut visitor = visitor;
                 for arg in args {
                     visitor = arg.accept(visitor)?;
                 }
                 Ok(visitor)
             }
-            ExpressionAction::AggregateFunction { op, args } => {
+            ExpressionAction::AggregateFunction { args, .. } => {
                 let mut visitor = visitor;
                 for arg in args {
                     visitor = arg.accept(visitor)?;
                 }
                 Ok(visitor)
             }
-            ExpressionAction::Cast { expr, data_type } => expr.accept(visitor),
+            ExpressionAction::Cast { expr, .. } => expr.accept(visitor),
             ExpressionAction::Sort { expr, .. } => expr.accept(visitor),
 
             _ => Ok(visitor)

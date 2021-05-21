@@ -17,9 +17,6 @@ use crate::pipelines::processors::IProcessor;
 use crate::pipelines::transforms::ExpressionExecutor;
 
 pub struct ProjectionTransform {
-    input_schema: DataSchemaRef,
-    output_schema: DataSchemaRef,
-
     executor: Arc<ExpressionExecutor>,
     input: Arc<dyn IProcessor>
 }
@@ -30,7 +27,7 @@ impl ProjectionTransform {
         output_schema: DataSchemaRef,
         exprs: Vec<ExpressionAction>
     ) -> Result<Self> {
-        let mut executor = ExpressionExecutor::try_create(
+        let executor = ExpressionExecutor::try_create(
             input_schema.clone(),
             output_schema.clone(),
             exprs,
@@ -38,8 +35,6 @@ impl ProjectionTransform {
         )?;
 
         Ok(ProjectionTransform {
-            input_schema,
-            output_schema,
             executor: Arc::new(executor),
             input: Arc::new(EmptyProcessor::create())
         })

@@ -122,7 +122,10 @@ impl DataArrayComparison {
                     }
                 }
             }
-            (DataColumnarValue::Constant(left_scala, rows), DataColumnarValue::Constant(right_scalar, _)) => {
+            (
+                DataColumnarValue::Constant(left_scala, rows),
+                DataColumnarValue::Constant(right_scalar, _)
+            ) => {
                 let coercion_type = super::data_type::equal_coercion(
                     &left_scala.data_type(),
                     &right_scalar.data_type()

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
-use std::sync::Arc;
 
 use common_aggregate_functions::AggregateFunctionFactory;
 use common_aggregate_functions::IAggreagteFunction;
@@ -13,12 +12,7 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_functions::AliasFunction;
-use common_functions::CastFunction;
-use common_functions::ColumnFunction;
 use common_functions::FunctionFactory;
-use common_functions::IFunction;
-use common_functions::LiteralFunction;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum ExpressionAction {
@@ -73,7 +67,7 @@ pub enum ExpressionAction {
 impl ExpressionAction {
     pub fn column_name(&self) -> String {
         match self {
-            ExpressionAction::Alias(name, expr) => name.clone(),
+            ExpressionAction::Alias(name, _expr) => name.clone(),
             _ => format!("{:?}", self)
         }
     }
@@ -123,12 +117,12 @@ impl ExpressionAction {
             ExpressionAction::Wildcard => Result::Err(ErrorCodes::IllegalDataType(
                 "Wildcard expressions are not valid to get return type"
             )),
-            ExpressionAction::Cast { expr, data_type } => Ok(data_type.clone()),
+            ExpressionAction::Cast { data_type, .. } => Ok(data_type.clone()),
             ExpressionAction::Sort { expr, .. } => expr.to_data_type(input_schema)
         }
     }
 
-    pub fn to_aggregate_function(&self) -> Result<(Box<dyn IAggreagteFunction>)> {
+    pub fn to_aggregate_function(&self) -> Result<Box<dyn IAggreagteFunction>> {
         match self {
             ExpressionAction::AggregateFunction { op, .. } => AggregateFunctionFactory::get(op),
             _ => Err(ErrorCodes::LogicalError(
@@ -147,11 +141,6 @@ impl ExpressionAction {
                 "Expression must be aggregated function"
             ))
         }
-    }
-
-    // TODO:sundy-li
-    pub fn has_aggregator(&self) -> Result<bool> {
-        Ok(true)
     }
 }
 

@@ -37,7 +37,7 @@ impl IFunction for CastFunction {
         Ok(self.cast_type.clone())
     }
 
-    // TODO fixme
+    // TODO
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }

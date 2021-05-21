@@ -6,12 +6,12 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_aggregate_functions::IAggreagteFunction;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
-use common_exception::{Result, ErrorCodes};
-use common_functions::IFunction;
-use common_planners::{ExpressionAction};
+use common_exception::Result;
+use common_planners::ExpressionAction;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
@@ -19,17 +19,19 @@ use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
-use common_aggregate_functions::{IAggreagteFunction, AggregateFunctionFactory};
 
 pub struct AggregatorFinalTransform {
-    funcs: Vec<(Box<dyn IAggreagteFunction>)>,
+    funcs: Vec<Box<dyn IAggreagteFunction>>,
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>
 }
 
 impl AggregatorFinalTransform {
     pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionAction>) -> Result<Self> {
-        let funcs = exprs.iter().map(|expr| expr.to_aggregate_function()).collect::<Result<Vec<_>>>()?;
+        let funcs = exprs
+            .iter()
+            .map(|expr| expr.to_aggregate_function())
+            .collect::<Result<Vec<_>>>()?;
         Ok(AggregatorFinalTransform {
             funcs,
             schema,

@@ -45,6 +45,13 @@ impl DataColumnarValue {
             DataColumnarValue::Constant(_, size) => *size
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            DataColumnarValue::Array(array) => array.len() == 0,
+            DataColumnarValue::Constant(_, size) => *size == 0
+        }
+    }
 }
 
 impl From<DataArrayRef> for DataColumnarValue {

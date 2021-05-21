@@ -35,7 +35,6 @@ pub type Date64Array = arrow::array::Date64Array;
 
 pub type StructArray = arrow::array::StructArray;
 
-
 pub fn data_array_cast(array: &ArrayRef, to_type: &DataType) -> Result<ArrayRef> {
     Ok(arrow::compute::cast(&array, &to_type)?)
 }

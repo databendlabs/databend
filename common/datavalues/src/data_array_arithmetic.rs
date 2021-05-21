@@ -33,14 +33,14 @@ impl DataArrayArithmetic {
         right: &DataColumnarValue
     ) -> Result<DataArrayRef> {
         let (left_array, right_array) = match (left, right) {
-            (DataColumnarValue::Constant(left_scalar, _), DataColumnarValue::Constant(right_scalar, _)) => (
+            (
+                DataColumnarValue::Constant(left_scalar, _),
+                DataColumnarValue::Constant(right_scalar, _)
+            ) => (
                 left_scalar.to_array_with_size(1)?,
                 right_scalar.to_array_with_size(1)?
             ),
-            _ => (
-                left.to_array()?,
-                right.to_array()?
-            )
+            _ => (left.to_array()?, right.to_array()?)
         };
 
         let coercion_type = super::data_type::numerical_arithmetic_coercion(

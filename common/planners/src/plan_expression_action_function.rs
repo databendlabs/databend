@@ -9,7 +9,7 @@ fn binary_expr(l: ExpressionAction, op: &str, r: ExpressionAction) -> Expression
     ExpressionAction::BinaryExpression {
         op: op.to_string(),
         left: Box::new(l),
-        right: Box::new(r),
+        right: Box::new(r)
     }
 }
 

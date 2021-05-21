@@ -35,7 +35,7 @@ async fn test_transform_projection() -> anyhow::Result<()> {
             Ok(Box::new(ProjectionTransform::try_create(
                 plan.input.schema(),
                 plan.schema.clone(),
-                plan.exprs.clone(),
+                plan.expr.clone()
             )?))
         })?;
     }

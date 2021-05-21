@@ -99,7 +99,7 @@ impl ExpressionChain {
             }
             ExpressionAction::Literal(l) => {
                 let value = ActionConstant {
-                    name: "".to_string(),
+                    name: expr.column_name(),
                     value: l.clone()
                 };
 
@@ -173,10 +173,7 @@ impl ExpressionChain {
 
                 self.actions.push(ActionNode::Function(function));
             }
-            ExpressionAction::Sort {
-                expr,
-                ..
-            } => {
+            ExpressionAction::Sort { expr, .. } => {
                 self.add_expr(expr)?;
             }
 
@@ -202,6 +199,17 @@ impl ExpressionChain {
     }
 }
 
+impl ActionNode {
+    pub fn column_name(&self) -> &str {
+        match self {
+            ActionNode::Input(input) => &input.name,
+            ActionNode::Constant(c) => &c.name,
+            ActionNode::Alias(a) => &a.name,
+            ActionNode::Function(f) => &f.name
+        }
+    }
+}
+
 impl ActionFunction {
     pub fn to_function(&self) -> Result<Box<dyn IFunction>> {
         if self.is_aggregated {
@@ -216,7 +224,7 @@ impl ActionFunction {
         }
     }
 
-    pub fn to_aggregate_function(&self) -> Result<(Box<dyn IAggreagteFunction>)> {
+    pub fn to_aggregate_function(&self) -> Result<Box<dyn IAggreagteFunction>> {
         if !self.is_aggregated {
             return Err(ErrorCodes::LogicalError(
                 "Action must be aggregated function"

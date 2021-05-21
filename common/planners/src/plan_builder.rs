@@ -2,13 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
-use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::col;
@@ -83,19 +81,12 @@ impl PlanBuilder {
             _ => projection_exprs.push(v.clone())
         });
 
-        // Merge fields.
         let fields = RewriteHelper::exprs_to_fields(&projection_exprs, &input_schema)?;
-        let mut merged = input_schema.fields().clone();
-        for field in fields {
-            if !merged.iter().any(|x| x.name() == field.name()) && field.name() != "*" {
-                merged.push(field);
-            }
-        }
 
         Ok(Self::from(&PlanNode::Expression(ExpressionPlan {
             input: Arc::new(self.plan.clone()),
             exprs,
-            schema: DataSchemaRefExt::create(merged),
+            schema: DataSchemaRefExt::create(fields),
             desc: desc.to_string()
         })))
     }
