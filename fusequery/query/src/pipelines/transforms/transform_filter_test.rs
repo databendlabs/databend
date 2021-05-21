@@ -27,6 +27,8 @@ async fn test_transform_filter() -> anyhow::Result<()> {
     {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
+                plan.input.schema(),
+                plan.schema(),
                 plan.predicate.clone(),
                 false
             )?))
@@ -76,6 +78,8 @@ async fn test_transform_filter_error() -> anyhow::Result<()> {
     {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
+                plan.input.schema(),
+                plan.schema(),
                 plan.predicate.clone(),
                 false
             )?))

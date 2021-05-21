@@ -2,18 +2,24 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::array::ArrayRef;
+use common_datavalues::DataArrayRef;
+use common_datavalues::DataColumnarValue;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataType;
+use common_datavalues::Float64Array;
+use common_datavalues::Int64Array;
 use common_exception::Result;
+use pretty_assertions::assert_eq;
+
+use crate::arithmetics::*;
+use crate::*;
 
 #[test]
 fn test_arithmetic_function() -> Result<()> {
-    use common_datablocks::DataBlock;
-    use common_datavalues::*;
-    use pretty_assertions::assert_eq;
-
-    use crate::arithmetics::*;
-    use crate::*;
-
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
@@ -32,14 +38,10 @@ fn test_arithmetic_function() -> Result<()> {
         DataField::new("c", DataType::Int16, false),
     ]);
 
-    let field_a = ColumnFunction::try_create("a")?;
-    let field_b = ColumnFunction::try_create("b")?;
-    let field_c = ColumnFunction::try_create("c")?;
-
     let tests = vec![
         Test {
             name: "add-int64-passed",
-            display: "plus(a, b)",
+            display: "plus",
             nullable: false,
             arg_names: vec!["a", "b"],
             func: ArithmeticPlusFunction::try_create_func("")?,
@@ -53,7 +55,7 @@ fn test_arithmetic_function() -> Result<()> {
         },
         Test {
             name: "add-diff-passed",
-            display: "plus(c, a)",
+            display: "plus",
             nullable: false,
             arg_names: vec!["c", "b"],
             func: ArithmeticPlusFunction::try_create_func("")?,
@@ -67,7 +69,7 @@ fn test_arithmetic_function() -> Result<()> {
         },
         Test {
             name: "sub-int64-passed",
-            display: "minus(a, b)",
+            display: "minus",
             arg_names: vec!["a", "b"],
             nullable: false,
             func: ArithmeticMinusFunction::try_create_func("")?,
@@ -81,7 +83,7 @@ fn test_arithmetic_function() -> Result<()> {
         },
         Test {
             name: "mul-int64-passed",
-            display: "multiply(a, b)",
+            display: "multiply",
             arg_names: vec!["a", "b"],
             nullable: false,
             func: ArithmeticMulFunction::try_create_func("")?,
@@ -95,7 +97,7 @@ fn test_arithmetic_function() -> Result<()> {
         },
         Test {
             name: "div-int64-passed",
-            display: "divide(a, b)",
+            display: "divide",
             arg_names: vec!["a", "b"],
             nullable: false,
             func: ArithmeticDivFunction::try_create_func("")?,
@@ -109,7 +111,7 @@ fn test_arithmetic_function() -> Result<()> {
         },
         Test {
             name: "mod-int64-passed",
-            display: "modulo(a, b)",
+            display: "modulo",
             arg_names: vec!["a", "b"],
             nullable: false,
             func: ArithmeticModuloFunction::try_create_func("")?,
@@ -140,11 +142,11 @@ fn test_arithmetic_function() -> Result<()> {
         let actual_null = func.nullable(&schema)?;
         assert_eq!(expect_null, actual_null);
 
-        let args = t
-            .arg_names
-            .iter()
-            .map(|name| schema.field_with_name(name).map(|f| f.data_type().clone()))
-            .collect::<Result<Vec<DataType>>>()?;
+        // Type check.
+        let mut args = vec![];
+        for name in t.arg_names {
+            args.push(schema.field_with_name(name)?.data_type().clone());
+        }
 
         let expect_type = func.return_type(&args)?.clone();
         let ref v = func.eval(&t.columns, rows)?;

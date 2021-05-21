@@ -8,12 +8,12 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_planners::ExpressionAction;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
-use common_planners::ExpressionAction;
 use crate::pipelines::transforms::ExpressionExecutor;
 
 pub struct ProjectionTransform {
@@ -25,8 +25,17 @@ pub struct ProjectionTransform {
 }
 
 impl ProjectionTransform {
-    pub fn try_create(input_schema: DataSchemaRef, output_schema: DataSchemaRef, exprs: Vec<ExpressionAction>) -> Result<Self> {
-        let mut executor = ExpressionExecutor::try_create(input_schema.clone(), exprs, false)?;
+    pub fn try_create(
+        input_schema: DataSchemaRef,
+        output_schema: DataSchemaRef,
+        exprs: Vec<ExpressionAction>
+    ) -> Result<Self> {
+        let mut executor = ExpressionExecutor::try_create(
+            input_schema.clone(),
+            output_schema.clone(),
+            exprs,
+            true
+        )?;
 
         Ok(ProjectionTransform {
             input_schema,
@@ -57,11 +66,18 @@ impl IProcessor for ProjectionTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-
         let executor = self.executor.clone();
-        let stream = self.input.filter_map(move |v| {
-            executor.execute(v)
-        });
+        let input_stream = self.input.execute().await?;
+
+        let executor_fn =
+            |executor: Arc<ExpressionExecutor>, block: Result<DataBlock>| -> Result<DataBlock> {
+                let block = block?;
+                executor.execute(&block)
+            };
+
+        let stream = input_stream
+            .filter_map(move |v| executor_fn(executor.clone(), v).map(Some).transpose());
+
         Ok(Box::pin(stream))
     }
 }

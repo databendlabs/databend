@@ -2,18 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::Result;
 use std::sync::Arc;
 
-use common_datablocks::*;
 use common_datavalues::*;
+use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 use crate::*;
 
 #[test]
 fn test_cast_function() -> Result<()> {
-
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
@@ -26,25 +24,22 @@ fn test_cast_function() -> Result<()> {
         func: Box<dyn IFunction>
     }
 
-
     let tests = vec![
         Test {
             name: "cast-int64-to-int8-passed",
-            display: "CAST(a)",
+            display: "CAST",
             nullable: false,
             columns: vec![Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into()],
-            func: CastFunction::create( DataType::Int8),
+            func: CastFunction::create(DataType::Int8),
             cast_type: DataType::Int8,
             expect: Arc::new(Int8Array::from(vec![4, 3, 2, 4])),
             error: ""
         },
         Test {
             name: "cast-string-to-date32-passed",
-            display: "CAST(a)",
+            display: "CAST",
             nullable: false,
-            columns: vec![
-               Arc::new(StringArray::from(vec!["20210305", "20211024"])).into()
-            ],
+            columns: vec![Arc::new(StringArray::from(vec!["20210305", "20211024"])).into()],
             func: CastFunction::create(DataType::Int32),
             cast_type: DataType::Date32,
             expect: Arc::new(Int32Array::from(vec![20210305, 20211024])),
@@ -55,7 +50,7 @@ fn test_cast_function() -> Result<()> {
     for t in tests {
         let rows = t.columns[0].len();
         let func = t.func;
-        if let Err(e) = func.eval(&t.columns) {
+        if let Err(e) = func.eval(&t.columns, rows) {
             assert_eq!(t.error, e.to_string());
         }
 

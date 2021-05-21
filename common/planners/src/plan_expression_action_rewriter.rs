@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::ExpressionAction;
-use common_exception::{Result, ErrorCodes};
+use common_exception::ErrorCodes;
+use common_exception::Result;
 use common_functions::FunctionFactory;
 
+use crate::ExpressionAction;
 
 /// Trait for potentially recursively rewriting an [`Expr`] expression
 /// tree. When passed to `Expr::rewrite`, `ExprVisitor::mutate` is
@@ -58,9 +59,7 @@ impl ExpressionAction {
     /// called on that expression
     ///
     pub fn rewrite<R>(self, rewriter: &mut R) -> Result<Self>
-        where
-            R: ExprRewriter,
-    {
+        where R: ExprRewriter {
         if !rewriter.pre_visit(&self)? {
             return Ok(self);
         };
@@ -69,28 +68,42 @@ impl ExpressionAction {
             ExpressionAction::Alias(name, expr) => {
                 let expr = expr.rewrite(rewriter)?;
                 ExpressionAction::Alias(name, Box::new(expr))
-            },
+            }
+            ExpressionAction::BinaryExpression { op, left, right } => {
+                ExpressionAction::BinaryExpression { op, left: Box::new(left.rewrite(rewriter)?), right: Box::new(right.rewrite(rewriter)?) }
+            }
             ExpressionAction::ScalarFunction { op, args } => {
                 let mut new_args = Vec::with_capacity(args.len());
                 for arg in args {
                     new_args.push(arg.rewrite(rewriter)?);
                 }
-                ExpressionAction::ScalarFunction {op, args: new_args}
+                ExpressionAction::ScalarFunction { op, args: new_args }
             }
             ExpressionAction::AggregateFunction { op, args } => {
                 let mut new_args = Vec::with_capacity(args.len());
                 for arg in args {
                     new_args.push(arg.rewrite(rewriter)?);
                 }
-                ExpressionAction::AggregateFunction {op, args: new_args}
+                ExpressionAction::AggregateFunction { op, args: new_args }
             }
             ExpressionAction::Cast { expr, data_type } => {
                 let expr = expr.rewrite(rewriter)?;
-                ExpressionAction::Cast {expr: Box::new(expr), data_type}
-            },
-            ExpressionAction::Sort { expr, asc, nulls_first } => {
+                ExpressionAction::Cast {
+                    expr: Box::new(expr),
+                    data_type,
+                }
+            }
+            ExpressionAction::Sort {
+                expr,
+                asc,
+                nulls_first
+            } => {
                 let expr = expr.rewrite(rewriter)?;
-                ExpressionAction::Sort {expr: Box::new(expr), asc, nulls_first}
+                ExpressionAction::Sort {
+                    expr: Box::new(expr),
+                    asc,
+                    nulls_first,
+                }
             }
             _ => self
         };

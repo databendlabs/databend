@@ -5,30 +5,16 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_aggregate_functions::AggregateFunctionFactory;
-use common_arrow::arrow::datatypes::DataType;
 use common_datablocks::DataBlock;
-use common_datavalues::DataArrayRef;
-use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_functions::AliasFunction;
-use common_functions::CastFunction;
-use common_functions::ColumnFunction;
-use common_functions::FunctionFactory;
-use common_functions::IFunction;
-use common_functions::LiteralFunction;
 use common_planners::ExpressionAction;
-use common_planners::ExpressionChain;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
 use crate::pipelines::transforms::ExpressionExecutor;
-use crate::sessions::FuseQueryContextRef;
-
 /// Executes certain expressions over the block and append the result column to the new block.
 /// Aims to transform a block to another format, such as add one or more columns against the Expressions.
 ///
@@ -57,7 +43,12 @@ impl ExpressionTransform {
         output_schema: DataSchemaRef,
         exprs: Vec<ExpressionAction>
     ) -> Result<Self> {
-        let mut executor = ExpressionExecutor::try_create(input_schema.clone(), exprs, false)?;
+        let executor = ExpressionExecutor::try_create(
+            input_schema.clone(),
+            output_schema.clone(),
+            exprs,
+            false
+        )?;
         executor.validate()?;
 
         Ok(ExpressionTransform {
@@ -90,17 +81,16 @@ impl IProcessor for ExpressionTransform {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let executor = self.executor.clone();
+        let input_stream = self.input.execute().await?;
 
-        let execute_fn =
+        let executor_fn =
             |executor: Arc<ExpressionExecutor>, block: Result<DataBlock>| -> Result<DataBlock> {
                 let block = block?;
                 executor.execute(&block)
             };
 
-        let stream = self.input.filter_map(move |v| {
-            let executor = executor.clone();
-            execute_fn(executor, v)
-        });
+        let stream = input_stream
+            .filter_map(move |v| executor_fn(executor.clone(), v).map(Some).transpose());
 
         Ok(Box::pin(stream))
     }

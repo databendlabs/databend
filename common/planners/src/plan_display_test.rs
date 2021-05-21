@@ -7,18 +7,15 @@ use std::collections::HashMap;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
-use pretty_assertions::assert_eq;
 
-use crate::CreateTablePlan;
-use crate::PlanNode;
-use crate::TableEngineType;
+use crate::*;
 
 #[test]
 fn test_plan_display_indent() -> anyhow::Result<()> {
-    // TODO test other plan type
+    use pretty_assertions::assert_eq;
 
+    // TODO test other plan type
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
-    let ctx = crate::tests::try_create_context()?;
 
     let mut options = HashMap::new();
     options.insert("opt_foo".to_string(), "opt_bar".to_string());

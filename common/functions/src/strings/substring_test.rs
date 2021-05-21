@@ -2,21 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
+use common_datavalues::*;
 use common_exception::Result;
+use pretty_assertions::assert_eq;
 
 use crate::strings::SubstringFunction;
-use crate::ColumnFunction;
 use crate::IFunction;
-use crate::LiteralFunction;
 
 #[test]
 fn test_substring_function() -> Result<()> {
-    use std::sync::Arc;
-
-    use common_datablocks::*;
-    use common_datavalues::*;
-    use pretty_assertions::assert_eq;
-
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
@@ -31,19 +27,19 @@ fn test_substring_function() -> Result<()> {
 
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::Utf8, false),
-        DataField::new("b", DataType::UInt64, false),
+        DataField::new("b", DataType::Int64, false),
         DataField::new("c", DataType::UInt64, false),
     ]);
 
     let tests = vec![
         Test {
             name: "substring-abcde-passed",
-            display: "SUBSTRING(a,2,3)",
+            display: "SUBSTRING",
             nullable: false,
             arg_names: vec!["a", "b", "c"],
             columns: vec![
                 Arc::new(StringArray::from(vec!["abcde"])).into(),
-                Arc::new(UInt64Array::from(vec![2])).into(),
+                Arc::new(Int64Array::from(vec![2])).into(),
                 Arc::new(UInt64Array::from(vec![3])).into(),
             ],
             func: SubstringFunction::try_create("substring")?,
@@ -52,12 +48,12 @@ fn test_substring_function() -> Result<()> {
         },
         Test {
             name: "substring-abcde-passed",
-            display: "SUBSTRING(a,1,3)",
+            display: "SUBSTRING",
             nullable: false,
             arg_names: vec!["a", "b", "c"],
             columns: vec![
                 Arc::new(StringArray::from(vec!["abcde"])).into(),
-                Arc::new(UInt64Array::from(vec![1])).into(),
+                Arc::new(Int64Array::from(vec![1])).into(),
                 Arc::new(UInt64Array::from(vec![3])).into(),
             ],
             func: SubstringFunction::try_create("substring")?,
@@ -66,12 +62,12 @@ fn test_substring_function() -> Result<()> {
         },
         Test {
             name: "substring-abcde-passed",
-            display: "SUBSTRING(a,2)",
+            display: "SUBSTRING",
             nullable: false,
             arg_names: vec!["a", "b"],
             columns: vec![
                 Arc::new(StringArray::from(vec!["abcde"])).into(),
-                Arc::new(UInt64Array::from(vec![2])).into(),
+                Arc::new(Int64Array::from(vec![2])).into(),
             ],
 
             func: SubstringFunction::try_create("substring")?,
@@ -100,12 +96,11 @@ fn test_substring_function() -> Result<()> {
 
         let ref v = func.eval(&t.columns, rows)?;
 
-        let args = t
-            .arg_names
-            .iter()
-            .map(|name| schema.field_with_name(name)?.data_type())
-            .collect::<Result<Vec<DataType>>>()?;
-
+        // Type check.
+        let mut args = vec![];
+        for name in t.arg_names {
+            args.push(schema.field_with_name(name)?.data_type().clone());
+        }
         // Type check.
         let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();

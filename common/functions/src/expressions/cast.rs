@@ -37,8 +37,9 @@ impl IFunction for CastFunction {
         Ok(self.cast_type.clone())
     }
 
+    // TODO fixme
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
+        Ok(false)
     }
 
     fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {

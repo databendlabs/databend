@@ -79,6 +79,6 @@ impl IFunction for ArithmeticFunction {
 
 impl fmt::Display for ArithmeticFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ArithmeticFunction({})", self.op)
+        write!(f, "{}", self.op)
     }
 }

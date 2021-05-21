@@ -2,11 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
+use common_arrow::arrow::datatypes::ArrowPrimitiveType;
 use common_exception::Result;
 
+use crate::BooleanArray;
 use crate::DataArrayRef;
 use crate::DataType;
 use crate::DataValue;
+use crate::PrimitiveArrayRef;
+use crate::StringArray;
 
 #[derive(Clone, Debug)]
 pub enum DataColumnarValue {
@@ -43,6 +49,24 @@ impl DataColumnarValue {
 
 impl From<DataArrayRef> for DataColumnarValue {
     fn from(array: DataArrayRef) -> Self {
-        DataColumnarValue::Array(array.clone())
+        DataColumnarValue::Array(array)
+    }
+}
+
+impl<T: ArrowPrimitiveType> From<PrimitiveArrayRef<T>> for DataColumnarValue {
+    fn from(array: PrimitiveArrayRef<T>) -> Self {
+        DataColumnarValue::Array(array as DataArrayRef)
+    }
+}
+
+impl From<Arc<BooleanArray>> for DataColumnarValue {
+    fn from(array: Arc<BooleanArray>) -> Self {
+        DataColumnarValue::Array(array as DataArrayRef)
+    }
+}
+
+impl From<Arc<StringArray>> for DataColumnarValue {
+    fn from(array: Arc<StringArray>) -> Self {
+        DataColumnarValue::Array(array as DataArrayRef)
     }
 }

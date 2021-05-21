@@ -70,6 +70,12 @@ impl ExpressionAction {
         // recurse (and cover all expression types)
         let visitor = match self {
             ExpressionAction::Alias(_, expr) => expr.accept(visitor),
+            ExpressionAction::BinaryExpression { op, left, right } => {
+                let mut visitor = visitor;
+                visitor = left.accept(visitor)?;
+                visitor = right.accept(visitor)?;
+                Ok(visitor)
+            }
             ExpressionAction::ScalarFunction { op, args } => {
                 let mut visitor = visitor;
                 for arg in args {

@@ -9,16 +9,13 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_functions::AliasFunction;
 use common_functions::CastFunction;
-use common_functions::ColumnFunction;
 use common_functions::FunctionFactory;
 use common_functions::IFunction;
-use common_functions::LiteralFunction;
 
 use crate::ExpressionAction;
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum ActionNode {
     /// Column which must be in input.
     Input(ActionInput),
@@ -28,26 +25,26 @@ pub enum ActionNode {
     Function(ActionFunction)
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ActionInput {
     pub name: String,
     pub return_type: DataType
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ActionConstant {
     pub name: String,
     pub value: DataValue
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ActionAlias {
     pub name: String,
     pub arg_name: String,
     pub arg_type: DataType
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ActionFunction {
     pub name: String,
     pub func_name: String,
@@ -57,7 +54,7 @@ pub struct ActionFunction {
     pub return_type: DataType
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ExpressionChain {
     // input schema
     pub schema: DataSchemaRef,
@@ -80,7 +77,7 @@ impl ExpressionChain {
 
     fn add_expr(&mut self, expr: &ExpressionAction) -> Result<()> {
         match expr {
-            ExpressionAction::Alias(name, sub_expr) => {
+            ExpressionAction::Alias(_, sub_expr) => {
                 self.add_expr(sub_expr)?;
                 let return_type = expr.to_data_type(&self.schema)?;
 
@@ -108,6 +105,29 @@ impl ExpressionChain {
 
                 self.actions.push(ActionNode::Constant(value));
             }
+
+            ExpressionAction::BinaryExpression { op, left, right } => {
+                self.add_expr(left)?;
+                self.add_expr(right)?;
+
+                let func = FunctionFactory::get(op)?;
+                let arg_types = vec![
+                    left.to_data_type(&self.schema)?,
+                    right.to_data_type(&self.schema)?,
+                ];
+
+                let function = ActionFunction {
+                    name: expr.column_name(),
+                    func_name: op.clone(),
+                    is_aggregated: false,
+                    arg_names: vec![left.column_name(), right.column_name()],
+                    arg_types: arg_types.clone(),
+                    return_type: func.return_type(&arg_types)?
+                };
+
+                self.actions.push(ActionNode::Function(function));
+            }
+
             ExpressionAction::ScalarFunction { op, args } => {
                 for expr in args.iter() {
                     self.add_expr(expr)?;
@@ -117,7 +137,7 @@ impl ExpressionChain {
                 let arg_types = args
                     .iter()
                     .map(|action| action.to_data_type(&self.schema))
-                    .collect::<Result<Vec<DataType>>>()?;
+                    .collect::<Result<Vec<_>>>()?;
 
                 let function = ActionFunction {
                     name: expr.column_name(),
@@ -140,7 +160,7 @@ impl ExpressionChain {
                 let arg_types = args
                     .iter()
                     .map(|action| action.to_data_type(&self.schema))
-                    .collect::<Result<Vec<DataType>>>()?;
+                    .collect::<Result<Vec<_>>>()?;
 
                 let function = ActionFunction {
                     name: expr.column_name(),
@@ -155,10 +175,9 @@ impl ExpressionChain {
             }
             ExpressionAction::Sort {
                 expr,
-                asc,
-                nulls_first
+                ..
             } => {
-                self.add_expr(expr);
+                self.add_expr(expr)?;
             }
 
             ExpressionAction::Wildcard => {}
@@ -187,7 +206,7 @@ impl ActionFunction {
     pub fn to_function(&self) -> Result<Box<dyn IFunction>> {
         if self.is_aggregated {
             return Err(ErrorCodes::LogicalError(
-                "ActionType ALIAS must have column to transform"
+                "Action must be non-aggregated function"
             ));
         }
 
@@ -195,5 +214,14 @@ impl ActionFunction {
             "cast" => Ok(CastFunction::create(self.return_type.clone())),
             _ => FunctionFactory::get(&self.func_name)
         }
+    }
+
+    pub fn to_aggregate_function(&self) -> Result<(Box<dyn IAggreagteFunction>)> {
+        if !self.is_aggregated {
+            return Err(ErrorCodes::LogicalError(
+                "Action must be aggregated function"
+            ));
+        }
+        AggregateFunctionFactory::get(&self.func_name)
     }
 }

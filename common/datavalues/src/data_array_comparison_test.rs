@@ -190,7 +190,7 @@ fn test_array_scalar_comparison() {
     for t in tests {
         let result = DataArrayComparison::data_array_comparison_op(
             t.op.clone(),
-            &DataColumnarValue::Array(t.array),
+            &DataColumnarValue::Array(t.array.clone()),
             &DataColumnarValue::Constant(t.scalar, t.array.len())
         );
         match result {

@@ -2,19 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_arrow::arrow::array::ArrayRef;
+use std::sync::Arc;
+
+use common_datavalues::*;
 use common_exception::Result;
+use pretty_assertions::assert_eq;
+
+use crate::*;
 
 #[test]
-fn test_Aggregate_function() -> Result<()> {
-    use std::sync::Arc;
-
-    use common_datablocks::DataBlock;
-    use common_datavalues::*;
-    use pretty_assertions::assert_eq;
-
-    use crate::*;
-
+fn test_aggregate_function() -> Result<()> {
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
@@ -28,21 +25,17 @@ fn test_Aggregate_function() -> Result<()> {
         func: Box<dyn IAggreagteFunction>
     }
 
-    let columns: Vec<ArrayRef> = vec![
-        Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
-        Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
+    let columns = vec![
+        Arc::new(Int64Array::from(vec![4, 3, 2, 1])).into(),
+        Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
     ];
-    let columns = columns
-        .iter()
-        .map(|a| a.clone().into())
-        .collect::<Vec<DataColumnarValue>>();
 
     let tests = vec![
         Test {
             name: "count-passed",
             eval_nums: 1,
             types: vec![DataType::Int64, DataType::Int64],
-            display: "count(a)",
+            display: "count",
             nullable: false,
             func: AggregateCountFunction::try_create("count")?,
             columns: columns.clone(),
@@ -53,7 +46,7 @@ fn test_Aggregate_function() -> Result<()> {
             name: "max-passed",
             eval_nums: 2,
             types: vec![DataType::Int64, DataType::Int64],
-            display: "max(a)",
+            display: "max",
             nullable: false,
             func: AggregateMaxFunction::try_create("max")?,
             columns: columns.clone(),
@@ -64,7 +57,7 @@ fn test_Aggregate_function() -> Result<()> {
             name: "min-passed",
             eval_nums: 2,
             types: vec![DataType::Int64, DataType::Int64],
-            display: "min(a)",
+            display: "min",
             nullable: false,
             func: AggregateMinFunction::try_create("min")?,
             columns: columns.clone(),
@@ -75,7 +68,7 @@ fn test_Aggregate_function() -> Result<()> {
             name: "avg-passed",
             eval_nums: 1,
             types: vec![DataType::Int64, DataType::Int64],
-            display: "avg(a)",
+            display: "avg",
             nullable: false,
             func: AggregateAvgFunction::try_create("avg")?,
             columns: columns.clone(),
@@ -86,7 +79,7 @@ fn test_Aggregate_function() -> Result<()> {
             name: "sum-passed",
             eval_nums: 1,
             types: vec![DataType::Int64, DataType::Int64],
-            display: "sum(a)",
+            display: "sum",
             nullable: false,
             func: AggregateSumFunction::try_create("sum")?,
             columns: columns.clone(),

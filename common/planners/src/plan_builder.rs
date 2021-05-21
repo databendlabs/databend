@@ -103,7 +103,7 @@ impl PlanBuilder {
     /// Apply a projection.
     pub fn project(&self, exprs: &[ExpressionAction]) -> Result<Self> {
         let input_schema = self.plan.schema();
-        let fields = PlanRewriter::exprs_to_fields(exprs, &input_schema)?;
+        let fields = RewriteHelper::exprs_to_fields(exprs, &input_schema)?;
 
         Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
             input: Arc::new(self.plan.clone()),
@@ -124,8 +124,8 @@ impl PlanBuilder {
             RewriteHelper::exprs_to_fields(&rewrite_aggr_exprs, &input_schema)?;
 
         // Aggregator check.
-        let mut group_by_names = HashSet::new();
-        PlanRewriter::exprs_to_names(&group_expr, &mut group_by_names)?;
+        // let mut group_by_names = HashSet::new();
+        // PlanRewriter::exprs_to_names(&group_expr, &mut group_by_names)?;
 
         // TODO
         // for aggr in aggr_expr {

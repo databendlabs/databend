@@ -14,7 +14,7 @@ pub use transform_remote::RemoteTransform;
 pub use transform_sort_merge::SortMergeTransform;
 pub use transform_sort_partial::SortPartialTransform;
 pub use transform_source::SourceTransform;
-pub use tansform_expression_executor::ExpressionExecutor;
+pub use transform_expression_executor::ExpressionExecutor;
 
 #[cfg(test)]
 mod transform_aggregator_final_test;
@@ -51,5 +51,5 @@ mod transform_remote;
 mod transform_sort_merge;
 mod transform_sort_partial;
 mod transform_source;
-mod tansform_expression_executor;
+mod transform_expression_executor;
 

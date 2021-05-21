@@ -6,9 +6,10 @@ use crate::ExpressionAction;
 
 /// return a new expression l <op> r.
 fn binary_expr(l: ExpressionAction, op: &str, r: ExpressionAction) -> ExpressionAction {
-    ExpressionAction::ScalarFunction {
+    ExpressionAction::BinaryExpression {
         op: op.to_string(),
-        args: vec![l, r],
+        left: Box::new(l),
+        right: Box::new(r),
     }
 }
 

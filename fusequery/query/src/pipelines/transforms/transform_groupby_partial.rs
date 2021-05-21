@@ -7,17 +7,18 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_aggregate_functions::IAggreagteFunction;
 use common_arrow::arrow::array::BinaryBuilder;
 use common_arrow::arrow::array::StringBuilder;
 use common_datablocks::DataBlock;
-use common_datavalues::{DataArrayRef, DataColumnarValue};
+use common_datavalues::DataArrayRef;
+use common_datavalues::DataColumnarValue;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_functions::IFunction;
 use common_infallible::RwLock;
 use common_planners::ExpressionAction;
 use common_streams::DataBlockStream;
@@ -27,11 +28,12 @@ use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
-use common_aggregate_functions::{AggregateFunctionFactory, IAggreagteFunction};
 
 // Table for <group_key, indices>
 type GroupIndicesTable = HashMap<Vec<u8>, Vec<u32>, ahash::RandomState>;
-type GroupFuncTable = RwLock<HashMap<Vec<u8>, Vec<(Box<dyn IAggreagteFunction>, String, Vec<String>)>, ahash::RandomState>>;
+type GroupFuncTable = RwLock<
+    HashMap<Vec<u8>, Vec<(Box<dyn IAggreagteFunction>, String, Vec<String>)>, ahash::RandomState>
+>;
 
 pub struct GroupByPartialTransform {
     aggr_exprs: Vec<ExpressionAction>,
@@ -106,11 +108,10 @@ impl IProcessor for GroupByPartialTransform {
     /// 1, 5
     /// 2, 7
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-
         let group_len = self.group_exprs.len();
         let aggr_len = self.aggr_exprs.len();
-
         let start = Instant::now();
+
         let mut stream = self.input.execute().await?;
         while let Some(block) = stream.next().await {
             let block = block?;
@@ -163,18 +164,27 @@ impl IProcessor for GroupByPartialTransform {
                     match groups.get_mut(&group_key) {
                         // New group.
                         None => {
-                            let aggr_funcs = self
-                                .aggr_exprs
-                                .iter()
-                                .map(|x| x.to_aggregate_function())
-                                .collect::<common_exception::Result<Vec<_>>>()?;
+                            let mut aggr_funcs = vec![];
+                            for expr in &self.aggr_exprs {
+                                let func = expr.to_aggregate_function()?;
+                                let name = expr.column_name();
+                                let args = expr.to_aggregate_function_args()?;
+
+                                aggr_funcs.push((func, name, args));
+                            }
 
                             groups.insert(group_key.clone(), aggr_funcs);
                         }
                         // Accumulate result against the take block by indices.
                         Some(aggr_funcs) => {
                             for func in aggr_funcs {
-                                let arg_columns = func.2.iter().map(|arg| take_block.try_column_by_name(&arg.column_name())?.into()).collect::<Result<Vec<DataColumnarValue>>>()?;
+                                let arg_columns = func
+                                    .2
+                                    .iter()
+                                    .map(|arg| {
+                                        take_block.try_column_by_name(arg).map(|c| c.clone().into())
+                                    })
+                                    .collect::<Result<Vec<DataColumnarValue>>>()?;
 
                                 func.0.accumulate(&arg_columns, rows)?
                             }
@@ -214,7 +224,7 @@ impl IProcessor for GroupByPartialTransform {
         let mut group_key_builder = BinaryBuilder::new(groups.len());
         for (key, funcs) in groups.iter() {
             for (idx, func) in funcs.iter().enumerate() {
-                let states = DataValue::Struct(func.accumulate_result()?);
+                let states = DataValue::Struct(func.0.accumulate_result()?);
                 let ser = serde_json::to_string(&states)?;
                 builders[idx].append_value(ser.as_str())?;
             }

@@ -6,7 +6,6 @@
 fn test_database_function() -> anyhow::Result<()> {
     use std::sync::Arc;
 
-    use common_datablocks::*;
     use common_datavalues::*;
     use pretty_assertions::assert_eq;
 
@@ -26,7 +25,7 @@ fn test_database_function() -> anyhow::Result<()> {
 
     let tests = vec![Test {
         name: "database-function-passed",
-        display: "database()",
+        display: "database",
         nullable: false,
         func: DatabaseFunction::try_create("database")?,
         columns: vec![Arc::new(Int64Array::from(vec![4])).into()],

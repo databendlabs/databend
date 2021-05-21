@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_aggregate_functions::AggregateFunctionFactory;
 use common_arrow::arrow::datatypes::Field;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
@@ -453,12 +454,10 @@ impl PlanParser {
                 Ok(ExpressionAction::Column(v.clone().value))
             }
             sqlparser::ast::Expr::BinaryOp { left, op, right } => {
-                Ok(ExpressionAction::ScalarFunction {
+                Ok(ExpressionAction::BinaryExpression {
                     op: format!("{}", op),
-                    args: vec![
-                        Box::new(self.sql_to_rex(left, schema)?),
-                        Box::new(self.sql_to_rex(right, schema)?),
-                    ]
+                    left: Box::new(self.sql_to_rex(left, schema)?),
+                    right: Box::new(self.sql_to_rex(right, schema)?)
                 })
             }
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema),
@@ -466,7 +465,7 @@ impl PlanParser {
                 let mut args = Vec::with_capacity(e.args.len());
 
                 // 1. Get the args from context by function name. such as SELECT database()
-                // common::functions::udf::database arg is ctx.get_default()
+                // common::ScalarFunctions::udf::database arg is ctx.get_default()
                 let ctx_args = ContextFunction::build_args_from_ctx(
                     e.name.to_string().as_str(),
                     self.ctx.clone()
@@ -487,8 +486,16 @@ impl PlanParser {
                     }
                 }
 
-                Ok(ExpressionAction::Function {
-                    op: e.name.to_string(),
+                let op = e.name.to_string();
+                if let Ok(_) = AggregateFunctionFactory::get(&op) {
+                    return Ok(ExpressionAction::AggregateFunction {
+                        op,
+                        args
+                    });
+                }
+
+                Ok(ExpressionAction::ScalarFunction {
+                    op,
                     args
                 })
             }
@@ -527,7 +534,7 @@ impl PlanParser {
                     args.push(ExpressionAction::Literal(DataValue::UInt64(None)));
                 }
 
-                Ok(ExpressionAction::Function {
+                Ok(ExpressionAction::ScalarFunction {
                     op: "substring".to_string(),
                     args
                 })

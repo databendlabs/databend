@@ -6,19 +6,13 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_aggregate_functions::AggregateFunctionFactory;
 use common_aggregate_functions::IAggreagteFunction;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
-use common_datavalues::DataColumnarValue;
-use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::StringArray;
 use common_exception::Result;
-use common_functions::IFunction;
 use common_planners::ExpressionAction;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -29,32 +23,28 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
 
 pub struct AggregatorPartialTransform {
-    funcs: Vec<(Box<dyn IAggreagteFunction>, String, Vec<String>)>,
+    funcs: Vec<Box<dyn IAggreagteFunction>>,
+    arg_names: Vec<Vec<String>>,
+
     schema: DataSchemaRef,
-    output_schema: DataSchemaRef,
-    exprs: Vec<ExpressionAction>,
     input: Arc<dyn IProcessor>
 }
 
 impl AggregatorPartialTransform {
     pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionAction>) -> Result<Self> {
-        let mut funcs = Vec::with_capacity(exprs.len());
-        let mut fields = Vec::with_capacity(exprs.len());
-
-        for expr in &exprs {
-            let column_name = expr.column_name();
-            let field = DataField::new(&column_name, DataType::Utf8, false);
-            // Field.
-            fields.push(field);
-            funcs.push(expr.to_aggregate_function()?);
-        }
-        let output_schema = DataSchemaRefExt::create(fields);
+        let funcs = exprs
+            .iter()
+            .map(|expr| expr.to_aggregate_function())
+            .collect::<Result<Vec<_>>>()?;
+        let arg_names = exprs
+            .iter()
+            .map(|expr| expr.to_aggregate_function_args())
+            .collect::<Result<Vec<_>>>()?;
 
         Ok(AggregatorPartialTransform {
             funcs,
+            arg_names,
             schema,
-            output_schema,
-            exprs,
             input: Arc::new(EmptyProcessor::create())
         })
     }
@@ -82,18 +72,19 @@ impl IProcessor for AggregatorPartialTransform {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let mut funcs = self.funcs.clone();
         let mut stream = self.input.execute().await?;
+        let arg_names = self.arg_names.clone();
 
         let start = Instant::now();
         while let Some(block) = stream.next().await {
             let block = block?;
             let rows = block.num_rows();
 
-            for func_args in funcs.iter_mut() {
+            for (idx, func) in funcs.iter_mut().enumerate() {
                 let mut arg_columns = vec![];
-                for arg_name in func_args.iter() {
-                    arg_columns.push(block.try_column_by_name(name)?.into());
+                for name in arg_names[idx].iter() {
+                    arg_columns.push(block.try_column_by_name(name)?.clone().into());
                 }
-                func_args.0.accumulate(&arg_columns, rows);
+                func.accumulate(&arg_columns, rows)?;
             }
         }
         let delta = start.elapsed();
@@ -102,13 +93,13 @@ impl IProcessor for AggregatorPartialTransform {
         let mut columns: Vec<DataArrayRef> = vec![];
         for func in funcs.iter() {
             // Column.
-            let states = DataValue::Struct(func.0.accumulate_result()?);
+            let states = DataValue::Struct(func.accumulate_result()?);
             let ser = serde_json::to_string(&states)?;
             let col = Arc::new(StringArray::from(vec![ser.as_str()]));
             columns.push(col);
         }
 
-        let block = DataBlock::create(self.output_schema.clone(), columns);
+        let block = DataBlock::create(self.schema.clone(), columns);
 
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),

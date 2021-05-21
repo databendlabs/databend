@@ -39,7 +39,7 @@ impl IFunction for LogicFunction {
         "LogicFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Boolean)
     }
 

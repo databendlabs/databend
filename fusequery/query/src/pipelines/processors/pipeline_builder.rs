@@ -190,6 +190,7 @@ impl PipelineBuilder {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
                  plan.input.schema(),
+                plan.schema(),
                 plan.predicate.clone(),
                 false,
             )?))
@@ -201,6 +202,7 @@ impl PipelineBuilder {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
                 plan.input.schema(),
+                plan.schema(),
                 plan.predicate.clone(),
                 true,
             )?))

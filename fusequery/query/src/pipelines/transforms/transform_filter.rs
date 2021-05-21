@@ -32,11 +32,16 @@ pub struct FilterTransform {
 impl FilterTransform {
     pub fn try_create(
         input_schema: DataSchemaRef,
+        output_schema: DataSchemaRef,
         predicate: ExpressionAction,
         having: bool
     ) -> Result<Self> {
-        let mut executor =
-            ExpressionExecutor::try_create(input_schema.clone(), vec![predicate.clone()], false)?;
+        let executor = ExpressionExecutor::try_create(
+            input_schema.clone(),
+            output_schema,
+            vec![predicate.clone()],
+            false
+        )?;
         executor.validate()?;
 
         Ok(FilterTransform {
@@ -72,10 +77,13 @@ impl IProcessor for FilterTransform {
         let executor = self.executor.clone();
         let column_name = self.predicate.column_name();
 
-        let execute_fn = |block: Result<DataBlock>| -> Result<DataBlock> {
+        let execute_fn = |executor: Arc<ExpressionExecutor>,
+                          column_name: &str,
+                          block: Result<DataBlock>|
+         -> Result<DataBlock> {
             let block = block?;
-            let filter_block = executor.execute(&block)?;
-            let filter_array = filter_block.try_column_by_name(&column_name)?;
+            let filter_block = executor.clone().execute(&block)?;
+            let filter_array = filter_block.try_column_by_name(column_name)?;
             // Downcast to boolean array
             let filter_array = datavalues::downcast_array!(filter_array, BooleanArray)?;
 
@@ -85,7 +93,11 @@ impl IProcessor for FilterTransform {
             batch.try_into()
         };
 
-        let stream = input_stream.filter_map(move |v| execute_fn(v).map(Some).transpose());
+        let stream = input_stream.filter_map(move |v| {
+            execute_fn(executor.clone(), &column_name, v)
+                .map(Some)
+                .transpose()
+        });
         Ok(Box::pin(stream))
     }
 }

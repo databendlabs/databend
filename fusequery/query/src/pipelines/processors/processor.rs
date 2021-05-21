@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
+use tokio_stream::StreamExt;
 
 /// Formatter settings for PlanStep debug.
 pub struct FormatterSettings {

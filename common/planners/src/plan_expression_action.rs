@@ -29,6 +29,13 @@ pub enum ExpressionAction {
     /// Constant value.
     Literal(DataValue),
 
+    /// A binary expression such as "age > 40"
+    BinaryExpression {
+        left: Box<ExpressionAction>,
+        op: String,
+        right: Box<ExpressionAction>
+    },
+
     /// ScalarFunction with a set of arguments.
     /// Note: BinaryFunction is a also kind of functions function
     ScalarFunction {
@@ -80,7 +87,7 @@ impl ExpressionAction {
     }
 
     // TODO
-    pub fn nullable(&self, input_schema: &DataSchemaRef) -> Result<bool> {
+    pub fn nullable(&self, _input_schema: &DataSchemaRef) -> Result<bool> {
         Ok(false)
     }
 
@@ -89,6 +96,14 @@ impl ExpressionAction {
             ExpressionAction::Alias(_, expr) => expr.to_data_type(input_schema),
             ExpressionAction::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
             ExpressionAction::Literal(v) => Ok(v.data_type()),
+            ExpressionAction::BinaryExpression { op, left, right } => {
+                let arg_types = vec![
+                    left.to_data_type(input_schema)?,
+                    right.to_data_type(input_schema)?,
+                ];
+                let func = FunctionFactory::get(op)?;
+                func.return_type(&arg_types)
+            }
             ExpressionAction::ScalarFunction { op, args } => {
                 let mut arg_types = Vec::with_capacity(args.len());
                 for arg in args {
@@ -113,18 +128,30 @@ impl ExpressionAction {
         }
     }
 
-    pub fn to_aggregate_function(&self) -> Result<(Box<dyn IAggreagteFunction>, Vec<String>)> {
+    pub fn to_aggregate_function(&self) -> Result<(Box<dyn IAggreagteFunction>)> {
         match self {
-            ExpressionAction::AggregateFunction { op, args } => {
-                let func = AggregateFunctionFactory::get(op)?;
-                let args = args.iter().map(|arg| arg.column_name()).collect();
-                Ok((func, args))
-            }
-            _ => Result::Err(ErrorCodes::IllegalAggregateExp(format!(
-                "Expression {:?} is not an aggregate function",
-                self
-            )))
+            ExpressionAction::AggregateFunction { op, .. } => AggregateFunctionFactory::get(op),
+            _ => Err(ErrorCodes::LogicalError(
+                "Expression must be aggregated function"
+            ))
         }
+    }
+
+    pub fn to_aggregate_function_args(&self) -> Result<Vec<String>> {
+        match self {
+            ExpressionAction::AggregateFunction { args, .. } => {
+                let arg_names = args.iter().map(|arg| arg.column_name()).collect::<Vec<_>>();
+                Ok(arg_names)
+            }
+            _ => Err(ErrorCodes::LogicalError(
+                "Expression must be aggregated function"
+            ))
+        }
+    }
+
+    // TODO:sundy-li
+    pub fn has_aggregator(&self) -> Result<bool> {
+        Ok(true)
     }
 }
 
@@ -135,6 +162,9 @@ impl fmt::Debug for ExpressionAction {
             ExpressionAction::Alias(alias, v) => write!(f, "{:?} as {:#}", v, alias),
             ExpressionAction::Column(ref v) => write!(f, "{:#}", v),
             ExpressionAction::Literal(ref v) => write!(f, "{:#}", v),
+            ExpressionAction::BinaryExpression { op, left, right } => {
+                write!(f, "({:?} {} {:?})", left, op, right,)
+            }
             ExpressionAction::ScalarFunction { op, args } => write!(f, "{}({:?})", op, args),
             ExpressionAction::AggregateFunction { op, args } => write!(f, "{}({:?})", op, args),
             ExpressionAction::Sort { expr, .. } => write!(f, "{:?}", expr),

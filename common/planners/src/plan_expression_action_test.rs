@@ -1,15 +1,16 @@
+use std::sync::Arc;
+
+use pretty_assertions::assert_eq;
+
+use crate::test::Test;
+use crate::*;
+
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
 fn test_expression_action_plan() -> anyhow::Result<()> {
-    use std::sync::Arc;
-
-    use pretty_assertions::assert_eq;
-
-    use crate::*;
-
     let source = Test::create().generate_source_plan_for_test(10000)?;
     let plan = PlanBuilder::from(&source)
         .filter(

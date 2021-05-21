@@ -5,10 +5,9 @@
 use common_exception::Result;
 
 #[test]
-fn test_logic_function() -> anyhow::Result<()> {
+fn test_logic_function() -> Result<()> {
     use std::sync::Arc;
 
-    use common_datablocks::*;
     use common_datavalues::*;
     use pretty_assertions::assert_eq;
 
@@ -37,7 +36,7 @@ fn test_logic_function() -> anyhow::Result<()> {
         Test {
             name: "and-passed",
             func_name: "AndFunction",
-            display: "a and b",
+            display: "and",
             nullable: false,
             func: LogicAndFunction::try_create_func("".clone())?,
             arg_names: vec!["a", "b"],
@@ -51,7 +50,7 @@ fn test_logic_function() -> anyhow::Result<()> {
         Test {
             name: "or-passed",
             func_name: "OrFunction",
-            display: "a or b",
+            display: "or",
             nullable: false,
             func: LogicOrFunction::try_create_func("".clone())?,
             arg_names: vec!["a", "b"],
@@ -83,11 +82,11 @@ fn test_logic_function() -> anyhow::Result<()> {
 
         let ref v = func.eval(&t.columns, rows)?;
         // Type check.
-        let args = t
-            .arg_names
-            .iter()
-            .map(|name| schema.field_with_name(name)?.data_type())
-            .collect::<Result<Vec<DataType>>>()?;
+        let mut args = vec![];
+        for name in t.arg_names {
+            args.push(schema.field_with_name(name)?.data_type().clone());
+        }
+
         let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);

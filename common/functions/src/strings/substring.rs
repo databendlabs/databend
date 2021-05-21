@@ -32,7 +32,7 @@ impl IFunction for SubstringFunction {
         "substring"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Utf8)
     }
 
@@ -47,7 +47,8 @@ impl IFunction for SubstringFunction {
             .as_any()
             .downcast_ref::<Int64Array>()
             .unwrap()
-            .value(0);
+            .value(0)
+            - 1;
 
         let end = {
             if columns.len() >= 3 {

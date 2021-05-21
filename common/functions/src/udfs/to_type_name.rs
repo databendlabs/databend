@@ -49,6 +49,6 @@ impl IFunction for ToTypeNameFunction {
 
 impl fmt::Display for ToTypeNameFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ToTypeName")
+        write!(f, "toTypeName")
     }
 }

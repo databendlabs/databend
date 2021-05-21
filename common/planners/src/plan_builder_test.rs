@@ -2,12 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+
+use crate::test::Test;
+use crate::*;
+
 #[test]
 fn test_plan_builds() -> anyhow::Result<()> {
-    use common_exception::Result;
     use pretty_assertions::assert_eq;
-
-    use crate::*;
 
     struct TestCase {
         name: &'static str,
@@ -55,7 +57,7 @@ fn test_plan_builds() -> anyhow::Result<()> {
                 .build()),
             expect:"\
             Projection: number:UInt64, number as c1:UInt64\
-            \n  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]" 
+            \n  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
         },
         TestCase {
             name: "expression-alias-pass",
