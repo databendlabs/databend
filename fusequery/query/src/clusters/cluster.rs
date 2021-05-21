@@ -66,15 +66,7 @@ impl Cluster {
                 )))
             },
             Vacant(entry) => {
-                entry.insert(Arc::new(
-                    Node {
-                        name: name.clone(),
-                        priority: priority,
-                        address: address.clone(),
-                        local: local,
-                        sequence: new_node_sequence,
-                    }
-                ));
+                entry.insert(Node::create(name.clone(), priority, address.clone(), local, new_node_sequence));
 
                 Ok(())
             },

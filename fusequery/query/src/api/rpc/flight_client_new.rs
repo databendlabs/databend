@@ -22,13 +22,10 @@ pub struct FlightClient {
 
 // TODO: Integration testing required
 impl FlightClient {
-    pub async fn connect(addr: String) -> Result<FlightClient> {
-        // TODO: For different addresses, it should be singleton
-        Ok(FlightClient {
-            inner: FlightServiceClient::connect(format!("http://{}", addr)).await
-                .map_err(|e| ErrorCodes::UnknownException(e.to_string()))?
-        })
-        // cache
+    pub fn new(inner: FlightServiceClient<Channel>) -> FlightClient {
+        FlightClient {
+            inner
+        }
     }
 
     pub async fn fetch_stream(&mut self, name: String, schema: SchemaRef, timeout: u64) -> Result<SendableDataBlockStream> {
