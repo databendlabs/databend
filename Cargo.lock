@@ -128,8 +128,8 @@ dependencies = [
 
 [[package]]
 name = "async-raft"
-version = "0.6.0"
-source = "git+https://github.com/drmingdrmer/async-raft?branch=fix-non-voter-restart#786f091dd691c3189c477a5e0050eef60ef0f9b3"
+version = "0.6.1"
+source = "git+https://github.com/drmingdrmer/async-raft?branch=rc#3dce97c5a42e6ddbd3e13b058dc657315ceae897"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3231,9 +3231,9 @@ dependencies = [
 
 [[package]]
 name = "run_script"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1c022176d696304ff6655716c2c09e1b888c00ac66a7c53c037ae7c9511ce6c"
+checksum = "7fa4becc694242c537d43695743701f362b43c42cb11a3d44c8a01eb0cd18ded"
 dependencies = [
  "fsio",
 ]

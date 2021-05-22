@@ -9,7 +9,7 @@ use fuse_query::configs::Config;
 use fuse_query::metrics::MetricService;
 use fuse_query::servers::ClickHouseHandler;
 use fuse_query::servers::MySQLHandler;
-use fuse_query::sessions::Session;
+use fuse_query::sessions::SessionManager;
 use log::info;
 
 #[tokio::main]
@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("FuseQuery v-{}", conf.version);
 
     let cluster = Cluster::create_global(conf.clone())?;
-    let session_manager = Session::create();
+    let session_manager = SessionManager::create();
 
     // MySQL handler.
     {

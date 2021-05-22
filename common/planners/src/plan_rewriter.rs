@@ -177,8 +177,8 @@ pub trait PlanRewriter<'plan> {
 
     fn rewrite_explain(&mut self, plan: &'plan ExplainPlan) -> Result<PlanNode> {
         Ok(PlanNode::Explain(ExplainPlan {
-            typ: plan.typ.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            typ: plan.typ,
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
@@ -249,7 +249,7 @@ impl RewriteHelper {
                     let hash_expr = format!("{:?}", expr);
 
                     if hash_result != hash_expr {
-                        return Result::Err(ErrorCodes::SyntexException(format!(
+                        return Result::Err(ErrorCodes::SyntaxException(format!(
                             "Planner Error: Different expressions with the same alias {}",
                             alias
                         )));
@@ -274,7 +274,7 @@ impl RewriteHelper {
 
                 // x + 1 --> y, y + 1 --> x
                 if data.inside_aliases.contains(field) {
-                    return Result::Err(ErrorCodes::SyntexException(format!(
+                    return Result::Err(ErrorCodes::SyntaxException(format!(
                         "Planner Error: Cyclic aliases: {}",
                         field
                     )));
@@ -323,7 +323,7 @@ impl RewriteHelper {
 
             ExpressionAction::Alias(alias, plan) => {
                 if data.inside_aliases.contains(alias) {
-                    return Result::Err(ErrorCodes::SyntexException(format!(
+                    return Result::Err(ErrorCodes::SyntaxException(format!(
                         "Planner Error: Cyclic aliases: {}",
                         alias
                     )));

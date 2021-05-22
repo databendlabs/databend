@@ -17,7 +17,8 @@ use common_arrow::arrow::datatypes::{SchemaRef, Schema, Field};
 use crate::pipelines::processors::{Pipeline, PipelineBuilder, IProcessor};
 use crate::configs::Config;
 use crate::clusters::ClusterRef;
-use crate::sessions::SessionRef;
+use crate::sessions::SessionManager;
+use crate::sessions::SessionManagerRef;
 use std::sync::Arc;
 use tokio_stream::StreamExt;
 use std::convert::TryInto;
@@ -58,7 +59,7 @@ pub struct DispatcherState {
 struct ServerState {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionRef,
+    session_manager: SessionManagerRef,
 }
 
 pub struct FlightDispatcher {
@@ -230,7 +231,7 @@ impl FlightDispatcher {
         Ok(())
     }
 
-    pub fn new(conf: Config, cluster: ClusterRef, session_manager: SessionRef) -> FlightDispatcher {
+    pub fn new(conf: Config, cluster: ClusterRef, session_manager: SessionManagerRef) -> FlightDispatcher {
         FlightDispatcher {
             state: Arc::new(ServerState {
                 conf: conf,

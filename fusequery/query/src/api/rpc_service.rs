@@ -9,17 +9,17 @@ use tonic::transport::Server;
 use crate::api::rpc::{FuseQueryService, FlightDispatcher};
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::sessions::SessionRef;
+use crate::sessions::SessionManagerRef;
 use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
 
 pub struct RpcService {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionRef
+    session_manager: SessionManagerRef
 }
 
 impl RpcService {
-    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionRef) -> Self {
+    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionManagerRef) -> Self {
         Self {
             conf,
             cluster,
