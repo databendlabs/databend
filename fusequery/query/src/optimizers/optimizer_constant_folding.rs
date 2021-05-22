@@ -2,28 +2,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
 use common_arrow::arrow::datatypes::DataType;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_planners::EmptyPlan;
 use common_planners::ExpressionAction;
 use common_planners::ExpressionPlan;
 use common_planners::PlanNode;
+use common_planners::PlanRewriter;
 
 use crate::optimizers::IOptimizer;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ConstantFoldingOptimizer {}
-
-impl ConstantFoldingOptimizer {
-    pub fn create(_ctx: FuseQueryContextRef) -> Self {
-        ConstantFoldingOptimizer {}
-    }
-}
 
 fn is_boolean_type(schema: &DataSchemaRef, expr: &ExpressionAction) -> bool {
     if let DataType::Boolean = expr.to_data_field(schema).unwrap().data_type() {
@@ -31,6 +22,8 @@ fn is_boolean_type(schema: &DataSchemaRef, expr: &ExpressionAction) -> bool {
     }
     false
 }
+
+struct ConstantFoldingImpl {}
 
 fn constant_folding(schema: &DataSchemaRef, expr: ExpressionAction) -> Result<ExpressionAction> {
     let new_expr = match expr {
@@ -115,46 +108,40 @@ fn constant_folding(schema: &DataSchemaRef, expr: ExpressionAction) -> Result<Ex
     Ok(new_expr)
 }
 
+impl<'plan> PlanRewriter<'plan> for ConstantFoldingImpl {
+    fn rewrite_expression(&mut self, plan: &ExpressionPlan) -> Result<PlanNode> {
+        let mut new_exprs = Vec::new();
+        let schema = plan.schema();
+
+        for e in plan.exprs.as_slice() {
+            let new_expr = constant_folding(&schema, e.clone())?;
+            new_exprs.push(new_expr);
+        }
+        let mut new_plan = plan.clone();
+        new_plan.exprs = new_exprs;
+        Ok(PlanNode::Expression(new_plan))
+    }
+}
+
+impl ConstantFoldingImpl {
+    pub fn new() -> ConstantFoldingImpl {
+        ConstantFoldingImpl {}
+    }
+}
+
 impl IOptimizer for ConstantFoldingOptimizer {
     fn name(&self) -> &str {
         "ConstantFolding"
     }
 
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
-        let mut rewritten_node = PlanNode::Empty(EmptyPlan {
-            schema: Arc::new(DataSchema::empty())
-        });
+        let mut visitor = ConstantFoldingImpl::new();
+        visitor.rewrite_plan_node(plan)
+    }
+}
 
-        plan.walk_postorder(|node| -> Result<bool> {
-            if let PlanNode::Expression(ExpressionPlan {
-                exprs,
-                schema: _,
-                input: _,
-                desc
-            }) = node
-            {
-                let mut new_exprs = Vec::new();
-                let schema = node.schema();
-                for e in exprs {
-                    let new_expr = constant_folding(&schema, e.clone())?;
-                    new_exprs.push(new_expr);
-                }
-                let mut new_node = PlanNode::Expression(ExpressionPlan {
-                    exprs: new_exprs,
-                    schema: schema,
-                    input: Arc::from(PlanNode::Empty(EmptyPlan::create())),
-                    desc: desc.to_string()
-                });
-                new_node.set_input(&rewritten_node);
-                rewritten_node = new_node;
-            } else {
-                let mut clone_node = node.clone();
-                clone_node.set_input(&rewritten_node);
-                rewritten_node = clone_node;
-            }
-            Ok(true)
-        })?;
-
-        Ok(rewritten_node)
+impl ConstantFoldingOptimizer {
+    pub fn create(_ctx: FuseQueryContextRef) -> Self {
+        ConstantFoldingOptimizer {}
     }
 }
