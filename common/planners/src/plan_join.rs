@@ -17,8 +17,8 @@ pub struct JoinPlan {
 
     /// The conjunctions of join condition
     pub conditions: Vec<ExpressionAction>,
-    pub left_child: Arc<PlanNode>,
-    pub right_child: Arc<PlanNode>
+    pub left_input: Arc<PlanNode>,
+    pub right_input: Arc<PlanNode>
 }
 
 impl JoinPlan {
@@ -26,28 +26,28 @@ impl JoinPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(
             DataSchema::try_merge(vec![
-                (*self.left_child.schema()).clone(),
-                (*self.right_child.schema()).clone(),
+                (*self.left_input.schema()).clone(),
+                (*self.right_input.schema()).clone(),
             ])
             .unwrap()
         )
     }
 
     pub fn get_left_child(&self) -> Arc<PlanNode> {
-        self.left_child.clone()
+        self.left_input.clone()
     }
 
     pub fn get_right_child(&self) -> Arc<PlanNode> {
-        self.right_child.clone()
+        self.right_input.clone()
     }
 
     pub fn set_left_child(&mut self, child: &PlanNode) -> Result<()> {
-        self.left_child = Arc::new(child.clone());
+        self.left_input = Arc::new(child.clone());
         Ok(())
     }
 
     pub fn set_right_child(&mut self, child: &PlanNode) -> Result<()> {
-        self.right_child = Arc::new(child.clone());
+        self.right_input = Arc::new(child.clone());
         Ok(())
     }
 }

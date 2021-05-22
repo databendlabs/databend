@@ -21,20 +21,14 @@ use crate::pipelines::transforms::transform_sort_partial::get_sort_descriptions;
 pub struct SortMergeTransform {
     schema: DataSchemaRef,
     exprs: Vec<ExpressionAction>,
-    limit: Option<usize>,
     input: Arc<dyn IProcessor>
 }
 
 impl SortMergeTransform {
-    pub fn try_create(
-        schema: DataSchemaRef,
-        exprs: Vec<ExpressionAction>,
-        limit: Option<usize>
-    ) -> Result<Self> {
+    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionAction>) -> Result<Self> {
         Ok(SortMergeTransform {
             schema,
             exprs,
-            limit,
             input: Arc::new(EmptyProcessor::create())
         })
     }
@@ -73,7 +67,7 @@ impl IProcessor for SortMergeTransform {
             _ => vec![DataBlock::merge_sort_blocks(
                 &blocks,
                 &sort_columns_descriptions,
-                self.limit
+                None
             )?]
         };
 

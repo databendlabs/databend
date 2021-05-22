@@ -25,8 +25,8 @@ use common_planners::StageState;
 use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
 use sqlparser::ast::FunctionArg;
-use sqlparser::ast::JoinConstraint;
-use sqlparser::ast::JoinOperator;
+// use sqlparser::ast::JoinConstraint;
+// use sqlparser::ast::JoinOperator;
 use sqlparser::ast::OrderByExpr;
 use sqlparser::ast::Statement;
 
@@ -321,13 +321,11 @@ impl PlanParser {
         for table_reference in table_references {
             joins.push(self.plan_join(table_reference)?);
         }
-        joins
-            .into_iter()
-            .map(|v| Ok(v))
-            .reduce(|acc, right| {
-                PlanBuilder::join(&PlanBuilder::from(&acc?), &[], &right?)?.build()
-            })
-            .unwrap()
+        let mut builder = PlanBuilder::from(&joins[0]);
+        for i in 1..joins.len() {
+            builder = builder.join(&[], &joins[i])?;
+        }
+        builder.build()
     }
 
     fn plan_join(&self, table_reference: &sqlparser::ast::TableWithJoins) -> Result<PlanNode> {
@@ -337,8 +335,7 @@ impl PlanParser {
         let mut schema = (*joined_table.schema()).clone();
         for join in table_reference.joins.iter() {
             let right_table = self.create_relation(&join.relation)?;
-            schema = DataSchema::try_merge(vec![schema, (*right_table.schema()).clone()])
-                .map_err(|e| ErrorCodes::from_arrow(e))?;
+            schema = DataSchema::try_merge(vec![schema, (*right_table.schema()).clone()])?;
             // Note that schema of current right table and merged left tables is enough to build condition expression.
             // let condition = match &join.join_operator {
             //     JoinOperator::Inner(constraint) => match constraint {

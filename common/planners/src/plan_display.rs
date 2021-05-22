@@ -157,6 +157,12 @@ impl PlanNode {
                             write!(f, " if_exists:{:}", plan.if_exists)?;
                             Ok(false)
                         }
+                        PlanNode::Join(plan) => {
+                            write!(f, "Join\n")?;
+                            write!(f, "{:?}\n", &plan.left_input)?;
+                            write!(f, "{:?}\n", &plan.right_input)?;
+                            Ok(false)
+                        }
                         _ => Ok(false),
                     }
                 })

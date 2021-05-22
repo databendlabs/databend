@@ -15,20 +15,17 @@ use crate::SendableDataBlockStream;
 
 pub struct SortStream {
     input: SendableDataBlockStream,
-    sort_columns_descriptions: Vec<SortColumnDescription>,
-    limit: Option<usize>
+    sort_columns_descriptions: Vec<SortColumnDescription>
 }
 
 impl SortStream {
     pub fn try_create(
         input: SendableDataBlockStream,
-        sort_columns_descriptions: Vec<SortColumnDescription>,
-        limit: Option<usize>
+        sort_columns_descriptions: Vec<SortColumnDescription>
     ) -> Result<Self> {
         Ok(SortStream {
             input,
-            sort_columns_descriptions,
-            limit
+            sort_columns_descriptions
         })
     }
 }
@@ -44,7 +41,7 @@ impl Stream for SortStream {
             Some(Ok(v)) => Some(DataBlock::sort_block(
                 &v,
                 &self.sort_columns_descriptions,
-                self.limit
+                None
             )),
             other => other
         })

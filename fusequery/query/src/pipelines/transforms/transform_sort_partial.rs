@@ -20,20 +20,14 @@ use crate::pipelines::processors::IProcessor;
 pub struct SortPartialTransform {
     schema: DataSchemaRef,
     exprs: Vec<ExpressionAction>,
-    limit: Option<usize>,
     input: Arc<dyn IProcessor>
 }
 
 impl SortPartialTransform {
-    pub fn try_create(
-        schema: DataSchemaRef,
-        exprs: Vec<ExpressionAction>,
-        limit: Option<usize>
-    ) -> Result<Self> {
+    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionAction>) -> Result<Self> {
         Ok(SortPartialTransform {
             schema,
             exprs,
-            limit,
             input: Arc::new(EmptyProcessor::create())
         })
     }
@@ -61,8 +55,7 @@ impl IProcessor for SortPartialTransform {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(SortStream::try_create(
             self.input.execute().await?,
-            get_sort_descriptions(&self.schema, &self.exprs)?,
-            self.limit
+            get_sort_descriptions(&self.schema, &self.exprs)?
         )?))
     }
 }

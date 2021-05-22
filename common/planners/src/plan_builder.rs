@@ -243,8 +243,8 @@ impl PlanBuilder {
     pub fn join(&self, conditions: &[ExpressionAction], right: &PlanNode) -> Result<Self> {
         Ok(Self::from(&PlanNode::Join(JoinPlan {
             conditions: Vec::from(conditions),
-            left_child: Arc::new(self.plan.clone()),
-            right_child: Arc::new(PlanBuilder::from(right).plan.clone())
+            left_input: Arc::new(self.plan.clone()),
+            right_input: Arc::new(PlanBuilder::from(right).plan.clone())
         })))
     }
 
