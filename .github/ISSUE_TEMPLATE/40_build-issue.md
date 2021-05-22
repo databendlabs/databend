@@ -1,6 +1,6 @@
 ---
 name: Build issue
-about: Report failed datafuse build from master
+about: Report failed Datafuse build from master
 title: ''
 labels: build
 assignees: ''
@@ -23,4 +23,4 @@ $ rustc --version
 $ cargo --version
 ```
 
-**FuseQuery git version**
+**Datafuse git version**

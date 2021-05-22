@@ -23,7 +23,7 @@ use crate::configs::Config;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::FuseQueryContextRef;
-use crate::sessions::SessionRef;
+use crate::sessions::SessionManagerRef;
 use crate::sql::PlanParser;
 
 struct Session {
@@ -117,11 +117,11 @@ impl<W: io::Write> MysqlShim<W> for Session {
 pub struct MySQLHandler {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionRef
+    session_manager: SessionManagerRef
 }
 
 impl MySQLHandler {
-    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionRef) -> Self {
+    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionManagerRef) -> Self {
         MySQLHandler {
             conf,
             cluster,

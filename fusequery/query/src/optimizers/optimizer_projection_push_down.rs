@@ -74,15 +74,15 @@ impl<'plan> PlanRewriter<'plan> for ProjectionPushDownImpl {
 
     fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
         self.get_projected_schema(plan.schema.as_ref())
-            .and_then(|projected_schema| {
-                Ok(PlanNode::ReadSource(ReadDataSourcePlan {
+            .map(|projected_schema| {
+                PlanNode::ReadSource(ReadDataSourcePlan {
                     db: plan.db.to_string(),
                     table: plan.table.to_string(),
                     schema: projected_schema,
                     partitions: plan.partitions.clone(),
                     statistics: plan.statistics.clone(),
                     description: plan.description.to_string()
-                }))
+                })
             })
     }
 
