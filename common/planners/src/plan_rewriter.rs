@@ -173,7 +173,7 @@ pub trait PlanRewriter<'plan> {
 
     fn rewrite_explain(&mut self, plan: &'plan ExplainPlan) -> Result<PlanNode> {
         Ok(PlanNode::Explain(ExplainPlan {
-            typ: plan.typ.clone(),
+            typ: plan.typ,
             input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
