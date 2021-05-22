@@ -76,7 +76,13 @@ impl ActionHandler {
         match action {
             StoreDoAction::ReadPlan(_) => Err(Status::internal("Store read plan unimplemented")),
             StoreDoAction::CreateDatabase(a) => self.create_db(a).await,
+            StoreDoAction::DropDatabase(_) => {
+                Err(Status::internal("Store drop database unimplemented"))
+            }
             StoreDoAction::CreateTable(a) => self.create_table(a).await,
+            StoreDoAction::DropTable(_) => {
+                Err(Status::internal("Store drop database unimplemented"))
+            }
             StoreDoAction::GetTable(a) => self.get_table(a).await
         }
     }

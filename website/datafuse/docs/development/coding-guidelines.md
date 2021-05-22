@@ -64,11 +64,3 @@ $ make test
 $ cd tests
 $ ./fuse-test
 ```
-## Code Coverage
-
-```
-$ make coverage
-```
-You should now be able to view the code coverage report:
-
-open ./target/debug/coverage/index.html

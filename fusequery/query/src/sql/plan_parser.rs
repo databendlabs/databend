@@ -13,6 +13,8 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
+use common_planners::DropDatabasePlan;
+use common_planners::DropTablePlan;
 use common_planners::ExplainPlan;
 use common_planners::ExpressionAction;
 use common_planners::PlanBuilder;
@@ -30,8 +32,10 @@ use crate::datasources::ITable;
 use crate::functions::ContextFunction;
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
+use crate::sql::sql_statement::DfDropDatabase;
 use crate::sql::sql_statement::DfUseDatabase;
 use crate::sql::DfCreateDatabase;
+use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
@@ -52,7 +56,7 @@ impl PlanParser {
                 .first()
                 .map(|statement| self.statement_to_plan(&statement))
                 .unwrap_or_else(|| {
-                    Result::Err(ErrorCodes::SyntexException("Only support single query"))
+                    Result::Err(ErrorCodes::SyntaxException("Only support single query"))
                 })
         })
     }
@@ -65,8 +69,10 @@ impl PlanParser {
                 self.build_from_sql("SELECT name FROM system.databases ORDER BY name")
             }
             DfStatement::CreateDatabase(v) => self.sql_create_database_to_plan(&v),
-            DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(&v),
+            DfStatement::DropDatabase(v) => self.sql_drop_database_to_plan(&v),
             DfStatement::CreateTable(v) => self.sql_create_table_to_plan(&v),
+            DfStatement::DropTable(v) => self.sql_drop_table_to_plan(&v),
+            DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(&v),
 
             // TODO: support like and other filters in show queries
             DfStatement::ShowTables(_) => self.build_from_sql(
@@ -87,7 +93,7 @@ impl PlanParser {
             Statement::SetVariable {
                 variable, value, ..
             } => self.set_variable_to_plan(variable, value),
-            _ => Result::Err(ErrorCodes::SyntexException(format!(
+            _ => Result::Err(ErrorCodes::SyntaxException(format!(
                 "Unsupported statement {:?}",
                 statement
             )))
@@ -103,11 +109,12 @@ impl PlanParser {
         }))
     }
 
+    /// DfCreateDatabase to plan.
     pub fn sql_create_database_to_plan(&self, create: &DfCreateDatabase) -> Result<PlanNode> {
         if create.name.0.is_empty() {
-            return Result::Err(ErrorCodes::SyntexException("Create database name is empty"));
+            return Result::Err(ErrorCodes::SyntaxException("Create database name is empty"));
         }
-        let create_database_name = create.name.0[0].value.clone();
+        let name = create.name.0[0].value.clone();
 
         let mut options = HashMap::new();
         for p in create.options.iter() {
@@ -116,9 +123,22 @@ impl PlanParser {
 
         Ok(PlanNode::CreateDatabase(CreateDatabasePlan {
             if_not_exists: create.if_not_exists,
-            db: create_database_name,
+            db: name,
             engine: create.engine,
             options
+        }))
+    }
+
+    /// DfDropDatabase to plan.
+    pub fn sql_drop_database_to_plan(&self, drop: &DfDropDatabase) -> Result<PlanNode> {
+        if drop.name.0.is_empty() {
+            return Result::Err(ErrorCodes::SyntaxException("Drop database name is empty"));
+        }
+        let name = drop.name.0[0].value.clone();
+
+        Ok(PlanNode::DropDatabase(DropDatabasePlan {
+            if_exists: drop.if_exists,
+            db: name
         }))
     }
 
@@ -130,7 +150,7 @@ impl PlanParser {
     pub fn sql_create_table_to_plan(&self, create: &DfCreateTable) -> Result<PlanNode> {
         let mut db = self.ctx.get_current_database();
         if create.name.0.is_empty() {
-            return Result::Err(ErrorCodes::SyntexException("Create table name is empty"));
+            return Result::Err(ErrorCodes::SyntaxException("Create table name is empty"));
         }
         let mut table = create.name.0[0].value.clone();
         if create.name.0.len() > 1 {
@@ -167,6 +187,24 @@ impl PlanParser {
             schema,
             engine: create.engine,
             options
+        }))
+    }
+
+    /// DfDropTable to plan.
+    pub fn sql_drop_table_to_plan(&self, drop: &DfDropTable) -> Result<PlanNode> {
+        let mut db = self.ctx.get_current_database();
+        if drop.name.0.is_empty() {
+            return Result::Err(ErrorCodes::SyntaxException("Drop table name is empty"));
+        }
+        let mut table = drop.name.0[0].value.clone();
+        if drop.name.0.len() > 1 {
+            db = table;
+            table = drop.name.0[1].value.clone();
+        }
+        Ok(PlanNode::DropTable(DropTablePlan {
+            if_exists: drop.if_exists,
+            db,
+            table
         }))
     }
 
@@ -272,7 +310,7 @@ impl PlanParser {
         match from.len() {
             0 => self.plan_with_dummy_source(),
             1 => self.plan_table_with_joins(&from[0]),
-            _ => Result::Err(ErrorCodes::SyntexException("Cannot support JOIN clause"))
+            _ => Result::Err(ErrorCodes::SyntaxException("Cannot support JOIN clause"))
         }
     }
 
@@ -396,7 +434,7 @@ impl PlanParser {
                     last_field,
                     fractional_seconds_precision
                 ),
-                other => Result::Err(ErrorCodes::SyntexException(format!(
+                other => Result::Err(ErrorCodes::SyntaxException(format!(
                     "Unsupported value expression: {}, type: {:?}",
                     value, other
                 )))
@@ -486,7 +524,7 @@ impl PlanParser {
                     args
                 })
             }
-            other => Result::Err(ErrorCodes::SyntexException(format!(
+            other => Result::Err(ErrorCodes::SyntaxException(format!(
                 "Unsupported expression: {}, type: {:?}",
                 expr, other
             )))
@@ -609,7 +647,7 @@ impl PlanParser {
                     .sql_to_rex(&limit_expr, &input.schema())
                     .and_then(|limit_expr| match limit_expr {
                         ExpressionAction::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
-                        _ => Err(ErrorCodes::SyntexException(
+                        _ => Err(ErrorCodes::SyntaxException(
                             "Unexpected expression for LIMIT clause"
                         ))
                     })?;

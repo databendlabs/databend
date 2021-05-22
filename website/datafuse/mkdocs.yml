@@ -132,8 +132,13 @@ nav:
     - SQL Reference:
       - Data Definition Language:
           - CREATE DATABASE: sqlstatement/data-definition-language-ddl/ddl-create-database.md
+          - DROP DATABASE: sqlstatement/data-definition-language-ddl/ddl-drop-database.md
       - Data Manipulation Language:
           - SELECT: sqlstatement/data-manipulation-language-dml/dml-select.md
+      - Show Commands:
+          - SHOW DATABASES: sqlstatement/show-commands/show-databases.md
+          - SHOW TABLES: sqlstatement/show-commands/show-tables.md
+      - System Tables: system/system-tables.md
       - Aggregate Functions:
           - AVG: sqlstatement/aggregate-functions/aggregate-avg.md
           - COUNT: sqlstatement/aggregate-functions/aggregate-count.md
@@ -142,9 +147,8 @@ nav:
           - SUM: sqlstatement/aggregate-functions/aggregate-sum.md
       - Information Functions:
           - DATABASE: sqlstatement/information-functions/database.md
-      - Show Commands:
-          - SHOW DATABASE: sqlstatement/show-commands/show-databases.md
-      - System Tables: system/system-tables.md
+      - String Functions:
+          - SUBSTRING: sqlstatement/string-functions/substring.md
   - RFCs:
       - FuseQuery Join: rfcs/query/2021-05-01-join-framework-design.md
       - FuseStore Design: rfcs/store/2021-04-22-store-design.md

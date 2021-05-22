@@ -69,7 +69,7 @@ build_exceptions! {
     UnImplement(2),
     UnknownDatabase(3),
     UnknownSetting(4),
-    SyntexException(5),
+    SyntaxException(5),
     BadArguments(6),
     IllegalDataType(7),
     UnknownFunction(8),
@@ -149,8 +149,8 @@ impl Debug for OtherErrors {
     }
 }
 
-impl ErrorCodes {
-    pub fn from_anyhow(error: anyhow::Error) -> ErrorCodes {
+impl From<anyhow::Error> for ErrorCodes {
+    fn from(error: anyhow::Error) -> Self {
         ErrorCodes {
             code: 1002,
             display_text: String::from(""),
@@ -158,44 +158,39 @@ impl ErrorCodes {
             backtrace: None
         }
     }
+}
 
-    pub fn from_parse_int(error: std::num::ParseIntError) -> ErrorCodes {
-        ErrorCodes {
-            code: 1002,
-            display_text: format!("{}", error),
-            cause: None,
-            backtrace: Some(Backtrace::new())
-        }
+impl From<std::num::ParseIntError> for ErrorCodes {
+    fn from(error: std::num::ParseIntError) -> Self {
+        ErrorCodes::from_std_error(error)
     }
+}
 
-    pub fn from_parse_float(error: std::num::ParseFloatError) -> ErrorCodes {
-        ErrorCodes {
-            code: 1002,
-            display_text: format!("{}", error),
-            cause: None,
-            backtrace: Some(Backtrace::new())
-        }
+impl From<std::num::ParseFloatError> for ErrorCodes {
+    fn from(error: std::num::ParseFloatError) -> Self {
+        ErrorCodes::from_std_error(error)
     }
+}
 
-    pub fn from_arrow(error: common_arrow::arrow::error::ArrowError) -> ErrorCodes {
-        ErrorCodes {
-            code: 1002,
-            display_text: format!("{}", error),
-            cause: None,
-            backtrace: Some(Backtrace::new())
-        }
+impl From<common_arrow::arrow::error::ArrowError> for ErrorCodes {
+    fn from(error: common_arrow::arrow::error::ArrowError) -> Self {
+        ErrorCodes::from_std_error(error)
     }
+}
 
-    pub fn from_serde(error: serde_json::Error) -> ErrorCodes {
-        ErrorCodes {
-            code: 1002,
-            display_text: format!("{}", error),
-            cause: None,
-            backtrace: Some(Backtrace::new())
-        }
+impl From<serde_json::Error> for ErrorCodes {
+    fn from(error: serde_json::Error) -> Self {
+        ErrorCodes::from_std_error(error)
     }
+}
 
-    pub fn from_parser(error: sqlparser::parser::ParserError) -> ErrorCodes {
+impl From<sqlparser::parser::ParserError> for ErrorCodes {
+    fn from(error: sqlparser::parser::ParserError) -> Self {
+        ErrorCodes::from_std_error(error)
+    }
+}
+impl ErrorCodes {
+    pub fn from_std_error<T: std::error::Error>(error: T) -> Self {
         ErrorCodes {
             code: 1002,
             display_text: format!("{}", error),

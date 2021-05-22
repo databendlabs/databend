@@ -4,13 +4,14 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
+use crate::DropDatabasePlan;
+use crate::DropTablePlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::ExpressionPlan;
@@ -42,8 +43,10 @@ pub enum PlanNode {
     ReadSource(ReadDataSourcePlan),
     Select(SelectPlan),
     Explain(ExplainPlan),
-    CreateTable(CreateTablePlan),
     CreateDatabase(CreateDatabasePlan),
+    DropDatabase(DropDatabasePlan),
+    CreateTable(CreateTablePlan),
+    DropTable(DropTablePlan),
     UseDatabase(UseDatabasePlan),
     SetVariable(SettingPlan)
 }
@@ -66,7 +69,9 @@ impl PlanNode {
             PlanNode::Select(v) => v.schema(),
             PlanNode::Explain(v) => v.schema(),
             PlanNode::CreateDatabase(v) => v.schema(),
+            PlanNode::DropDatabase(v) => v.schema(),
             PlanNode::CreateTable(v) => v.schema(),
+            PlanNode::DropTable(v) => v.schema(),
             PlanNode::SetVariable(v) => v.schema(),
             PlanNode::Sort(v) => v.schema(),
             PlanNode::UseDatabase(v) => v.schema()
@@ -88,49 +93,35 @@ impl PlanNode {
             PlanNode::ReadSource(_) => "ReadSourcePlan",
             PlanNode::Select(_) => "SelectPlan",
             PlanNode::Explain(_) => "ExplainPlan",
-            PlanNode::CreateTable(_) => "CreateTablePlan",
             PlanNode::CreateDatabase(_) => "CreateDatabasePlan",
+            PlanNode::DropDatabase(_) => "DropDatabasePlan",
+            PlanNode::CreateTable(_) => "CreateTablePlan",
+            PlanNode::DropTable(_) => "DropTablePlan",
             PlanNode::SetVariable(_) => "SetVariablePlan",
             PlanNode::Sort(_) => "SortPlan",
             PlanNode::UseDatabase(_) => "UseDatabasePlan"
         }
     }
 
-    pub fn input(&self) -> Arc<PlanNode> {
+    pub fn inputs(&self) -> Vec<Arc<PlanNode>> {
         match self {
-            PlanNode::Stage(v) => v.input(),
-            PlanNode::Projection(v) => v.input(),
-            PlanNode::Expression(v) => v.input(),
-            PlanNode::AggregatorPartial(v) => v.input(),
-            PlanNode::AggregatorFinal(v) => v.input(),
-            PlanNode::Filter(v) => v.input(),
-            PlanNode::Having(v) => v.input(),
-            PlanNode::Limit(v) => v.input(),
-            PlanNode::Explain(v) => v.input(),
-            PlanNode::Select(v) => v.input(),
-            PlanNode::Sort(v) => v.input(),
+            PlanNode::Stage(v) => vec![v.input.clone()],
+            PlanNode::Projection(v) => vec![v.input.clone()],
+            PlanNode::Expression(v) => vec![v.input.clone()],
+            PlanNode::AggregatorPartial(v) => vec![v.input.clone()],
+            PlanNode::AggregatorFinal(v) => vec![v.input.clone()],
+            PlanNode::Filter(v) => vec![v.input.clone()],
+            PlanNode::Having(v) => vec![v.input.clone()],
+            PlanNode::Limit(v) => vec![v.input.clone()],
+            PlanNode::Explain(v) => vec![v.input.clone()],
+            PlanNode::Select(v) => vec![v.input.clone()],
+            PlanNode::Sort(v) => vec![v.input.clone()],
 
-            _ => Arc::new(PlanNode::Empty(EmptyPlan {
-                schema: Arc::new(DataSchema::empty())
-            }))
+            _ => vec![]
         }
     }
 
-    pub fn set_input(&mut self, node: &PlanNode) {
-        match self {
-            PlanNode::Stage(v) => v.set_input(node),
-            PlanNode::Projection(v) => v.set_input(node),
-            PlanNode::Expression(v) => v.set_input(node),
-            PlanNode::AggregatorPartial(v) => v.set_input(node),
-            PlanNode::AggregatorFinal(v) => v.set_input(node),
-            PlanNode::Filter(v) => v.set_input(node),
-            PlanNode::Having(v) => v.set_input(node),
-            PlanNode::Limit(v) => v.set_input(node),
-            PlanNode::Explain(v) => v.set_input(node),
-            PlanNode::Select(v) => v.set_input(node),
-            PlanNode::Sort(v) => v.set_input(node),
-
-            _ => {}
-        }
+    pub fn input(&self, n: usize) -> Arc<PlanNode> {
+        self.inputs()[n].clone()
     }
 }

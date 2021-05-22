@@ -6,6 +6,8 @@ use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
+use crate::DropDatabasePlan;
+use crate::DropTablePlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::ExpressionPlan;
@@ -59,7 +61,7 @@ use crate::UseDatabasePlan;
 /// impl<'plan> PlanVisitor<'plan> for PreOrder {
 ///     fn visit_plan_node(&mut self, plan: &PlanNode) {
 ///         self.process(plan); // Process current node first
-///         PlanVisitor::visit_plan_node(self, plan.input().as_ref()); // Then process children
+///         PlanVisitor::visit_plan_node(self, plan.child().as_ref()); // Then process children
 ///     }
 /// }
 /// ```
@@ -77,8 +79,10 @@ pub trait PlanVisitor<'plan> {
             PlanNode::ReadSource(plan) => self.visit_read_data_source(plan),
             PlanNode::Select(plan) => self.visit_select(plan),
             PlanNode::Explain(plan) => self.visit_explain(plan),
-            PlanNode::CreateTable(plan) => self.visit_create_table(plan),
             PlanNode::CreateDatabase(plan) => self.visit_create_database(plan),
+            PlanNode::DropDatabase(plan) => self.visit_drop_database(plan),
+            PlanNode::CreateTable(plan) => self.visit_create_table(plan),
+            PlanNode::DropTable(plan) => self.visit_drop_table(plan),
             PlanNode::UseDatabase(plan) => self.visit_use_database(plan),
             PlanNode::SetVariable(plan) => self.visit_set_variable(plan),
             PlanNode::Stage(plan) => self.visit_stage(plan),
@@ -137,9 +141,13 @@ pub trait PlanVisitor<'plan> {
         self.visit_plan_node(plan.input.as_ref());
     }
 
+    fn visit_create_database(&mut self, _: &'plan CreateDatabasePlan) {}
+
+    fn visit_drop_database(&mut self, _: &'plan DropDatabasePlan) {}
+
     fn visit_create_table(&mut self, _: &'plan CreateTablePlan) {}
 
-    fn visit_create_database(&mut self, _: &'plan CreateDatabasePlan) {}
+    fn visit_drop_table(&mut self, _: &'plan DropTablePlan) {}
 
     fn visit_use_database(&mut self, _: &'plan UseDatabasePlan) {}
 

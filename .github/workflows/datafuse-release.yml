@@ -49,12 +49,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          override: true
-          components: rustfmt
-          target: ${{ matrix.target }}
+      - name: Rust setup
+        run: |
+          bash ./scripts/setup/dev_setup.sh
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
@@ -76,12 +73,6 @@ jobs:
           echo ::set-output name=current_version::${GITHUB_REF#refs/tags/v}
         shell: bash
 
-      - name: Get CHANGELOG.md entry
-        id: changelog_reader
-        uses: mindsers/changelog-reader-action@v1
-        with:
-          version: ${{ steps.tag_name.outputs.current_version }}
-          path: ./CHANGELOG.md
 
       - name: Release
         uses: svenstaro/upload-release-action@v2

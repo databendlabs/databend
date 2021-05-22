@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[cfg(test)]
-mod optimizer_alias_push_down_test;
-#[cfg(test)]
 mod optimizer_projection_push_down_test;
 
 mod optimizer;

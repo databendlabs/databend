@@ -10,6 +10,8 @@ use common_planners::PlanNode;
 
 use crate::interpreters::CreateDatabaseInterpreter;
 use crate::interpreters::CreateTableInterpreter;
+use crate::interpreters::DropDatabaseInterpreter;
+use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::ExplainInterpreter;
 use crate::interpreters::IInterpreter;
 use crate::interpreters::SelectInterpreter;
@@ -24,8 +26,10 @@ impl InterpreterFactory {
         match plan {
             PlanNode::Select(v) => SelectInterpreter::try_create(ctx, v),
             PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx, v),
-            PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx, v),
             PlanNode::CreateDatabase(v) => CreateDatabaseInterpreter::try_create(ctx, v),
+            PlanNode::DropDatabase(v) => DropDatabaseInterpreter::try_create(ctx, v),
+            PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx, v),
+            PlanNode::DropTable(v) => DropTableInterpreter::try_create(ctx, v),
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx, v),
             _ => Result::Err(ErrorCodes::UnknownTypeOfQuery(format!(

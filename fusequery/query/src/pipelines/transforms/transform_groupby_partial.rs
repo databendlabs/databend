@@ -16,7 +16,6 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_functions::IFunction;
 use common_infallible::RwLock;
@@ -216,14 +215,10 @@ impl IProcessor for GroupByPartialTransform {
         for (key, funcs) in groups.iter() {
             for (idx, func) in funcs.iter().enumerate() {
                 let states = DataValue::Struct(func.accumulate_result()?);
-                let ser = serde_json::to_string(&states).map_err(ErrorCodes::from_serde)?;
-                builders[idx]
-                    .append_value(ser.as_str())
-                    .map_err(ErrorCodes::from_arrow)?;
+                let ser = serde_json::to_string(&states)?;
+                builders[idx].append_value(ser.as_str())?;
             }
-            group_key_builder
-                .append_value(key)
-                .map_err(ErrorCodes::from_arrow)?;
+            group_key_builder.append_value(key)?;
         }
 
         let mut columns: Vec<DataArrayRef> = Vec::with_capacity(fields.len());

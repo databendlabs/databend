@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+// Disabled until https://github.com/datafuselabs/datafuse/pull/550 finished
+/*
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_select_interpreter() -> anyhow::Result<()> {
     use common_planners::*;
@@ -53,3 +55,4 @@ async fn test_select_interpreter() -> anyhow::Result<()> {
 
     Ok(())
 }
+*/

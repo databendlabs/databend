@@ -18,9 +18,9 @@ use common_planners::ExpressionAction;
 use common_planners::FilterPlan;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
-use common_planners::PlanVisitor;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
+use common_planners::RewriteHelper;
 use common_planners::SortPlan;
 
 use crate::optimizers::IOptimizer;
@@ -30,109 +30,52 @@ pub struct ProjectionPushDownOptimizer {}
 
 struct ProjectionPushDownImpl {
     pub required_columns: HashSet<String>,
-    pub new_plan: PlanNode,
-    pub has_projection: bool,
-    pub state: Result<()>
+    pub has_projection: bool
 }
 
-impl<'plan> PlanVisitor<'plan> for ProjectionPushDownImpl {
-    fn visit_plan_node(&mut self, plan: &PlanNode) {
-        match plan {
-            PlanNode::AggregatorPartial(plan) => self.visit_aggregate_partial(plan),
-            PlanNode::AggregatorFinal(plan) => self.visit_aggregate_final(plan),
-            PlanNode::Empty(plan) => self.visit_empty(plan),
-            PlanNode::Projection(plan) => self.visit_projection(plan),
-            PlanNode::Filter(plan) => self.visit_filter(plan),
-            PlanNode::Sort(plan) => self.visit_sort(plan),
-            PlanNode::ReadSource(plan) => self.visit_read_data_source(plan),
-            _ => self.visit(plan)
-        }
-    }
-
-    fn visit_projection(&mut self, plan: &ProjectionPlan) {
-        if self.state.is_err() {
-            return;
-        }
-        if let Result::Err(e) = self.collect_column_names_from_expr_vec(plan.expr.as_slice()) {
-            self.state = Result::Err(e);
-            return;
-        }
+impl<'plan> PlanRewriter<'plan> for ProjectionPushDownImpl {
+    fn rewrite_projection(&mut self, plan: &ProjectionPlan) -> Result<PlanNode> {
+        self.collect_column_names_from_expr_vec(plan.expr.as_slice())?;
         self.has_projection = true;
-        self.visit_plan_node(&plan.input);
         let mut new_plan = plan.clone();
-        new_plan.set_input(&self.new_plan);
-        self.new_plan = PlanNode::Projection(new_plan);
+        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
+        Ok(PlanNode::Projection(new_plan))
     }
 
-    fn visit_filter(&mut self, plan: &FilterPlan) {
-        if self.state.is_err() {
-            return;
-        }
-        if let Result::Err(e) = self.collect_column_names_from_expr(&plan.predicate) {
-            self.state = Result::Err(e);
-            return;
-        }
-        self.visit_plan_node(&plan.input);
+    fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
+        self.collect_column_names_from_expr(&plan.predicate)?;
         let mut new_plan = plan.clone();
-        new_plan.set_input(&self.new_plan);
-        self.new_plan = PlanNode::Filter(new_plan);
+        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
+        Ok(PlanNode::Filter(new_plan))
     }
 
-    fn visit_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) {
-        if self.state.is_err() {
-            return;
-        }
-        if let Result::Err(e) = self
-            .collect_column_names_from_expr_vec(&plan.group_expr)
-            .and_then(|_| self.collect_column_names_from_expr_vec(&plan.aggr_expr))
-        {
-            self.state = Result::Err(e);
-            return;
-        }
-        self.visit_plan_node(&plan.input);
+    fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
+        self.collect_column_names_from_expr_vec(&plan.group_expr)
+            .and_then(|_| self.collect_column_names_from_expr_vec(&plan.aggr_expr))?;
         let mut new_plan = plan.clone();
-        new_plan.set_input(&self.new_plan);
-        self.new_plan = PlanNode::AggregatorPartial(new_plan);
+        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
+        Ok(PlanNode::AggregatorPartial(new_plan))
     }
 
-    fn visit_aggregate_final(&mut self, plan: &AggregatorFinalPlan) {
-        if self.state.is_err() {
-            return;
-        }
-        if let Result::Err(e) = self
-            .collect_column_names_from_expr_vec(&plan.group_expr)
-            .and_then(|_| self.collect_column_names_from_expr_vec(&plan.aggr_expr))
-        {
-            self.state = Result::Err(e);
-            return;
-        }
-        self.visit_plan_node(&plan.input);
+    fn rewrite_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<PlanNode> {
+        self.collect_column_names_from_expr_vec(&plan.group_expr)
+            .and_then(|_| self.collect_column_names_from_expr_vec(&plan.aggr_expr))?;
         let mut new_plan = plan.clone();
-        new_plan.set_input(&self.new_plan);
-        self.new_plan = PlanNode::AggregatorFinal(new_plan);
+        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
+        Ok(PlanNode::AggregatorFinal(new_plan))
     }
 
-    fn visit_sort(&mut self, plan: &SortPlan) {
-        if self.state.is_err() {
-            return;
-        }
-        if let Result::Err(e) = self.collect_column_names_from_expr_vec(&plan.order_by) {
-            self.state = Result::Err(e);
-            return;
-        }
-        self.visit_plan_node(&plan.input);
+    fn rewrite_sort(&mut self, plan: &SortPlan) -> Result<PlanNode> {
+        self.collect_column_names_from_expr_vec(plan.order_by.as_slice())?;
         let mut new_plan = plan.clone();
-        new_plan.set_input(&self.new_plan);
-        self.new_plan = PlanNode::Sort(new_plan);
+        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
+        Ok(PlanNode::Sort(new_plan))
     }
 
-    fn visit_read_data_source(&mut self, plan: &ReadDataSourcePlan) {
-        if self.state.is_err() {
-            return;
-        }
-        match self.get_projected_schema(plan.schema.as_ref()) {
-            Ok(projected_schema) => {
-                self.new_plan = PlanNode::ReadSource(ReadDataSourcePlan {
+    fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
+        self.get_projected_schema(plan.schema.as_ref())
+            .map(|projected_schema| {
+                PlanNode::ReadSource(ReadDataSourcePlan {
                     db: plan.db.to_string(),
                     table: plan.table.to_string(),
                     schema: projected_schema,
@@ -140,18 +83,11 @@ impl<'plan> PlanVisitor<'plan> for ProjectionPushDownImpl {
                     statistics: plan.statistics.clone(),
                     description: plan.description.to_string()
                 })
-            }
-            Err(e) => {
-                self.state = Result::Err(e);
-            }
-        }
+            })
     }
 
-    fn visit_empty(&mut self, plan: &EmptyPlan) {
-        if self.state.is_err() {
-            return;
-        }
-        self.new_plan = PlanNode::Empty(plan.clone());
+    fn rewrite_empty(&mut self, plan: &EmptyPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Empty(plan.clone()))
     }
 }
 
@@ -159,32 +95,8 @@ impl ProjectionPushDownImpl {
     pub fn new() -> ProjectionPushDownImpl {
         ProjectionPushDownImpl {
             required_columns: HashSet::new(),
-            new_plan: PlanNode::Empty(EmptyPlan {
-                schema: Arc::new(DataSchema::new(vec![]))
-            }),
-            has_projection: false,
-            state: Ok(())
+            has_projection: false
         }
-    }
-
-    /// Finalize plan after ProjectionPushDown optimization.
-    /// This function should only be called after calling `visit`
-    fn finalize(self) -> Result<PlanNode> {
-        match self.state {
-            Ok(()) => Ok(self.new_plan),
-            Err(e) => Err(e)
-        }
-    }
-
-    /// Visit the plan tree and do ProjectionPushDown optimization.
-    fn visit(&mut self, plan: &PlanNode) {
-        if self.state.is_err() {
-            return;
-        }
-        self.visit_plan_node(&plan.input());
-        let mut new_plan = plan.clone();
-        new_plan.set_input(&self.new_plan);
-        self.new_plan = new_plan;
     }
 
     // Recursively walk a list of expression trees, collecting the unique set of column
@@ -198,7 +110,7 @@ impl ProjectionPushDownImpl {
     // Recursively walk an expression tree, collecting the unique set of column names
     // referenced in the expression
     fn collect_column_names_from_expr(&mut self, expr: &ExpressionAction) -> Result<()> {
-        PlanRewriter::expression_plan_children(expr)?
+        RewriteHelper::expression_plan_children(expr)?
             .iter()
             .fold(Ok(()), |acc, e| {
                 acc.and_then(|_| self.collect_column_names_from_expr(e))
@@ -252,8 +164,7 @@ impl IOptimizer for ProjectionPushDownOptimizer {
 
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         let mut visitor = ProjectionPushDownImpl::new();
-        visitor.visit(plan);
-        visitor.finalize()
+        visitor.rewrite_plan_node(plan)
     }
 }
 

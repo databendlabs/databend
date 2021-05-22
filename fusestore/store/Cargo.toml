@@ -26,8 +26,8 @@ common-planners = {path = "../../common/planners"}
 
 # Crates.io dependencies
 anyhow = "1.0.40"
-#a bug fix on this repo: https://github.com/async-raft/async-raft/pull/114
-async-raft = { git = "https://github.com/drmingdrmer/async-raft", branch = "fix-non-voter-restart" }
+# track self maintained branch with hot fixes
+async-raft = { git = "https://github.com/drmingdrmer/async-raft", branch = "rc" }
 #async-raft = "0.6.0"
 async-trait = "0.1"
 env_logger = "0.8"
@@ -35,8 +35,8 @@ futures = "0.3"
 indexmap = "1.6.1"
 lazy_static = "1.4.0"
 log = "0.4"
-metrics = "0.15.1"
-metrics-exporter-prometheus = "0.4.0"
+metrics = "0.16.0"
+metrics-exporter-prometheus = "0.5.0"
 maplit = "1.0.2"
 num = "0.4"
 num_cpus = "1.0"
@@ -55,7 +55,7 @@ tonic = "0.4"
 tracing = "0.1.26"
 tracing-futures = { version = "0.2.5", default-features = false }
 tracing-subscriber = "0.2.18"
-
+uuid = { version = "0.8", features = ["serde", "v4"] }
 
 [dev-dependencies]
 pretty_assertions = "0.7"

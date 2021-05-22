@@ -21,3 +21,5 @@ pub mod fs;
 pub mod localfs;
 pub mod meta_service;
 pub mod metrics;
+
+mod data_part;

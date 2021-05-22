@@ -78,7 +78,6 @@ Note:
 * ClickHouse system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/bba7ec2c23da8017eced7118b59fc7d5)
 * FuseQuery system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/8c37f5390e129cfc9d648ff930d9ef03)
 
-
 ## Status
 
 #### General
@@ -109,26 +108,16 @@ Note:
 - [ ] Joins (WIP)
 - [ ] Window (TODO)
 
-
 ## Getting Started
 
-### Learn Datafuse
-
-* [Architecture](website/datafuse/docs/overview/architecture.md)
-* [Performance](website/datafuse/docs/overview/performance.md)
-* [SQL](website/datafuse/docs/sqlstatement/)
-* [Functions](website/datafuse/docs/functions/)
-
-### Try Datafuse
-
-* [How to Run](website/datafuse/docs/overview/building-and-running.md)
-* [How to Run 3-node cluster](scripts/ci/fusequery-cluster-3-nodes.sh)
+* [Quick Start](https://datafuse.rs/overview/architecture/)
+* [Architecture](https://datafuse.rs/overview/architecture/)
+* [Performance](https://datafuse.rs/overview/performance/)
 
 ## Contributing
 
-* [Contribution Guide](website/datafuse/docs/development/contributing.md)
-* [Coding Guidelines](website/datafuse/docs/development/coding-guidelines.md)
-* [How to Profile](website/datafuse/docs/development/how-to-profile.md)
+* [Contribution Guide](https://datafuse.rs/development/contributing/)
+* [Coding Guidelines](https://datafuse.rs/development/coding-guidelines/)
 
 ## Roadmap
 
@@ -138,6 +127,12 @@ Note:
 - [x] 0.4 Support order by (2021.04)
 - [ ] 0.5 Support join
 - [ ] 1.0 Support TPC-H benchmark
+
+## Release Status
+
+Datafuse is currently in **Alpha** and is not ready to be used in production.
+
+We are doing our best to release R1.
 
 ## License
 

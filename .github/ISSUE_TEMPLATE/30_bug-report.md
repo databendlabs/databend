@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Create a report to help us improve FuseQuery 
+about: Create a report to help us improve Datafuse 
 title: ''
 labels: bug
 assignees: ''
@@ -12,12 +12,9 @@ assignees: ''
 **Describe the bug**
 A clear and concise description of what works not as it is supposed to.
 
-
 **How to reproduce**
-* Which FuseQuery version to use
-* Which interface to use, if matters
+* Which Datafuse version to use
 * Non-default settings, if any
-* `CREATE TABLE` statements for all tables involved
 * Queries to run that lead to unexpected result
 
 **Expected behavior**

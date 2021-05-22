@@ -3,18 +3,33 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::cmp::min;
-use std::sync::Arc;
 
-use common_datavalues::DataSchema;
 use common_exception::Result;
-use common_planners::EmptyPlan;
 use common_planners::PlanNode;
+use common_planners::PlanRewriter;
 use common_planners::ReadDataSourcePlan;
 use log::info;
 
 use crate::sessions::FuseQueryContextRef;
 
 pub struct PlanScheduler;
+
+/// ReadSourceRewriter will replace all ReadDataSourcePlan in a plan tree with given `new_source_plan`
+struct ReadSourceRewriter {
+    new_source_plan: ReadDataSourcePlan
+}
+
+impl<'plan> PlanRewriter<'plan> for ReadSourceRewriter {
+    fn rewrite_read_data_source(&mut self, _plan: &ReadDataSourcePlan) -> Result<PlanNode> {
+        Ok(PlanNode::ReadSource(self.new_source_plan.clone()))
+    }
+}
+
+impl ReadSourceRewriter {
+    fn rewrite(mut self, plan: &PlanNode) -> Result<PlanNode> {
+        self.rewrite_plan_node(plan)
+    }
+}
 
 impl PlanScheduler {
     /// Schedule the plan to Local or Remote mode.
@@ -110,21 +125,9 @@ impl PlanScheduler {
                 );
                 num_chunks_so_far += chunk_size;
 
-                let mut rewritten_node = PlanNode::Empty(EmptyPlan {
-                    schema: Arc::new(DataSchema::empty())
-                });
-
                 // Walk and rewrite the plan from the source.
-                plan.walk_postorder(|node| -> Result<bool> {
-                    if let PlanNode::ReadSource(_) = node {
-                        rewritten_node = PlanNode::ReadSource(new_source_plan.clone());
-                    } else {
-                        let mut clone_node = node.clone();
-                        clone_node.set_input(&rewritten_node);
-                        rewritten_node = clone_node;
-                    }
-                    Ok(true)
-                })?;
+                let rewriter = ReadSourceRewriter { new_source_plan };
+                let rewritten_node = rewriter.rewrite(plan)?;
                 results.push((executor.address.clone(), rewritten_node));
             }
         }

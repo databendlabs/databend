@@ -17,6 +17,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           workflowFileName: unit-tests.yml
           skipEventTypes: '["push", "schedule"]'
+
       - uses: potiuk/cancel-workflow-runs@master
         name: "Cancel stale Performance runs"
         with:
@@ -24,6 +25,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           workflowFileName: performace-tests-standalone.yml
           skipEventTypes: '["push", "schedule"]'
+
       - uses: potiuk/cancel-workflow-runs@master
         name: "Cancel stale Stateless Standalone runs"
         with:
@@ -31,6 +33,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           workflowFileName: stateless-tests-stadnalone.yml
           skipEventTypes: '["push", "schedule"]'
+
       - uses: potiuk/cancel-workflow-runs@master
         name: "Cancel stale Stateless Cluster runs"
         with:

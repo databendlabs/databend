@@ -29,7 +29,7 @@ impl FilterTransform {
     pub fn try_create(predicate: ExpressionAction, having: bool) -> Result<Self> {
         let func = predicate.to_function()?;
         if !having && func.is_aggregator() {
-            return Result::Err(ErrorCodes::SyntexException(format!(
+            return Result::Err(ErrorCodes::SyntaxException(format!(
                 "Aggregate function {:?} is found in WHERE in query",
                 predicate
             )));
@@ -76,8 +76,7 @@ impl IProcessor for FilterTransform {
             let filter_array = datavalues::downcast_array!(filter_array, BooleanArray)?;
             // Convert to arrow record_batch
             let batch = block.try_into()?;
-            let batch = arrow::compute::filter_record_batch(&batch, filter_array)
-                .map_err(ErrorCodes::from_arrow)?;
+            let batch = arrow::compute::filter_record_batch(&batch, filter_array)?;
             batch.try_into()
         };
 
