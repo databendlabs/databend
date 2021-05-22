@@ -7,5 +7,5 @@ mod exception_test;
 
 pub mod exception;
 
-pub use crate::exception::ErrorCodes;
-pub use crate::exception::Result;
+pub use exception::ErrorCodes;
+pub use exception::Result;

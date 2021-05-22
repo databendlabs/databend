@@ -4,5 +4,5 @@
 
 mod result_ext;
 
-pub use crate::result_ext::ResultExt;
-pub use crate::result_ext::ResultTupleExt;
+pub use result_ext::ResultExt;
+pub use result_ext::ResultTupleExt;

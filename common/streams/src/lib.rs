@@ -15,9 +15,9 @@ mod stream_parquet;
 mod stream_progress;
 mod stream_sort;
 
-pub use crate::stream::SendableDataBlockStream;
-pub use crate::stream_datablock::DataBlockStream;
-pub use crate::stream_limit::LimitStream;
-pub use crate::stream_parquet::ParquetStream;
-pub use crate::stream_progress::ProgressStream;
-pub use crate::stream_sort::SortStream;
+pub use stream::SendableDataBlockStream;
+pub use stream_datablock::DataBlockStream;
+pub use stream_limit::LimitStream;
+pub use stream_parquet::ParquetStream;
+pub use stream_progress::ProgressStream;
+pub use stream_sort::SortStream;
