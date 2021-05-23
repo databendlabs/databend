@@ -43,7 +43,6 @@ impl FlightClient {
 
     // Execute do_action.
     async fn do_get(&mut self, ticket: Ticket, schema: SchemaRef, timeout: u64) -> Result<SendableDataBlockStream> {
-        // let action_type = ticket.r#type.clone();
         let mut request = Request::new(ticket);
         request.set_timeout(Duration::from_secs(timeout));
 
