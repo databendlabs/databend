@@ -12,7 +12,6 @@ use common_exception::Result;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
-use log::info;
 
 use crate::pipelines::processors::IProcessor;
 use crate::sessions::FuseQueryContextRef;
@@ -76,11 +75,6 @@ impl IProcessor for NestedLoopJoinTransform {
 
         let left_buffer = read_left_task.await.unwrap()?;
         let right_buffer = read_right_task.await.unwrap()?;
-
-        info!(
-            "left_buffer: {:?}, right_buffer: {:?}, schema: {:?}",
-            &left_buffer, &right_buffer, &self.schema
-        );
 
         let mut joined_blocks: Vec<DataBlock> = vec![];
         for outer_block in &right_buffer {
