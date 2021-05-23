@@ -15,6 +15,7 @@ use common_functions::ColumnFunction;
 use common_functions::FunctionFactory;
 use common_functions::IFunction;
 use common_functions::LiteralFunction;
+use common_functions::NotFunction;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum ExpressionAction {
@@ -24,6 +25,8 @@ pub enum ExpressionAction {
     Column(String),
     /// Constant value.
     Literal(DataValue),
+    /// Negation of a Boolean expr
+    Not(Box<ExpressionAction>),
     /// A binary expression such as "age > 40"
     BinaryExpression {
         left: Box<ExpressionAction>,
@@ -85,6 +88,11 @@ impl ExpressionAction {
                 func.set_depth(depth);
                 AliasFunction::try_create(alias.clone(), func)
             }
+            ExpressionAction::Not(expr) => {
+                let mut func = expr.to_function_with_depth(depth)?;
+                func.set_depth(depth);
+                NotFunction::try_create(func)
+            }
             ExpressionAction::Sort { expr, .. } => expr.to_function_with_depth(depth),
             ExpressionAction::Wildcard => ColumnFunction::try_create("*"),
             ExpressionAction::Cast { expr, data_type } => Ok(CastFunction::create(
@@ -117,6 +125,7 @@ impl fmt::Debug for ExpressionAction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ExpressionAction::Alias(alias, v) => write!(f, "{:?} as {:#}", v, alias),
+            ExpressionAction::Not(v) => write!(f, "NOT {:?}", v),
             ExpressionAction::Column(ref v) => write!(f, "{:#}", v),
             ExpressionAction::Literal(ref v) => write!(f, "{:#}", v),
             ExpressionAction::BinaryExpression { left, op, right } => {
