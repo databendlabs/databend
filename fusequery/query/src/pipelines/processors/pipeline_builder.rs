@@ -277,12 +277,14 @@ impl PipelineBuilder {
 
     fn build_join_plan(&self, pipeline: &mut Pipeline, plan: &JoinPlan) -> Result<()> {
         // Build left pipeline
-        let mut left_pipeline = Pipeline::create(self.ctx.clone());
-        self.build_impl(&mut left_pipeline, &plan.left_input)?;
+        let mut left_pipeline_builder =
+            PipelineBuilder::create(FuseQueryContext::try_create()?, (*plan.left_input).clone());
+        let mut left_pipeline = left_pipeline_builder.build()?;
         left_pipeline.merge_processor()?;
         // Build right pipeline
-        let mut right_pipeline = Pipeline::create(self.ctx.clone());
-        self.build_impl(&mut right_pipeline, &plan.right_input)?;
+        let mut right_pipeline_builder =
+            PipelineBuilder::create(FuseQueryContext::try_create()?, (*plan.right_input).clone());
+        let mut right_pipeline = right_pipeline_builder.build()?;
         right_pipeline.merge_processor()?;
 
         info!("Left: {:?}", &plan.left_input);
