@@ -34,11 +34,13 @@ use crate::functions::ContextFunction;
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::expr_common::can_columns_satisfy_exprs;
 use crate::sql::expr_common::expand_aggregate_arg_exprs;
+use crate::sql::expr_common::expand_wildcard;
 use crate::sql::expr_common::expr_as_column_expr;
 use crate::sql::expr_common::extract_aliases;
 use crate::sql::expr_common::find_aggregate_exprs;
 use crate::sql::expr_common::rebase_expr;
 use crate::sql::expr_common::resolve_aliases_to_exprs;
+use crate::sql::expr_common::unwrap_alias_exprs;
 use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::sql_statement::DfDropDatabase;
 use crate::sql::sql_statement::DfUseDatabase;
@@ -246,7 +248,10 @@ impl PlanParser {
             .projection
             .iter()
             .map(|e| self.sql_select_to_rex(&e, &plan.schema()))
-            .collect::<Result<Vec<ExpressionAction>>>()?;
+            .collect::<Result<Vec<ExpressionAction>>>()?
+            .iter()
+            .flat_map(|expr| expand_wildcard(&expr, &plan.schema()))
+            .collect::<Vec<ExpressionAction>>();
 
         // aliase replacement for group by, having, sorting
         let aliases = extract_aliases(&projection_exprs);
@@ -317,9 +322,18 @@ impl PlanParser {
                 .collect::<Vec<_>>();
 
             let before_agg_exprs = expand_aggregate_arg_exprs(&aggr_projection_exprs);
+            let unalias_exprs = before_agg_exprs
+                .iter()
+                .map(|expr| unwrap_alias_exprs(expr))
+                .collect::<Result<Vec<_>>>()?;
+
+            println!("SS {:?}", plan);
+
             let plan = self
-                .expression(&plan, &before_agg_exprs, "Before GroupBy")
+                .expression(&plan, &unalias_exprs, "Before GroupBy")
                 .and_then(|input| self.aggregate(&input, &aggr_exprs, &group_by_exprs))?;
+
+            println!("SS2 {:?}", plan);
 
             // After aggregation, these are all of the columns that will be
             // available to next phases of planning.
@@ -359,8 +373,13 @@ impl PlanParser {
 
             (plan, select_exprs_post_aggr, having_expr_post_aggr_opt)
         } else {
+            let unalias_exprs = projection_exprs
+                .iter()
+                .map(|expr| unwrap_alias_exprs(expr))
+                .collect::<Result<Vec<_>>>()?;
+
             let plan = self
-                .expression(&plan, &projection_exprs, "Before Projection")
+                .expression(&plan, &unalias_exprs, "Before Projection")
                 .and_then(|input| self.expression(&input, &order_by_exprs, "Before OrderBy"))?;
 
             (plan, projection_exprs, having_expr_opt)

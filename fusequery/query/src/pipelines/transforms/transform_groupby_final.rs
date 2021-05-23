@@ -27,24 +27,31 @@ use crate::pipelines::processors::IProcessor;
 type GroupFuncTable =
     RwLock<HashMap<Vec<u8>, Vec<Box<dyn IAggreagteFunction>>, ahash::RandomState>>;
 
+// Group Key ==> Group by values
+type GroupKeyTable = RwLock<HashMap<Vec<u8>, Vec<DataValue>>>;
+
 pub struct GroupByFinalTransform {
     aggr_exprs: Vec<ExpressionAction>,
+    group_exprs: Vec<ExpressionAction>,
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>,
-    groups: GroupFuncTable
+    groups: GroupFuncTable,
+    keys: GroupKeyTable
 }
 
 impl GroupByFinalTransform {
     pub fn create(
         schema: DataSchemaRef,
         aggr_exprs: Vec<ExpressionAction>,
-        _group_exprs: Vec<ExpressionAction>
+        group_exprs: Vec<ExpressionAction>
     ) -> Self {
         Self {
             aggr_exprs,
+            group_exprs,
             schema,
             input: Arc::new(EmptyProcessor::create()),
-            groups: RwLock::new(HashMap::default())
+            groups: RwLock::new(HashMap::default()),
+            keys: RwLock::new(HashMap::default())
         }
     }
 }
@@ -75,16 +82,18 @@ impl IProcessor for GroupByFinalTransform {
             .map(|x| x.to_aggregate_function())
             .collect::<Result<Vec<_>>>()?;
 
-        let aggr_funcs_length = aggr_funcs.len();
+        let aggr_funcs_len = aggr_funcs.len();
+        let group_expr_len = self.group_exprs.len();
 
         let start = Instant::now();
         let mut stream = self.input.execute().await?;
         while let Some(block) = stream.next().await {
             let mut groups = self.groups.write();
+            let mut keys = self.keys.write();
             let block = block?;
             for row in 0..block.num_rows() {
                 if let DataValue::Binary(Some(group_key)) =
-                    DataValue::try_from_array(block.column(aggr_funcs_length), row)?
+                    DataValue::try_from_array(block.column(1 + aggr_funcs_len), row)?
                 {
                     match groups.get_mut(&group_key) {
                         None => {
@@ -100,6 +109,15 @@ impl IProcessor for GroupByFinalTransform {
                                 }
                             }
                             groups.insert(group_key.clone(), funcs);
+
+                            if let DataValue::Utf8(Some(col)) =
+                                DataValue::try_from_array(block.column(aggr_funcs_len), row)?
+                            {
+                                let val: DataValue = serde_json::from_str(&col)?;
+                                if let DataValue::Struct(states) = val {
+                                    keys.insert(group_key.clone(), states);
+                                }
+                            }
                         }
                         Some(funcs) => {
                             for (i, func) in funcs.iter_mut().enumerate() {
@@ -122,14 +140,30 @@ impl IProcessor for GroupByFinalTransform {
 
         // Collect the merge states.
         let groups = self.groups.read();
-        let mut aggr_values: Vec<Vec<DataValue>> = {
+        let keys = self.keys.read();
+
+        let mut group_values: Vec<Vec<DataValue>> = {
             let mut values = vec![];
-            for _i in 0..aggr_funcs_length {
+            for _i in 0..group_expr_len {
                 values.push(vec![])
             }
             values
         };
-        for (_, aggr_funcs) in groups.iter() {
+
+        let mut aggr_values: Vec<Vec<DataValue>> = {
+            let mut values = vec![];
+            for _i in 0..aggr_funcs_len {
+                values.push(vec![])
+            }
+            values
+        };
+        for (key, aggr_funcs) in groups.iter() {
+            if let Some(values) = keys.get(key) {
+                for (i, value) in values.iter().enumerate() {
+                    group_values[i].push(value.clone());
+                }
+            }
+
             for (i, func) in aggr_funcs.iter().enumerate() {
                 let merge = func.merge_result()?;
                 aggr_values[i].push(merge);
@@ -137,12 +171,20 @@ impl IProcessor for GroupByFinalTransform {
         }
 
         // Build final state block.
-        let mut columns: Vec<DataArrayRef> = Vec::with_capacity(self.aggr_exprs.len());
+        let mut columns: Vec<DataArrayRef> = Vec::with_capacity(group_expr_len + aggr_funcs_len);
+
+        for value in &group_values {
+            if !value.is_empty() {
+                columns.push(DataValue::try_into_data_array(value.as_slice())?);
+            }
+        }
+
         for value in &aggr_values {
             if !value.is_empty() {
                 columns.push(DataValue::try_into_data_array(value.as_slice())?);
             }
         }
+
         let mut blocks = vec![];
         if !columns.is_empty() {
             let block = DataBlock::create(self.schema.clone(), columns);

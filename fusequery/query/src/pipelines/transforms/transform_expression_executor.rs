@@ -47,8 +47,19 @@ impl ExpressionExecutor {
     }
 
     pub fn execute(&self, block: &DataBlock) -> Result<DataBlock> {
-        let mut columns = vec![];
         let mut column_map: HashMap<String, DataColumnarValue> = HashMap::new();
+        let mut columns = block
+            .columns()
+            .iter()
+            .map(|c| c.clone().into())
+            .collect::<Vec<DataColumnarValue>>();
+
+        for f in block.schema().fields().iter() {
+            column_map.insert(
+                f.name().clone(),
+                block.try_column_by_name(f.name())?.clone().into()
+            );
+        }
 
         let rows = block.num_rows();
         for action in self.chain.actions.iter() {
@@ -80,11 +91,13 @@ impl ExpressionExecutor {
 
                     let func = f.to_function()?;
                     let column = func.eval(&arg_columns, rows)?;
+
                     columns.push(column.clone());
                     column_map.insert(f.name.clone(), column);
                 }
                 // we just ignore alias action in expressions
                 ActionNode::Alias(alias) => {
+                    println!("got alias {:?} {:?} ", alias, self.alias_project);
                     if self.alias_project {
                         let column = column_map.get(&alias.arg_name).ok_or_else(|| {
                             ErrorCodes::LogicalError(
@@ -108,8 +121,9 @@ impl ExpressionExecutor {
         for f in self.output_schema.fields() {
             let column = column_map.get(f.name()).ok_or_else(|| {
                 ErrorCodes::LogicalError(format!(
-                    "Projection column: {} not exists, there are bugs!",
-                    f.name()
+                    "Projection column: {} not exists in {:?}, there are bugs!",
+                    f.name(),
+                    column_map.keys()
                 ))
             })?;
             project_columns.push(column.to_array()?);

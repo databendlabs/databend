@@ -300,3 +300,12 @@ pub fn resolve_aliases_to_exprs(
         _ => Ok(None)
     })
 }
+
+/// Rebuilds an `expr` using the inner expr for expression
+///  `(a + b) as c` ---> `(a + b)`
+pub fn unwrap_alias_exprs(expr: &ExpressionAction) -> Result<ExpressionAction> {
+    clone_with_replacement(expr, &|nest_exprs| match nest_exprs {
+        ExpressionAction::Alias(name, nested_expr) => Ok(Some(*nested_expr.clone())),
+        _ => Ok(None)
+    })
+}

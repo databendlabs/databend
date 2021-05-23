@@ -77,12 +77,12 @@ impl ExpressionChain {
 
     fn add_expr(&mut self, expr: &ExpressionAction) -> Result<()> {
         match expr {
-            ExpressionAction::Alias(_, sub_expr) => {
+            ExpressionAction::Alias(name, sub_expr) => {
                 self.add_expr(sub_expr)?;
                 let return_type = expr.to_data_type(&self.schema)?;
 
                 let alias = ActionAlias {
-                    name: expr.column_name(),
+                    name: name.clone(),
                     arg_name: sub_expr.column_name(),
                     arg_type: return_type
                 };

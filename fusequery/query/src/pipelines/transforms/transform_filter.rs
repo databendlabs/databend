@@ -11,6 +11,7 @@ use common_datablocks::DataBlock;
 use common_datavalues as datavalues;
 use common_datavalues::BooleanArray;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::ExpressionAction;
@@ -29,14 +30,16 @@ pub struct FilterTransform {
 
 impl FilterTransform {
     pub fn try_create(
-        input_schema: DataSchemaRef,
-        output_schema: DataSchemaRef,
+        schema: DataSchemaRef,
         predicate: ExpressionAction,
         having: bool
     ) -> Result<Self> {
+        let mut fields = schema.fields().clone();
+        fields.push(predicate.to_data_field(&schema)?);
+
         let executor = ExpressionExecutor::try_create(
-            input_schema,
-            output_schema,
+            schema,
+            DataSchemaRefExt::create(fields),
             vec![predicate.clone()],
             false
         )?;

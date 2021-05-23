@@ -37,6 +37,7 @@ mod data_value_aggregate;
 mod data_value_arithmetic;
 mod data_value_kernel;
 mod data_value_operator;
+mod data_array_builder;
 
 pub use crate::data_array::*;
 pub use crate::data_array_aggregate::DataArrayAggregate;
@@ -59,3 +60,4 @@ pub use crate::data_value_operator::DataValueAggregateOperator;
 pub use crate::data_value_operator::DataValueArithmeticOperator;
 pub use crate::data_value_operator::DataValueComparisonOperator;
 pub use crate::data_value_operator::DataValueLogicOperator;
+pub use crate::data_array_builder::make_builder;

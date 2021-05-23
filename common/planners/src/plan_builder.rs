@@ -81,12 +81,19 @@ impl PlanBuilder {
             _ => projection_exprs.push(v.clone())
         });
 
+        // Merge fields.
         let fields = RewriteHelper::exprs_to_fields(&projection_exprs, &input_schema)?;
+        let mut merged = input_schema.fields().clone();
+        for field in fields {
+            if !merged.iter().any(|x| x.name() == field.name()) && field.name() != "*" {
+                merged.push(field);
+            }
+        }
 
         Ok(Self::from(&PlanNode::Expression(ExpressionPlan {
             input: Arc::new(self.plan.clone()),
             exprs,
-            schema: DataSchemaRefExt::create(fields),
+            schema: DataSchemaRefExt::create(merged),
             desc: desc.to_string()
         })))
     }
@@ -110,46 +117,24 @@ impl PlanBuilder {
         group_expr: &[ExpressionAction]
     ) -> Result<Self> {
         let input_schema = self.plan.schema();
-        let rewrite_aggr_exprs = RewriteHelper::rewrite_projection_aliases(aggr_expr)?;
-        let aggr_projection_fields =
-            RewriteHelper::exprs_to_fields(&rewrite_aggr_exprs, &input_schema)?;
 
-        // Aggregator check.
-        // let mut group_by_names = HashSet::new();
-        // PlanRewriter::exprs_to_names(&group_expr, &mut group_by_names)?;
-
-        // TODO
-        // for aggr in aggr_expr {
-        //     // do not check literal expressions
-        //     if let ExpressionAction::Literal(_) = aggr {
-        //         continue;
-        //     } else if !aggr.has_aggregator()? {
-        //         // Check if aggr is in group-by's list
-        //         let in_group_by =
-        //             PlanRewriter::check_aggr_in_group_expr(&aggr, &group_by_names, &input_schema)?;
-        //         if !in_group_by {
-        //             return Result::Err(ErrorCodes::IllegalAggregateExp(format!(
-        //                 "Column `{:?}` is not under aggregate function and not in GROUP BY: While processing {:#}",
-        //                 aggr,
-        //                 aggr_expr.iter().map(|aggr| format!("{:#?}", aggr)).collect::<Vec<_>>().join(", ")
-        //             )));
-        //         }
-        //     }
-        // }
+        let mut final_exprs = aggr_expr.to_owned();
+        final_exprs.extend_from_slice(group_expr);
+        let final_fields = RewriteHelper::exprs_to_fields(&final_exprs, &input_schema)?;
 
         Ok(match mode {
             AggregateMode::Partial => {
                 Self::from(&PlanNode::AggregatorPartial(AggregatorPartialPlan {
                     input: Arc::new(self.plan.clone()),
-                    aggr_expr: rewrite_aggr_exprs.to_vec(),
+                    aggr_expr: aggr_expr.to_vec(),
                     group_expr: group_expr.to_vec()
                 }))
             }
             AggregateMode::Final => Self::from(&PlanNode::AggregatorFinal(AggregatorFinalPlan {
                 input: Arc::new(self.plan.clone()),
-                aggr_expr: rewrite_aggr_exprs.to_vec(),
+                aggr_expr: aggr_expr.to_vec(),
                 group_expr: group_expr.to_vec(),
-                schema: DataSchemaRefExt::create(aggr_projection_fields)
+                schema: DataSchemaRefExt::create(final_fields)
             }))
         })
     }

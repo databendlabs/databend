@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_aggregate_functions::AggregateFunctionFactory;
 use common_datavalues::DataValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
@@ -20,7 +21,7 @@ impl ContextFunction {
         ctx: FuseQueryContextRef
     ) -> Result<Vec<ExpressionAction>> {
         // Check the function is supported in common functions.
-        if !FunctionFactory::check(name) {
+        if !FunctionFactory::check(name) && !AggregateFunctionFactory::check(name) {
             return Result::Err(ErrorCodes::UnknownFunction(format!(
                 "Unsupported function: {:?}",
                 name
