@@ -67,7 +67,7 @@ impl IProcessor for RemoteTransform {
         let mut fetch_node = cluster.get_node_by_name(self.fetch_node_name.clone())?;
 
         let timeout = self.ctx.get_flight_client_timeout()?;
-        let mut flight_client = fetch_node.get_flight_client()?;
+        let mut flight_client = fetch_node.get_flight_client().await?;
         flight_client.fetch_stream(self.fetch_name.clone(), self.schema.clone(), timeout).await
     }
 }

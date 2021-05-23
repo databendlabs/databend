@@ -63,8 +63,9 @@ impl Node {
         self.local
     }
 
-    pub fn get_flight_client(&self) -> Result<FlightClient> {
-        let channel = self.channel_generator.lock().generate();
+    pub async fn get_flight_client(&self) -> Result<FlightClient> {
+        let channel = ChannelGenerator::create_flight_channel(self.address.clone()).await;
+        // let channel = self.channel_generator.lock().generate();
         channel.map(|channel| FlightClient::new(FlightServiceClient::new(channel)))
     }
 }
@@ -155,7 +156,7 @@ impl ChannelGenerator {
         }
     }
 
-    async fn create_flight_channel(addr: Address) -> Result<Channel> {
+    pub async fn create_flight_channel(addr: Address) -> Result<Channel> {
         /// Hack: block with connect
         /// There's no better way. limited by 'connect_with_connector'(no 'lazy_connect_with_connector')
         match format!("http://{}", addr.to_string()).parse::<Uri>() {

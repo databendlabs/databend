@@ -58,7 +58,7 @@ impl IInterpreter for SelectInterpreter {
         for index in 0..remote_actions.len() {
             let (node, action) = &remote_actions[index];
 
-            let mut flight_client = node.get_flight_client()?;
+            let mut flight_client = node.get_flight_client().await?;
             if let Err(error) = flight_client.prepare_query_stage(action.clone(), timeout).await {
                 return prepare_error_handler(error, index);
             }

@@ -202,10 +202,9 @@ impl ReadSourceGetNodePlan {
             }
 
             // For some irregular partitions, we assign them to the head nodes
+            let offset = partitions_pre_node * cluster_nodes.len();
             for index in 0..(new_partitions.len() % cluster_nodes.len()) {
                 let node_name = &cluster_nodes[index].name;
-
-                let offset = new_partitions.len() - partitions_pre_node - 1;
                 match nodes_partitions.entry(node_name.clone()) {
                     Vacant(entry) => {
                         let mut node_partitions = vec![];
@@ -217,6 +216,8 @@ impl ReadSourceGetNodePlan {
                     },
                 }
             }
+
+            println!("Reschedule partitions: {:?}", nodes_partitions);
 
             let nested_getter = RemoteReadSourceGetNodePlan(new_read_source_plan, Arc::new(nodes_partitions), nest_getter.clone());
             return Ok(Arc::new(Box::new(ReadSourceGetNodePlan(Arc::new(Box::new(nested_getter))))))
