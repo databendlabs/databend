@@ -38,7 +38,7 @@ use tonic::Streaming;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::pipelines::processors::PipelineBuilder;
-use crate::sessions::SessionRef;
+use crate::sessions::SessionManagerRef;
 
 type FlightDataSender = tokio::sync::mpsc::Sender<Result<FlightData, Status>>;
 type FlightDataReceiver = tokio::sync::mpsc::Receiver<Result<FlightData, Status>>;
@@ -49,11 +49,11 @@ pub type FlightStream<T> =
 pub struct FlightService {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionRef
+    session_manager: SessionManagerRef
 }
 
 impl FlightService {
-    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionRef) -> Self {
+    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionManagerRef) -> Self {
         Self {
             conf,
             cluster,

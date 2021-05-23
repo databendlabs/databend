@@ -7,11 +7,12 @@ mod macros;
 
 mod context;
 mod metrics;
-mod session;
+#[allow(clippy::module_inception)]
+mod sessions;
 mod settings;
 
 pub use context::FuseQueryContext;
 pub use context::FuseQueryContextRef;
-pub use session::Session;
-pub use session::SessionRef;
+pub use sessions::SessionManager;
+pub use sessions::SessionManagerRef;
 pub use settings::Settings;

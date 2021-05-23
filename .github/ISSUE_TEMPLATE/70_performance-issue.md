@@ -13,7 +13,7 @@ assignees: ''
 What exactly works slower than expected?
 
 **How to reproduce**
-* Which FuseQuery server version to use
+* Which Datafuse server version to use
 * Which interface to use, if matters
 * Non-default settings, if any
 * `CREATE TABLE` statements for all tables involved

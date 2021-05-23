@@ -66,7 +66,7 @@ criterion = "0.3"
 
 [build-dependencies]
 vergen = "5.1.6"
-run_script = "^0.7.0"
+run_script = "^0.8.0"
 
 [[bench]]
 name = "bench_main"

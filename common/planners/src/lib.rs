@@ -32,7 +32,7 @@ mod plan_stage_test;
 mod plan_walker_test;
 
 mod test;
-pub use crate::test::Test;
+pub use test::Test;
 
 mod plan_aggregator_final;
 mod plan_aggregator_partial;

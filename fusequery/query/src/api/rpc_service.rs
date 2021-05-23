@@ -9,16 +9,16 @@ use tonic::transport::Server;
 use crate::api::rpc::FlightService;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::sessions::SessionRef;
+use crate::sessions::SessionManagerRef;
 
 pub struct RpcService {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionRef
+    session_manager: SessionManagerRef
 }
 
 impl RpcService {
-    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionRef) -> Self {
+    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionManagerRef) -> Self {
         Self {
             conf,
             cluster,
