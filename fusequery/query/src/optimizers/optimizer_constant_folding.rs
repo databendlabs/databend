@@ -2,14 +2,22 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::datatypes::DataType;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_planners::AggregatorFinalPlan;
+use common_planners::AggregatorPartialPlan;
+use common_planners::EmptyPlan;
 use common_planners::ExpressionAction;
 use common_planners::ExpressionPlan;
+use common_planners::FilterPlan;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
+use common_planners::ProjectionPlan;
+use common_planners::ReadDataSourcePlan;
 
 use crate::optimizers::IOptimizer;
 use crate::sessions::FuseQueryContextRef;
@@ -109,6 +117,32 @@ fn constant_folding(schema: &DataSchemaRef, expr: ExpressionAction) -> Result<Ex
 }
 
 impl<'plan> PlanRewriter<'plan> for ConstantFoldingImpl {
+    fn rewrite_projection(&mut self, plan: &ProjectionPlan) -> Result<PlanNode> {
+        let mut new_plan = plan.clone();
+        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
+        Ok(PlanNode::Projection(new_plan))
+    }
+
+    fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
+        let mut new_plan = plan.clone();
+        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
+        Ok(PlanNode::AggregatorPartial(new_plan))
+    }
+
+    fn rewrite_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<PlanNode> {
+        let mut new_plan = plan.clone();
+        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
+        Ok(PlanNode::AggregatorFinal(new_plan))
+    }
+
+    fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
+        let schema = plan.schema();
+        let mut new_plan = plan.clone();
+        new_plan.predicate = constant_folding(&schema, plan.predicate.clone())?;
+        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
+        Ok(PlanNode::Filter(new_plan))
+    }
+
     fn rewrite_expression(&mut self, plan: &ExpressionPlan) -> Result<PlanNode> {
         let mut new_exprs = Vec::new();
         let schema = plan.schema();
@@ -120,6 +154,14 @@ impl<'plan> PlanRewriter<'plan> for ConstantFoldingImpl {
         let mut new_plan = plan.clone();
         new_plan.exprs = new_exprs;
         Ok(PlanNode::Expression(new_plan))
+    }
+
+    fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
+        Ok(PlanNode::ReadSource(plan.clone()))
+    }
+
+    fn rewrite_empty(&mut self, plan: &EmptyPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Empty(plan.clone()))
     }
 }
 
