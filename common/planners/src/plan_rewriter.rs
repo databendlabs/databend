@@ -84,11 +84,11 @@ pub trait PlanRewriter<'plan> {
         &mut self,
         plan: &'plan AggregatorPartialPlan,
     ) -> Result<PlanNode> {
-        Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan {
-            aggr_expr: plan.aggr_expr.clone(),
-            group_expr: plan.group_expr.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
-        }))
+        Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan::try_create(
+            plan.group_expr.clone(),
+            plan.aggr_expr.clone(),
+            Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
+        )?))
     }
 
     fn rewrite_aggregate_final(&mut self, plan: &'plan AggregatorFinalPlan) -> Result<PlanNode> {

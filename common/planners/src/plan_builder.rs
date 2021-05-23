@@ -163,11 +163,11 @@ impl PlanBuilder {
 
         Ok(match mode {
             AggregateMode::Partial => {
-                Self::from(&PlanNode::AggregatorPartial(AggregatorPartialPlan {
-                    input: Arc::new(self.plan.clone()),
-                    aggr_expr: rewrite_aggr_exprs.to_vec(),
-                    group_expr: group_expr.to_vec()
-                }))
+                Self::from(&PlanNode::AggregatorPartial(AggregatorPartialPlan::try_create(
+                    group_expr.to_vec(),
+                    rewrite_aggr_exprs.to_vec(),
+                    Arc::new(self.plan.clone())
+                )?))
             }
             AggregateMode::Final => Self::from(&PlanNode::AggregatorFinal(AggregatorFinalPlan {
                 input: Arc::new(self.plan.clone()),

@@ -11,7 +11,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::CreateDatabasePlan;
+use common_planners::{CreateDatabasePlan, AggregatorFinalPlan};
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
@@ -605,13 +605,31 @@ impl PlanParser {
             .map(|e| self.sql_to_rex(&e, &input.schema()))
             .collect::<Result<Vec<ExpressionAction>>>()?;
 
-        // S0: Apply a partial aggregator plan.
-        // S1: Apply a fragment plan for distributed planners split.
-        // S2: Apply a final aggregator plan.
-        PlanBuilder::from(&input)
-            .aggregate_partial(aggr_expr, &group_expr)
-            .and_then(|builder| builder.aggregate_final(aggr_expr, &group_expr))
+        // TODO
+        // We use the same input to build the aggregate_partial and aggregate_final.
+        // This is a bad implementation
+        // Because we don't have a better way to get the schema that calculates the final state
+        // from the partial state
+        PlanBuilder::from(&input).aggregate_partial(aggr_expr, &group_expr)
             .and_then(|builder| builder.build())
+            .and_then(|aggr_partial| {
+                PlanBuilder::from(&input)
+                    .aggregate_final(aggr_expr, &group_expr)
+                    .and_then(|builder| builder.build())
+                    .and_then(|aggr_final| {
+                        match aggr_final {
+                            PlanNode::AggregatorFinal(aggr_final) => {
+                                Ok(PlanNode::AggregatorFinal(AggregatorFinalPlan {
+                                    aggr_expr: aggr_final.aggr_expr,
+                                    group_expr: aggr_final.group_expr,
+                                    schema: aggr_final.schema,
+                                    input: Arc::new(aggr_partial),
+                                }))
+                            }
+                            _ => Result::Err(ErrorCodes::LogicalError("Logical error: need AggregatorFinalPlan"))
+                        }
+                    })
+            })
     }
 
     fn sort(&self, input: &PlanNode, order_by: &[OrderByExpr]) -> Result<PlanNode> {

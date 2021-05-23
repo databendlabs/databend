@@ -58,11 +58,11 @@ impl ScattersOptimizer {
         if let Some(OptimizeKind::Local) = status.pop() {
             // Keep running in standalone mode
             status.push(OptimizeKind::Local);
-            return Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan {
-                group_expr: plan.group_expr.clone(),
-                aggr_expr: plan.aggr_expr.clone(),
-                input: Arc::new(input),
-            }));
+            return Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan::try_create(
+                plan.group_expr.clone(),
+                plan.aggr_expr.clone(),
+                Arc::new(input),
+            )?));
         }
 
         match plan.group_expr.len() {
@@ -72,11 +72,11 @@ impl ScattersOptimizer {
                 Ok(PlanNode::Stage(StagePlan {
                     kind: StageKind::Convergent,
                     scatters_expr: ExpressionAction::Literal(DataValue::UInt64(Some(0))),
-                    input: Arc::new(PlanNode::AggregatorPartial(AggregatorPartialPlan {
-                        group_expr: plan.group_expr.clone(),
-                        aggr_expr: plan.aggr_expr.clone(),
-                        input: Arc::new(input),
-                    })),
+                    input: Arc::new(PlanNode::AggregatorPartial(AggregatorPartialPlan::try_create(
+                        plan.group_expr.clone(),
+                        plan.aggr_expr.clone(),
+                        Arc::new(input),
+                    )?)),
                 }))
             },
             _ => {
@@ -85,11 +85,11 @@ impl ScattersOptimizer {
                 Ok(PlanNode::Stage(StagePlan {
                     kind: StageKind::Normal,
                     scatters_expr: plan.group_expr[0].clone(),
-                    input: Arc::new(PlanNode::AggregatorPartial(AggregatorPartialPlan {
-                        group_expr: plan.group_expr.clone(),
-                        aggr_expr: plan.aggr_expr.clone(),
-                        input: Arc::new(input),
-                    })),
+                    input: Arc::new(PlanNode::AggregatorPartial(AggregatorPartialPlan::try_create(
+                        plan.group_expr.clone(),
+                        plan.aggr_expr.clone(),
+                        Arc::new(input)
+                    )?)),
                 }))
             }
         }
