@@ -8,10 +8,11 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 
 use crate::plan_partition::Partition;
-use crate::Partitions;
+use crate::{Partitions, ScanPlan};
 use crate::PlanNode;
 use crate::ReadDataSourcePlan;
 use crate::Statistics;
+use std::sync::Arc;
 
 pub struct Test {}
 
@@ -38,7 +39,8 @@ impl Test {
             description: format!(
                 "(Read from system.numbers_mt table, Read Rows:{}, Read Bytes:{})",
                 statistics.read_rows, statistics.read_bytes
-            )
+            ),
+            scan_plan: Arc::new(ScanPlan::empty())
         }))
     }
 

@@ -71,7 +71,7 @@ impl ITable for NumbersTable {
         self.table == "numbers_local"
     }
 
-    fn read_plan(&self, ctx: FuseQueryContextRef, scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
+    fn read_plan(&self, ctx: FuseQueryContextRef, scan: &ScanPlan, _partitions: usize) -> Result<ReadDataSourcePlan> {
         let mut total = ctx.get_max_block_size()? as u64;
 
         let ScanPlan { table_args, .. } = scan.clone();
@@ -106,7 +106,8 @@ impl ITable for NumbersTable {
             description: format!(
                 "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
                 self.table, statistics.read_rows, statistics.read_bytes
-            )
+            ),
+            scan_plan: Arc::new(scan.clone())
         })
     }
 

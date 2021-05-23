@@ -97,7 +97,7 @@ build_exceptions! {
     UnknownColumn(30),
     BadScatterExpression(31),
     EmptyDataFromServer(32),
-    NotFountLocalNode(33),
+    NotFoundLocalNode(33),
     PlanScheduleError(34),
     BadPlanInputs(35),
     DuplicateClusterNode(36),

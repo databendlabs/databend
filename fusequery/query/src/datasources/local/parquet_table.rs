@@ -123,20 +123,21 @@ impl ITable for ParquetTable {
         true
     }
 
-    fn read_plan(&self, _ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
+    fn read_plan(&self, _ctx: FuseQueryContextRef, scan: &ScanPlan, _partitions: usize) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0
+                version: 0,
             }],
             statistics: Statistics::default(),
             description: format!(
                 "(Read from Parquet Engine table  {}.{})",
                 self.db, self.name
-            )
+            ),
+            scan_plan: Arc::new(scan.clone())
         })
     }
 

@@ -38,14 +38,7 @@ impl ScattersOptimizer {
                     op: String::from("blockNumber"),
                     args: vec![],
                 },
-                input: Arc::new(PlanNode::ReadSource(ReadDataSourcePlan {
-                    db: plan.db.clone(),
-                    table: plan.table.clone(),
-                    schema: plan.schema.clone(),
-                    partitions: plan.partitions.clone(),
-                    statistics: plan.statistics.clone(),
-                    description: plan.description.clone(),
-                })),
+                input: Arc::new(PlanNode::ReadSource(plan.clone())),
             }));
         }
 
@@ -58,14 +51,7 @@ impl ScattersOptimizer {
         // Keep local mode, there are two cases
         // 1. The data is small enough that we just need to continue to run on standalone mode.
         // 2. The table is already clustered. We just need to rebuild the partition for the cluster mode.
-        Ok(PlanNode::ReadSource(ReadDataSourcePlan {
-            db: plan.db.clone(),
-            table: plan.table.clone(),
-            schema: plan.schema.clone(),
-            partitions: plan.partitions.clone(),
-            statistics: plan.statistics.clone(),
-            description: plan.description.clone(),
-        }))
+        Ok(PlanNode::ReadSource(plan.clone()))
     }
 
     fn optimize_aggregator(&mut self, plan: &AggregatorPartialPlan, input: PlanNode, status: &mut Vec<OptimizeKind>) -> Result<PlanNode> {

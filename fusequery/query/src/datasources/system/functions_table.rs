@@ -57,7 +57,7 @@ impl ITable for FunctionsTable {
         true
     }
 
-    fn read_plan(&self, _ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
+    fn read_plan(&self, _ctx: FuseQueryContextRef, scan: &ScanPlan, _partitions: usize) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
@@ -67,7 +67,8 @@ impl ITable for FunctionsTable {
                 version: 0
             }],
             statistics: Statistics::default(),
-            description: "(Read from system.functions table)".to_string()
+            description: "(Read from system.functions table)".to_string(),
+            scan_plan: Arc::new(scan.clone())
         })
     }
 

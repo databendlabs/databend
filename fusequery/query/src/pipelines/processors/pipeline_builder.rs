@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::{AggregatorFinalPlan, RemotePlan};
+use common_planners::{AggregatorFinalPlan, RemotePlan, EmptyPlan};
 use common_planners::AggregatorPartialPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
@@ -19,7 +19,7 @@ use common_planners::SortPlan;
 use common_planners::StagePlan;
 use log::info;
 
-use crate::pipelines::processors::Pipeline;
+use crate::pipelines::processors::{Pipeline, EmptyProcessor};
 use crate::pipelines::transforms::AggregatorFinalTransform;
 use crate::pipelines::transforms::AggregatorPartialTransform;
 use crate::pipelines::transforms::ExpressionTransform;
@@ -257,19 +257,14 @@ impl PipelineBuilder {
         self.ctx.try_set_partitions(plan.partitions.clone())?;
 
         let max_threads = self.ctx.get_max_threads()? as usize;
-        let workers = if max_threads == 0 {
-            1
-        } else if max_threads > plan.partitions.len() {
-            plan.partitions.len()
-        } else {
-            max_threads
-        };
+        let max_threads = std::cmp::min(max_threads, plan.partitions.len());
+        let workers = std::cmp::max(max_threads, 1);
 
         for _i in 0..workers {
             let source = SourceTransform::try_create(
                 self.ctx.clone(),
                 plan.db.as_str(),
-                plan.table.as_str()
+                plan.table.as_str(),
             )?;
             pipeline.add_source(Arc::new(source))?;
         }

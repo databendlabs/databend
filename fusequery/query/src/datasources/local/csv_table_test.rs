@@ -39,12 +39,12 @@ async fn test_csv_table() -> anyhow::Result<()> {
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "column1",
             DataType::UInt64,
-            false
+            false,
         )]),
         filters: vec![],
         limit: None
     };
-    let source_plan = table.read_plan(ctx.clone(), &scan_plan)?;
+    let source_plan = table.read_plan(ctx.clone(), &scan_plan, ctx.get_max_threads()? as usize)?;
     ctx.try_set_partitions(source_plan.partitions)?;
 
     let stream = table.read(ctx).await?;
@@ -112,12 +112,12 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "column2",
             DataType::UInt64,
-            false
+            false,
         )]),
         filters: vec![],
         limit: None
     };
-    let source_plan = table.read_plan(ctx.clone(), &scan_plan)?;
+    let source_plan = table.read_plan(ctx.clone(), &scan_plan, ctx.get_max_threads()? as usize)?;
     ctx.try_set_partitions(source_plan.partitions)?;
 
     let stream = table.read(ctx).await?;

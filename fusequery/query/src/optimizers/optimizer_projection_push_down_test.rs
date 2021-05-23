@@ -88,7 +88,8 @@ mod tests {
                 "test".to_string(),
                 statistics.read_rows,
                 statistics.read_bytes
-            )
+            ),
+            scan_plan: Arc::new(ScanPlan::empty())
         });
 
         let filter_plan = PlanBuilder::from(&source_plan)
@@ -143,7 +144,8 @@ mod tests {
                 "test".to_string(),
                 statistics.read_rows,
                 statistics.read_bytes
-            )
+            ),
+            scan_plan: Arc::new(ScanPlan::empty())
         });
 
         let group_exprs = &[col("a"), col("c")];

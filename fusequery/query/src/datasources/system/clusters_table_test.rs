@@ -14,7 +14,7 @@ async fn test_clusters_table() -> Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
     let table = ClustersTable::create();
-    table.read_plan(ctx.clone(), &ScanPlan::empty())?;
+    table.read_plan(ctx.clone(), &ScanPlan::empty(), ctx.get_max_threads()? as usize)?;
 
     let stream = table.read(ctx).await?;
     let result = stream.try_collect::<Vec<_>>().await?;

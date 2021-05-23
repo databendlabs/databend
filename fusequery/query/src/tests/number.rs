@@ -48,7 +48,7 @@ impl NumberTestData {
             projected_schema: Arc::new(DataSchema::empty()),
             filters: vec![],
             limit: None
-        })
+        }, self.ctx.get_max_threads()? as usize)
     }
 
     pub fn number_source_transform_for_test(&self, numbers: i64) -> Result<SourceTransform> {

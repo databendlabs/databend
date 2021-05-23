@@ -19,6 +19,7 @@ use crate::datasources::local::CsvTableStream;
 use crate::datasources::Common;
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
+use std::sync::Arc;
 
 pub struct CsvTable {
     db: String,
@@ -77,7 +78,7 @@ impl ITable for CsvTable {
         true
     }
 
-    fn read_plan(&self, ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
+    fn read_plan(&self, ctx: FuseQueryContextRef, scan: &ScanPlan, _partitions: usize) -> Result<ReadDataSourcePlan> {
         let start_line: usize = if self.has_header { 1 } else { 0 };
         let file = &self.file;
         let lines_count = Common::count_lines(
@@ -85,7 +86,7 @@ impl ITable for CsvTable {
                 .with_context(|| format!("Cannot find file:{}", file))
                 .map_err(ErrorCodes::from)?
         )
-        .map_err(|e| ErrorCodes::CannotReadFile(e.to_string()))?;
+            .map_err(|e| ErrorCodes::CannotReadFile(e.to_string()))?;
 
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
@@ -97,7 +98,8 @@ impl ITable for CsvTable {
                 lines_count as u64
             ),
             statistics: Statistics::default(),
-            description: format!("(Read from CSV Engine table  {}.{})", self.db, self.name)
+            description: format!("(Read from CSV Engine table  {}.{})", self.db, self.name),
+            scan_plan: Arc::new(scan.clone())
         })
     }
 

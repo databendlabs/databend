@@ -326,7 +326,7 @@ impl PlanParser {
                 .and_then(|builder| builder.build())
                 .and_then(|dummy_scan_plan| match dummy_scan_plan {
                     PlanNode::Scan(ref dummy_scan_plan) => table
-                        .read_plan(self.ctx.clone(), dummy_scan_plan)
+                        .read_plan(self.ctx.clone(), dummy_scan_plan, self.ctx.get_max_threads()? as usize)
                         .map(PlanNode::ReadSource),
                     _unreachable_plan => panic!("Logical error: cannot downcast to scan plan")
                 })
@@ -391,9 +391,10 @@ impl PlanParser {
                     })
                 };
 
+                // TODO: Move ReadSourcePlan to SelectInterpreter
                 scan.and_then(|scan| match scan {
                     PlanNode::Scan(ref scan) => table
-                        .read_plan(self.ctx.clone(), scan)
+                        .read_plan(self.ctx.clone(), scan, self.ctx.get_max_threads()? as usize)
                         .map(PlanNode::ReadSource),
                     _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan")
                 })
