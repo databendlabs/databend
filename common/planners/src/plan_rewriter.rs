@@ -23,6 +23,7 @@ use crate::ExpressionAction;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
+use crate::InsertIntoPlan;
 use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
@@ -75,7 +76,8 @@ pub trait PlanRewriter<'plan> {
             PlanNode::Having(plan) => self.rewrite_having(plan),
             PlanNode::Expression(plan) => self.rewrite_expression(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
-            PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan)
+            PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
+            PlanNode::InsertInto(plan) => self.rewrite_insert_into(plan)
         }
     }
 
@@ -200,6 +202,10 @@ pub trait PlanRewriter<'plan> {
 
     fn rewrite_drop_database(&mut self, plan: &'plan DropDatabasePlan) -> Result<PlanNode> {
         Ok(PlanNode::DropDatabase(plan.clone()))
+    }
+
+    fn rewrite_insert_into(&mut self, plan: &'plan InsertIntoPlan) -> Result<PlanNode> {
+        Ok(PlanNode::InsertInto(plan.clone()))
     }
 }
 

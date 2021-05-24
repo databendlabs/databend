@@ -7,45 +7,29 @@ use std::sync::Arc;
 
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_flights::StoreClient;
 use common_infallible::RwLock;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::configs::Config;
 use crate::datasources::remote::remote_table::RemoteTable;
+use crate::datasources::remote::store_client_provider::StoreClientProvider;
 use crate::datasources::IDatabase;
 use crate::datasources::ITable;
 use crate::datasources::ITableFunction;
 
 pub struct RemoteDatabase {
     name: String,
-    conf: Config,
-    tables: RwLock<HashMap<String, Arc<dyn ITable>>>,
-    store_client: RwLock<Option<StoreClient>>
+    store_client_provider: StoreClientProvider,
+    tables: RwLock<HashMap<String, Arc<dyn ITable>>>
 }
 
 impl RemoteDatabase {
-    pub fn create(conf: Config, name: String) -> Self {
+    pub fn create(store_client_provider: StoreClientProvider, name: String) -> Self {
         RemoteDatabase {
             name,
-            conf,
-            tables: RwLock::new(HashMap::default()),
-            store_client: RwLock::new(None)
+            store_client_provider,
+            tables: RwLock::new(HashMap::default())
         }
-    }
-
-    async fn try_get_client(&self) -> Result<StoreClient> {
-        if self.store_client.read().is_none() {
-            let store_addr = self.conf.store_api_address.clone();
-            let username = self.conf.store_api_username.clone();
-            let password = self.conf.store_api_password.clone();
-            let client = StoreClient::try_create(&store_addr, &username, &password)
-                .await
-                .map_err(ErrorCodes::from)?;
-            *self.store_client.write() = Some(client);
-        }
-        Ok(self.store_client.read().as_ref().unwrap().clone())
     }
 }
 
@@ -64,9 +48,14 @@ impl IDatabase for RemoteDatabase {
     }
 
     fn get_table(&self, _table_name: &str) -> Result<Arc<dyn ITable>> {
-        Result::Err(ErrorCodes::UnImplement(
-            "RemoteDatabase get_table not yet implemented"
-        ))
+        match self.tables.read().get(_table_name) {
+            Some(tbl) => Ok(tbl.clone()),
+            None =>
+            // Depends on the degree of staleness we can tolerate ...
+            {
+                Err(ErrorCodes::UnknownTable(_table_name))
+            }
+        }
     }
 
     fn get_tables(&self) -> Result<Vec<Arc<dyn ITable>>> {
@@ -93,8 +82,15 @@ impl IDatabase for RemoteDatabase {
 
         // Call remote create.
         let clone = plan.clone();
-        let mut client = self.try_get_client().await?;
-        let table = RemoteTable::try_create(plan.db, plan.table, plan.schema, plan.options)?;
+        let provider = self.store_client_provider.clone();
+        let table = RemoteTable::try_create(
+            plan.db,
+            plan.table,
+            plan.schema,
+            provider.clone(),
+            plan.options
+        )?;
+        let mut client = provider.try_get_client().await?;
         client.create_table(clone).await.map(|_| {
             let mut tables = self.tables.write();
             tables.insert(table.name().to_string(), Arc::from(table));
@@ -116,7 +112,7 @@ impl IDatabase for RemoteDatabase {
         }
 
         // Call remote create.
-        let mut client = self.try_get_client().await?;
+        let mut client = self.store_client_provider.try_get_client().await?;
         client.drop_table(plan.clone()).await.map(|_| {
             let mut tables = self.tables.write();
             tables.remove(table_name);

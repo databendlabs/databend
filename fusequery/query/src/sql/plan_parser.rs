@@ -4,10 +4,16 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 
+use common_arrow::arrow::array::ArrayRef;
+use common_arrow::arrow::array::StringArray;
 use common_arrow::arrow::datatypes::Field;
+use common_datablocks::DataBlock;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
@@ -17,6 +23,7 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_planners::ExplainPlan;
 use common_planners::ExpressionAction;
+use common_planners::InsertIntoPlan;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
@@ -24,8 +31,12 @@ use common_planners::SettingPlan;
 use common_planners::StageState;
 use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
+use sqlparser::ast::Expr;
 use sqlparser::ast::FunctionArg;
+use sqlparser::ast::Ident;
+use sqlparser::ast::ObjectName;
 use sqlparser::ast::OrderByExpr;
+use sqlparser::ast::Query;
 use sqlparser::ast::Statement;
 
 use crate::datasources::ITable;
@@ -93,6 +104,14 @@ impl PlanParser {
             Statement::SetVariable {
                 variable, value, ..
             } => self.set_variable_to_plan(variable, value),
+
+            Statement::Insert {
+                table_name,
+                columns,
+                source,
+                ..
+            } => self.insert_to_plan(table_name, columns, source),
+
             _ => Result::Err(ErrorCodes::SyntaxException(format!(
                 "Unsupported statement {:?}",
                 statement
@@ -206,6 +225,86 @@ impl PlanParser {
             db,
             table
         }))
+    }
+
+    fn insert_to_plan(
+        &self,
+        table_name: &ObjectName,
+        columns: &[Ident],
+        source: &Query
+    ) -> Result<PlanNode> {
+        if let sqlparser::ast::SetExpr::Values(ref vs) = source.body {
+            //            let col_num = columns.len();
+            let db_name = self.ctx.get_current_database();
+            let tbl_name = table_name
+                .0
+                .get(0)
+                .ok_or_else(|| ErrorCodes::SyntaxException("empty table name now allowed"))?
+                .value
+                .clone();
+
+            let values = &vs.0;
+            if values.is_empty() {
+                return Err(ErrorCodes::EmptyData(
+                    "empty values for insertion is not allowed"
+                ));
+            }
+
+            let all_value = values
+                .iter()
+                .all(|row| row.iter().all(|item| matches!(item, Expr::Value(_))));
+            if !all_value {
+                return Err(ErrorCodes::UnImplement(
+                    "not support expressions other than literal value yet"
+                ));
+            }
+            // Buffers some chunks if possible
+            let chunks = values.chunks(100);
+            let fields = columns
+                .iter()
+                .map(|ident| Field::new(&ident.value, DataType::Utf8, true))
+                .collect::<Vec<_>>();
+            let schema = DataSchemaRefExt::create(fields);
+
+            let blocks: Vec<DataBlock> = chunks
+                .map(|chunk| {
+                    let transposed: Vec<Vec<String>> = (0..chunk[0].len())
+                        .map(|i| {
+                            chunk
+                                .iter()
+                                .map(|inner| match &inner[i] {
+                                    Expr::Value(v) => v.to_string(),
+                                    _ => "N/A".to_string()
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .collect();
+
+                    let cols = transposed
+                        .iter()
+                        .map(|col| {
+                            Arc::new(StringArray::from(
+                                col.iter().map(|s| s as &str).collect::<Vec<&str>>()
+                            )) as ArrayRef
+                        })
+                        .collect::<Vec<_>>();
+
+                    DataBlock::create(schema.clone(), cols)
+                })
+                .collect();
+            log::info!("data block is {:?}", blocks);
+            let input_stream = futures::stream::iter(blocks);
+            let plan_node = InsertIntoPlan {
+                db_name,
+                tbl_name,
+                schema,
+                // this is crazy, please do not keep it, I am just test driving apis
+                input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream))))
+            };
+            Ok(PlanNode::InsertInto(plan_node))
+        } else {
+            Err(ErrorCodes::UnImplement("only supports ..."))
+        }
     }
 
     /// Generate a logic plan from an SQL query
