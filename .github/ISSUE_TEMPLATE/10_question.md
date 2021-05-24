@@ -1,6 +1,6 @@
 ---
 name: Question
-about: Ask a question about datafuse
+about: Ask a question about Datafuse
 title: ''
 labels: question
 assignees: ''

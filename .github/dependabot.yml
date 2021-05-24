@@ -5,7 +5,7 @@ updates:
   schedule:
     interval: daily
     # Check for updates at 8am UTC.
-    time: "08:00"
+    time: "00:00"
   open-pull-requests-limit: 2
   target-branch: master
   ignore:

@@ -27,7 +27,7 @@ use crate::configs::Config;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::clickhouse::ClickHouseStream;
 use crate::sessions::FuseQueryContextRef;
-use crate::sessions::SessionRef;
+use crate::sessions::SessionManagerRef;
 use crate::sql::PlanParser;
 
 struct Session {
@@ -169,11 +169,11 @@ impl ClickHouseSession for Session {
 pub struct ClickHouseHandler {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionRef
+    session_manager: SessionManagerRef
 }
 
 impl ClickHouseHandler {
-    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionRef) -> Self {
+    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionManagerRef) -> Self {
         Self {
             conf,
             cluster,

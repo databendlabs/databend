@@ -73,12 +73,6 @@ jobs:
           echo ::set-output name=current_version::${GITHUB_REF#refs/tags/v}
         shell: bash
 
-      - name: Get CHANGELOG.md entry
-        id: changelog_reader
-        uses: mindsers/changelog-reader-action@v1
-        with:
-          version: ${{ steps.tag_name.outputs.current_version }}
-          path: ./CHANGELOG.md
 
       - name: Release
         uses: svenstaro/upload-release-action@v2
