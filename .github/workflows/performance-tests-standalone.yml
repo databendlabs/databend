@@ -1,4 +1,4 @@
-name: Performance Tests(Standalone)
+name: Performance(Standalone)
 on: [push, pull_request]
 
 env:
@@ -6,6 +6,7 @@ env:
 
 jobs:
   build:
+    name: "Tests"
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v2
@@ -14,8 +15,9 @@ jobs:
         run: |
           bash ./scripts/setup/dev_setup.sh
 
-      - name: Build release
-        run: RUST_BACKTRACE=full RUSTFLAGS="-C target-cpu=native" cargo build --bin=fuse-query --release
+      - name: Build native release
+        run: |
+          bash ./scripts/ci/ci-native-release-build.sh
 
       - name: Run Performance Tests with Standalone mode
         run: |
