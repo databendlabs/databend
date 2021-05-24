@@ -4,8 +4,7 @@ status = [
   "Cargo Lint",
   "Unit Tests",
   "Stateless Tests(Standalone)",
-  "Stateless Tests(Cluster)",
-  "Performance Tests(Standalone)"
+  "Stateless Tests(Cluster)"
 ]
 block_labels = [
   "wip"
