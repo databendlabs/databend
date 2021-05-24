@@ -186,9 +186,9 @@ impl ExpressionChain {
                 let function = ActionFunction {
                     name: expr.column_name(),
                     func_name: "cast".to_string(),
-                    is_aggregated: true,
-                    arg_names: vec![],
-                    arg_types: vec![],
+                    is_aggregated: false,
+                    arg_names: vec![sub_expr.column_name()],
+                    arg_types: vec![sub_expr.to_data_type(&self.schema)?],
                     return_type: data_type.clone()
                 };
 

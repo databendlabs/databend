@@ -322,7 +322,7 @@ impl PlanParser {
             projection_exprs, aggr_exprs, group_by_exprs
         );
 
-        let (plan, select_exprs_post_aggr, having_expr_post_aggr_opt) = if has_aggregator {
+        let (plan, having_expr_post_aggr_opt) = if has_aggregator {
             let aggr_projection_exprs = group_by_exprs
                 .iter()
                 .chain(aggr_exprs.iter())
@@ -375,7 +375,7 @@ impl PlanParser {
                 None
             };
 
-            (plan, select_exprs_post_aggr, having_expr_post_aggr_opt)
+            (plan, having_expr_post_aggr_opt)
         } else {
             let stage_phase = if order_by_exprs.is_empty() {
                 "Before Projection"
@@ -385,7 +385,7 @@ impl PlanParser {
 
             let plan = self.expression(&plan, &expression_exprs, stage_phase)?;
 
-            (plan, projection_exprs, having_expr_opt)
+            (plan, having_expr_opt)
         };
 
         // Having.
@@ -393,7 +393,7 @@ impl PlanParser {
         // Order by
         let plan = self.sort(&plan, &order_by_exprs)?;
         // Projection
-        let plan = self.project(&plan, &select_exprs_post_aggr)?;
+        let plan = self.project(&plan, &projection_exprs)?;
         // Limit.
         let plan = self.limit(&plan, limit)?;
 
@@ -598,7 +598,7 @@ impl PlanParser {
                 }
 
                 let op = e.name.to_string();
-                if let Ok(_) = AggregateFunctionFactory::get(&op) {
+                if AggregateFunctionFactory::get(&op).is_ok() {
                     return Ok(ExpressionAction::AggregateFunction { op, args });
                 }
 
@@ -635,8 +635,6 @@ impl PlanParser {
 
                 if let Some(len) = substring_for {
                     args.push(self.sql_to_rex(len, schema)?);
-                } else {
-                    args.push(ExpressionAction::Literal(DataValue::UInt64(None)));
                 }
 
                 Ok(ExpressionAction::ScalarFunction {
@@ -792,8 +790,9 @@ impl PlanParser {
         let mut dedup_exprs = vec![];
         for expr in exprs {
             let rebased_expr = unwrap_alias_exprs(expr)
-                .and_then(|expr| rebase_expr_from_input(&expr, &input.schema()))
-                .and_then(|expr| Ok(sort_to_inner_expr(&expr)))?;
+                .and_then(|e| rebase_expr_from_input(&e, &input.schema()))?;
+            let rebased_expr = sort_to_inner_expr(&rebased_expr);
+
             if !dedup_exprs.contains(&rebased_expr) {
                 dedup_exprs.push(rebased_expr);
             }

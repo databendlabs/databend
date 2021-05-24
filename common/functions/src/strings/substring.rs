@@ -10,6 +10,7 @@ use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::UInt64Array;
+use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::IFunction;
@@ -42,23 +43,66 @@ impl IFunction for SubstringFunction {
 
     fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
         // TODO: make this function support column value as arguments rather than literal
-        let from = columns[1]
-            .to_array()?
-            .as_any()
-            .downcast_ref::<Int64Array>()
-            .unwrap()
-            .value(0)
-            - 1;
+        let from = match columns[1].data_type() {
+            DataType::UInt64 => Ok(columns[1]
+                .to_array()
+                .unwrap()
+                .as_any()
+                .downcast_ref::<UInt64Array>()
+                .unwrap()
+                .value(0) as i64
+                - 1),
 
-        let end = {
-            if columns.len() >= 3 {
-                let array = columns[2].to_array()?;
-                let v = array.as_any().downcast_ref::<UInt64Array>().unwrap();
-                Some(v.value(0))
-            } else {
-                None
+            DataType::Int64 => Ok(columns[1]
+                .to_array()
+                .unwrap()
+                .as_any()
+                .downcast_ref::<Int64Array>()
+                .unwrap()
+                .value(0)
+                - 1),
+
+            other => Err(ErrorCodes::BadArguments(format!(
+                "Unsupport datatype {:?} as argument",
+                other
+            )))
+        }?;
+
+        let mut end = None;
+        if columns.len() >= 3 {
+            match columns[2].data_type() {
+                DataType::UInt64 => {
+                    end = Some(
+                        columns[2]
+                            .to_array()
+                            .unwrap()
+                            .as_any()
+                            .downcast_ref::<UInt64Array>()
+                            .unwrap()
+                            .value(0)
+                    );
+                }
+
+                DataType::Int64 => {
+                    end = Some(
+                        columns[2]
+                            .to_array()
+                            .unwrap()
+                            .as_any()
+                            .downcast_ref::<Int64Array>()
+                            .unwrap()
+                            .value(0) as u64
+                    );
+                }
+
+                other => {
+                    return Err(ErrorCodes::BadArguments(format!(
+                        "Unsupport datatype {:?} as argument",
+                        other
+                    )))
+                }
             }
-        };
+        }
 
         let value = columns[0].to_array()?;
         Ok(DataColumnarValue::Array(

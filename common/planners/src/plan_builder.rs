@@ -118,11 +118,9 @@ impl PlanBuilder {
         aggr_expr: &[ExpressionAction],
         group_expr: &[ExpressionAction]
     ) -> Result<Self> {
-        let input_schema = schema_before_groupby.clone();
-
         Ok(match mode {
             AggregateMode::Partial => {
-                let fields = RewriteHelper::exprs_to_fields(aggr_expr, &input_schema)?;
+                let fields = RewriteHelper::exprs_to_fields(aggr_expr, &schema_before_groupby)?;
                 let mut partial_fields = fields
                     .iter()
                     .map(|f| DataField::new(f.name(), DataType::Utf8, false))
@@ -134,7 +132,8 @@ impl PlanBuilder {
                     // keys:  Vec<Key>, DataTypeStruct
                     // key:  group id, DataTypeBinary
 
-                    let keys_fields = RewriteHelper::exprs_to_fields(group_expr, &input_schema)?;
+                    let keys_fields =
+                        RewriteHelper::exprs_to_fields(group_expr, &schema_before_groupby)?;
                     partial_fields.push(DataField::new(
                         "_group_keys",
                         DataType::Struct(keys_fields),
@@ -154,7 +153,8 @@ impl PlanBuilder {
             AggregateMode::Final => {
                 let mut final_exprs = aggr_expr.to_owned();
                 final_exprs.extend_from_slice(group_expr);
-                let final_fields = RewriteHelper::exprs_to_fields(&final_exprs, &input_schema)?;
+                let final_fields =
+                    RewriteHelper::exprs_to_fields(&final_exprs, &schema_before_groupby)?;
 
                 Self::from(&PlanNode::AggregatorFinal(AggregatorFinalPlan {
                     input: Arc::new(self.plan.clone()),

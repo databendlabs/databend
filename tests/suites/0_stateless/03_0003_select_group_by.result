@@ -10,11 +10,11 @@ SELECT max(number) FROM numbers_mt (10) where number > 99999999998 GROUP BY numb
 SELECT avg(number), max(number+1)+1 FROM numbers_mt(10000) where number > 2 GROUP BY 1
 --------------
 
-+-------------+-------------------------------+
-| avg(number) | plus(max(plus(number, 1)), 1) |
-+-------------+-------------------------------+
-|        5001 |                         10001 |
-+-------------+-------------------------------+
++-------------+-------------------------+
+| avg(number) | (max((number + 1)) + 1) |
++-------------+-------------------------+
+|        5001 |                   10001 |
++-------------+-------------------------+
 --------------
 SELECT number%3 as c1, number%2 as c2 FROM numbers_mt(10000) where number > 2 group by number%3, number%2 order by c1,c2
 --------------
@@ -29,21 +29,6 @@ SELECT number%3 as c1, number%2 as c2 FROM numbers_mt(10000) where number > 2 gr
 |    2 |    0 |
 |    2 |    1 |
 +------+------+
---------------
-SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number order by c1
---------------
-
-+------+
-| c1   |
-+------+
-|    0 |
-|    0 |
-|    0 |
-|    1 |
-|    1 |
-|    2 |
-|    2 |
-+------+
 --------------
 SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number%3 order by c1
 --------------
@@ -68,21 +53,4 @@ SELECT 'NOT in GROUP BY function check'
 SELECT number%3 as c1, number as c2 FROM numbers_mt(10) where number > 2 group by c1 order by c1
 --------------
 
-ERROR 1105 (HY000) at line 10: Code: 26, displayText = Column `number as c2` is not under aggregate function and not in GROUP BY: While processing (number % 3) as c1, number as c2.
---------------
-SELECT number%3 as c1, number as c2, max(c2) FROM numbers_mt(10) where number > 2 group by c1 order by c1
---------------
-
-ERROR 1105 (HY000) at line 11: Code: 26, displayText = Column `number as c2` is not under aggregate function and not in GROUP BY: While processing (number % 3) as c1, number as c2, max([c2]).
---------------
-SELECT 1 + sum(number) as d, d + 3 FROM numbers(10) group by number % 4 order by d
---------------
-
-+------+-------------------------------+
-| d    | plus(plus(1, sum(number)), 3) |
-+------+-------------------------------+
-|    9 |                            12 |
-|   11 |                            14 |
-|   13 |                            16 |
-|   16 |                            19 |
-+------+-------------------------------+
+ERROR 1105 (HY000) at line 9: Code: 26, displayText = Column `number` is not under aggregate function and not in GROUP BY: While processing [(number % 3) as c1, number as c2, (number % 3)].

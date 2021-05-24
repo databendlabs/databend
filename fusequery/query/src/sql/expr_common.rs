@@ -165,14 +165,17 @@ pub fn rebase_expr(
 }
 
 // Rebuilds an `expr` to ColumnExpr when some expressions already processed in upstream
+// Skip Sort, Alias because we can go into the inner nest_exprs
 pub fn rebase_expr_from_input(
     expr: &ExpressionAction,
     schema: &DataSchemaRef
 ) -> Result<ExpressionAction> {
     clone_with_replacement(expr, &|nest_exprs| match nest_exprs {
-        ExpressionAction::Sort { .. } | ExpressionAction::Column(_) => Ok(None),
+        ExpressionAction::Sort { .. }
+        | ExpressionAction::Column(_)
+        | ExpressionAction::Alias(_, _) => Ok(None),
         _ => {
-            if let Ok(_) = schema.field_with_name(&nest_exprs.column_name()) {
+            if schema.field_with_name(&nest_exprs.column_name()).is_ok() {
                 Ok(Some(expr_as_column_expr(nest_exprs)?))
             } else {
                 Ok(None)
@@ -210,7 +213,7 @@ pub fn find_columns_not_satisfy_exprs(
             return Ok(Some(expr.clone()));
         }
     }
-    return Ok(None);
+    Ok(None)
 }
 
 /// Returns a cloned `expr`, but any of the `expr`'s in the tree may be

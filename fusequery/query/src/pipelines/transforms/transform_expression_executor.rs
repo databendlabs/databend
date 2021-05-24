@@ -48,11 +48,9 @@ impl ExpressionExecutor {
 
     pub fn execute(&self, block: &DataBlock) -> Result<DataBlock> {
         let mut column_map: HashMap<String, DataColumnarValue> = HashMap::new();
-        let mut columns = block
-            .columns()
-            .iter()
-            .map(|c| c.clone().into())
-            .collect::<Vec<DataColumnarValue>>();
+
+        // a + 1 as b, a + 1 as c
+        let mut alias_map: HashMap<String, Vec<String>> = HashMap::new();
 
         for f in block.schema().fields().iter() {
             column_map.insert(
@@ -63,6 +61,14 @@ impl ExpressionExecutor {
 
         let rows = block.num_rows();
         for action in self.chain.actions.iter() {
+            if let ActionNode::Alias(alias) = action {
+                if let Some(v) = alias_map.get_mut(&alias.arg_name) {
+                    v.push(alias.name.clone());
+                } else {
+                    alias_map.insert(alias.arg_name.clone(), vec![alias.name.clone()]);
+                }
+            }
+
             if column_map.contains_key(action.column_name()) {
                 continue;
             }
@@ -72,7 +78,6 @@ impl ExpressionExecutor {
                     let column =
                         DataColumnarValue::Array(block.try_column_by_name(&input.name)?.clone());
 
-                    columns.push(column.clone());
                     column_map.insert(input.name.clone(), column);
                 }
                 ActionNode::Function(f) => {
@@ -81,7 +86,7 @@ impl ExpressionExecutor {
                         .arg_names
                         .iter()
                         .map(|arg| {
-                            column_map.get(arg).map(|c| c.clone()).ok_or_else(|| {
+                            column_map.get(arg).cloned().ok_or_else(|| {
                                 ErrorCodes::LogicalError(
                                     "Arguments must be prepared before function transform"
                                 )
@@ -92,29 +97,25 @@ impl ExpressionExecutor {
                     let func = f.to_function()?;
                     let column = func.eval(&arg_columns, rows)?;
 
-                    columns.push(column.clone());
                     column_map.insert(f.name.clone(), column);
-                }
-                // we just ignore alias action in expressions
-                ActionNode::Alias(alias) => {
-                    if self.alias_project {
-                        let column = column_map
-                            .get(&alias.arg_name)
-                            .ok_or_else(|| {
-                                ErrorCodes::LogicalError(
-                                    "ActionNode ALIAS must have column to transform"
-                                )
-                            })?
-                            .clone();
-
-                        columns.push(column.clone());
-                        column_map.insert(alias.name.clone(), column);
-                    }
                 }
                 ActionNode::Constant(constant) => {
                     let column = DataColumnarValue::Constant(constant.value.clone(), rows);
-                    columns.push(column.clone());
                     column_map.insert(constant.name.clone(), column);
+                }
+
+                _ => {}
+            }
+        }
+
+        if self.alias_project {
+            for (k, v) in alias_map.iter() {
+                let column = column_map.get(k).cloned().ok_or_else(|| {
+                    ErrorCodes::LogicalError("Arguments must be prepared before alias transform")
+                })?;
+
+                for name in v.iter() {
+                    column_map.insert(name.clone(), column.clone());
                 }
             }
         }

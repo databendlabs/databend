@@ -157,7 +157,7 @@ impl fmt::Debug for ExpressionAction {
             ExpressionAction::ScalarFunction { op, args } => {
                 write!(f, "{}(", op)?;
 
-                for i in 0..args.len() {
+                for (i, _) in args.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
@@ -168,7 +168,7 @@ impl fmt::Debug for ExpressionAction {
 
             ExpressionAction::AggregateFunction { op, args } => {
                 write!(f, "{}(", op)?;
-                for i in 0..args.len() {
+                for (i, _) in args.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }

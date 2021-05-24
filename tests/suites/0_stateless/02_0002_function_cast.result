@@ -2,17 +2,17 @@
 SELECT toTypeName(CAST(number AS float)) FROM numbers_mt(10)
 --------------
 
-+--------------------------+
-| toTypeName(CAST(number)) |
-+--------------------------+
-| Float32                  |
-| Float32                  |
-| Float32                  |
-| Float32                  |
-| Float32                  |
-| Float32                  |
-| Float32                  |
-| Float32                  |
-| Float32                  |
-| Float32                  |
-+--------------------------+
++-------------------------------------+
+| toTypeName(cast(number as Float32)) |
++-------------------------------------+
+| Float32                             |
+| Float32                             |
+| Float32                             |
+| Float32                             |
+| Float32                             |
+| Float32                             |
+| Float32                             |
+| Float32                             |
+| Float32                             |
+| Float32                             |
++-------------------------------------+
