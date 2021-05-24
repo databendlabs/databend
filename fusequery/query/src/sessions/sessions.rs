@@ -14,15 +14,15 @@ use metrics::counter;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 
-pub struct Session {
+pub struct SessionManager {
     sessions: RwLock<HashMap<String, FuseQueryContextRef>>
 }
 
-pub type SessionRef = Arc<Session>;
+pub type SessionManagerRef = Arc<SessionManager>;
 
-impl Session {
-    pub fn create() -> SessionRef {
-        Arc::new(Session {
+impl SessionManager {
+    pub fn create() -> SessionManagerRef {
+        Arc::new(SessionManager {
             sessions: RwLock::new(HashMap::new())
         })
     }
