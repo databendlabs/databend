@@ -65,7 +65,7 @@ impl IFunction for SubstringFunction {
         if let DataColumnarValue::Scalar(from) = from {
             match from {
                 DataValue::Int64(Some(from)) => {
-                    if from >= 0 {
+                    if from >= 1 {
                         from_scalar = from - 1;
                     } else {
                         from_scalar = from

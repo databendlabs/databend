@@ -30,7 +30,7 @@ pub enum ExpressionAction {
         op: String,
         right: Box<ExpressionAction>
     },
-    /// A binary expression such as "age > 40"
+    /// A unary expression such as "NOT foo"
     UnaryExpression {
         op: String,
         expr: Box<ExpressionAction>
@@ -75,9 +75,8 @@ impl ExpressionAction {
                 Ok(func)
             }
             ExpressionAction::UnaryExpression { op, expr } => {
-                let v: i64 = 0;
-                let vv = Some(v);
-                let left = Box::new(ExpressionAction::Literal(DataValue::Int64(vv)));
+                let left_val = Some(0);
+                let left = Box::new(ExpressionAction::Literal(DataValue::Int64(left_val)));
                 let l = left.to_function_with_depth(depth)?;
                 let r = expr.to_function_with_depth(depth + 1)?;
                 let mut func = FunctionFactory::get(op, &[l, r])?;
