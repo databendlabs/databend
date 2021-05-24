@@ -83,6 +83,7 @@ pub use plan_expression::ExpressionPlan;
 pub use plan_expression_action::ExpressionAction;
 pub use plan_expression_action_column::col;
 pub use plan_expression_action_function::add;
+pub use plan_expression_action_function::not;
 pub use plan_expression_action_function::avg;
 pub use plan_expression_action_function::modular;
 pub use plan_expression_action_function::sum;

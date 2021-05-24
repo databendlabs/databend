@@ -125,7 +125,7 @@ impl fmt::Debug for ExpressionAction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ExpressionAction::Alias(alias, v) => write!(f, "{:?} as {:#}", v, alias),
-            ExpressionAction::Not(v) => write!(f, "NOT {:?}", v),
+            ExpressionAction::Not(v) => write!(f, "NOT{:?}", v),
             ExpressionAction::Column(ref v) => write!(f, "{:#}", v),
             ExpressionAction::Literal(ref v) => write!(f, "{:#}", v),
             ExpressionAction::BinaryExpression { left, op, right } => {

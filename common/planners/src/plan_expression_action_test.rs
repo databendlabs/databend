@@ -19,14 +19,14 @@ fn test_expression_action_plan() -> anyhow::Result<()> {
                 .and(col("number").lt(lit(4)))
                 .and(col("number").lt_eq(lit(4)))
                 .and(col("number").gt(lit(4)))
-                .and(col("number").gt_eq(lit(4)))
+                .and(not(col("number").gt_eq(lit(4))))
         )?
         .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
         typ: ExplainType::Syntax,
         input: Arc::new(plan)
     });
-    let expect ="Filter: (((((((number + 1) = 4) and (number != 4)) and (number < 4)) and (number <= 4)) and (number > 4)) and (number >= 4))\
+    let expect ="Filter: (((((((number + 1) = 4) and (number != 4)) and (number < 4)) and (number <= 4)) and (number > 4)) and NOT(number >= 4))\
     \n  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
     let actual = format!("{:?}", explain);
     assert_eq!(expect, actual);
