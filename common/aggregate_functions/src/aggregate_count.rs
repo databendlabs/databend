@@ -72,7 +72,6 @@ impl IAggreagteFunction for AggregateCountFunction {
     }
 
     fn merge_result(&self) -> Result<DataValue> {
-        println!("state merge: result {:?}  {}", self.state, self.depth);
         Ok(self.state.clone())
     }
 }

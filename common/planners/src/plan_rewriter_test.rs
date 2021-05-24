@@ -20,135 +20,106 @@ fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
     }
 
     let tests = vec![
-        RewriteTest{
-            name : "Cyclic",
+        RewriteTest {
+            name: "Cyclic",
             exprs: vec![
-                    Box::new(ExpressionAction::ScalarFunction {
-                        op: "plus".to_string(),
-                        args: vec![
-                            lit(1i32),
-                            col("z")
-                        ],
-                    }).alias("x"),
-                    Box::new(ExpressionAction::ScalarFunction {
-                        op: "plus".to_string(),
-                        args: vec![
-                            lit(1i32),
-                            col("x")
-                        ],
-                    }).alias("y"),
-                    Box::new(ExpressionAction::ScalarFunction {
-                        op: "plus".to_string(),
-                        args: vec![
-                            lit(1i32),
-                            col("y")
-                        ],
-                    }).alias("z"),
+                Box::new(ExpressionAction::ScalarFunction {
+                    op: "plus".to_string(),
+                    args: vec![lit(1i32), col("z")]
+                })
+                .alias("x"),
+                Box::new(ExpressionAction::ScalarFunction {
+                    op: "plus".to_string(),
+                    args: vec![lit(1i32), col("x")]
+                })
+                .alias("y"),
+                Box::new(ExpressionAction::ScalarFunction {
+                    op: "plus".to_string(),
+                    args: vec![lit(1i32), col("y")]
+                })
+                .alias("z"),
             ],
             expect_str: "",
-            error_msg : "Code: 5, displayText = Planner Error: Cyclic aliases: x.",
+            error_msg: "Code: 5, displayText = Planner Error: Cyclic aliases: x."
         },
-
-        RewriteTest{
-            name : "Duplicate aliases",
+        RewriteTest {
+            name: "Duplicate aliases",
             exprs: vec![
-                    Box::new(ExpressionAction::ScalarFunction {
-                        op: "plus".to_string(),
-                        args: vec![
-                            lit(1i32),
-                            col("z")
-                        ],
-                    }).alias("x"),
-                    Box::new(ExpressionAction::ScalarFunction {
-                        op: "plus".to_string(),
-                        args: vec![
-                            lit(1i32),
-                            col("y")
-                        ],
-                    }).alias("x"),
+                Box::new(ExpressionAction::ScalarFunction {
+                    op: "plus".to_string(),
+                    args: vec![lit(1i32), col("z")]
+                })
+                .alias("x"),
+                Box::new(ExpressionAction::ScalarFunction {
+                    op: "plus".to_string(),
+                    args: vec![lit(1i32), col("y")]
+                })
+                .alias("x"),
             ],
             expect_str: "",
-            error_msg : "Code: 5, displayText = Planner Error: Different expressions with the same alias x.",
+            error_msg:
+                "Code: 5, displayText = Planner Error: Different expressions with the same alias x."
         },
-
-        RewriteTest{
+        RewriteTest {
             name: "normal",
             exprs: vec![
                 col("x"),
                 Box::new(ExpressionAction::ScalarFunction {
-                        op: "add".to_string(),
-                        args: vec![
-                            lit(1i32),
-                            col("x")
-                        ],
-                    }).alias("y"),
+                    op: "add".to_string(),
+                    args: vec![lit(1i32), col("x")]
+                })
+                .alias("y"),
                 ExpressionAction::ScalarFunction {
                     op: "multiply".to_string(),
-                    args: vec![
-                        col("y"),
-                        col("y"),
-                    ],
+                    args: vec![col("y"), col("y")]
                 },
             ],
-            expect_str: "[x, add([1, x]) as y, multiply([add([1, x]), add([1, x])])]",
-            error_msg: "",
+            expect_str: "[x, add(1, x) as y, multiply(add(1, x), add(1, x))]",
+            error_msg: ""
         },
-
-        RewriteTest{
+        RewriteTest {
             name: "normal2",
             exprs: vec![
                 Box::new(ExpressionAction::ScalarFunction {
-                        op: "add".to_string(),
-                        args: vec![
-                            lit(1i32),
-                            lit(1i64),
-                        ],
-                    }).alias("x"),
+                    op: "add".to_string(),
+                    args: vec![lit(1i32), lit(1i64)]
+                })
+                .alias("x"),
                 Box::new(ExpressionAction::ScalarFunction {
-                        op: "add".to_string(),
-                        args: vec![
-                            lit(1i32),
-                            col("x")
-                        ],
-                    }).alias("y"),
+                    op: "add".to_string(),
+                    args: vec![lit(1i32), col("x")]
+                })
+                .alias("y"),
                 ExpressionAction::ScalarFunction {
                     op: "multiply".to_string(),
-                    args: vec![
-                        col("x"),
-                        col("y")
-                    ],
+                    args: vec![col("x"), col("y")]
                 },
             ],
-            expect_str: "[add([1, 1]) as x, add([1, add([1, 1])]) as y, multiply([add([1, 1]), add([1, add([1, 1])])])]",
-            error_msg: "",
+            expect_str:
+                "[add(1, 1) as x, add(1, add(1, 1)) as y, multiply(add(1, 1), add(1, add(1, 1)))]",
+            error_msg: ""
         },
-        RewriteTest{
+        RewriteTest {
             name: "x+1->x",
             exprs: vec![
                 Box::new(ExpressionAction::ScalarFunction {
                     op: "add".to_string(),
-                    args: vec![
-                        col("x"),
-                        lit(1i64),
-                    ],
-                }).alias("x"),
+                    args: vec![col("x"), lit(1i64)]
+                })
+                .alias("x"),
                 Box::new(ExpressionAction::ScalarFunction {
                     op: "add".to_string(),
-                    args: vec![
-                        lit(1i32),
-                        col("x")
-                    ],
-                }).alias("y"),
+                    args: vec![lit(1i32), col("x")]
+                })
+                .alias("y"),
                 ExpressionAction::ScalarFunction {
                     op: "multiply".to_string(),
-                    args: vec![
-                        col("x"),
-                        col("y")
-                    ],
+                    args: vec![col("x"), col("y")]
                 },
             ],
-            expect_str: "[add([x, 1]) as x, add([1, add([x, 1])]) as y, multiply([add([x, 1]), add([1, add([x, 1])])])]",
-            error_msg: "",
+            expect_str:
+                "[add(x, 1) as x, add(1, add(x, 1)) as y, multiply(add(x, 1), add(1, add(x, 1)))]",
+            error_msg: ""
         },
     ];
 

@@ -98,14 +98,17 @@ impl ExpressionExecutor {
                 // we just ignore alias action in expressions
                 ActionNode::Alias(alias) => {
                     if self.alias_project {
-                        let column = column_map.get(&alias.arg_name).ok_or_else(|| {
-                            ErrorCodes::LogicalError(
-                                "ActionNode ALIAS must have column to transform"
-                            )
-                        })?;
+                        let column = column_map
+                            .get(&alias.arg_name)
+                            .ok_or_else(|| {
+                                ErrorCodes::LogicalError(
+                                    "ActionNode ALIAS must have column to transform"
+                                )
+                            })?
+                            .clone();
 
                         columns.push(column.clone());
-                        column_map.insert(alias.name.clone(), column.clone());
+                        column_map.insert(alias.name.clone(), column);
                     }
                 }
                 ActionNode::Constant(constant) => {

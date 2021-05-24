@@ -165,8 +165,29 @@ impl fmt::Debug for ExpressionAction {
             ExpressionAction::BinaryExpression { op, left, right } => {
                 write!(f, "({:?} {} {:?})", left, op, right,)
             }
-            ExpressionAction::ScalarFunction { op, args } => write!(f, "{}({:?})", op, args),
-            ExpressionAction::AggregateFunction { op, args } => write!(f, "{}({:?})", op, args),
+            ExpressionAction::ScalarFunction { op, args } => {
+                write!(f, "{}(", op)?;
+
+                for i in 0..args.len() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{:?}", args[i],)?;
+                }
+                write!(f, ")")
+            }
+
+            ExpressionAction::AggregateFunction { op, args } => {
+                write!(f, "{}(", op)?;
+                for i in 0..args.len() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{:?}", args[i],)?;
+                }
+                write!(f, ")")
+            }
+
             ExpressionAction::Sort { expr, .. } => write!(f, "{:?}", expr),
             ExpressionAction::Wildcard => write!(f, "*"),
             ExpressionAction::Cast { expr, data_type } => {

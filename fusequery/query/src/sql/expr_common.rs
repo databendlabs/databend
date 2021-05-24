@@ -183,10 +183,10 @@ pub fn rebase_expr_from_input(
 
 /// Determines if the set of `ExpressionAction`'s are a valid projection on the input
 /// `ExpressionAction::Column`'s.
-pub fn can_columns_satisfy_exprs(
+pub fn find_columns_not_satisfy_exprs(
     columns: &[ExpressionAction],
     exprs: &[ExpressionAction]
-) -> Result<bool> {
+) -> Result<Option<ExpressionAction>> {
     columns.iter().try_for_each(|c| match c {
         ExpressionAction::Column(_) => Ok(()),
 
@@ -195,7 +195,13 @@ pub fn can_columns_satisfy_exprs(
         ))
     })?;
 
-    Ok(find_column_exprs(exprs).iter().all(|c| columns.contains(c)))
+    let exprs = find_column_exprs(exprs);
+    for expr in &exprs {
+        if !columns.contains(expr) {
+            return Ok(Some(expr.clone()));
+        }
+    }
+    return Ok(None);
 }
 
 /// Returns a cloned `expr`, but any of the `expr`'s in the tree may be
@@ -322,7 +328,7 @@ pub fn resolve_aliases_to_exprs(
 ///  `(a + b) as c` ---> `(a + b)`
 pub fn unwrap_alias_exprs(expr: &ExpressionAction) -> Result<ExpressionAction> {
     clone_with_replacement(expr, &|nest_exprs| match nest_exprs {
-        ExpressionAction::Alias(name, nested_expr) => Ok(Some(*nested_expr.clone())),
+        ExpressionAction::Alias(_, nested_expr) => Ok(Some(*nested_expr.clone())),
         _ => Ok(None)
     })
 }

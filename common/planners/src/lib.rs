@@ -32,6 +32,8 @@ mod plan_select_test;
 mod plan_stage_test;
 #[cfg(test)]
 mod plan_walker_test;
+#[cfg(test)]
+mod test;
 
 mod plan_aggregator_final;
 mod plan_aggregator_partial;
@@ -117,5 +119,3 @@ pub use crate::plan_table_create::TableOptions;
 pub use crate::plan_table_drop::DropTablePlan;
 pub use crate::plan_use_database::UseDatabasePlan;
 pub use crate::plan_visitor::PlanVisitor;
-
-mod test;

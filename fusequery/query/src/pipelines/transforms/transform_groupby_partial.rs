@@ -8,11 +8,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_aggregate_functions::IAggreagteFunction;
-use common_arrow::arrow::array::ArrayBuilder;
 use common_arrow::arrow::array::BinaryBuilder;
 use common_arrow::arrow::array::StringBuilder;
 use common_datablocks::DataBlock;
-use common_datavalues::make_builder;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataField;
@@ -31,24 +29,27 @@ use log::info;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
 
-// Table for <group_key, indices>
-type GroupIndicesTable = HashMap<Vec<u8>, Vec<u32>, ahash::RandomState>;
+// Table for <group_key, (indices, keys) >
+type GroupIndicesTable = HashMap<Vec<u8>, (Vec<u32>, Vec<DataValue>), ahash::RandomState>;
 
-// Table for <group_key, (function, column_name, args)>
+// Table for <group_key, ((function, column_name, args), keys) >
 type GroupFuncTable = RwLock<
-    HashMap<Vec<u8>, Vec<(Box<dyn IAggreagteFunction>, String, Vec<String>)>, ahash::RandomState>
+    HashMap<
+        Vec<u8>,
+        (
+            Vec<(Box<dyn IAggreagteFunction>, String, Vec<String>)>,
+            Vec<DataValue>
+        ),
+        ahash::RandomState
+    >
 >;
-
-// Group Key ==> Group by values
-type GroupKeyTable = RwLock<HashMap<Vec<u8>, Vec<DataValue>>>;
 
 pub struct GroupByPartialTransform {
     aggr_exprs: Vec<ExpressionAction>,
     group_exprs: Vec<ExpressionAction>,
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>,
-    groups: GroupFuncTable,
-    keys: GroupKeyTable
+    groups: GroupFuncTable
 }
 
 impl GroupByPartialTransform {
@@ -62,8 +63,7 @@ impl GroupByPartialTransform {
             group_exprs,
             schema,
             input: Arc::new(EmptyProcessor::create()),
-            groups: RwLock::new(HashMap::default()),
-            keys: RwLock::new(HashMap::default())
+            groups: RwLock::new(HashMap::default())
         }
     }
 }
@@ -126,7 +126,6 @@ impl IProcessor for GroupByPartialTransform {
         while let Some(block) = stream.next().await {
             let block = block?;
             let mut group_indices = GroupIndicesTable::default();
-            let mut keys = self.keys.write();
             let mut group_columns = Vec::with_capacity(group_len);
 
             // 1.1 Eval the group expr columns.
@@ -152,18 +151,18 @@ impl IProcessor for GroupByPartialTransform {
                 for row in 0..block.num_rows() {
                     group_key.clear();
 
-                    let mut group_vlaues = Vec::with_capacity(group_key.len());
+                    let mut group_values = Vec::with_capacity(group_key.len());
                     for col in &group_columns {
                         DataValue::concat_row_to_one_key(col, row, &mut group_key)?;
-                        group_vlaues.push(DataValue::try_from_array(col, row)?);
+                        group_values.push(DataValue::try_from_array(col, row)?);
                     }
 
                     match group_indices.get_mut(&group_key) {
                         None => {
-                            group_indices.insert(group_key.clone(), vec![row as u32]);
-                            keys.insert(group_key.clone(), group_vlaues);
+                            group_indices
+                                .insert(group_key.clone(), (vec![row as u32], group_values));
                         }
-                        Some(v) => {
+                        Some((v, _)) => {
                             v.push(row as u32);
                         }
                     }
@@ -172,7 +171,7 @@ impl IProcessor for GroupByPartialTransform {
 
             // 1.3 Apply take blocks to aggregate function by group_key.
             {
-                for (group_key, group_indices) in group_indices {
+                for (group_key, (group_indices, values)) in group_indices {
                     let take_block = DataBlock::block_take_by_indices(&block, &group_indices)?;
                     let rows = take_block.num_rows();
 
@@ -197,10 +196,10 @@ impl IProcessor for GroupByPartialTransform {
                                 aggr_funcs.push((func, name, args));
                             }
 
-                            groups.insert(group_key.clone(), aggr_funcs);
+                            groups.insert(group_key.clone(), (aggr_funcs, values));
                         }
                         // Accumulate result against the take block by indices.
-                        Some(aggr_funcs) => {
+                        Some((aggr_funcs, _)) => {
                             for func in aggr_funcs {
                                 let arg_columns = func
                                     .2
@@ -230,7 +229,6 @@ impl IProcessor for GroupByPartialTransform {
         info!("Group by partial cost: {:?}", delta);
 
         let groups = self.groups.read();
-        let keys = self.keys.read();
 
         // Fields. [aggrs,  [keys],  key ]
         // aggrs: aggr_len aggregate states
@@ -248,7 +246,7 @@ impl IProcessor for GroupByPartialTransform {
             fields.push(expr.to_data_field(&self.schema)?)
         }
 
-        if let Some((_, funcs)) = groups.iter().next() {
+        if let Some((_, (funcs, _))) = groups.iter().next() {
             for func in funcs {
                 let field = DataField::new(&func.1, DataType::Utf8, false);
                 fields.push(field);
@@ -269,14 +267,13 @@ impl IProcessor for GroupByPartialTransform {
             .collect();
 
         let mut group_key_builder = BinaryBuilder::new(groups.len());
-        for (key, funcs) in groups.iter() {
+        for (key, (funcs, values)) in groups.iter() {
             for (idx, func) in funcs.iter().enumerate() {
                 let states = DataValue::Struct(func.0.accumulate_result()?);
                 let ser = serde_json::to_string(&states)?;
                 builders[idx].append_value(ser.as_str())?;
             }
 
-            let values = keys.get(key).unwrap();
             let key_ser = serde_json::to_string(&DataValue::Struct(values.clone()))?;
             builders[aggr_len].append_value(key_ser.as_str())?;
 

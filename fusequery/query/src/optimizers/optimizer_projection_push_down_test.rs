@@ -12,6 +12,32 @@ use pretty_assertions::assert_eq;
 use crate::optimizers::*;
 use crate::sql::*;
 
+fn generate_partitions(workers: u64, total: u64) -> Partitions {
+    let part_size = total / workers;
+    let part_remain = total % workers;
+
+    let mut partitions = Vec::with_capacity(workers as usize);
+    if part_size == 0 {
+        partitions.push(Partition {
+            name: format!("{}-{}-{}", total, 0, total,),
+            version: 0
+        })
+    } else {
+        for part in 0..workers {
+            let part_begin = part * part_size;
+            let mut part_end = (part + 1) * part_size;
+            if part == (workers - 1) && part_remain > 0 {
+                part_end += part_remain;
+            }
+            partitions.push(Partition {
+                name: format!("{}-{}-{}", total, part_begin, part_end,),
+                version: 0
+            })
+        }
+    }
+    partitions
+}
+
 #[test]
 fn test_projection_push_down_optimizer_1() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
@@ -75,7 +101,7 @@ fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
             DataField::new("b", DataType::Utf8, false),
             DataField::new("c", DataType::Utf8, false),
         ]),
-        partitions: Test::generate_partitions(8, total as u64),
+        partitions: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
         description: format!(
             "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
@@ -130,7 +156,7 @@ fn test_projection_push_down_optimizer_3() -> anyhow::Result<()> {
             DataField::new("f", DataType::Utf8, false),
             DataField::new("g", DataType::Utf8, false),
         ]),
-        partitions: Test::generate_partitions(8, total as u64),
+        partitions: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
         description: format!(
             "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",

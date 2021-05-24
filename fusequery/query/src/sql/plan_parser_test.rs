@@ -79,8 +79,14 @@ fn test_plan_parser() -> anyhow::Result<()> {
         Test {
         name: "database-passed",
         sql: "select database()",
-        expect: "Projection: database([default]):Utf8\n  Expression: database([default]):UInt8 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
+        expect: "Projection: database(default):Utf8\n  Expression: database(default):UInt8 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
         error: "",
+        },
+        Test {
+            name: "aggr-fail1",
+            sql: "select number + 1, number + 3 from numbers(10) group by number + 2, number + 1",
+            expect: "",
+            error: "Code: 26, displayText = Column `number` is not under aggregate function and not in GROUP BY: While processing [(number + 1), (number + 3)].",
         },
         Test {
             name: "unsupported-function",

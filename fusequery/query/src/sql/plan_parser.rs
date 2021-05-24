@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashMap;
-use std::fmt::format;
 use std::sync::Arc;
 
 use common_aggregate_functions::AggregateFunctionFactory;
@@ -34,12 +33,12 @@ use super::expr_common::rebase_expr_from_input;
 use crate::datasources::ITable;
 use crate::functions::ContextFunction;
 use crate::sessions::FuseQueryContextRef;
-use crate::sql::expr_common::can_columns_satisfy_exprs;
 use crate::sql::expr_common::expand_aggregate_arg_exprs;
 use crate::sql::expr_common::expand_wildcard;
 use crate::sql::expr_common::expr_as_column_expr;
 use crate::sql::expr_common::extract_aliases;
 use crate::sql::expr_common::find_aggregate_exprs;
+use crate::sql::expr_common::find_columns_not_satisfy_exprs;
 use crate::sql::expr_common::rebase_expr;
 use crate::sql::expr_common::resolve_aliases_to_exprs;
 use crate::sql::expr_common::unwrap_alias_exprs;
@@ -343,10 +342,12 @@ impl PlanParser {
                 .map(|expr| rebase_expr(expr, &aggr_projection_exprs))
                 .collect::<Result<Vec<_>>>()?;
 
-            if !can_columns_satisfy_exprs(&column_exprs_post_aggr, &select_exprs_post_aggr)? {
-                return Err(ErrorCodes::SyntaxException(format!(
-                    "Projection references non-aggregate values, got: {:?}, but have to meet {:?}",
-                    column_exprs_post_aggr, select_exprs_post_aggr
+            if let Ok(Some(expr)) =
+                find_columns_not_satisfy_exprs(&column_exprs_post_aggr, &select_exprs_post_aggr)
+            {
+                return Err(ErrorCodes::IllegalAggregateExp(format!(
+                    "Column `{:?}` is not under aggregate function and not in GROUP BY: While processing {:?}",
+                    expr, select_exprs_post_aggr
                 )));
             }
 
@@ -354,12 +355,13 @@ impl PlanParser {
             // aggregation.
             let having_expr_post_aggr_opt = if let Some(having_expr) = &having_expr_opt {
                 let having_expr_post_aggr = rebase_expr(having_expr, &aggr_projection_exprs)?;
-                if !can_columns_satisfy_exprs(&column_exprs_post_aggr, &[
+                if let Ok(Some(expr)) = find_columns_not_satisfy_exprs(&column_exprs_post_aggr, &[
                     having_expr_post_aggr.clone()
-                ])? {
-                    return Err(ErrorCodes::SyntaxException(
-                        "Having references non-aggregate values"
-                    ));
+                ]) {
+                    return Err(ErrorCodes::IllegalAggregateExp(format!(
+                        "Column `{:?}` is not under aggregate function and not in GROUP BY: While processing {:?}",
+                        expr, having_expr_post_aggr
+                    )));
                 }
                 Some(having_expr_post_aggr)
             } else {
@@ -368,7 +370,13 @@ impl PlanParser {
 
             (plan, select_exprs_post_aggr, having_expr_post_aggr_opt)
         } else {
-            let plan = self.expression(&plan, &expression_exprs, "Before OrderBy")?;
+            let stage_phase = if order_by_exprs.is_empty() {
+                "Before Projection"
+            } else {
+                "Before OrderBy"
+            };
+
+            let plan = self.expression(&plan, &expression_exprs, stage_phase)?;
 
             (plan, projection_exprs, having_expr_opt)
         };

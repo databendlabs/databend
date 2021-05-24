@@ -25,7 +25,8 @@ use crate::pipelines::transforms::ExpressionExecutor;
 pub struct FilterTransform {
     input: Arc<dyn IProcessor>,
     executor: Arc<ExpressionExecutor>,
-    predicate: ExpressionAction
+    predicate: ExpressionAction,
+    having: bool
 }
 
 impl FilterTransform {
@@ -48,7 +49,8 @@ impl FilterTransform {
         Ok(FilterTransform {
             input: Arc::new(EmptyProcessor::create()),
             executor: Arc::new(executor),
-            predicate
+            predicate,
+            having
         })
     }
 }
@@ -56,6 +58,9 @@ impl FilterTransform {
 #[async_trait::async_trait]
 impl IProcessor for FilterTransform {
     fn name(&self) -> &str {
+        if self.having {
+            return "HavingTransform";
+        }
         "FilterTransform"
     }
 
