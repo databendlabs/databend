@@ -9,6 +9,7 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
+use log::error;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
@@ -64,14 +65,31 @@ impl IProcessor for MergeProcessor {
                     self.ctx.execute_task(async move {
                         let mut stream = match input.execute().await {
                             Err(e) => {
-                                sender.send(Result::Err(e)).await.ok();
+                                if let Err(error) = sender.send(Result::Err(e)).await {
+                                    error!("Merge processor cannot push data: {}", error);
+                                }
                                 return;
                             }
                             Ok(stream) => stream
                         };
 
                         while let Some(item) = stream.next().await {
-                            sender.send(item).await.ok();
+                            match item {
+                                Ok(item) => {
+                                    if let Err(error) = sender.send(Ok(item)).await {
+                                        // Stop pulling data
+                                        error!("Merge processor cannot push data: {}", error);
+                                        return;
+                                    }
+                                }
+                                Err(error) => {
+                                    // Stop pulling data
+                                    if let Err(error) = sender.send(Err(error)).await {
+                                        error!("Merge processor cannot push data: {}", error);
+                                    }
+                                    return;
+                                }
+                            }
                         }
                     });
                 }
