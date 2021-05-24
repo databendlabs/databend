@@ -41,6 +41,7 @@ use crate::sql::expr_common::find_aggregate_exprs;
 use crate::sql::expr_common::find_columns_not_satisfy_exprs;
 use crate::sql::expr_common::rebase_expr;
 use crate::sql::expr_common::resolve_aliases_to_exprs;
+use crate::sql::expr_common::sort_to_inner_expr;
 use crate::sql::expr_common::unwrap_alias_exprs;
 use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::sql_statement::DfDropDatabase;
@@ -180,7 +181,13 @@ impl PlanParser {
 
         let mut options = HashMap::new();
         for p in create.options.iter() {
-            options.insert(p.name.value.to_lowercase(), p.value.to_string());
+            options.insert(
+                p.name.value.to_lowercase(),
+                p.value
+                    .to_string()
+                    .trim_matches(|s| s == '\'' || s == '"')
+                    .to_string()
+            );
         }
 
         // Schema with metadata(due to serde must set metadata).
@@ -729,7 +736,9 @@ impl PlanParser {
             .and_then(|builder| {
                 builder.stage(self.ctx.get_id().unwrap(), StageState::AggregatorMerge)
             })
-            .and_then(|builder| builder.aggregate_final(&aggr_exprs, &group_by_exprs))
+            .and_then(|builder| {
+                builder.aggregate_final(input.schema(), &aggr_exprs, &group_by_exprs)
+            })
             .and_then(|builder| builder.build())
     }
 
@@ -780,18 +789,18 @@ impl PlanParser {
             return Ok(input.clone());
         }
 
-        let unalias_exprs = exprs
-            .iter()
-            .map(|expr| unwrap_alias_exprs(expr))
-            .collect::<Result<Vec<_>>>()?;
-
-        let rebased_exprs = unalias_exprs
-            .iter()
-            .map(|expr| rebase_expr_from_input(expr, &input.schema()))
-            .collect::<Result<Vec<_>>>()?;
+        let mut dedup_exprs = vec![];
+        for expr in exprs {
+            let rebased_expr = unwrap_alias_exprs(expr)
+                .and_then(|expr| rebase_expr_from_input(&expr, &input.schema()))
+                .and_then(|expr| Ok(sort_to_inner_expr(&expr)))?;
+            if !dedup_exprs.contains(&rebased_expr) {
+                dedup_exprs.push(rebased_expr);
+            }
+        }
 
         PlanBuilder::from(&input)
-            .expression(&rebased_exprs, desc)
+            .expression(&dedup_exprs, desc)
             .and_then(|builder| builder.build())
     }
 }

@@ -142,17 +142,6 @@ impl ExpressionAction {
             ))
         }
     }
-
-    pub fn to_debug_str(&self) -> String {
-        match self {
-            ExpressionAction::BinaryExpression { .. } => "BIN()".to_string(),
-            ExpressionAction::Sort { expr, .. } => {
-                format!("SORT({})", expr.column_name())
-            }
-            ExpressionAction::ScalarFunction { .. } => "SC()".to_string(),
-            _ => "other".to_string()
-        }
-    }
 }
 
 // Also used as expression column name

@@ -11,9 +11,9 @@ fn test_plan_walker() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     let source = Test::create().generate_source_plan_for_test(10000)?;
     let plan = PlanBuilder::from(&source)
-        .aggregate_partial(&[sum(col("number")).alias("sumx")], &[])?
-        .aggregate_final(&[sum(col("number")).alias("sumx")], &[])?
-        .project(&[col("sumx")])?
+        .aggregate_partial(&[sum(col("number"))], &[])?
+        .aggregate_final(source.schema(), &[sum(col("number"))], &[])?
+        .project(&[col("sum(number)").alias("sumx")])?
         .build()?;
 
     // PreOrder.

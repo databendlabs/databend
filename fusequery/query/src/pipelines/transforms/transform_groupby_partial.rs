@@ -13,10 +13,8 @@ use common_arrow::arrow::array::StringBuilder;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataColumnarValue;
-use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -230,37 +228,6 @@ impl IProcessor for GroupByPartialTransform {
 
         let groups = self.groups.read();
 
-        // Fields. [aggrs,  [keys],  key ]
-        // aggrs: aggr_len aggregate states
-        // keys:  Vec<Key>, DataTypeStruct
-        // key:  group id, DataTypeBinary
-        let mut fields = Vec::with_capacity(aggr_len + 1 + 1);
-
-        let keys_fields = self
-            .group_exprs
-            .iter()
-            .map(|e| e.to_data_field(&self.schema))
-            .collect::<Result<Vec<_>>>()?;
-
-        for expr in self.group_exprs.iter() {
-            fields.push(expr.to_data_field(&self.schema)?)
-        }
-
-        if let Some((_, (funcs, _))) = groups.iter().next() {
-            for func in funcs {
-                let field = DataField::new(&func.1, DataType::Utf8, false);
-                fields.push(field);
-            }
-        }
-
-        fields.push(DataField::new(
-            "_group_keys",
-            DataType::Struct(keys_fields),
-            false
-        ));
-
-        fields.push(DataField::new("_group_by_key", DataType::Binary, false));
-
         // Builders.
         let mut builders: Vec<StringBuilder> = (0..1 + aggr_len)
             .map(|_| StringBuilder::new(groups.len()))
@@ -274,21 +241,20 @@ impl IProcessor for GroupByPartialTransform {
                 builders[idx].append_value(ser.as_str())?;
             }
 
+            // TODO: separate keys in each column
             let key_ser = serde_json::to_string(&DataValue::Struct(values.clone()))?;
             builders[aggr_len].append_value(key_ser.as_str())?;
 
             group_key_builder.append_value(key)?;
         }
 
-        let mut columns: Vec<DataArrayRef> = Vec::with_capacity(fields.len());
+        let mut columns: Vec<DataArrayRef> = Vec::with_capacity(self.schema.fields().len());
         for mut builder in builders {
             columns.push(Arc::new(builder.finish()));
         }
         columns.push(Arc::new(group_key_builder.finish()));
 
-        let schema = DataSchemaRefExt::create(fields);
-        let block = DataBlock::create(schema, columns);
-
+        let block = DataBlock::create(self.schema.clone(), columns);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,

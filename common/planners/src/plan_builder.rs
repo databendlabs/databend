@@ -4,9 +4,11 @@
 
 use std::sync::Arc;
 
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataType;
 use common_exception::Result;
 
 use crate::col;
@@ -71,7 +73,6 @@ impl PlanBuilder {
 
         // Get the projection expressions(Including rewrite).
         let mut projection_exprs = vec![];
-        let exprs = RewriteHelper::rewrite_projection_aliases(exprs)?;
         exprs.iter().for_each(|v| match v {
             ExpressionAction::Wildcard => {
                 for i in 0..input_schema.fields().len() {
@@ -92,7 +93,7 @@ impl PlanBuilder {
 
         Ok(Self::from(&PlanNode::Expression(ExpressionPlan {
             input: Arc::new(self.plan.clone()),
-            exprs,
+            exprs: projection_exprs,
             schema: DataSchemaRefExt::create(merged),
             desc: desc.to_string()
         })))
@@ -113,29 +114,55 @@ impl PlanBuilder {
     fn aggregate(
         &self,
         mode: AggregateMode,
+        schema_before_groupby: DataSchemaRef,
         aggr_expr: &[ExpressionAction],
         group_expr: &[ExpressionAction]
     ) -> Result<Self> {
-        let input_schema = self.plan.schema();
-
-        let mut final_exprs = aggr_expr.to_owned();
-        final_exprs.extend_from_slice(group_expr);
-        let final_fields = RewriteHelper::exprs_to_fields(&final_exprs, &input_schema)?;
+        let input_schema = schema_before_groupby.clone();
 
         Ok(match mode {
             AggregateMode::Partial => {
+                let fields = RewriteHelper::exprs_to_fields(aggr_expr, &input_schema)?;
+                let mut partial_fields = fields
+                    .iter()
+                    .map(|f| DataField::new(f.name(), DataType::Utf8, false))
+                    .collect::<Vec<_>>();
+
+                if !group_expr.is_empty() {
+                    // Fields. [aggrs,  [keys],  key ]
+                    // aggrs: aggr_len aggregate states
+                    // keys:  Vec<Key>, DataTypeStruct
+                    // key:  group id, DataTypeBinary
+
+                    let keys_fields = RewriteHelper::exprs_to_fields(group_expr, &input_schema)?;
+                    partial_fields.push(DataField::new(
+                        "_group_keys",
+                        DataType::Struct(keys_fields),
+                        false
+                    ));
+
+                    partial_fields.push(DataField::new("_group_by_key", DataType::Binary, false));
+                }
+
                 Self::from(&PlanNode::AggregatorPartial(AggregatorPartialPlan {
                     input: Arc::new(self.plan.clone()),
                     aggr_expr: aggr_expr.to_vec(),
-                    group_expr: group_expr.to_vec()
+                    group_expr: group_expr.to_vec(),
+                    schema: DataSchemaRefExt::create(partial_fields)
                 }))
             }
-            AggregateMode::Final => Self::from(&PlanNode::AggregatorFinal(AggregatorFinalPlan {
-                input: Arc::new(self.plan.clone()),
-                aggr_expr: aggr_expr.to_vec(),
-                group_expr: group_expr.to_vec(),
-                schema: DataSchemaRefExt::create(final_fields)
-            }))
+            AggregateMode::Final => {
+                let mut final_exprs = aggr_expr.to_owned();
+                final_exprs.extend_from_slice(group_expr);
+                let final_fields = RewriteHelper::exprs_to_fields(&final_exprs, &input_schema)?;
+
+                Self::from(&PlanNode::AggregatorFinal(AggregatorFinalPlan {
+                    input: Arc::new(self.plan.clone()),
+                    aggr_expr: aggr_expr.to_vec(),
+                    group_expr: group_expr.to_vec(),
+                    schema: DataSchemaRefExt::create(final_fields)
+                }))
+            }
         })
     }
 
@@ -145,16 +172,27 @@ impl PlanBuilder {
         aggr_expr: &[ExpressionAction],
         group_expr: &[ExpressionAction]
     ) -> Result<Self> {
-        self.aggregate(AggregateMode::Partial, aggr_expr, group_expr)
+        self.aggregate(
+            AggregateMode::Partial,
+            self.plan.schema(),
+            aggr_expr,
+            group_expr
+        )
     }
 
     /// Apply a final aggregator plan.
     pub fn aggregate_final(
         &self,
+        schema_before_groupby: DataSchemaRef,
         aggr_expr: &[ExpressionAction],
         group_expr: &[ExpressionAction]
     ) -> Result<Self> {
-        self.aggregate(AggregateMode::Final, aggr_expr, group_expr)
+        self.aggregate(
+            AggregateMode::Final,
+            schema_before_groupby,
+            aggr_expr,
+            group_expr
+        )
     }
 
     /// Scan a data source

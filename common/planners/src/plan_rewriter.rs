@@ -84,6 +84,7 @@ pub trait PlanRewriter<'plan> {
         plan: &'plan AggregatorPartialPlan
     ) -> Result<PlanNode> {
         Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan {
+            schema: plan.schema.clone(),
             aggr_expr: plan.aggr_expr.clone(),
             group_expr: plan.group_expr.clone(),
             input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)

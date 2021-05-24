@@ -42,14 +42,23 @@ fn generate_partitions(workers: u64, total: u64) -> Partitions {
 fn test_projection_push_down_optimizer_1() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", DataType::Utf8, false),
+        DataField::new("b", DataType::Utf8, false),
+        DataField::new("c", DataType::Utf8, false),
+        DataField::new("d", DataType::Utf8, false),
+    ]);
+
+    let output_schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", DataType::Utf8, false),
+        DataField::new("b", DataType::Utf8, false),
+        DataField::new("c", DataType::Utf8, false),
+    ]);
+
     let plan = PlanNode::Projection(ProjectionPlan {
         expr: vec![col("a"), col("b"), col("c")],
-        schema: DataSchemaRefExt::create(vec![
-            DataField::new("a", DataType::Utf8, false),
-            DataField::new("b", DataType::Utf8, false),
-            DataField::new("c", DataType::Utf8, false),
-        ]),
-        input: Arc::from(PlanBuilder::empty().build()?)
+        schema: output_schema,
+        input: Arc::from(PlanBuilder::from(&PlanNode::Empty(EmptyPlan { schema })).build()?)
     });
 
     let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
@@ -73,11 +82,15 @@ fn test_projection_push_down_optimizer_group_by() -> anyhow::Result<()> {
 
     let mut project_push_down = ProjectionPushDownOptimizer::create(ctx);
     let optimized = project_push_down.optimize(&plan)?;
+
     let expect = "\
-        AggregatorFinal: groupBy=[[c2]], aggr=[[max([value]) as c1, name as c2]]\
-        \n  RedistributeStage[state: AggregatorMerge, id: 0]\
-        \n    AggregatorPartial: groupBy=[[c2]], aggr=[[max([value]) as c1, name as c2]]\
-        \n      ReadDataSource: scan partitions: [1], scan schema: [name:Utf8, value:Utf8], statistics: [read_rows: 0, read_bytes: 0]";
+        Projection: max(value) as c1:Utf8, name as c2:Utf8\
+        \n  AggregatorFinal: groupBy=[[name]], aggr=[[max(value)]]\
+        \n    RedistributeStage[state: AggregatorMerge, id: 0]\
+        \n      AggregatorPartial: groupBy=[[name]], aggr=[[max(value)]]\
+        \n        Expression: name:Utf8, value:Utf8 (Before GroupBy)\
+        \n          ReadDataSource: scan partitions: [1], scan schema: [name:Utf8, value:Utf8], statistics: [read_rows: 0, read_bytes: 0]";
+
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);
     Ok(())
@@ -168,13 +181,14 @@ fn test_projection_push_down_optimizer_3() -> anyhow::Result<()> {
 
     let group_exprs = &[col("a"), col("c")];
 
-    // SELECT a FROM table WHERE b = 10 GROUP BY a, c HAVING d < 9 ORDER BY e LIMIT 10;
+    // SELECT a FROM table WHERE b = 10 GROUP BY a, c having a < 10 order by c LIMIT 10;
     let plan = PlanBuilder::from(&source_plan)
-        .limit(10)?
-        .sort(&[col("e")])?
-        .filter(col("d").lt(lit(10)))?
-        .aggregate_partial(&[], group_exprs)?
         .filter(col("b").eq(lit(10)))?
+        .aggregate_partial(&[], group_exprs)?
+        .aggregate_final(source_plan.schema(), &[], group_exprs)?
+        .having(col("a").lt(lit(10)))?
+        .sort(&[col("c")])?
+        .limit(10)?
         .project(&[col("a")])?
         .build()?;
 
@@ -182,13 +196,14 @@ fn test_projection_push_down_optimizer_3() -> anyhow::Result<()> {
     let optimized = projection_push_down.optimize(&plan)?;
 
     let expect = "\
-        Projection: a:Utf8\
-        \n  Filter: (b = 10)\
-        \n    AggregatorPartial: groupBy=[[a, c]], aggr=[[]]\
-        \n      Filter: (d < 10)\
-        \n        Sort: e:Utf8\
-        \n          Limit: 10\
-        \n            ReadDataSource: scan partitions: [8], scan schema: [a:Utf8, b:Utf8, c:Utf8, d:Utf8, e:Utf8], statistics: [read_rows: 10000, read_bytes: 80000]";
+    Projection: a:Utf8\
+    \n  Limit: 10\
+    \n    Sort: c:Utf8\
+    \n      Having: (a < 10)\
+    \n        AggregatorFinal: groupBy=[[a, c]], aggr=[[]]\
+    \n          AggregatorPartial: groupBy=[[a, c]], aggr=[[]]\
+    \n            Filter: (b = 10)\
+    \n              ReadDataSource: scan partitions: [8], scan schema: [a:Utf8, b:Utf8, c:Utf8], statistics: [read_rows: 10000, read_bytes: 80000]";
 
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);

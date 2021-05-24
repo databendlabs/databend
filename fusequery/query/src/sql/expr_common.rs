@@ -181,6 +181,15 @@ pub fn rebase_expr_from_input(
     })
 }
 
+pub fn sort_to_inner_expr(expr: &ExpressionAction) -> ExpressionAction {
+    match expr {
+        ExpressionAction::Sort {
+            expr: nest_exprs, ..
+        } => *nest_exprs.clone(),
+        _ => expr.clone()
+    }
+}
+
 /// Determines if the set of `ExpressionAction`'s are a valid projection on the input
 /// `ExpressionAction::Column`'s.
 pub fn find_columns_not_satisfy_exprs(
