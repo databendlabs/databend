@@ -453,6 +453,10 @@ impl PlanParser {
                     right: Box::new(self.sql_to_rex(right, schema)?)
                 })
             }
+            sqlparser::ast::Expr::UnaryOp { op, expr } => Ok(ExpressionAction::UnaryExpression {
+                op: format!("{}", op),
+                expr: Box::new(self.sql_to_rex(expr, schema)?)
+            }),
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema),
             sqlparser::ast::Expr::Function(e) => {
                 let mut args = Vec::with_capacity(e.args.len());

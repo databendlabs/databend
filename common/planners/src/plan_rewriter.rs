@@ -302,6 +302,15 @@ impl RewriteHelper {
                 })
             }
 
+            ExpressionAction::UnaryExpression { op, expr } => {
+                let expr_new = RewriteHelper::expr_rewrite_alias(expr, data)?;
+
+                Ok(ExpressionAction::UnaryExpression {
+                    op: op.clone(),
+                    expr: Box::new(expr_new)
+                })
+            }
+
             ExpressionAction::Function { op, args } => {
                 let new_args: Result<Vec<ExpressionAction>> = args
                     .iter()
@@ -397,6 +406,9 @@ impl RewriteHelper {
             ExpressionAction::BinaryExpression { left, right, .. } => {
                 vec![left.as_ref().clone(), right.as_ref().clone()]
             }
+            ExpressionAction::UnaryExpression { expr, .. } => {
+                vec![expr.as_ref().clone()]
+            }
             ExpressionAction::Function { args, .. } => args.clone(),
             ExpressionAction::Wildcard => vec![],
             ExpressionAction::Sort { expr, .. } => vec![expr.as_ref().clone()],
@@ -416,6 +428,11 @@ impl RewriteHelper {
                 l.append(&mut r);
                 l
             }
+            ExpressionAction::UnaryExpression { expr, .. } => {
+                let v = Self::expression_plan_columns(expr)?;
+                v
+            }
+
             ExpressionAction::Function { args, .. } => {
                 let mut v = vec![];
                 for arg in args {
