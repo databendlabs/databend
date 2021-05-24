@@ -70,11 +70,10 @@ impl IFunction for LogicFunction {
 
     fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
         Ok(DataColumnarValue::Array(
-            DataArrayLogic::data_array_logic_op(
-                self.op.clone(),
+            DataArrayLogic::data_array_logic_op(self.op.clone(), &vec![
                 &self.left.eval(block)?,
-                &self.right.eval(block)?
-            )?
+                &self.right.eval(block)?,
+            ])?
         ))
     }
 
