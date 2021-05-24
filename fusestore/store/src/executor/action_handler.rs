@@ -23,8 +23,11 @@ use log::error;
 #[allow(unused_imports)]
 use log::info;
 use tokio::sync::mpsc::Sender;
+use tokio_stream::StreamExt;
 use tonic::Status;
+use tonic::Streaming;
 
+use crate::data_part::appender::Appender;
 use crate::engine::MemEngine;
 use crate::fs::IFileSystem;
 use crate::protobuf::CmdCreateDatabase;
@@ -33,11 +36,6 @@ use crate::protobuf::Db;
 use crate::protobuf::Table;
 
 pub struct ActionHandler {
-    // TODO zbr's proposol
-    // catalog: Box<dyn Catalog>,
-    // tbl_spec: TableSpec,
-    // db_spec: DatabaseSpec,
-    // TODO delegate table/database RW to fs
     meta: Arc<Mutex<MemEngine>>,
     fs: Arc<dyn IFileSystem>
 }
@@ -172,5 +170,37 @@ impl ActionHandler {
         });
 
         Ok(rst)
+    }
+}
+
+impl ActionHandler {
+    pub(crate) async fn do_put(
+        &self,
+        db_name: String,
+        table_name: String,
+        parts: Streaming<FlightData>
+    ) -> anyhow::Result<common_flights::AppendResult> {
+        log::info!("calling do_put");
+        {
+            let mut meta = self.meta.lock().unwrap();
+            let _tbl_meta = meta.get_table(db_name.clone(), table_name.clone())?;
+
+            // TODO:  Validates the schema of input stream:
+            // The schema of `parts` should be a subset of
+            // table's current schema (or following the evolution rules of table schema)
+        }
+
+        let appender = Appender::new(self.fs.clone());
+        let parts = parts
+            .take_while(|item| item.is_ok())
+            .map(|item| item.unwrap());
+
+        info!("calling appender");
+        let res = appender
+            .append_data(db_name + "/" + &table_name, Box::pin(parts))
+            .await;
+
+        info!("leaving with {:?}", res);
+        res
     }
 }
