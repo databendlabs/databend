@@ -137,7 +137,7 @@ pub fn expr_as_column_expr(expr: &ExpressionAction) -> Result<ExpressionAction> 
     }
 }
 
-/// Rebuilds an `ExpressionAction` as a projection on top of a collection of `ExpressionAction`'s.
+/// Rebuilds an `expr` as a projection on top of a collection of `ExpressionAction`'s.
 ///
 /// For example, the ExpressionActionession `a + b < 1` would require, as input, the 2
 /// individual columns, `a` and `b`. But, if the base exprs already
@@ -160,6 +160,23 @@ pub fn rebase_expr(
             Ok(Some(expr_as_column_expr(nest_exprs)?))
         } else {
             Ok(None)
+        }
+    })
+}
+
+// Rebuilds an `expr` to ColumnExpr when some expressions already processed in upstream
+pub fn rebase_expr_from_input(
+    expr: &ExpressionAction,
+    schema: &DataSchemaRef
+) -> Result<ExpressionAction> {
+    clone_with_replacement(expr, &|nest_exprs| match nest_exprs {
+        ExpressionAction::Sort { .. } | ExpressionAction::Column(_) => Ok(None),
+        _ => {
+            if let Ok(_) = schema.field_with_name(&nest_exprs.column_name()) {
+                Ok(Some(expr_as_column_expr(nest_exprs)?))
+            } else {
+                Ok(None)
+            }
         }
     })
 }

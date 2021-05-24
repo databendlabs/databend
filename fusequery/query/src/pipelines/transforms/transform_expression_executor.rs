@@ -97,7 +97,6 @@ impl ExpressionExecutor {
                 }
                 // we just ignore alias action in expressions
                 ActionNode::Alias(alias) => {
-                    println!("got alias {:?} {:?} ", alias, self.alias_project);
                     if self.alias_project {
                         let column = column_map.get(&alias.arg_name).ok_or_else(|| {
                             ErrorCodes::LogicalError(

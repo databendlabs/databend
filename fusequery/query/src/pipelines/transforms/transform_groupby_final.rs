@@ -171,15 +171,15 @@ impl IProcessor for GroupByFinalTransform {
         }
 
         // Build final state block.
-        let mut columns: Vec<DataArrayRef> = Vec::with_capacity(group_expr_len + aggr_funcs_len);
+        let mut columns: Vec<DataArrayRef> = Vec::with_capacity(aggr_funcs_len + group_expr_len);
 
-        for value in &group_values {
+        for value in &aggr_values {
             if !value.is_empty() {
                 columns.push(DataValue::try_into_data_array(value.as_slice())?);
             }
         }
 
-        for value in &aggr_values {
+        for value in &group_values {
             if !value.is_empty() {
                 columns.push(DataValue::try_into_data_array(value.as_slice())?);
             }
