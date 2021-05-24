@@ -79,6 +79,22 @@ fn test_substring_function() -> Result<()> {
             expect: Arc::new(StringArray::from(vec!["bcde"])),
             error: ""
         },
+        Test {
+            name: "substring-1234567890-passed",
+            display: "SUBSTRING(a,-3,3)",
+            nullable: false,
+            block: DataBlock::create(
+                DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
+                vec![Arc::new(StringArray::from(vec!["1234567890"]))]
+            ),
+            func: SubstringFunction::try_create("substring", &[
+                field_a.clone(),
+                LiteralFunction::try_create(DataValue::Int64(Some(-3)))?,
+                LiteralFunction::try_create(DataValue::UInt64(Some(3)))?
+            ])?,
+            expect: Arc::new(StringArray::from(vec!["890"])),
+            error: ""
+        },
     ];
 
     for t in tests {
