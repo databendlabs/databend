@@ -24,7 +24,6 @@ To contribute to Datafuse, ensure that you have the latest version of the codeba
 $ git clone https://github.com/datafuselabs/datafuse
 $ cd datafuse
 $ make setup
-$ make build
 $ make test
 ```
 
@@ -46,7 +45,8 @@ To submit your pull request:
 4. If you have added code that should be tested, add unit tests.
 5. Verify and ensure that the unit test suite passes, `make test`.
 6. Verify and ensure that stateless test passes:
-   `cd tests` and `./fuse-test`
+   * standalone: `./scripts/ci/ci-stateless-tests-standalone.sh`
+   * cluster: `./scripts/ci/ci-stateless-tests-cluster.sh`
 
 7. Make sure your code passes both linters, `make lint`.
 8. Change the status to “Ready for review”.
