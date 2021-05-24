@@ -44,11 +44,10 @@ fn test_array_logic() {
 
     for t in tests {
         for (i, args) in t.args.iter().enumerate() {
-            let result = DataArrayLogic::data_array_logic_op(
-                t.op.clone(),
+            let result = DataArrayLogic::data_array_logic_op(t.op.clone(), vec![
                 &DataColumnarValue::Array(args[0].clone()),
-                &DataColumnarValue::Array(args[1].clone())
-            );
+                &DataColumnarValue::Array(args[1].clone()),
+            ]);
             match result {
                 Ok(v) => assert_eq!(v.as_ref(), t.expect[i].as_ref()),
                 Err(e) => assert_eq!(t.error[i], e.to_string())
