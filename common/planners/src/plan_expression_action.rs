@@ -15,7 +15,6 @@ use common_functions::ColumnFunction;
 use common_functions::FunctionFactory;
 use common_functions::IFunction;
 use common_functions::LiteralFunction;
-use common_functions::NotFunction;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum ExpressionAction {
@@ -89,9 +88,10 @@ impl ExpressionAction {
                 AliasFunction::try_create(alias.clone(), func)
             }
             ExpressionAction::Not(expr) => {
-                let mut func = expr.to_function_with_depth(depth)?;
+                let operand = expr.to_function_with_depth(depth)?;
+                let mut func = FunctionFactory::get("not", &[operand])?;
                 func.set_depth(depth);
-                NotFunction::try_create(func)
+                Ok(func)
             }
             ExpressionAction::Sort { expr, .. } => expr.to_function_with_depth(depth),
             ExpressionAction::Wildcard => ColumnFunction::try_create("*"),

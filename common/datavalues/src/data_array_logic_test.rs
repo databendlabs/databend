@@ -40,14 +40,23 @@ fn test_array_logic() {
             expect: vec![Arc::new(BooleanArray::from(vec![true, true]))],
             error: vec![""]
         },
+        ArrayTest {
+            name: "not-passed",
+            args: vec![vec![Arc::new(BooleanArray::from(vec![true, false]))]],
+            op: DataValueLogicOperator::Not,
+            expect: vec![Arc::new(BooleanArray::from(vec![false, true]))],
+            error: vec![""]
+        },
     ];
 
     for t in tests {
         for (i, args) in t.args.iter().enumerate() {
-            let result = DataArrayLogic::data_array_logic_op(t.op.clone(), vec![
-                &DataColumnarValue::Array(args[0].clone()),
-                &DataColumnarValue::Array(args[1].clone()),
-            ]);
+            let arrays = args
+                .iter()
+                .map(|x| DataColumnarValue::Array(x.clone()))
+                .collect::<Vec<_>>();
+
+            let result = DataArrayLogic::data_array_logic_op(t.op.clone(), &arrays);
             match result {
                 Ok(v) => assert_eq!(v.as_ref(), t.expect[i].as_ref()),
                 Err(e) => assert_eq!(t.error[i], e.to_string())

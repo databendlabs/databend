@@ -14,6 +14,7 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::logics::LogicAndFunction;
+use crate::logics::LogicNotFunction;
 use crate::logics::LogicOrFunction;
 use crate::FactoryFuncRef;
 use crate::IFunction;
@@ -22,8 +23,7 @@ use crate::IFunction;
 pub struct LogicFunction {
     depth: usize,
     op: DataValueLogicOperator,
-    left: Box<dyn IFunction>,
-    right: Box<dyn IFunction>,
+    operands: Vec<Box<dyn IFunction>>,
     saved: Option<DataColumnarValue>
 }
 
@@ -32,6 +32,7 @@ impl LogicFunction {
         let mut map = map.write();
         map.insert("and", LogicAndFunction::try_create_func);
         map.insert("or", LogicOrFunction::try_create_func);
+        map.insert("not", LogicNotFunction::try_create_func);
         Ok(())
     }
 
@@ -43,14 +44,26 @@ impl LogicFunction {
             2 => Result::Ok(Box::new(LogicFunction {
                 depth: 0,
                 op,
-                left: args[0].clone(),
-                right: args[1].clone(),
+                operands: vec![args[0].clone(), args[1].clone()],
                 saved: None
             })),
-            _ => Result::Err(ErrorCodes::BadArguments(format!(
-                "Function Error: Logic function {} args length must be 2",
-                op
-            )))
+            1 => Result::Ok(Box::new(LogicFunction {
+                depth: 0,
+                op,
+                operands: vec![args[0].clone()],
+                saved: None
+            })),
+            _ => {
+                let num_args = if let DataValueLogicOperator::Not = op {
+                    1
+                } else {
+                    2
+                };
+                Result::Err(ErrorCodes::BadArguments(format!(
+                    "Function Error: Logic function {} args length must be {}",
+                    op, num_args
+                )))
+            }
         }
     }
 }
@@ -69,11 +82,13 @@ impl IFunction for LogicFunction {
     }
 
     fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
+        let arr = self
+            .operands
+            .iter()
+            .map(|x| x.eval(block).unwrap())
+            .collect::<Vec<_>>();
         Ok(DataColumnarValue::Array(
-            DataArrayLogic::data_array_logic_op(self.op.clone(), &vec![
-                &self.left.eval(block)?,
-                &self.right.eval(block)?,
-            ])?
+            DataArrayLogic::data_array_logic_op(self.op.clone(), &arr)?
         ))
     }
 
@@ -82,12 +97,18 @@ impl IFunction for LogicFunction {
     }
 
     fn is_aggregator(&self) -> bool {
-        self.left.is_aggregator() || self.right.is_aggregator()
+        match self.op {
+            DataValueLogicOperator::Not => self.operands[0].is_aggregator(),
+            _ => self.operands[0].is_aggregator() || self.operands[1].is_aggregator()
+        }
     }
 }
 
 impl fmt::Display for LogicFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {} {}", self.left, self.op, self.right)
+        match self.op {
+            DataValueLogicOperator::Not => write!(f, "{} {}", self.op, self.operands[0]),
+            _ => write!(f, "{} {} {}", self.operands[0], self.op, self.operands[1])
+        }
     }
 }
