@@ -1,4 +1,4 @@
-name: first-interaction
+name: Welcome
 on: [pull_request, issues]
 
 jobs:
