@@ -1,0 +1,15 @@
+status = [
+  "Build Check (ubuntu-latest)",
+  "Build Check (macos-latest)",
+  "Cargo Lint",
+  "Unit Tests",
+  "Stateless Tests(Standalone)",
+  "Stateless Tests(Cluster)",
+  "Performance Tests(Standalone)"
+]
+block_labels = [
+  "wip"
+]
+required_approvals = 0
+use_codeowners = false
+delete_merged_branches = true
