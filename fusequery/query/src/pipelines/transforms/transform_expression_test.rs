@@ -23,14 +23,14 @@ async fn test_transform_expression() -> anyhow::Result<()> {
     if let PlanNode::Expression(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
         .expression(
             &[col("number"), col("number"), add(col("number"), lit(1u8))],
-            ""
+            "",
         )?
         .build()?
     {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ExpressionTransform::try_create(
                 plan.schema.clone(),
-                plan.exprs.clone()
+                plan.exprs.clone(),
             )?))
         })?;
     }
@@ -78,7 +78,7 @@ async fn test_transform_expression_error() -> anyhow::Result<()> {
     let result = PlanBuilder::create(test_source.number_schema_for_test()?).project(&[
         col("xnumber"),
         col("number"),
-        add(col("number"), lit(1u8))
+        add(col("number"), lit(1u8)),
     ]);
     let actual = format!("{}", result.err().unwrap());
     let expect = "Code: 1002, displayText = Invalid argument error: Unable to get field named \"xnumber\". Valid fields: [\"number\"].";

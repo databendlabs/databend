@@ -17,7 +17,7 @@ use crate::IFunction;
 pub struct AliasFunction {
     depth: usize,
     alias: String,
-    func: Box<dyn IFunction>
+    func: Box<dyn IFunction>,
 }
 
 impl AliasFunction {
@@ -25,7 +25,7 @@ impl AliasFunction {
         Ok(Box::new(AliasFunction {
             depth: 0,
             alias,
-            func
+            func,
         }))
     }
 }

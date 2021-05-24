@@ -23,12 +23,13 @@ use crate::fs::IFileSystem;
 
 #[allow(dead_code)] // temporarily allowed
 pub(crate) struct Appender<FS> {
-    fs: FS // owned type? to be discussed later.
+    fs: FS, // owned type? to be discussed later.
 }
 
 #[allow(dead_code)] // temporarily allowed
 impl<FS> Appender<FS>
-where FS: IFileSystem
+where
+    FS: IFileSystem,
 {
     pub fn new(fs: FS) -> Self {
         Appender { fs }
@@ -40,7 +41,7 @@ where FS: IFileSystem
     pub async fn append_data(
         &self,
         path: String,
-        mut stream: std::pin::Pin<Box<dyn futures::Stream<Item = FlightData>>>
+        mut stream: std::pin::Pin<Box<dyn futures::Stream<Item = FlightData>>>,
     ) -> Result<Vec<String>> {
         if let Some(flight_data) = stream.next().await {
             let data_schema = DataSchema::try_from(&flight_data)?;

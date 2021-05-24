@@ -36,7 +36,7 @@ impl SQLCommon {
             _ => Result::Err(ErrorCodes::IllegalDataType(format!(
                 "The SQL data type {:?} is not implemented",
                 sql_type
-            )))
+            ))),
         }
     }
 
@@ -47,7 +47,7 @@ impl SQLCommon {
         leading_field: &Option<DateTimeField>,
         leading_precision: &Option<u64>,
         last_field: &Option<DateTimeField>,
-        fractional_seconds_precision: &Option<u64>
+        fractional_seconds_precision: &Option<u64>,
     ) -> Result<ExpressionAction> {
         if leading_field.is_some() {
             return Result::Err(ErrorCodes::SyntaxException(format!(
@@ -152,7 +152,7 @@ impl SQLCommon {
 
             let (diff_month, diff_days, diff_millis) = calculate_from_part(
                 interval_period_str.unwrap(),
-                parts.next().unwrap_or("second")
+                parts.next().unwrap_or("second"),
             )?;
 
             result_month += diff_month as i64;
@@ -200,13 +200,13 @@ impl SQLCommon {
 
         if result_month != 0 {
             return Ok(ExpressionAction::Literal(DataValue::IntervalYearMonth(
-                Some(result_month as i32)
+                Some(result_month as i32),
             )));
         }
 
         let result: i64 = (result_days << 32) | result_millis;
         Ok(ExpressionAction::Literal(DataValue::IntervalDayTime(Some(
-            result
+            result,
         ))))
     }
 }

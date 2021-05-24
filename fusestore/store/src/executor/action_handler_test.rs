@@ -37,7 +37,7 @@ async fn test_action_handler_do_pull_file() -> anyhow::Result<()> {
         // pull file
         let (tx, mut rx): (
             Sender<Result<FlightData, tonic::Status>>,
-            Receiver<Result<FlightData, tonic::Status>>
+            Receiver<Result<FlightData, tonic::Status>>,
         ) = tokio::sync::mpsc::channel(2);
 
         hdlr.do_pull_file("foo".into(), tx).await?;

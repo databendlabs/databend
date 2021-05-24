@@ -14,7 +14,7 @@ macro_rules! match_async_result {
                 $SENDER.send(Err(tonic::Status::internal(msg))).await.ok();
                 return;
             }
-            Ok(v) => v
+            Ok(v) => v,
         }
     }};
 }

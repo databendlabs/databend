@@ -18,7 +18,7 @@ pub struct ProjectionPlan {
     /// The schema description of the output
     pub schema: DataSchemaRef,
     /// The incoming logical plan
-    pub input: Arc<PlanNode>
+    pub input: Arc<PlanNode>,
 }
 
 impl ProjectionPlan {

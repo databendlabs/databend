@@ -26,17 +26,20 @@ fn test_aggregator_function() -> Result<()> {
         block: DataBlock,
         expect: DataValue,
         error: &'static str,
-        func: Box<dyn IFunction>
+        func: Box<dyn IFunction>,
     }
 
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Int64, false),
     ]);
-    let block = DataBlock::create(schema.clone(), vec![
-        Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
-        Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
-    ]);
+    let block = DataBlock::create(
+        schema.clone(),
+        vec![
+            Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
+            Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
+        ],
+    );
 
     let field_a = ColumnFunction::try_create("a")?;
     let field_b = ColumnFunction::try_create("b")?;
@@ -48,12 +51,13 @@ fn test_aggregator_function() -> Result<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "count(a)",
             nullable: false,
-            func: AggregatorCountFunction::try_create("count", &[ColumnFunction::try_create(
-                "a"
-            )?])?,
+            func: AggregatorCountFunction::try_create(
+                "count",
+                &[ColumnFunction::try_create("a")?],
+            )?,
             block: block.clone(),
             expect: DataValue::UInt64(Some(4)),
-            error: ""
+            error: "",
         },
         Test {
             name: "max-passed",
@@ -64,7 +68,7 @@ fn test_aggregator_function() -> Result<()> {
             func: AggregatorMaxFunction::try_create("max", &[ColumnFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::Int64(Some(4)),
-            error: ""
+            error: "",
         },
         Test {
             name: "min-passed",
@@ -75,7 +79,7 @@ fn test_aggregator_function() -> Result<()> {
             func: AggregatorMinFunction::try_create("min", &[ColumnFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::Int64(Some(1)),
-            error: ""
+            error: "",
         },
         Test {
             name: "avg-passed",
@@ -86,7 +90,7 @@ fn test_aggregator_function() -> Result<()> {
             func: AggregatorAvgFunction::try_create("avg", &[ColumnFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::Float64(Some(2.5)),
-            error: ""
+            error: "",
         },
         Test {
             name: "sum-passed",
@@ -97,7 +101,7 @@ fn test_aggregator_function() -> Result<()> {
             func: AggregatorSumFunction::try_create("sum", &[ColumnFunction::try_create("a")?])?,
             block: block.clone(),
             expect: DataValue::Int64(Some(10)),
-            error: ""
+            error: "",
         },
         Test {
             name: "1+1+sum(a)-merge-passed",
@@ -105,16 +109,25 @@ fn test_aggregator_function() -> Result<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "plus(1, plus(1, sum(a)))",
             nullable: false,
-            func: ArithmeticPlusFunction::try_create_func("+", &[
-                LiteralFunction::try_create(DataValue::Int64(Some(1)))?,
-                ArithmeticPlusFunction::try_create_func("+", &[
+            func: ArithmeticPlusFunction::try_create_func(
+                "+",
+                &[
                     LiteralFunction::try_create(DataValue::Int64(Some(1)))?,
-                    AggregatorSumFunction::try_create("sum", &[ColumnFunction::try_create("a")?])?
-                ])?
-            ])?,
+                    ArithmeticPlusFunction::try_create_func(
+                        "+",
+                        &[
+                            LiteralFunction::try_create(DataValue::Int64(Some(1)))?,
+                            AggregatorSumFunction::try_create(
+                                "sum",
+                                &[ColumnFunction::try_create("a")?],
+                            )?,
+                        ],
+                    )?,
+                ],
+            )?,
             block: block.clone(),
             expect: DataValue::Int64(Some(72)),
-            error: ""
+            error: "",
         },
         Test {
             name: "sum(a)/count(a)-merge-passed",
@@ -122,13 +135,19 @@ fn test_aggregator_function() -> Result<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "divide(sum(a), count(a))",
             nullable: false,
-            func: ArithmeticDivFunction::try_create_func("/", &[
-                AggregatorSumFunction::try_create("sum", &[ColumnFunction::try_create("a")?])?,
-                AggregatorCountFunction::try_create("count", &[ColumnFunction::try_create("a")?])?
-            ])?,
+            func: ArithmeticDivFunction::try_create_func(
+                "/",
+                &[
+                    AggregatorSumFunction::try_create("sum", &[ColumnFunction::try_create("a")?])?,
+                    AggregatorCountFunction::try_create(
+                        "count",
+                        &[ColumnFunction::try_create("a")?],
+                    )?,
+                ],
+            )?,
             block: block.clone(),
             expect: DataValue::Float64(Some(2.5)),
-            error: ""
+            error: "",
         },
         Test {
             name: "(sum(a+1)+2)-merge-passed",
@@ -136,18 +155,25 @@ fn test_aggregator_function() -> Result<()> {
             args: vec![field_a.clone(), field_b.clone()],
             display: "plus(sum(plus(a, 1)), 2)",
             nullable: false,
-            func: ArithmeticPlusFunction::try_create_func("+", &[
-                AggregatorSumFunction::try_create("sum", &[
-                    ArithmeticPlusFunction::try_create_func("+", &[
-                        ColumnFunction::try_create("a")?,
-                        LiteralFunction::try_create(DataValue::Int8(Some(1)))?
-                    ])?
-                ])?,
-                LiteralFunction::try_create(DataValue::Int8(Some(2)))?
-            ])?,
+            func: ArithmeticPlusFunction::try_create_func(
+                "+",
+                &[
+                    AggregatorSumFunction::try_create(
+                        "sum",
+                        &[ArithmeticPlusFunction::try_create_func(
+                            "+",
+                            &[
+                                ColumnFunction::try_create("a")?,
+                                LiteralFunction::try_create(DataValue::Int8(Some(1)))?,
+                            ],
+                        )?],
+                    )?,
+                    LiteralFunction::try_create(DataValue::Int8(Some(2)))?,
+                ],
+            )?,
             block,
             expect: DataValue::Int64(Some(100)),
-            error: ""
+            error: "",
         },
     ];
 

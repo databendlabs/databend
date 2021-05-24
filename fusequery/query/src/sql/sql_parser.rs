@@ -43,7 +43,7 @@ macro_rules! parser_err {
 
 /// SQL Parser
 pub struct DfParser<'a> {
-    parser: Parser<'a>
+    parser: Parser<'a>,
 }
 
 impl<'a> DfParser<'a> {
@@ -59,7 +59,7 @@ impl<'a> DfParser<'a> {
         let tokens = tokenizer.tokenize()?;
 
         Ok(DfParser {
-            parser: Parser::new(tokens, dialect)
+            parser: Parser::new(tokens, dialect),
         })
     }
 
@@ -72,7 +72,7 @@ impl<'a> DfParser<'a> {
     /// Parse a SQL statement and produce a set of statements
     pub fn parse_sql_with_dialect(
         sql: &str,
-        dialect: &dyn Dialect
+        dialect: &dyn Dialect,
     ) -> Result<Vec<DfStatement>, ParserError> {
         let mut parser = DfParser::new_with_dialect(sql, dialect)?;
         let mut stmts = Vec::new();
@@ -136,7 +136,7 @@ impl<'a> DfParser<'a> {
                     Keyword::NoKeyword => match w.value.to_uppercase().as_str() {
                         // Use database
                         "USE" => self.parse_use_database(),
-                        _ => self.expected("Keyword", self.parser.peek_token())
+                        _ => self.expected("Keyword", self.parser.peek_token()),
                     },
                     _ => {
                         // use the native parser
@@ -165,9 +165,9 @@ impl<'a> DfParser<'a> {
                     self.parser.next_token();
                     ExplainType::Graph
                 }
-                _ => ExplainType::Syntax
+                _ => ExplainType::Syntax,
             },
-            _ => ExplainType::Syntax
+            _ => ExplainType::Syntax,
         };
 
         let statement = Box::new(self.parser.parse_statement()?);
@@ -192,7 +192,7 @@ impl<'a> DfParser<'a> {
             } else {
                 return self.expected(
                     "column name or constraint definition",
-                    self.parser.peek_token()
+                    self.parser.peek_token(),
                 );
             }
             let comma = self.parser.consume_token(&Token::Comma);
@@ -202,7 +202,7 @@ impl<'a> DfParser<'a> {
             } else if !comma {
                 return self.expected(
                     "',' or ')' after column definition",
-                    self.parser.peek_token()
+                    self.parser.peek_token(),
                 );
             }
         }
@@ -221,21 +221,21 @@ impl<'a> DfParser<'a> {
                 Keyword::NoKeyword if w.quote_style.is_some() => match w.quote_style {
                     Some('"') => Ok(Value::DoubleQuotedString(w.value)),
                     Some('\'') => Ok(Value::SingleQuotedString(w.value)),
-                    _ => self.expected("A value?", Token::Word(w))?
+                    _ => self.expected("A value?", Token::Word(w))?,
                 },
-                _ => self.expected("a concrete value", Token::Word(w))
+                _ => self.expected("a concrete value", Token::Word(w)),
             },
             // The call to n.parse() returns a bigdecimal when the
             // bigdecimal feature is enabled, and is otherwise a no-op
             // (i.e., it returns the input string).
             Token::Number(ref n, l) => match n.parse() {
                 Ok(n) => Ok(Value::Number(n, l)),
-                Err(e) => parser_err!(format!("Could not parse '{}' as number: {}", n, e))
+                Err(e) => parser_err!(format!("Could not parse '{}' as number: {}", n, e)),
             },
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
             Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
             Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
-            unexpected => self.expected("a value", unexpected)
+            unexpected => self.expected("a value", unexpected),
         }
     }
 
@@ -256,7 +256,7 @@ impl<'a> DfParser<'a> {
                 } else {
                     return self.expected(
                         "constraint details after CONSTRAINT <name>",
-                        self.parser.peek_token()
+                        self.parser.peek_token(),
                     );
                 }
             } else if let Some(option) = self.parser.parse_optional_column_option()? {
@@ -269,7 +269,7 @@ impl<'a> DfParser<'a> {
             name,
             data_type,
             collation,
-            options
+            options,
         })
     }
 
@@ -278,9 +278,9 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => self.parse_create_table(),
                 Keyword::DATABASE => self.parse_create_database(),
-                _ => self.expected("create statement", Token::Word(w))
+                _ => self.expected("create statement", Token::Word(w)),
             },
-            unexpected => self.expected("create statement", unexpected)
+            unexpected => self.expected("create statement", unexpected),
         }
     }
 
@@ -295,7 +295,7 @@ impl<'a> DfParser<'a> {
             if_not_exists,
             name: db_name,
             engine,
-            options: vec![]
+            options: vec![],
         };
 
         Ok(DfStatement::CreateDatabase(create))
@@ -307,9 +307,9 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::DATABASE => self.parse_drop_database(),
                 Keyword::TABLE => self.parse_drop_table(),
-                _ => self.expected("drop statement", Token::Word(w))
+                _ => self.expected("drop statement", Token::Word(w)),
             },
-            unexpected => self.expected("drop statement", unexpected)
+            unexpected => self.expected("drop statement", unexpected),
         }
     }
 
@@ -320,7 +320,7 @@ impl<'a> DfParser<'a> {
 
         let drop = DfDropDatabase {
             if_exists: if_not_exists,
-            name: db_name
+            name: db_name,
         };
 
         Ok(DfStatement::DropDatabase(drop))
@@ -333,7 +333,7 @@ impl<'a> DfParser<'a> {
 
         let drop = DfDropTable {
             if_exists: if_not_exists,
-            name: table_name
+            name: table_name,
         };
 
         Ok(DfStatement::DropTable(drop))
@@ -361,9 +361,9 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => match &*w.value {
                 "Local" => Ok(DatabaseEngineType::Local),
                 "Remote" => Ok(DatabaseEngineType::Remote),
-                _ => self.expected("Engine must one of Local, Remote", Token::Word(w))
+                _ => self.expected("Engine must one of Local, Remote", Token::Word(w)),
             },
-            unexpected => self.expected("Engine must one of Local, Remote", unexpected)
+            unexpected => self.expected("Engine must one of Local, Remote", unexpected),
         }
     }
 
@@ -383,7 +383,7 @@ impl<'a> DfParser<'a> {
             let value = self.parse_value()?;
             table_properties.push(SqlOption {
                 name: Ident::new("LOCATION"),
-                value
+                value,
             })
         }
 
@@ -392,7 +392,7 @@ impl<'a> DfParser<'a> {
             name: table_name,
             columns,
             engine,
-            options: table_properties
+            options: table_properties,
         };
 
         Ok(DfStatement::CreateTable(create))
@@ -415,13 +415,13 @@ impl<'a> DfParser<'a> {
                 "Null" => Ok(TableEngineType::Null),
                 _ => self.expected(
                     "Engine must one of Parquet, JSONEachRaw, Null or CSV",
-                    Token::Word(w)
-                )
+                    Token::Word(w),
+                ),
             },
             unexpected => self.expected(
                 "Engine must one of Parquet, JSONEachRaw, Null or CSV",
-                unexpected
-            )
+                unexpected,
+            ),
         }
     }
 

@@ -9,7 +9,7 @@ fn binary_expr(l: ExpressionAction, op: &str, r: ExpressionAction) -> Expression
     ExpressionAction::BinaryExpression {
         left: Box::new(l),
         op: op.to_string(),
-        right: Box::new(r)
+        right: Box::new(r),
     }
 }
 
@@ -27,7 +27,7 @@ pub fn modular(left: ExpressionAction, right: ExpressionAction) -> ExpressionAct
 pub fn sum(other: ExpressionAction) -> ExpressionAction {
     ExpressionAction::Function {
         op: "sum".to_string(),
-        args: vec![other]
+        args: vec![other],
     }
 }
 
@@ -35,7 +35,7 @@ pub fn sum(other: ExpressionAction) -> ExpressionAction {
 pub fn avg(other: ExpressionAction) -> ExpressionAction {
     ExpressionAction::Function {
         op: "avg".to_string(),
-        args: vec![other]
+        args: vec![other],
     }
 }
 

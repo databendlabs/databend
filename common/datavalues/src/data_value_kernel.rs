@@ -149,7 +149,7 @@ impl DataValue {
     fn dictionary_create_key_for_col<K: ArrowDictionaryKeyType>(
         col: &ArrayRef,
         row: usize,
-        vec: &mut Vec<u8>
+        vec: &mut Vec<u8>,
     ) -> Result<()> {
         let dict_col = col.as_any().downcast_ref::<DictionaryArray<K>>().unwrap();
 
@@ -182,7 +182,7 @@ impl DataValue {
             other => Result::Err(ErrorCodes::BadDataValueType(format!(
                 "Unexpected type:{} for DataValue List",
                 other
-            )))
+            ))),
         }
     }
 
@@ -295,7 +295,7 @@ impl DataValue {
             other => Result::Err(ErrorCodes::BadDataValueType(format!(
                 "DataValue Error: Can't create a scalar of array of type \"{:?}\"",
                 other
-            )))
+            ))),
         }
     }
 
@@ -308,7 +308,7 @@ impl DataValue {
                     Ok(DataValue::Int64(Some(n)))
                 }
             }
-            Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?)))
+            Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?))),
         }
     }
 }

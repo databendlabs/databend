@@ -11,7 +11,7 @@ use crate::datasources::remote::RemoteDatabase;
 use crate::datasources::IDatabase;
 
 pub struct RemoteFactory {
-    conf: Config
+    conf: Config,
 }
 
 impl RemoteFactory {
@@ -23,7 +23,7 @@ impl RemoteFactory {
         // Load databases from remote.
         let databases: Vec<Arc<dyn IDatabase>> = vec![Arc::new(RemoteDatabase::create(
             self.conf.clone(),
-            "for_test".to_string()
+            "for_test".to_string(),
         ))];
         Ok(databases)
     }

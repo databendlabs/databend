@@ -37,8 +37,8 @@ async fn test_meta_server_set_get() -> anyhow::Result<()> {
             txid: None,
             cmd: Cmd::AddFile {
                 key: "foo".to_string(),
-                value: "bar".to_string()
-            }
+                value: "bar".to_string(),
+            },
         };
         let rst = client.write(req).await?.into_inner();
         let resp: ClientResponse = rst.into();
@@ -64,8 +64,8 @@ async fn test_meta_server_set_get() -> anyhow::Result<()> {
             txid: None,
             cmd: Cmd::AddFile {
                 key: "foo".to_string(),
-                value: "bar".to_string()
-            }
+                value: "bar".to_string(),
+            },
         };
         let rst = client.write(req).await?.into_inner();
         let resp: ClientResponse = rst.into();
@@ -84,8 +84,8 @@ async fn test_meta_server_set_get() -> anyhow::Result<()> {
             txid: None,
             cmd: Cmd::SetFile {
                 key: "foo".to_string(),
-                value: "bar2".to_string()
-            }
+                value: "bar2".to_string(),
+            },
         };
         let rst = client.write(req).await?.into_inner();
         let resp: ClientResponse = rst.into();

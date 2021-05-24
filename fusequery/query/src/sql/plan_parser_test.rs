@@ -12,7 +12,7 @@ fn test_plan_parser() -> anyhow::Result<()> {
         name: &'static str,
         sql: &'static str,
         expect: &'static str,
-        error: &'static str
+        error: &'static str,
     }
 
     let tests = vec![

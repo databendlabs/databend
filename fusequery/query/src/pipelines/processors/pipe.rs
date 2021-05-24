@@ -8,7 +8,7 @@ use crate::pipelines::processors::IProcessor;
 
 #[derive(Clone)]
 pub struct Pipe {
-    processors: Vec<Arc<dyn IProcessor>>
+    processors: Vec<Arc<dyn IProcessor>>,
 }
 
 impl Pipe {

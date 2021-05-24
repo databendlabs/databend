@@ -23,7 +23,7 @@ fn test_arithmetic_function() -> Result<()> {
         block: DataBlock,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>
+        func: Box<dyn IFunction>,
     }
 
     let schema = DataSchemaRefExt::create(vec![
@@ -42,84 +42,102 @@ fn test_arithmetic_function() -> Result<()> {
             display: "plus(a, b)",
             nullable: false,
             func: ArithmeticPlusFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
-            block: DataBlock::create(schema.clone(), vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
-                Arc::new(Int16Array::from(vec![1, 2, 3, 4])),
-            ]),
+            block: DataBlock::create(
+                schema.clone(),
+                vec![
+                    Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3, 4])),
+                    Arc::new(Int16Array::from(vec![1, 2, 3, 4])),
+                ],
+            ),
             expect: Arc::new(Int64Array::from(vec![5, 5, 5, 5])),
-            error: ""
+            error: "",
         },
         Test {
             name: "add-diff-passed",
             display: "plus(c, a)",
             nullable: false,
             func: ArithmeticPlusFunction::try_create_func("", &[field_c.clone(), field_a.clone()])?,
-            block: DataBlock::create(schema.clone(), vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
-                Arc::new(Int16Array::from(vec![1, 2, 3, 4])),
-                Arc::new(Int16Array::from(vec![1, 2, 3, 4])),
-            ]),
+            block: DataBlock::create(
+                schema.clone(),
+                vec![
+                    Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
+                    Arc::new(Int16Array::from(vec![1, 2, 3, 4])),
+                    Arc::new(Int16Array::from(vec![1, 2, 3, 4])),
+                ],
+            ),
             expect: Arc::new(Int64Array::from(vec![5, 5, 5, 5])),
-            error: ""
+            error: "",
         },
         Test {
             name: "sub-int64-passed",
             display: "minus(a, b)",
             nullable: false,
-            func: ArithmeticMinusFunction::try_create_func("", &[
-                field_a.clone(),
-                field_b.clone()
-            ])?,
-            block: DataBlock::create(schema.clone(), vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2])),
-                Arc::new(Int64Array::from(vec![1, 2, 3])),
-                Arc::new(Int16Array::from(vec![1, 2, 3])),
-            ]),
+            func: ArithmeticMinusFunction::try_create_func(
+                "",
+                &[field_a.clone(), field_b.clone()],
+            )?,
+            block: DataBlock::create(
+                schema.clone(),
+                vec![
+                    Arc::new(Int64Array::from(vec![4, 3, 2])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3])),
+                    Arc::new(Int16Array::from(vec![1, 2, 3])),
+                ],
+            ),
             expect: Arc::new(Int64Array::from(vec![3, 1, -1])),
-            error: ""
+            error: "",
         },
         Test {
             name: "mul-int64-passed",
             display: "multiply(a, b)",
             nullable: false,
             func: ArithmeticMulFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
-            block: DataBlock::create(schema.clone(), vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2])),
-                Arc::new(Int64Array::from(vec![1, 2, 3])),
-                Arc::new(Int16Array::from(vec![1, 2, 3])),
-            ]),
+            block: DataBlock::create(
+                schema.clone(),
+                vec![
+                    Arc::new(Int64Array::from(vec![4, 3, 2])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3])),
+                    Arc::new(Int16Array::from(vec![1, 2, 3])),
+                ],
+            ),
             expect: Arc::new(Int64Array::from(vec![4, 6, 6])),
-            error: ""
+            error: "",
         },
         Test {
             name: "div-int64-passed",
             display: "divide(a, b)",
             nullable: false,
             func: ArithmeticDivFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
-            block: DataBlock::create(schema.clone(), vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2])),
-                Arc::new(Int64Array::from(vec![1, 2, 3])),
-                Arc::new(Int16Array::from(vec![1, 2, 3])),
-            ]),
+            block: DataBlock::create(
+                schema.clone(),
+                vec![
+                    Arc::new(Int64Array::from(vec![4, 3, 2])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3])),
+                    Arc::new(Int16Array::from(vec![1, 2, 3])),
+                ],
+            ),
             expect: Arc::new(Float64Array::from(vec![4.0, 1.5, 0.6666666666666666])),
-            error: ""
+            error: "",
         },
         Test {
             name: "mod-int64-passed",
             display: "modulo(a, b)",
             nullable: false,
-            func: ArithmeticModuloFunction::try_create_func("", &[
-                field_a.clone(),
-                field_b.clone()
-            ])?,
-            block: DataBlock::create(schema.clone(), vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2])),
-                Arc::new(Int64Array::from(vec![1, 2, 3])),
-                Arc::new(Int16Array::from(vec![1, 2, 3])),
-            ]),
+            func: ArithmeticModuloFunction::try_create_func(
+                "",
+                &[field_a.clone(), field_b.clone()],
+            )?,
+            block: DataBlock::create(
+                schema.clone(),
+                vec![
+                    Arc::new(Int64Array::from(vec![4, 3, 2])),
+                    Arc::new(Int64Array::from(vec![1, 2, 3])),
+                    Arc::new(Int16Array::from(vec![1, 2, 3])),
+                ],
+            ),
             expect: Arc::new(Int64Array::from(vec![0, 1, 2])),
-            error: ""
+            error: "",
         },
     ];
 

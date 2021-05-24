@@ -9,7 +9,8 @@ use crate::fs::ListResult;
 /// Abstract storage layer API.
 #[async_trait]
 pub trait IFileSystem
-where Self: Sync + Send
+where
+    Self: Sync + Send,
 {
     /// Add file atomically.
     /// AKA put_if_absent

@@ -87,7 +87,7 @@ pub trait PlanVisitor<'plan> {
             PlanNode::SetVariable(plan) => self.visit_set_variable(plan),
             PlanNode::Stage(plan) => self.visit_stage(plan),
             PlanNode::Having(plan) => self.visit_having(plan),
-            PlanNode::Expression(plan) => self.visit_expression(plan)
+            PlanNode::Expression(plan) => self.visit_expression(plan),
         }
     }
 

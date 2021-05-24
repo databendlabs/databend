@@ -15,7 +15,7 @@ fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
         name: &'static str,
         exprs: Vec<ExpressionAction>,
         expect_str: &'static str,
-        error_msg: &'static str
+        error_msg: &'static str,
     }
 
     let tests = vec![
@@ -155,7 +155,7 @@ fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
         let result = RewriteHelper::rewrite_projection_aliases(&t.exprs);
         match &result {
             Ok(v) => assert_eq!(t.expect_str, format!("{:?}", v), "in test_case {}", t.name),
-            Err(e) => assert_eq!(t.error_msg, e.to_string(), "in test_case {}", t.name)
+            Err(e) => assert_eq!(t.error_msg, e.to_string(), "in test_case {}", t.name),
         }
     }
 
@@ -181,12 +181,12 @@ fn test_rewrite_expressions_plan() -> anyhow::Result<()> {
 
     let exprs = vec![ExpressionAction::Function {
         op: "multiply".to_string(),
-        args: vec![col("x"), col("y")]
+        args: vec![col("x"), col("y")],
     }];
 
     let expect_plan = ExpressionAction::Function {
         op: "multiply".to_string(),
-        args: vec![col("number"), col("number")]
+        args: vec![col("number"), col("number")],
     };
     let actual_plan = RewriteHelper::rewrite_alias_exprs(&actual, &exprs)?;
     assert_eq!(expect_plan, actual_plan[0]);

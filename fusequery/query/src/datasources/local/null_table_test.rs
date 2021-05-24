@@ -15,7 +15,7 @@ async fn test_null_table() -> anyhow::Result<()> {
         "default".into(),
         "a".into(),
         DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]).into(),
-        TableOptions::default()
+        TableOptions::default(),
     )?;
     table.read_plan(ctx.clone(), &ScanPlan::empty())?;
     assert_eq!(table.engine(), "Null");

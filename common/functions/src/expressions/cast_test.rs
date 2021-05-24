@@ -22,7 +22,7 @@ fn test_cast_function() -> Result<()> {
         block: DataBlock,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>
+        func: Box<dyn IFunction>,
     }
 
     let field_a = ColumnFunction::try_create("a").unwrap();
@@ -34,11 +34,11 @@ fn test_cast_function() -> Result<()> {
             nullable: false,
             block: DataBlock::create(
                 DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]),
-                vec![Arc::new(Int64Array::from(vec![4, 3, 2, 4]))]
+                vec![Arc::new(Int64Array::from(vec![4, 3, 2, 4]))],
             ),
             func: CastFunction::create(field_a.clone(), DataType::Int8),
             expect: Arc::new(Int8Array::from(vec![4, 3, 2, 4])),
-            error: ""
+            error: "",
         },
         Test {
             name: "cast-string-to-date32-passed",
@@ -46,11 +46,11 @@ fn test_cast_function() -> Result<()> {
             nullable: false,
             block: DataBlock::create(
                 DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
-                vec![Arc::new(StringArray::from(vec!["20210305", "20211024"]))]
+                vec![Arc::new(StringArray::from(vec!["20210305", "20211024"]))],
             ),
             func: CastFunction::create(field_a.clone(), DataType::Int32),
             expect: Arc::new(Int32Array::from(vec![20210305, 20211024])),
-            error: ""
+            error: "",
         },
     ];
 

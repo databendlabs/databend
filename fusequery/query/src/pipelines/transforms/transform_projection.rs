@@ -16,14 +16,14 @@ use crate::pipelines::processors::IProcessor;
 
 pub struct ProjectionTransform {
     schema: DataSchemaRef,
-    input: Arc<dyn IProcessor>
+    input: Arc<dyn IProcessor>,
 }
 
 impl ProjectionTransform {
     pub fn try_create(schema: DataSchemaRef) -> Result<Self> {
         Ok(ProjectionTransform {
             schema,
-            input: Arc::new(EmptyProcessor::create())
+            input: Arc::new(EmptyProcessor::create()),
         })
     }
 }

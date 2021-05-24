@@ -28,7 +28,7 @@ pub struct Meta {
 
     // cluster nodes, key distribution etc.
     pub slots: Vec<Slot>,
-    pub nodes: HashMap<NodeId, Node>
+    pub nodes: HashMap<NodeId, Node>,
 }
 
 impl Meta {
@@ -55,7 +55,7 @@ impl Meta {
 
             Cmd::AddNode {
                 ref node_id,
-                ref node
+                ref node,
             } => {
                 if self.nodes.contains_key(node_id) {
                     let prev = self.nodes.get(node_id);
@@ -88,13 +88,13 @@ impl Meta {
 /// A slot is assigned to several physical servers(normally 3 for durability).
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Slot {
-    pub node_ids: Vec<NodeId>
+    pub node_ids: Vec<NodeId>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Node {
     pub name: String,
-    pub address: String
+    pub address: String,
 }
 
 impl Display for Node {

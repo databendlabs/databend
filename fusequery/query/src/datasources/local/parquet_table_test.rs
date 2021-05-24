@@ -17,7 +17,7 @@ async fn test_parquet_table() -> anyhow::Result<()> {
         env::current_dir()?
             .join("../../tests/data/alltypes_plain.parquet")
             .display()
-            .to_string()
+            .to_string(),
     )]
     .iter()
     .cloned()
@@ -28,7 +28,7 @@ async fn test_parquet_table() -> anyhow::Result<()> {
         "default".into(),
         "test_parquet".into(),
         DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)]).clone(),
-        options
+        options,
     )?;
     table.read_plan(ctx.clone(), &ScanPlan::empty())?;
 

@@ -22,7 +22,7 @@ fn test_logic_function() -> anyhow::Result<()> {
         block: DataBlock,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>
+        func: Box<dyn IFunction>,
     }
 
     let schema = DataSchemaRefExt::create(vec![
@@ -40,12 +40,15 @@ fn test_logic_function() -> anyhow::Result<()> {
             display: "a and b",
             nullable: false,
             func: LogicAndFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
-            block: DataBlock::create(schema.clone(), vec![
-                Arc::new(BooleanArray::from(vec![true, true, true, false])),
-                Arc::new(BooleanArray::from(vec![true, false, true, true])),
-            ]),
+            block: DataBlock::create(
+                schema.clone(),
+                vec![
+                    Arc::new(BooleanArray::from(vec![true, true, true, false])),
+                    Arc::new(BooleanArray::from(vec![true, false, true, true])),
+                ],
+            ),
             expect: Arc::new(BooleanArray::from(vec![true, false, true, false])),
-            error: ""
+            error: "",
         },
         Test {
             name: "or-passed",
@@ -53,12 +56,15 @@ fn test_logic_function() -> anyhow::Result<()> {
             display: "a or b",
             nullable: false,
             func: LogicOrFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
-            block: DataBlock::create(schema.clone(), vec![
-                Arc::new(BooleanArray::from(vec![true, true, true, false])),
-                Arc::new(BooleanArray::from(vec![true, false, true, true])),
-            ]),
+            block: DataBlock::create(
+                schema.clone(),
+                vec![
+                    Arc::new(BooleanArray::from(vec![true, true, true, false])),
+                    Arc::new(BooleanArray::from(vec![true, false, true, true])),
+                ],
+            ),
             expect: Arc::new(BooleanArray::from(vec![true, true, true, true])),
-            error: ""
+            error: "",
         },
     ];
 

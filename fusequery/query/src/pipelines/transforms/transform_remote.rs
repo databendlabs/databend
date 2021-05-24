@@ -20,7 +20,7 @@ pub struct RemoteTransform {
     remote_addr: String,
     pub ctx: FuseQueryContextRef,
     pub plan: PlanNode,
-    input: Arc<dyn IProcessor>
+    input: Arc<dyn IProcessor>,
 }
 
 impl RemoteTransform {
@@ -28,14 +28,14 @@ impl RemoteTransform {
         ctx: FuseQueryContextRef,
         job_id: String,
         remote_addr: String,
-        plan: PlanNode
+        plan: PlanNode,
     ) -> Result<Self> {
         Ok(Self {
             job_id,
             remote_addr,
             ctx,
             plan,
-            input: Arc::new(EmptyProcessor::create())
+            input: Arc::new(EmptyProcessor::create()),
         })
     }
 }
@@ -64,7 +64,7 @@ impl IProcessor for RemoteTransform {
             ctx: FuseQueryContextRef,
             remote_addr: &str,
             job_id: &str,
-            plan: &PlanNode
+            plan: &PlanNode,
         ) -> anyhow::Result<SendableDataBlockStream> {
             let mut client = QueryClient::try_create(remote_addr.to_string().clone()).await?;
             client.set_timeout(ctx.get_flight_client_timeout()?);
@@ -78,10 +78,10 @@ impl IProcessor for RemoteTransform {
                 self.ctx.clone(),
                 &self.remote_addr,
                 &self.job_id,
-                &self.plan
+                &self.plan,
             )
             .await
-            .map_err(ErrorCodes::from)?
+            .map_err(ErrorCodes::from)?,
         ))
     }
 }

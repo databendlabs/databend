@@ -28,7 +28,7 @@ async fn test_datasource() -> anyhow::Result<()> {
                 if_not_exists: false,
                 db: "test_db".to_string(),
                 engine: DatabaseEngineType::Local,
-                options: Default::default()
+                options: Default::default(),
             })
             .await?;
 
@@ -40,7 +40,7 @@ async fn test_datasource() -> anyhow::Result<()> {
         datasource
             .drop_database(DropDatabasePlan {
                 if_exists: false,
-                db: "test_db".to_string()
+                db: "test_db".to_string(),
             })
             .await?;
 

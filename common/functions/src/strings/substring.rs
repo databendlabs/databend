@@ -23,24 +23,24 @@ pub struct SubstringFunction {
     expr: Box<dyn IFunction>,
     /// Substring params
     from: Box<dyn IFunction>,
-    len: Box<dyn IFunction>
+    len: Box<dyn IFunction>,
 }
 
 impl SubstringFunction {
     pub fn try_create(
         display_name: &str,
-        args: &[Box<dyn IFunction>]
+        args: &[Box<dyn IFunction>],
     ) -> Result<Box<dyn IFunction>> {
         match args.len() {
             3 => Ok(Box::new(SubstringFunction {
                 display_name: display_name.to_string(),
                 expr: args[0].clone(),
                 from: args[1].clone(),
-                len: args[2].clone()
+                len: args[2].clone(),
             })),
             _ => Result::Err(ErrorCodes::BadArguments(
-                "Function Error: Substring function args length must be 3"
-            ))
+                "Function Error: Substring function args length must be 3",
+            )),
         }
     }
 }
@@ -82,14 +82,14 @@ impl IFunction for SubstringFunction {
 
         match value {
             DataColumnarValue::Array(v) => Ok(DataColumnarValue::Array(
-                compute::kernels::substring::substring(v.deref(), from_scalar, &len_scalar)?
+                compute::kernels::substring::substring(v.deref(), from_scalar, &len_scalar)?,
             )),
             DataColumnarValue::Scalar(v) => {
                 let scalar_array = v.to_array()?;
                 let substring_array = compute::kernels::substring::substring(
                     scalar_array.deref(),
                     from_scalar,
-                    &len_scalar
+                    &len_scalar,
                 )?;
                 let substring_scalar = DataValue::try_from_array(&substring_array, 0)?;
                 Ok(DataColumnarValue::Scalar(substring_scalar))

@@ -32,7 +32,7 @@ fn commit_authors() {
     );
     let authors = match r {
         Ok((_, output, _)) => output,
-        Err(e) => e.to_string()
+        Err(e) => e.to_string(),
     };
     println!("cargo:rustc-env=COMMIT_AUTHORS={}", authors);
 }

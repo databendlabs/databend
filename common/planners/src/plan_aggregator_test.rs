@@ -20,7 +20,7 @@ mod tests {
             .build()?;
         let explain = PlanNode::Explain(ExplainPlan {
             typ: ExplainType::Syntax,
-            input: Arc::new(plan)
+            input: Arc::new(plan),
         });
         let expect = "\
         Projection: sumx:UInt64\
@@ -44,7 +44,7 @@ mod tests {
             name: &'static str,
             plan: Result<PlanBuilder, ErrorCodes>,
             expect_error: bool,
-            expect: &'static str
+            expect: &'static str,
         }
 
         let source = Test::create().generate_source_plan_for_test(10000)?;

@@ -36,7 +36,7 @@ pub struct ExpressionTransform {
     funcs: Vec<Box<dyn IFunction>>,
     // The final schema(Build by plan_builder.expression).
     schema: DataSchemaRef,
-    input: Arc<dyn IProcessor>
+    input: Arc<dyn IProcessor>,
 }
 
 impl ExpressionTransform {
@@ -59,7 +59,7 @@ impl ExpressionTransform {
         Ok(ExpressionTransform {
             funcs,
             schema,
-            input: Arc::new(EmptyProcessor::create())
+            input: Arc::new(EmptyProcessor::create()),
         })
     }
 }

@@ -22,7 +22,7 @@ use crate::pipelines::processors::IProcessor;
 
 pub struct FilterTransform {
     func: Box<dyn IFunction>,
-    input: Arc<dyn IProcessor>
+    input: Arc<dyn IProcessor>,
 }
 
 impl FilterTransform {
@@ -37,7 +37,7 @@ impl FilterTransform {
 
         Ok(FilterTransform {
             func,
-            input: Arc::new(EmptyProcessor::create())
+            input: Arc::new(EmptyProcessor::create()),
         })
     }
 }

@@ -16,7 +16,7 @@ fn test_array_logic() {
         args: Vec<Vec<DataArrayRef>>,
         expect: Vec<DataArrayRef>,
         error: Vec<&'static str>,
-        op: DataValueLogicOperator
+        op: DataValueLogicOperator,
     }
 
     let tests = vec![
@@ -28,7 +28,7 @@ fn test_array_logic() {
             ]],
             op: DataValueLogicOperator::And,
             expect: vec![Arc::new(BooleanArray::from(vec![true, false]))],
-            error: vec![""]
+            error: vec![""],
         },
         ArrayTest {
             name: "or-passed",
@@ -38,7 +38,7 @@ fn test_array_logic() {
             ]],
             op: DataValueLogicOperator::Or,
             expect: vec![Arc::new(BooleanArray::from(vec![true, true]))],
-            error: vec![""]
+            error: vec![""],
         },
     ];
 
@@ -47,11 +47,11 @@ fn test_array_logic() {
             let result = DataArrayLogic::data_array_logic_op(
                 t.op.clone(),
                 &DataColumnarValue::Array(args[0].clone()),
-                &DataColumnarValue::Array(args[1].clone())
+                &DataColumnarValue::Array(args[1].clone()),
             );
             match result {
                 Ok(v) => assert_eq!(v.as_ref(), t.expect[i].as_ref()),
-                Err(e) => assert_eq!(t.error[i], e.to_string())
+                Err(e) => assert_eq!(t.error[i], e.to_string()),
             }
         }
     }

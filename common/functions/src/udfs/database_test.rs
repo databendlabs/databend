@@ -21,7 +21,7 @@ fn test_database_function() -> anyhow::Result<()> {
         block: DataBlock,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>
+        func: Box<dyn IFunction>,
     }
 
     let database = LiteralFunction::try_create(DataValue::Utf8(Some("default".to_string())))?;
@@ -33,7 +33,7 @@ fn test_database_function() -> anyhow::Result<()> {
         func: DatabaseFunction::try_create("database", &[database.clone()])?,
         block: DataBlock::empty(),
         expect: Arc::new(StringArray::from(vec!["default"])),
-        error: ""
+        error: "",
     }];
 
     for t in tests {

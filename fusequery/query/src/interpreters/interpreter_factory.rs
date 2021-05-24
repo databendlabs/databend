@@ -35,7 +35,7 @@ impl InterpreterFactory {
             _ => Result::Err(ErrorCodes::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan:{}",
                 plan.name()
-            )))
+            ))),
         }
     }
 }

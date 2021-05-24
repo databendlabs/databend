@@ -11,5 +11,6 @@ pub trait ITableFunction: Sync + Send + ITable {
     fn db(&self) -> &str;
 
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn ITable + 'a>
-    where Self: 'a;
+    where
+        Self: 'a;
 }

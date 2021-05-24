@@ -16,7 +16,7 @@ pub struct PlanScheduler;
 
 /// ReadSourceRewriter will replace all ReadDataSourcePlan in a plan tree with given `new_source_plan`
 struct ReadSourceRewriter {
-    new_source_plan: ReadDataSourcePlan
+    new_source_plan: ReadDataSourcePlan,
 }
 
 impl<'plan> PlanRewriter<'plan> for ReadSourceRewriter {
@@ -35,7 +35,7 @@ impl PlanScheduler {
     /// Schedule the plan to Local or Remote mode.
     pub fn reschedule(
         ctx: FuseQueryContextRef,
-        plan: &PlanNode
+        plan: &PlanNode,
     ) -> Result<Vec<(String, PlanNode)>> {
         let mut results = vec![];
         let max_threads = ctx.get_max_threads()? as usize;
@@ -50,7 +50,7 @@ impl PlanScheduler {
                         source_plan = node.clone();
                         Ok(false)
                     }
-                    _ => Ok(true)
+                    _ => Ok(true),
                 }
             })?;
         }
@@ -108,7 +108,7 @@ impl PlanScheduler {
                     let left = total_chunks - num_chunks_so_far;
                     chunk_size = min(
                         (p_usize * total_chunks - remainder) / priority_sum + 1,
-                        left
+                        left,
                     );
 
                     info!(
@@ -121,7 +121,7 @@ impl PlanScheduler {
                 }
                 new_source_plan.partitions = vec![];
                 new_source_plan.partitions.extend_from_slice(
-                    &all_parts[num_chunks_so_far..num_chunks_so_far + chunk_size]
+                    &all_parts[num_chunks_so_far..num_chunks_so_far + chunk_size],
                 );
                 num_chunks_so_far += chunk_size;
 

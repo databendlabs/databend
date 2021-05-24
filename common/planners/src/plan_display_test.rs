@@ -28,7 +28,7 @@ fn test_plan_display_indent() -> anyhow::Result<()> {
         table: "bar".into(),
         schema,
         engine: TableEngineType::JsonEachRaw,
-        options
+        options,
     });
 
     assert_eq!(

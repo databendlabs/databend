@@ -31,7 +31,7 @@ async fn test_state_machine_apply_add() -> anyhow::Result<()> {
         &str,
         &str,
         Option<String>,
-        Option<String>
+        Option<String>,
     )> = vec![
         (
             "add on none",
@@ -39,7 +39,7 @@ async fn test_state_machine_apply_add() -> anyhow::Result<()> {
             "k1",
             "v1",
             None,
-            Some("v1".to_string())
+            Some("v1".to_string()),
         ),
         (
             "add on existent",
@@ -47,7 +47,7 @@ async fn test_state_machine_apply_add() -> anyhow::Result<()> {
             "k1",
             "v2",
             Some("v1".to_string()),
-            None
+            None,
         ),
         (
             "dup set with same serial, even with diff key, got the previous result",
@@ -55,7 +55,7 @@ async fn test_state_machine_apply_add() -> anyhow::Result<()> {
             "k2",
             "v3",
             Some("v1".to_string()),
-            None
+            None,
         ),
         (
             "diff client, same serial",
@@ -63,18 +63,21 @@ async fn test_state_machine_apply_add() -> anyhow::Result<()> {
             "k2",
             "v3",
             None,
-            Some("v3".to_string())
+            Some("v3".to_string()),
         ),
         ("no txid", None, "k3", "v4", None, Some("v4".to_string())),
     ];
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
-        let resp = sm.apply(5, &ClientRequest {
-            txid: txid.clone(),
-            cmd: Cmd::AddFile {
-                key: k.to_string(),
-                value: v.to_string()
-            }
-        });
+        let resp = sm.apply(
+            5,
+            &ClientRequest {
+                txid: txid.clone(),
+                cmd: Cmd::AddFile {
+                    key: k.to_string(),
+                    value: v.to_string(),
+                },
+            },
+        );
         assert_eq!(
             ClientResponse::String {
                 prev: want_prev.clone(),
@@ -100,7 +103,7 @@ async fn test_state_machine_apply_set() -> anyhow::Result<()> {
         &str,
         &str,
         Option<String>,
-        Option<String>
+        Option<String>,
     )> = vec![
         (
             "set on none",
@@ -108,7 +111,7 @@ async fn test_state_machine_apply_set() -> anyhow::Result<()> {
             "k1",
             "v1",
             None,
-            Some("v1".to_string())
+            Some("v1".to_string()),
         ),
         (
             "set on existent",
@@ -116,7 +119,7 @@ async fn test_state_machine_apply_set() -> anyhow::Result<()> {
             "k1",
             "v2",
             Some("v1".to_string()),
-            Some("v2".to_string())
+            Some("v2".to_string()),
         ),
         (
             "dup set with same serial, even with diff key, got the previous result",
@@ -124,7 +127,7 @@ async fn test_state_machine_apply_set() -> anyhow::Result<()> {
             "k2",
             "v3",
             Some("v1".to_string()),
-            Some("v2".to_string())
+            Some("v2".to_string()),
         ),
         (
             "diff client, same serial",
@@ -132,7 +135,7 @@ async fn test_state_machine_apply_set() -> anyhow::Result<()> {
             "k2",
             "v3",
             None,
-            Some("v3".to_string())
+            Some("v3".to_string()),
         ),
         (
             "no txid",
@@ -140,17 +143,20 @@ async fn test_state_machine_apply_set() -> anyhow::Result<()> {
             "k2",
             "v4",
             Some("v3".to_string()),
-            Some("v4".to_string())
+            Some("v4".to_string()),
         ),
     ];
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
-        let resp = sm.apply(5, &ClientRequest {
-            txid: txid.clone(),
-            cmd: Cmd::SetFile {
-                key: k.to_string(),
-                value: v.to_string()
-            }
-        });
+        let resp = sm.apply(
+            5,
+            &ClientRequest {
+                txid: txid.clone(),
+                cmd: Cmd::SetFile {
+                    key: k.to_string(),
+                    value: v.to_string(),
+                },
+            },
+        );
         assert_eq!(
             ClientResponse::String {
                 prev: want_prev.clone(),
@@ -324,7 +330,7 @@ async fn setup_leader() -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
 async fn setup_non_voter(
     leader: Arc<MetaNode>,
     id: NodeId,
-    addr: &str
+    addr: &str,
 ) -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
     let mn = MetaNode::boot_non_voter(id, addr).await?;
     let mut rx = mn.raft.metrics();
@@ -372,8 +378,8 @@ async fn assert_write_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> anyho
                 txid: None,
                 cmd: Cmd::SetFile {
                     key: key.to_string(),
-                    value: key.to_string()
-                }
+                    value: key.to_string(),
+                },
             })
             .await?;
     }
@@ -397,7 +403,7 @@ async fn assert_applied_index(meta_nodes: Vec<Arc<MetaNode>>, at_least: u64) -> 
         wait_for_applied(
             &format!("n{}", i,),
             &mut mn.sto.applied_rx.clone(),
-            at_least
+            at_least,
         )
         .await;
     }
@@ -407,7 +413,7 @@ async fn assert_applied_index(meta_nodes: Vec<Arc<MetaNode>>, at_least: u64) -> 
 async fn assert_get_file(
     meta_nodes: Vec<Arc<MetaNode>>,
     key: &str,
-    value: &str
+    value: &str,
 ) -> anyhow::Result<()> {
     for i in 0..meta_nodes.len() {
         let mn = meta_nodes[i].clone();
@@ -430,7 +436,9 @@ async fn assert_connection(addr: &str) -> anyhow::Result<()> {
 // wait for raft metrics to a state that satisfies `func`.
 #[tracing::instrument(level = "info", skip(func, mrx))]
 async fn wait_for<T>(msg: &str, mrx: &mut Receiver<RaftMetrics>, func: T) -> RaftMetrics
-where T: Fn(&RaftMetrics) -> bool {
+where
+    T: Fn(&RaftMetrics) -> bool,
+{
     loop {
         let latest = mrx.borrow().clone();
         tracing::info!("start wait for {:} metrics: {:?}", msg, latest);

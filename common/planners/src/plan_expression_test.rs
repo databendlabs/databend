@@ -15,7 +15,7 @@ fn test_expression_plan() -> anyhow::Result<()> {
         exprs: vec![col("a")],
         schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
         input: Arc::from(PlanBuilder::empty().build()?),
-        desc: "".to_string()
+        desc: "".to_string(),
     });
     let _ = expression.schema();
     let expect = "Expression: a:Utf8 ()";

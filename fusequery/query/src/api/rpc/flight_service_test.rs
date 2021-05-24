@@ -15,7 +15,7 @@ async fn test_flight_execute() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
     let plan = PlanBuilder::from(&PlanNode::ReadSource(
-        test_source.number_read_source_plan_for_test(5)?
+        test_source.number_read_source_plan_for_test(5)?,
     ))
     .build()?;
 
@@ -57,7 +57,7 @@ async fn test_flight_empty_source() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
     let plan = PlanBuilder::from(&PlanNode::ReadSource(
-        test_source.number_read_source_plan_for_test(0)?
+        test_source.number_read_source_plan_for_test(0)?,
     ))
     .build()?;
 

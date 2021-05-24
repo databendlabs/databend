@@ -33,7 +33,7 @@ use crate::query_do_get::QueryDoGet;
 pub struct QueryClient {
     // In seconds.
     timeout_second: u64,
-    client: FlightServiceClient<tonic::transport::channel::Channel>
+    client: FlightServiceClient<tonic::transport::channel::Channel>,
 }
 
 impl QueryClient {
@@ -41,7 +41,7 @@ impl QueryClient {
         let client = FlightServiceClient::connect(format!("http://{}", addr)).await?;
         Ok(Self {
             timeout_second: 60,
-            client
+            client,
         })
     }
 
@@ -53,11 +53,11 @@ impl QueryClient {
     pub async fn execute_remote_plan_action(
         &mut self,
         job_id: String,
-        plan: &PlanNode
+        plan: &PlanNode,
     ) -> Result<SendableDataBlockStream> {
         let action = QueryDoGet::ExecutePlan(ExecutePlanAction {
             job_id: job_id.clone(),
-            plan: plan.clone()
+            plan: plan.clone(),
         });
         self.do_get(&action).await
     }
@@ -82,7 +82,7 @@ impl QueryClient {
                 let block_stream = stream.map(move |flight_data| {
                     fn fetch_impl(
                         data: Result<FlightData, Status>,
-                        schema: &SchemaRef
+                        schema: &SchemaRef,
                     ) -> anyhow::Result<RecordBatch> {
                         let batch = flight_data_to_arrow_batch(&data?, schema.clone(), &[])?;
                         Ok(batch)
@@ -97,7 +97,7 @@ impl QueryClient {
             None => bail!(
                 "Can not receive data from flight server, action:{:?}",
                 action
-            )
+            ),
         }
     }
 
@@ -114,7 +114,7 @@ impl QueryClient {
                     action
                 )
             }
-            Some(resp) => Ok(resp.body)
+            Some(resp) => Ok(resp.body),
         }
     }
 }

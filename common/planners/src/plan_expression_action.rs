@@ -28,12 +28,12 @@ pub enum ExpressionAction {
     BinaryExpression {
         left: Box<ExpressionAction>,
         op: String,
-        right: Box<ExpressionAction>
+        right: Box<ExpressionAction>,
     },
     /// Functions with a set of arguments.
     Function {
         op: String,
-        args: Vec<ExpressionAction>
+        args: Vec<ExpressionAction>,
     },
 
     /// A sort expression, that can be used to sort values.
@@ -43,7 +43,7 @@ pub enum ExpressionAction {
         /// The direction of the sort
         asc: bool,
         /// Whether to put Nulls before all other data values
-        nulls_first: bool
+        nulls_first: bool,
     },
     /// All fields(*) in a schema.
     Wildcard,
@@ -53,8 +53,8 @@ pub enum ExpressionAction {
         /// The expression being cast
         expr: Box<ExpressionAction>,
         /// The `DataType` the expression will yield
-        data_type: DataType
-    }
+        data_type: DataType,
+    },
 }
 
 impl ExpressionAction {
@@ -89,8 +89,8 @@ impl ExpressionAction {
             ExpressionAction::Wildcard => ColumnFunction::try_create("*"),
             ExpressionAction::Cast { expr, data_type } => Ok(CastFunction::create(
                 expr.to_function_with_depth(depth)?,
-                data_type.clone()
-            ))
+                data_type.clone(),
+            )),
         }
     }
 

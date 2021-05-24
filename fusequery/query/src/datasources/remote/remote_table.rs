@@ -19,7 +19,7 @@ use crate::sessions::FuseQueryContextRef;
 pub struct RemoteTable {
     pub(crate) db: String,
     name: String,
-    schema: DataSchemaRef
+    schema: DataSchemaRef,
 }
 
 impl RemoteTable {
@@ -28,7 +28,7 @@ impl RemoteTable {
         db: String,
         name: String,
         schema: DataSchemaRef,
-        _options: TableOptions
+        _options: TableOptions,
     ) -> Result<Box<dyn ITable>> {
         let table = Self { db, name, schema };
         Ok(Box::new(table))
@@ -59,13 +59,13 @@ impl ITable for RemoteTable {
 
     fn read_plan(&self, _ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
         Result::Err(ErrorCodes::UnImplement(
-            "RemoteTable read_plan not yet implemented"
+            "RemoteTable read_plan not yet implemented",
         ))
     }
 
     async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
         Result::Err(ErrorCodes::UnImplement(
-            "RemoteTable read not yet implemented"
+            "RemoteTable read not yet implemented",
         ))
     }
 }

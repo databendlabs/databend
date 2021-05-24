@@ -49,7 +49,7 @@ pub type FlightStream<T> =
 pub struct FlightService {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionManagerRef
+    session_manager: SessionManagerRef,
 }
 
 impl FlightService {
@@ -57,7 +57,7 @@ impl FlightService {
         Self {
             conf,
             cluster,
-            session_manager
+            session_manager,
         }
     }
 
@@ -71,7 +71,7 @@ impl Flight for FlightService {
     type HandshakeStream = FlightStream<HandshakeResponse>;
     async fn handshake(
         &self,
-        _request: Request<Streaming<HandshakeRequest>>
+        _request: Request<Streaming<HandshakeRequest>>,
     ) -> Result<Response<Self::HandshakeStream>, Status> {
         unimplemented!()
     }
@@ -79,21 +79,21 @@ impl Flight for FlightService {
     type ListFlightsStream = FlightStream<FlightInfo>;
     async fn list_flights(
         &self,
-        _request: Request<Criteria>
+        _request: Request<Criteria>,
     ) -> Result<Response<Self::ListFlightsStream>, Status> {
         unimplemented!()
     }
 
     async fn get_flight_info(
         &self,
-        _request: Request<FlightDescriptor>
+        _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
         unimplemented!()
     }
 
     async fn get_schema(
         &self,
-        _request: Request<FlightDescriptor>
+        _request: Request<FlightDescriptor>,
     ) -> Result<Response<SchemaResult>, Status> {
         unimplemented!()
     }
@@ -101,7 +101,7 @@ impl Flight for FlightService {
     type DoGetStream = FlightStream<FlightData>;
     async fn do_get(
         &self,
-        request: Request<Ticket>
+        request: Request<Ticket>,
     ) -> Result<Response<Self::DoGetStream>, Status> {
         let action: QueryDoGet = request.try_into()?;
         match action {
@@ -149,7 +149,7 @@ impl Flight for FlightService {
                             let schema_flight_data =
                                 arrow_flight::utils::flight_data_from_arrow_schema(
                                     block.schema(),
-                                    &options
+                                    &options,
                                 );
                             sender.send(Ok(schema_flight_data)).await.ok();
                             has_send = true;
@@ -178,7 +178,7 @@ impl Flight for FlightService {
                         let empty_schema = DataSchemaRefExt::create(vec![]);
                         let schema_flight_data = arrow_flight::utils::flight_data_from_arrow_schema(
                             &empty_schema,
-                            &options
+                            &options,
                         );
                         sender.send(Ok(schema_flight_data)).await.ok();
                     }
@@ -203,7 +203,7 @@ impl Flight for FlightService {
     type DoPutStream = FlightStream<PutResult>;
     async fn do_put(
         &self,
-        _request: Request<Streaming<FlightData>>
+        _request: Request<Streaming<FlightData>>,
     ) -> Result<Response<Self::DoPutStream>, Status> {
         unimplemented!()
     }
@@ -211,7 +211,7 @@ impl Flight for FlightService {
     type DoExchangeStream = FlightStream<FlightData>;
     async fn do_exchange(
         &self,
-        _request: Request<Streaming<FlightData>>
+        _request: Request<Streaming<FlightData>>,
     ) -> Result<Response<Self::DoExchangeStream>, Status> {
         unimplemented!()
     }
@@ -219,7 +219,7 @@ impl Flight for FlightService {
     type DoActionStream = FlightStream<arrow_flight::Result>;
     async fn do_action(
         &self,
-        request: Request<Action>
+        request: Request<Action>,
     ) -> Result<Response<Self::DoActionStream>, Status> {
         let action: QueryDoAction = request.try_into()?;
         match action {
@@ -236,7 +236,7 @@ impl Flight for FlightService {
                 let stream = {
                     let result = arrow_flight::Result {
                         body: serde_json::to_vec(&parts)
-                            .map_err(|e| Status::internal(e.to_string()))?
+                            .map_err(|e| Status::internal(e.to_string()))?,
                     };
 
                     let flights: Vec<Result<arrow_flight::Result, Status>> = vec![Ok(result)];
@@ -250,7 +250,7 @@ impl Flight for FlightService {
     type ListActionsStream = FlightStream<ActionType>;
     async fn list_actions(
         &self,
-        _request: Request<Empty>
+        _request: Request<Empty>,
     ) -> Result<Response<Self::ListActionsStream>, Status> {
         unimplemented!()
     }
@@ -258,7 +258,7 @@ impl Flight for FlightService {
 
 async fn send_response(
     tx: &FlightDataSender,
-    data: Result<FlightData, Status>
+    data: Result<FlightData, Status>,
 ) -> Result<(), Status> {
     tx.send(data)
         .await

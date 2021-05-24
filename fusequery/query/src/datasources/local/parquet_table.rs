@@ -33,7 +33,7 @@ pub struct ParquetTable {
     db: String,
     name: String,
     schema: DataSchemaRef,
-    file: String
+    file: String,
 }
 
 impl ParquetTable {
@@ -41,7 +41,7 @@ impl ParquetTable {
         db: String,
         name: String,
         schema: DataSchemaRef,
-        options: TableOptions
+        options: TableOptions,
     ) -> Result<Box<dyn ITable>> {
         let file = options.get("location");
         return match file {
@@ -50,13 +50,13 @@ impl ParquetTable {
                     db,
                     name,
                     schema,
-                    file: file.trim_matches(|s| s == '\'' || s == '"').to_string()
+                    file: file.trim_matches(|s| s == '\'' || s == '"').to_string(),
                 };
                 Ok(Box::new(table))
             }
             _ => Result::Err(ErrorCodes::BadOption(
-                "Parquet Engine must contains file location options".to_string()
-            ))
+                "Parquet Engine must contains file location options".to_string(),
+            )),
         };
     }
 }
@@ -64,7 +64,7 @@ impl ParquetTable {
 fn read_file(
     file: &str,
     tx: Sender<Option<Result<DataBlock>>>,
-    projection: &[usize]
+    projection: &[usize],
 ) -> Result<()> {
     let file_reader = File::open(file).map_err(|e| ErrorCodes::CannotReadFile(e.to_string()))?;
     let file_reader = SerializedFileReader::new(file_reader)
@@ -90,7 +90,7 @@ fn read_file(
                 let err_msg = format!("Error reading batch from {:?}: {}", file, e.to_string());
 
                 tx.send(Some(Result::Err(ErrorCodes::CannotReadFile(
-                    err_msg.clone()
+                    err_msg.clone(),
                 ))))
                 .map_err(|send_error| ErrorCodes::UnknownException(send_error.to_string()))?;
 
@@ -130,13 +130,13 @@ impl ITable for ParquetTable {
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0
+                version: 0,
             }],
             statistics: Statistics::default(),
             description: format!(
                 "(Read from Parquet Engine table  {}.{})",
                 self.db, self.name
-            )
+            ),
         })
     }
 

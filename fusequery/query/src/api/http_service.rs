@@ -10,7 +10,7 @@ use crate::configs::Config;
 
 pub struct HttpService {
     cfg: Config,
-    cluster: ClusterRef
+    cluster: ClusterRef,
 }
 
 impl HttpService {

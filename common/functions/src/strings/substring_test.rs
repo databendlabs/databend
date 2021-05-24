@@ -25,7 +25,7 @@ fn test_substring_function() -> Result<()> {
         block: DataBlock,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>
+        func: Box<dyn IFunction>,
     }
 
     let field_a = ColumnFunction::try_create("a").unwrap();
@@ -37,15 +37,18 @@ fn test_substring_function() -> Result<()> {
             nullable: false,
             block: DataBlock::create(
                 DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
-                vec![Arc::new(StringArray::from(vec!["abcde"]))]
+                vec![Arc::new(StringArray::from(vec!["abcde"]))],
             ),
-            func: SubstringFunction::try_create("substring", &[
-                field_a.clone(),
-                LiteralFunction::try_create(DataValue::Int64(Some(2)))?,
-                LiteralFunction::try_create(DataValue::UInt64(Some(3)))?
-            ])?,
+            func: SubstringFunction::try_create(
+                "substring",
+                &[
+                    field_a.clone(),
+                    LiteralFunction::try_create(DataValue::Int64(Some(2)))?,
+                    LiteralFunction::try_create(DataValue::UInt64(Some(3)))?,
+                ],
+            )?,
             expect: Arc::new(StringArray::from(vec!["bcd"])),
-            error: ""
+            error: "",
         },
         Test {
             name: "substring-abcde-passed",
@@ -53,15 +56,18 @@ fn test_substring_function() -> Result<()> {
             nullable: false,
             block: DataBlock::create(
                 DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
-                vec![Arc::new(StringArray::from(vec!["abcde"]))]
+                vec![Arc::new(StringArray::from(vec!["abcde"]))],
             ),
-            func: SubstringFunction::try_create("substring", &[
-                field_a.clone(),
-                LiteralFunction::try_create(DataValue::Int64(Some(1)))?,
-                LiteralFunction::try_create(DataValue::UInt64(Some(3)))?
-            ])?,
+            func: SubstringFunction::try_create(
+                "substring",
+                &[
+                    field_a.clone(),
+                    LiteralFunction::try_create(DataValue::Int64(Some(1)))?,
+                    LiteralFunction::try_create(DataValue::UInt64(Some(3)))?,
+                ],
+            )?,
             expect: Arc::new(StringArray::from(vec!["abc"])),
-            error: ""
+            error: "",
         },
         Test {
             name: "substring-abcde-passed",
@@ -69,15 +75,18 @@ fn test_substring_function() -> Result<()> {
             nullable: false,
             block: DataBlock::create(
                 DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
-                vec![Arc::new(StringArray::from(vec!["abcde"]))]
+                vec![Arc::new(StringArray::from(vec!["abcde"]))],
             ),
-            func: SubstringFunction::try_create("substring", &[
-                field_a.clone(),
-                LiteralFunction::try_create(DataValue::Int64(Some(2)))?,
-                LiteralFunction::try_create(DataValue::UInt64(None))?
-            ])?,
+            func: SubstringFunction::try_create(
+                "substring",
+                &[
+                    field_a.clone(),
+                    LiteralFunction::try_create(DataValue::Int64(Some(2)))?,
+                    LiteralFunction::try_create(DataValue::UInt64(None))?,
+                ],
+            )?,
             expect: Arc::new(StringArray::from(vec!["bcde"])),
-            error: ""
+            error: "",
         },
     ];
 

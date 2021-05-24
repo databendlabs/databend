@@ -20,13 +20,13 @@ use crate::datasources::ITable;
 use crate::datasources::ITableFunction;
 
 pub struct LocalDatabase {
-    tables: RwLock<HashMap<String, Arc<dyn ITable>>>
+    tables: RwLock<HashMap<String, Arc<dyn ITable>>>,
 }
 
 impl LocalDatabase {
     pub fn create() -> Self {
         LocalDatabase {
-            tables: RwLock::new(HashMap::default())
+            tables: RwLock::new(HashMap::default()),
         }
     }
 }

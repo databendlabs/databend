@@ -16,7 +16,7 @@ fn test_array_aggregate() {
         args: Vec<DataArrayRef>,
         expect: Vec<DataValue>,
         error: Vec<&'static str>,
-        op: DataValueAggregateOperator
+        op: DataValueAggregateOperator,
     }
 
     let tests = vec![
@@ -151,7 +151,7 @@ fn test_array_aggregate() {
             let result = DataArrayAggregate::data_array_aggregate_op(t.op.clone(), args.clone());
             match result {
                 Ok(v) => assert_eq!(v, t.expect[i]),
-                Err(e) => assert_eq!(t.error[i], e.to_string())
+                Err(e) => assert_eq!(t.error[i], e.to_string()),
             }
         }
     }

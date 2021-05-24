@@ -16,13 +16,13 @@ use crate::protobuf::FlightQueryRequest;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ExecutePlanAction {
     pub job_id: String,
-    pub plan: PlanNode
+    pub plan: PlanNode,
 }
 
 // Action wrapper for do_get.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum QueryDoGet {
-    ExecutePlan(ExecutePlanAction)
+    ExecutePlan(ExecutePlanAction),
 }
 
 /// Try convert tonic::Request<Ticket> to DoGetAction.
@@ -51,7 +51,7 @@ impl TryInto<Request<Ticket>> for &QueryDoGet {
 
     fn try_into(self) -> Result<Request<Ticket>, Self::Error> {
         let flight_request = FlightQueryRequest {
-            body: serde_json::to_string(&self)?
+            body: serde_json::to_string(&self)?,
         };
 
         let mut buf = vec![];

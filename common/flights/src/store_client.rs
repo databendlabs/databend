@@ -39,7 +39,7 @@ use crate::GetTableActionResult;
 pub struct StoreClient {
     token: Vec<u8>,
     timeout_second: u64,
-    client: FlightServiceClient<tonic::transport::channel::Channel>
+    client: FlightServiceClient<tonic::transport::channel::Channel>,
 }
 
 impl StoreClient {
@@ -48,7 +48,7 @@ impl StoreClient {
         let mut rx = Self {
             token: vec![],
             timeout_second: 60,
-            client
+            client,
         };
         rx.handshake(username, password).await?;
         Ok(rx)
@@ -61,7 +61,7 @@ impl StoreClient {
     /// Create database call.
     pub async fn create_database(
         &mut self,
-        plan: CreateDatabasePlan
+        plan: CreateDatabasePlan,
     ) -> anyhow::Result<CreateDatabaseActionResult> {
         let action = StoreDoAction::CreateDatabase(CreateDatabaseAction { plan });
         let rst = self.do_action(&action).await?;
@@ -75,7 +75,7 @@ impl StoreClient {
     /// Drop database call.
     pub async fn drop_database(
         &mut self,
-        plan: DropDatabasePlan
+        plan: DropDatabasePlan,
     ) -> anyhow::Result<DropDatabaseActionResult> {
         let action = StoreDoAction::DropDatabase(DropDatabaseAction { plan });
         let rst = self.do_action(&action).await?;
@@ -89,7 +89,7 @@ impl StoreClient {
     /// Create table call.
     pub async fn create_table(
         &mut self,
-        plan: CreateTablePlan
+        plan: CreateTablePlan,
     ) -> anyhow::Result<CreateTableActionResult> {
         let action = StoreDoAction::CreateTable(CreateTableAction { plan });
         let rst = self.do_action(&action).await?;
@@ -103,7 +103,7 @@ impl StoreClient {
     /// Drop table call.
     pub async fn drop_table(
         &mut self,
-        plan: DropTablePlan
+        plan: DropTablePlan,
     ) -> anyhow::Result<DropTableActionResult> {
         let action = StoreDoAction::DropTable(DropTableAction { plan });
         let rst = self.do_action(&action).await?;
@@ -118,7 +118,7 @@ impl StoreClient {
     pub async fn get_table(
         &mut self,
         db: String,
-        table: String
+        table: String,
     ) -> anyhow::Result<GetTableActionResult> {
         let action = StoreDoAction::GetTable(GetTableAction { db, table });
         let rst = self.do_action(&action).await?;
@@ -133,7 +133,7 @@ impl StoreClient {
     async fn handshake(&mut self, username: &str, password: &str) -> anyhow::Result<()> {
         let auth = BasicAuth {
             username: username.to_string(),
-            password: password.to_string()
+            password: password.to_string(),
         };
         let mut payload = vec![];
         auth.encode(&mut payload)?;
@@ -164,7 +164,7 @@ impl StoreClient {
         let metadata = req.metadata_mut();
         metadata.insert_bin(
             "auth-token-bin",
-            MetadataValue::from_bytes(&self.token.clone())
+            MetadataValue::from_bytes(&self.token.clone()),
         );
 
         let mut stream = self

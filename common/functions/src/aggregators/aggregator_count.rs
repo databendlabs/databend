@@ -20,13 +20,13 @@ pub struct AggregatorCountFunction {
     display_name: String,
     depth: usize,
     arg: Box<dyn IFunction>,
-    state: DataValue
+    state: DataValue,
 }
 
 impl AggregatorCountFunction {
     pub fn try_create(
         display_name: &str,
-        args: &[Box<dyn IFunction>]
+        args: &[Box<dyn IFunction>],
     ) -> Result<Box<dyn IFunction>> {
         let arg = if args.is_empty() {
             LiteralFunction::try_create(DataValue::UInt64(Some(1)))?
@@ -37,7 +37,7 @@ impl AggregatorCountFunction {
             display_name: display_name.to_string(),
             depth: 0,
             arg,
-            state: DataValue::Null
+            state: DataValue::Null,
         }))
     }
 }
@@ -64,7 +64,7 @@ impl IFunction for AggregatorCountFunction {
         self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
-            DataValue::UInt64(Some(rows as u64))
+            DataValue::UInt64(Some(rows as u64)),
         )?;
         Ok(())
     }
@@ -78,7 +78,7 @@ impl IFunction for AggregatorCountFunction {
         self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
-            val
+            val,
         )?;
         Ok(())
     }

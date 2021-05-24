@@ -15,7 +15,7 @@ use crate::IFunction;
 
 #[derive(Clone, Debug)]
 pub struct LiteralFunction {
-    value: DataValue
+    value: DataValue,
 }
 
 impl LiteralFunction {

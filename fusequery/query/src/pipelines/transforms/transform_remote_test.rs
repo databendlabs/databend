@@ -16,7 +16,7 @@ async fn test_transform_remote_with_local() -> anyhow::Result<()> {
     let remote_addr = crate::tests::try_start_service(1).await?[0].clone();
 
     let plan = PlanBuilder::from(&PlanNode::ReadSource(
-        test_source.number_read_source_plan_for_test(100)?
+        test_source.number_read_source_plan_for_test(100)?,
     ))
     .filter(col("number").eq(lit(99)))?
     .build()?;

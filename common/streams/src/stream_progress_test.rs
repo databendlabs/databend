@@ -15,15 +15,16 @@ async fn test_progress_stream() -> anyhow::Result<()> {
 
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
 
-    let block = DataBlock::create(schema.clone(), vec![Arc::new(Int64Array::from(vec![
-        1, 2, 3,
-    ]))]);
+    let block = DataBlock::create(
+        schema.clone(),
+        vec![Arc::new(Int64Array::from(vec![1, 2, 3]))],
+    );
 
-    let input = DataBlockStream::create(Arc::new(DataSchema::empty()), None, vec![
-        block.clone(),
-        block.clone(),
-        block,
-    ]);
+    let input = DataBlockStream::create(
+        Arc::new(DataSchema::empty()),
+        None,
+        vec![block.clone(), block.clone(), block],
+    );
 
     let mut all_rows = 0;
     let progress = Box::new(move |value: &ProgressValues| {

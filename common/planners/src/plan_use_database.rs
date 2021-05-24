@@ -9,7 +9,7 @@ use common_datavalues::DataSchemaRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct UseDatabasePlan {
-    pub db: String
+    pub db: String,
 }
 
 impl UseDatabasePlan {

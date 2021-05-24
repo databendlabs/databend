@@ -24,7 +24,7 @@ mod tests {
                 DataField::new("b", DataType::Utf8, false),
                 DataField::new("c", DataType::Utf8, false),
             ]),
-            input: Arc::from(PlanBuilder::empty().build()?)
+            input: Arc::from(PlanBuilder::empty().build()?),
         });
 
         let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
@@ -49,7 +49,7 @@ mod tests {
         let ctx = crate::tests::try_create_context()?;
 
         let plan = PlanParser::create(ctx.clone()).build_from_sql(
-            "select max(value) as c1, name as c2 from system.settings group by c2"
+            "select max(value) as c1, name as c2 from system.settings group by c2",
         )?;
 
         let mut project_push_down = ProjectionPushDownOptimizer::create(ctx);
@@ -71,7 +71,7 @@ mod tests {
         let total = ctx.get_max_block_size()? as u64;
         let statistics = Statistics {
             read_rows: total as usize,
-            read_bytes: ((total) * size_of::<u64>() as u64) as usize
+            read_bytes: ((total) * size_of::<u64>() as u64) as usize,
         };
         ctx.try_set_statistics(&statistics)?;
         let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
@@ -89,7 +89,7 @@ mod tests {
                 "test".to_string(),
                 statistics.read_rows,
                 statistics.read_bytes
-            )
+            ),
         });
 
         let filter_plan = PlanBuilder::from(&source_plan)
@@ -99,7 +99,7 @@ mod tests {
         let plan = PlanNode::Projection(ProjectionPlan {
             expr: vec![col("a")],
             schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
-            input: Arc::from(filter_plan)
+            input: Arc::from(filter_plan),
         });
 
         let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
@@ -122,7 +122,7 @@ mod tests {
         let total = ctx.get_max_block_size()? as u64;
         let statistics = Statistics {
             read_rows: total as usize,
-            read_bytes: ((total) * size_of::<u64>() as u64) as usize
+            read_bytes: ((total) * size_of::<u64>() as u64) as usize,
         };
         ctx.try_set_statistics(&statistics)?;
         let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
@@ -144,7 +144,7 @@ mod tests {
                 "test".to_string(),
                 statistics.read_rows,
                 statistics.read_bytes
-            )
+            ),
         });
 
         let group_exprs = &[col("a"), col("c")];

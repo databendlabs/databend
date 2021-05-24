@@ -13,7 +13,7 @@ pub struct ComparisonLtEqFunction;
 impl ComparisonLtEqFunction {
     pub fn try_create_func(
         _display_name: &str,
-        args: &[Box<dyn IFunction>]
+        args: &[Box<dyn IFunction>],
     ) -> Result<Box<dyn IFunction>> {
         ComparisonFunction::try_create_func(DataValueComparisonOperator::LtEq, args)
     }

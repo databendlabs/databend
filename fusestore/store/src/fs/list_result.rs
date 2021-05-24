@@ -7,7 +7,7 @@ use std::fmt::Formatter;
 #[derive(Debug)]
 pub struct ListResult {
     pub dirs: Vec<String>,
-    pub files: Vec<String>
+    pub files: Vec<String>,
 }
 
 impl PartialEq for ListResult {

@@ -13,7 +13,7 @@ use crate::PlanNode;
 pub struct AggregatorPartialPlan {
     pub group_expr: Vec<ExpressionAction>,
     pub aggr_expr: Vec<ExpressionAction>,
-    pub input: Arc<PlanNode>
+    pub input: Arc<PlanNode>,
 }
 
 impl AggregatorPartialPlan {

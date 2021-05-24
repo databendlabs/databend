@@ -12,7 +12,7 @@ fn test_plan_builds() -> anyhow::Result<()> {
     struct TestCase {
         name: &'static str,
         plan: Result<PlanNode>,
-        expect: &'static str
+        expect: &'static str,
     }
 
     let source = Test::create().generate_source_plan_for_test(10000)?;

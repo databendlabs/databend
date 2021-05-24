@@ -21,25 +21,25 @@ pub struct AggregatorMinFunction {
     display_name: String,
     depth: usize,
     arg: Box<dyn IFunction>,
-    state: DataValue
+    state: DataValue,
 }
 
 impl AggregatorMinFunction {
     pub fn try_create(
         display_name: &str,
-        args: &[Box<dyn IFunction>]
+        args: &[Box<dyn IFunction>],
     ) -> Result<Box<dyn IFunction>> {
         match args.len() {
             1 => Ok(Box::new(AggregatorMinFunction {
                 display_name: display_name.to_string(),
                 depth: 0,
                 arg: args[0].clone(),
-                state: DataValue::Null
+                state: DataValue::Null,
             })),
             _ => Result::Err(ErrorCodes::BadArguments(format!(
                 "Function Error: Aggregator function {} args require single argument",
                 display_name
-            )))
+            ))),
         }
     }
 }
@@ -69,8 +69,8 @@ impl IFunction for AggregatorMinFunction {
             self.state.clone(),
             DataArrayAggregate::data_array_aggregate_op(
                 DataValueAggregateOperator::Min,
-                val.to_array(rows)?
-            )?
+                val.to_array(rows)?,
+            )?,
         )?;
         Ok(())
     }
@@ -84,7 +84,7 @@ impl IFunction for AggregatorMinFunction {
         self.state = DataValueAggregate::data_value_aggregate_op(
             DataValueAggregateOperator::Min,
             self.state.clone(),
-            val
+            val,
         )?;
         Ok(())
     }

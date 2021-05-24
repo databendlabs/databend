@@ -14,7 +14,7 @@ pub enum StageState {
     Through,
     SortMerge,
     GroupByMerge,
-    AggregatorMerge
+    AggregatorMerge,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -22,7 +22,7 @@ pub struct StagePlan {
     pub uuid: String,
     pub id: usize,
     pub state: StageState,
-    pub input: Arc<PlanNode>
+    pub input: Arc<PlanNode>,
 }
 
 impl StagePlan {

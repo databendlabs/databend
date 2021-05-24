@@ -36,7 +36,7 @@ async fn test_transform_partial_groupby() -> anyhow::Result<()> {
         Ok(Box::new(GroupByPartialTransform::create(
             aggr_partial.schema(),
             aggr_exprs.clone(),
-            group_exprs.clone()
+            group_exprs.clone(),
         )))
     })?;
     pipeline.merge_processor()?;

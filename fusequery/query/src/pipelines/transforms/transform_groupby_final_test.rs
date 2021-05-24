@@ -21,7 +21,7 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
     let aggr_exprs = &[
         add(sum(col("number")), lit(2u64)),
         avg(col("number")),
-        modular(col("number"), lit(3u64))
+        modular(col("number"), lit(3u64)),
     ];
     let group_exprs = &[modular(col("number"), lit(3u64))];
     let aggr_partial = PlanBuilder::create(test_source.number_schema_for_test()?)
@@ -40,7 +40,7 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
         Ok(Box::new(GroupByPartialTransform::create(
             aggr_partial.schema(),
             aggr_exprs.to_vec(),
-            group_exprs.to_vec()
+            group_exprs.to_vec(),
         )))
     })?;
     pipeline.merge_processor()?;
@@ -48,7 +48,7 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
         Ok(Box::new(GroupByFinalTransform::create(
             aggr_final.schema(),
             aggr_exprs.to_vec(),
-            group_exprs.to_vec()
+            group_exprs.to_vec(),
         )))
     })?;
 

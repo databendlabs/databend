@@ -19,7 +19,7 @@ use crate::sessions::FuseQueryContextRef;
 pub struct NumberTestData {
     ctx: FuseQueryContextRef,
     db: &'static str,
-    table: &'static str
+    table: &'static str,
 }
 
 impl NumberTestData {
@@ -27,7 +27,7 @@ impl NumberTestData {
         NumberTestData {
             ctx,
             db: "system",
-            table: "numbers_mt"
+            table: "numbers_mt",
         }
     }
 
@@ -40,15 +40,18 @@ impl NumberTestData {
     pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
         let datasource = crate::datasources::DataSource::try_create()?;
         let table = datasource.get_table(self.db, self.table)?;
-        table.read_plan(self.ctx.clone(), &ScanPlan {
-            schema_name: self.db.to_string(),
-            table_schema: Arc::new(DataSchema::empty()),
-            table_args: Some(ExpressionAction::Literal(DataValue::Int64(Some(numbers)))),
-            projection: None,
-            projected_schema: Arc::new(DataSchema::empty()),
-            filters: vec![],
-            limit: None
-        })
+        table.read_plan(
+            self.ctx.clone(),
+            &ScanPlan {
+                schema_name: self.db.to_string(),
+                table_schema: Arc::new(DataSchema::empty()),
+                table_args: Some(ExpressionAction::Literal(DataValue::Int64(Some(numbers)))),
+                projection: None,
+                projected_schema: Arc::new(DataSchema::empty()),
+                filters: vec![],
+                limit: None,
+            },
+        )
     }
 
     pub fn number_source_transform_for_test(&self, numbers: i64) -> Result<SourceTransform> {

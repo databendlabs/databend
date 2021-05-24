@@ -14,7 +14,7 @@ pub struct ExpressionPlan {
     pub exprs: Vec<ExpressionAction>,
     pub schema: DataSchemaRef,
     pub input: Arc<PlanNode>,
-    pub desc: String
+    pub desc: String,
 }
 
 impl ExpressionPlan {

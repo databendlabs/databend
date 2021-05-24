@@ -22,25 +22,25 @@ pub struct AggregatorSumFunction {
     display_name: String,
     depth: usize,
     arg: Box<dyn IFunction>,
-    state: DataValue
+    state: DataValue,
 }
 
 impl AggregatorSumFunction {
     pub fn try_create(
         display_name: &str,
-        args: &[Box<dyn IFunction>]
+        args: &[Box<dyn IFunction>],
     ) -> Result<Box<dyn IFunction>> {
         match args.len() {
             1 => Ok(Box::new(AggregatorSumFunction {
                 display_name: display_name.to_string(),
                 depth: 0,
                 arg: args[0].clone(),
-                state: DataValue::Null
+                state: DataValue::Null,
             })),
             _ => Result::Err(ErrorCodes::BadArguments(format!(
                 "Function Error: Aggregator function {} args require single argument",
                 display_name
-            )))
+            ))),
         }
     }
 }
@@ -71,8 +71,8 @@ impl IFunction for AggregatorSumFunction {
             self.state.clone(),
             DataArrayAggregate::data_array_aggregate_op(
                 DataValueAggregateOperator::Sum,
-                val.to_array(rows)?
-            )?
+                val.to_array(rows)?,
+            )?,
         )?;
 
         Ok(())
@@ -87,7 +87,7 @@ impl IFunction for AggregatorSumFunction {
         self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
-            val
+            val,
         )?;
         Ok(())
     }

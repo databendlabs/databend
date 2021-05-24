@@ -16,7 +16,7 @@ fn test_array_arithmetic() {
         args: Vec<Vec<DataArrayRef>>,
         expect: Vec<DataArrayRef>,
         error: Vec<&'static str>,
-        op: DataValueArithmeticOperator
+        op: DataValueArithmeticOperator,
     }
 
     let tests = vec![
@@ -87,7 +87,7 @@ fn test_array_arithmetic() {
                 Arc::new(Float64Array::from(vec![5.0, 5.0, 5.0, 5.0])),
                 Arc::new(Float64Array::from(vec![5.0, 5.0, 5.0, 5.0])),
             ],
-            error: vec!["Code: 10, displayText = DataValue Error: Unsupported (Utf8) plus (Utf8)."]
+            error: vec!["Code: 10, displayText = DataValue Error: Unsupported (Utf8) plus (Utf8)."],
         },
         ArrayTest {
             name: "minus-passed",
@@ -158,7 +158,7 @@ fn test_array_arithmetic() {
             ],
             error: vec![
                 "Code: 10, displayText = DataValue Error: Unsupported (Utf8) minus (Utf8).",
-            ]
+            ],
         },
         ArrayTest {
             name: "mul-passed",
@@ -224,7 +224,7 @@ fn test_array_arithmetic() {
             ],
             error: vec![
                 "Code: 10, displayText = DataValue Error: Unsupported (Utf8) multiply (Utf8).",
-            ]
+            ],
         },
         ArrayTest {
             name: "div-passed",
@@ -290,7 +290,7 @@ fn test_array_arithmetic() {
             ],
             error: vec![
                 "Code: 10, displayText = DataValue Error: Unsupported (Utf8) divide (Utf8).",
-            ]
+            ],
         },
     ];
 
@@ -299,7 +299,7 @@ fn test_array_arithmetic() {
             let result = DataArrayArithmetic::data_array_arithmetic_op(
                 t.op.clone(),
                 &DataColumnarValue::Array(args[0].clone()),
-                &DataColumnarValue::Array(args[1].clone())
+                &DataColumnarValue::Array(args[1].clone()),
             );
             match result {
                 Ok(v) => assert_eq!(
@@ -315,7 +315,7 @@ fn test_array_arithmetic() {
                     "failed in the test: {}, case: {}",
                     t.name,
                     i
-                )
+                ),
             }
         }
     }
@@ -334,7 +334,7 @@ fn test_array_scalar_arithmetic() {
         op: DataValueArithmeticOperator,
         scalar: DataValue,
         expect: DataArrayRef,
-        error: &'static str
+        error: &'static str,
     }
 
     let tests = vec![
@@ -344,7 +344,7 @@ fn test_array_scalar_arithmetic() {
             scalar: DataValue::Int8(Some(1)),
             op: DataValueArithmeticOperator::Plus,
             expect: Arc::new(Int16Array::from(vec![5, 5, 5, 5])),
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "sub-passed",
@@ -352,7 +352,7 @@ fn test_array_scalar_arithmetic() {
             scalar: DataValue::Int8(Some(1)),
             op: DataValueArithmeticOperator::Minus,
             expect: Arc::new(Int16Array::from(vec![3, 3, 3, 3])),
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "mul-passed",
@@ -360,7 +360,7 @@ fn test_array_scalar_arithmetic() {
             scalar: DataValue::Int8(Some(1)),
             op: DataValueArithmeticOperator::Mul,
             expect: Arc::new(Int16Array::from(vec![4, 4, 4, 4])),
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "div-passed",
@@ -368,7 +368,7 @@ fn test_array_scalar_arithmetic() {
             scalar: DataValue::Int8(Some(2)),
             op: DataValueArithmeticOperator::Div,
             expect: Arc::new(Float64Array::from(vec![2.0, 2.0, 2.0, 2.0])),
-            error: ""
+            error: "",
         },
     ];
 
@@ -376,7 +376,7 @@ fn test_array_scalar_arithmetic() {
         let result = DataArrayArithmetic::data_array_arithmetic_op(
             t.op.clone(),
             &DataColumnarValue::Array(t.array),
-            &DataColumnarValue::Scalar(t.scalar)
+            &DataColumnarValue::Scalar(t.scalar),
         );
         match result {
             Ok(v) => assert_eq!(
@@ -385,7 +385,7 @@ fn test_array_scalar_arithmetic() {
                 "failed in the test: {}",
                 t.name
             ),
-            Err(e) => assert_eq!(t.error, e.to_string(), "failed in the test: {}", t.name)
+            Err(e) => assert_eq!(t.error, e.to_string(), "failed in the test: {}", t.name),
         }
     }
 }
@@ -403,7 +403,7 @@ fn test_scalar_array_arithmetic() {
         op: DataValueArithmeticOperator,
         scalar: DataValue,
         expect: DataArrayRef,
-        error: &'static str
+        error: &'static str,
     }
 
     let tests = vec![
@@ -413,7 +413,7 @@ fn test_scalar_array_arithmetic() {
             scalar: DataValue::Int8(Some(1)),
             op: DataValueArithmeticOperator::Plus,
             expect: Arc::new(Int16Array::from(vec![5, 5, 5, 5])),
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "sub-passed",
@@ -421,7 +421,7 @@ fn test_scalar_array_arithmetic() {
             scalar: DataValue::Int8(Some(1)),
             op: DataValueArithmeticOperator::Minus,
             expect: Arc::new(Int16Array::from(vec![-3, -3, -3, -3])),
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "mul-passed",
@@ -429,7 +429,7 @@ fn test_scalar_array_arithmetic() {
             scalar: DataValue::Int8(Some(1)),
             op: DataValueArithmeticOperator::Mul,
             expect: Arc::new(Int16Array::from(vec![4, 4, 4, 4])),
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "div-passed",
@@ -437,7 +437,7 @@ fn test_scalar_array_arithmetic() {
             scalar: DataValue::Int8(Some(8)),
             op: DataValueArithmeticOperator::Div,
             expect: Arc::new(Float64Array::from(vec![2.0, 2.0, 2.0, 2.0])),
-            error: ""
+            error: "",
         },
     ];
 
@@ -445,7 +445,7 @@ fn test_scalar_array_arithmetic() {
         let result = DataArrayArithmetic::data_array_arithmetic_op(
             t.op.clone(),
             &DataColumnarValue::Scalar(t.scalar),
-            &DataColumnarValue::Array(t.array)
+            &DataColumnarValue::Array(t.array),
         );
         match result {
             Ok(v) => assert_eq!(
@@ -454,7 +454,7 @@ fn test_scalar_array_arithmetic() {
                 "failed in the test: {}",
                 t.name
             ),
-            Err(e) => assert_eq!(t.error, e.to_string(), "failed in the test: {}", t.name)
+            Err(e) => assert_eq!(t.error, e.to_string(), "failed in the test: {}", t.name),
         }
     }
 }

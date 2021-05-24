@@ -48,7 +48,7 @@ pub enum PlanNode {
     CreateTable(CreateTablePlan),
     DropTable(DropTablePlan),
     UseDatabase(UseDatabasePlan),
-    SetVariable(SettingPlan)
+    SetVariable(SettingPlan),
 }
 
 impl PlanNode {
@@ -74,7 +74,7 @@ impl PlanNode {
             PlanNode::DropTable(v) => v.schema(),
             PlanNode::SetVariable(v) => v.schema(),
             PlanNode::Sort(v) => v.schema(),
-            PlanNode::UseDatabase(v) => v.schema()
+            PlanNode::UseDatabase(v) => v.schema(),
         }
     }
 
@@ -99,7 +99,7 @@ impl PlanNode {
             PlanNode::DropTable(_) => "DropTablePlan",
             PlanNode::SetVariable(_) => "SetVariablePlan",
             PlanNode::Sort(_) => "SortPlan",
-            PlanNode::UseDatabase(_) => "UseDatabasePlan"
+            PlanNode::UseDatabase(_) => "UseDatabasePlan",
         }
     }
 
@@ -117,7 +117,7 @@ impl PlanNode {
             PlanNode::Select(v) => vec![v.input.clone()],
             PlanNode::Sort(v) => vec![v.input.clone()],
 
-            _ => vec![]
+            _ => vec![],
         }
     }
 

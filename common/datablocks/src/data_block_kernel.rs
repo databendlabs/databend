@@ -13,7 +13,7 @@ use crate::DataBlock;
 pub struct SortColumnDescription {
     pub column_name: String,
     pub asc: bool,
-    pub nulls_first: bool
+    pub nulls_first: bool,
 }
 
 impl DataBlock {
@@ -58,7 +58,7 @@ impl DataBlock {
     pub fn sort_block(
         block: &DataBlock,
         sort_columns_descriptions: &[SortColumnDescription],
-        limit: Option<usize>
+        limit: Option<usize>,
     ) -> Result<DataBlock> {
         let order_columns = sort_columns_descriptions
             .iter()
@@ -67,8 +67,8 @@ impl DataBlock {
                     values: block.try_column_by_name(&f.column_name)?.clone(),
                     options: Some(compute::SortOptions {
                         descending: !f.asc,
-                        nulls_first: f.nulls_first
-                    })
+                        nulls_first: f.nulls_first,
+                    }),
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -87,7 +87,7 @@ impl DataBlock {
         lhs: &DataBlock,
         rhs: &DataBlock,
         sort_columns_descriptions: &[SortColumnDescription],
-        limit: Option<usize>
+        limit: Option<usize>,
     ) -> Result<DataBlock> {
         if lhs.num_rows() == 0 {
             return Ok(rhs.clone());
@@ -111,7 +111,7 @@ impl DataBlock {
             .map(|f| {
                 Ok(compute::SortOptions {
                     descending: !f.asc,
-                    nulls_first: f.nulls_first
+                    nulls_first: f.nulls_first,
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -121,7 +121,7 @@ impl DataBlock {
 
         let indices = match limit {
             Some(limit) => &indices[0..limit.min(indices.len())],
-            _ => &indices
+            _ => &indices,
         };
 
         let arrays = lhs
@@ -137,7 +137,7 @@ impl DataBlock {
     pub fn merge_sort_blocks(
         blocks: &[DataBlock],
         sort_columns_descriptions: &[SortColumnDescription],
-        limit: Option<usize>
+        limit: Option<usize>,
     ) -> Result<DataBlock> {
         match blocks.len() {
             0 => Result::Err(ErrorCodes::EmptyData("Can't merge empty blocks")),
@@ -146,18 +146,18 @@ impl DataBlock {
                 &blocks[0],
                 &blocks[1],
                 sort_columns_descriptions,
-                limit
+                limit,
             ),
             _ => {
                 let left = DataBlock::merge_sort_blocks(
                     &blocks[0..blocks.len() / 2],
                     sort_columns_descriptions,
-                    limit
+                    limit,
                 )?;
                 let right = DataBlock::merge_sort_blocks(
                     &blocks[blocks.len() / 2..blocks.len()],
                     sort_columns_descriptions,
-                    limit
+                    limit,
                 )?;
                 DataBlock::merge_sort_block(&left, &right, sort_columns_descriptions, limit)
             }

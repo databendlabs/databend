@@ -29,7 +29,7 @@ pub struct ComparisonFunction {
     op: DataValueComparisonOperator,
     left: Box<dyn IFunction>,
     right: Box<dyn IFunction>,
-    saved: Option<DataColumnarValue>
+    saved: Option<DataColumnarValue>,
 }
 
 impl ComparisonFunction {
@@ -48,7 +48,7 @@ impl ComparisonFunction {
 
     pub fn try_create_func(
         op: DataValueComparisonOperator,
-        args: &[Box<dyn IFunction>]
+        args: &[Box<dyn IFunction>],
     ) -> Result<Box<dyn IFunction>> {
         match args.len() {
             2 => Ok(Box::new(ComparisonFunction {
@@ -56,12 +56,12 @@ impl ComparisonFunction {
                 op,
                 left: args[0].clone(),
                 right: args[1].clone(),
-                saved: None
+                saved: None,
             })),
             _ => Result::Err(ErrorCodes::BadArguments(format!(
                 "Function Error: Comparison function {} args length must be 2",
                 op
-            )))
+            ))),
         }
     }
 }
@@ -89,7 +89,7 @@ impl IFunction for ComparisonFunction {
                 let data_value = DataValue::try_from_array(&result, 0)?;
                 Ok(DataColumnarValue::Scalar(data_value))
             }
-            _ => Ok(DataColumnarValue::Array(result))
+            _ => Ok(DataColumnarValue::Array(result)),
         }
     }
 

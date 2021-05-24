@@ -15,16 +15,16 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct UdfExampleFunction {
-    display_name: String
+    display_name: String,
 }
 
 impl UdfExampleFunction {
     pub fn try_create(
         display_name: &str,
-        _args: &[Box<dyn IFunction>]
+        _args: &[Box<dyn IFunction>],
     ) -> Result<Box<dyn IFunction>> {
         Ok(Box::new(UdfExampleFunction {
-            display_name: display_name.to_string()
+            display_name: display_name.to_string(),
         }))
     }
 }

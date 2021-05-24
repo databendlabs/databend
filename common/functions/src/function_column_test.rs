@@ -13,9 +13,10 @@ fn test_column_function() -> anyhow::Result<()> {
     use crate::*;
 
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Boolean, false)]);
-    let block = DataBlock::create(schema.clone(), vec![Arc::new(BooleanArray::from(vec![
-        true, true, true, false,
-    ]))]);
+    let block = DataBlock::create(
+        schema.clone(),
+        vec![Arc::new(BooleanArray::from(vec![true, true, true, false]))],
+    );
 
     // Ok.
     {

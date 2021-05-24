@@ -17,7 +17,7 @@ impl ContextFunction {
     // such as `SELECT database()`, the arg is ctx.get_default_db()
     pub fn build_args_from_ctx(
         name: &str,
-        ctx: FuseQueryContextRef
+        ctx: FuseQueryContextRef,
     ) -> Result<Vec<ExpressionAction>> {
         // Check the function is supported in common functions.
         if !FunctionFactory::check(name) {
@@ -29,9 +29,9 @@ impl ContextFunction {
 
         Ok(match name.to_lowercase().as_str() {
             "database" => vec![ExpressionAction::Literal(DataValue::Utf8(Some(
-                ctx.get_current_database()
+                ctx.get_current_database(),
             )))],
-            _ => vec![]
+            _ => vec![],
         })
     }
 }

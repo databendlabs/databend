@@ -24,7 +24,7 @@ use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ClustersTable {
-    schema: DataSchemaRef
+    schema: DataSchemaRef,
 }
 
 impl ClustersTable {
@@ -34,7 +34,7 @@ impl ClustersTable {
                 DataField::new("name", DataType::Utf8, false),
                 DataField::new("address", DataType::Utf8, false),
                 DataField::new("priority", DataType::UInt8, false),
-            ])
+            ]),
         }
     }
 }
@@ -68,10 +68,10 @@ impl ITable for ClustersTable {
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0
+                version: 0,
             }],
             statistics: Statistics::default(),
-            description: "(Read from system.clusters table)".to_string()
+            description: "(Read from system.clusters table)".to_string(),
         })
     }
 
@@ -80,15 +80,18 @@ impl ITable for ClustersTable {
         let names: Vec<&str> = nodes.iter().map(|x| x.name.as_str()).collect();
         let addresses: Vec<&str> = nodes.iter().map(|x| x.address.as_str()).collect();
         let priorities: Vec<u8> = nodes.iter().map(|x| x.priority).collect();
-        let block = DataBlock::create(self.schema.clone(), vec![
-            Arc::new(StringArray::from(names)),
-            Arc::new(StringArray::from(addresses)),
-            Arc::new(UInt8Array::from(priorities)),
-        ]);
+        let block = DataBlock::create(
+            self.schema.clone(),
+            vec![
+                Arc::new(StringArray::from(names)),
+                Arc::new(StringArray::from(addresses)),
+                Arc::new(UInt8Array::from(priorities)),
+            ],
+        );
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block]
+            vec![block],
         )))
     }
 }

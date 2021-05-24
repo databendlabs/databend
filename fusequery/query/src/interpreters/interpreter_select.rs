@@ -16,7 +16,7 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct SelectInterpreter {
     ctx: FuseQueryContextRef,
-    select: SelectPlan
+    select: SelectPlan,
 }
 
 impl SelectInterpreter {

@@ -16,7 +16,7 @@ pub struct ErrorCodes {
     code: u16,
     display_text: String,
     cause: Option<Box<dyn std::error::Error + Sync + Send>>,
-    backtrace: Option<Backtrace>
+    backtrace: Option<Backtrace>,
 }
 
 impl ErrorCodes {
@@ -34,7 +34,7 @@ impl ErrorCodes {
     pub fn backtrace(&self) -> String {
         return match self.backtrace.as_ref() {
             None => "".to_string(), // no backtrace
-            Some(backtrace) => format!("{:?}", backtrace)
+            Some(backtrace) => format!("{:?}", backtrace),
         };
     }
 }
@@ -130,13 +130,13 @@ impl Display for ErrorCodes {
 
 #[derive(Error)]
 enum OtherErrors {
-    AnyHow { error: anyhow::Error }
+    AnyHow { error: anyhow::Error },
 }
 
 impl Display for OtherErrors {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            OtherErrors::AnyHow { error } => write!(f, "{}", error)
+            OtherErrors::AnyHow { error } => write!(f, "{}", error),
         }
     }
 }
@@ -144,7 +144,7 @@ impl Display for OtherErrors {
 impl Debug for OtherErrors {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            OtherErrors::AnyHow { error } => write!(f, "{:?}", error)
+            OtherErrors::AnyHow { error } => write!(f, "{:?}", error),
         }
     }
 }
@@ -155,7 +155,7 @@ impl From<anyhow::Error> for ErrorCodes {
             code: 1002,
             display_text: String::from(""),
             cause: Some(Box::new(OtherErrors::AnyHow { error })),
-            backtrace: None
+            backtrace: None,
         }
     }
 }
@@ -195,7 +195,7 @@ impl ErrorCodes {
             code: 1002,
             display_text: format!("{}", error),
             cause: None,
-            backtrace: Some(Backtrace::new())
+            backtrace: Some(Backtrace::new()),
         }
     }
 }

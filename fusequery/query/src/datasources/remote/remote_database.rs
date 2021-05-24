@@ -22,7 +22,7 @@ pub struct RemoteDatabase {
     name: String,
     conf: Config,
     tables: RwLock<HashMap<String, Arc<dyn ITable>>>,
-    store_client: RwLock<Option<StoreClient>>
+    store_client: RwLock<Option<StoreClient>>,
 }
 
 impl RemoteDatabase {
@@ -31,7 +31,7 @@ impl RemoteDatabase {
             name,
             conf,
             tables: RwLock::new(HashMap::default()),
-            store_client: RwLock::new(None)
+            store_client: RwLock::new(None),
         }
     }
 
@@ -65,7 +65,7 @@ impl IDatabase for RemoteDatabase {
 
     fn get_table(&self, _table_name: &str) -> Result<Arc<dyn ITable>> {
         Result::Err(ErrorCodes::UnImplement(
-            "RemoteDatabase get_table not yet implemented"
+            "RemoteDatabase get_table not yet implemented",
         ))
     }
 

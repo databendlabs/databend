@@ -14,7 +14,7 @@ pub struct SortPlan {
     /// The expression to sort on
     pub order_by: Vec<ExpressionAction>,
     /// The logical plan
-    pub input: Arc<PlanNode>
+    pub input: Arc<PlanNode>,
 }
 
 impl SortPlan {

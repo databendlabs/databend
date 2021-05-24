@@ -28,7 +28,7 @@ use crate::pipelines::processors::IProcessor;
 pub struct AggregatorPartialTransform {
     funcs: Vec<Box<dyn IFunction>>,
     schema: DataSchemaRef,
-    input: Arc<dyn IProcessor>
+    input: Arc<dyn IProcessor>,
 }
 
 impl AggregatorPartialTransform {
@@ -41,7 +41,7 @@ impl AggregatorPartialTransform {
         Ok(AggregatorPartialTransform {
             funcs,
             schema,
-            input: Arc::new(EmptyProcessor::create())
+            input: Arc::new(EmptyProcessor::create()),
         })
     }
 }
@@ -99,7 +99,7 @@ impl IProcessor for AggregatorPartialTransform {
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block]
+            vec![block],
         )))
     }
 }

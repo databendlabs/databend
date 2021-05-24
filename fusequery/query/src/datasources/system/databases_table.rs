@@ -23,13 +23,13 @@ use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct DatabasesTable {
-    schema: DataSchemaRef
+    schema: DataSchemaRef,
 }
 
 impl DatabasesTable {
     pub fn create() -> Self {
         DatabasesTable {
-            schema: DataSchemaRefExt::create(vec![DataField::new("name", DataType::Utf8, false)])
+            schema: DataSchemaRefExt::create(vec![DataField::new("name", DataType::Utf8, false)]),
         }
     }
 }
@@ -63,10 +63,10 @@ impl ITable for DatabasesTable {
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0
+                version: 0,
             }],
             statistics: Statistics::default(),
-            description: "(Read from system.databases table)".to_string()
+            description: "(Read from system.databases table)".to_string(),
         })
     }
 
@@ -79,13 +79,16 @@ impl ITable for DatabasesTable {
                     .map(|database_name| database_name.as_str())
                     .collect();
 
-                let block = DataBlock::create(self.schema.clone(), vec![Arc::new(
-                    StringArray::from(databases_name_str)
-                )]);
+                let block = DataBlock::create(
+                    self.schema.clone(),
+                    vec![Arc::new(StringArray::from(databases_name_str))],
+                );
 
-                Box::pin(DataBlockStream::create(self.schema.clone(), None, vec![
-                    block,
-                ]))
+                Box::pin(DataBlockStream::create(
+                    self.schema.clone(),
+                    None,
+                    vec![block],
+                ))
             })
     }
 }

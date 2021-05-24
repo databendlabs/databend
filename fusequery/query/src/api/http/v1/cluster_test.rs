@@ -24,7 +24,7 @@ async fn test_cluster() -> Result<()> {
             .json(&ClusterNodeRequest {
                 name: "9090".to_string(),
                 priority: 8,
-                address: "127.0.0.1:9090".to_string()
+                address: "127.0.0.1:9090".to_string(),
             })
             .reply(&filter);
         assert_eq!(200, res.await.status());
@@ -36,7 +36,7 @@ async fn test_cluster() -> Result<()> {
             .json(&ClusterNodeRequest {
                 name: "9091".to_string(),
                 priority: 4,
-                address: "127.0.0.1:9091".to_string()
+                address: "127.0.0.1:9091".to_string(),
             })
             .reply(&filter);
         assert_eq!(200, res.await.status());
@@ -51,7 +51,7 @@ async fn test_cluster() -> Result<()> {
             .json(&ClusterNodeRequest {
                 name: "9091".to_string(),
                 priority: 4,
-                address: "127.0.0.1:9091".to_string()
+                address: "127.0.0.1:9091".to_string(),
             })
             .reply(&filter);
         assert_eq!(200, res.await.status());

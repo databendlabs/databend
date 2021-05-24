@@ -9,7 +9,7 @@ pub struct Node {
     // larger value means higher priority
     pub priority: u8,
     pub address: String,
-    pub local: bool
+    pub local: bool,
 }
 
 impl Node {

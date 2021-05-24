@@ -12,7 +12,7 @@ fn test_limit_plan() -> anyhow::Result<()> {
 
     let limit = PlanNode::Limit(LimitPlan {
         n: 33,
-        input: Arc::from(PlanBuilder::empty().build()?)
+        input: Arc::from(PlanBuilder::empty().build()?),
     });
     let expect = "Limit: 33";
     let actual = format!("{:?}", limit);
