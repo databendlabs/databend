@@ -46,6 +46,7 @@ async fn test_functions_table() -> anyhow::Result<()> {
         "| minus      |",
         "| modulo     |",
         "| multiply   |",
+        "| not        |",
         "| or         |",
         "| plus       |",
         "| substring  |",

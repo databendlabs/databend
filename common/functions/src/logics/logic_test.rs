@@ -41,10 +41,10 @@ fn test_logic_function() -> anyhow::Result<()> {
             nullable: false,
             func: LogicAndFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(schema.clone(), vec![
-                Arc::new(BooleanArray::from(vec![true, true, true, false])),
+                Arc::new(BooleanArray::from(vec![true, true, false, false])),
                 Arc::new(BooleanArray::from(vec![true, false, true, true])),
             ]),
-            expect: Arc::new(BooleanArray::from(vec![true, false, true, false])),
+            expect: Arc::new(BooleanArray::from(vec![true, false, false, false])),
             error: ""
         },
         Test {
@@ -54,10 +54,22 @@ fn test_logic_function() -> anyhow::Result<()> {
             nullable: false,
             func: LogicOrFunction::try_create_func("", &[field_a.clone(), field_b.clone()])?,
             block: DataBlock::create(schema.clone(), vec![
-                Arc::new(BooleanArray::from(vec![true, true, true, false])),
-                Arc::new(BooleanArray::from(vec![true, false, true, true])),
+                Arc::new(BooleanArray::from(vec![true, true, false, false])),
+                Arc::new(BooleanArray::from(vec![true, false, true, false])),
             ]),
-            expect: Arc::new(BooleanArray::from(vec![true, true, true, true])),
+            expect: Arc::new(BooleanArray::from(vec![true, true, true, false])),
+            error: ""
+        },
+        Test {
+            name: "not-passed",
+            func_name: "NotFunction",
+            display: "not a",
+            nullable: false,
+            func: LogicNotFunction::try_create_func("", &[field_a.clone()])?,
+            block: DataBlock::create(schema.clone(), vec![Arc::new(BooleanArray::from(vec![
+                true, false,
+            ]))]),
+            expect: Arc::new(BooleanArray::from(vec![false, true])),
             error: ""
         },
     ];
