@@ -4,9 +4,8 @@ updates:
   directory: "/"
   schedule:
     interval: daily
-    # Check for updates at 8am UTC.
     time: "00:00"
-  open-pull-requests-limit: 2
+  open-pull-requests-limit: 4
   target-branch: master
   ignore:
   - dependency-name: libc
