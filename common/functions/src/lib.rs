@@ -17,6 +17,7 @@ mod function_literal;
 mod logics;
 mod strings;
 mod udfs;
+mod hashes;
 
 pub use expressions::CastFunction;
 pub use function::IFunction;

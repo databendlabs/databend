@@ -17,6 +17,7 @@ use crate::logics::LogicFunction;
 use crate::strings::StringFunction;
 use crate::udfs::UdfFunction;
 use crate::IFunction;
+use crate::hashes::HashesFunction;
 
 pub struct FunctionFactory;
 pub type FactoryFunc = fn(name: &str, args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>>;
@@ -32,6 +33,7 @@ lazy_static! {
         LogicFunction::register(map.clone()).unwrap();
         StringFunction::register(map.clone()).unwrap();
         UdfFunction::register(map.clone()).unwrap();
+        HashesFunction::register(map.clone()).unwrap();
         map
     };
 }

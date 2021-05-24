@@ -57,6 +57,9 @@ impl ScattersOptimizer {
     fn optimize_aggregator(&mut self, plan: &AggregatorPartialPlan, input: PlanNode, status: &mut Vec<OptimizeKind>) -> Result<PlanNode> {
         if let Some(OptimizeKind::Local) = status.pop() {
             // Keep running in standalone mode
+            // TODO We can estimate and evaluate the amount of data to decide whether to shuffle again
+            // For example, when ReadSourcePlan = 500MB
+            // We can evaluate 500MB * 0.8(it can be get by history) after FilterPlan
             status.push(OptimizeKind::Local);
             return Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan::try_create(
                 plan.group_expr.clone(),
@@ -84,11 +87,14 @@ impl ScattersOptimizer {
                 status.push(OptimizeKind::Scattered);
                 Ok(PlanNode::Stage(StagePlan {
                     kind: StageKind::Normal,
-                    scatters_expr: plan.group_expr[0].clone(),
+                    scatters_expr: ExpressionAction::Function {
+                        op: String::from("sipHash"),
+                        args: vec![ExpressionAction::Column(String::from("_group_by_key"))]
+                    },
                     input: Arc::new(PlanNode::AggregatorPartial(AggregatorPartialPlan::try_create(
                         plan.group_expr.clone(),
                         plan.aggr_expr.clone(),
-                        Arc::new(input)
+                        Arc::new(input),
                     )?)),
                 }))
             }

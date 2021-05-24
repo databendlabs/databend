@@ -45,9 +45,10 @@ pub struct QueryInfo {
     pub runtime: Runtime,
 }
 
+#[derive(Debug)]
 pub struct FlightStreamInfo {
     schema: DataSchemaRef,
-    data_receiver: Receiver<Result<FlightData>>,
+    data_receiver: Option<Receiver<Result<FlightData>>>,
     launcher_sender: Sender<()>,
 }
 
@@ -81,12 +82,31 @@ impl FlightDispatcher {
         while let Some(request) = receiver.recv().await {
             match request {
                 Request::GetStream(id, stream_receiver) => {
-                    match dispatcher_state.streams.remove(&id) {
-                        Some(stream_info) => {
-                            stream_info.launcher_sender.send(()).await;
-                            stream_receiver.send(Ok(stream_info.data_receiver)).await
+                    match dispatcher_state.streams.get_mut(&id) {
+                        None => {
+                            stream_receiver.send(Err(
+                                ErrorCodes::NotFoundStream(format!(
+                                    "Stream {} is not found",
+                                    id
+                                ))
+                            )).await;
                         },
-                        None => stream_receiver.send(Err(ErrorCodes::NotFoundStream(format!("Stream {} is not found", id)))).await,
+                        Some(stream_info) => {
+                            match stream_info.data_receiver.take() {
+                                None => {
+                                    stream_receiver.send(Err(
+                                        ErrorCodes::DuplicateGetStream(format!(
+                                            "Stream {} has been fetched once",
+                                            id
+                                        ))
+                                    )).await;
+                                },
+                                Some(receiver) => {
+                                    stream_info.launcher_sender.send(()).await;
+                                    stream_receiver.send(Ok(receiver)).await;
+                                }
+                            };
+                        }
                     };
                 },
                 Request::GetSchema(id, schema_receiver) => {
@@ -107,21 +127,33 @@ impl FlightDispatcher {
                         None => stream_info_receiver.send(Err(ErrorCodes::NotFoundStream(format!("Stream {} is not found", id)))).await,
                     };
                 },
-                Request::TerminalStage(query_id, _stage_id) => {
-                    let stream_prefix = format!("{}/", query_id);
-                    for (id, _) in &dispatcher_state.streams {
-                        if id.starts_with(&stream_prefix) {
-                            break;
-                        }
-                    }
-
-                    // Destroy runtime
-                    match dispatcher_state.queries.remove(&query_id) {
-                        None => {},
-                        Some(query_info) => {
-                            query_info.runtime.shutdown_background();
-                        }
-                    };
+                Request::TerminalStage(query_id, stage_id) => {
+                    // let stage_stream_prefix = format!("{}/{}", query_id, stage_id);
+                    //
+                    // let completed_streams = &dispatcher_state.streams
+                    //     .iter()
+                    //     .filter(|(id, _)| id.starts_with(&stage_stream_prefix))
+                    //     .collect::<Vec<_>>();
+                    //
+                    // for (stream_id, _) in completed_streams {
+                    //     dispatcher_state.streams.remove(stream_id);
+                    // }
+                    //
+                    // let query_stream_prefix = format!("{}/", query_id);
+                    // if let None = dispatcher_state.streams
+                    //     .iter()
+                    //     .filter(|(id, _)| id.starts_with(&query_stream_prefix))
+                    //     .next() {
+                    //     // Destroy runtime
+                    //     println!("Destroy runtime when : {:?}", &dispatcher_state.streams);
+                    //
+                    //     match dispatcher_state.queries.remove(&query_id) {
+                    //         None => {}
+                    //         Some(query_info) => {
+                    //             query_info.runtime.shutdown_background();
+                    //         }
+                    //     };
+                    // }
                 }
             };
         }
@@ -257,7 +289,7 @@ impl FlightStreamInfo {
         let (sender, mut receive) = channel(5);
         (sender, FlightStreamInfo {
             schema: schema.clone(),
-            data_receiver: receive,
+            data_receiver: Some(receive),
             launcher_sender: launcher_sender.clone(),
         })
     }

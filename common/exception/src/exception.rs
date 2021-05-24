@@ -105,6 +105,8 @@ build_exceptions! {
     BadAddressFormat(38),
     DnsParseError(39),
     CannotConnectNode(40),
+    BadDataArrayType(41),
+    DuplicateGetStream(42),
 
     UnknownException(1000),
     TokioError(1001)
