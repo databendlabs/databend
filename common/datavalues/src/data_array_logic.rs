@@ -55,7 +55,7 @@ impl DataArrayLogic {
 
     pub fn data_array_logic_op(
         op: DataValueLogicOperator,
-        args: &Vec<DataColumnarValue>
+        args: &[DataColumnarValue]
     ) -> Result<DataArrayRef> {
         match op {
             DataValueLogicOperator::Not => Self::data_array_negation(&args[0]),
