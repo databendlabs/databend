@@ -255,6 +255,14 @@ where
                 Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?)
             )),
 
+            ExpressionAction::UnaryExpression {
+                op,
+                expr: nested_expr
+            } => Ok(ExpressionAction::UnaryExpression {
+                op: op.clone(),
+                expr: Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?)
+            }),
+
             ExpressionAction::BinaryExpression { left, op, right } => {
                 Ok(ExpressionAction::BinaryExpression {
                     left: Box::new(clone_with_replacement(&**left, replacement_fn)?),

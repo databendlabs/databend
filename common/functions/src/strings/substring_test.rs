@@ -74,6 +74,21 @@ fn test_substring_function() -> Result<()> {
             expect: Arc::new(StringArray::from(vec!["bcde"])),
             error: ""
         },
+        Test {
+            name: "substring-1234567890-passed",
+            display: "SUBSTRING",
+            nullable: false,
+            arg_names: vec!["a", "b", "c"],
+            columns: vec![
+                Arc::new(StringArray::from(vec!["1234567890"])).into(),
+                Arc::new(Int64Array::from(vec![-3])).into(),
+                Arc::new(UInt64Array::from(vec![3])).into(),
+            ],
+
+            func: SubstringFunction::try_create("substring")?,
+            expect: Arc::new(StringArray::from(vec!["890"])),
+            error: ""
+        },
     ];
 
     for t in tests {

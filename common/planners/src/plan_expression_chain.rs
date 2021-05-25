@@ -106,6 +106,27 @@ impl ExpressionChain {
                 self.actions.push(ActionNode::Constant(value));
             }
 
+            ExpressionAction::UnaryExpression {
+                op,
+                expr: nested_expr
+            } => {
+                self.add_expr(nested_expr)?;
+
+                let func = FunctionFactory::get(op)?;
+                let arg_types = vec![nested_expr.to_data_type(&self.schema)?];
+
+                let function = ActionFunction {
+                    name: expr.column_name(),
+                    func_name: op.clone(),
+                    is_aggregated: false,
+                    arg_names: vec![nested_expr.column_name()],
+                    arg_types: arg_types.clone(),
+                    return_type: func.return_type(&arg_types)?
+                };
+
+                self.actions.push(ActionNode::Function(function));
+            }
+
             ExpressionAction::BinaryExpression { op, left, right } => {
                 self.add_expr(left)?;
                 self.add_expr(right)?;

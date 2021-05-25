@@ -23,6 +23,7 @@ use crate::ExpressionAction;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
+use crate::InsertIntoPlan;
 use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
@@ -75,7 +76,8 @@ pub trait PlanRewriter<'plan> {
             PlanNode::Having(plan) => self.rewrite_having(plan),
             PlanNode::Expression(plan) => self.rewrite_expression(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
-            PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan)
+            PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
+            PlanNode::InsertInto(plan) => self.rewrite_insert_into(plan)
         }
     }
 
@@ -202,6 +204,10 @@ pub trait PlanRewriter<'plan> {
     fn rewrite_drop_database(&mut self, plan: &'plan DropDatabasePlan) -> Result<PlanNode> {
         Ok(PlanNode::DropDatabase(plan.clone()))
     }
+
+    fn rewrite_insert_into(&mut self, plan: &'plan InsertIntoPlan) -> Result<PlanNode> {
+        Ok(PlanNode::InsertInto(plan.clone()))
+    }
 }
 
 pub struct RewriteHelper {}
@@ -300,6 +306,15 @@ impl RewriteHelper {
                     op: op.clone(),
                     left: Box::new(left),
                     right: Box::new(right)
+                })
+            }
+
+            ExpressionAction::UnaryExpression { op, expr } => {
+                let expr_new = RewriteHelper::expr_rewrite_alias(expr, data)?;
+
+                Ok(ExpressionAction::UnaryExpression {
+                    op: op.clone(),
+                    expr: Box::new(expr_new)
                 })
             }
 
@@ -410,6 +425,9 @@ impl RewriteHelper {
             ExpressionAction::Alias(_, expr) => vec![expr.as_ref().clone()],
             ExpressionAction::Column(_) => vec![],
             ExpressionAction::Literal(_) => vec![],
+            ExpressionAction::UnaryExpression { expr, .. } => {
+                vec![expr.as_ref().clone()]
+            }
             ExpressionAction::BinaryExpression { left, right, .. } => {
                 vec![left.as_ref().clone(), right.as_ref().clone()]
             }
@@ -427,6 +445,10 @@ impl RewriteHelper {
             ExpressionAction::Alias(_, expr) => Self::expression_plan_columns(expr)?,
             ExpressionAction::Column(_) => vec![expr.clone()],
             ExpressionAction::Literal(_) => vec![],
+            ExpressionAction::UnaryExpression { expr, .. } => {
+                let v = Self::expression_plan_columns(expr)?;
+                v
+            }
             ExpressionAction::BinaryExpression { left, right, .. } => {
                 let mut l = Self::expression_plan_columns(left)?;
                 let mut r = Self::expression_plan_columns(right)?;

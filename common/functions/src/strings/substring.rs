@@ -43,15 +43,14 @@ impl IFunction for SubstringFunction {
 
     fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
         // TODO: make this function support column value as arguments rather than literal
-        let from = match columns[1].data_type() {
+        let mut from = match columns[1].data_type() {
             DataType::UInt64 => Ok(columns[1]
                 .to_array()
                 .unwrap()
                 .as_any()
                 .downcast_ref::<UInt64Array>()
                 .unwrap()
-                .value(0) as i64
-                - 1),
+                .value(0) as i64),
 
             DataType::Int64 => Ok(columns[1]
                 .to_array()
@@ -59,14 +58,17 @@ impl IFunction for SubstringFunction {
                 .as_any()
                 .downcast_ref::<Int64Array>()
                 .unwrap()
-                .value(0)
-                - 1),
+                .value(0)),
 
             other => Err(ErrorCodes::BadArguments(format!(
                 "Unsupport datatype {:?} as argument",
                 other
             )))
         }?;
+
+        if from >= 1 {
+            from = from - 1;
+        }
 
         let mut end = None;
         if columns.len() >= 3 {

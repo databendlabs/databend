@@ -23,6 +23,12 @@ pub enum ExpressionAction {
     /// Constant value.
     Literal(DataValue),
 
+    /// A unary expression such as "NOT foo"
+    UnaryExpression {
+        op: String,
+        expr: Box<ExpressionAction>
+    },
+
     /// A binary expression such as "age > 40"
     BinaryExpression {
         left: Box<ExpressionAction>,
@@ -98,6 +104,13 @@ impl ExpressionAction {
                 let func = FunctionFactory::get(op)?;
                 func.return_type(&arg_types)
             }
+
+            ExpressionAction::UnaryExpression { op, expr } => {
+                let arg_types = vec![expr.to_data_type(input_schema)?];
+                let func = FunctionFactory::get(op)?;
+                func.return_type(&arg_types)
+            }
+
             ExpressionAction::ScalarFunction { op, args } => {
                 let mut arg_types = Vec::with_capacity(args.len());
                 for arg in args {
@@ -154,6 +167,11 @@ impl fmt::Debug for ExpressionAction {
             ExpressionAction::BinaryExpression { op, left, right } => {
                 write!(f, "({:?} {} {:?})", left, op, right,)
             }
+
+            ExpressionAction::UnaryExpression { op, expr } => {
+                write!(f, "({} {:?})", op, expr)
+            }
+
             ExpressionAction::ScalarFunction { op, args } => {
                 write!(f, "{}(", op)?;
 

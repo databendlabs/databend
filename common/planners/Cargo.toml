@@ -12,12 +12,14 @@ common-datavalues = {path = "../datavalues"}
 common-functions = {path = "../functions"}
 common-aggregate-functions = {path = "../aggregate_functions" }
 common-exception = {path = "../exception"}
+common-datablocks = {path = "../datablocks"}
 
 # Github dependencies
 
 # Crates.io dependencies
 anyhow = "1.0.40"
 serde = { version = "1.0", features = ["derive"] }
+futures = "0.3"
 
 [dev-dependencies]
 pretty_assertions = "0.7"
