@@ -10,6 +10,10 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v2
+      - name: dependency hack on self hosted machine
+        run: |
+          sudo wget http://archive.ubuntu.com/ubuntu/pool/main/p/psmisc/psmisc_23.3-1_amd64.deb
+          sudo dpkg -i ./psmisc_23.3-1_amd64.deb
 
       - name: Install latest nightly
         uses: actions-rs/toolchain@v1
@@ -27,7 +31,6 @@ jobs:
 
       - name: Rust setup
         run: |
-          sudo apt-get install psmisc
           bash ./scripts/setup/dev_setup.sh
 
       - name: Build native release
