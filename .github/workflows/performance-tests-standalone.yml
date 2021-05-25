@@ -15,9 +15,11 @@ jobs:
         run: |
           bash ./scripts/setup/dev_setup.sh
 
-      - name: Build native release
-        run: |
-          bash ./scripts/ci/ci-native-release-build.sh
+      - name: Cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release
 
       - name: Run Performance Tests with Standalone mode
         run: |
