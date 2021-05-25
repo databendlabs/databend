@@ -38,14 +38,15 @@ impl FlightScatter {
         )?;
         expression_executor.validate()?;
 
+
         Ok(FlightScatter(Arc::new(expression_executor), output_name, num))
     }
 
-    pub fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
+    pub fn execute(&self, data_block: &DataBlock) -> Result<Vec<DataBlock>> {
         let expression_executor = self.0.clone();
-        match expression_executor.execute(&data_block)?.column_by_name(&self.1) {
+        match expression_executor.execute(data_block)?.column_by_name(&self.1) {
             None => Result::Err(ErrorCodes::LogicalError("Logical error: expression executor error.")),
-            Some(indices) => DataBlock::scatter_block(&data_block, &indices, self.2)
+            Some(indices) => DataBlock::scatter_block(data_block, &indices, self.2),
         }
     }
 }

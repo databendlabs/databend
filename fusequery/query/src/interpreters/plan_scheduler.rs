@@ -217,7 +217,7 @@ impl ReadSourceGetNodePlan {
                 }
             }
 
-            println!("Reschedule partitions: {:?}", nodes_partitions);
+            // println!("Reschedule partitions: {:?}", nodes_partitions);
 
             let nested_getter = RemoteReadSourceGetNodePlan(new_read_source_plan, Arc::new(nodes_partitions), nest_getter.clone());
             return Ok(Arc::new(Box::new(ReadSourceGetNodePlan(Arc::new(Box::new(nested_getter))))))

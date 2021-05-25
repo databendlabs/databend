@@ -8,6 +8,9 @@ mod flight_dispatcher_test;
 #[cfg(test)]
 mod flight_service_new_test;
 
+#[cfg(test)]
+mod flight_scatter_test;
+
 #[macro_use]
 mod macros;
 mod metrics;

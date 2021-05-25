@@ -906,8 +906,6 @@ impl PlanParser {
             return Ok(input.clone());
         }
 
-        println!("expression {:?}, {:?}", &input.schema(), dedup_exprs);
-
         if dedup_exprs.is_empty() {
             return Ok(input.clone());
         }

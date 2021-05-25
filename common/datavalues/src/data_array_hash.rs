@@ -92,11 +92,11 @@ impl<Hasher: std::hash::Hasher + Default> DataArrayHash<Hasher> {
                 ))
             })?;
 
-        let mut hasher = Hasher::default();
         let value_size = binary_data.value_data().len();
         let mut hash_builder = UInt64Array::builder(value_size);
 
         for index in 0..binary_data.len() {
+            let mut hasher = Hasher::default();
             match binary_data.is_null(index) {
                 true => { let _ = hash_builder.append_null()?; },
                 false => {

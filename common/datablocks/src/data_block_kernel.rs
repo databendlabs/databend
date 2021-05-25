@@ -176,7 +176,7 @@ impl DataBlock {
             let mut scattered_column = DataArrayScatter::scatter(column, &indices, scatter_size)?;
 
             for scattered_index in 0..scattered_column.len() {
-                scattered_columns[scattered_index * columns_size + column_index] = Some(scattered_column.remove(0));
+                scattered_columns[scattered_index * columns_size + column_index] = Some(scattered_column[scattered_index].clone());
             }
         }
 
@@ -185,7 +185,7 @@ impl DataBlock {
             let begin_index = index * columns_size;
             let end_index = (index + 1) * columns_size;
 
-            let mut block_columns = vec![];
+            let mut block_columns: Vec<DataArrayRef> = vec![];
             for scattered_column in &scattered_columns[begin_index..end_index] {
                 match scattered_column {
                     None => panic!(""),

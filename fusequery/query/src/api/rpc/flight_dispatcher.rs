@@ -29,8 +29,10 @@ use crate::pipelines::transforms::ExpressionTransform;
 use common_arrow::arrow::record_batch::RecordBatch;
 use crate::api::rpc::flight_scatter::FlightScatter;
 
+#[derive(Debug)]
 pub struct PrepareStageInfo(pub String, pub String, pub PlanNode, pub Vec<String>, pub ExpressionAction);
 
+#[derive(Debug)]
 pub struct StreamInfo(pub DataSchemaRef, pub String, pub Vec<String>);
 
 pub enum Request {
@@ -116,6 +118,7 @@ impl FlightDispatcher {
                     };
                 }
                 Request::PrepareQueryStage(info, response_sender) => {
+                    // println!("PrepareQueryStage: {:?}", &info);
                     let mut pipeline = Self::create_plan_pipeline(&*state, &info.2);
                     response_sender.send(Self::prepare_stage(&mut dispatcher_state, &info, pipeline, request_sender.clone())).await;
                 }
@@ -195,7 +198,7 @@ impl FlightDispatcher {
         query_info.runtime.spawn(async move {
             let _ = launcher_receiver.recv().await;
 
-            if let Err(error) = Self::receive_data_and_push(pipeline, flight_scatter, &streams_data_sender).await {
+            if let Err(error) = Self::receive_data_and_push(pipeline, flight_scatter, streams_data_sender.clone()).await {
                 for sender in streams_data_sender {
                     // TODO: backtrace
                     let clone_error = ErrorCodes::create(error.code(), error.message(), None);
@@ -224,7 +227,7 @@ impl FlightDispatcher {
 
     // We need to always use the inline function to ensure that async/await state machine is simple enough
     #[inline(always)]
-    async fn receive_data_and_push(mut pipeline: Pipeline, flight_scatter: FlightScatter, senders: &Vec<Sender<Result<FlightData>>>) -> Result<()> {
+    async fn receive_data_and_push(mut pipeline: Pipeline, flight_scatter: FlightScatter, senders: Vec<Sender<Result<FlightData>>>) -> Result<()> {
         use common_arrow::arrow::ipc::writer::IpcWriteOptions;
         use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
 
@@ -245,15 +248,16 @@ impl FlightDispatcher {
         } else {
             while let Some(item) = pipeline_stream.next().await {
                 let block = item?;
-                let mut scattered_data = flight_scatter.execute(block)?;
+                let mut scattered_data = flight_scatter.execute(&block)?;
 
                 for index in 0..scattered_data.len() {
-                    if !scattered_data[0].is_empty() {
-                        let record_batch = scattered_data.remove(0).try_into()?;
+                    if !scattered_data[index].is_empty() {
+                        let record_batch = RecordBatch::try_new(scattered_data[index].schema().clone(), scattered_data[index].columns().to_vec())?;
                         let (dicts, values) = flight_data_from_arrow_batch(&record_batch, &options);
                         let normalized_flight_data = dicts.into_iter().chain(std::iter::once(values));
+
                         for flight_data in normalized_flight_data {
-                            &senders[index].send(Ok(flight_data)).await;
+                            (&senders[index]).send(Ok(flight_data)).await;
                         }
                     }
                 }

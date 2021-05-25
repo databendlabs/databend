@@ -117,8 +117,7 @@ impl DataArrayScatter {
             match data.null_count() {
                 0 => scattered_data_res.push(Arc::new(PrimitiveArray::<T>::from(builder.build()))),
                 _ => {
-                    // We always remove the first element, which is similar to pop_first
-                    builder = builder.null_bit_buffer(scattered_null_bit.remove(0));
+                    builder = builder.null_bit_buffer(scattered_null_bit[index].clone());
                     scattered_data_res.push(Arc::new(PrimitiveArray::<T>::from(builder.build())));
                 }
             }

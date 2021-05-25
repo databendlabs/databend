@@ -167,7 +167,6 @@ impl FlightService for FuseQueryService {
             Err(utf_8_error) => Err(Status::invalid_argument(utf_8_error.to_string())),
             Ok(ticket) => {
                 // Flight ticket = query_id/stage_id/stream_id
-                println!("Get Flight Stream {}", ticket);
                 let (response_sender, mut receiver) = channel(1);
                 self.dispatcher_sender.send(DispatcherRequest::GetStream(ticket.to_string(), response_sender)).await;
                 receiver.recv().await
