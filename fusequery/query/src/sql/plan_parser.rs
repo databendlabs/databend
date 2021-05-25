@@ -255,7 +255,7 @@ impl PlanParser {
                 .all(|row| row.iter().all(|item| matches!(item, Expr::Value(_))));
             if !all_value {
                 return Err(ErrorCodes::UnImplement(
-                    "not support expressions other than literal value yet"
+                    "not support value expressions other than literal value yet"
                 ));
             }
             // Buffers some chunks if possible
@@ -303,7 +303,9 @@ impl PlanParser {
             };
             Ok(PlanNode::InsertInto(plan_node))
         } else {
-            Err(ErrorCodes::UnImplement("only supports ..."))
+            Err(ErrorCodes::UnImplement(
+                "only supports simple value tuples as source of insertion"
+            ))
         }
     }
 
