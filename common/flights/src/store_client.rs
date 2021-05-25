@@ -2,22 +2,32 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::time::Duration;
 
+use common_arrow::arrow::datatypes::SchemaRef;
+use common_arrow::arrow::ipc::writer::IpcWriteOptions;
+use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
+use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
+use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
 use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::BasicAuth;
 use common_arrow::arrow_flight::HandshakeRequest;
+use common_datablocks::DataBlock;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use futures::stream;
+use futures::SinkExt;
 use futures::StreamExt;
 use log::info;
 use prost::Message;
 use tonic::metadata::MetadataValue;
+use tonic::transport::Channel;
+use tonic::transport::Endpoint;
 use tonic::Request;
 
 use crate::flight_result_to_str;
@@ -28,6 +38,8 @@ use crate::store_do_action::DropDatabaseAction;
 use crate::store_do_action::DropDatabaseActionResult;
 use crate::store_do_action::StoreDoAction;
 use crate::store_do_action::StoreDoActionResult;
+use crate::store_do_put;
+use crate::store_do_put::AppendResult;
 use crate::CreateDatabaseActionResult;
 use crate::CreateTableActionResult;
 use crate::DropTableAction;
@@ -35,27 +47,46 @@ use crate::DropTableActionResult;
 use crate::GetTableAction;
 use crate::GetTableActionResult;
 
+pub type BlockStream =
+    std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;
+
 #[derive(Clone)]
 pub struct StoreClient {
     token: Vec<u8>,
-    timeout_second: u64,
+    timeout: Duration,
     client: FlightServiceClient<tonic::transport::channel::Channel>
 }
 
 impl StoreClient {
     pub async fn try_create(addr: &str, username: &str, password: &str) -> anyhow::Result<Self> {
-        let client = FlightServiceClient::connect(format!("http://{}", addr)).await?;
-        let mut rx = Self {
-            token: vec![],
-            timeout_second: 60,
+        // TODO configuration
+        let timeout = Duration::from_secs(60);
+
+        let endpoint = Endpoint::from_shared(format!("http://{}", addr))?.timeout(timeout);
+        let channel = endpoint.connect().await?;
+
+        let mut client = FlightServiceClient::new(channel.clone());
+        let token = StoreClient::handshake(&mut client, timeout, username, password).await?;
+
+        let client = {
+            let token = token.clone();
+            FlightServiceClient::with_interceptor(channel, move |mut req: Request<()>| {
+                let metadata = req.metadata_mut();
+                metadata.insert_bin("auth-token-bin", MetadataValue::from_bytes(&token));
+                Ok(req)
+            })
+        };
+
+        let rx = Self {
+            token,
+            timeout,
             client
         };
-        rx.handshake(username, password).await?;
         Ok(rx)
     }
 
-    pub fn set_timeout(&mut self, timeout_sec: u64) {
-        self.timeout_second = timeout_sec;
+    pub fn set_timeout(&mut self, timeout: Duration) {
+        self.timeout = timeout;
     }
 
     /// Create database call.
@@ -130,7 +161,12 @@ impl StoreClient {
     }
 
     /// Handshake.
-    async fn handshake(&mut self, username: &str, password: &str) -> anyhow::Result<()> {
+    async fn handshake(
+        client: &mut FlightServiceClient<Channel>,
+        timeout: Duration,
+        username: &str,
+        password: &str
+    ) -> anyhow::Result<Vec<u8>> {
         let auth = BasicAuth {
             username: username.to_string(),
             password: password.to_string()
@@ -144,28 +180,21 @@ impl StoreClient {
                 ..HandshakeRequest::default()
             }
         }));
-        req.set_timeout(Duration::from_secs(self.timeout_second));
+        req.set_timeout(timeout);
 
-        let rx = self.client.handshake(req).await?;
+        let rx = client.handshake(req).await?;
         let mut rx = rx.into_inner();
 
         let resp = rx.next().await.expect("Must respond from handshake")?;
-        self.token = resp.payload;
-
-        Ok(())
+        let token = resp.payload;
+        Ok(token)
     }
 
     /// Execute do_action.
     async fn do_action(&mut self, action: &StoreDoAction) -> anyhow::Result<StoreDoActionResult> {
         // TODO: an action can always be able to serialize, or it is a bug.
         let mut req: Request<Action> = action.try_into()?;
-        req.set_timeout(Duration::from_secs(self.timeout_second));
-
-        let metadata = req.metadata_mut();
-        metadata.insert_bin(
-            "auth-token-bin",
-            MetadataValue::from_bytes(&self.token.clone())
-        );
+        req.set_timeout(self.timeout);
 
         let mut stream = self
             .client
@@ -186,5 +215,49 @@ impl StoreClient {
                 Ok(action_rst)
             }
         }
+    }
+
+    /// Appends data partitions to specified table
+    pub async fn append_data(
+        &mut self,
+        db_name: String,
+        tbl_name: String,
+        scheme_ref: SchemaRef,
+        mut block_stream: BlockStream
+    ) -> anyhow::Result<AppendResult> {
+        let ipc_write_opt = IpcWriteOptions::default();
+        let flight_schema = flight_data_from_arrow_schema(&scheme_ref, &ipc_write_opt);
+        let (mut tx, flight_stream) = futures::channel::mpsc::channel(100);
+
+        tx.send(flight_schema).await?;
+
+        tokio::spawn(async move {
+            while let Some(block) = block_stream.next().await {
+                info!("next data block");
+                if let Ok(batch) = RecordBatch::try_from(block) {
+                    if let Err(_e) = tx
+                        .send(flight_data_from_arrow_batch(&batch, &ipc_write_opt).1)
+                        .await
+                    {
+                        log::info!("failed to send flight-data to downstream, breaking out");
+                        break;
+                    }
+                } else {
+                    log::info!("failed to convert DataBlock to RecordBatch , breaking out");
+                    break;
+                }
+            }
+        });
+
+        let mut req = Request::new(flight_stream);
+        let meta = req.metadata_mut();
+        store_do_put::set_do_put_meta(meta, &db_name, &tbl_name);
+
+        let res = self.client.do_put(req).await?;
+
+        use anyhow::Context;
+        let put_result = res.into_inner().next().await.context("empty response")??;
+        let vec = serde_json::from_slice(&put_result.app_metadata)?;
+        Ok(vec)
     }
 }
