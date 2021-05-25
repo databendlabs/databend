@@ -73,7 +73,6 @@ jobs:
           echo ::set-output name=current_version::${GITHUB_REF#refs/tags/v}
         shell: bash
 
-
       - name: Release
         uses: svenstaro/upload-release-action@v2
         with:

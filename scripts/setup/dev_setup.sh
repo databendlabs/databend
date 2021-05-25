@@ -107,6 +107,7 @@ function install_toolchain {
   echo "Installing ${version} of rust toolchain"
   rustup install "$version"
   rustup set profile minimal
+  rustup component add cargo --toolchain "$version"
   rustup component add rustfmt --toolchain "$version"
   rustup component add clippy --toolchain "$version"
   rustup default "$version"
