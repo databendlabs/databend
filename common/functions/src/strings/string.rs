@@ -14,6 +14,7 @@ impl StringFunction {
     pub fn register(map: FactoryFuncRef) -> Result<()> {
         let mut map = map.write();
         map.insert("substring", SubstringFunction::try_create);
+
         Ok(())
     }
 }

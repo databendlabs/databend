@@ -4,17 +4,15 @@
 
 use std::fmt;
 
+use common_aggregate_functions::AggregateFunctionFactory;
+use common_aggregate_functions::IAggregateFunction;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_functions::AliasFunction;
-use common_functions::CastFunction;
-use common_functions::ColumnFunction;
 use common_functions::FunctionFactory;
-use common_functions::IFunction;
-use common_functions::LiteralFunction;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum ExpressionAction {
@@ -24,19 +22,29 @@ pub enum ExpressionAction {
     Column(String),
     /// Constant value.
     Literal(DataValue),
+
+    /// A unary expression such as "NOT foo"
+    UnaryExpression {
+        op: String,
+        expr: Box<ExpressionAction>
+    },
+
     /// A binary expression such as "age > 40"
     BinaryExpression {
         left: Box<ExpressionAction>,
         op: String,
         right: Box<ExpressionAction>
     },
-    /// A unary expression such as "NOT foo"
-    UnaryExpression {
+
+    /// ScalarFunction with a set of arguments.
+    /// Note: BinaryFunction is a also kind of functions function
+    ScalarFunction {
         op: String,
-        expr: Box<ExpressionAction>
+        args: Vec<ExpressionAction>
     },
-    /// Functions with a set of arguments.
-    Function {
+
+    /// AggregateFunction with a set of arguments.
+    AggregateFunction {
         op: String,
         args: Vec<ExpressionAction>
     },
@@ -63,83 +71,130 @@ pub enum ExpressionAction {
 }
 
 impl ExpressionAction {
-    fn to_function_with_depth(&self, depth: usize) -> Result<Box<dyn IFunction>> {
+    pub fn column_name(&self) -> String {
         match self {
-            ExpressionAction::Column(ref v) => ColumnFunction::try_create(v.as_str()),
-            ExpressionAction::Literal(ref v) => LiteralFunction::try_create(v.clone()),
-            ExpressionAction::BinaryExpression { left, op, right } => {
-                let l = left.to_function_with_depth(depth)?;
-                let r = right.to_function_with_depth(depth + 1)?;
-                let mut func = FunctionFactory::get(op, &[l, r])?;
-                func.set_depth(depth);
-                Ok(func)
+            ExpressionAction::Alias(name, _expr) => name.clone(),
+            _ => format!("{:?}", self)
+        }
+    }
+
+    pub fn to_data_field(&self, input_schema: &DataSchemaRef) -> Result<DataField> {
+        let name = self.column_name();
+        self.to_data_type(&input_schema).and_then(|return_type| {
+            self.nullable(&input_schema)
+                .map(|nullable| DataField::new(&name, return_type, nullable))
+        })
+    }
+
+    // TODO
+    pub fn nullable(&self, _input_schema: &DataSchemaRef) -> Result<bool> {
+        Ok(false)
+    }
+
+    pub fn to_data_type(&self, input_schema: &DataSchemaRef) -> Result<DataType> {
+        match self {
+            ExpressionAction::Alias(_, expr) => expr.to_data_type(input_schema),
+            ExpressionAction::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
+            ExpressionAction::Literal(v) => Ok(v.data_type()),
+            ExpressionAction::BinaryExpression { op, left, right } => {
+                let arg_types = vec![
+                    left.to_data_type(input_schema)?,
+                    right.to_data_type(input_schema)?,
+                ];
+                let func = FunctionFactory::get(op)?;
+                func.return_type(&arg_types)
             }
+
             ExpressionAction::UnaryExpression { op, expr } => {
-                let left_val = Some(0);
-                let left = Box::new(ExpressionAction::Literal(DataValue::Int64(left_val)));
-                let l = left.to_function_with_depth(depth)?;
-                let r = expr.to_function_with_depth(depth + 1)?;
-                let mut func = FunctionFactory::get(op, &[l, r])?;
-                func.set_depth(depth);
-                Ok(func)
+                let arg_types = vec![expr.to_data_type(input_schema)?];
+                let func = FunctionFactory::get(op)?;
+                func.return_type(&arg_types)
             }
-            ExpressionAction::Function { op, args } => {
-                let mut funcs = Vec::with_capacity(args.len());
+
+            ExpressionAction::ScalarFunction { op, args } => {
+                let mut arg_types = Vec::with_capacity(args.len());
                 for arg in args {
-                    let mut func = arg.to_function_with_depth(depth + 1)?;
-                    func.set_depth(depth);
-                    funcs.push(func);
+                    arg_types.push(arg.to_data_type(input_schema)?);
                 }
-                let mut func = FunctionFactory::get(op, &funcs)?;
-                func.set_depth(depth);
-                Ok(func)
+                let func = FunctionFactory::get(op)?;
+                func.return_type(&arg_types)
             }
-            ExpressionAction::Alias(alias, expr) => {
-                let mut func = expr.to_function_with_depth(depth)?;
-                func.set_depth(depth);
-                AliasFunction::try_create(alias.clone(), func)
+            ExpressionAction::AggregateFunction { op, args } => {
+                let mut arg_types = Vec::with_capacity(args.len());
+                for arg in args {
+                    arg_types.push(arg.to_data_type(input_schema)?);
+                }
+                let func = AggregateFunctionFactory::get(op)?;
+                func.return_type(&arg_types)
             }
-            ExpressionAction::Sort { expr, .. } => expr.to_function_with_depth(depth),
-            ExpressionAction::Wildcard => ColumnFunction::try_create("*"),
-            ExpressionAction::Cast { expr, data_type } => Ok(CastFunction::create(
-                expr.to_function_with_depth(depth)?,
-                data_type.clone()
+            ExpressionAction::Wildcard => Result::Err(ErrorCodes::IllegalDataType(
+                "Wildcard expressions are not valid to get return type"
+            )),
+            ExpressionAction::Cast { data_type, .. } => Ok(data_type.clone()),
+            ExpressionAction::Sort { expr, .. } => expr.to_data_type(input_schema)
+        }
+    }
+
+    pub fn to_aggregate_function(&self) -> Result<Box<dyn IAggregateFunction>> {
+        match self {
+            ExpressionAction::AggregateFunction { op, .. } => AggregateFunctionFactory::get(op),
+            _ => Err(ErrorCodes::LogicalError(
+                "Expression must be aggregated function"
             ))
         }
     }
 
-    pub fn to_function(&self) -> Result<Box<dyn IFunction>> {
-        self.to_function_with_depth(0)
-    }
-
-    pub fn to_data_field(&self, input_schema: &DataSchemaRef) -> Result<DataField> {
-        self.to_function().and_then(|function| {
-            function.return_type(&input_schema).and_then(|return_type| {
-                function.nullable(&input_schema).map(|nullable| {
-                    DataField::new(format!("{}", function).as_str(), return_type, nullable)
-                })
-            })
-        })
-    }
-
-    pub fn has_aggregator(&self) -> Result<bool> {
-        Ok(self.to_function()?.is_aggregator())
+    pub fn to_aggregate_function_args(&self) -> Result<Vec<String>> {
+        match self {
+            ExpressionAction::AggregateFunction { args, .. } => {
+                let arg_names = args.iter().map(|arg| arg.column_name()).collect::<Vec<_>>();
+                Ok(arg_names)
+            }
+            _ => Err(ErrorCodes::LogicalError(
+                "Expression must be aggregated function"
+            ))
+        }
     }
 }
 
+// Also used as expression column name
 impl fmt::Debug for ExpressionAction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ExpressionAction::Alias(alias, v) => write!(f, "{:?} as {:#}", v, alias),
             ExpressionAction::Column(ref v) => write!(f, "{:#}", v),
             ExpressionAction::Literal(ref v) => write!(f, "{:#}", v),
-            ExpressionAction::BinaryExpression { left, op, right } => {
+            ExpressionAction::BinaryExpression { op, left, right } => {
                 write!(f, "({:?} {} {:?})", left, op, right,)
             }
+
             ExpressionAction::UnaryExpression { op, expr } => {
-                write!(f, "({} {:?})", op, expr,)
+                write!(f, "({} {:?})", op, expr)
             }
-            ExpressionAction::Function { op, args } => write!(f, "{}({:?})", op, args),
+
+            ExpressionAction::ScalarFunction { op, args } => {
+                write!(f, "{}(", op)?;
+
+                for (i, _) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{:?}", args[i],)?;
+                }
+                write!(f, ")")
+            }
+
+            ExpressionAction::AggregateFunction { op, args } => {
+                write!(f, "{}(", op)?;
+                for (i, _) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{:?}", args[i],)?;
+                }
+                write!(f, ")")
+            }
+
             ExpressionAction::Sort { expr, .. } => write!(f, "{:?}", expr),
             ExpressionAction::Wildcard => write!(f, "*"),
             ExpressionAction::Cast { expr, data_type } => {

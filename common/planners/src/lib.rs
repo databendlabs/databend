@@ -2,6 +2,77 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#[cfg(test)]
+mod plan_aggregator_test;
+#[cfg(test)]
+mod plan_builder_test;
+#[cfg(test)]
+mod plan_display_test;
+#[cfg(test)]
+mod plan_explain_test;
+#[cfg(test)]
+mod plan_expression_action_test;
+#[cfg(test)]
+mod plan_expression_test;
+#[cfg(test)]
+mod plan_filter_test;
+#[cfg(test)]
+mod plan_having_test;
+#[cfg(test)]
+mod plan_limit_test;
+#[cfg(test)]
+mod plan_projection_test;
+#[cfg(test)]
+mod plan_rewriter_test;
+#[cfg(test)]
+mod plan_scan_test;
+#[cfg(test)]
+mod plan_select_test;
+#[cfg(test)]
+mod plan_stage_test;
+#[cfg(test)]
+mod plan_walker_test;
+#[cfg(test)]
+mod test;
+
+mod plan_aggregator_final;
+mod plan_aggregator_partial;
+mod plan_builder;
+mod plan_database_create;
+mod plan_database_drop;
+mod plan_display;
+mod plan_empty;
+mod plan_explain;
+mod plan_expression;
+mod plan_expression_action;
+mod plan_expression_action_column;
+mod plan_expression_action_function;
+mod plan_expression_action_literal;
+mod plan_expression_action_rewriter;
+mod plan_expression_action_sort;
+mod plan_expression_action_visitor;
+mod plan_expression_chain;
+mod plan_filter;
+mod plan_having;
+mod plan_insert_into;
+mod plan_limit;
+mod plan_node;
+mod plan_partition;
+mod plan_projection;
+mod plan_read_datasource;
+mod plan_rewriter;
+mod plan_scan;
+mod plan_select;
+mod plan_setting;
+mod plan_sort;
+mod plan_stage;
+mod plan_statistics;
+mod plan_table_create;
+mod plan_table_drop;
+mod plan_use_database;
+mod plan_visitor;
+mod plan_walker;
+
 pub use plan_aggregator_final::AggregatorFinalPlan;
 pub use plan_aggregator_partial::AggregatorPartialPlan;
 pub use plan_builder::PlanBuilder;
@@ -20,7 +91,11 @@ pub use plan_expression_action_function::avg;
 pub use plan_expression_action_function::modular;
 pub use plan_expression_action_function::sum;
 pub use plan_expression_action_literal::lit;
+pub use plan_expression_action_rewriter::ExprRewriter;
 pub use plan_expression_action_sort::sort;
+pub use plan_expression_action_visitor::ExpressionVisitor;
+pub use plan_expression_action_visitor::Recursion;
+pub use plan_expression_chain::*;
 pub use plan_filter::FilterPlan;
 pub use plan_having::HavingPlan;
 pub use plan_insert_into::InsertIntoPlan;
@@ -46,70 +121,3 @@ pub use plan_table_create::TableOptions;
 pub use plan_table_drop::DropTablePlan;
 pub use plan_use_database::UseDatabasePlan;
 pub use plan_visitor::PlanVisitor;
-pub use test::Test;
-
-#[cfg(test)]
-mod plan_aggregator_test;
-#[cfg(test)]
-mod plan_builder_test;
-#[cfg(test)]
-mod plan_display_test;
-#[cfg(test)]
-mod plan_expression_action_test;
-#[cfg(test)]
-mod plan_expression_test;
-#[cfg(test)]
-mod plan_filter_test;
-#[cfg(test)]
-mod plan_having_test;
-#[cfg(test)]
-mod plan_limit_test;
-#[cfg(test)]
-mod plan_projection_test;
-#[cfg(test)]
-mod plan_rewriter_test;
-#[cfg(test)]
-mod plan_scan_test;
-#[cfg(test)]
-mod plan_select_test;
-#[cfg(test)]
-mod plan_stage_test;
-#[cfg(test)]
-mod plan_walker_test;
-
-mod plan_aggregator_final;
-mod plan_aggregator_partial;
-mod plan_builder;
-mod plan_database_create;
-mod plan_database_drop;
-mod plan_display;
-mod plan_empty;
-mod plan_explain;
-mod plan_explain_test;
-mod plan_expression;
-mod plan_expression_action;
-mod plan_expression_action_column;
-mod plan_expression_action_function;
-mod plan_expression_action_literal;
-mod plan_expression_action_sort;
-mod plan_filter;
-mod plan_having;
-mod plan_insert_into;
-mod plan_limit;
-mod plan_node;
-mod plan_partition;
-mod plan_projection;
-mod plan_read_datasource;
-mod plan_rewriter;
-mod plan_scan;
-mod plan_select;
-mod plan_setting;
-mod plan_sort;
-mod plan_stage;
-mod plan_statistics;
-mod plan_table_create;
-mod plan_table_drop;
-mod plan_use_database;
-mod plan_visitor;
-mod plan_walker;
-mod test;

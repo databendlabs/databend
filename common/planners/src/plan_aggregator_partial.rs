@@ -13,11 +13,12 @@ use crate::PlanNode;
 pub struct AggregatorPartialPlan {
     pub group_expr: Vec<ExpressionAction>,
     pub aggr_expr: Vec<ExpressionAction>,
+    pub schema: DataSchemaRef,
     pub input: Arc<PlanNode>
 }
 
 impl AggregatorPartialPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        self.input.schema()
+        self.schema.clone()
     }
 }

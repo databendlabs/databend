@@ -17,8 +17,8 @@ async fn test_transform_partial_aggregator() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
-    // sum(number)+1, avg(number)
-    let aggr_exprs = &[add(sum(col("number")), lit(2u64)), avg(col("number"))];
+    // sum(number), avg(number)
+    let aggr_exprs = &[sum(col("number")), avg(col("number"))];
     let aggr_partial = PlanBuilder::create(test_source.number_schema_for_test()?)
         .aggregate_partial(aggr_exprs, &[])?
         .build()?;
@@ -27,6 +27,7 @@ async fn test_transform_partial_aggregator() -> anyhow::Result<()> {
     let mut pipeline = Pipeline::create(ctx.clone());
     let source = test_source.number_source_transform_for_test(200000)?;
     pipeline.add_source(Arc::new(source))?;
+
     pipeline.add_simple_transform(|| {
         Ok(Box::new(AggregatorPartialTransform::try_create(
             aggr_partial.schema(),
@@ -42,11 +43,11 @@ async fn test_transform_partial_aggregator() -> anyhow::Result<()> {
     assert_eq!(block.num_columns(), 2);
 
     let expected = vec![
-        "+--------------------------------------------------+--------------------------------------------------------------------+",
-        "| plus(sum(number), 2)                             | avg(number)                                                        |",
-        "+--------------------------------------------------+--------------------------------------------------------------------+",
-        "| {\"Struct\":[{\"UInt64\":19999900000},{\"UInt64\":2}]} | {\"Struct\":[{\"Struct\":[{\"UInt64\":19999900000},{\"UInt64\":200000}]}]} |",
-        "+--------------------------------------------------+--------------------------------------------------------------------+",
+        "+-------------------------------------+--------------------------------------------------------------------+",
+        "| sum(number)                         | avg(number)                                                        |",
+        "+-------------------------------------+--------------------------------------------------------------------+",
+        "| {\"Struct\":[{\"UInt64\":19999900000}]} | {\"Struct\":[{\"Struct\":[{\"UInt64\":19999900000},{\"UInt64\":200000}]}]} |",
+        "+-------------------------------------+--------------------------------------------------------------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 

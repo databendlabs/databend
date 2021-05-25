@@ -11,10 +11,7 @@ use crate::IFunction;
 pub struct ComparisonLtFunction;
 
 impl ComparisonLtFunction {
-    pub fn try_create_func(
-        _display_name: &str,
-        args: &[Box<dyn IFunction>]
-    ) -> Result<Box<dyn IFunction>> {
-        ComparisonFunction::try_create_func(DataValueComparisonOperator::Lt, args)
+    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn IFunction>> {
+        ComparisonFunction::try_create_func(DataValueComparisonOperator::Lt)
     }
 }

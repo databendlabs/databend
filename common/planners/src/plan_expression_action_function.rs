@@ -7,8 +7,8 @@ use crate::ExpressionAction;
 /// return a new expression l <op> r.
 fn binary_expr(l: ExpressionAction, op: &str, r: ExpressionAction) -> ExpressionAction {
     ExpressionAction::BinaryExpression {
-        left: Box::new(l),
         op: op.to_string(),
+        left: Box::new(l),
         right: Box::new(r)
     }
 }
@@ -25,7 +25,7 @@ pub fn modular(left: ExpressionAction, right: ExpressionAction) -> ExpressionAct
 
 /// sum() aggregate function.
 pub fn sum(other: ExpressionAction) -> ExpressionAction {
-    ExpressionAction::Function {
+    ExpressionAction::AggregateFunction {
         op: "sum".to_string(),
         args: vec![other]
     }
@@ -33,7 +33,7 @@ pub fn sum(other: ExpressionAction) -> ExpressionAction {
 
 /// avg() aggregate function.
 pub fn avg(other: ExpressionAction) -> ExpressionAction {
-    ExpressionAction::Function {
+    ExpressionAction::AggregateFunction {
         op: "avg".to_string(),
         args: vec![other]
     }

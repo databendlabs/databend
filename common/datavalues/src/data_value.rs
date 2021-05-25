@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-// Borrow from apache/arrow/rust/datafusion/src/scalar.rs
+// Borrow from apache/arrow/rust/datafusion/src/functions.rs
 // See notice.md
 
 use std::convert::TryFrom;

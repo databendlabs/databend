@@ -4,13 +4,11 @@
 
 use std::fmt;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataArrayLogic;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValueLogicOperator;
-use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::logics::LogicAndFunction;
@@ -20,11 +18,7 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct LogicFunction {
-    depth: usize,
-    op: DataValueLogicOperator,
-    left: Box<dyn IFunction>,
-    right: Box<dyn IFunction>,
-    saved: Option<DataColumnarValue>
+    op: DataValueLogicOperator
 }
 
 impl LogicFunction {
@@ -35,23 +29,8 @@ impl LogicFunction {
         Ok(())
     }
 
-    pub fn try_create_func(
-        op: DataValueLogicOperator,
-        args: &[Box<dyn IFunction>]
-    ) -> Result<Box<dyn IFunction>> {
-        match args.len() {
-            2 => Result::Ok(Box::new(LogicFunction {
-                depth: 0,
-                op,
-                left: args[0].clone(),
-                right: args[1].clone(),
-                saved: None
-            })),
-            _ => Result::Err(ErrorCodes::BadArguments(format!(
-                "Function Error: Logic function {} args length must be 2",
-                op
-            )))
-        }
+    pub fn try_create_func(op: DataValueLogicOperator) -> Result<Box<dyn IFunction>> {
+        Ok(Box::new(LogicFunction { op }))
     }
 }
 
@@ -60,7 +39,7 @@ impl IFunction for LogicFunction {
         "LogicFunction"
     }
 
-    fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Boolean)
     }
 
@@ -68,27 +47,15 @@ impl IFunction for LogicFunction {
         Ok(false)
     }
 
-    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
+    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
         Ok(DataColumnarValue::Array(
-            DataArrayLogic::data_array_logic_op(
-                self.op.clone(),
-                &self.left.eval(block)?,
-                &self.right.eval(block)?
-            )?
+            DataArrayLogic::data_array_logic_op(self.op.clone(), &columns[0], &columns[1])?
         ))
-    }
-
-    fn set_depth(&mut self, depth: usize) {
-        self.depth = depth;
-    }
-
-    fn is_aggregator(&self) -> bool {
-        self.left.is_aggregator() || self.right.is_aggregator()
     }
 }
 
 impl fmt::Display for LogicFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {} {}", self.left, self.op, self.right)
+        write!(f, "{}", self.op)
     }
 }

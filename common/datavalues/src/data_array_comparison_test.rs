@@ -190,8 +190,8 @@ fn test_array_scalar_comparison() {
     for t in tests {
         let result = DataArrayComparison::data_array_comparison_op(
             t.op.clone(),
-            &DataColumnarValue::Array(t.array),
-            &DataColumnarValue::Scalar(t.scalar)
+            &DataColumnarValue::Array(t.array.clone()),
+            &DataColumnarValue::Constant(t.scalar, t.array.len())
         );
         match result {
             Ok(v) => assert_eq!(v.as_ref(), t.expect.as_ref()),
@@ -270,7 +270,7 @@ fn test_scalar_array_comparison() {
     for t in tests {
         let result = DataArrayComparison::data_array_comparison_op(
             t.op.clone(),
-            &DataColumnarValue::Scalar(t.scalar),
+            &DataColumnarValue::Constant(t.scalar, t.array.len()),
             &DataColumnarValue::Array(t.array)
         );
         match result {

@@ -3,14 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt;
-use std::ops::Deref;
 
+use common_arrow::arrow::array::Int64Array;
 use common_arrow::arrow::compute;
-use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_datavalues::UInt64Array;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
@@ -18,30 +17,14 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct SubstringFunction {
-    display_name: String,
-    /// The expression to substring
-    expr: Box<dyn IFunction>,
-    /// Substring params
-    from: Box<dyn IFunction>,
-    len: Box<dyn IFunction>
+    display_name: String
 }
 
 impl SubstringFunction {
-    pub fn try_create(
-        display_name: &str,
-        args: &[Box<dyn IFunction>]
-    ) -> Result<Box<dyn IFunction>> {
-        match args.len() {
-            3 => Ok(Box::new(SubstringFunction {
-                display_name: display_name.to_string(),
-                expr: args[0].clone(),
-                from: args[1].clone(),
-                len: args[2].clone()
-            })),
-            _ => Result::Err(ErrorCodes::BadArguments(
-                "Function Error: Substring function args length must be 3"
-            ))
-        }
+    pub fn try_create(display_name: &str) -> Result<Box<dyn IFunction>> {
+        Ok(Box::new(SubstringFunction {
+            display_name: display_name.to_string()
+        }))
     }
 }
 
@@ -50,60 +33,88 @@ impl IFunction for SubstringFunction {
         "substring"
     }
 
-    fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
-        self.expr.return_type(input_schema)
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+        Ok(DataType::Utf8)
     }
 
-    fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
-        self.expr.nullable(input_schema)
+    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
+        Ok(false)
     }
 
-    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
-        let value = self.expr.eval(block)?;
-        let from = self.from.eval(block)?;
-        let mut from_scalar = 0_i64;
-        if let DataColumnarValue::Scalar(from) = from {
-            match from {
-                DataValue::Int64(Some(from)) => {
-                    if from >= 1 {
-                        from_scalar = from - 1;
-                    } else {
-                        from_scalar = from
-                    }
+    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
+        // TODO: make this function support column value as arguments rather than literal
+        let mut from = match columns[1].data_type() {
+            DataType::UInt64 => Ok(columns[1]
+                .to_array()
+                .unwrap()
+                .as_any()
+                .downcast_ref::<UInt64Array>()
+                .unwrap()
+                .value(0) as i64),
+
+            DataType::Int64 => Ok(columns[1]
+                .to_array()
+                .unwrap()
+                .as_any()
+                .downcast_ref::<Int64Array>()
+                .unwrap()
+                .value(0)),
+
+            other => Err(ErrorCodes::BadArguments(format!(
+                "Unsupport datatype {:?} as argument",
+                other
+            )))
+        }?;
+
+        if from >= 1 {
+            from -= 1;
+        }
+
+        let mut end = None;
+        if columns.len() >= 3 {
+            match columns[2].data_type() {
+                DataType::UInt64 => {
+                    end = Some(
+                        columns[2]
+                            .to_array()
+                            .unwrap()
+                            .as_any()
+                            .downcast_ref::<UInt64Array>()
+                            .unwrap()
+                            .value(0)
+                    );
                 }
-                DataValue::UInt64(Some(from)) => {
-                    from_scalar = (from as i64) - 1;
+
+                DataType::Int64 => {
+                    end = Some(
+                        columns[2]
+                            .to_array()
+                            .unwrap()
+                            .as_any()
+                            .downcast_ref::<Int64Array>()
+                            .unwrap()
+                            .value(0) as u64
+                    );
                 }
-                _ => {}
+
+                other => {
+                    return Err(ErrorCodes::BadArguments(format!(
+                        "Unsupport datatype {:?} as argument",
+                        other
+                    )))
+                }
             }
         }
 
-        let len = self.len.eval(block)?;
-        let mut len_scalar = None;
-        if let DataColumnarValue::Scalar(DataValue::UInt64(len)) = len {
-            len_scalar = len;
-        }
-
-        match value {
-            DataColumnarValue::Array(v) => Ok(DataColumnarValue::Array(
-                compute::kernels::substring::substring(v.deref(), from_scalar, &len_scalar)?
-            )),
-            DataColumnarValue::Scalar(v) => {
-                let scalar_array = v.to_array()?;
-                let substring_array = compute::kernels::substring::substring(
-                    scalar_array.deref(),
-                    from_scalar,
-                    &len_scalar
-                )?;
-                let substring_scalar = DataValue::try_from_array(&substring_array, 0)?;
-                Ok(DataColumnarValue::Scalar(substring_scalar))
-            }
-        }
+        let value = columns[0].to_array()?;
+        Ok(DataColumnarValue::Array(
+            compute::kernels::substring::substring(value.as_ref(), from, &end)?
+        ))
     }
 }
 
 impl fmt::Display for SubstringFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SUBSTRING({},{},{})", self.expr, self.from, self.len)
+        write!(f, "SUBSTRING")
     }
 }

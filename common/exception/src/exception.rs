@@ -91,6 +91,7 @@ build_exceptions! {
     ParquetError(24),
     UnknownTable(25),
     IllegalAggregateExp(26),
+    UnknownAggregateFunction(27),
 
     UnknownException(1000),
     TokioError(1001)
