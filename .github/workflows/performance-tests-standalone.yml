@@ -14,8 +14,8 @@ jobs:
         run: |
           sudo wget http://archive.ubuntu.com/ubuntu/pool/main/p/psmisc/psmisc_23.3-1_amd64.deb
           sudo dpkg -i ./psmisc_23.3-1_amd64.deb
-          sudo wget http://archive.ubuntu.com/ubuntu/pool/main/m/mysql-8.0/mysql-client_8.0.19-0ubuntu5_all.deb
-          sudo dpkg -i ./mysql-client_8.0.19-0ubuntu5_all.deb
+          sudo apt-get update
+          sudo apt-get install mysql-client -y
 
       - name: Install latest nightly
         uses: actions-rs/toolchain@v1
