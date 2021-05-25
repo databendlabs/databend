@@ -445,10 +445,7 @@ impl RewriteHelper {
             ExpressionAction::Alias(_, expr) => Self::expression_plan_columns(expr)?,
             ExpressionAction::Column(_) => vec![expr.clone()],
             ExpressionAction::Literal(_) => vec![],
-            ExpressionAction::UnaryExpression { expr, .. } => {
-                let v = Self::expression_plan_columns(expr)?;
-                v
-            }
+            ExpressionAction::UnaryExpression { expr, .. } => Self::expression_plan_columns(expr)?,
             ExpressionAction::BinaryExpression { left, right, .. } => {
                 let mut l = Self::expression_plan_columns(left)?;
                 let mut r = Self::expression_plan_columns(right)?;

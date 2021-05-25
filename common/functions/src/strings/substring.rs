@@ -67,7 +67,7 @@ impl IFunction for SubstringFunction {
         }?;
 
         if from >= 1 {
-            from = from - 1;
+            from -= 1;
         }
 
         let mut end = None;

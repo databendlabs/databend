@@ -95,13 +95,30 @@ The process is `accumulate`(apply data to the function) --> `accumulate_result`(
 
 ps: We don't store the arguments types and arguments names in functions, we can store them later if we need.
 
+### Column
+
+*Block* is the unit of data passed between streams for pipeline processing, while *Column* is the unit of data passed between expressions.
+So in the view of expression(functions, literal, ...), everything is *Column*, we have *DataColumnarValue* to represent a column.
+```
+#[derive(Clone, Debug)]
+pub enum DataColumnarValue {
+    // Array of values.
+    Array(DataArrayRef),
+    // A Single value.
+    Constant(DataValue, usize)
+}
+```
+
+*DataColumnarValue::Constant* is like  *ConstantColumn* in *ClickHouse*.
+
+Note: We don't have *ScalarValue* , because it can be known as `Constant(DataValue, 1)`, and there is *DataValue* struct.
+
 
 ### Expression chain and expression executor
 
 Currently we can collect the inner expression from expressions to build ExpressionChain. This could be done by Depth-first-serach visiting.  ExpressionFunction: `number + (number + 1)` will be :  `[ ExpressionColumn(number),  ExpressionColumn(number), ExpressionLiteral(1),  ExpressionBinary('+', 'number', '1'), ExpressionBinary('+', 'number',  '(number + 1)')  ]`.
 
-We have the ExpressionExecutor the execute the expression chain, during the execution, we don't need to care about the kind of the arguments. We just conside it as a ColumnExpression from upstream, so we just fetch the column *number* and the column *(number + 1)* from the block.
-
+We have the *ExpressionExecutor* the execute the expression chain, during the execution, we don't need to care about the kind of the arguments. We just conside them as *ColumnExpression* from upstream, so we just fetch the column *number* and the column *(number + 1)* from the block.
 
 
 > Let's introduce plan builder now

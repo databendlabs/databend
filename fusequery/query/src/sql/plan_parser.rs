@@ -905,7 +905,7 @@ impl PlanParser {
             if let ExpressionAction::Column(_) = expr {
                 return true;
             }
-            return false;
+            false
         }) {
             return Ok(input.clone());
         }
