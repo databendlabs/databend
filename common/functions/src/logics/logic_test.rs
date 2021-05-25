@@ -68,9 +68,7 @@ fn test_logic_function() -> Result<()> {
             nullable: false,
             func: LogicNotFunction::try_create_func("".clone())?,
             arg_names: vec!["a"],
-            columns: vec![
-                Arc::new(BooleanArray::from(vec![true, false])).into(),
-            ],
+            columns: vec![Arc::new(BooleanArray::from(vec![true, false])).into()],
             expect: Arc::new(BooleanArray::from(vec![false, true])),
             error: ""
         },
