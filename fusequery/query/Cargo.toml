@@ -29,6 +29,7 @@ common-streams = {path = "../../common/streams"}
 
 # Github dependencies
 clickhouse-srv = { git = "https://github.com/sundy-li/clickhouse-svr", rev = "82a8aac" }
+msql-srv = { git = "https://github.com/datafuselabs/msql-srv", rev = "76b8ae3" }
 
 # Crates.io dependencies
 ahash = "0.7.3"
