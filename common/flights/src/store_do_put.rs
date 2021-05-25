@@ -87,20 +87,3 @@ pub fn get_do_put_meta(meta: &MetadataMap) -> anyhow::Result<(String, String)> {
     let tbl_name = fetch_string(meta, META_KEY_TBL_NAME, "invalid tbl_name meta data")?;
     Ok((db_name, tbl_name))
 }
-
-#[cfg(test)]
-mod test {
-
-    use super::*;
-
-    #[test]
-    fn test_get_set_meta() {
-        let mut meta = MetadataMap::new();
-        let test_db = "test_db";
-        let test_tbl = "test_tbl";
-        set_do_put_meta(&mut meta, test_db, test_tbl);
-        let (db, tbl) = get_do_put_meta(&meta).unwrap();
-        assert_eq!(test_db, db);
-        assert_eq!(test_tbl, tbl);
-    }
-}

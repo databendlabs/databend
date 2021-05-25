@@ -48,3 +48,6 @@ pub mod protobuf {
     tonic::include_proto!("queryflight");
     tonic::include_proto!("storeflight");
 }
+
+#[cfg(test)]
+mod store_do_put_test;
