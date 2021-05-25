@@ -27,6 +27,7 @@ jobs:
 
       - name: Rust setup
         run: |
+          apt-get install psmisc
           bash ./scripts/setup/dev_setup.sh
 
       - name: Build native release
