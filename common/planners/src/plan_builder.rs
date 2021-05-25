@@ -131,15 +131,7 @@ impl PlanBuilder {
                     // aggrs: aggr_len aggregate states
                     // keys:  Vec<Key>, DataTypeStruct
                     // key:  group id, DataTypeBinary
-
-                    let keys_fields =
-                        RewriteHelper::exprs_to_fields(group_expr, &schema_before_groupby)?;
-                    partial_fields.push(DataField::new(
-                        "_group_keys",
-                        DataType::Struct(keys_fields),
-                        false
-                    ));
-
+                    partial_fields.push(DataField::new("_group_keys", DataType::Utf8, false));
                     partial_fields.push(DataField::new("_group_by_key", DataType::Binary, false));
                 }
 

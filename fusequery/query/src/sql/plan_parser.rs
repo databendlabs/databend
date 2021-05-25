@@ -306,6 +306,7 @@ impl PlanParser {
         let mut expression_exprs = projection_exprs.clone();
         // from order by
         expression_exprs.extend_from_slice(&order_by_exprs);
+        let expression_without_having = expression_exprs.clone();
         // ... or from the HAVING.
         if let Some(having_expr) = &having_expr_opt {
             expression_exprs.push(having_expr.clone());
@@ -377,16 +378,16 @@ impl PlanParser {
 
             (plan, having_expr_post_aggr_opt)
         } else {
-            let stage_phase = if order_by_exprs.is_empty() {
-                "Before Projection"
-            } else {
-                "Before OrderBy"
-            };
-
-            let plan = self.expression(&plan, &expression_exprs, stage_phase)?;
-
             (plan, having_expr_opt)
         };
+
+        let stage_phase = if order_by_exprs.is_empty() {
+            "Before Projection"
+        } else {
+            "Before OrderBy"
+        };
+
+        let plan = self.expression(&plan, &expression_without_having, stage_phase)?;
 
         // Having.
         let plan = self.having(&plan, having_expr_post_aggr_opt)?;
@@ -783,10 +784,6 @@ impl PlanParser {
         exprs: &[ExpressionAction],
         desc: &str
     ) -> Result<PlanNode> {
-        if exprs.is_empty() {
-            return Ok(input.clone());
-        }
-
         let mut dedup_exprs = vec![];
         for expr in exprs {
             let rebased_expr = unwrap_alias_exprs(expr)
@@ -796,6 +793,10 @@ impl PlanParser {
             if !dedup_exprs.contains(&rebased_expr) {
                 dedup_exprs.push(rebased_expr);
             }
+        }
+
+        if exprs.is_empty() {
+            return Ok(input.clone());
         }
 
         PlanBuilder::from(&input)
