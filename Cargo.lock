@@ -131,7 +131,7 @@ dependencies = [
 [[package]]
 name = "async-raft"
 version = "0.6.1"
-source = "git+https://github.com/drmingdrmer/async-raft?branch=rc#3dce97c5a42e6ddbd3e13b058dc657315ceae897"
+source = "git+https://github.com/drmingdrmer/async-raft?rev=cf40344f66fdcb6cde160b3e5671ff87c88f2af8#cf40344f66fdcb6cde160b3e5671ff87c88f2af8"
 dependencies = [
  "anyhow",
  "async-trait",
