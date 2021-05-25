@@ -2,16 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-mod common;
-mod flight_token;
-mod store_client;
-mod store_do_action;
-mod store_do_get;
-
 pub use common::flight_result_to_str;
 pub use common::status_err;
 pub use flight_token::FlightClaim;
 pub use flight_token::FlightToken;
+pub use store_client::BlockStream;
 pub use store_client::StoreClient;
 pub use store_do_action::CreateDatabaseAction;
 pub use store_do_action::CreateDatabaseActionResult;
@@ -28,6 +23,17 @@ pub use store_do_action::ReadPlanActionResult;
 pub use store_do_action::StoreDoAction;
 pub use store_do_action::StoreDoActionResult;
 pub use store_do_get::StoreDoGet;
+pub use store_do_put::AppendResult;
+// TODO refine these
+pub use store_do_put::get_do_put_meta;
+pub use store_do_put::set_do_put_meta;
+
+mod common;
+mod flight_token;
+mod store_client;
+mod store_do_action;
+mod store_do_get;
+pub mod store_do_put;
 
 // ProtoBuf generated files.
 #[allow(clippy::all)]
@@ -35,3 +41,6 @@ pub mod protobuf {
     tonic::include_proto!("queryflight");
     tonic::include_proto!("storeflight");
 }
+
+#[cfg(test)]
+mod store_do_put_test;

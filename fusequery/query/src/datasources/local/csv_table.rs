@@ -43,7 +43,7 @@ impl CsvTable {
                     "CSV Engine must contains file location options"
                 ));
             }
-            Some(v) => v.trim_matches(|s| s == '\'' || s == '"').to_string()
+            Some(v) => v.clone()
         };
 
         Ok(Box::new(Self {

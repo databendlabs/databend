@@ -17,20 +17,16 @@ async fn test_transform_partial_groupby() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
-    // sum(number)+1, avg(number)
-    let aggr_exprs = vec![
-        add(sum(col("number")), lit(2u64)),
-        avg(col("number")),
-        modular(col("number"), lit(3u64)),
-    ];
-    let group_exprs = vec![modular(col("number"), lit(3u64))];
+    // sum(number), avg(number)
+    let aggr_exprs = vec![sum(col("number")), avg(col("number"))];
+    let group_exprs = vec![col("number")];
     let aggr_partial = PlanBuilder::create(test_source.number_schema_for_test()?)
         .aggregate_partial(&aggr_exprs, &group_exprs)?
         .build()?;
 
     // Pipeline.
     let mut pipeline = Pipeline::create(ctx.clone());
-    let source = test_source.number_source_transform_for_test(1000)?;
+    let source = test_source.number_source_transform_for_test(5)?;
     pipeline.add_source(Arc::new(source))?;
     pipeline.add_simple_transform(|| {
         Ok(Box::new(GroupByPartialTransform::create(
@@ -47,15 +43,17 @@ async fn test_transform_partial_groupby() -> anyhow::Result<()> {
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
 
-    // SELECT SUM(number)+2, AVG(number), number%3 ... GROUP BY number%3;
+    // SELECT SUM(number), AVG(number), number ... GROUP BY number;
     let expected = vec![
-        "+---------------------------------------------+------------------------------------------------------------+------------------------------------------+------------------+",
-        "| plus(sum(number), 2)                        | avg(number)                                                | modulo(number, 3)                        | _group_by_key    |",
-        "+---------------------------------------------+------------------------------------------------------------+------------------------------------------+------------------+",
-        "| {\"Struct\":[{\"UInt64\":166167},{\"UInt64\":2}]} | {\"Struct\":[{\"Struct\":[{\"UInt64\":166167},{\"UInt64\":333}]}]} | {\"Struct\":[{\"UInt64\":877},{\"UInt64\":3}]} | 0100000000000000 |",
-        "| {\"Struct\":[{\"UInt64\":166500},{\"UInt64\":2}]} | {\"Struct\":[{\"Struct\":[{\"UInt64\":166500},{\"UInt64\":333}]}]} | {\"Struct\":[{\"UInt64\":875},{\"UInt64\":3}]} | 0200000000000000 |",
-        "| {\"Struct\":[{\"UInt64\":166833},{\"UInt64\":2}]} | {\"Struct\":[{\"Struct\":[{\"UInt64\":166833},{\"UInt64\":334}]}]} | {\"Struct\":[{\"UInt64\":876},{\"UInt64\":3}]} | 0000000000000000 |",
-        "+---------------------------------------------+------------------------------------------------------------+------------------------------------------+------------------+",
+        "+---------------------------+-----------------------------------------------------+---------------------------+------------------+",
+        "| sum(number)               | avg(number)                                         | _group_keys               | _group_by_key    |",
+        "+---------------------------+-----------------------------------------------------+---------------------------+------------------+",
+        "| {\"Struct\":[{\"UInt64\":0}]} | {\"Struct\":[{\"Struct\":[{\"UInt64\":0},{\"UInt64\":1}]}]} | {\"Struct\":[{\"UInt64\":0}]} | 0000000000000000 |",
+        "| {\"Struct\":[{\"UInt64\":1}]} | {\"Struct\":[{\"Struct\":[{\"UInt64\":1},{\"UInt64\":1}]}]} | {\"Struct\":[{\"UInt64\":1}]} | 0100000000000000 |",
+        "| {\"Struct\":[{\"UInt64\":2}]} | {\"Struct\":[{\"Struct\":[{\"UInt64\":2},{\"UInt64\":1}]}]} | {\"Struct\":[{\"UInt64\":2}]} | 0200000000000000 |",
+        "| {\"Struct\":[{\"UInt64\":3}]} | {\"Struct\":[{\"Struct\":[{\"UInt64\":3},{\"UInt64\":1}]}]} | {\"Struct\":[{\"UInt64\":3}]} | 0300000000000000 |",
+        "| {\"Struct\":[{\"UInt64\":4}]} | {\"Struct\":[{\"Struct\":[{\"UInt64\":4},{\"UInt64\":1}]}]} | {\"Struct\":[{\"UInt64\":4}]} | 0400000000000000 |",
+        "+---------------------------+-----------------------------------------------------+---------------------------+------------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 

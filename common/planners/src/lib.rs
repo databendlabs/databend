@@ -9,6 +9,8 @@ mod plan_builder_test;
 #[cfg(test)]
 mod plan_display_test;
 #[cfg(test)]
+mod plan_explain_test;
+#[cfg(test)]
 mod plan_expression_action_test;
 #[cfg(test)]
 mod plan_expression_test;
@@ -28,9 +30,8 @@ mod plan_scan_test;
 mod plan_select_test;
 #[cfg(test)]
 mod plan_walker_test;
-
+#[cfg(test)]
 mod test;
-pub use test::Test;
 
 mod plan_aggregator_final;
 mod plan_aggregator_partial;
@@ -40,15 +41,18 @@ mod plan_database_drop;
 mod plan_display;
 mod plan_empty;
 mod plan_explain;
-mod plan_explain_test;
 mod plan_expression;
 mod plan_expression_action;
 mod plan_expression_action_column;
 mod plan_expression_action_function;
 mod plan_expression_action_literal;
+mod plan_expression_action_rewriter;
 mod plan_expression_action_sort;
+mod plan_expression_action_visitor;
+mod plan_expression_chain;
 mod plan_filter;
 mod plan_having;
+mod plan_insert_into;
 mod plan_limit;
 mod plan_node;
 mod plan_partition;
@@ -86,9 +90,14 @@ pub use plan_expression_action_function::avg;
 pub use plan_expression_action_function::modular;
 pub use plan_expression_action_function::sum;
 pub use plan_expression_action_literal::lit;
+pub use plan_expression_action_rewriter::ExprRewriter;
 pub use plan_expression_action_sort::sort;
+pub use plan_expression_action_visitor::ExpressionVisitor;
+pub use plan_expression_action_visitor::Recursion;
+pub use plan_expression_chain::*;
 pub use plan_filter::FilterPlan;
 pub use plan_having::HavingPlan;
+pub use plan_insert_into::InsertIntoPlan;
 pub use plan_limit::LimitPlan;
 pub use plan_node::PlanNode;
 pub use plan_partition::Partition;

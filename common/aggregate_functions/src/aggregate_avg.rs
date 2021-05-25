@@ -4,53 +4,41 @@
 
 use std::fmt;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataArrayAggregate;
+use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DataValueAggregateOperator;
 use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
-use common_exception::ErrorCodes;
 use common_exception::Result;
 
-use crate::IFunction;
+use crate::IAggregateFunction;
 
 #[derive(Clone)]
-pub struct AggregatorAvgFunction {
+pub struct AggregateAvgFunction {
     display_name: String,
     depth: usize,
-    arg: Box<dyn IFunction>,
     state: DataValue
 }
 
-impl AggregatorAvgFunction {
-    pub fn try_create(
-        display_name: &str,
-        args: &[Box<dyn IFunction>]
-    ) -> Result<Box<dyn IFunction>> {
-        match args.len() {
-            1 => Ok(Box::new(AggregatorAvgFunction {
-                display_name: display_name.to_string(),
-                depth: 0,
-                arg: args[0].clone(),
-                state: DataValue::Struct(vec![DataValue::Null, DataValue::UInt64(Some(0))])
-            })),
-            _ => Result::Err(ErrorCodes::BadArguments(format!(
-                "Function Error: Aggregator function {} args require single argument",
-                display_name
-            )))
-        }
+impl AggregateAvgFunction {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggregateFunction>> {
+        Ok(Box::new(AggregateAvgFunction {
+            display_name: display_name.to_string(),
+            depth: 0,
+            state: DataValue::Struct(vec![DataValue::Null, DataValue::UInt64(Some(0))])
+        }))
     }
 }
 
-impl IFunction for AggregatorAvgFunction {
+impl IAggregateFunction for AggregateAvgFunction {
     fn name(&self) -> &str {
-        "AggregatorAvgFunction"
+        "AggregateAvgFunction"
     }
 
-    fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Float64)
     }
 
@@ -62,23 +50,20 @@ impl IFunction for AggregatorAvgFunction {
         self.depth = depth;
     }
 
-    fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
-        let rows = block.num_rows();
-        let val = self.arg.eval(&block)?;
-
+    fn accumulate(&mut self, columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
         if let DataValue::Struct(values) = self.state.clone() {
             let sum = DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
                 values[0].clone(),
                 DataArrayAggregate::data_array_aggregate_op(
                     DataValueAggregateOperator::Sum,
-                    val.to_array(1)?
+                    columns[0].to_array()?
                 )?
             )?;
             let count = DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
                 values[1].clone(),
-                DataValue::UInt64(Some(rows as u64))
+                DataValue::UInt64(Some(input_rows as u64))
             )?;
 
             self.state = DataValue::Struct(vec![sum, count]);
@@ -121,14 +106,10 @@ impl IFunction for AggregatorAvgFunction {
             self.state.clone()
         })
     }
-
-    fn is_aggregator(&self) -> bool {
-        true
-    }
 }
 
-impl fmt::Display for AggregatorAvgFunction {
+impl fmt::Display for AggregateAvgFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}({})", self.display_name, self.arg)
+        write!(f, "{}", self.display_name)
     }
 }

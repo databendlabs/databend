@@ -4,15 +4,12 @@
 
 use std::fmt;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataArrayArithmetic;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
-use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::arithmetics::ArithmeticDivFunction;
@@ -26,9 +23,7 @@ use crate::IFunction;
 #[derive(Clone)]
 pub struct ArithmeticFunction {
     depth: usize,
-    op: DataValueArithmeticOperator,
-    left: Box<dyn IFunction>,
-    right: Box<dyn IFunction>
+    op: DataValueArithmeticOperator
 }
 
 impl ArithmeticFunction {
@@ -47,22 +42,8 @@ impl ArithmeticFunction {
         Ok(())
     }
 
-    pub fn try_create_func(
-        op: DataValueArithmeticOperator,
-        args: &[Box<dyn IFunction>]
-    ) -> Result<Box<dyn IFunction>> {
-        match args.len() {
-            2 => Ok(Box::new(ArithmeticFunction {
-                depth: 0,
-                op,
-                left: args[0].clone(),
-                right: args[1].clone()
-            })),
-            _ => Result::Err(ErrorCodes::BadArguments(format!(
-                "Function Error: Arithmetic function {} args length must be 2",
-                op
-            )))
-        }
+    pub fn try_create_func(op: DataValueArithmeticOperator) -> Result<Box<dyn IFunction>> {
+        Ok(Box::new(ArithmeticFunction { depth: 0, op }))
     }
 }
 
@@ -71,71 +52,33 @@ impl IFunction for ArithmeticFunction {
         "ArithmeticFunction"
     }
 
-    fn return_type(&self, input_schema: &DataSchema) -> Result<DataType> {
-        common_datavalues::numerical_arithmetic_coercion(
-            &self.op,
-            &self.left.return_type(input_schema)?,
-            &self.right.return_type(input_schema)?
-        )
+    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+        common_datavalues::numerical_arithmetic_coercion(&self.op, &args[0], &args[1])
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
-        let left = &self.left.eval(block)?;
-        let right = &self.right.eval(block)?;
-        let result = DataArrayArithmetic::data_array_arithmetic_op(self.op.clone(), left, right)?;
+    fn eval(&self, columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
+        let result = DataArrayArithmetic::data_array_arithmetic_op(
+            self.op.clone(),
+            &columns[0],
+            &columns[1]
+        )?;
 
-        match (left, right) {
-            (DataColumnarValue::Scalar(_), DataColumnarValue::Scalar(_)) => {
+        match (&columns[0], &columns[1]) {
+            (DataColumnarValue::Constant(_, _), DataColumnarValue::Constant(_, _)) => {
                 let data_value = DataValue::try_from_array(&result, 0)?;
-                Ok(DataColumnarValue::Scalar(data_value))
+                Ok(DataColumnarValue::Constant(data_value, input_rows))
             }
             _ => Ok(DataColumnarValue::Array(result))
         }
-    }
-
-    fn set_depth(&mut self, depth: usize) {
-        self.left.set_depth(depth);
-        self.right.set_depth(depth + 1);
-        self.depth = depth;
-    }
-
-    fn accumulate(&mut self, block: &DataBlock) -> Result<()> {
-        self.left.accumulate(&block)?;
-        self.right.accumulate(&block)
-    }
-
-    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
-        Ok([
-            &self.left.accumulate_result()?[..],
-            &self.right.accumulate_result()?[..]
-        ]
-        .concat())
-    }
-
-    fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        self.left.merge(states)?;
-        self.right.merge(states)
-    }
-
-    fn merge_result(&self) -> Result<DataValue> {
-        DataValueArithmetic::data_value_arithmetic_op(
-            self.op.clone(),
-            self.left.merge_result()?,
-            self.right.merge_result()?
-        )
-    }
-
-    fn is_aggregator(&self) -> bool {
-        self.left.is_aggregator() || self.right.is_aggregator()
     }
 }
 
 impl fmt::Display for ArithmeticFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}({}, {})", self.op, self.left, self.right)
+        write!(f, "{}", self.op)
     }
 }

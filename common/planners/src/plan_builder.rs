@@ -2,13 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
-use common_exception::ErrorCodes;
+use common_datavalues::DataType;
 use common_exception::Result;
 
 use crate::{col, StageKind};
@@ -62,7 +62,6 @@ impl PlanBuilder {
 
         // Get the projection expressions(Including rewrite).
         let mut projection_exprs = vec![];
-        let exprs = RewriteHelper::rewrite_projection_aliases(exprs)?;
         exprs.iter().for_each(|v| match v {
             ExpressionAction::Wildcard => {
                 for i in 0..input_schema.fields().len() {
@@ -83,7 +82,7 @@ impl PlanBuilder {
 
         Ok(Self::from(&PlanNode::Expression(ExpressionPlan {
             input: Arc::new(self.plan.clone()),
-            exprs,
+            exprs: projection_exprs,
             schema: DataSchemaRefExt::create(merged),
             desc: desc.to_string()
         })))
@@ -91,24 +90,12 @@ impl PlanBuilder {
 
     /// Apply a projection.
     pub fn project(&self, exprs: &[ExpressionAction]) -> Result<Self> {
-        let exprs = RewriteHelper::rewrite_projection_aliases(exprs)?;
         let input_schema = self.plan.schema();
-
-        let mut projection_exprs = vec![];
-        exprs.iter().for_each(|v| match v {
-            ExpressionAction::Wildcard => {
-                for i in 0..input_schema.fields().len() {
-                    projection_exprs.push(col(input_schema.fields()[i].name()))
-                }
-            }
-            _ => projection_exprs.push(v.clone())
-        });
-
-        let fields = RewriteHelper::exprs_to_fields(&projection_exprs, &input_schema)?;
+        let fields = RewriteHelper::exprs_to_fields(exprs, &input_schema)?;
 
         Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
             input: Arc::new(self.plan.clone()),
-            expr: projection_exprs,
+            expr: exprs.to_owned(),
             schema: DataSchemaRefExt::create(fields)
         })))
     }
@@ -116,65 +103,47 @@ impl PlanBuilder {
     fn aggregate(
         &self,
         mode: AggregateMode,
+        schema_before_groupby: DataSchemaRef,
         aggr_expr: &[ExpressionAction],
         group_expr: &[ExpressionAction]
     ) -> Result<Self> {
-        let input_schema = self.plan.schema();
-        let rewrite_aggr_exprs = RewriteHelper::rewrite_projection_aliases(aggr_expr)?;
-        let aggr_projection_fields =
-            RewriteHelper::exprs_to_fields(&rewrite_aggr_exprs, &input_schema)?;
-
-        // Aggregator check.
-        let mut group_by_names = HashSet::new();
-        RewriteHelper::exprs_to_names(&group_expr, &mut group_by_names)?;
-        for aggr in &rewrite_aggr_exprs {
-            match aggr {
-                // do not check literal expressions
-                ExpressionAction::Literal(_) => continue,
-                ExpressionAction::Function { op: _, args } => {
-                    for arg in args {
-                        if arg.has_aggregator()? {
-                            return Result::Err(ErrorCodes::IllegalAggregateExp(format!(
-                                "Aggregate function {:?} is found inside another aggregate function in query: While processing {:?}",
-                                arg, arg
-                            )));
-                        }
-                    }
-                }
-                _ => {
-                    if !aggr.has_aggregator()? {
-                        // Check if aggr is in group-by's list
-                        let in_group_by = RewriteHelper::check_aggr_in_group_expr(
-                            &aggr,
-                            &group_by_names,
-                            &input_schema
-                        )?;
-                        if !in_group_by {
-                            return Result::Err(ErrorCodes::IllegalAggregateExp(format!(
-                                "Column `{:?}` is not under aggregate function and not in GROUP BY: While processing {:#}",
-                                aggr,
-                                aggr_expr.iter().map(|aggr| format!("{:#?}", aggr)).collect::<Vec<_>>().join(", ")
-                            )));
-                        }
-                    }
-                }
-            }
-        }
-
         Ok(match mode {
             AggregateMode::Partial => {
-                Self::from(&PlanNode::AggregatorPartial(AggregatorPartialPlan::try_create(
-                    group_expr.to_vec(),
-                    rewrite_aggr_exprs.to_vec(),
-                    Arc::new(self.plan.clone())
-                )?))
+                let fields = RewriteHelper::exprs_to_fields(aggr_expr, &schema_before_groupby)?;
+                let mut partial_fields = fields
+                    .iter()
+                    .map(|f| DataField::new(f.name(), DataType::Utf8, false))
+                    .collect::<Vec<_>>();
+
+                if !group_expr.is_empty() {
+                    // Fields. [aggrs,  [keys],  key ]
+                    // aggrs: aggr_len aggregate states
+                    // keys:  Vec<Key>, DataTypeStruct
+                    // key:  group id, DataTypeBinary
+                    partial_fields.push(DataField::new("_group_keys", DataType::Utf8, false));
+                    partial_fields.push(DataField::new("_group_by_key", DataType::Binary, false));
+                }
+
+                Self::from(&PlanNode::AggregatorPartial(AggregatorPartialPlan {
+                    input: Arc::new(self.plan.clone()),
+                    aggr_expr: aggr_expr.to_vec(),
+                    group_expr: group_expr.to_vec(),
+                    schema: DataSchemaRefExt::create(partial_fields)
+                }))
             }
-            AggregateMode::Final => Self::from(&PlanNode::AggregatorFinal(AggregatorFinalPlan {
-                input: Arc::new(self.plan.clone()),
-                aggr_expr: rewrite_aggr_exprs.to_vec(),
-                group_expr: group_expr.to_vec(),
-                schema: DataSchemaRefExt::create(aggr_projection_fields)
-            }))
+            AggregateMode::Final => {
+                let mut final_exprs = aggr_expr.to_owned();
+                final_exprs.extend_from_slice(group_expr);
+                let final_fields =
+                    RewriteHelper::exprs_to_fields(&final_exprs, &schema_before_groupby)?;
+
+                Self::from(&PlanNode::AggregatorFinal(AggregatorFinalPlan {
+                    input: Arc::new(self.plan.clone()),
+                    aggr_expr: aggr_expr.to_vec(),
+                    group_expr: group_expr.to_vec(),
+                    schema: DataSchemaRefExt::create(final_fields)
+                }))
+            }
         })
     }
 
@@ -184,16 +153,27 @@ impl PlanBuilder {
         aggr_expr: &[ExpressionAction],
         group_expr: &[ExpressionAction]
     ) -> Result<Self> {
-        self.aggregate(AggregateMode::Partial, aggr_expr, group_expr)
+        self.aggregate(
+            AggregateMode::Partial,
+            self.plan.schema(),
+            aggr_expr,
+            group_expr
+        )
     }
 
     /// Apply a final aggregator plan.
     pub fn aggregate_final(
         &self,
+        schema_before_groupby: DataSchemaRef,
         aggr_expr: &[ExpressionAction],
         group_expr: &[ExpressionAction]
     ) -> Result<Self> {
-        self.aggregate(AggregateMode::Final, aggr_expr, group_expr)
+        self.aggregate(
+            AggregateMode::Final,
+            schema_before_groupby,
+            aggr_expr,
+            group_expr
+        )
     }
 
     /// Scan a data source

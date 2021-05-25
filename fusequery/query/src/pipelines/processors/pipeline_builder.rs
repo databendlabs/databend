@@ -114,6 +114,7 @@ impl PipelineBuilder {
     fn visit_expression_plan(pipeline: &mut Pipeline, plan: &ExpressionPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ExpressionTransform::try_create(
+                plan.input.schema(),
                 plan.schema.clone(),
                 plan.exprs.clone(),
             )?))
@@ -124,7 +125,9 @@ impl PipelineBuilder {
     fn visit_projection_plan(pipeline: &mut Pipeline, plan: &ProjectionPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ProjectionTransform::try_create(
-                plan.schema.clone()
+                plan.input.schema(),
+                plan.schema(),
+                plan.expr.clone()
             )?))
         })?;
         Ok(true)
@@ -180,6 +183,7 @@ impl PipelineBuilder {
     fn visit_filter_plan(pipeline: &mut Pipeline, plan: &FilterPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
+                plan.input.schema(),
                 plan.predicate.clone(),
                 false
             )?))
@@ -190,6 +194,7 @@ impl PipelineBuilder {
     fn visit_having_plan(pipeline: &mut Pipeline, plan: &HavingPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
+                plan.input.schema(),
                 plan.predicate.clone(),
                 true
             )?))

@@ -5,7 +5,6 @@
 #[cfg(test)]
 mod function_column_test;
 
-mod aggregators;
 mod arithmetics;
 mod comparisons;
 mod expressions;

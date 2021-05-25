@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
 use common_arrow::arrow;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::datatypes::DataType;
@@ -13,6 +15,7 @@ pub type NullArray = arrow::array::NullArray;
 
 pub type BooleanArray = arrow::array::BooleanArray;
 
+pub type PrimitiveArrayRef<T> = Arc<arrow::array::PrimitiveArray<T>>;
 pub type Int8Array = arrow::array::Int8Array;
 pub type Int16Array = arrow::array::Int16Array;
 pub type Int32Array = arrow::array::Int32Array;

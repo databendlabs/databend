@@ -6,29 +6,25 @@ use std::fmt;
 
 use common_arrow::arrow::compute;
 use common_arrow::arrow::compute::CastOptions;
-use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_exception::Result;
 
-use crate::IFunction;
+use crate::function::IFunction;
 
 /// provide Datafuse default cast options
 pub const DEFAULT_DATAFUSE_CAST_OPTIONS: CastOptions = CastOptions { safe: false };
 
 #[derive(Clone)]
 pub struct CastFunction {
-    /// The expression to cast
-    expr: Box<dyn IFunction>,
     /// The data type to cast to
     cast_type: DataType
 }
 
 impl CastFunction {
-    pub fn create(expr: Box<dyn IFunction>, cast_type: DataType) -> Box<dyn IFunction> {
-        Box::new(Self { expr, cast_type })
+    pub fn create(cast_type: DataType) -> Box<dyn IFunction> {
+        Box::new(Self { cast_type })
     }
 }
 
@@ -37,40 +33,29 @@ impl IFunction for CastFunction {
         "cast"
     }
 
-    fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(self.cast_type.clone())
     }
 
-    fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
-        self.expr.nullable(input_schema)
+    // TODO
+    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
+        Ok(false)
     }
 
-    fn eval(&self, block: &DataBlock) -> Result<DataColumnarValue> {
-        let value = self.expr.eval(block)?;
-        match value {
-            DataColumnarValue::Array(v) => Ok(DataColumnarValue::Array(
-                compute::kernels::cast::cast_with_options(
-                    &v,
-                    &self.cast_type,
-                    &DEFAULT_DATAFUSE_CAST_OPTIONS
-                )?
-            )),
-            DataColumnarValue::Scalar(v) => {
-                let scalar_array = v.to_array()?;
-                let cast_array = compute::kernels::cast::cast_with_options(
-                    &scalar_array,
-                    &self.cast_type,
-                    &DEFAULT_DATAFUSE_CAST_OPTIONS
-                )?;
-                let cast_scalar = DataValue::try_from_array(&cast_array, 0)?;
-                Ok(DataColumnarValue::Scalar(cast_scalar))
-            }
-        }
+    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
+        let value = columns[0].to_array()?;
+        Ok(DataColumnarValue::Array(
+            compute::kernels::cast::cast_with_options(
+                &value,
+                &self.cast_type,
+                &DEFAULT_DATAFUSE_CAST_OPTIONS
+            )?
+        ))
     }
 }
 
 impl fmt::Display for CastFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "CAST({})", self.expr)
+        write!(f, "CAST")
     }
 }

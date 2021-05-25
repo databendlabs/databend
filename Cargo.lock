@@ -575,6 +575,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-aggregate-functions"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common-arrow",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-infallible",
+ "dyn-clone",
+ "indexmap",
+ "lazy_static",
+ "pretty_assertions",
+]
+
+[[package]]
 name = "common-arrow"
 version = "0.1.0"
 dependencies = [
@@ -628,6 +644,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-arrow",
+ "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-planners",
@@ -639,6 +656,7 @@ dependencies = [
  "prost",
  "serde",
  "serde_json",
+ "tokio",
  "tokio-stream",
  "tonic",
  "tonic-build",
@@ -669,9 +687,12 @@ name = "common-planners"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "common-aggregate-functions",
+ "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "futures",
  "pretty_assertions",
  "serde",
 ]
@@ -1285,6 +1306,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "clickhouse-srv",
+ "common-aggregate-functions",
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
@@ -1363,6 +1385,7 @@ dependencies = [
  "serde_json",
  "structopt",
  "tempfile",
+ "test-env-log",
  "thiserror",
  "threadpool",
  "tokio",
@@ -3808,6 +3831,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dfed899f0eb03f32ee8c6a0aabdb8a7949659e3466561fc0adf54e26d88c5f4"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "test-env-log"
+version = "0.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3e4b132a630cc8a0d06cfcb400da67adef3d0087a94b3332d4692908f0c2544"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

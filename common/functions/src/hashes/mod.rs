@@ -13,4 +13,4 @@
 mod hashes;
 mod siphash;
 
-pub use hashes::HashesFunction;
+// pub use hashes::HashesFunction;

@@ -5,7 +5,9 @@
 use std::any::Any;
 
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCodes;
 use common_exception::Result;
+use common_planners::InsertIntoPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_streams::SendableDataBlockStream;
@@ -24,4 +26,16 @@ pub trait ITable: Sync + Send {
     fn read_plan(&self, ctx: FuseQueryContextRef, scan: &ScanPlan, partitions: usize) -> Result<ReadDataSourcePlan>;
     // Read block data from the underling.
     async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream>;
+
+    // temporary added, pls feel free to rm it
+    async fn append_data(
+        &self,
+        _ctx: FuseQueryContextRef,
+        _insert_plan: InsertIntoPlan
+    ) -> Result<()> {
+        Err(ErrorCodes::UnImplement(format!(
+            "append data for local table {} is not implemented",
+            self.name()
+        )))
+    }
 }

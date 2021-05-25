@@ -29,6 +29,7 @@ async fn test_transform_expression() -> anyhow::Result<()> {
     {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ExpressionTransform::try_create(
+                plan.input.schema(),
                 plan.schema.clone(),
                 plan.exprs.clone()
             )?))
@@ -41,18 +42,18 @@ async fn test_transform_expression() -> anyhow::Result<()> {
     assert_eq!(block.num_columns(), 2);
 
     let expected = vec![
-        "+--------+-----------------+",
-        "| number | plus(number, 1) |",
-        "+--------+-----------------+",
-        "| 0      | 1               |",
-        "| 1      | 2               |",
-        "| 2      | 3               |",
-        "| 3      | 4               |",
-        "| 4      | 5               |",
-        "| 5      | 6               |",
-        "| 6      | 7               |",
-        "| 7      | 8               |",
-        "+--------+-----------------+",
+        "+--------+--------------+",
+        "| number | (number + 1) |",
+        "+--------+--------------+",
+        "| 0      | 1            |",
+        "| 1      | 2            |",
+        "| 2      | 3            |",
+        "| 3      | 4            |",
+        "| 4      | 5            |",
+        "| 5      | 6            |",
+        "| 6      | 7            |",
+        "| 7      | 8            |",
+        "+--------+--------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 

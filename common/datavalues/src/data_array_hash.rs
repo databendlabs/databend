@@ -17,8 +17,8 @@ impl<Hasher: std::hash::Hasher + Default> DataArrayHash<Hasher> {
             DataColumnarValue::Array(input) => {
                 Ok(DataColumnarValue::Array(Self::data_array_hash_with_array(input)?))
             }
-            DataColumnarValue::Scalar(input) => {
-                Ok(DataColumnarValue::Scalar(Self::data_array_hash_with_scalar(input)?))
+            DataColumnarValue::Constant(input, rows) => {
+                Ok(DataColumnarValue::Constant(Self::data_array_hash_with_scalar(input)?, rows.clone()))
             }
         }
     }

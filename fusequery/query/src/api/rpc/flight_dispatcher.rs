@@ -189,7 +189,7 @@ impl FlightDispatcher {
         let query_id = info.0.clone();
         let stage_id = info.1.clone();
         let mut pipeline = pipeline?;
-        let flight_scatter = FlightScatter::try_create(info.4.clone(), streams_data_sender.len())?;
+        let flight_scatter = FlightScatter::try_create(info.2.schema(), info.4.clone(), streams_data_sender.len())?;
         let query_info = state.queries.get_mut(&info.0).expect("No exists query info");
 
         query_info.runtime.spawn(async move {

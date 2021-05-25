@@ -6,16 +6,13 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_aggregate_functions::IAggregateFunction;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
-use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::StringArray;
 use common_exception::Result;
-use common_functions::IFunction;
 use common_planners::ExpressionAction;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -26,20 +23,27 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
 
 pub struct AggregatorPartialTransform {
-    funcs: Vec<Box<dyn IFunction>>,
+    funcs: Vec<Box<dyn IAggregateFunction>>,
+    arg_names: Vec<Vec<String>>,
+
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>
 }
 
 impl AggregatorPartialTransform {
     pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionAction>) -> Result<Self> {
-        let mut funcs = Vec::with_capacity(exprs.len());
-        for expr in &exprs {
-            funcs.push(expr.to_function()?);
-        }
+        let funcs = exprs
+            .iter()
+            .map(|expr| expr.to_aggregate_function())
+            .collect::<Result<Vec<_>>>()?;
+        let arg_names = exprs
+            .iter()
+            .map(|expr| expr.to_aggregate_function_args())
+            .collect::<Result<Vec<_>>>()?;
 
         Ok(AggregatorPartialTransform {
             funcs,
+            arg_names,
             schema,
             input: Arc::new(EmptyProcessor::create())
         })
@@ -68,25 +72,26 @@ impl IProcessor for AggregatorPartialTransform {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let mut funcs = self.funcs.clone();
         let mut stream = self.input.execute().await?;
+        let arg_names = self.arg_names.clone();
 
         let start = Instant::now();
         while let Some(block) = stream.next().await {
             let block = block?;
+            let rows = block.num_rows();
 
-            for func in funcs.iter_mut() {
-                func.accumulate(&block)?;
+            for (idx, func) in funcs.iter_mut().enumerate() {
+                let mut arg_columns = vec![];
+                for name in arg_names[idx].iter() {
+                    arg_columns.push(block.try_column_by_name(name)?.clone().into());
+                }
+                func.accumulate(&arg_columns, rows)?;
             }
         }
         let delta = start.elapsed();
         info!("Aggregator partial cost: {:?}", delta);
 
-        let mut fields = Vec::with_capacity(funcs.len());
-        let mut columns: Vec<DataArrayRef> = Vec::with_capacity(funcs.len());
-        for func in &funcs {
-            // Field.
-            let field = DataField::new(format!("{}", func).as_str(), DataType::Utf8, false);
-            fields.push(field);
-
+        let mut columns: Vec<DataArrayRef> = vec![];
+        for func in funcs.iter() {
             // Column.
             let states = DataValue::Struct(func.accumulate_result()?);
             let ser = serde_json::to_string(&states)?;
@@ -94,8 +99,8 @@ impl IProcessor for AggregatorPartialTransform {
             columns.push(col);
         }
 
-        let schema = DataSchemaRefExt::create(fields);
-        let block = DataBlock::create(schema, columns);
+        let block = DataBlock::create(self.schema.clone(), columns);
+
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,

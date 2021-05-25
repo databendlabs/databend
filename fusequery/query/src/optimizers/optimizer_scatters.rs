@@ -34,7 +34,7 @@ impl ScattersOptimizer {
             status.push(OptimizeKind::Scattered);
             return Ok(PlanNode::Stage(StagePlan {
                 kind: StageKind::Expansive,
-                scatters_expr: ExpressionAction::Function {
+                scatters_expr: ExpressionAction::ScalarFunction {
                     op: String::from("blockNumber"),
                     args: vec![],
                 },
@@ -61,11 +61,12 @@ impl ScattersOptimizer {
             // For example, when ReadSourcePlan = 500MB
             // We can evaluate 500MB * 0.8(it can be get by history) after FilterPlan
             status.push(OptimizeKind::Local);
-            return Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan::try_create(
-                plan.group_expr.clone(),
-                plan.aggr_expr.clone(),
-                Arc::new(input),
-            )?));
+            return Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan {
+                group_expr: plan.group_expr.clone(),
+                aggr_expr: plan.aggr_expr.clone(),
+                schema: plan.schema.clone(),
+                input: Arc::new(input),
+            }));
         }
 
         match plan.group_expr.len() {
@@ -75,11 +76,12 @@ impl ScattersOptimizer {
                 Ok(PlanNode::Stage(StagePlan {
                     kind: StageKind::Convergent,
                     scatters_expr: ExpressionAction::Literal(DataValue::UInt64(Some(0))),
-                    input: Arc::new(PlanNode::AggregatorPartial(AggregatorPartialPlan::try_create(
-                        plan.group_expr.clone(),
-                        plan.aggr_expr.clone(),
-                        Arc::new(input),
-                    )?)),
+                    input: Arc::new(PlanNode::AggregatorPartial(AggregatorPartialPlan {
+                        group_expr: plan.group_expr.clone(),
+                        aggr_expr: plan.aggr_expr.clone(),
+                        schema: plan.schema.clone(),
+                        input: Arc::new(input),
+                    })),
                 }))
             },
             _ => {
@@ -87,15 +89,16 @@ impl ScattersOptimizer {
                 status.push(OptimizeKind::Scattered);
                 Ok(PlanNode::Stage(StagePlan {
                     kind: StageKind::Normal,
-                    scatters_expr: ExpressionAction::Function {
+                    scatters_expr: ExpressionAction::ScalarFunction {
                         op: String::from("sipHash"),
-                        args: vec![ExpressionAction::Column(String::from("_group_by_key"))]
+                        args: vec![ExpressionAction::Column(String::from("_group_by_key"))],
                     },
-                    input: Arc::new(PlanNode::AggregatorPartial(AggregatorPartialPlan::try_create(
-                        plan.group_expr.clone(),
-                        plan.aggr_expr.clone(),
-                        Arc::new(input),
-                    )?)),
+                    input: Arc::new(PlanNode::AggregatorPartial(AggregatorPartialPlan {
+                        group_expr: plan.group_expr.clone(),
+                        aggr_expr: plan.aggr_expr.clone(),
+                        schema: plan.schema.clone(),
+                        input: Arc::new(input),
+                    })),
                 }))
             }
         }

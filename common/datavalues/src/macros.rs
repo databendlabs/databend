@@ -125,7 +125,7 @@ macro_rules! arrow_array_op {
     };
 }
 
-/// Invoke a compute kernel on a data array and a scalar value
+/// Invoke a compute kernel on a data array and a functions value
 macro_rules! compute_op_scalar {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
         use std::convert::TryInto;
@@ -141,7 +141,7 @@ macro_rules! compute_op_scalar {
     }};
 }
 
-/// Invoke a compute kernel on a data array and a scalar value
+/// Invoke a compute kernel on a data array and a functions value
 macro_rules! compute_utf8_op_scalar {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
         let ll = downcast_array!($LEFT, $DT)?;
@@ -282,7 +282,7 @@ macro_rules! typed_data_value_min_max {
     }};
 }
 
-// min/max of two scalar string values.
+// min/max of two functions string values.
 macro_rules! typed_data_value_min_max_string {
     ($VALUE:expr, $DELTA:expr, $SCALAR:ident, $OP:ident) => {{
         Result::Ok(DataValue::$SCALAR(match ($VALUE, $DELTA) {
