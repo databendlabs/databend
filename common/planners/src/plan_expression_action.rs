@@ -30,6 +30,11 @@ pub enum ExpressionAction {
         op: String,
         right: Box<ExpressionAction>
     },
+    /// A unary expression such as "NOT foo"
+    UnaryExpression {
+        op: String,
+        expr: Box<ExpressionAction>
+    },
     /// Functions with a set of arguments.
     Function {
         op: String,
@@ -65,6 +70,15 @@ impl ExpressionAction {
             ExpressionAction::BinaryExpression { left, op, right } => {
                 let l = left.to_function_with_depth(depth)?;
                 let r = right.to_function_with_depth(depth + 1)?;
+                let mut func = FunctionFactory::get(op, &[l, r])?;
+                func.set_depth(depth);
+                Ok(func)
+            }
+            ExpressionAction::UnaryExpression { op, expr } => {
+                let left_val = Some(0);
+                let left = Box::new(ExpressionAction::Literal(DataValue::Int64(left_val)));
+                let l = left.to_function_with_depth(depth)?;
+                let r = expr.to_function_with_depth(depth + 1)?;
                 let mut func = FunctionFactory::get(op, &[l, r])?;
                 func.set_depth(depth);
                 Ok(func)
@@ -121,6 +135,9 @@ impl fmt::Debug for ExpressionAction {
             ExpressionAction::Literal(ref v) => write!(f, "{:#}", v),
             ExpressionAction::BinaryExpression { left, op, right } => {
                 write!(f, "({:?} {} {:?})", left, op, right,)
+            }
+            ExpressionAction::UnaryExpression { op, expr } => {
+                write!(f, "({} {:?})", op, expr,)
             }
             ExpressionAction::Function { op, args } => write!(f, "{}({:?})", op, args),
             ExpressionAction::Sort { expr, .. } => write!(f, "{:?}", expr),
