@@ -5,7 +5,7 @@
 use std::fmt;
 
 use common_aggregate_functions::AggregateFunctionFactory;
-use common_aggregate_functions::IAggreagteFunction;
+use common_aggregate_functions::IAggregateFunction;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
@@ -122,7 +122,7 @@ impl ExpressionAction {
         }
     }
 
-    pub fn to_aggregate_function(&self) -> Result<Box<dyn IAggreagteFunction>> {
+    pub fn to_aggregate_function(&self) -> Result<Box<dyn IAggregateFunction>> {
         match self {
             ExpressionAction::AggregateFunction { op, .. } => AggregateFunctionFactory::get(op),
             _ => Err(ErrorCodes::LogicalError(

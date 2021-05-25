@@ -14,7 +14,7 @@ use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
-use crate::IAggreagteFunction;
+use crate::IAggregateFunction;
 
 #[derive(Clone)]
 pub struct AggregateSumFunction {
@@ -24,7 +24,7 @@ pub struct AggregateSumFunction {
 }
 
 impl AggregateSumFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggreagteFunction>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggregateFunction>> {
         Ok(Box::new(AggregateSumFunction {
             display_name: display_name.to_string(),
             depth: 0,
@@ -33,7 +33,7 @@ impl AggregateSumFunction {
     }
 }
 
-impl IAggreagteFunction for AggregateSumFunction {
+impl IAggregateFunction for AggregateSumFunction {
     fn name(&self) -> &str {
         "AggregateSumFunction"
     }

@@ -22,7 +22,7 @@ fn test_aggregate_function() -> Result<()> {
         columns: Vec<DataColumnarValue>,
         expect: DataValue,
         error: &'static str,
-        func: Box<dyn IAggreagteFunction>
+        func: Box<dyn IAggregateFunction>
     }
 
     let columns = vec![

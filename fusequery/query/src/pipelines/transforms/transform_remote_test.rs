@@ -57,11 +57,12 @@ async fn test_transform_remote_with_cluster() -> anyhow::Result<()> {
     // Check the distributed plan.
     let expect = "\
     Projection: (sum((number + 1)) + 2) as sumx:UInt64\
-    \n  AggregatorFinal: groupBy=[[]], aggr=[[sum((number + 1))]]\
-    \n    RedistributeStage[state: AggregatorMerge, id: 0]\
-    \n      AggregatorPartial: groupBy=[[]], aggr=[[sum((number + 1))]]\
-    \n        Expression: (number + 1):UInt64 (Before GroupBy)\
-    \n          ReadDataSource: scan partitions: [40], scan schema: [number:UInt64], statistics: [read_rows: 1000000, read_bytes: 8000000]";
+    \n  Expression: (sum((number + 1)) + 2):UInt64 (Before Projection)\
+    \n    AggregatorFinal: groupBy=[[]], aggr=[[sum((number + 1))]]\
+    \n      RedistributeStage[state: AggregatorMerge, id: 0]\
+    \n        AggregatorPartial: groupBy=[[]], aggr=[[sum((number + 1))]]\
+    \n          Expression: (number + 1):UInt64 (Before GroupBy)\
+    \n            ReadDataSource: scan partitions: [40], scan schema: [number:UInt64], statistics: [read_rows: 1000000, read_bytes: 8000000]";
     let actual = format!("{:?}", plan);
     assert_eq!(expect, actual);
 
@@ -70,9 +71,10 @@ async fn test_transform_remote_with_cluster() -> anyhow::Result<()> {
     // Check the distributed pipeline.
     let actual = format!("{:?}", pipeline);
     let expect = "ProjectionTransform × 1 processor\
-    \n  AggregatorFinalTransform × 1 processor\
-    \n    Merge (RemoteTransform × 3 processors) to (AggregatorFinalTransform × 1)\
-    \n      RemoteTransform × 3 processor(s): AggregatorPartialTransform × 8 processors -> ExpressionTransform × 8 processors ->   SourceTransform × 8 processors";
+    \n  ExpressionTransform × 1 processor\
+    \n    AggregatorFinalTransform × 1 processor\
+    \n      Merge (RemoteTransform × 3 processors) to (AggregatorFinalTransform × 1)\
+    \n        RemoteTransform × 3 processor(s): AggregatorPartialTransform × 8 processors -> ExpressionTransform × 8 processors ->   SourceTransform × 8 processors";
     assert_eq!(expect, actual);
 
     let stream = pipeline.execute().await?;

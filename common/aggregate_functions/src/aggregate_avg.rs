@@ -14,7 +14,7 @@ use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
-use crate::IAggreagteFunction;
+use crate::IAggregateFunction;
 
 #[derive(Clone)]
 pub struct AggregateAvgFunction {
@@ -24,7 +24,7 @@ pub struct AggregateAvgFunction {
 }
 
 impl AggregateAvgFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggreagteFunction>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggregateFunction>> {
         Ok(Box::new(AggregateAvgFunction {
             display_name: display_name.to_string(),
             depth: 0,
@@ -33,7 +33,7 @@ impl AggregateAvgFunction {
     }
 }
 
-impl IAggreagteFunction for AggregateAvgFunction {
+impl IAggregateFunction for AggregateAvgFunction {
     fn name(&self) -> &str {
         "AggregateAvgFunction"
     }

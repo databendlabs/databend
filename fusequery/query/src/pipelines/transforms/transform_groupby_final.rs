@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_aggregate_functions::IAggreagteFunction;
+use common_aggregate_functions::IAggregateFunction;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataSchemaRef;
@@ -25,7 +25,7 @@ use crate::pipelines::processors::IProcessor;
 
 // Table for <group_key, indices>
 type GroupFuncTable =
-    RwLock<HashMap<Vec<u8>, Vec<Box<dyn IAggreagteFunction>>, ahash::RandomState>>;
+    RwLock<HashMap<Vec<u8>, Vec<Box<dyn IAggregateFunction>>, ahash::RandomState>>;
 
 // Group Key ==> Group by values
 type GroupKeyTable = RwLock<HashMap<Vec<u8>, Vec<DataValue>>>;

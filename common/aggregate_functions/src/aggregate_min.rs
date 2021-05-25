@@ -13,7 +13,7 @@ use common_datavalues::DataValueAggregate;
 use common_datavalues::DataValueAggregateOperator;
 use common_exception::Result;
 
-use crate::IAggreagteFunction;
+use crate::IAggregateFunction;
 
 #[derive(Clone)]
 pub struct AggregateMinFunction {
@@ -23,7 +23,7 @@ pub struct AggregateMinFunction {
 }
 
 impl AggregateMinFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggreagteFunction>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggregateFunction>> {
         Ok(Box::new(AggregateMinFunction {
             display_name: display_name.to_string(),
             depth: 0,
@@ -32,7 +32,7 @@ impl AggregateMinFunction {
     }
 }
 
-impl IAggreagteFunction for AggregateMinFunction {
+impl IAggregateFunction for AggregateMinFunction {
     fn name(&self) -> &str {
         "AggregateMinFunction"
     }

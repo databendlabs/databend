@@ -12,7 +12,7 @@ use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
-use crate::IAggreagteFunction;
+use crate::IAggregateFunction;
 
 #[derive(Clone)]
 pub struct AggregateCountFunction {
@@ -22,7 +22,7 @@ pub struct AggregateCountFunction {
 }
 
 impl AggregateCountFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggreagteFunction>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggregateFunction>> {
         Ok(Box::new(AggregateCountFunction {
             display_name: display_name.to_string(),
             depth: 0,
@@ -31,7 +31,7 @@ impl AggregateCountFunction {
     }
 }
 
-impl IAggreagteFunction for AggregateCountFunction {
+impl IAggregateFunction for AggregateCountFunction {
     fn name(&self) -> &str {
         "AggregateCountFunction"
     }

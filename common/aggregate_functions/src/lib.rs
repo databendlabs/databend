@@ -17,7 +17,7 @@ mod aggregator;
 mod test;
 pub use aggregate_avg::AggregateAvgFunction;
 pub use aggregate_count::AggregateCountFunction;
-pub use aggregate_function::IAggreagteFunction;
+pub use aggregate_function::IAggregateFunction;
 pub use aggregate_function_factory::AggregateFunctionFactory;
 pub use aggregate_max::AggregateMaxFunction;
 pub use aggregate_min::AggregateMinFunction;

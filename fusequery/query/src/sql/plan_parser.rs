@@ -306,7 +306,7 @@ impl PlanParser {
         let mut expression_exprs = projection_exprs.clone();
         // from order by
         expression_exprs.extend_from_slice(&order_by_exprs);
-        let expression_without_having = expression_exprs.clone();
+        let expression_with_sort = expression_exprs.clone();
         // ... or from the HAVING.
         if let Some(having_expr) = &having_expr_opt {
             expression_exprs.push(having_expr.clone());
@@ -387,7 +387,7 @@ impl PlanParser {
             "Before OrderBy"
         };
 
-        let plan = self.expression(&plan, &expression_without_having, stage_phase)?;
+        let plan = self.expression(&plan, &expression_with_sort, stage_phase)?;
 
         // Having.
         let plan = self.having(&plan, having_expr_post_aggr_opt)?;
@@ -795,7 +795,19 @@ impl PlanParser {
             }
         }
 
-        if exprs.is_empty() {
+        // if all expression is column expression expression, we skip this expression
+        if dedup_exprs.iter().all(|expr| {
+            if let ExpressionAction::Column(_) = expr {
+                return true;
+            }
+            return false;
+        }) {
+            return Ok(input.clone());
+        }
+
+        println!("expression {:?}, {:?}", &input.schema(), dedup_exprs);
+
+        if dedup_exprs.is_empty() {
             return Ok(input.clone());
         }
 

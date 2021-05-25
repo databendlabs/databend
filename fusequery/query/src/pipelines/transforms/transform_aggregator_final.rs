@@ -6,7 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_aggregate_functions::IAggreagteFunction;
+use common_aggregate_functions::IAggregateFunction;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
@@ -21,7 +21,7 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
 
 pub struct AggregatorFinalTransform {
-    funcs: Vec<Box<dyn IAggreagteFunction>>,
+    funcs: Vec<Box<dyn IAggregateFunction>>,
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>
 }

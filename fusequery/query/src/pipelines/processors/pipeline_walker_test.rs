@@ -28,6 +28,7 @@ async fn test_pipeline_walker() -> anyhow::Result<()> {
         let expect = vec![
             "LimitTransform x 1".to_string(),
             "ProjectionTransform x 1".to_string(),
+            "ExpressionTransform x 1".to_string(),
             "AggregatorFinalTransform x 1".to_string(),
             "MergeProcessor x 1".to_string(),
             "AggregatorPartialTransform x 8".to_string(),
@@ -54,6 +55,7 @@ async fn test_pipeline_walker() -> anyhow::Result<()> {
             "AggregatorPartialTransform x 8".to_string(),
             "MergeProcessor x 1".to_string(),
             "AggregatorFinalTransform x 1".to_string(),
+            "ExpressionTransform x 1".to_string(),
             "ProjectionTransform x 1".to_string(),
             "LimitTransform x 1".to_string(),
         ];

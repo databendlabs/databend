@@ -5,7 +5,7 @@
 
 Logic plan and expression play a big role throughout the life cycle of SQL query. This doc is intended to explain the new design of expressions and plan builder.
 
-> Let's introduce expressions firstyly
+> Let's introduce expressions firstly
 
 ## Alias Expression
 
@@ -31,7 +31,7 @@ Eg:
 
 `select number + 1 as c, sum(number) from numbers(10) group by c having c > 3 order by c limit 10`
 
-- Firstly, we can scan all alias expression from projection ASTs. `c ---> (number + 1)`
+- Firstly, we can scan all the alias expressions from projection ASTs. `c ---> (number + 1)`
 - Then we replaced the alias into the corresponding expression in *having*, *order by*, *group by* clause. So the query will be: `select number + 1 as c, sum(number) from numbers(10) group by (number + 1) having (number + 1) > 3 order by (number + 1) limit 10`
 - At last, when the query is finished, we apply the projection to rename the column `(number+1)` to `c`
 
@@ -53,7 +53,7 @@ We can see we do not need to care about aliasing until the projection, so it wil
 
 ## Materialized Expression
 
-Materialized expression processing is that we can rebase the expression as a ExpressionColumn if the some expression is already processed upstream.
+Materialized expression processing is that we can rebase the expression as a *ExpressionColumn* if the same expression is already processed upstream.
 
 Eg:
 

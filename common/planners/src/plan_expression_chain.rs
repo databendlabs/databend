@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_aggregate_functions::AggregateFunctionFactory;
-use common_aggregate_functions::IAggreagteFunction;
+use common_aggregate_functions::IAggregateFunction;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -224,7 +224,7 @@ impl ActionFunction {
         }
     }
 
-    pub fn to_aggregate_function(&self) -> Result<Box<dyn IAggreagteFunction>> {
+    pub fn to_aggregate_function(&self) -> Result<Box<dyn IAggregateFunction>> {
         if !self.is_aggregated {
             return Err(ErrorCodes::LogicalError(
                 "Action must be aggregated function"

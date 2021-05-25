@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_aggregate_functions::IAggreagteFunction;
+use common_aggregate_functions::IAggregateFunction;
 use common_arrow::arrow::array::BinaryBuilder;
 use common_arrow::arrow::array::StringBuilder;
 use common_datablocks::DataBlock;
@@ -35,7 +35,7 @@ type GroupFuncTable = RwLock<
     HashMap<
         Vec<u8>,
         (
-            Vec<(Box<dyn IAggreagteFunction>, String, Vec<String>)>,
+            Vec<(Box<dyn IAggregateFunction>, String, Vec<String>)>,
             Vec<DataValue>
         ),
         ahash::RandomState
