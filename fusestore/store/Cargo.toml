@@ -59,6 +59,10 @@ uuid = { version = "0.8", features = ["serde", "v4"] }
 
 [dev-dependencies]
 pretty_assertions = "0.7"
+test-env-log = "0.2.7"
+env_logger = "*"
+tracing = {version = "0.1", default-features = false}
+tracing-subscriber = {version = "0.2.17", default-features = false, features = ["env-filter", "fmt"]}
 
 [build-dependencies]
 tonic-build = "0.4"
