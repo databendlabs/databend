@@ -175,12 +175,7 @@ fn test_plan_rewriter_1() -> anyhow::Result<()> {
     let plan = PlanBuilder::from(&source)
         .filter(col("number").eq(lit(1i64)))?
         .aggregate_partial(&[col("number")], &[col("number")])?
-<<<<<<< HEAD
-        .aggregate_final(&[col("number")], &[col("number")])?
-=======
-        .stage(String::from("hahaha"), StageState::AggregatorMerge)?
         .aggregate_final(source.schema(), &[col("number")], &[col("number")])?
->>>>>>> master
         .project(&[col("number").alias("x"), col("number").alias("y")])?
         .build()?;
     struct DefaultRewriter;

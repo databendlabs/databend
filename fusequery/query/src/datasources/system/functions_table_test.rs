@@ -44,9 +44,10 @@ async fn test_functions_table() -> anyhow::Result<()> {
         "| multiply   |",
         "| or         |",
         "| plus       |",
+        "| siphash    |",
         "| substring  |",
         "| totypename |",
-        "+------------+",
+        "+------------+"
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 

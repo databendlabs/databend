@@ -25,7 +25,7 @@ async fn test_scatter_optimizer() -> Result<()> {
             query: "SELECT 1",
             expect: "\
             Projection: 1:UInt64\
-            \n  Expression: 1:UInt8 (Before Projection)\
+            \n  Expression: 1:UInt64 (Before Projection)\
             \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
         },
         Test {
@@ -33,32 +33,36 @@ async fn test_scatter_optimizer() -> Result<()> {
             query: "SELECT number FROM numbers_local(100)",
             expect: "\
             Projection: number:UInt64\
-            \n  Expression: number:UInt64 (Before Projection)\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800]",
+            \n  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800]",
         },
         Test {
             name: "Small local table aggregate query with group by key",
             query: "SELECT SUM(number) FROM numbers_local(100) GROUP BY number % 3",
             expect: "\
-            AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[SUM([number])]]\
-            \n  AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[SUM([number])]]\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800]",
+            Projection: SUM(number):UInt64\
+            \n  AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[SUM(number)]]\
+            \n    AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[SUM(number)]]\
+            \n      Expression: (number % 3):UInt64, number:UInt64 (Before GroupBy)\
+            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800]",
         },
         Test {
             name: "Small local table aggregate query with group by keys",
             query: "SELECT SUM(number) FROM numbers_local(100) GROUP BY number % 3, number % 2",
             expect: "\
-            AggregatorFinal: groupBy=[[(number % 3), (number % 2)]], aggr=[[SUM([number])]]\
-            \n  AggregatorPartial: groupBy=[[(number % 3), (number % 2)]], aggr=[[SUM([number])]]\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800]",
+            Projection: SUM(number):UInt64\
+            \n  AggregatorFinal: groupBy=[[(number % 3), (number % 2)]], aggr=[[SUM(number)]]\
+            \n    AggregatorPartial: groupBy=[[(number % 3), (number % 2)]], aggr=[[SUM(number)]]\
+            \n      Expression: (number % 3):UInt64, (number % 2):UInt64, number:UInt64 (Before GroupBy)\
+            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800]",
         },
         Test {
             name: "Small local table aggregate query without group by",
             query: "SELECT SUM(number) FROM numbers_local(100)",
             expect: "\
-            AggregatorFinal: groupBy=[[]], aggr=[[SUM([number])]]\
-            \n  AggregatorPartial: groupBy=[[]], aggr=[[SUM([number])]]\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800]",
+            Projection: SUM(number):UInt64\
+            \n  AggregatorFinal: groupBy=[[]], aggr=[[SUM(number)]]\
+            \n    AggregatorPartial: groupBy=[[]], aggr=[[SUM(number)]]\
+            \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800]",
         },
         Test {
             name: "Large local table query",
@@ -66,41 +70,45 @@ async fn test_scatter_optimizer() -> Result<()> {
             expect: "\
             RedistributeStage[expr: 0]\
             \n  Projection: number:UInt64\
-            \n  Expression: number:UInt64 (Before Projection)\
-            \n    RedistributeStage[expr: blockNumber([])]\
-            \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000]",
+            \n  RedistributeStage[expr: blockNumber()]\
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000]",
         },
         Test {
             name: "Large local table aggregate query with group by key",
             query: "SELECT SUM(number) FROM numbers_local(100000000) GROUP BY number % 3",
             expect: "\
             RedistributeStage[expr: 0]\
-            \n  AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[SUM([number])]]\
-            \n  RedistributeStage[expr: (number % 3)]\
-            \n    AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[SUM([number])]]\
-            \n      RedistributeStage[expr: blockNumber([])]\
-            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000]",
+            \n  Projection: SUM(number):UInt64\
+            \n  AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[SUM(number)]]\
+            \n    RedistributeStage[expr: sipHash(_group_by_key)]\
+            \n      AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[SUM(number)]]\
+            \n        Expression: (number % 3):UInt64, number:UInt64 (Before GroupBy)\
+            \n          RedistributeStage[expr: blockNumber()]\
+            \n            ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000]",
         },
         Test {
             name: "Large local table aggregate query with group by keys",
             query: "SELECT SUM(number) FROM numbers_local(100000000) GROUP BY number % 3, number % 2",
             expect: "\
             RedistributeStage[expr: 0]\
-            \n  AggregatorFinal: groupBy=[[(number % 3), (number % 2)]], aggr=[[SUM([number])]]\
-            \n  RedistributeStage[expr: (number % 3)]\
-            \n    AggregatorPartial: groupBy=[[(number % 3), (number % 2)]], aggr=[[SUM([number])]]\
-            \n      RedistributeStage[expr: blockNumber([])]\
-            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000]",
+            \n  Projection: SUM(number):UInt64\
+            \n  AggregatorFinal: groupBy=[[(number % 3), (number % 2)]], aggr=[[SUM(number)]]\
+            \n    RedistributeStage[expr: sipHash(_group_by_key)]\
+            \n      AggregatorPartial: groupBy=[[(number % 3), (number % 2)]], aggr=[[SUM(number)]]\
+            \n        Expression: (number % 3):UInt64, (number % 2):UInt64, number:UInt64 (Before GroupBy)\
+            \n          RedistributeStage[expr: blockNumber()]\
+            \n            ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000]",
         },
         Test {
             name: "Large local table aggregate query without group by",
             query: "SELECT SUM(number) FROM numbers_local(100000000)",
             expect: "\
-            AggregatorFinal: groupBy=[[]], aggr=[[SUM([number])]]\
-            \n  RedistributeStage[expr: 0]\
-            \n    AggregatorPartial: groupBy=[[]], aggr=[[SUM([number])]]\
-            \n      RedistributeStage[expr: blockNumber([])]\
-            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000]",
+            Projection: SUM(number):UInt64\
+            \n  AggregatorFinal: groupBy=[[]], aggr=[[SUM(number)]]\
+            \n    RedistributeStage[expr: 0]\
+            \n      AggregatorPartial: groupBy=[[]], aggr=[[SUM(number)]]\
+            \n        RedistributeStage[expr: blockNumber()]\
+            \n          ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000]",
         },
         Test {
             name: "Large cluster table query",
@@ -108,37 +116,41 @@ async fn test_scatter_optimizer() -> Result<()> {
             expect: "\
             RedistributeStage[expr: 0]\
             \n  Projection: number:UInt64\
-            \n  Expression: number:UInt64 (Before Projection)\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000]",
+            \n  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000]",
         },
         Test {
             name: "Large cluster table aggregate query with group by key",
             query: "SELECT SUM(number) FROM numbers(100000000) GROUP BY number % 3",
             expect: "\
             RedistributeStage[expr: 0]\
-            \n  AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[SUM([number])]]\
-            \n  RedistributeStage[expr: (number % 3)]\
-            \n    AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[SUM([number])]]\
-            \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000]",
+            \n  Projection: SUM(number):UInt64\
+            \n  AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[SUM(number)]]\
+            \n    RedistributeStage[expr: sipHash(_group_by_key)]\
+            \n      AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[SUM(number)]]\
+            \n        Expression: (number % 3):UInt64, number:UInt64 (Before GroupBy)\
+            \n          ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000]",
         },
         Test {
             name: "Large cluster table aggregate query with group by keys",
             query: "SELECT SUM(number) FROM numbers(100000000) GROUP BY number % 3, number % 2",
             expect: "\
             RedistributeStage[expr: 0]\
-            \n  AggregatorFinal: groupBy=[[(number % 3), (number % 2)]], aggr=[[SUM([number])]]\
-            \n  RedistributeStage[expr: (number % 3)]\
-            \n    AggregatorPartial: groupBy=[[(number % 3), (number % 2)]], aggr=[[SUM([number])]]\
-            \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000]",
+            \n  Projection: SUM(number):UInt64\
+            \n  AggregatorFinal: groupBy=[[(number % 3), (number % 2)]], aggr=[[SUM(number)]]\
+            \n    RedistributeStage[expr: sipHash(_group_by_key)]\
+            \n      AggregatorPartial: groupBy=[[(number % 3), (number % 2)]], aggr=[[SUM(number)]]\
+            \n        Expression: (number % 3):UInt64, (number % 2):UInt64, number:UInt64 (Before GroupBy)\
+            \n          ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000]",
         },
         Test {
             name: "Large cluster table aggregate query without group by",
             query: "SELECT SUM(number) FROM numbers(100000000)",
             expect: "\
-            AggregatorFinal: groupBy=[[]], aggr=[[SUM([number])]]\
-            \n  RedistributeStage[expr: 0]\
-            \n    AggregatorPartial: groupBy=[[]], aggr=[[SUM([number])]]\
-            \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000]",
+            Projection: SUM(number):UInt64\
+            \n  AggregatorFinal: groupBy=[[]], aggr=[[SUM(number)]]\
+            \n    RedistributeStage[expr: 0]\
+            \n      AggregatorPartial: groupBy=[[]], aggr=[[SUM(number)]]\
+            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100000000, read_bytes: 800000000]",
         }
     ];
 

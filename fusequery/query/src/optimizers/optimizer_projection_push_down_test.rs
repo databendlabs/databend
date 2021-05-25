@@ -86,9 +86,8 @@ fn test_projection_push_down_optimizer_group_by() -> anyhow::Result<()> {
     let expect = "\
         Projection: max(value) as c1:Utf8, name as c2:Utf8\
         \n  AggregatorFinal: groupBy=[[name]], aggr=[[max(value)]]\
-        \n    RedistributeStage[state: AggregatorMerge, id: 0]\
-        \n      AggregatorPartial: groupBy=[[name]], aggr=[[max(value)]]\
-        \n        ReadDataSource: scan partitions: [1], scan schema: [name:Utf8, value:Utf8], statistics: [read_rows: 0, read_bytes: 0]";
+        \n    AggregatorPartial: groupBy=[[name]], aggr=[[max(value)]]\
+        \n      ReadDataSource: scan partitions: [1], scan schema: [name:Utf8, value:Utf8], statistics: [read_rows: 0, read_bytes: 0]";
 
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);

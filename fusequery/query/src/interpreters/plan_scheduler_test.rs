@@ -43,7 +43,7 @@ async fn test_scheduler_plan_with_one_normal_stage() -> Result<()> {
     match reschedule_res {
         Ok(_) => assert!(false, "test_scheduler_plan_with_one_normal_stage must be failure!"),
         Err(error_code) => {
-            assert_eq!(error_code.code(), 34);
+            assert_eq!(error_code.code(), 35);
             assert_eq!(error_code.message(), "The final stage plan must be convergent");
         }
     }
@@ -67,7 +67,7 @@ async fn test_scheduler_plan_with_one_expansive_stage() -> Result<()> {
     match reschedule_res {
         Ok(_) => assert!(false, "test_scheduler_plan_with_one_expansive_stage must be failure!"),
         Err(error_code) => {
-            assert_eq!(error_code.code(), 34);
+            assert_eq!(error_code.code(), 35);
             assert_eq!(error_code.message(), "The final stage plan must be convergent");
         }
     }
@@ -151,7 +151,7 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
                 input: Arc::new(PlanNode::Select(SelectPlan {
                     input: Arc::new(PlanNode::Stage(StagePlan {
                         kind: StageKind::Expansive,
-                        scatters_expr: ExpressionAction::Function { op: String::from("blockNumber"), args: vec![] },
+                        scatters_expr: ExpressionAction::ScalarFunction { op: String::from("blockNumber"), args: vec![] },
                         input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
                     }))
                 })),
@@ -162,7 +162,7 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
     assert_eq!(remote_actions.len(), 3);
     assert_eq!(remote_actions[0].0.name, String::from("dummy_local"));
     assert_eq!(remote_actions[0].1.scatters, vec![String::from("dummy_local"), String::from("dummy")]);
-    assert_eq!(remote_actions[0].1.scatters_action, ExpressionAction::Function { op: String::from("blockNumber"), args: vec![] });
+    assert_eq!(remote_actions[0].1.scatters_action, ExpressionAction::ScalarFunction { op: String::from("blockNumber"), args: vec![] });
     assert_eq!(remote_actions[0].1.plan, PlanNode::Empty(EmptyPlan::create()));
 
     assert_eq!(remote_actions[1].0.name, String::from("dummy_local"));
