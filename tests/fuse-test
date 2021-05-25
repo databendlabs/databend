@@ -60,12 +60,11 @@ def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_fi
     }
 
     pattern = '{test} > {stdout} 2>&1'
-
     if ext == '.sql':
         pattern = "{client} {options} < " + pattern
 
     command = pattern.format(**params)
-    #print(command)
+    # print(command)
 
     proc = Popen(command, shell=True, env=os.environ)
     start_time = datetime.now()
@@ -73,7 +72,6 @@ def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_fi
         sleep(0.01)
 
     total_time = (datetime.now() - start_time).total_seconds()
-
     # Normalize randomized database names in stdout, stderr files.
     os.system("LC_ALL=C sed -i -e 's/{test_db}/default/g' {file}".format(test_db=args.database, file=stdout_file))
 
@@ -81,7 +79,6 @@ def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_fi
     stdout = str(stdout, errors='replace', encoding='utf-8')
     stderr = open(stderr_file, 'rb').read() if os.path.exists(stderr_file) else b''
     stderr = str(stderr, errors='replace', encoding='utf-8')
-
     return proc, stdout, stderr, total_time
 
 
@@ -267,7 +264,6 @@ def run_tests_array(all_tests_with_params):
                             status += " - no result file\n"
                         else:
                             result_is_different = subprocess.call(['diff', '-q', result_file, stdout_file], stdout=PIPE)
-
                             if result_is_different:
                                 diff = Popen(['diff', '-U', str(args.unified), result_file, stdout_file], stdout=PIPE, universal_newlines=True).communicate()[0]
                                 failures += 1

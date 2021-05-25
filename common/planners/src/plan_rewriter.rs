@@ -86,6 +86,7 @@ pub trait PlanRewriter<'plan> {
         plan: &'plan AggregatorPartialPlan
     ) -> Result<PlanNode> {
         Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan {
+            schema: plan.schema.clone(),
             aggr_expr: plan.aggr_expr.clone(),
             group_expr: plan.group_expr.clone(),
             input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
@@ -297,14 +298,14 @@ impl RewriteHelper {
                 Ok(expr.clone())
             }
 
-            ExpressionAction::BinaryExpression { left, op, right } => {
-                let left_new = RewriteHelper::expr_rewrite_alias(left, data)?;
-                let right_new = RewriteHelper::expr_rewrite_alias(right, data)?;
+            ExpressionAction::BinaryExpression { op, left, right } => {
+                let left = RewriteHelper::expr_rewrite_alias(left, data)?;
+                let right = RewriteHelper::expr_rewrite_alias(right, data)?;
 
                 Ok(ExpressionAction::BinaryExpression {
-                    left: Box::new(left_new),
                     op: op.clone(),
-                    right: Box::new(right_new)
+                    left: Box::new(left),
+                    right: Box::new(right)
                 })
             }
 
@@ -317,14 +318,29 @@ impl RewriteHelper {
                 })
             }
 
-            ExpressionAction::Function { op, args } => {
+            ExpressionAction::ScalarFunction { op, args } => {
                 let new_args: Result<Vec<ExpressionAction>> = args
                     .iter()
                     .map(|v| RewriteHelper::expr_rewrite_alias(v, data))
                     .collect();
 
                 match new_args {
-                    Ok(v) => Ok(ExpressionAction::Function {
+                    Ok(v) => Ok(ExpressionAction::ScalarFunction {
+                        op: op.clone(),
+                        args: v
+                    }),
+                    Err(v) => Err(v)
+                }
+            }
+
+            ExpressionAction::AggregateFunction { op, args } => {
+                let new_args: Result<Vec<ExpressionAction>> = args
+                    .iter()
+                    .map(|v| RewriteHelper::expr_rewrite_alias(v, data))
+                    .collect();
+
+                match new_args {
+                    Ok(v) => Ok(ExpressionAction::AggregateFunction {
                         op: op.clone(),
                         args: v
                     }),
@@ -409,13 +425,14 @@ impl RewriteHelper {
             ExpressionAction::Alias(_, expr) => vec![expr.as_ref().clone()],
             ExpressionAction::Column(_) => vec![],
             ExpressionAction::Literal(_) => vec![],
-            ExpressionAction::BinaryExpression { left, right, .. } => {
-                vec![left.as_ref().clone(), right.as_ref().clone()]
-            }
             ExpressionAction::UnaryExpression { expr, .. } => {
                 vec![expr.as_ref().clone()]
             }
-            ExpressionAction::Function { args, .. } => args.clone(),
+            ExpressionAction::BinaryExpression { left, right, .. } => {
+                vec![left.as_ref().clone(), right.as_ref().clone()]
+            }
+            ExpressionAction::ScalarFunction { args, .. } => args.clone(),
+            ExpressionAction::AggregateFunction { args, .. } => args.clone(),
             ExpressionAction::Wildcard => vec![],
             ExpressionAction::Sort { expr, .. } => vec![expr.as_ref().clone()],
             ExpressionAction::Cast { expr, .. } => vec![expr.as_ref().clone()]
@@ -428,18 +445,22 @@ impl RewriteHelper {
             ExpressionAction::Alias(_, expr) => Self::expression_plan_columns(expr)?,
             ExpressionAction::Column(_) => vec![expr.clone()],
             ExpressionAction::Literal(_) => vec![],
+            ExpressionAction::UnaryExpression { expr, .. } => Self::expression_plan_columns(expr)?,
             ExpressionAction::BinaryExpression { left, right, .. } => {
                 let mut l = Self::expression_plan_columns(left)?;
                 let mut r = Self::expression_plan_columns(right)?;
                 l.append(&mut r);
                 l
             }
-            ExpressionAction::UnaryExpression { expr, .. } => {
-                let v = Self::expression_plan_columns(expr)?;
+            ExpressionAction::ScalarFunction { args, .. } => {
+                let mut v = vec![];
+                for arg in args {
+                    let mut col = Self::expression_plan_columns(arg)?;
+                    v.append(&mut col);
+                }
                 v
             }
-
-            ExpressionAction::Function { args, .. } => {
+            ExpressionAction::AggregateFunction { args, .. } => {
                 let mut v = vec![];
                 for arg in args {
                     let mut col = Self::expression_plan_columns(arg)?;
@@ -471,15 +492,15 @@ impl RewriteHelper {
             // Aggregator aggr_expr is the projection
             PlanNode::AggregatorPartial(v) => {
                 for expr in &v.aggr_expr {
-                    let field = expr.to_data_field(&v.input.schema())?;
-                    map.insert(field.name().clone(), expr.clone());
+                    let column_name = expr.column_name();
+                    map.insert(column_name, expr.clone());
                 }
             }
             // Aggregator aggr_expr is the projection
             PlanNode::AggregatorFinal(v) => {
                 for expr in &v.aggr_expr {
-                    let field = expr.to_data_field(&v.input.schema())?;
-                    map.insert(field.name().clone(), expr.clone());
+                    let column_name = expr.column_name();
+                    map.insert(column_name, expr.clone());
                 }
             }
             other => {
@@ -506,7 +527,11 @@ impl RewriteHelper {
                 op: op.clone(),
                 right: Box::new(expressions[1].clone())
             },
-            ExpressionAction::Function { op, .. } => ExpressionAction::Function {
+            ExpressionAction::ScalarFunction { op, .. } => ExpressionAction::ScalarFunction {
+                op: op.clone(),
+                args: expressions.to_vec()
+            },
+            ExpressionAction::AggregateFunction { op, .. } => ExpressionAction::AggregateFunction {
                 op: op.clone(),
                 args: expressions.to_vec()
             },
@@ -538,7 +563,7 @@ impl RewriteHelper {
                 } else {
                     let columns = Self::expression_plan_columns(aggr)?;
                     for col in columns {
-                        let cn = col.to_data_field(input_schema)?.name().clone();
+                        let cn = col.column_name();
                         if !group_by_names.contains(&cn) {
                             return Ok(false);
                         }

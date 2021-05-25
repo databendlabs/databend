@@ -6,11 +6,11 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_aggregate_functions::IAggregateFunction;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_functions::IFunction;
 use common_planners::ExpressionAction;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -21,18 +21,17 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
 
 pub struct AggregatorFinalTransform {
-    funcs: Vec<Box<dyn IFunction>>,
+    funcs: Vec<Box<dyn IAggregateFunction>>,
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>
 }
 
 impl AggregatorFinalTransform {
     pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionAction>) -> Result<Self> {
-        let mut funcs = Vec::with_capacity(exprs.len());
-        for expr in &exprs {
-            funcs.push(expr.to_function()?);
-        }
-
+        let funcs = exprs
+            .iter()
+            .map(|expr| expr.to_aggregate_function())
+            .collect::<Result<Vec<_>>>()?;
         Ok(AggregatorFinalTransform {
             funcs,
             schema,

@@ -33,19 +33,14 @@ impl DataArrayArithmetic {
         right: &DataColumnarValue
     ) -> Result<DataArrayRef> {
         let (left_array, right_array) = match (left, right) {
-            (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
-                (left_array.clone(), right_array.clone())
-            }
-            (DataColumnarValue::Array(array), DataColumnarValue::Scalar(scalar)) => {
-                (array.clone(), scalar.to_array_with_size(array.len())?)
-            }
-            (DataColumnarValue::Scalar(scalar), DataColumnarValue::Array(array)) => {
-                (scalar.to_array_with_size(array.len())?, array.clone())
-            }
-            (DataColumnarValue::Scalar(left_scalar), DataColumnarValue::Scalar(right_scalar)) => (
+            (
+                DataColumnarValue::Constant(left_scalar, _),
+                DataColumnarValue::Constant(right_scalar, _)
+            ) => (
                 left_scalar.to_array_with_size(1)?,
                 right_scalar.to_array_with_size(1)?
-            )
+            ),
+            _ => (left.to_array()?, right.to_array()?)
         };
 
         let coercion_type = super::data_type::numerical_arithmetic_coercion(

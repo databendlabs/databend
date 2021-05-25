@@ -4,7 +4,6 @@
 
 use std::fmt;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
@@ -19,10 +18,7 @@ pub struct UdfExampleFunction {
 }
 
 impl UdfExampleFunction {
-    pub fn try_create(
-        display_name: &str,
-        _args: &[Box<dyn IFunction>]
-    ) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn IFunction>> {
         Ok(Box::new(UdfExampleFunction {
             display_name: display_name.to_string()
         }))
@@ -34,7 +30,7 @@ impl IFunction for UdfExampleFunction {
         "UdfExampleFunction"
     }
 
-    fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Boolean)
     }
 
@@ -42,8 +38,11 @@ impl IFunction for UdfExampleFunction {
         Ok(false)
     }
 
-    fn eval(&self, _block: &DataBlock) -> Result<DataColumnarValue> {
-        Ok(DataColumnarValue::Scalar(DataValue::Boolean(Some(true))))
+    fn eval(&self, _columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
+        Ok(DataColumnarValue::Constant(
+            DataValue::Boolean(Some(true)),
+            input_rows
+        ))
     }
 }
 

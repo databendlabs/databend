@@ -11,10 +11,7 @@ use crate::IFunction;
 pub struct ArithmeticMinusFunction;
 
 impl ArithmeticMinusFunction {
-    pub fn try_create_func(
-        _display_name: &str,
-        args: &[Box<dyn IFunction>]
-    ) -> Result<Box<dyn IFunction>> {
-        ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Minus, args)
+    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn IFunction>> {
+        ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Minus)
     }
 }

@@ -21,9 +21,11 @@ async fn test_distributed_pipeline_build() -> anyhow::Result<()> {
     )?;
     let pipeline = PipelineBuilder::create(ctx, plan).build()?;
     let expect = "LimitTransform × 1 processor\
-    \n  AggregatorFinalTransform × 1 processor\
-    \n    Merge (RemoteTransform × 3 processors) to (AggregatorFinalTransform × 1)\
-    \n      RemoteTransform × 3 processor(s): AggregatorPartialTransform × 8 processors -> FilterTransform × 8 processors ->   SourceTransform × 8 processors";
+    \n  ProjectionTransform × 1 processor\
+    \n    ExpressionTransform × 1 processor\
+    \n      AggregatorFinalTransform × 1 processor\
+    \n        Merge (RemoteTransform × 3 processors) to (AggregatorFinalTransform × 1)\
+    \n          RemoteTransform × 3 processor(s): AggregatorPartialTransform × 8 processors -> ExpressionTransform × 8 processors ->   FilterTransform × 8 processors ->     SourceTransform × 8 processors";
     let actual = format!("{:?}", pipeline);
     assert_eq!(expect, actual);
     Ok(())
@@ -52,10 +54,8 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
 
             plan: "\
             Projection: number as c1:UInt64, number as c2:UInt64\
-            \n  Sort: c1:UInt64\
-            \n    Expression: c1:UInt64 (Before OrderBy)\
-            \n      Expression: number as c1:UInt64, number as c2:UInt64 (Before Projection)\
-            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            \n  Sort: number:UInt64\
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
 
             pipeline: "\
             ProjectionTransform × 1 processor\
@@ -63,9 +63,8 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
             \n    Merge (SortMergeTransform × 8 processors) to (SortMergeTransform × 1)\
             \n      SortMergeTransform × 8 processors\
             \n        SortPartialTransform × 8 processors\
-            \n          ExpressionTransform × 8 processors\
-            \n            ExpressionTransform × 8 processors\
-            \n              SourceTransform × 8 processors",
+            \n          SourceTransform × 8 processors",
+
 
             block: vec![
                 "+----+----+",
@@ -90,10 +89,9 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
 
             plan: "\
             Projection: number as c1:UInt64, number as c2:UInt64\
-            \n  Sort: c1:UInt64, c2:UInt64\
-            \n    Expression: c1:UInt64, c2:UInt64 (Before OrderBy)\
-            \n      Expression: number as c1:UInt64, number as c2:UInt64 (Before Projection)\
-            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            \n  Sort: number:UInt64, number:UInt64\
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+
 
             pipeline: "\
             ProjectionTransform × 1 processor\
@@ -101,8 +99,7 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
             \n    Merge (SortMergeTransform × 8 processors) to (SortMergeTransform × 1)\
             \n      SortMergeTransform × 8 processors\
             \n        SortPartialTransform × 8 processors\
-            \n          ExpressionTransform × 8 processors\
-            \n            ExpressionTransform × 8 processors\n              SourceTransform × 8 processors",
+            \n          SourceTransform × 8 processors",
 
             block: vec![
                 "+----+----+",
@@ -124,14 +121,13 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
         Test {
             name: "select-order-by-alias-expression-pass",
             query:
-                "select number as c1, (number+1) as c2 from numbers_mt(10) order by c1 desc, c2 asc",
+                "select number as c1, (number + 1) as c2 from numbers_mt(10) order by c1 desc, c2 asc",
 
             plan: "\
             Projection: number as c1:UInt64, (number + 1) as c2:UInt64\
-            \n  Sort: c1:UInt64, c2:UInt64\
-            \n    Expression: c1:UInt64, c2:UInt64 (Before OrderBy)\
-            \n      Expression: number as c1:UInt64, (number + 1) as c2:UInt64 (Before Projection)\
-            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            \n  Sort: number:UInt64, (number + 1):UInt64\
+            \n    Expression: number:UInt64, (number + 1):UInt64 (Before OrderBy)\
+            \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
 
             pipeline: "\
             ProjectionTransform × 1 processor\
@@ -140,8 +136,7 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
             \n      SortMergeTransform × 8 processors\
             \n        SortPartialTransform × 8 processors\
             \n          ExpressionTransform × 8 processors\
-            \n            ExpressionTransform × 8 processors\
-            \n              SourceTransform × 8 processors",
+            \n            SourceTransform × 8 processors",
 
             block: vec![
                 "+----+----+",
