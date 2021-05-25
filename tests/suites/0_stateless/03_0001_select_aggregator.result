@@ -7,8 +7,3 @@ select 1, sum(number) from numbers_mt(1000000)
 +------+--------------+
 |    1 | 499999500000 |
 +------+--------------+
---------------
-SELECT min(sum(number)) FROM numbers(10)
---------------
-
-ERROR 1105 (HY000) at line 2: Code: 15, displayText = Action must be non-aggregated function.

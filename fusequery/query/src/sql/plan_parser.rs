@@ -316,11 +316,11 @@ impl PlanParser {
         // Aggregator check.
         let has_aggregator = aggr_exprs.len() + group_by_exprs.len() > 0;
 
-        // Before group by
-        println!(
-            "proj {:?}, agg: {:?}, group: {:?}",
-            projection_exprs, aggr_exprs, group_by_exprs
-        );
+        // // Before group by
+        // println!(
+        //     "proj {:?}, agg: {:?}, group: {:?}",
+        //     projection_exprs, aggr_exprs, group_by_exprs
+        // );
 
         let (plan, having_expr_post_aggr_opt) = if has_aggregator {
             let aggr_projection_exprs = group_by_exprs
