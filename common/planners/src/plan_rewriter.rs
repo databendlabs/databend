@@ -301,10 +301,6 @@ impl RewriteHelper {
                     right: Box::new(right_new)
                 })
             }
-            ExpressionAction::Not(plan) => {
-                let plan_new = RewriteHelper::expr_rewrite_alias(plan, data)?;
-                Ok(ExpressionAction::Not(Box::new(plan_new)))
-            }
 
             ExpressionAction::UnaryExpression { op, expr } => {
                 let expr_new = RewriteHelper::expr_rewrite_alias(expr, data)?;
@@ -405,7 +401,6 @@ impl RewriteHelper {
     pub fn expression_plan_children(expr: &ExpressionAction) -> Result<Vec<ExpressionAction>> {
         Ok(match expr {
             ExpressionAction::Alias(_, expr) => vec![expr.as_ref().clone()],
-            ExpressionAction::Not(expr) => vec![expr.as_ref().clone()],
             ExpressionAction::Column(_) => vec![],
             ExpressionAction::Literal(_) => vec![],
             ExpressionAction::BinaryExpression { left, right, .. } => {
@@ -425,7 +420,6 @@ impl RewriteHelper {
     pub fn expression_plan_columns(expr: &ExpressionAction) -> Result<Vec<ExpressionAction>> {
         Ok(match expr {
             ExpressionAction::Alias(_, expr) => Self::expression_plan_columns(expr)?,
-            ExpressionAction::Not(expr) => Self::expression_plan_columns(expr)?,
             ExpressionAction::Column(_) => vec![expr.clone()],
             ExpressionAction::Literal(_) => vec![],
             ExpressionAction::BinaryExpression { left, right, .. } => {

@@ -20,7 +20,10 @@ pub fn add(left: ExpressionAction, right: ExpressionAction) -> ExpressionAction 
 
 /// Not.
 pub fn not(other: ExpressionAction) -> ExpressionAction {
-    ExpressionAction::Not(Box::new(other))
+    ExpressionAction::UnaryExpression {
+        op: "not".to_string(),
+        expr: Box::new(other)
+    }
 }
 
 /// Mod binary function.

@@ -8,6 +8,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_functions::AliasFunction;
 use common_functions::CastFunction;
@@ -24,8 +25,6 @@ pub enum ExpressionAction {
     Column(String),
     /// Constant value.
     Literal(DataValue),
-    /// Negation of a Boolean expr
-    Not(Box<ExpressionAction>),
     /// A binary expression such as "age > 40"
     BinaryExpression {
         left: Box<ExpressionAction>,
@@ -76,15 +75,29 @@ impl ExpressionAction {
                 func.set_depth(depth);
                 Ok(func)
             }
-            ExpressionAction::UnaryExpression { op, expr } => {
-                let left_val = Some(0);
-                let left = Box::new(ExpressionAction::Literal(DataValue::Int64(left_val)));
-                let l = left.to_function_with_depth(depth)?;
-                let r = expr.to_function_with_depth(depth + 1)?;
-                let mut func = FunctionFactory::get(op, &[l, r])?;
-                func.set_depth(depth);
-                Ok(func)
-            }
+            ExpressionAction::UnaryExpression { op, expr } => match op.as_ref() {
+                "-" => {
+                    let left_val = Some(0);
+                    let left = Box::new(ExpressionAction::Literal(DataValue::Int64(left_val)));
+                    let l = left.to_function_with_depth(depth)?;
+                    let r = expr.to_function_with_depth(depth + 1)?;
+                    let mut func = FunctionFactory::get(op, &[l, r])?;
+                    func.set_depth(depth);
+                    Ok(func)
+                }
+                "not" => {
+                    let operand = expr.to_function_with_depth(depth)?;
+                    let mut func = FunctionFactory::get("not", &[operand])?;
+                    func.set_depth(depth);
+                    Ok(func)
+                }
+                _ => {
+                    return Result::Err(ErrorCodes::UnImplement(format!(
+                        "Unary Operator {:?} is not implemented yet",
+                        op
+                    )));
+                }
+            },
             ExpressionAction::Function { op, args } => {
                 let mut funcs = Vec::with_capacity(args.len());
                 for arg in args {
@@ -100,12 +113,6 @@ impl ExpressionAction {
                 let mut func = expr.to_function_with_depth(depth)?;
                 func.set_depth(depth);
                 AliasFunction::try_create(alias.clone(), func)
-            }
-            ExpressionAction::Not(expr) => {
-                let operand = expr.to_function_with_depth(depth)?;
-                let mut func = FunctionFactory::get("not", &[operand])?;
-                func.set_depth(depth);
-                Ok(func)
             }
             ExpressionAction::Sort { expr, .. } => expr.to_function_with_depth(depth),
             ExpressionAction::Wildcard => ColumnFunction::try_create("*"),
@@ -139,7 +146,6 @@ impl fmt::Debug for ExpressionAction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ExpressionAction::Alias(alias, v) => write!(f, "{:?} as {:#}", v, alias),
-            ExpressionAction::Not(v) => write!(f, "NOT{:?}", v),
             ExpressionAction::Column(ref v) => write!(f, "{:#}", v),
             ExpressionAction::Literal(ref v) => write!(f, "{:#}", v),
             ExpressionAction::BinaryExpression { left, op, right } => {
