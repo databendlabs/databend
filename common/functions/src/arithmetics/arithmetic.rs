@@ -53,6 +53,9 @@ impl IFunction for ArithmeticFunction {
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+        if args.len() == 1 {
+            return Ok(args[0].clone());
+        }
         common_datavalues::numerical_arithmetic_coercion(&self.op, &args[0], &args[1])
     }
 
@@ -61,18 +64,30 @@ impl IFunction for ArithmeticFunction {
     }
 
     fn eval(&self, columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
-        let result = DataArrayArithmetic::data_array_arithmetic_op(
-            self.op.clone(),
-            &columns[0],
-            &columns[1]
-        )?;
-
-        match (&columns[0], &columns[1]) {
-            (DataColumnarValue::Constant(_, _), DataColumnarValue::Constant(_, _)) => {
-                let data_value = DataValue::try_from_array(&result, 0)?;
-                Ok(DataColumnarValue::Constant(data_value, input_rows))
+        if columns.len() == 1 {
+            let result =
+                DataArrayArithmetic::data_array_arithmetic_unary_op(self.op.clone(), &columns[0])?;
+            match &columns[0] {
+                DataColumnarValue::Constant(_, _) => {
+                    let data_value = DataValue::try_from_array(&result, 0)?;
+                    Ok(DataColumnarValue::Constant(data_value, input_rows))
+                }
+                _ => Ok(DataColumnarValue::Array(result))
             }
-            _ => Ok(DataColumnarValue::Array(result))
+        } else {
+            let result = DataArrayArithmetic::data_array_arithmetic_op(
+                self.op.clone(),
+                &columns[0],
+                &columns[1]
+            )?;
+
+            match (&columns[0], &columns[1]) {
+                (DataColumnarValue::Constant(_, _), DataColumnarValue::Constant(_, _)) => {
+                    let data_value = DataValue::try_from_array(&result, 0)?;
+                    Ok(DataColumnarValue::Constant(data_value, input_rows))
+                }
+                _ => Ok(DataColumnarValue::Array(result))
+            }
         }
     }
 }

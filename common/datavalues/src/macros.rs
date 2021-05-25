@@ -51,6 +51,16 @@ macro_rules! compute_self_defined_op {
     }};
 }
 
+/// Invoke a compute negate kernel on a array
+macro_rules! compute_negate {
+    ($VALUE:expr, $DT:ident) => {{
+        let vv = downcast_array!($VALUE, $DT)?;
+        Ok(Arc::new(
+            common_arrow::arrow::compute::negate(&vv).map_err(ErrorCodes::from)?
+        ))
+    }};
+}
+
 /// Invoke a compute kernel on a pair of arrays
 /// The arrow_primitive_array_op macro only evaluates for primitive types
 /// like integers and floats.
@@ -120,6 +130,26 @@ macro_rules! arrow_array_op {
                 "Unsupported arithmetic_compute::{} for data type: {:?}",
                 stringify!($OP),
                 ($LEFT).data_type(),
+            )))
+        }
+    };
+}
+
+/// Invoke a negate compute kernel on a array
+/// The arrow_primitive_array_negate macro only evaluates for signed primitive types
+/// like signed integers and floats.
+macro_rules! arrow_primitive_array_negate {
+    ($VALUE:expr, $RESULT:expr) => {
+        match $RESULT {
+            DataType::Int8 => compute_negate!($VALUE, Int8Array),
+            DataType::Int16 => compute_negate!($VALUE, Int16Array),
+            DataType::Int32 => compute_negate!($VALUE, Int32Array),
+            DataType::Int64 => compute_negate!($VALUE, Int64Array),
+            DataType::Float32 => compute_negate!($VALUE, Float32Array),
+            DataType::Float64 => compute_negate!($VALUE, Float64Array),
+            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+                "Unsupported arithmetic_compute::negate for data type: {:?}",
+                ($VALUE).data_type(),
             )))
         }
     };
