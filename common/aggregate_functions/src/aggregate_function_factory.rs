@@ -31,7 +31,7 @@ impl AggregateFunctionFactory {
     pub fn get(name: &str) -> Result<Box<dyn IAggregateFunction>> {
         let map = FACTORY.read();
         let creator = map.get(&*name.to_lowercase()).ok_or_else(|| {
-            ErrorCodes::UnknownFunction(format!("Unsupported AggregateFunction: {}", name))
+            ErrorCodes::UnknownAggregateFunction(format!("Unsupported AggregateFunction: {}", name))
         })?;
         (creator)(name)
     }

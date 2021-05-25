@@ -14,7 +14,6 @@ mod aggregate_min;
 mod aggregate_sum;
 mod aggregator;
 
-mod test;
 pub use aggregate_avg::AggregateAvgFunction;
 pub use aggregate_count::AggregateCountFunction;
 pub use aggregate_function::IAggregateFunction;
@@ -23,4 +22,3 @@ pub use aggregate_max::AggregateMaxFunction;
 pub use aggregate_min::AggregateMinFunction;
 pub use aggregate_sum::AggregateSumFunction;
 pub use aggregator::AggregatorFunction;
-pub use test::*;
