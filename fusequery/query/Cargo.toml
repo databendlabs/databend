@@ -30,7 +30,7 @@ common-streams = {path = "../../common/streams"}
 clickhouse-srv = { git = "https://github.com/sundy-li/clickhouse-svr", rev = "82a8aac" }
 
 # Crates.io dependencies
-ahash = "0.7.2"
+ahash = "0.7.3"
 anyhow = "1.0.40"
 async-trait = "0.1"
 crossbeam = "0.8"
@@ -65,7 +65,7 @@ pretty_assertions = "0.7"
 criterion = "0.3"
 
 [build-dependencies]
-vergen = "5.1.6"
+vergen = "5.1.7"
 run_script = "^0.8.0"
 
 [[bench]]

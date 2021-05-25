@@ -1,4 +1,4 @@
-name: Cargo Lint
+name: Cargo
 on: [push, pull_request]
 
 env:
@@ -6,7 +6,7 @@ env:
 
 jobs:
   rustfmt_and_clippy:
-    name: rustfmt && clippy
+    name: "Lint"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
