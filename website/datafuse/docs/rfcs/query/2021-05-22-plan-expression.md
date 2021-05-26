@@ -1,29 +1,32 @@
-# Expression and plan builder refactoring docs
-
+# Expression and plan builder
 
 ## Summary
 
-Logic plan and expression play a big role throughout the life cycle of SQL query. This doc is intended to explain the new design of expressions and plan builder.
+Logic plan and expression play a big role throughout the life cycle of SQL query. 
+This doc is intended to explain the new design of expressions and plan builder.
 
-> Let's introduce expressions firstly
+## Expression
 
-## Alias Expression
+### Alias Expression
 
-Aliasing is useful in SQL, we can alias an complex expression as a short alias name. Such as:
+Aliasing is useful in SQL, we can alias a complex expression as a short alias name. Such as:
 `select a + 3 as b`.
 
 In the standard SQL protocol, aliasing can work in:
 
-- group by, eg: `select a + 3 as b, count(1) from table group by b`
-- having, eg: `select a + 3 as b, count(1) as c from table group by b having c > 0`
-- order by: eg: `select a + 3 as b from table order by b`
+- Group By, eg: ```select a + 3 as b, count(1) from table group by b```
+- Having, eg: ```select a + 3 as b, count(1) as c from table group by b having c > 0```
+- Order By: eg: ```select a + 3 as b from table order by b```
 
-ClickHouse has extended the usage of expression alias, it can work in:
 
-- recusive alias expression: eg: `select a + 1 as b, b + 1 as c`
-- filter: eg: `select a + 1 as b, b + 1 as c  from table where c > 0`
+!!! note "Notes"
+    ClickHouse has extended the usage of expression alias, it can be work in:
 
-Note Currently we do not support clickhouse style alias expression. It can be implemented later.
+    - recursive alias expression: eg: `select a + 1 as b, b + 1 as c`
+
+    - filter: eg: `select a + 1 as b, b + 1 as c  from table where c > 0`
+
+    Note Currently we do not support clickhouse style alias expression. It can be implemented later.
 
 For expression alias, we only handle it at last, in projection stage. But We have to replace the alias of the expression as early as possible to prevent ambiguity later.
 
@@ -51,7 +54,7 @@ Let's take a look at the explain result of this query:
 
 We can see we do not need to care about aliasing until the projection, so it will be very convenient to apply other expressions.
 
-## Materialized Expression
+### Materialized Expression
 
 Materialized expression processing is that we can rebase the expression as a *ExpressionColumn* if the same expression is already processed upstream.
 
@@ -64,7 +67,7 @@ After aliases replacement, we will know that order by is `sum(number)`, but `sum
 So `number + 1` in having can also apply to rebase the expression.
 
 
-## Expression Functions
+### Expression Functions
 
 There are many kinds of expression functions.
 
@@ -79,7 +82,6 @@ For ScalarFunctions, we really don't care about the whole block, we just care ab
 ```rust
 fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue>;
 ```
-
 
 For AggregateFunctions, we should keep the state in the corresponding function instance to apply the two-level merge, we have the following virtual method in `IAggregateFunction`:
 
@@ -99,7 +101,7 @@ ps: We don't store the arguments types and arguments names in functions, we can 
 
 *Block* is the unit of data passed between streams for pipeline processing, while *Column* is the unit of data passed between expressions.
 So in the view of expression(functions, literal, ...), everything is *Column*, we have *DataColumnarValue* to represent a column.
-```
+```rust
 #[derive(Clone, Debug)]
 pub enum DataColumnarValue {
     // Array of values.
@@ -116,13 +118,12 @@ Note: We don't have *ScalarValue* , because it can be known as `Constant(DataVal
 
 ### Expression chain and expression executor
 
-Currently we can collect the inner expression from expressions to build ExpressionChain. This could be done by Depth-first-serach visiting.  ExpressionFunction: `number + (number + 1)` will be :  `[ ExpressionColumn(number),  ExpressionColumn(number), ExpressionLiteral(1),  ExpressionBinary('+', 'number', '1'), ExpressionBinary('+', 'number',  '(number + 1)')  ]`.
+Currently, we can collect the inner expression from expressions to build ExpressionChain. This could be done by Depth-first-search visiting.  ExpressionFunction: `number + (number + 1)` will be :  `[ ExpressionColumn(number),  ExpressionColumn(number), ExpressionLiteral(1),  ExpressionBinary('+', 'number', '1'), ExpressionBinary('+', 'number',  '(number + 1)')  ]`.
 
-We have the *ExpressionExecutor* the execute the expression chain, during the execution, we don't need to care about the kind of the arguments. We just conside them as *ColumnExpression* from upstream, so we just fetch the column *number* and the column *(number + 1)* from the block.
+We have the *ExpressionExecutor* the execute the expression chain, during the execution, we don't need to care about the kind of the arguments. We just consider them as *ColumnExpression* from upstream, so we just fetch the column *number* and the column *(number + 1)* from the block.
 
 
-> Let's introduce plan builder now
-
+## Plan Builder
 
 ### None aggregation query
 
@@ -147,7 +148,7 @@ The build process is
 - SourcePlan : schema --> [number]
 - FilterPlan:  filter expression is  `(number + 1) > 3`, the schema keeps the same,  schema --> [number]
 - Expression:  we will collect expressions from `order by` and `having ` clauses to apply the expression, schema --> `[number, number + 1, number + 3]`
-- Sort: since we already have the `number + 1` in the input plan, so the sorting will conside `number + 1` as *ColumnExpression*, schema --> `[number, number + 1, number + 3]`
+- Sort: since we already have the `number + 1` in the input plan, so the sorting will consider `number + 1` as *ColumnExpression*, schema --> `[number, number + 1, number + 3]`
 - Projection: applying the aliases and projection the columns,  schema --> `[b]`
 
 
@@ -170,8 +171,8 @@ Eg:  `explain select number + 1 as b, sum(number + 2 ) + 4 as c from numbers(10)
                   ReadDataSource: scan partitions: [4], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]
 ```
 
-
 The build process is
+
 - SourcePlan : schema --> [number]
 - FilterPlan:  filter expression is  `(number + 3) > 0`, the schema keeps the same,  schema --> [number]
 - Expression: Before group by  `(number + 1):UInt64, (number + 2):UInt64, (number + 5):UInt64, (number + 4):UInt64 (Before GroupBy)`
