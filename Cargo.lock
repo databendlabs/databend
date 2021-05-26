@@ -19,9 +19,9 @@ checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
 name = "ahash"
-version = "0.7.3"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11149c3eb723d15cb065a9ea5cc74ab57250f098ef33c9f6f7f39b48bd207750"
+checksum = "43bb833f0bf979d8475d38fbf09ed3b8a55e1885fe93ad3f93239fc6a4f17b98"
 dependencies = [
  "getrandom 0.2.2",
  "once_cell",
@@ -131,7 +131,7 @@ dependencies = [
 [[package]]
 name = "async-raft"
 version = "0.6.1"
-source = "git+https://github.com/drmingdrmer/async-raft?branch=rc#3dce97c5a42e6ddbd3e13b058dc657315ceae897"
+source = "git+https://github.com/drmingdrmer/async-raft?rev=cf40344f66fdcb6cde160b3e5671ff87c88f2af8#cf40344f66fdcb6cde160b3e5671ff87c88f2af8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2249,8 +2249,7 @@ dependencies = [
 [[package]]
 name = "msql-srv"
 version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8abd5a8795c8ae6888275fa43bed844991de703a7b9850a1de9066dcf90546ea"
+source = "git+https://github.com/datafuselabs/msql-srv?rev=76b8ae3#76b8ae360080942127805ea469f322552ed53177"
 dependencies = [
  "byteorder",
  "chrono",
@@ -4417,9 +4416,9 @@ checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "vergen"
-version = "5.1.7"
+version = "5.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "047405d0de369210f6364d8c0ab790d9291c5b31d2989697d7bf79999b763191"
+checksum = "59032138343003a17090952a1eaa7c1b260080b44d3dbb0d68905bd2230260ee"
 dependencies = [
  "anyhow",
  "cfg-if 1.0.0",
