@@ -13,10 +13,10 @@ use common_functions::CastFunction;
 use common_functions::FunctionFactory;
 use common_functions::IFunction;
 
-use crate::ExpressionAction;
+use crate::Expression;
 
 #[derive(Debug, Clone)]
-pub enum ActionNode {
+pub enum ExpressionAction {
     /// Column which must be in input.
     Input(ActionInput),
     /// Constant column with known value.
@@ -58,11 +58,11 @@ pub struct ActionFunction {
 pub struct ExpressionChain {
     // input schema
     pub schema: DataSchemaRef,
-    pub actions: Vec<ActionNode>
+    pub actions: Vec<ExpressionAction>
 }
 
 impl ExpressionChain {
-    pub fn try_create(schema: DataSchemaRef, exprs: &[ExpressionAction]) -> Result<Self> {
+    pub fn try_create(schema: DataSchemaRef, exprs: &[Expression]) -> Result<Self> {
         let mut chain = Self {
             schema,
             actions: vec![]
@@ -75,9 +75,9 @@ impl ExpressionChain {
         Ok(chain)
     }
 
-    fn add_expr(&mut self, expr: &ExpressionAction) -> Result<()> {
+    fn add_expr(&mut self, expr: &Expression) -> Result<()> {
         match expr {
-            ExpressionAction::Alias(name, sub_expr) => {
+            Expression::Alias(name, sub_expr) => {
                 self.add_expr(sub_expr)?;
                 let return_type = expr.to_data_type(&self.schema)?;
 
@@ -87,26 +87,26 @@ impl ExpressionChain {
                     arg_type: return_type
                 };
 
-                self.actions.push(ActionNode::Alias(alias));
+                self.actions.push(ExpressionAction::Alias(alias));
             }
-            ExpressionAction::Column(c) => {
+            Expression::Column(c) => {
                 let arg_type = self.schema.field_with_name(c)?.data_type();
                 let input = ActionInput {
                     name: expr.column_name(),
                     return_type: arg_type.clone()
                 };
-                self.actions.push(ActionNode::Input(input));
+                self.actions.push(ExpressionAction::Input(input));
             }
-            ExpressionAction::Literal(l) => {
+            Expression::Literal(l) => {
                 let value = ActionConstant {
                     name: expr.column_name(),
                     value: l.clone()
                 };
 
-                self.actions.push(ActionNode::Constant(value));
+                self.actions.push(ExpressionAction::Constant(value));
             }
 
-            ExpressionAction::UnaryExpression {
+            Expression::UnaryExpression {
                 op,
                 expr: nested_expr
             } => {
@@ -124,10 +124,10 @@ impl ExpressionChain {
                     return_type: func.return_type(&arg_types)?
                 };
 
-                self.actions.push(ActionNode::Function(function));
+                self.actions.push(ExpressionAction::Function(function));
             }
 
-            ExpressionAction::BinaryExpression { op, left, right } => {
+            Expression::BinaryExpression { op, left, right } => {
                 self.add_expr(left)?;
                 self.add_expr(right)?;
 
@@ -146,10 +146,10 @@ impl ExpressionChain {
                     return_type: func.return_type(&arg_types)?
                 };
 
-                self.actions.push(ActionNode::Function(function));
+                self.actions.push(ExpressionAction::Function(function));
             }
 
-            ExpressionAction::ScalarFunction { op, args } => {
+            Expression::ScalarFunction { op, args } => {
                 for expr in args.iter() {
                     self.add_expr(expr)?;
                 }
@@ -169,10 +169,10 @@ impl ExpressionChain {
                     return_type: func.return_type(&arg_types)?
                 };
 
-                self.actions.push(ActionNode::Function(function));
+                self.actions.push(ExpressionAction::Function(function));
             }
 
-            ExpressionAction::AggregateFunction { op, args } => {
+            Expression::AggregateFunction { op, args } => {
                 for expr in args.iter() {
                     self.add_expr(expr)?;
                 }
@@ -192,14 +192,14 @@ impl ExpressionChain {
                     return_type: func.return_type(&arg_types)?
                 };
 
-                self.actions.push(ActionNode::Function(function));
+                self.actions.push(ExpressionAction::Function(function));
             }
-            ExpressionAction::Sort { expr, .. } => {
+            Expression::Sort { expr, .. } => {
                 self.add_expr(expr)?;
             }
 
-            ExpressionAction::Wildcard => {}
-            ExpressionAction::Cast {
+            Expression::Wildcard => {}
+            Expression::Cast {
                 expr: sub_expr,
                 data_type
             } => {
@@ -213,20 +213,20 @@ impl ExpressionChain {
                     return_type: data_type.clone()
                 };
 
-                self.actions.push(ActionNode::Function(function));
+                self.actions.push(ExpressionAction::Function(function));
             }
         }
         Ok(())
     }
 }
 
-impl ActionNode {
+impl ExpressionAction {
     pub fn column_name(&self) -> &str {
         match self {
-            ActionNode::Input(input) => &input.name,
-            ActionNode::Constant(c) => &c.name,
-            ActionNode::Alias(a) => &a.name,
-            ActionNode::Function(f) => &f.name
+            ExpressionAction::Input(input) => &input.name,
+            ExpressionAction::Constant(c) => &c.name,
+            ExpressionAction::Alias(a) => &a.name,
+            ExpressionAction::Function(f) => &f.name
         }
     }
 }

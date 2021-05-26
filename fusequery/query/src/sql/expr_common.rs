@@ -7,39 +7,39 @@ use std::collections::HashMap;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
 use common_planners::ExpressionVisitor;
 use common_planners::Recursion;
 
-/// Resolves an `ExpressionAction::Wildcard` to a collection of `ExpressionAction::Column`'s.
-pub fn expand_wildcard(expr: &ExpressionAction, schema: &DataSchemaRef) -> Vec<ExpressionAction> {
+/// Resolves an `Expression::Wildcard` to a collection of `Expression::Column`'s.
+pub fn expand_wildcard(expr: &Expression, schema: &DataSchemaRef) -> Vec<Expression> {
     match expr {
-        ExpressionAction::Wildcard => schema
+        Expression::Wildcard => schema
             .fields()
             .iter()
-            .map(|f| ExpressionAction::Column(f.name().to_string()))
-            .collect::<Vec<ExpressionAction>>(),
+            .map(|f| Expression::Column(f.name().to_string()))
+            .collect::<Vec<Expression>>(),
         _ => vec![expr.clone()]
     }
 }
 
-/// Collect all deeply nested `ExpressionAction::AggregateFunction` and
-/// `ExpressionAction::AggregateUDF`. They are returned in order of occurrence (depth
+/// Collect all deeply nested `Expression::AggregateFunction` and
+/// `Expression::AggregateUDF`. They are returned in order of occurrence (depth
 /// first), with duplicates omitted.
-pub fn find_aggregate_exprs(exprs: &[ExpressionAction]) -> Vec<ExpressionAction> {
+pub fn find_aggregate_exprs(exprs: &[Expression]) -> Vec<Expression> {
     find_exprs_in_exprs(exprs, &|nest_exprs| {
-        matches!(nest_exprs, ExpressionAction::AggregateFunction { .. })
+        matches!(nest_exprs, Expression::AggregateFunction { .. })
     })
 }
 
 /// Collect all arguments from aggregation function and append to this exprs
 /// [ColumnExpr(b), Aggr(sum(a, b))] ---> [ColumnExpr(b), ColumnExpr(a)]
 
-pub fn expand_aggregate_arg_exprs(exprs: &[ExpressionAction]) -> Vec<ExpressionAction> {
+pub fn expand_aggregate_arg_exprs(exprs: &[Expression]) -> Vec<Expression> {
     let mut res = vec![];
     for expr in exprs {
         match expr {
-            ExpressionAction::AggregateFunction { args, .. } => {
+            Expression::AggregateFunction { args, .. } => {
                 for arg in args {
                     if !res.contains(arg) {
                         res.push(arg.clone());
@@ -56,19 +56,19 @@ pub fn expand_aggregate_arg_exprs(exprs: &[ExpressionAction]) -> Vec<ExpressionA
     res
 }
 
-/// Collect all deeply nested `ExpressionAction::Column`'s. They are returned in order of
+/// Collect all deeply nested `Expression::Column`'s. They are returned in order of
 /// appearance (depth first), with duplicates omitted.
-pub fn find_column_exprs(exprs: &[ExpressionAction]) -> Vec<ExpressionAction> {
+pub fn find_column_exprs(exprs: &[Expression]) -> Vec<Expression> {
     find_exprs_in_exprs(exprs, &|nest_exprs| {
-        matches!(nest_exprs, ExpressionAction::Column(_))
+        matches!(nest_exprs, Expression::Column(_))
     })
 }
 
-/// Search the provided `ExpressionAction`'s, and all of their nested `ExpressionAction`, for any that
-/// pass the provided test. The returned `ExpressionAction`'s are deduplicated and returned
+/// Search the provided `Expression`'s, and all of their nested `Expression`, for any that
+/// pass the provided test. The returned `Expression`'s are deduplicated and returned
 /// in order of appearance (depth first).
-fn find_exprs_in_exprs<F>(exprs: &[ExpressionAction], test_fn: &F) -> Vec<ExpressionAction>
-where F: Fn(&ExpressionAction) -> bool {
+fn find_exprs_in_exprs<F>(exprs: &[Expression], test_fn: &F) -> Vec<Expression>
+where F: Fn(&Expression) -> bool {
     exprs
         .iter()
         .flat_map(|expr| find_exprs_in_expr(expr, test_fn))
@@ -80,16 +80,16 @@ where F: Fn(&ExpressionAction) -> bool {
         })
 }
 
-// Visitor that find ExpressionActionessions that match a particular predicate
+// Visitor that find Expressionessions that match a particular predicate
 struct Finder<'a, F>
-where F: Fn(&ExpressionAction) -> bool
+where F: Fn(&Expression) -> bool
 {
     test_fn: &'a F,
-    exprs: Vec<ExpressionAction>
+    exprs: Vec<Expression>
 }
 
 impl<'a, F> Finder<'a, F>
-where F: Fn(&ExpressionAction) -> bool
+where F: Fn(&Expression) -> bool
 {
     /// Create a new finder with the `test_fn`
     fn new(test_fn: &'a F) -> Self {
@@ -101,9 +101,9 @@ where F: Fn(&ExpressionAction) -> bool
 }
 
 impl<'a, F> ExpressionVisitor for Finder<'a, F>
-where F: Fn(&ExpressionAction) -> bool
+where F: Fn(&Expression) -> bool
 {
-    fn pre_visit(mut self, expr: &ExpressionAction) -> Result<Recursion<Self>> {
+    fn pre_visit(mut self, expr: &Expression) -> Result<Recursion<Self>> {
         if (self.test_fn)(expr) {
             if !(self.exprs.contains(expr)) {
                 self.exprs.push(expr.clone())
@@ -116,11 +116,11 @@ where F: Fn(&ExpressionAction) -> bool
     }
 }
 
-/// Search an `ExpressionAction`, and all of its nested `ExpressionAction`'s, for any that pass the
-/// provided test. The returned `ExpressionAction`'s are deduplicated and returned in order
+/// Search an `Expression`, and all of its nested `Expression`'s, for any that pass the
+/// provided test. The returned `Expression`'s are deduplicated and returned in order
 /// of appearance (depth first).
-fn find_exprs_in_expr<F>(expr: &ExpressionAction, test_fn: &F) -> Vec<ExpressionAction>
-where F: Fn(&ExpressionAction) -> bool {
+fn find_exprs_in_expr<F>(expr: &Expression, test_fn: &F) -> Vec<Expression>
+where F: Fn(&Expression) -> bool {
     let Finder { exprs, .. } = expr
         .accept(Finder::new(test_fn))
         // pre_visit always returns OK, so this will always too
@@ -129,17 +129,17 @@ where F: Fn(&ExpressionAction) -> bool {
     exprs
 }
 
-/// Convert any `ExpressionAction` to an `ExpressionAction::Column`.
-pub fn expr_as_column_expr(expr: &ExpressionAction) -> Result<ExpressionAction> {
+/// Convert any `Expression` to an `Expression::Column`.
+pub fn expr_as_column_expr(expr: &Expression) -> Result<Expression> {
     match expr {
-        ExpressionAction::Column(_) => Ok(expr.clone()),
-        _ => Ok(ExpressionAction::Column(expr.column_name()))
+        Expression::Column(_) => Ok(expr.clone()),
+        _ => Ok(Expression::Column(expr.column_name()))
     }
 }
 
-/// Rebuilds an `expr` as a projection on top of a collection of `ExpressionAction`'s.
+/// Rebuilds an `expr` as a projection on top of a collection of `Expression`'s.
 ///
-/// For example, the ExpressionActionession `a + b < 1` would require, as input, the 2
+/// For example, the Expressionession `a + b < 1` would require, as input, the 2
 /// individual columns, `a` and `b`. But, if the base exprs already
 /// contain the `a + b` result, then that may be used in lieu of the `a` and
 /// `b` columns.
@@ -151,10 +151,7 @@ pub fn expr_as_column_expr(expr: &ExpressionAction) -> Result<ExpressionAction> 
 /// where post-aggregation, `a + b` need not be a projection against the
 /// individual columns `a` and `b`, but rather it is a projection against the
 /// `a + b` found in the GROUP BY.
-pub fn rebase_expr(
-    expr: &ExpressionAction,
-    base_exprs: &[ExpressionAction]
-) -> Result<ExpressionAction> {
+pub fn rebase_expr(expr: &Expression, base_exprs: &[Expression]) -> Result<Expression> {
     clone_with_replacement(expr, &|nest_exprs| {
         if base_exprs.contains(nest_exprs) {
             Ok(Some(expr_as_column_expr(nest_exprs)?))
@@ -166,14 +163,9 @@ pub fn rebase_expr(
 
 // Rebuilds an `expr` to ColumnExpr when some expressions already processed in upstream
 // Skip Sort, Alias because we can go into the inner nest_exprs
-pub fn rebase_expr_from_input(
-    expr: &ExpressionAction,
-    schema: &DataSchemaRef
-) -> Result<ExpressionAction> {
+pub fn rebase_expr_from_input(expr: &Expression, schema: &DataSchemaRef) -> Result<Expression> {
     clone_with_replacement(expr, &|nest_exprs| match nest_exprs {
-        ExpressionAction::Sort { .. }
-        | ExpressionAction::Column(_)
-        | ExpressionAction::Alias(_, _) => Ok(None),
+        Expression::Sort { .. } | Expression::Column(_) | Expression::Alias(_, _) => Ok(None),
         _ => {
             if schema.field_with_name(&nest_exprs.column_name()).is_ok() {
                 Ok(Some(expr_as_column_expr(nest_exprs)?))
@@ -184,26 +176,26 @@ pub fn rebase_expr_from_input(
     })
 }
 
-pub fn sort_to_inner_expr(expr: &ExpressionAction) -> ExpressionAction {
+pub fn sort_to_inner_expr(expr: &Expression) -> Expression {
     match expr {
-        ExpressionAction::Sort {
+        Expression::Sort {
             expr: nest_exprs, ..
         } => *nest_exprs.clone(),
         _ => expr.clone()
     }
 }
 
-/// Determines if the set of `ExpressionAction`'s are a valid projection on the input
-/// `ExpressionAction::Column`'s.
+/// Determines if the set of `Expression`'s are a valid projection on the input
+/// `Expression::Column`'s.
 pub fn find_columns_not_satisfy_exprs(
-    columns: &[ExpressionAction],
-    exprs: &[ExpressionAction]
-) -> Result<Option<ExpressionAction>> {
+    columns: &[Expression],
+    exprs: &[Expression]
+) -> Result<Option<Expression>> {
     columns.iter().try_for_each(|c| match c {
-        ExpressionAction::Column(_) => Ok(()),
+        Expression::Column(_) => Ok(()),
 
         _ => Err(ErrorCodes::SyntaxException(
-            "ExpressionAction::Column are required".to_string()
+            "Expression::Column are required".to_string()
         ))
     })?;
 
@@ -223,7 +215,7 @@ pub fn find_columns_not_satisfy_exprs(
 /// the argument `expr`, then descending depth-first through its
 /// descendants. The function chooses to replace or keep (clone) each `expr`.
 ///
-/// The function's return type is `Result<Option<ExpressionAction>>>`, where:
+/// The function's return type is `Result<Option<Expression>>>`, where:
 ///
 /// * `Ok(Some(replacement_expr))`: A replacement `expr` is provided; it is
 ///       swapped in at the particular node in the tree. Any nested `expr` are
@@ -233,13 +225,8 @@ pub fn find_columns_not_satisfy_exprs(
 ///       cloning/replacement.
 /// * `Err(err)`: Any error returned by the function is returned as-is by
 ///       `clone_with_replacement()`.
-fn clone_with_replacement<F>(
-    expr: &ExpressionAction,
-    replacement_fn: &F
-) -> Result<ExpressionAction>
-where
-    F: Fn(&ExpressionAction) -> Result<Option<ExpressionAction>>
-{
+fn clone_with_replacement<F>(expr: &Expression, replacement_fn: &F) -> Result<Expression>
+where F: Fn(&Expression) -> Result<Option<Expression>> {
     let replacement_opt = replacement_fn(expr)?;
 
     match replacement_opt {
@@ -247,93 +234,89 @@ where
         // descend further.
         Some(replacement) => Ok(replacement),
         // No replacement was provided, clone the node and recursively call
-        // clone_with_replacement() on any nested ExpressionActionessions.
+        // clone_with_replacement() on any nested Expressionessions.
         None => match expr {
-            ExpressionAction::Wildcard => Ok(ExpressionAction::Wildcard),
-            ExpressionAction::Alias(alias_name, nested_expr) => Ok(ExpressionAction::Alias(
+            Expression::Wildcard => Ok(Expression::Wildcard),
+            Expression::Alias(alias_name, nested_expr) => Ok(Expression::Alias(
                 alias_name.clone(),
                 Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?)
             )),
 
-            ExpressionAction::UnaryExpression {
+            Expression::UnaryExpression {
                 op,
                 expr: nested_expr
-            } => Ok(ExpressionAction::UnaryExpression {
+            } => Ok(Expression::UnaryExpression {
                 op: op.clone(),
                 expr: Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?)
             }),
 
-            ExpressionAction::BinaryExpression { left, op, right } => {
-                Ok(ExpressionAction::BinaryExpression {
-                    left: Box::new(clone_with_replacement(&**left, replacement_fn)?),
-                    op: op.clone(),
-                    right: Box::new(clone_with_replacement(&**right, replacement_fn)?)
-                })
-            }
+            Expression::BinaryExpression { left, op, right } => Ok(Expression::BinaryExpression {
+                left: Box::new(clone_with_replacement(&**left, replacement_fn)?),
+                op: op.clone(),
+                right: Box::new(clone_with_replacement(&**right, replacement_fn)?)
+            }),
 
-            ExpressionAction::ScalarFunction { op, args } => Ok(ExpressionAction::ScalarFunction {
+            Expression::ScalarFunction { op, args } => Ok(Expression::ScalarFunction {
                 op: op.clone(),
                 args: args
                     .iter()
                     .map(|e| clone_with_replacement(e, replacement_fn))
-                    .collect::<Result<Vec<ExpressionAction>>>()?
+                    .collect::<Result<Vec<Expression>>>()?
             }),
 
-            ExpressionAction::AggregateFunction { op, args } => {
-                Ok(ExpressionAction::AggregateFunction {
-                    op: op.clone(),
-                    args: args
-                        .iter()
-                        .map(|e| clone_with_replacement(e, replacement_fn))
-                        .collect::<Result<Vec<ExpressionAction>>>()?
-                })
-            }
+            Expression::AggregateFunction { op, args } => Ok(Expression::AggregateFunction {
+                op: op.clone(),
+                args: args
+                    .iter()
+                    .map(|e| clone_with_replacement(e, replacement_fn))
+                    .collect::<Result<Vec<Expression>>>()?
+            }),
 
-            ExpressionAction::Sort {
+            Expression::Sort {
                 expr: nested_expr,
                 asc,
                 nulls_first
-            } => Ok(ExpressionAction::Sort {
+            } => Ok(Expression::Sort {
                 expr: Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?),
                 asc: *asc,
                 nulls_first: *nulls_first
             }),
 
-            ExpressionAction::Cast {
+            Expression::Cast {
                 expr: nested_expr,
                 data_type
-            } => Ok(ExpressionAction::Cast {
+            } => Ok(Expression::Cast {
                 expr: Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?),
                 data_type: data_type.clone()
             }),
 
-            ExpressionAction::Column(_) | ExpressionAction::Literal(_) => Ok(expr.clone())
+            Expression::Column(_) | Expression::Literal(_) => Ok(expr.clone())
         }
     }
 }
 
-/// Returns mapping of each alias (`String`) to the exprs (`ExpressionAction`) it is
+/// Returns mapping of each alias (`String`) to the exprs (`Expression`) it is
 /// aliasing.
-pub fn extract_aliases(exprs: &[ExpressionAction]) -> HashMap<String, ExpressionAction> {
+pub fn extract_aliases(exprs: &[Expression]) -> HashMap<String, Expression> {
     exprs
         .iter()
         .filter_map(|expr| match expr {
-            ExpressionAction::Alias(alias_name, nest_exprs) => {
+            Expression::Alias(alias_name, nest_exprs) => {
                 Some((alias_name.clone(), *nest_exprs.clone()))
             }
             _ => None
         })
-        .collect::<HashMap<String, ExpressionAction>>()
+        .collect::<HashMap<String, Expression>>()
 }
 
 /// Rebuilds an `expr` with columns that refer to aliases replaced by the
 /// alias' underlying `expr`.
 pub fn resolve_aliases_to_exprs(
-    expr: &ExpressionAction,
-    aliases: &HashMap<String, ExpressionAction>
-) -> Result<ExpressionAction> {
+    expr: &Expression,
+    aliases: &HashMap<String, Expression>
+) -> Result<Expression> {
     clone_with_replacement(expr, &|nest_exprs| match nest_exprs {
-        ExpressionAction::Column(name) => {
+        Expression::Column(name) => {
             if let Some(aliased_expr) = aliases.get(name) {
                 Ok(Some(aliased_expr.clone()))
             } else {
@@ -346,9 +329,9 @@ pub fn resolve_aliases_to_exprs(
 
 /// Rebuilds an `expr` using the inner expr for expression
 ///  `(a + b) as c` ---> `(a + b)`
-pub fn unwrap_alias_exprs(expr: &ExpressionAction) -> Result<ExpressionAction> {
+pub fn unwrap_alias_exprs(expr: &Expression) -> Result<Expression> {
     clone_with_replacement(expr, &|nest_exprs| match nest_exprs {
-        ExpressionAction::Alias(_, nested_expr) => Ok(Some(*nested_expr.clone())),
+        Expression::Alias(_, nested_expr) => Ok(Some(*nested_expr.clone())),
         _ => Ok(None)
     })
 }

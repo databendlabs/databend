@@ -2,7 +2,7 @@
 
 ## Summary
 
-Logic plan and expression play a big role throughout the life cycle of SQL query. 
+Logic plan and expression play a big role throughout the life cycle of SQL query.
 This doc is intended to explain the new design of expressions and plan builder.
 
 ## Expression
@@ -145,6 +145,7 @@ Eg: `explain select number + 1 as b from numbers(10) where number + 1 > 3  order
 ```
 
 The build process is
+
 - SourcePlan : schema --> [number]
 - FilterPlan:  filter expression is  `(number + 1) > 3`, the schema keeps the same,  schema --> [number]
 - Expression:  we will collect expressions from `order by` and `having ` clauses to apply the expression, schema --> `[number, number + 1, number + 3]`

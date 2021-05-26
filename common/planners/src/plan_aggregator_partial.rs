@@ -6,13 +6,13 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 
-use crate::ExpressionAction;
+use crate::Expression;
 use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct AggregatorPartialPlan {
-    pub group_expr: Vec<ExpressionAction>,
-    pub aggr_expr: Vec<ExpressionAction>,
+    pub group_expr: Vec<Expression>,
+    pub aggr_expr: Vec<Expression>,
     pub schema: DataSchemaRef,
     pub input: Arc<PlanNode>
 }
