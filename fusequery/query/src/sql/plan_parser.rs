@@ -209,14 +209,7 @@ impl PlanParser {
             );
         }
 
-        // Schema with metadata(due to serde must set metadata).
-        let schema = Arc::new(DataSchema::new_with_metadata(
-            fields,
-            [("Key".to_string(), "Value".to_string())]
-                .iter()
-                .cloned()
-                .collect()
-        ));
+        let schema = DataSchemaRefExt::create(fields);
         Ok(PlanNode::CreateTable(CreateTablePlan {
             if_not_exists: create.if_not_exists,
             db,
