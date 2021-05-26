@@ -10,6 +10,7 @@ use common_exception::Result;
 use crate::BooleanArray;
 use crate::DataArrayRef;
 use crate::DataColumnarValue;
+use crate::DataValue;
 use crate::DataValueLogicOperator;
 
 pub struct DataArrayLogic;
@@ -46,10 +47,14 @@ impl DataArrayLogic {
                     common_arrow::arrow::compute::not(arr).map_err(ErrorCodes::from)?
                 ))
             }
-            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
-                "DataValue Error: Cannot do data_array Not, array:{:?}",
-                val.data_type(),
-            )))
+            DataColumnarValue::Constant(_v, _size) => {
+                let vec = val.to_array()?;
+                let arr = downcast_array!(vec, BooleanArray)?;
+                let res =
+                    Arc::new(common_arrow::arrow::compute::not(arr).map_err(ErrorCodes::from)?);
+                let vo = DataValue::Boolean(Some(res.value(0)));
+                DataValue::try_into_data_array(&[vo])
+            }
         }
     }
 
