@@ -50,14 +50,23 @@ impl IAggregateFunction for AggregateSumFunction {
         self.depth = depth;
     }
 
-    fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
+    fn accumulate(&mut self, columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
+        let value = match &columns[0] {
+            DataColumnarValue::Array(array) => DataArrayAggregate::data_array_aggregate_op(
+                DataValueAggregateOperator::Sum,
+                array.clone()
+            ),
+            DataColumnarValue::Constant(s, _) => DataValueArithmetic::data_value_arithmetic_op(
+                DataValueArithmeticOperator::Mul,
+                s.clone(),
+                DataValue::UInt64(Some(input_rows as u64))
+            )
+        }?;
+
         self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
-            DataArrayAggregate::data_array_aggregate_op(
-                DataValueAggregateOperator::Sum,
-                columns[0].to_array()?
-            )?
+            value
         )?;
 
         Ok(())

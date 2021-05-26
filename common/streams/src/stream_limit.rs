@@ -5,7 +5,6 @@
 use std::task::Context;
 use std::task::Poll;
 
-use common_arrow::arrow;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use futures::Stream;
@@ -43,7 +42,7 @@ impl LimitStream {
             for i in 0..block.num_columns() {
                 limited_columns.push(block.column(i).limit(keep));
             }
-            Ok(Some(DataBlock::create_by_array(
+            Ok(Some(DataBlock::create(
                 block.schema().clone(),
                 limited_columns
             )))

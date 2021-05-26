@@ -34,68 +34,68 @@ impl ClickHouseStream {
         }
 
         for i in 0..block.num_columns() {
-            let column = block.column(i);
+            let column = block.column(i).to_array()?;
             let name = block.schema().field(i).name();
 
             match column.data_type() {
                 DataType::Int8 => {
-                    let data = build_primitive_column::<Int8Type>(column)?;
+                    let data = build_primitive_column::<Int8Type>(&column)?;
                     result = result.column(name, data);
                 }
                 DataType::Int16 => {
-                    let data = build_primitive_column::<Int16Type>(column)?;
+                    let data = build_primitive_column::<Int16Type>(&column)?;
                     result = result.column(name, data);
                 }
                 DataType::Int32 => {
-                    let data = build_primitive_column::<Int32Type>(column)?;
+                    let data = build_primitive_column::<Int32Type>(&column)?;
                     result = result.column(name, data);
                 }
                 DataType::Int64 => {
-                    let data = build_primitive_column::<Int64Type>(column)?;
+                    let data = build_primitive_column::<Int64Type>(&column)?;
                     result = result.column(name, data);
                 }
                 DataType::UInt8 => {
-                    let data = build_primitive_column::<UInt8Type>(column)?;
+                    let data = build_primitive_column::<UInt8Type>(&column)?;
                     result = result.column(name, data);
                 }
                 DataType::UInt16 => {
-                    let data = build_primitive_column::<UInt16Type>(column)?;
+                    let data = build_primitive_column::<UInt16Type>(&column)?;
                     result = result.column(name, data);
                 }
                 DataType::UInt32 => {
-                    let data = build_primitive_column::<UInt32Type>(column)?;
+                    let data = build_primitive_column::<UInt32Type>(&column)?;
                     result = result.column(name, data);
                 }
                 DataType::UInt64 => {
-                    let data = build_primitive_column::<UInt64Type>(column)?;
+                    let data = build_primitive_column::<UInt64Type>(&column)?;
                     result = result.column(name, data);
                 }
 
                 DataType::Float32 => {
-                    let data = build_primitive_column::<Float32Type>(column)?;
+                    let data = build_primitive_column::<Float32Type>(&column)?;
                     result = result.column(name, data);
                 }
                 DataType::Float64 => {
-                    let data = build_primitive_column::<Float64Type>(column)?;
+                    let data = build_primitive_column::<Float64Type>(&column)?;
                     result = result.column(name, data);
                 }
 
                 DataType::Date32 => {
-                    let data = build_primitive_column::<Date32Type>(column)?;
+                    let data = build_primitive_column::<Date32Type>(&column)?;
                     result = result.column(name, data);
                 }
                 DataType::Date64 => {
-                    let data = build_primitive_column::<Date64Type>(column)?;
+                    let data = build_primitive_column::<Date64Type>(&column)?;
                     result = result.column(name, data);
                 }
 
                 DataType::Boolean => {
-                    let data = build_boolean_column(column)?;
+                    let data = build_boolean_column(&column)?;
                     result = result.column(name, data);
                 }
 
                 DataType::Utf8 => {
-                    let data = build_string_column(column)?;
+                    let data = build_string_column(&column)?;
                     result = result.column(name, data);
                 }
 

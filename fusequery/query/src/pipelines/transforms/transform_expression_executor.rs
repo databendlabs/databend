@@ -75,9 +75,7 @@ impl ExpressionExecutor {
 
             match action {
                 ActionNode::Input(input) => {
-                    let column =
-                        DataColumnarValue::Array(block.try_column_by_name(&input.name)?.clone());
-
+                    let column = block.try_column_by_name(&input.name)?.clone();
                     column_map.insert(input.name.clone(), column);
                 }
                 ActionNode::Function(f) => {
@@ -129,10 +127,10 @@ impl ExpressionExecutor {
                     column_map.keys()
                 ))
             })?;
-            project_columns.push(column.to_array()?);
+            project_columns.push(column.clone());
         }
         // projection to remove unused columns
-        Ok(DataBlock::create_by_array(
+        Ok(DataBlock::create(
             self.output_schema.clone(),
             project_columns
         ))

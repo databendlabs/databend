@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use common_arrow::arrow;
 use common_arrow::arrow::datatypes::ArrowPrimitiveType;
 use common_exception::Result;
 
@@ -62,21 +63,21 @@ impl DataColumnarValue {
             DataColumnarValue::Array(array) => array.get_array_memory_size(),
             DataColumnarValue::Constant(scalar, size) => scalar
                 .to_array_with_size(*size)
-                .and_then(|arr| Ok(arr.get_array_memory_size()))
+                .map(|arr| arr.get_array_memory_size())
                 .unwrap_or(0)
         }
     }
 
     // kernels
     #[inline]
-    pub fn limit(&self, keep: usize) -> Self {
+    pub fn limit(&self, keep: usize) -> DataColumnarValue {
         match self {
             // limited_columns.push(arrow::compute::limit(&block.column(i).to_array()?, keep));]
             DataColumnarValue::Array(array) => {
                 DataColumnarValue::Array(arrow::compute::limit(array, keep))
             }
-            DataColumnarValue::Constant(scalar, size) => {
-                Ok(DataColumnarValue::Constant(scalar, keep))
+            DataColumnarValue::Constant(scalar, _) => {
+                DataColumnarValue::Constant(scalar.clone(), keep)
             }
         }
     }
