@@ -97,7 +97,7 @@ impl ITable for SettingsTable {
         let values: Vec<&str> = values.iter().map(|x| x.as_str()).collect();
         let default_values: Vec<&str> = default_values.iter().map(|x| x.as_str()).collect();
         let descs: Vec<&str> = descs.iter().map(|x| x.as_str()).collect();
-        let block = DataBlock::create(self.schema.clone(), vec![
+        let block = DataBlock::create_by_array(self.schema.clone(), vec![
             Arc::new(StringArray::from(names)),
             Arc::new(StringArray::from(values)),
             Arc::new(StringArray::from(default_values)),

@@ -75,9 +75,9 @@ impl ITable for FunctionsTable {
     async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
         let func_names = FunctionFactory::registered_names();
         let names: Vec<&str> = func_names.iter().map(|x| x.as_ref()).collect();
-        let block = DataBlock::create(self.schema.clone(), vec![Arc::new(StringArray::from(
-            names
-        ))]);
+        let block = DataBlock::create_by_array(self.schema.clone(), vec![Arc::new(
+            StringArray::from(names)
+        )]);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,

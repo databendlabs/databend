@@ -12,6 +12,7 @@ use common_datavalues::DataValueLogicOperator;
 use common_exception::Result;
 
 use crate::logics::LogicAndFunction;
+use crate::logics::LogicNotFunction;
 use crate::logics::LogicOrFunction;
 use crate::FactoryFuncRef;
 use crate::IFunction;
@@ -26,6 +27,7 @@ impl LogicFunction {
         let mut map = map.write();
         map.insert("and", LogicAndFunction::try_create_func);
         map.insert("or", LogicOrFunction::try_create_func);
+        map.insert("not", LogicNotFunction::try_create_func);
         Ok(())
     }
 
@@ -49,7 +51,7 @@ impl IFunction for LogicFunction {
 
     fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
         Ok(DataColumnarValue::Array(
-            DataArrayLogic::data_array_logic_op(self.op.clone(), &columns[0], &columns[1])?
+            DataArrayLogic::data_array_logic_op(self.op.clone(), columns)?
         ))
     }
 }

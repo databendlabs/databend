@@ -93,14 +93,14 @@ impl IProcessor for GroupByFinalTransform {
             let block = block?;
             for row in 0..block.num_rows() {
                 if let DataValue::Binary(Some(group_key)) =
-                    DataValue::try_from_array(block.column(1 + aggr_funcs_len), row)?
+                    DataValue::try_from_column(block.column(1 + aggr_funcs_len), row)?
                 {
                     match groups.get_mut(&group_key) {
                         None => {
                             let mut funcs = aggr_funcs.clone();
                             for (i, func) in funcs.iter_mut().enumerate() {
                                 if let DataValue::Utf8(Some(col)) =
-                                    DataValue::try_from_array(block.column(i), row)?
+                                    DataValue::try_from_column(block.column(i), row)?
                                 {
                                     let val: DataValue = serde_json::from_str(&col)?;
                                     if let DataValue::Struct(states) = val {
@@ -111,7 +111,7 @@ impl IProcessor for GroupByFinalTransform {
                             groups.insert(group_key.clone(), funcs);
 
                             if let DataValue::Utf8(Some(col)) =
-                                DataValue::try_from_array(block.column(aggr_funcs_len), row)?
+                                DataValue::try_from_column(block.column(aggr_funcs_len), row)?
                             {
                                 let val: DataValue = serde_json::from_str(&col)?;
                                 if let DataValue::Struct(states) = val {
@@ -122,7 +122,7 @@ impl IProcessor for GroupByFinalTransform {
                         Some(funcs) => {
                             for (i, func) in funcs.iter_mut().enumerate() {
                                 if let DataValue::Utf8(Some(col)) =
-                                    DataValue::try_from_array(block.column(i), row)?
+                                    DataValue::try_from_column(block.column(i), row)?
                                 {
                                     let val: DataValue = serde_json::from_str(&col)?;
                                     if let DataValue::Struct(states) = val {
@@ -187,7 +187,7 @@ impl IProcessor for GroupByFinalTransform {
 
         let mut blocks = vec![];
         if !columns.is_empty() {
-            let block = DataBlock::create(self.schema.clone(), columns);
+            let block = DataBlock::create_by_array(self.schema.clone(), columns);
             blocks.push(block);
         }
 

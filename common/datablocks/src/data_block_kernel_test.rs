@@ -18,7 +18,7 @@ fn test_data_block_kernel_take() -> anyhow::Result<()> {
         DataField::new("b", DataType::Utf8, false),
     ]);
 
-    let raw = DataBlock::create(schema.clone(), vec![
+    let raw = DataBlock::create_by_array(schema.clone(), vec![
         Arc::new(Int64Array::from(vec![1, 2, 3])),
         Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
     ]);
@@ -53,15 +53,15 @@ fn test_data_block_kernel_concat() -> anyhow::Result<()> {
     ]);
 
     let blocks = vec![
-        DataBlock::create(schema.clone(), vec![
+        DataBlock::create_by_array(schema.clone(), vec![
             Arc::new(Int64Array::from(vec![1, 2, 3])),
             Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
         ]),
-        DataBlock::create(schema.clone(), vec![
+        DataBlock::create_by_array(schema.clone(), vec![
             Arc::new(Int64Array::from(vec![4, 5, 6])),
             Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
         ]),
-        DataBlock::create(schema.clone(), vec![
+        DataBlock::create_by_array(schema.clone(), vec![
             Arc::new(Int64Array::from(vec![7, 8, 9])),
             Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
         ]),
@@ -103,7 +103,7 @@ fn test_data_block_sort() -> anyhow::Result<()> {
         DataField::new("b", DataType::Utf8, false),
     ]);
 
-    let raw = DataBlock::create(schema.clone(), vec![
+    let raw = DataBlock::create_by_array(schema.clone(), vec![
         Arc::new(Int64Array::from(vec![6, 4, 3, 2, 1, 7])),
         Arc::new(StringArray::from(vec!["b1", "b2", "b3", "b4", "b5", "b6"])),
     ]);
@@ -166,8 +166,8 @@ fn test_scatter_block() -> anyhow::Result<()> {
     ]);
 
     let raw = DataBlock::create(schema.clone(), vec![
-        Arc::new(Int64Array::from(vec![1, 2, 3])),
-        Arc::new(Float64Array::from(vec![1., 2., 3.])),
+        DataColumnarValue::Array(Arc::new(Int64Array::from(vec![1, 2, 3]))),
+        DataColumnarValue::Array(Arc::new(Float64Array::from(vec![1., 2., 3.])))
     ]);
 
     let mut builder = UInt64Builder::new(3);

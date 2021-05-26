@@ -75,10 +75,10 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
                         for row_index in 0..rows_size {
                             let mut row = Vec::with_capacity(columns_size);
                             for column_index in 0..columns_size {
-                                let column = block.column(column_index);
+                                let column = block.column(column_index).to_array().unwrap();
                                 // We are already in convert_schema checks all supported to string columns
                                 // So `array_value_to_string(column, r).unwrap()` is safe.
-                                row.push(array_value_to_string(column, row_index).unwrap());
+                                row.push(array_value_to_string(&column, row_index).unwrap());
                             }
 
                             row_writer.write_row(row)?;

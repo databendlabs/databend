@@ -11,7 +11,7 @@ use tokio_stream::{Stream, StreamExt};
 use common_exception::ErrorCodes;
 use common_datablocks::DataBlock;
 use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
-use common_datavalues::{DataSchemaRef, DataSchema};
+use common_datavalues::{DataSchemaRef, DataSchema, DataColumnarValue};
 use common_arrow::arrow::record_batch::RecordBatch;
 use std::sync::Arc;
 use std::ops::Deref;
@@ -30,7 +30,12 @@ impl FlightDataStream {
                 Err(status) => Err(ErrorCodes::UnknownException(status.message())),
                 Ok(flight_data) => {
                     fn create_data_block(record_batch: RecordBatch) -> DataBlock {
-                        DataBlock::create(record_batch.schema(), record_batch.columns().to_vec())
+                        let columns = record_batch.columns()
+                            .iter()
+                            .map(|column| DataColumnarValue::Array(column.clone()))
+                            .collect::<Vec<_>>();
+
+                        DataBlock::create(record_batch.schema(), columns)
                     }
 
                     Ok(flight_data_to_arrow_batch(&flight_data, schema.clone(), &[])
@@ -48,7 +53,12 @@ impl FlightDataStream {
                 Err(error_code) => Err(error_code),
                 Ok(flight_data) => {
                     fn create_data_block(record_batch: RecordBatch) -> DataBlock {
-                        DataBlock::create(record_batch.schema(), record_batch.columns().to_vec())
+                        let columns = record_batch.columns()
+                            .iter()
+                            .map(|column| DataColumnarValue::Array(column.clone()))
+                            .collect::<Vec<_>>();
+
+                        DataBlock::create(record_batch.schema(), columns)
                     }
 
                     Ok(flight_data_to_arrow_batch(&flight_data, schema.clone(), &[])

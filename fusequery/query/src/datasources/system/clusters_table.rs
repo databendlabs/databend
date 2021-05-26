@@ -86,7 +86,7 @@ impl ITable for ClustersTable {
         let hostnames = hosts.iter().map(|x| x.as_str()).collect::<Vec<&str>>();
         let ports: Vec<u16> = nodes.iter().map(|x| x.address.port()).collect();
         let priorities: Vec<u8> = nodes.iter().map(|x| x.priority).collect();
-        let block = DataBlock::create(self.schema.clone(), vec![
+        let block = DataBlock::create_by_array(self.schema.clone(), vec![
             Arc::new(StringArray::from(names)),
             Arc::new(StringArray::from(hostnames)),
             Arc::new(UInt16Array::from(ports)),

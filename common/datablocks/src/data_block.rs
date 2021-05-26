@@ -9,6 +9,7 @@ use std::sync::Arc;
 use common_arrow::arrow;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_datavalues::DataArrayRef;
+use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
@@ -19,11 +20,19 @@ use crate::pretty_format_blocks;
 #[derive(Clone)]
 pub struct DataBlock {
     schema: DataSchemaRef,
-    columns: Vec<DataArrayRef>
+    columns: Vec<DataColumnarValue>
 }
 
 impl DataBlock {
-    pub fn create(schema: DataSchemaRef, columns: Vec<DataArrayRef>) -> Self {
+    pub fn create(schema: DataSchemaRef, columns: Vec<DataColumnarValue>) -> Self {
+        DataBlock { schema, columns }
+    }
+
+    pub fn create_by_array(schema: DataSchemaRef, arrays: Vec<DataArrayRef>) -> Self {
+        let columns = arrays
+            .iter()
+            .map(|array| DataColumnarValue::Array(array.clone()))
+            .collect();
         DataBlock { schema, columns }
     }
 
@@ -37,7 +46,7 @@ impl DataBlock {
     pub fn empty_with_schema(schema: DataSchemaRef) -> Self {
         let mut columns = vec![];
         for f in schema.fields().iter() {
-            columns.push(arrow::array::new_empty_array(f.data_type()))
+            columns.push(arrow::array::new_empty_array(f.data_type()).into())
         }
         DataBlock { schema, columns }
     }
@@ -54,7 +63,7 @@ impl DataBlock {
         if self.columns.is_empty() {
             0
         } else {
-            self.columns[0].data().len()
+            self.columns[0].len()
         }
     }
 
@@ -67,15 +76,15 @@ impl DataBlock {
         self.columns.iter().map(|x| x.get_array_memory_size()).sum()
     }
 
-    pub fn column(&self, index: usize) -> &DataArrayRef {
+    pub fn column(&self, index: usize) -> &DataColumnarValue {
         &self.columns[index]
     }
 
-    pub fn columns(&self) -> &[DataArrayRef] {
+    pub fn columns(&self) -> &[DataColumnarValue] {
         &self.columns
     }
 
-    pub fn try_column_by_name(&self, name: &str) -> Result<&DataArrayRef> {
+    pub fn try_column_by_name(&self, name: &str) -> Result<&DataColumnarValue> {
         if name == "*" {
             Ok(&self.columns[0])
         } else {
@@ -84,7 +93,7 @@ impl DataBlock {
         }
     }
 
-    pub fn column_by_name(&self, name: &str) -> Option<&DataArrayRef> {
+    pub fn column_by_name(&self, name: &str) -> Option<&DataColumnarValue> {
         if self.is_empty() {
             return None;
         }
@@ -100,6 +109,15 @@ impl DataBlock {
         }
     }
 
+    pub fn try_array_by_name(&self, name: &str) -> Result<DataArrayRef> {
+        if name == "*" {
+            self.columns[0].to_array()
+        } else {
+            let idx = self.schema.index_of(name)?;
+            self.columns[idx].to_array()
+        }
+    }
+
     pub fn index_by_name(&self, column_name: &str) -> Option<usize> {
         match column_name {
             "" => None,
@@ -107,13 +125,19 @@ impl DataBlock {
             other_column_name => self.schema.index_of(other_column_name).ok()
         }
     }
+
 }
 
 impl TryFrom<DataBlock> for RecordBatch {
     type Error = ErrorCodes;
 
     fn try_from(v: DataBlock) -> Result<RecordBatch> {
-        Ok(RecordBatch::try_new(v.schema.clone(), v.columns.clone())?)
+        let columns = v
+            .columns()
+            .iter()
+            .map(|c| c.to_array())
+            .collect::<Result<Vec<_>>>()?;
+        Ok(RecordBatch::try_new(v.schema.clone(), columns)?)
     }
 }
 
@@ -121,7 +145,10 @@ impl TryFrom<arrow::record_batch::RecordBatch> for DataBlock {
     type Error = ErrorCodes;
 
     fn try_from(v: arrow::record_batch::RecordBatch) -> Result<DataBlock> {
-        Ok(DataBlock::create(v.schema(), Vec::from(v.columns())))
+        Ok(DataBlock::create_by_array(
+            v.schema(),
+            Vec::from(v.columns())
+        ))
     }
 }
 

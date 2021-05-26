@@ -12,7 +12,7 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::{PlanNode, ExpressionAction};
 
-use common_datavalues::DataSchemaRef;
+use common_datavalues::{DataSchemaRef, DataColumnarValue};
 use common_arrow::arrow::datatypes::{SchemaRef, Schema, Field};
 use crate::pipelines::processors::{Pipeline, PipelineBuilder, IProcessor};
 use crate::configs::Config;
@@ -252,7 +252,12 @@ impl FlightDispatcher {
 
                 for index in 0..scattered_data.len() {
                     if !scattered_data[index].is_empty() {
-                        let record_batch = RecordBatch::try_new(scattered_data[index].schema().clone(), scattered_data[index].columns().to_vec())?;
+                        let scattered_columns = scattered_data[index].columns()
+                            .iter()
+                            .map(|column| column.to_array())
+                            .collect::<Result<Vec<_>>>()?;
+
+                        let record_batch = RecordBatch::try_new(scattered_data[index].schema().clone(), scattered_columns)?;
                         let (dicts, values) = flight_data_from_arrow_batch(&record_batch, &options);
                         let normalized_flight_data = dicts.into_iter().chain(std::iter::once(values));
 

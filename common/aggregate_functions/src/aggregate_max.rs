@@ -50,14 +50,20 @@ impl IAggregateFunction for AggregateMaxFunction {
     }
 
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
+        let value = match &columns[0] {
+            DataColumnarValue::Array(array) => DataArrayAggregate::data_array_aggregate_op(
+                DataValueAggregateOperator::Max,
+                array.clone()
+            ),
+            DataColumnarValue::Constant(s, _) => Ok(s.clone())
+        }?;
+
         self.state = DataValueAggregate::data_value_aggregate_op(
             DataValueAggregateOperator::Max,
             self.state.clone(),
-            DataArrayAggregate::data_array_aggregate_op(
-                DataValueAggregateOperator::Max,
-                columns[0].to_array()?
-            )?
+            value
         )?;
+
         Ok(())
     }
 

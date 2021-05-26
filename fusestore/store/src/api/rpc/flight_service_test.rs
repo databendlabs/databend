@@ -204,7 +204,7 @@ async fn test_do_append() -> anyhow::Result<()> {
     let expected_rows = col0.data().len() * 2;
     let expected_cols = 2;
 
-    let block = DataBlock::create(schema.clone(), vec![col0, col1]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![col0, col1]);
     let batches = vec![block.clone(), block];
     let num_batch = batches.len();
     let stream = futures::stream::iter(batches);

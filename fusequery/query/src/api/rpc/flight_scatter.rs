@@ -46,7 +46,7 @@ impl FlightScatter {
         let expression_executor = self.0.clone();
         match expression_executor.execute(data_block)?.column_by_name(&self.1) {
             None => Result::Err(ErrorCodes::LogicalError("Logical error: expression executor error.")),
-            Some(indices) => DataBlock::scatter_block(data_block, &indices, self.2),
+            Some(indices) => DataBlock::scatter_block(data_block, &indices.to_array()?, self.2),
         }
     }
 }
