@@ -260,7 +260,7 @@ pub fn numerical_arithmetic_coercion(
 }
 
 #[inline]
-pub fn numerical_singed_coercion(val_type: &DataType) -> Result<DataType> {
+pub fn numerical_signed_coercion(val_type: &DataType) -> Result<DataType> {
     // error on any non-numeric type
     if !is_numeric(val_type) {
         return Result::Err(ErrorCodes::BadDataValueType(format!(
@@ -272,7 +272,7 @@ pub fn numerical_singed_coercion(val_type: &DataType) -> Result<DataType> {
     let has_float = is_floating(val_type);
     let max_size = numeric_byte_size(val_type)?;
 
-    construct_numeric_type(true, has_float, next_size(max_size))
+    construct_numeric_type(true, has_float, max_size)
 }
 
 // coercion rules for equality operations. This is a superset of all numerical coercion rules.

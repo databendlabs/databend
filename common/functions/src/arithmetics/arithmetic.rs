@@ -66,7 +66,7 @@ impl IFunction for ArithmeticFunction {
     fn eval(&self, columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
         if columns.len() == 1 {
             let result =
-                DataArrayArithmetic::data_array_arithmetic_unary_op(self.op.clone(), &columns[0])?;
+                DataArrayArithmetic::data_array_unary_arithmetic_op(self.op.clone(), &columns[0])?;
             match &columns[0] {
                 DataColumnarValue::Constant(_, _) => {
                     let data_value = DataValue::try_from_array(&result, 0)?;

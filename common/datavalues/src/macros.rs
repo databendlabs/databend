@@ -135,7 +135,7 @@ macro_rules! arrow_array_op {
     };
 }
 
-/// Invoke a negate compute kernel on a array
+/// Invoke a negate compute kernel on an array
 /// The arrow_primitive_array_negate macro only evaluates for signed primitive types
 /// like signed integers and floats.
 macro_rules! arrow_primitive_array_negate {

@@ -75,7 +75,7 @@ impl DataArrayArithmetic {
     }
 
     #[inline]
-    pub fn data_array_arithmetic_unary_op(
+    pub fn data_array_unary_arithmetic_op(
         op: DataValueArithmeticOperator,
         value: &DataColumnarValue
     ) -> Result<DataArrayRef> {
@@ -89,12 +89,15 @@ impl DataArrayArithmetic {
                 };
 
                 let coercion_type =
-                    super::data_type::numerical_singed_coercion(&value_array.data_type())?;
+                    super::data_type::numerical_signed_coercion(&value_array.data_type())?;
                 let value_array = data_array_cast(&value_array, &coercion_type)?;
                 arrow_primitive_array_negate!(&value_array, &coercion_type)
             }
             // @todo support other unary operation
-            _ => Result::Err(ErrorCodes::BadArguments("Unsupported unary operation"))
+            _ => Result::Err(ErrorCodes::BadArguments(format!(
+                "Unsupported unary operation: {:?} as argument",
+                op
+            )))
         }
     }
 }
