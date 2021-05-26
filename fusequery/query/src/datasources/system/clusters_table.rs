@@ -80,7 +80,7 @@ impl ITable for ClustersTable {
         let names: Vec<&str> = nodes.iter().map(|x| x.name.as_str()).collect();
         let addresses: Vec<&str> = nodes.iter().map(|x| x.address.as_str()).collect();
         let priorities: Vec<u8> = nodes.iter().map(|x| x.priority).collect();
-        let block = DataBlock::create(self.schema.clone(), vec![
+        let block = DataBlock::create_by_array(self.schema.clone(), vec![
             Arc::new(StringArray::from(names)),
             Arc::new(StringArray::from(addresses)),
             Arc::new(UInt8Array::from(priorities)),

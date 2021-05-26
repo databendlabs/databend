@@ -138,8 +138,8 @@ impl IProcessor for GroupByPartialTransform {
                 let mut group_key_len = 0;
                 for col in &group_columns {
                     let typ = col.data_type();
-                    if common_datavalues::is_integer(typ) {
-                        group_key_len += common_datavalues::numeric_byte_size(typ)?;
+                    if common_datavalues::is_integer(&typ) {
+                        group_key_len += common_datavalues::numeric_byte_size(&typ)?;
                     } else {
                         group_key_len += 4;
                     }
@@ -157,7 +157,7 @@ impl IProcessor for GroupByPartialTransform {
                         None => {
                             let mut group_values = Vec::with_capacity(group_key.len());
                             for col in &group_columns {
-                                group_values.push(DataValue::try_from_array(col, row)?);
+                                group_values.push(DataValue::try_from_column(col, row)?);
                             }
                             group_indices
                                 .insert(group_key.clone(), (vec![row as u32], group_values));
@@ -256,7 +256,7 @@ impl IProcessor for GroupByPartialTransform {
         }
         columns.push(Arc::new(group_key_builder.finish()));
 
-        let block = DataBlock::create(self.schema.clone(), columns);
+        let block = DataBlock::create_by_array(self.schema.clone(), columns);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,

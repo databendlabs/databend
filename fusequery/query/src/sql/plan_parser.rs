@@ -300,7 +300,7 @@ impl PlanParser {
                         })
                         .collect::<Vec<_>>();
 
-                    DataBlock::create(schema.clone(), cols)
+                    DataBlock::create_by_array(schema.clone(), cols)
                 })
                 .collect();
             log::info!("data block is {:?}", blocks);

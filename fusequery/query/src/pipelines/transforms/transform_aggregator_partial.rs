@@ -99,7 +99,7 @@ impl IProcessor for AggregatorPartialTransform {
             columns.push(col);
         }
 
-        let block = DataBlock::create(self.schema.clone(), columns);
+        let block = DataBlock::create_by_array(self.schema.clone(), columns);
 
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
