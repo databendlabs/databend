@@ -41,9 +41,9 @@ impl LimitStream {
 
             let mut limited_columns = Vec::with_capacity(block.num_columns());
             for i in 0..block.num_columns() {
-                limited_columns.push(arrow::compute::limit(block.column(i), keep));
+                limited_columns.push(block.column(i).limit(keep));
             }
-            Ok(Some(DataBlock::create(
+            Ok(Some(DataBlock::create_by_array(
                 block.schema().clone(),
                 limited_columns
             )))

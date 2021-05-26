@@ -90,7 +90,10 @@ impl IProcessor for AggregatorFinalTransform {
 
         let mut blocks = vec![];
         if !final_result.is_empty() {
-            blocks.push(DataBlock::create(self.schema.clone(), final_result));
+            blocks.push(DataBlock::create_by_array(
+                self.schema.clone(),
+                final_result
+            ));
         }
 
         Ok(Box::pin(DataBlockStream::create(

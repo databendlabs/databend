@@ -23,6 +23,7 @@ pub enum DataColumnarValue {
 }
 
 impl DataColumnarValue {
+    #[inline]
     pub fn data_type(&self) -> DataType {
         let x = match self {
             DataColumnarValue::Array(v) => v.data_type().clone(),
@@ -39,6 +40,7 @@ impl DataColumnarValue {
         }
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         match self {
             DataColumnarValue::Array(array) => array.len(),
@@ -46,10 +48,36 @@ impl DataColumnarValue {
         }
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         match self {
             DataColumnarValue::Array(array) => array.len() == 0,
             DataColumnarValue::Constant(_, size) => *size == 0
+        }
+    }
+
+    #[inline]
+    pub fn get_array_memory_size(&self) -> usize {
+        match self {
+            DataColumnarValue::Array(array) => array.get_array_memory_size(),
+            DataColumnarValue::Constant(scalar, size) => scalar
+                .to_array_with_size(*size)
+                .and_then(|arr| Ok(arr.get_array_memory_size()))
+                .unwrap_or(0)
+        }
+    }
+
+    // kernels
+    #[inline]
+    pub fn limit(&self, keep: usize) -> Self {
+        match self {
+            // limited_columns.push(arrow::compute::limit(&block.column(i).to_array()?, keep));]
+            DataColumnarValue::Array(array) => {
+                DataColumnarValue::Array(arrow::compute::limit(array, keep))
+            }
+            DataColumnarValue::Constant(scalar, size) => {
+                Ok(DataColumnarValue::Constant(scalar, keep))
+            }
         }
     }
 }

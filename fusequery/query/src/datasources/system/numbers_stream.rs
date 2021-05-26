@@ -108,7 +108,7 @@ impl NumbersStream {
                     .add_buffer(buffer)
                     .build();
 
-                let block = DataBlock::create(self.schema.clone(), vec![Arc::new(
+                let block = DataBlock::create_by_array(self.schema.clone(), vec![Arc::new(
                     UInt64Array::from(arr_data)
                 )]);
                 Some(block)

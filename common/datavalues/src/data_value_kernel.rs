@@ -8,6 +8,7 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::DataArrayRef;
+use crate::DataColumnarValue;
 use crate::DataValue;
 
 impl DataValue {
@@ -186,6 +187,15 @@ impl DataValue {
         }
     }
 
+    #[inline]
+    pub fn try_from_column(column: &DataColumnarValue, index: usize) -> Result<DataValue> {
+        match column {
+            DataColumnarValue::Constant(scalar, _) => Ok(scalar.clone()),
+            DataColumnarValue::Array(array) => try_from_array(array, index)
+        }
+    }
+
+    #[inline]
     /// Converts a value in `array` at `index` into a ScalarValue
     pub fn try_from_array(array: &DataArrayRef, index: usize) -> Result<DataValue> {
         match array.data_type() {

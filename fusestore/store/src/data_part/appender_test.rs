@@ -36,7 +36,7 @@ mod test {
 
         let col0 = Arc::new(Int64Array::from(vec![0, 1, 2]));
         let col1 = Arc::new(StringArray::from(vec!["str1", "str2", "str3"]));
-        let block = DataBlock::create(schema.clone(), vec![col0.clone(), col1.clone()]);
+        let block = DataBlock::create_by_array(schema.clone(), vec![col0.clone(), col1.clone()]);
 
         let buffer = write_in_memory(block)?;
 

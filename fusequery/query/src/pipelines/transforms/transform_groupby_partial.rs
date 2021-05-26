@@ -256,7 +256,7 @@ impl IProcessor for GroupByPartialTransform {
         }
         columns.push(Arc::new(group_key_builder.finish()));
 
-        let block = DataBlock::create(self.schema.clone(), columns);
+        let block = DataBlock::create_by_array(self.schema.clone(), columns);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,

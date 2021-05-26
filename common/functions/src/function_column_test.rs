@@ -12,16 +12,15 @@ use crate::*;
 #[test]
 fn test_column_function() -> anyhow::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Boolean, false)]);
-    let block = DataBlock::create(schema.clone(), vec![Arc::new(BooleanArray::from(vec![
-        true, true, true, false,
-    ]))]);
+    let block =
+        DataBlock::create_by_array(schema.clone(), vec![Arc::new(BooleanArray::from(vec![
+            true, true, true, false,
+        ]))]);
 
     // Ok.
     {
         let col = ColumnFunction::try_create("a")?;
-        let columns = vec![DataColumnarValue::Array(
-            block.try_column_by_name("a")?.clone()
-        )];
+        let columns = vec![block.try_column_by_name("a")?.clone()];
         let _ = col.eval(&columns, block.num_rows())?;
     }
 

@@ -187,7 +187,7 @@ impl IProcessor for GroupByFinalTransform {
 
         let mut blocks = vec![];
         if !columns.is_empty() {
-            let block = DataBlock::create(self.schema.clone(), columns);
+            let block = DataBlock::create_by_array(self.schema.clone(), columns);
             blocks.push(block);
         }
 

@@ -12,7 +12,7 @@ fn test_data_block() -> anyhow::Result<()> {
 
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
 
-    let block = DataBlock::create(schema.clone(), vec![Arc::new(Int64Array::from(vec![
+    let block = DataBlock::create_by_array(schema.clone(), vec![Arc::new(Int64Array::from(vec![
         1, 2, 3,
     ]))]);
     assert_eq!(&schema, block.schema());

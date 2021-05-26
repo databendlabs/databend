@@ -132,7 +132,7 @@ impl ExpressionExecutor {
             project_columns.push(column.to_array()?);
         }
         // projection to remove unused columns
-        Ok(DataBlock::create(
+        Ok(DataBlock::create_by_array(
             self.output_schema.clone(),
             project_columns
         ))
