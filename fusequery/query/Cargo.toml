@@ -66,7 +66,7 @@ pretty_assertions = "0.7"
 criterion = "0.3"
 
 [build-dependencies]
-vergen = "5.1.7"
+vergen = "5.1.8"
 run_script = "^0.8.0"
 
 [[bench]]
