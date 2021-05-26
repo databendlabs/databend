@@ -284,11 +284,7 @@ pub struct MemStore {
     /// The current hard state.
     hs: RwLock<Option<HardState>>,
     /// The current snapshot.
-    current_snapshot: RwLock<Option<MemStoreSnapshot>>,
-
-    // Channels for publishing applied index
-    pub applied_tx: watch::Sender<u64>,
-    pub applied_rx: watch::Receiver<u64>
+    current_snapshot: RwLock<Option<MemStoreSnapshot>>
 }
 
 impl MemStore {
@@ -299,15 +295,12 @@ impl MemStore {
         let hs = RwLock::new(None);
         let current_snapshot = RwLock::new(None);
 
-        let (tx, rx) = watch::channel(0);
         Self {
             id,
             log,
             sm,
             hs,
-            current_snapshot,
-            applied_tx: tx,
-            applied_rx: rx
+            current_snapshot
         }
     }
 
@@ -324,16 +317,12 @@ impl MemStore {
         let sm = RwLock::new(sm);
         let hs = RwLock::new(hs);
         let current_snapshot = RwLock::new(current_snapshot);
-        // TODO: init applied tx
-        let (tx, rx) = watch::channel(0);
         Self {
             id,
             log,
             sm,
             hs,
-            current_snapshot,
-            applied_tx: tx,
-            applied_rx: rx
+            current_snapshot
         }
     }
 
@@ -465,9 +454,6 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
     ) -> Result<ClientResponse> {
         let mut sm = self.sm.write().await;
         let resp = sm.apply(*index, data)?;
-
-        self.applied_tx.send(*index)?;
-
         Ok(resp)
     }
 
@@ -476,7 +462,6 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
         let mut sm = self.sm.write().await;
         for (index, data) in entries {
             sm.apply(**index, data)?;
-            self.applied_tx.send(**index)?;
         }
         Ok(())
     }
