@@ -14,7 +14,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
@@ -31,8 +31,8 @@ type GroupFuncTable =
 type GroupKeyTable = RwLock<HashMap<Vec<u8>, Vec<DataValue>>>;
 
 pub struct GroupByFinalTransform {
-    aggr_exprs: Vec<ExpressionAction>,
-    group_exprs: Vec<ExpressionAction>,
+    aggr_exprs: Vec<Expression>,
+    group_exprs: Vec<Expression>,
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>,
     groups: GroupFuncTable,
@@ -42,8 +42,8 @@ pub struct GroupByFinalTransform {
 impl GroupByFinalTransform {
     pub fn create(
         schema: DataSchemaRef,
-        aggr_exprs: Vec<ExpressionAction>,
-        group_exprs: Vec<ExpressionAction>
+        aggr_exprs: Vec<Expression>,
+        group_exprs: Vec<Expression>
     ) -> Self {
         Self {
             aggr_exprs,

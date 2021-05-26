@@ -14,7 +14,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
@@ -25,16 +25,12 @@ use crate::pipelines::transforms::ExpressionExecutor;
 pub struct FilterTransform {
     input: Arc<dyn IProcessor>,
     executor: Arc<ExpressionExecutor>,
-    predicate: ExpressionAction,
+    predicate: Expression,
     having: bool
 }
 
 impl FilterTransform {
-    pub fn try_create(
-        schema: DataSchemaRef,
-        predicate: ExpressionAction,
-        having: bool
-    ) -> Result<Self> {
+    pub fn try_create(schema: DataSchemaRef, predicate: Expression, having: bool) -> Result<Self> {
         let mut fields = schema.fields().clone();
         fields.push(predicate.to_data_field(&schema)?);
 

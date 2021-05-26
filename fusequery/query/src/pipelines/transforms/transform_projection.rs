@@ -8,7 +8,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
@@ -25,7 +25,7 @@ impl ProjectionTransform {
     pub fn try_create(
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
-        exprs: Vec<ExpressionAction>
+        exprs: Vec<Expression>
     ) -> Result<Self> {
         let executor = ExpressionExecutor::try_create(input_schema, output_schema, exprs, true)?;
 

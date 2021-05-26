@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use crate::col;
-use crate::ExpressionAction;
+use crate::Expression;
 
-pub fn sort(name: &str, asc: bool, nulls_first: bool) -> ExpressionAction {
-    ExpressionAction::Sort {
+pub fn sort(name: &str, asc: bool, nulls_first: bool) -> Expression {
+    Expression::Sort {
         expr: Box::new(col(name)),
         asc,
         nulls_first
