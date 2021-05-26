@@ -149,14 +149,16 @@ impl IProcessor for GroupByPartialTransform {
                 for row in 0..block.num_rows() {
                     group_key.clear();
 
-                    let mut group_values = Vec::with_capacity(group_key.len());
                     for col in &group_columns {
                         DataValue::concat_row_to_one_key(col, row, &mut group_key)?;
-                        group_values.push(DataValue::try_from_array(col, row)?);
                     }
 
                     match group_indices.get_mut(&group_key) {
                         None => {
+                            let mut group_values = Vec::with_capacity(group_key.len());
+                            for col in &group_columns {
+                                group_values.push(DataValue::try_from_array(col, row)?);
+                            }
                             group_indices
                                 .insert(group_key.clone(), (vec![row as u32], group_values));
                         }
