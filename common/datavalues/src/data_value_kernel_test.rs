@@ -33,8 +33,8 @@ fn test_data_value_kernel_concat_row_key() -> anyhow::Result<()> {
             Arc::new(Float32Array::from(vec![4.0, 3.0])),
             Arc::new(Float64Array::from(vec![4.0, 3.0])),
         ],
-        expect: vec!["[2, 0, 0, 0, 0, 0, 0, 0, 120, 49, 1, 4, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 4, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 64, 0, 0, 0, 0, 0, 0, 16, 64]", 
-                     "[2, 0, 0, 0, 0, 0, 0, 0, 120, 50, 2, 3, 0, 3, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 3, 3, 0, 3, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 64, 64, 0, 0, 0, 0, 0, 0, 8, 64]", 
+        expect: vec!["[2, 0, 0, 0, 0, 0, 0, 0, 120, 49, 1, 4, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 4, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 64, 0, 0, 0, 0, 0, 0, 16, 64]",
+                     "[2, 0, 0, 0, 0, 0, 0, 0, 120, 50, 2, 3, 0, 3, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 3, 3, 0, 3, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 64, 64, 0, 0, 0, 0, 0, 0, 8, 64]",
         ],
         error: vec![""],
     }];
@@ -43,7 +43,11 @@ fn test_data_value_kernel_concat_row_key() -> anyhow::Result<()> {
         for row in 0..2 {
             let mut key: Vec<u8> = vec![];
             for col in 0..t.args.len() {
-                DataValue::concat_row_to_one_key(&t.args[col], row, &mut key)?;
+                DataValue::concat_row_to_one_key(
+                    &DataColumnarValue::Array(t.args[col].clone()),
+                    row,
+                    &mut key
+                )?;
             }
             assert_eq!(format!("{:?}", key), t.expect[row]);
         }
