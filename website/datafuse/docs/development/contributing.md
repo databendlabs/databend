@@ -16,7 +16,6 @@ Thank you.
 
     `SELECT * FROM system.contributors`
 
-
 ## Contributing
 
 To contribute to Datafuse, ensure that you have the latest version of the codebase, run the following:
