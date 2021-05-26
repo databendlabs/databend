@@ -341,18 +341,22 @@ impl PlanParser {
     }
 
     /// Generate a logic plan from an SQL select
+    /// For example:
+    /// "select sum(number+1)+2, number%3 as id from numbers(10) where number>1 group by id having id>1 order by id desc limit 3"
     fn select_to_plan(
         &self,
         select: &sqlparser::ast::Select,
         limit: &Option<sqlparser::ast::Expr>,
         order_by: &[OrderByExpr]
     ) -> Result<PlanNode> {
-        // From then Filter (also known as selection) first
+        // Filter expression
+        // In example: Filter=(number > 1)
         let plan = self
             .plan_tables_with_joins(&select.from)
             .and_then(|input| self.filter(&input, &select.selection))?;
 
-        // Projection expressions.
+        // Projection expression
+        // In example: Projection=[(sum((number + 1)) + 2), (number % 3) as id]
         let projection_exprs = select
             .projection
             .iter()
@@ -362,10 +366,12 @@ impl PlanParser {
             .flat_map(|expr| expand_wildcard(&expr, &plan.schema()))
             .collect::<Vec<ExpressionAction>>();
 
-        // aliase replacement for group by, having, sorting
+        // Aliases replacement for group by, having, sorting
+        // In example: Aliases=[("id", (number % 3))]
         let aliases = extract_aliases(&projection_exprs);
 
-        // Group by
+        // Group By expression after against aliases
+        // In example: GroupBy=[(number % 3)]
         let group_by_exprs = select
             .group_by
             .iter()
@@ -375,7 +381,8 @@ impl PlanParser {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        // Optionally the HAVING expression.
+        // Having Expression after against aliases
+        // In example: Having=((number % 3) > 1)
         let having_expr_opt = select
             .having
             .as_ref()
@@ -387,7 +394,8 @@ impl PlanParser {
             })
             .transpose()?;
 
-        // OrderBy expressions.
+        // OrderBy expression after against aliases
+        // In example: Sort=(number % 3)
         let order_by_exprs = order_by
             .iter()
             .map(|e| -> Result<ExpressionAction> {
@@ -414,27 +422,24 @@ impl PlanParser {
         }
 
         // All of the aggregate expressions (deduplicated).
+        // In example: aggr=[[sum((number + 1))]]
         let aggr_exprs = find_aggregate_exprs(&expression_exprs);
-        // Aggregator check.
-        let has_aggregator = aggr_exprs.len() + group_by_exprs.len() > 0;
 
-        // // Before group by
-        // println!(
-        //     "proj {:?}, agg: {:?}, group: {:?}",
-        //     projection_exprs, aggr_exprs, group_by_exprs
-        // );
-
-        let (plan, having_expr_post_aggr_opt) = if has_aggregator {
+        let has_aggr = aggr_exprs.len() + group_by_exprs.len() > 0;
+        let (plan, having_expr_post_aggr_opt) = if has_aggr {
             let aggr_projection_exprs = group_by_exprs
                 .iter()
                 .chain(aggr_exprs.iter())
                 .cloned()
                 .collect::<Vec<_>>();
 
-            let before_agg_exprs = expand_aggregate_arg_exprs(&aggr_projection_exprs);
+            let before_aggr_exprs = expand_aggregate_arg_exprs(&aggr_projection_exprs);
 
+            // Build aggregate inner expression plan and then aggregate&groupby plan.
+            // In example:
+            // inner expression=[(number + 1), (number % 3)]
             let plan = self
-                .expression(&plan, &before_agg_exprs, "Before GroupBy")
+                .expression(&plan, &before_aggr_exprs, "Before GroupBy")
                 .and_then(|input| self.aggregate(&input, &aggr_exprs, &group_by_exprs))?;
 
             // After aggregation, these are all of the columns that will be
@@ -444,8 +449,8 @@ impl PlanParser {
                 .map(|expr| expr_as_column_expr(expr))
                 .collect::<Result<Vec<_>>>()?;
 
-            // Rewrite the SELECT expression to use the columns produced by the
-            // aggregation.
+            // Rewrite the SELECT expression to use the columns produced by the aggregation.
+            // In example:[col("number + 1"), col("number % 3")]
             let select_exprs_post_aggr = expression_exprs
                 .iter()
                 .map(|expr| rebase_expr(expr, &aggr_projection_exprs))
@@ -836,10 +841,7 @@ impl PlanParser {
         // S2: Apply a final aggregator plan.
         PlanBuilder::from(&input)
             .aggregate_partial(&aggr_exprs, &group_by_exprs)
-            // TODO self.ctx.get_id().unwrap()
-            .and_then(|builder| {
-                builder.stage(self.ctx.get_id().unwrap(), StageState::AggregatorMerge)
-            })
+            .and_then(|builder| builder.stage(self.ctx.get_id()?, StageState::AggregatorMerge))
             .and_then(|builder| {
                 builder.aggregate_final(input.schema(), &aggr_exprs, &group_by_exprs)
             })
