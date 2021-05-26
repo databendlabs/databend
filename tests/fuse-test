@@ -194,8 +194,12 @@ def run_tests_array(all_tests_with_params):
                 else:
                     file_suffix = ('.' + str(os.getpid())) if is_concurrent and args.test_runs > 1 else ''
                     result_file = os.path.join(suite_dir, name) + '.result'
+                    cluster_result_file = os.path.join(suite_dir, name) + '_cluster.result'
                     stdout_file = os.path.join(suite_tmp_dir, name) + file_suffix + '.stdout'
                     stderr_file = os.path.join(suite_tmp_dir, name) + file_suffix + '.stderr'
+
+                    if args.mode == 'cluster' and os.path.isfile(cluster_result_file):
+                        result_file = cluster_result_file
 
                     proc, stdout, stderr, total_time = run_single_test(args, ext, client_options, case_file, stdout_file, stderr_file)
 
@@ -448,6 +452,7 @@ if __name__ == '__main__':
     parser.add_argument('--skip-dir', nargs='+', help="Skip all these tests in the dir")
     parser.add_argument('--run-dir', nargs='+', help="Only run these tests in the dir")
     parser.add_argument('--stop', action='store_true', default=None, dest='stop', help='Stop on network errors')
+    parser.add_argument('--mode', default='standalone', help='FuseQuery running mode, the value can be \'standalone\' or \'cluster\'')
 
     args = parser.parse_args()
 
