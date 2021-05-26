@@ -21,6 +21,27 @@ impl ScattersOptimizer {
         }
     }
 
+    fn converge_stage_if_scattered(&mut self, plan: &PlanNode, status: &mut Vec<OptimizeKind>) -> Result<PlanNode> {
+        match status.pop() {
+            None => {
+                status.push(OptimizeKind::Local);
+                Ok(plan.clone())
+            },
+            Some(OptimizeKind::Local) => {
+                status.push(OptimizeKind::Local);
+                Ok(plan.clone())
+            },
+            Some(OptimizeKind::Scattered) => {
+                status.push(OptimizeKind::Local);
+                Ok(PlanNode::Stage(StagePlan {
+                    kind: StageKind::Convergent,
+                    scatters_expr: ExpressionAction::Literal(DataValue::UInt64(Some(0))),
+                    input: Arc::new(plan.clone()),
+                }))
+            }
+        }
+    }
+
     fn optimize_read_plan(&mut self, plan: &ReadDataSourcePlan, status: &mut Vec<OptimizeKind>) -> Result<PlanNode> {
         let read_table = self.ctx.get_datasource()
             .get_table(plan.db.as_str(), plan.table.as_str())?;
@@ -127,6 +148,16 @@ impl IOptimizer for ScattersOptimizer {
                     rewritten_node = self.optimize_read_plan(plan, &mut status_rpn)?,
                 PlanNode::AggregatorPartial(plan) =>
                     rewritten_node = self.optimize_aggregator(plan, rewritten_node.clone(), &mut status_rpn)?,
+                PlanNode::Sort(plan) => {
+                    let mut new_plan = PlanNode::Sort(plan.clone());
+                    new_plan.set_inputs(vec![&rewritten_node]);
+                    rewritten_node = self.converge_stage_if_scattered(&new_plan, &mut status_rpn)?;
+                }
+                PlanNode::Limit(plan) => {
+                    let mut new_plan = PlanNode::Limit(plan.clone());
+                    new_plan.set_inputs(vec![&rewritten_node]);
+                    rewritten_node = self.converge_stage_if_scattered(&new_plan, &mut status_rpn)?;
+                }
                 _ => {
                     let mut clone_node = node.clone();
                     clone_node.set_inputs(vec![&rewritten_node]);
@@ -138,17 +169,7 @@ impl IOptimizer for ScattersOptimizer {
         })?;
 
         // We need to converge at the end
-        match status_rpn.pop() {
-            None => Ok(rewritten_node),
-            Some(OptimizeKind::Local) => Ok(rewritten_node),
-            Some(OptimizeKind::Scattered) => {
-                Ok(PlanNode::Stage(StagePlan {
-                    kind: StageKind::Convergent,
-                    scatters_expr: ExpressionAction::Literal(DataValue::UInt64(Some(0))),
-                    input: Arc::new(rewritten_node),
-                }))
-            }
-        }
+        self.converge_stage_if_scattered(&rewritten_node, &mut status_rpn)
     }
 }
 
