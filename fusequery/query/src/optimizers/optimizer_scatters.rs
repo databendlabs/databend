@@ -149,14 +149,12 @@ impl IOptimizer for ScattersOptimizer {
                 PlanNode::AggregatorPartial(plan) =>
                     rewritten_node = self.optimize_aggregator(plan, rewritten_node.clone(), &mut status_rpn)?,
                 PlanNode::Sort(plan) => {
-                    let mut new_plan = PlanNode::Sort(plan.clone());
-                    new_plan.set_inputs(vec![&rewritten_node]);
-                    rewritten_node = self.converge_stage_if_scattered(&new_plan, &mut status_rpn)?;
+                    rewritten_node = PlanNode::Sort(plan.clone());
+                    rewritten_node.set_inputs(vec![&self.converge_stage_if_scattered(&*plan.input, &mut status_rpn)?]);
                 }
                 PlanNode::Limit(plan) => {
-                    let mut new_plan = PlanNode::Limit(plan.clone());
-                    new_plan.set_inputs(vec![&rewritten_node]);
-                    rewritten_node = self.converge_stage_if_scattered(&new_plan, &mut status_rpn)?;
+                    rewritten_node = PlanNode::Limit(plan.clone());
+                    rewritten_node.set_inputs(vec![&self.converge_stage_if_scattered(&*plan.input, &mut status_rpn)?]);
                 }
                 _ => {
                     let mut clone_node = node.clone();
