@@ -61,6 +61,17 @@ fn test_logic_function() -> Result<()> {
             expect: Arc::new(BooleanArray::from(vec![true, true, true, true])),
             error: ""
         },
+        Test {
+            name: "not-passed",
+            func_name: "NotFunction",
+            display: "not",
+            nullable: false,
+            func: LogicNotFunction::try_create_func("".clone())?,
+            arg_names: vec!["a"],
+            columns: vec![Arc::new(BooleanArray::from(vec![true, false])).into()],
+            expect: Arc::new(BooleanArray::from(vec![false, true])),
+            error: ""
+        },
     ];
 
     for t in tests {

@@ -18,6 +18,14 @@ pub fn add(left: ExpressionAction, right: ExpressionAction) -> ExpressionAction 
     binary_expr(left, "+", right)
 }
 
+/// Not.
+pub fn not(other: ExpressionAction) -> ExpressionAction {
+    ExpressionAction::UnaryExpression {
+        op: "not".to_string(),
+        expr: Box::new(other)
+    }
+}
+
 /// Mod binary function.
 pub fn modular(left: ExpressionAction, right: ExpressionAction) -> ExpressionAction {
     binary_expr(left, "%", right)
@@ -40,7 +48,7 @@ pub fn avg(other: ExpressionAction) -> ExpressionAction {
 }
 
 impl ExpressionAction {
-    // And.
+    /// And.
     pub fn and(&self, other: ExpressionAction) -> ExpressionAction {
         binary_expr(self.clone(), "and", other)
     }
