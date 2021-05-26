@@ -82,7 +82,7 @@ impl IProcessor for AggregatorPartialTransform {
             for (idx, func) in funcs.iter_mut().enumerate() {
                 let mut arg_columns = vec![];
                 for name in arg_names[idx].iter() {
-                    arg_columns.push(block.try_column_by_name(name)?.clone().into());
+                    arg_columns.push(block.try_column_by_name(name)?.clone());
                 }
                 func.accumulate(&arg_columns, rows)?;
             }
