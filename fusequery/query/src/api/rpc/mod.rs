@@ -29,11 +29,53 @@ pub use flight_service_new::FuseQueryService;
 
 use common_exception::ErrorCodes;
 use tonic::Status;
+use tonic::Code;
+use common_exception::exception::ErrorCodesBacktrace;
+use std::sync::Arc;
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SerializedError {
+    code: u16,
+    message: String,
+    backtrace: String,
+}
 
 pub fn to_status(error: ErrorCodes) -> Status {
-    Status::internal(error.to_string())
+    let serialized_error_json = serde_json::to_string::<SerializedError>(
+        &SerializedError {
+            code: error.code(),
+            message: error.message(),
+            backtrace: error.backtrace_str(),
+        }
+    );
+
+    match serialized_error_json {
+        Ok(serialized_error_json) => Status::internal(serialized_error_json),
+        Err(error) => Status::unknown(error.to_string())
+    }
 }
 
 pub fn from_status(status: Status) -> ErrorCodes {
-    ErrorCodes::UnknownException(status.to_string())
+    match status.code() {
+        Code::Internal => {
+            match serde_json::from_str::<SerializedError>(&status.message()) {
+                Err(error) => ErrorCodes::from(error),
+                Ok(serialized_error) => {
+                    match serialized_error.backtrace.len() {
+                        0 => ErrorCodes::create(serialized_error.code, serialized_error.message, None),
+                        _ => {
+                            ErrorCodes::create(
+                                serialized_error.code,
+                                serialized_error.message,
+                                Some(ErrorCodesBacktrace::Serialized(
+                                    Arc::new(serialized_error.backtrace)
+                                )),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        _ => ErrorCodes::UnImplement(status.to_string())
+    }
 }

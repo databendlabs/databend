@@ -10,13 +10,33 @@ use std::fmt::Formatter;
 
 use backtrace::Backtrace;
 use thiserror::Error;
+use std::sync::Arc;
+
+#[derive(Clone)]
+pub enum ErrorCodesBacktrace {
+    Serialized(Arc<String>),
+    Origin(Arc<Backtrace>),
+}
+
+impl ToString for ErrorCodesBacktrace {
+    fn to_string(&self) -> String {
+        match self {
+            ErrorCodesBacktrace::Serialized(backtrace) => {
+                Arc::as_ref(backtrace).clone()
+            },
+            ErrorCodesBacktrace::Origin(backtrace) => {
+                format!("{:?}", backtrace)
+            }
+        }
+    }
+}
 
 #[derive(Error)]
 pub struct ErrorCodes {
     code: u16,
     display_text: String,
     cause: Option<Box<dyn std::error::Error + Sync + Send>>,
-    pub backtrace: Option<Backtrace>,
+    backtrace: Option<ErrorCodesBacktrace>,
 }
 
 impl ErrorCodes {
@@ -31,11 +51,15 @@ impl ErrorCodes {
             .unwrap_or_else(|| self.display_text.clone())
     }
 
-    pub fn backtrace(&self) -> String {
-        return match self.backtrace.as_ref() {
-            None => "".to_string(), // no backtrace
-            Some(backtrace) => format!("{:?}", backtrace)
-        };
+    pub fn backtrace(&self) -> Option<ErrorCodesBacktrace> {
+        self.backtrace.clone()
+    }
+
+    pub fn backtrace_str(&self) -> String {
+        match self.backtrace.as_ref() {
+            None => "".to_string(),
+            Some(backtrace) => backtrace.to_string()
+        }
     }
 }
 
@@ -51,11 +75,12 @@ macro_rules! build_exceptions {
             impl ErrorCodes {
                 $(
                 pub fn $body(display_text: impl Into<String>) -> ErrorCodes {
+                    let backtrace = Arc::new(Backtrace::new());
                     ErrorCodes {
                         code:$code,
                         display_text: display_text.into(),
                         cause: None,
-                        backtrace: Some(Backtrace::new()),
+                        backtrace: Some(ErrorCodesBacktrace::Origin(Arc::new(Backtrace::new()))),
                     }
                 })*
             }
@@ -92,22 +117,17 @@ build_exceptions! {
     UnknownTable(25),
     IllegalAggregateExp(26),
     UnknownAggregateFunction(27),
-    StageExists(28),
-    NotFoundStream(29),
-    BadColumnarType(30),
-    UnknownColumn(31),
-    BadScatterExpression(32),
-    EmptyDataFromServer(33),
-    NotFoundLocalNode(34),
-    PlanScheduleError(35),
-    BadPlanInputs(36),
-    DuplicateClusterNode(37),
-    NotFoundClusterNode(38),
-    BadAddressFormat(39),
-    DnsParseError(40),
-    CannotConnectNode(41),
-    BadDataArrayType(42),
-    DuplicateGetStream(43),
+    NotFoundStream(28),
+    EmptyDataFromServer(29),
+    NotFoundLocalNode(30),
+    PlanScheduleError(31),
+    BadPlanInputs(32),
+    DuplicateClusterNode(33),
+    NotFoundClusterNode(34),
+    BadAddressFormat(35),
+    DnsParseError(36),
+    CannotConnectNode(37),
+    DuplicateGetStream(38),
 
     UnknownException(1000),
     TokioError(1001)
@@ -128,7 +148,10 @@ impl Debug for ErrorCodes {
             None => Ok(()), // no backtrace
             Some(backtrace) => {
                 // TODO: Custom stack frame format for print
-                write!(f, "\n\n{:?}", backtrace)
+                match backtrace {
+                    ErrorCodesBacktrace::Origin(backtrace) => write!(f, "\n\n{:?}", backtrace),
+                    ErrorCodesBacktrace::Serialized(backtrace) => write!(f, "\n\n{:?}", backtrace)
+                }
             }
         }
     }
@@ -214,11 +237,11 @@ impl ErrorCodes {
             code: 1002,
             display_text: format!("{}", error),
             cause: None,
-            backtrace: Some(Backtrace::new()),
+            backtrace: Some(ErrorCodesBacktrace::Origin(Arc::new(Backtrace::new()))),
         }
     }
 
-    pub fn create(code: u16, display_text: String, backtrace: Option<Backtrace>) -> ErrorCodes {
+    pub fn create(code: u16, display_text: String, backtrace: Option<ErrorCodesBacktrace>) -> ErrorCodes {
         ErrorCodes {
             code,
             display_text,

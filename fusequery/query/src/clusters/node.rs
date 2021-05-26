@@ -151,7 +151,7 @@ impl ChannelGenerator {
 
         match &self.channel {
             (Some(channel), None) => Ok(channel.clone()),
-            (None, Some(error)) => Err(ErrorCodes::create(error.code(), error.message(), error.backtrace.clone())),
+            (None, Some(error)) => Err(ErrorCodes::create(error.code(), error.message(), error.backtrace())),
             _ => Err(ErrorCodes::LogicalError("Logical error: Unreachable code for ChannelGenerator.")),
         }
     }
@@ -169,7 +169,7 @@ impl ChannelGenerator {
 
                 match Channel::builder(uri).connect_with_connector(inner_connector).await {
                     Ok(channel) => Result::Ok(channel),
-                    Err(error) => Result::Err(ErrorCodes::CannotConnectNode(format!("Node address format is not parse: {}", error))),
+                    Err(error) => Result::Err(ErrorCodes::CannotConnectNode(format!("Cannot to RPC server: {}", error))),
                 }
             }
         }

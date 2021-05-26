@@ -46,7 +46,7 @@ impl<Hasher: std::hash::Hasher + Default> DataArrayHash<Hasher> {
             DataType::LargeUtf8 => Self::string_data_array_hash_with_array::<i64>(input),
             DataType::Binary => Self::binary_data_array_hash_with_array(input),
             DataType::LargeBinary => Self::large_binary_data_array_hash_with_array(input),
-            _ => Result::Err(ErrorCodes::BadDataArrayType("\
+            _ => Result::Err(ErrorCodes::BadDataValueType("\
                    DataArray Error: data_array_hash_with_array must be string type."))
         }
     }
@@ -56,7 +56,7 @@ impl<Hasher: std::hash::Hasher + Default> DataArrayHash<Hasher> {
             .as_any()
             .downcast_ref::<GenericStringArray<T>>()
             .ok_or_else(|| {
-                ErrorCodes::BadDataArrayType(format!(
+                ErrorCodes::BadDataValueType(format!(
                     "DataArray Error: Cannot downcast_array from datatype:{:?} item to:{}",
                     data.data_type(),
                     stringify!(GenericStringArray<T>)

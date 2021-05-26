@@ -18,6 +18,7 @@ use common_arrow::arrow_flight::flight_descriptor::DescriptorType;
 use common_datavalues::DataType;
 use common_arrow::arrow::ipc::convert;
 use warp::reply::Response;
+use crate::api::rpc::from_status;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_service_list_actions() -> Result<()> {
@@ -103,7 +104,10 @@ async fn test_do_get_stream() -> Result<()> {
     assert!(response.is_ok());
 
     let mut data_stream = response.unwrap().into_inner();
-    assert_eq!(data_stream.next().await.unwrap().unwrap_err().message(), "Code: 0, displayText = test_error_code.");
+    let error_codes = from_status(data_stream.next().await.unwrap().unwrap_err());
+    assert_eq!(error_codes.code(), 0);
+    assert_eq!(error_codes.message(), "test_error_code");
+
     assert_eq!(data_stream.next().await.unwrap().unwrap(), FlightData {
         flight_descriptor: None,
         data_header: vec![1],
