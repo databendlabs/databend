@@ -4,13 +4,14 @@
 
 use anyhow::anyhow;
 use anyhow::Result;
+use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
 use tonic::transport::Server;
 
-use crate::api::rpc::{FuseQueryService, FlightDispatcher};
+use crate::api::rpc::FlightDispatcher;
+use crate::api::rpc::FuseQueryService;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::sessions::SessionManagerRef;
-use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
 
 pub struct RpcService {
     conf: Config,
@@ -36,7 +37,7 @@ impl RpcService {
         let flight_dispatcher = FlightDispatcher::new(
             self.conf.clone(),
             self.cluster.clone(),
-            self.session_manager.clone(),
+            self.session_manager.clone()
         );
 
         // Flight service:

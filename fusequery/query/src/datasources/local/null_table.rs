@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -17,7 +18,6 @@ use common_streams::SendableDataBlockStream;
 
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
-use std::sync::Arc;
 
 pub struct NullTable {
     db: String,
@@ -59,14 +59,19 @@ impl ITable for NullTable {
         true
     }
 
-    fn read_plan(&self, _ctx: FuseQueryContextRef, scan: &ScanPlan, _partitions: usize) -> Result<ReadDataSourcePlan> {
+    fn read_plan(
+        &self,
+        _ctx: FuseQueryContextRef,
+        scan: &ScanPlan,
+        _partitions: usize
+    ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0,
+                version: 0
             }],
             statistics: Statistics::default(),
             description: format!("(Read from Null Engine table  {}.{})", self.db, self.name),

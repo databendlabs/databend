@@ -1,9 +1,18 @@
-use crate::sessions::FuseQueryContextRef;
-use crate::optimizers::IOptimizer;
-use common_planners::{PlanNode, EmptyPlan, StagePlan, ReadDataSourcePlan, AggregatorPartialPlan, StageKind, Statistics, ExpressionAction};
-use common_exception::Result;
-use common_datavalues::{DataSchema, DataValue};
 use std::sync::Arc;
+
+use common_datavalues::DataSchema;
+use common_datavalues::DataValue;
+use common_exception::Result;
+use common_planners::AggregatorPartialPlan;
+use common_planners::EmptyPlan;
+use common_planners::ExpressionAction;
+use common_planners::PlanNode;
+use common_planners::ReadDataSourcePlan;
+use common_planners::StageKind;
+use common_planners::StagePlan;
+
+use crate::optimizers::IOptimizer;
+use crate::sessions::FuseQueryContextRef;
 
 pub struct ScattersOptimizer {
     ctx: FuseQueryContextRef
@@ -11,44 +20,55 @@ pub struct ScattersOptimizer {
 
 enum OptimizeKind {
     Local,
-    Scattered,
+    Scattered
 }
 
 impl ScattersOptimizer {
     pub fn create(ctx: FuseQueryContextRef) -> Self {
-        ScattersOptimizer {
-            ctx
-        }
+        ScattersOptimizer { ctx }
     }
 
-    fn converge_stage_if_scattered(&mut self, plan: &PlanNode, status: &mut Vec<OptimizeKind>) -> Result<PlanNode> {
+    fn converge_stage_if_scattered(
+        &mut self,
+        plan: &PlanNode,
+        status: &mut Vec<OptimizeKind>
+    ) -> Result<PlanNode> {
         match status.pop() {
             None => {
                 status.push(OptimizeKind::Local);
                 Ok(plan.clone())
-            },
+            }
             Some(OptimizeKind::Local) => {
                 status.push(OptimizeKind::Local);
                 Ok(plan.clone())
-            },
+            }
             Some(OptimizeKind::Scattered) => {
                 status.push(OptimizeKind::Local);
                 Ok(PlanNode::Stage(StagePlan {
                     kind: StageKind::Convergent,
                     scatters_expr: ExpressionAction::Literal(DataValue::UInt64(Some(0))),
-                    input: Arc::new(plan.clone()),
+                    input: Arc::new(plan.clone())
                 }))
             }
         }
     }
 
-    fn optimize_read_plan(&mut self, plan: &ReadDataSourcePlan, status: &mut Vec<OptimizeKind>) -> Result<PlanNode> {
-        let read_table = self.ctx.get_datasource()
+    fn optimize_read_plan(
+        &mut self,
+        plan: &ReadDataSourcePlan,
+        status: &mut Vec<OptimizeKind>
+    ) -> Result<PlanNode> {
+        let read_table = self
+            .ctx
+            .get_datasource()
             .get_table(plan.db.as_str(), plan.table.as_str())?;
 
         let rows_threshold = self.ctx.get_min_distributed_rows()? as usize;
         let bytes_threshold = self.ctx.get_min_distributed_bytes()? as usize;
-        if read_table.is_local() && (plan.statistics.read_rows >= rows_threshold || plan.statistics.read_bytes >= bytes_threshold) {
+        if read_table.is_local()
+            && (plan.statistics.read_rows >= rows_threshold
+                || plan.statistics.read_bytes >= bytes_threshold)
+        {
             // TODO: Need implement blockNumber function.
             // We use the blockNumber function as the scatter expr.
             // This will be DataBlock based round robin scheduling.
@@ -57,9 +77,9 @@ impl ScattersOptimizer {
                 kind: StageKind::Expansive,
                 scatters_expr: ExpressionAction::ScalarFunction {
                     op: String::from("blockNumber"),
-                    args: vec![],
+                    args: vec![]
                 },
-                input: Arc::new(PlanNode::ReadSource(plan.clone())),
+                input: Arc::new(PlanNode::ReadSource(plan.clone()))
             }));
         }
 
@@ -75,7 +95,12 @@ impl ScattersOptimizer {
         Ok(PlanNode::ReadSource(plan.clone()))
     }
 
-    fn optimize_aggregator(&mut self, plan: &AggregatorPartialPlan, input: PlanNode, status: &mut Vec<OptimizeKind>) -> Result<PlanNode> {
+    fn optimize_aggregator(
+        &mut self,
+        plan: &AggregatorPartialPlan,
+        input: PlanNode,
+        status: &mut Vec<OptimizeKind>
+    ) -> Result<PlanNode> {
         if let Some(OptimizeKind::Local) = status.pop() {
             // Keep running in standalone mode
             // TODO We can estimate and evaluate the amount of data to decide whether to shuffle again
@@ -86,7 +111,7 @@ impl ScattersOptimizer {
                 group_expr: plan.group_expr.clone(),
                 aggr_expr: plan.aggr_expr.clone(),
                 schema: plan.schema.clone(),
-                input: Arc::new(input),
+                input: Arc::new(input)
             }));
         }
 
@@ -101,10 +126,10 @@ impl ScattersOptimizer {
                         group_expr: plan.group_expr.clone(),
                         aggr_expr: plan.aggr_expr.clone(),
                         schema: plan.schema.clone(),
-                        input: Arc::new(input),
-                    })),
+                        input: Arc::new(input)
+                    }))
                 }))
-            },
+            }
             _ => {
                 // Keep running in cluster mode
                 status.push(OptimizeKind::Scattered);
@@ -112,14 +137,14 @@ impl ScattersOptimizer {
                     kind: StageKind::Normal,
                     scatters_expr: ExpressionAction::ScalarFunction {
                         op: String::from("sipHash"),
-                        args: vec![ExpressionAction::Column(String::from("_group_by_key"))],
+                        args: vec![ExpressionAction::Column(String::from("_group_by_key"))]
                     },
                     input: Arc::new(PlanNode::AggregatorPartial(AggregatorPartialPlan {
                         group_expr: plan.group_expr.clone(),
                         aggr_expr: plan.aggr_expr.clone(),
                         schema: plan.schema.clone(),
-                        input: Arc::new(input),
-                    })),
+                        input: Arc::new(input)
+                    }))
                 }))
             }
         }
@@ -144,23 +169,30 @@ impl IOptimizer for ScattersOptimizer {
 
         plan.walk_postorder(|node| -> Result<bool> {
             match node {
-                PlanNode::ReadSource(plan) =>
-                    rewritten_node = self.optimize_read_plan(plan, &mut status_rpn)?,
-                PlanNode::AggregatorPartial(plan) =>
-                    rewritten_node = self.optimize_aggregator(plan, rewritten_node.clone(), &mut status_rpn)?,
+                PlanNode::ReadSource(plan) => {
+                    rewritten_node = self.optimize_read_plan(plan, &mut status_rpn)?
+                }
+                PlanNode::AggregatorPartial(plan) => {
+                    rewritten_node =
+                        self.optimize_aggregator(plan, rewritten_node.clone(), &mut status_rpn)?
+                }
                 PlanNode::Sort(plan) => {
                     let mut new_node = PlanNode::Sort(plan.clone());
-                    new_node.set_inputs(vec![&self.converge_stage_if_scattered(&rewritten_node, &mut status_rpn)?]);
+                    new_node.set_inputs(vec![
+                        &self.converge_stage_if_scattered(&rewritten_node, &mut status_rpn)?
+                    ])?;
                     rewritten_node = new_node;
                 }
                 PlanNode::Limit(plan) => {
                     let mut new_node = PlanNode::Limit(plan.clone());
-                    new_node.set_inputs(vec![&self.converge_stage_if_scattered(&rewritten_node, &mut status_rpn)?]);
+                    new_node.set_inputs(vec![
+                        &self.converge_stage_if_scattered(&rewritten_node, &mut status_rpn)?
+                    ])?;
                     rewritten_node = new_node;
                 }
                 _ => {
                     let mut clone_node = node.clone();
-                    clone_node.set_inputs(vec![&rewritten_node]);
+                    clone_node.set_inputs(vec![&rewritten_node])?;
                     rewritten_node = clone_node;
                 }
             };
@@ -172,4 +204,3 @@ impl IOptimizer for ScattersOptimizer {
         self.converge_stage_if_scattered(&rewritten_node, &mut status_rpn)
     }
 }
-

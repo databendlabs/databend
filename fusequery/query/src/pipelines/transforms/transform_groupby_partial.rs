@@ -188,7 +188,7 @@ impl IProcessor for GroupByPartialTransform {
                                 let arg_columns = args
                                     .iter()
                                     .map(|arg| {
-                                        take_block.try_column_by_name(arg).map(|c| c.clone().into())
+                                        take_block.try_column_by_name(arg).map(|c| c.clone())
                                     })
                                     .collect::<Result<Vec<DataColumnarValue>>>()?;
                                 func.accumulate(&arg_columns, rows)?;
@@ -205,7 +205,7 @@ impl IProcessor for GroupByPartialTransform {
                                     .2
                                     .iter()
                                     .map(|arg| {
-                                        take_block.try_column_by_name(arg).map(|c| c.clone().into())
+                                        take_block.try_column_by_name(arg).map(|c| c.clone())
                                     })
                                     .collect::<Result<Vec<DataColumnarValue>>>()?;
 

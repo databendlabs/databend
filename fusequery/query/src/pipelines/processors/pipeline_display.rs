@@ -5,11 +5,7 @@
 use std::fmt;
 use std::fmt::Display;
 
-use anyhow::anyhow;
-
 use crate::pipelines::processors::Pipeline;
-use crate::pipelines::processors::PipelineBuilder;
-use crate::pipelines::transforms::RemoteTransform;
 
 impl Pipeline {
     pub fn display_indent(&self) -> impl fmt::Display + '_ {
@@ -75,7 +71,11 @@ impl Pipeline {
                                 // })?;
 
                                 // TODO: We should output for every remote
-                                write!(f, "{} × {} processor(s)", name, ways/*, pipeline_display*/)?
+                                write!(
+                                    f,
+                                    "{} × {} processor(s)",
+                                    name, ways /*, pipeline_display*/
+                                )?
                             }
                             _ => {
                                 write!(

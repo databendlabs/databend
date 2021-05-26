@@ -2,13 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
 use common_exception::Result;
+
+use crate::clusters::Cluster;
+use crate::clusters::Node;
+use crate::configs::Config;
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::IOptimizer;
 use crate::sql::PlanParser;
-use crate::clusters::{Cluster, Node};
-use crate::configs::Config;
-use std::sync::Arc;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scatter_optimizer() -> Result<()> {
@@ -16,7 +19,7 @@ async fn test_scatter_optimizer() -> Result<()> {
     struct Test {
         name: &'static str,
         query: &'static str,
-        expect: &'static str,
+        expect: &'static str
     }
 
     let tests = vec![
@@ -157,7 +160,13 @@ async fn test_scatter_optimizer() -> Result<()> {
     for test in tests {
         let ctx = crate::tests::try_create_context()?;
         let cluster = Cluster::create_global(Config::default())?;
-        cluster.add_node(&String::from("Github"), 1, &String::from("www.github.com:9090")).await?;
+        cluster
+            .add_node(
+                &String::from("Github"),
+                1,
+                &String::from("www.github.com:9090")
+            )
+            .await?;
 
         ctx.with_cluster(cluster.clone());
         let plan = PlanParser::create(ctx.clone()).build_from_sql(test.query)?;

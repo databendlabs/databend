@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::{AggregatorFinalPlan, RemotePlan};
+use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
@@ -18,6 +18,7 @@ use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
+use crate::RemotePlan;
 use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
@@ -108,7 +109,7 @@ pub trait PlanVisitor<'plan> {
         self.visit_plan_node(plan.input.as_ref());
     }
 
-    fn visit_remote(&mut self, plan: &'plan RemotePlan) {}
+    fn visit_remote(&mut self, _: &'plan RemotePlan) {}
 
     fn visit_projection(&mut self, plan: &'plan ProjectionPlan) {
         self.visit_plan_node(plan.input.as_ref());

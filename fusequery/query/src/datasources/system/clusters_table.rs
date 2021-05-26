@@ -6,11 +6,12 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::{DataField, UInt16Array};
+use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::StringArray;
+use common_datavalues::UInt16Array;
 use common_datavalues::UInt8Array;
 use common_exception::Result;
 use common_planners::Partition;
@@ -22,11 +23,9 @@ use common_streams::SendableDataBlockStream;
 
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
-use clickhouse_srv::types::SqlType::UInt16;
-use std::iter::FromIterator;
 
 pub struct ClustersTable {
-    schema: DataSchemaRef,
+    schema: DataSchemaRef
 }
 
 impl ClustersTable {
@@ -64,14 +63,19 @@ impl ITable for ClustersTable {
         true
     }
 
-    fn read_plan(&self, _ctx: FuseQueryContextRef, scan: &ScanPlan, _partitions: usize) -> Result<ReadDataSourcePlan> {
+    fn read_plan(
+        &self,
+        _ctx: FuseQueryContextRef,
+        scan: &ScanPlan,
+        _partitions: usize
+    ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0,
+                version: 0
             }],
             statistics: Statistics::default(),
             description: "(Read from system.clusters table)".to_string(),
@@ -82,7 +86,10 @@ impl ITable for ClustersTable {
     async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
         let nodes = ctx.try_get_cluster()?.get_nodes()?;
         let names: Vec<&str> = nodes.iter().map(|x| x.name.as_str()).collect();
-        let hosts = nodes.iter().map(|x| x.address.hostname()).collect::<Vec<_>>();
+        let hosts = nodes
+            .iter()
+            .map(|x| x.address.hostname())
+            .collect::<Vec<_>>();
         let hostnames = hosts.iter().map(|x| x.as_str()).collect::<Vec<&str>>();
         let ports: Vec<u16> = nodes.iter().map(|x| x.address.port()).collect();
         let priorities: Vec<u8> = nodes.iter().map(|x| x.priority).collect();

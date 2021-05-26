@@ -5,8 +5,7 @@
 #[cfg(test)]
 mod siphash_test;
 
-mod hashes;
+mod hash;
 mod siphash;
 
-
-pub use hashes::HashesFunction;
+pub use hash::HashesFunction;

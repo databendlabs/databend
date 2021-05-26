@@ -18,7 +18,6 @@ pub struct AggregatorPartialPlan {
 }
 
 impl AggregatorPartialPlan {
-
     pub fn set_input(&mut self, node: &PlanNode) {
         self.input = Arc::new(node.clone());
     }

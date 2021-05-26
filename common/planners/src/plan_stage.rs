@@ -6,20 +6,21 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 
-use crate::{PlanNode, ExpressionAction};
+use crate::ExpressionAction;
+use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum StageKind {
     Normal,
     Expansive,
-    Convergent,
+    Convergent
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct StagePlan {
     pub kind: StageKind,
     pub input: Arc<PlanNode>,
-    pub scatters_expr: ExpressionAction,
+    pub scatters_expr: ExpressionAction
 }
 
 impl StagePlan {

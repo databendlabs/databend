@@ -2,22 +2,34 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::api::rpc::flight_service_new::FuseQueryService;
-use common_arrow::arrow_flight::flight_service_server::FlightService;
-use tonic::{Request, Status};
-use common_arrow::arrow_flight::{Empty, ActionType, Action, Ticket, FlightData, FlightDescriptor};
-use crate::api::rpc::flight_dispatcher::{Request as DispatcherRequest, PrepareStageInfo};
-use common_exception::{Result, ErrorCodes};
-use tokio_stream::StreamExt;
-use common_planners::{PlanNode, EmptyPlan};
 use std::sync::Arc;
-use common_arrow::arrow::datatypes::{Schema, Field};
-use crate::api::rpc::actions::ExecutePlanWithShuffleAction;
-use common_arrow::parquet::data_type::AsBytes;
-use common_arrow::arrow_flight::flight_descriptor::DescriptorType;
-use common_datavalues::DataType;
+
+use common_arrow::arrow::datatypes::Field;
+use common_arrow::arrow::datatypes::Schema;
 use common_arrow::arrow::ipc::convert;
+use common_arrow::arrow_flight::flight_descriptor::DescriptorType;
+use common_arrow::arrow_flight::flight_service_server::FlightService;
+use common_arrow::arrow_flight::Action;
+use common_arrow::arrow_flight::ActionType;
+use common_arrow::arrow_flight::Empty;
+use common_arrow::arrow_flight::FlightData;
+use common_arrow::arrow_flight::FlightDescriptor;
+use common_arrow::arrow_flight::Ticket;
+use common_arrow::parquet::data_type::AsBytes;
+use common_datavalues::DataType;
+use common_exception::ErrorCodes;
+use common_exception::Result;
+use common_planners::EmptyPlan;
+use common_planners::PlanNode;
+use tokio_stream::StreamExt;
+use tonic::Request;
+use tonic::Status;
 use warp::reply::Response;
+
+use crate::api::rpc::actions::ExecutePlanWithShuffleAction;
+use crate::api::rpc::flight_dispatcher::PrepareStageInfo;
+use crate::api::rpc::flight_dispatcher::Request as DispatcherRequest;
+use crate::api::rpc::flight_service_new::FuseQueryService;
 use crate::api::rpc::from_status;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -29,8 +41,15 @@ async fn test_service_list_actions() -> Result<()> {
     assert!(response.is_ok());
     let list_actions = response.unwrap().into_inner().collect::<Vec<_>>().await;
     assert_eq!(list_actions.len(), 1);
-    assert_eq!(list_actions[0].as_ref().unwrap().r#type, "PrepareQueryStage".to_string());
-    assert_eq!(list_actions[0].as_ref().unwrap().description, "Prepare a query stage that can be sent to the remote after receiving data from remote".to_string());
+    assert_eq!(
+        list_actions[0].as_ref().unwrap().r#type,
+        "PrepareQueryStage".to_string()
+    );
+    assert_eq!(
+        list_actions[0].as_ref().unwrap().description,
+        "Prepare a query stage that can be sent to the remote after receiving data from remote"
+            .to_string()
+    );
 
     Ok(())
 }
@@ -64,7 +83,9 @@ async fn test_prepare_query_stage() -> Result<()> {
 
     match response {
         Err(error) => assert!(false, "test_prepare_query_stage error: {:?}", error),
-        Ok(_) => join_handler.await.expect("Receive unexpect prepare stage info"),
+        Ok(_) => join_handler
+            .await
+            .expect("Receive unexpect prepare stage info")
     };
 
     Ok(())
@@ -84,23 +105,32 @@ async fn test_do_get_stream() -> Result<()> {
                 // Validate prepare stage info
                 assert_eq!(stream_id, "stream_id");
                 // Push some data
-                data_sender.send(Err(ErrorCodes::Ok("test_error_code".to_string()))).await;
-                data_sender.send(Ok(FlightData {
-                    flight_descriptor: None,
-                    data_header: vec![1],
-                    app_metadata: vec![2],
-                    data_body: vec![3],
-                })).await;
+                data_sender
+                    .send(Err(ErrorCodes::Ok("test_error_code".to_string())))
+                    .await;
+                data_sender
+                    .send(Ok(FlightData {
+                        flight_descriptor: None,
+                        data_header: vec![1],
+                        app_metadata: vec![2],
+                        data_body: vec![3]
+                    }))
+                    .await;
             }
             other => panic!("expect GetStream")
         }
     });
 
-    let response = service.do_get(
-        Request::new(Ticket { ticket: "stream_id".as_bytes().to_vec() })).await;
+    let response = service
+        .do_get(Request::new(Ticket {
+            ticket: "stream_id".as_bytes().to_vec()
+        }))
+        .await;
 
     // First:check error status
-    join_handler.await.expect("Receive unexpect prepare stage info");
+    join_handler
+        .await
+        .expect("Receive unexpect prepare stage info");
     assert!(response.is_ok());
 
     let mut data_stream = response.unwrap().into_inner();
@@ -112,7 +142,7 @@ async fn test_do_get_stream() -> Result<()> {
         flight_descriptor: None,
         data_header: vec![1],
         app_metadata: vec![2],
-        data_body: vec![3],
+        data_body: vec![3]
     });
     assert!(data_stream.next().await.is_none());
 
@@ -127,7 +157,13 @@ async fn test_do_get_schema() -> Result<()> {
         match receiver.recv().await.unwrap() {
             DispatcherRequest::GetSchema(stream_id, sender) => {
                 // To avoid deadlock, we first return the result
-                sender.send(Ok(Arc::new(Schema::new(vec![Field::new("field", DataType::Int8, true)])))).await;
+                sender
+                    .send(Ok(Arc::new(Schema::new(vec![Field::new(
+                        "field",
+                        DataType::Int8,
+                        true
+                    )]))))
+                    .await;
 
                 // Validate prepare stage info
                 assert_eq!(stream_id, "test_a/test_b");
@@ -136,21 +172,26 @@ async fn test_do_get_schema() -> Result<()> {
         }
     });
 
-    let response = service.get_schema(Request::new(
-        FlightDescriptor {
+    let response = service
+        .get_schema(Request::new(FlightDescriptor {
             r#type: DescriptorType::Path as i32,
             cmd: vec![],
-            path: vec!["test_a".to_string(), "test_b".to_string()],
-        }
-    )).await;
+            path: vec!["test_a".to_string(), "test_b".to_string()]
+        }))
+        .await;
 
     // First:check error status
-    join_handler.await.expect("Receive unexpect prepare stage info");
+    join_handler
+        .await
+        .expect("Receive unexpect prepare stage info");
     assert!(response.is_ok());
 
     let schema = convert::schema_from_bytes(&response.unwrap().into_inner().schema);
     assert!(schema.is_ok());
-    assert_eq!(schema.unwrap(), Schema::new(vec![Field::new("field", DataType::Int8, true)]));
+    assert_eq!(
+        schema.unwrap(),
+        Schema::new(vec![Field::new("field", DataType::Int8, true)])
+    );
 
     Ok(())
 }

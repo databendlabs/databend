@@ -2,11 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
 use common_datavalues::DataSchemaRef;
-
-use crate::{PlanNode, ExpressionAction};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct RemotePlan {

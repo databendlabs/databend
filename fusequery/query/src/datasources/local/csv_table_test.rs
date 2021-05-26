@@ -39,7 +39,7 @@ async fn test_csv_table() -> anyhow::Result<()> {
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "column1",
             DataType::UInt64,
-            false,
+            false
         )]),
         filters: vec![],
         limit: None
@@ -112,7 +112,7 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "column2",
             DataType::UInt64,
-            false,
+            false
         )]),
         filters: vec![],
         limit: None

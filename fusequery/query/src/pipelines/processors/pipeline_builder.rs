@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::{AggregatorFinalPlan, RemotePlan, EmptyPlan};
+use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
@@ -15,11 +15,12 @@ use common_planners::LimitPlan;
 use common_planners::PlanNode;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
+use common_planners::RemotePlan;
 use common_planners::SortPlan;
 use common_planners::StagePlan;
 use log::info;
 
-use crate::pipelines::processors::{Pipeline, EmptyProcessor};
+use crate::pipelines::processors::Pipeline;
 use crate::pipelines::transforms::AggregatorFinalTransform;
 use crate::pipelines::transforms::AggregatorPartialTransform;
 use crate::pipelines::transforms::ExpressionTransform;
@@ -94,8 +95,10 @@ impl PipelineBuilder {
         Ok(pipeline)
     }
 
-    fn visit_stage_plan(&self, pipeline: &mut Pipeline, plan: &&StagePlan) -> Result<bool> {
-        Result::Err(ErrorCodes::LogicalError("Logical Error: visit_stage_plan in pipeline_builder"))
+    fn visit_stage_plan(&self, _: &mut Pipeline, _: &&StagePlan) -> Result<bool> {
+        Result::Err(ErrorCodes::LogicalError(
+            "Logical Error: visit_stage_plan in pipeline_builder"
+        ))
     }
 
     fn visit_remote_plan(&self, pipeline: &mut Pipeline, plan: &&RemotePlan) -> Result<bool> {
@@ -104,7 +107,7 @@ impl PipelineBuilder {
                 self.ctx.clone(),
                 plan.fetch_name.clone(),
                 fetch_node.clone(),
-                plan.schema.clone(),
+                plan.schema.clone()
             )?))?;
         }
 
@@ -116,7 +119,7 @@ impl PipelineBuilder {
             Ok(Box::new(ExpressionTransform::try_create(
                 plan.input.schema(),
                 plan.schema.clone(),
-                plan.exprs.clone(),
+                plan.exprs.clone()
             )?))
         })?;
         Ok(true)
@@ -269,7 +272,7 @@ impl PipelineBuilder {
             let source = SourceTransform::try_create(
                 self.ctx.clone(),
                 plan.db.as_str(),
-                plan.table.as_str(),
+                plan.table.as_str()
             )?;
             pipeline.add_source(Arc::new(source))?;
         }

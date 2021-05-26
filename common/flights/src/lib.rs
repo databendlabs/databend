@@ -23,10 +23,10 @@ pub use store_do_action::ReadPlanActionResult;
 pub use store_do_action::StoreDoAction;
 pub use store_do_action::StoreDoActionResult;
 pub use store_do_get::StoreDoGet;
-pub use store_do_put::AppendResult;
 // TODO refine these
 pub use store_do_put::get_do_put_meta;
 pub use store_do_put::set_do_put_meta;
+pub use store_do_put::AppendResult;
 
 mod common;
 mod flight_token;

@@ -125,7 +125,6 @@ impl DataBlock {
             other_column_name => self.schema.index_of(other_column_name).ok()
         }
     }
-
 }
 
 impl TryFrom<DataBlock> for RecordBatch {

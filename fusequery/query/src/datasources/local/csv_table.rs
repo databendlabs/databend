@@ -4,6 +4,7 @@
 
 use std::any::Any;
 use std::fs::File;
+use std::sync::Arc;
 
 use anyhow::Context;
 use common_datavalues::DataSchemaRef;
@@ -19,7 +20,6 @@ use crate::datasources::local::CsvTableStream;
 use crate::datasources::Common;
 use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
-use std::sync::Arc;
 
 pub struct CsvTable {
     db: String,
@@ -78,7 +78,12 @@ impl ITable for CsvTable {
         true
     }
 
-    fn read_plan(&self, ctx: FuseQueryContextRef, scan: &ScanPlan, _partitions: usize) -> Result<ReadDataSourcePlan> {
+    fn read_plan(
+        &self,
+        ctx: FuseQueryContextRef,
+        scan: &ScanPlan,
+        _partitions: usize
+    ) -> Result<ReadDataSourcePlan> {
         let start_line: usize = if self.has_header { 1 } else { 0 };
         let file = &self.file;
         let lines_count = Common::count_lines(
@@ -86,7 +91,7 @@ impl ITable for CsvTable {
                 .with_context(|| format!("Cannot find file:{}", file))
                 .map_err(ErrorCodes::from)?
         )
-            .map_err(|e| ErrorCodes::CannotReadFile(e.to_string()))?;
+        .map_err(|e| ErrorCodes::CannotReadFile(e.to_string()))?;
 
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),

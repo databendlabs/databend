@@ -167,7 +167,7 @@ fn test_scatter_block() -> anyhow::Result<()> {
 
     let raw = DataBlock::create(schema.clone(), vec![
         DataColumnarValue::Array(Arc::new(Int64Array::from(vec![1, 2, 3]))),
-        DataColumnarValue::Array(Arc::new(Float64Array::from(vec![1., 2., 3.])))
+        DataColumnarValue::Array(Arc::new(Float64Array::from(vec![1., 2., 3.]))),
     ]);
 
     let mut builder = UInt64Builder::new(3);

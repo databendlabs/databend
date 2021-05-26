@@ -5,8 +5,10 @@
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
-use crate::{AggregatorFinalPlan, RemotePlan};
+use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
@@ -21,14 +23,13 @@ use crate::InsertIntoPlan;
 use crate::LimitPlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
+use crate::RemotePlan;
 use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::UseDatabasePlan;
-use common_exception::ErrorCodes;
-use common_exception::Result;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum PlanNode {
@@ -135,8 +136,8 @@ impl PlanNode {
     }
 
     pub fn set_inputs(&mut self, inputs: Vec<&PlanNode>) -> Result<()> {
-        if inputs.len() < 1 {
-            return Result::Err(ErrorCodes::BadPlanInputs("The plan set_input length must be greater than 1"));
+        if inputs.is_empty() {
+            return Result::Err(ErrorCodes::BadPlanInputs("Inputs must not be empty"));
         }
 
         match self {

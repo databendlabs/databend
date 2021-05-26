@@ -19,8 +19,8 @@ fn generate_partitions(workers: u64, total: u64) -> Partitions {
     let mut partitions = Vec::with_capacity(workers as usize);
     if part_size == 0 {
         partitions.push(Partition {
-            name: format!("{}-{}-{}", total, 0, total, ),
-            version: 0,
+            name: format!("{}-{}-{}", total, 0, total,),
+            version: 0
         })
     } else {
         for part in 0..workers {
@@ -30,8 +30,8 @@ fn generate_partitions(workers: u64, total: u64) -> Partitions {
                 part_end += part_remain;
             }
             partitions.push(Partition {
-                name: format!("{}-{}-{}", total, part_begin, part_end, ),
-                version: 0,
+                name: format!("{}-{}-{}", total, part_begin, part_end,),
+                version: 0
             })
         }
     }
@@ -58,7 +58,7 @@ fn test_projection_push_down_optimizer_1() -> anyhow::Result<()> {
     let plan = PlanNode::Projection(ProjectionPlan {
         expr: vec![col("a"), col("b"), col("c")],
         schema: output_schema,
-        input: Arc::from(PlanBuilder::from(&PlanNode::Empty(EmptyPlan { schema })).build()?),
+        input: Arc::from(PlanBuilder::from(&PlanNode::Empty(EmptyPlan { schema })).build()?)
     });
 
     let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
@@ -101,7 +101,7 @@ fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
     let total = ctx.get_max_block_size()? as u64;
     let statistics = Statistics {
         read_rows: total as usize,
-        read_bytes: ((total) * size_of::<u64>() as u64) as usize,
+        read_bytes: ((total) * size_of::<u64>() as u64) as usize
     };
     ctx.try_set_statistics(&statistics)?;
     let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
@@ -130,7 +130,7 @@ fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
     let plan = PlanNode::Projection(ProjectionPlan {
         expr: vec![col("a")],
         schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
-        input: Arc::from(filter_plan),
+        input: Arc::from(filter_plan)
     });
 
     let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
@@ -153,7 +153,7 @@ fn test_projection_push_down_optimizer_3() -> anyhow::Result<()> {
     let total = ctx.get_max_block_size()? as u64;
     let statistics = Statistics {
         read_rows: total as usize,
-        read_bytes: ((total) * size_of::<u64>() as u64) as usize,
+        read_bytes: ((total) * size_of::<u64>() as u64) as usize
     };
     ctx.try_set_statistics(&statistics)?;
     let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {

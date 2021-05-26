@@ -7,23 +7,21 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::sync::Arc;
 
 use backtrace::Backtrace;
 use thiserror::Error;
-use std::sync::Arc;
 
 #[derive(Clone)]
 pub enum ErrorCodesBacktrace {
     Serialized(Arc<String>),
-    Origin(Arc<Backtrace>),
+    Origin(Arc<Backtrace>)
 }
 
 impl ToString for ErrorCodesBacktrace {
     fn to_string(&self) -> String {
         match self {
-            ErrorCodesBacktrace::Serialized(backtrace) => {
-                Arc::as_ref(backtrace).clone()
-            },
+            ErrorCodesBacktrace::Serialized(backtrace) => Arc::as_ref(backtrace).clone(),
             ErrorCodesBacktrace::Origin(backtrace) => {
                 format!("{:?}", backtrace)
             }
@@ -36,7 +34,7 @@ pub struct ErrorCodes {
     code: u16,
     display_text: String,
     cause: Option<Box<dyn std::error::Error + Sync + Send>>,
-    backtrace: Option<ErrorCodesBacktrace>,
+    backtrace: Option<ErrorCodesBacktrace>
 }
 
 impl ErrorCodes {
@@ -75,7 +73,6 @@ macro_rules! build_exceptions {
             impl ErrorCodes {
                 $(
                 pub fn $body(display_text: impl Into<String>) -> ErrorCodes {
-                    let backtrace = Arc::new(Backtrace::new());
                     ErrorCodes {
                         code:$code,
                         display_text: display_text.into(),
@@ -189,14 +186,13 @@ impl Debug for OtherErrors {
     }
 }
 
-
 impl From<anyhow::Error> for ErrorCodes {
     fn from(error: anyhow::Error) -> Self {
         ErrorCodes {
             code: 1002,
             display_text: String::from(""),
             cause: Some(Box::new(OtherErrors::AnyHow { error })),
-            backtrace: None,
+            backtrace: None
         }
     }
 }
@@ -237,16 +233,20 @@ impl ErrorCodes {
             code: 1002,
             display_text: format!("{}", error),
             cause: None,
-            backtrace: Some(ErrorCodesBacktrace::Origin(Arc::new(Backtrace::new()))),
+            backtrace: Some(ErrorCodesBacktrace::Origin(Arc::new(Backtrace::new())))
         }
     }
 
-    pub fn create(code: u16, display_text: String, backtrace: Option<ErrorCodesBacktrace>) -> ErrorCodes {
+    pub fn create(
+        code: u16,
+        display_text: String,
+        backtrace: Option<ErrorCodesBacktrace>
+    ) -> ErrorCodes {
         ErrorCodes {
             code,
             display_text,
             cause: None,
-            backtrace,
+            backtrace
         }
     }
 }

@@ -2,13 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-
-use std::sync::Arc;
-
-use common_arrow::arrow::array::{ArrayRef, UInt32Builder, UInt64Builder};
 use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::ArrayRef;
+use common_arrow::arrow::array::UInt32Builder;
 use common_arrow::arrow::compute;
-use common_datavalues::{DataArrayMerge, DataArrayRef, DataArrayScatter};
+use common_datavalues::DataArrayMerge;
+use common_datavalues::DataArrayRef;
+use common_datavalues::DataArrayScatter;
 use common_datavalues::DataColumnarValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
@@ -18,7 +18,7 @@ use crate::DataBlock;
 pub struct SortColumnDescription {
     pub column_name: String,
     pub asc: bool,
-    pub nulls_first: bool,
+    pub nulls_first: bool
 }
 
 impl DataBlock {
@@ -69,14 +69,14 @@ impl DataBlock {
 
         Ok(DataBlock::create_by_array(
             first_block.schema().clone(),
-            arrays,
+            arrays
         ))
     }
 
     pub fn sort_block(
         block: &DataBlock,
         sort_columns_descriptions: &[SortColumnDescription],
-        limit: Option<usize>,
+        limit: Option<usize>
     ) -> Result<DataBlock> {
         let order_columns = sort_columns_descriptions
             .iter()
@@ -85,8 +85,8 @@ impl DataBlock {
                     values: block.try_array_by_name(&f.column_name)?.clone(),
                     options: Some(compute::SortOptions {
                         descending: !f.asc,
-                        nulls_first: f.nulls_first,
-                    }),
+                        nulls_first: f.nulls_first
+                    })
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -99,7 +99,7 @@ impl DataBlock {
         lhs: &DataBlock,
         rhs: &DataBlock,
         sort_columns_descriptions: &[SortColumnDescription],
-        limit: Option<usize>,
+        limit: Option<usize>
     ) -> Result<DataBlock> {
         if lhs.num_rows() == 0 {
             return Ok(rhs.clone());
@@ -123,7 +123,7 @@ impl DataBlock {
             .map(|f| {
                 Ok(compute::SortOptions {
                     descending: !f.asc,
-                    nulls_first: f.nulls_first,
+                    nulls_first: f.nulls_first
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -153,7 +153,7 @@ impl DataBlock {
     pub fn merge_sort_blocks(
         blocks: &[DataBlock],
         sort_columns_descriptions: &[SortColumnDescription],
-        limit: Option<usize>,
+        limit: Option<usize>
     ) -> Result<DataBlock> {
         match blocks.len() {
             0 => Result::Err(ErrorCodes::EmptyData("Can't merge empty blocks")),
@@ -162,25 +162,29 @@ impl DataBlock {
                 &blocks[0],
                 &blocks[1],
                 sort_columns_descriptions,
-                limit,
+                limit
             ),
             _ => {
                 let left = DataBlock::merge_sort_blocks(
                     &blocks[0..blocks.len() / 2],
                     sort_columns_descriptions,
-                    limit,
+                    limit
                 )?;
                 let right = DataBlock::merge_sort_blocks(
                     &blocks[blocks.len() / 2..blocks.len()],
                     sort_columns_descriptions,
-                    limit,
+                    limit
                 )?;
                 DataBlock::merge_sort_block(&left, &right, sort_columns_descriptions, limit)
             }
         }
     }
 
-    pub fn scatter_block(block: &DataBlock, indices: &DataArrayRef, scatter_size: usize) -> Result<Vec<DataBlock>> {
+    pub fn scatter_block(
+        block: &DataBlock,
+        indices: &DataArrayRef,
+        scatter_size: usize
+    ) -> Result<Vec<DataBlock>> {
         let columns_size = block.num_columns();
         let mut scattered_columns: Vec<Option<ArrayRef>> = vec![];
 
@@ -188,10 +192,11 @@ impl DataBlock {
 
         for column_index in 0..columns_size {
             let column = block.column(column_index).to_array()?;
-            let mut scattered_column = DataArrayScatter::scatter(&column, &indices, scatter_size)?;
+            let scattered_column = DataArrayScatter::scatter(&column, &indices, scatter_size)?;
 
             for scattered_index in 0..scattered_column.len() {
-                scattered_columns[scattered_index * columns_size + column_index] = Some(scattered_column[scattered_index].clone());
+                scattered_columns[scattered_index * columns_size + column_index] =
+                    Some(scattered_column[scattered_index].clone());
             }
         }
 
@@ -204,8 +209,9 @@ impl DataBlock {
             for scattered_column in &scattered_columns[begin_index..end_index] {
                 match scattered_column {
                     None => panic!(""),
-                    Some(scattered_column) => block_columns.push(
-                        DataColumnarValue::Array(scattered_column.clone())),
+                    Some(scattered_column) => {
+                        block_columns.push(DataColumnarValue::Array(scattered_column.clone()))
+                    }
                 };
             }
 

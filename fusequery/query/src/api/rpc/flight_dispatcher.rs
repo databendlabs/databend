@@ -3,34 +3,38 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashMap;
+use std::convert::TryInto;
+use std::sync::Arc;
 
-use tokio::runtime::Runtime;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
-
+use common_arrow::arrow::datatypes::SchemaRef;
+use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::FlightData;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::{PlanNode, ExpressionAction};
-
-use common_datavalues::{DataSchemaRef, DataColumnarValue};
-use common_arrow::arrow::datatypes::{SchemaRef, Schema, Field};
-use crate::pipelines::processors::{Pipeline, PipelineBuilder, IProcessor};
-use crate::configs::Config;
-use crate::clusters::ClusterRef;
-use crate::sessions::SessionManager;
-use crate::sessions::SessionManagerRef;
-use std::sync::Arc;
+use common_planners::ExpressionAction;
+use common_planners::PlanNode;
+use tokio::runtime::Runtime;
+use tokio::sync::mpsc::channel;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::Sender;
 use tokio_stream::StreamExt;
-use std::convert::TryInto;
-use tonic::Status;
-use tokio::sync::mpsc::error::SendError;
-use common_datablocks::DataBlock;
-use crate::pipelines::transforms::ExpressionTransform;
-use common_arrow::arrow::record_batch::RecordBatch;
+
 use crate::api::rpc::flight_scatter::FlightScatter;
+use crate::clusters::ClusterRef;
+use crate::configs::Config;
+use crate::pipelines::processors::Pipeline;
+use crate::pipelines::processors::PipelineBuilder;
+use crate::sessions::SessionManagerRef;
 
 #[derive(Debug)]
-pub struct PrepareStageInfo(pub String, pub String, pub PlanNode, pub Vec<String>, pub ExpressionAction);
+pub struct PrepareStageInfo(
+    pub String,
+    pub String,
+    pub PlanNode,
+    pub Vec<String>,
+    pub ExpressionAction
+);
 
 #[derive(Debug)]
 pub struct StreamInfo(pub DataSchemaRef, pub String, pub Vec<String>);
@@ -40,29 +44,29 @@ pub enum Request {
     GetStream(String, Sender<Result<Receiver<Result<FlightData>>>>),
     PrepareQueryStage(PrepareStageInfo, Sender<Result<()>>),
     GetStreamInfo(String, Sender<Result<StreamInfo>>),
-    TerminalStage(String, String),
+    TerminalStage(String, String)
 }
 
 pub struct QueryInfo {
-    pub runtime: Runtime,
+    pub runtime: Runtime
 }
 
 #[derive(Debug)]
 pub struct FlightStreamInfo {
     schema: DataSchemaRef,
     data_receiver: Option<Receiver<Result<FlightData>>>,
-    launcher_sender: Sender<()>,
+    launcher_sender: Sender<()>
 }
 
 pub struct DispatcherState {
     queries: HashMap<String, QueryInfo>,
-    streams: HashMap<String, FlightStreamInfo>,
+    streams: HashMap<String, FlightStreamInfo>
 }
 
 struct ServerState {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionManagerRef,
+    session_manager: SessionManagerRef
 }
 
 pub struct FlightDispatcher {
@@ -72,37 +76,41 @@ pub struct FlightDispatcher {
 impl FlightDispatcher {
     pub fn run(&self) -> Sender<Request> {
         let state = self.state.clone();
-        let (sender, mut receiver) = channel::<Request>(100);
+        let (sender, receiver) = channel::<Request>(100);
         let dispatch_sender = sender.clone();
         tokio::spawn(async move { Self::dispatch(state.clone(), receiver, dispatch_sender).await });
-        sender.clone()
+        sender
     }
 
     #[inline(always)]
-    async fn dispatch(state: Arc<ServerState>, mut receiver: Receiver<Request>, request_sender: Sender<Request>) {
+    async fn dispatch(
+        state: Arc<ServerState>,
+        mut receiver: Receiver<Request>,
+        request_sender: Sender<Request>
+    ) {
         let mut dispatcher_state = DispatcherState::create();
         while let Some(request) = receiver.recv().await {
             match request {
                 Request::GetStream(id, stream_receiver) => {
                     match dispatcher_state.streams.get_mut(&id) {
                         None => {
-                            stream_receiver.send(Err(
-                                ErrorCodes::NotFoundStream(format!(
+                            stream_receiver
+                                .send(Err(ErrorCodes::NotFoundStream(format!(
                                     "Stream {} is not found",
                                     id
-                                ))
-                            )).await;
-                        },
+                                ))))
+                                .await;
+                        }
                         Some(stream_info) => {
                             match stream_info.data_receiver.take() {
                                 None => {
-                                    stream_receiver.send(Err(
-                                        ErrorCodes::DuplicateGetStream(format!(
+                                    stream_receiver
+                                        .send(Err(ErrorCodes::DuplicateGetStream(format!(
                                             "Stream {} has been fetched once",
                                             id
-                                        ))
-                                    )).await;
-                                },
+                                        ))))
+                                        .await;
+                                }
                                 Some(receiver) => {
                                     stream_info.launcher_sender.send(()).await;
                                     stream_receiver.send(Ok(receiver)).await;
@@ -110,27 +118,51 @@ impl FlightDispatcher {
                             };
                         }
                     };
-                },
+                }
                 Request::GetSchema(id, schema_receiver) => {
                     match dispatcher_state.streams.get(&id) {
-                        Some(stream_info) => schema_receiver.send(Ok(stream_info.schema.clone())).await,
-                        None => schema_receiver.send(Err(ErrorCodes::NotFoundStream(format!("Stream {} is not found", id)))).await,
+                        Some(stream_info) => {
+                            schema_receiver.send(Ok(stream_info.schema.clone())).await
+                        }
+                        None => {
+                            schema_receiver
+                                .send(Err(ErrorCodes::NotFoundStream(format!(
+                                    "Stream {} is not found",
+                                    id
+                                ))))
+                                .await
+                        }
                     };
                 }
                 Request::PrepareQueryStage(info, response_sender) => {
-                    // println!("PrepareQueryStage: {:?}", &info);
-                    let mut pipeline = Self::create_plan_pipeline(&*state, &info.2);
-                    response_sender.send(Self::prepare_stage(&mut dispatcher_state, &info, pipeline, request_sender.clone())).await;
+                    let pipeline = Self::create_plan_pipeline(&*state, &info.2);
+                    response_sender
+                        .send(Self::prepare_stage(
+                            &mut dispatcher_state,
+                            &info,
+                            pipeline,
+                            request_sender.clone()
+                        ))
+                        .await;
                 }
                 Request::GetStreamInfo(id, stream_info_receiver) => {
                     match dispatcher_state.streams.get(&id) {
                         Some(stream_info) => {
-                            stream_info_receiver.send(Ok(StreamInfo(stream_info.schema.clone(), id, vec![]))).await
-                        },
-                        None => stream_info_receiver.send(Err(ErrorCodes::NotFoundStream(format!("Stream {} is not found", id)))).await,
+                            stream_info_receiver
+                                .send(Ok(StreamInfo(stream_info.schema.clone(), id, vec![])))
+                                .await
+                        }
+                        None => {
+                            stream_info_receiver
+                                .send(Err(ErrorCodes::NotFoundStream(format!(
+                                    "Stream {} is not found",
+                                    id
+                                ))))
+                                .await
+                        }
                     };
-                },
-                Request::TerminalStage(query_id, stage_id) => {
+                }
+                Request::TerminalStage(_, _) => {
                     // let stage_stream_prefix = format!("{}/{}", query_id, stage_id);
                     //
                     // let completed_streams = &dispatcher_state.streams
@@ -163,7 +195,12 @@ impl FlightDispatcher {
         // TODO: shutdown
     }
 
-    fn prepare_stage(state: &mut DispatcherState, info: &PrepareStageInfo, mut pipeline: Result<Pipeline>, request_sender: Sender<Request>) -> Result<()> {
+    fn prepare_stage(
+        state: &mut DispatcherState,
+        info: &PrepareStageInfo,
+        pipeline: Result<Pipeline>,
+        request_sender: Sender<Request>
+    ) -> Result<()> {
         if !state.queries.contains_key(&info.0) {
             fn build_runtime(max_threads: u64) -> Result<Runtime> {
                 tokio::runtime::Builder::new_multi_thread()
@@ -184,50 +221,66 @@ impl FlightDispatcher {
         let (launcher_sender, mut launcher_receiver) = channel(info.3.len());
         for stream_name in &info.3 {
             let stream_full_name = format!("{}/{}/{}", info.0, info.1, stream_name);
-            let (sender, stream_info) = FlightStreamInfo::create(&info.2.schema(), &launcher_sender);
+            let (sender, stream_info) =
+                FlightStreamInfo::create(&info.2.schema(), &launcher_sender);
             streams_data_sender.push(sender);
             state.streams.insert(stream_full_name, stream_info);
         }
 
         let query_id = info.0.clone();
         let stage_id = info.1.clone();
-        let mut pipeline = pipeline?;
-        let flight_scatter = FlightScatter::try_create(info.2.schema(), info.4.clone(), streams_data_sender.len())?;
-        let query_info = state.queries.get_mut(&info.0).expect("No exists query info");
+        let pipeline = pipeline?;
+        let flight_scatter =
+            FlightScatter::try_create(info.2.schema(), info.4.clone(), streams_data_sender.len())?;
+        let query_info = state
+            .queries
+            .get_mut(&info.0)
+            .expect("No exists query info");
 
         query_info.runtime.spawn(async move {
             let _ = launcher_receiver.recv().await;
 
-            if let Err(error) = Self::receive_data_and_push(pipeline, flight_scatter, streams_data_sender.clone()).await {
+            if let Err(error) =
+                Self::receive_data_and_push(pipeline, flight_scatter, streams_data_sender.clone())
+                    .await
+            {
                 for sender in streams_data_sender {
                     // TODO: backtrace
                     let clone_error = ErrorCodes::create(error.code(), error.message(), None);
-                    if let Err(send_error) = sender.send(Err(clone_error)).await {
+                    if sender.send(Err(clone_error)).await.is_err() {
                         // TODO: log to error
                     }
                 }
             }
 
             // Destroy Query Stage
-            request_sender.send(Request::TerminalStage(query_id, stage_id)).await;
+            request_sender
+                .send(Request::TerminalStage(query_id, stage_id))
+                .await;
         });
 
         Ok(())
     }
 
     fn create_plan_pipeline(state: &ServerState, plan: &PlanNode) -> Result<Pipeline> {
-        state.session_manager.clone()
+        state
+            .session_manager
+            .clone()
             .try_create_context()
             .and_then(|ctx| ctx.with_cluster(state.cluster.clone()))
             .and_then(|ctx| {
-                ctx.set_max_threads(state.conf.num_cpus);
-                PipelineBuilder::create(ctx.clone(), plan.clone()).build()
+                ctx.set_max_threads(state.conf.num_cpus)?;
+                PipelineBuilder::create(ctx, plan.clone()).build()
             })
     }
 
     // We need to always use the inline function to ensure that async/await state machine is simple enough
     #[inline(always)]
-    async fn receive_data_and_push(mut pipeline: Pipeline, flight_scatter: FlightScatter, senders: Vec<Sender<Result<FlightData>>>) -> Result<()> {
+    async fn receive_data_and_push(
+        mut pipeline: Pipeline,
+        flight_scatter: FlightScatter,
+        senders: Vec<Sender<Result<FlightData>>>
+    ) -> Result<()> {
         use common_arrow::arrow::ipc::writer::IpcWriteOptions;
         use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
 
@@ -248,18 +301,23 @@ impl FlightDispatcher {
         } else {
             while let Some(item) = pipeline_stream.next().await {
                 let block = item?;
-                let mut scattered_data = flight_scatter.execute(&block)?;
+                let scattered_data = flight_scatter.execute(&block)?;
 
                 for index in 0..scattered_data.len() {
                     if !scattered_data[index].is_empty() {
-                        let scattered_columns = scattered_data[index].columns()
+                        let scattered_columns = scattered_data[index]
+                            .columns()
                             .iter()
                             .map(|column| column.to_array())
                             .collect::<Result<Vec<_>>>()?;
 
-                        let record_batch = RecordBatch::try_new(scattered_data[index].schema().clone(), scattered_columns)?;
+                        let record_batch = RecordBatch::try_new(
+                            scattered_data[index].schema().clone(),
+                            scattered_columns
+                        )?;
                         let (dicts, values) = flight_data_from_arrow_batch(&record_batch, &options);
-                        let normalized_flight_data = dicts.into_iter().chain(std::iter::once(values));
+                        let normalized_flight_data =
+                            dicts.into_iter().chain(std::iter::once(values));
 
                         for flight_data in normalized_flight_data {
                             (&senders[index]).send(Ok(flight_data)).await;
@@ -272,12 +330,16 @@ impl FlightDispatcher {
         Ok(())
     }
 
-    pub fn new(conf: Config, cluster: ClusterRef, session_manager: SessionManagerRef) -> FlightDispatcher {
+    pub fn new(
+        conf: Config,
+        cluster: ClusterRef,
+        session_manager: SessionManagerRef
+    ) -> FlightDispatcher {
         FlightDispatcher {
             state: Arc::new(ServerState {
-                conf: conf,
-                cluster: cluster,
-                session_manager: session_manager,
+                conf,
+                cluster,
+                session_manager
             })
         }
     }
@@ -287,26 +349,34 @@ impl DispatcherState {
     pub fn create() -> DispatcherState {
         DispatcherState {
             queries: HashMap::new(),
-            streams: HashMap::new(),
+            streams: HashMap::new()
         }
     }
 }
 
 impl FlightStreamInfo {
-    pub fn create(schema: &SchemaRef, launcher_sender: &Sender<()>) -> (Sender<Result<FlightData>>, FlightStreamInfo) {
+    pub fn create(
+        schema: &SchemaRef,
+        launcher_sender: &Sender<()>
+    ) -> (Sender<Result<FlightData>>, FlightStreamInfo) {
         // TODO: Back pressure buffer size
-        let (sender, mut receive) = channel(5);
+        let (sender, receive) = channel(5);
         (sender, FlightStreamInfo {
             schema: schema.clone(),
             data_receiver: Some(receive),
-            launcher_sender: launcher_sender.clone(),
+            launcher_sender: launcher_sender.clone()
         })
     }
 }
 
 impl PrepareStageInfo {
-    pub fn create(query_id: String, stage_id: String, plan_node: PlanNode, scatters: Vec<String>, scatters_action: ExpressionAction) -> PrepareStageInfo {
+    pub fn create(
+        query_id: String,
+        stage_id: String,
+        plan_node: PlanNode,
+        scatters: Vec<String>,
+        scatters_action: ExpressionAction
+    ) -> PrepareStageInfo {
         PrepareStageInfo(query_id, stage_id, plan_node, scatters, scatters_action)
     }
 }
-

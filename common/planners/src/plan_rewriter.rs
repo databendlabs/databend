@@ -11,7 +11,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
-use crate::{AggregatorFinalPlan, RemotePlan};
+use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
@@ -28,6 +28,7 @@ use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
+use crate::RemotePlan;
 use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
@@ -84,7 +85,7 @@ pub trait PlanRewriter<'plan> {
 
     fn rewrite_aggregate_partial(
         &mut self,
-        plan: &'plan AggregatorPartialPlan,
+        plan: &'plan AggregatorPartialPlan
     ) -> Result<PlanNode> {
         Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan {
             schema: plan.schema.clone(),
@@ -99,7 +100,7 @@ pub trait PlanRewriter<'plan> {
             schema: plan.schema.clone(),
             aggr_expr: plan.aggr_expr.clone(),
             group_expr: plan.group_expr.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
@@ -111,7 +112,7 @@ pub trait PlanRewriter<'plan> {
         Ok(PlanNode::Stage(StagePlan {
             kind: plan.kind.clone(),
             scatters_expr: plan.scatters_expr.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
@@ -123,7 +124,7 @@ pub trait PlanRewriter<'plan> {
         Ok(PlanNode::Projection(ProjectionPlan {
             schema: plan.schema.clone(),
             expr: plan.expr.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
@@ -132,35 +133,35 @@ pub trait PlanRewriter<'plan> {
             schema: plan.schema.clone(),
             desc: plan.desc.clone(),
             exprs: plan.exprs.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
     fn rewrite_filter(&mut self, plan: &'plan FilterPlan) -> Result<PlanNode> {
         Ok(PlanNode::Filter(FilterPlan {
             predicate: plan.predicate.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
     fn rewrite_having(&mut self, plan: &'plan HavingPlan) -> Result<PlanNode> {
         Ok(PlanNode::Having(HavingPlan {
             predicate: plan.predicate.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
     fn rewrite_sort(&mut self, plan: &'plan SortPlan) -> Result<PlanNode> {
         Ok(PlanNode::Sort(SortPlan {
             order_by: plan.order_by.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
     fn rewrite_limit(&mut self, plan: &'plan LimitPlan) -> Result<PlanNode> {
         Ok(PlanNode::Limit(LimitPlan {
             n: plan.n,
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
     }
 
@@ -220,7 +221,7 @@ struct QueryAliasData {
     aliases: HashMap<String, ExpressionAction>,
     inside_aliases: HashSet<String>,
     // deepest alias current step in
-    current_alias: String,
+    current_alias: String
 }
 
 impl RewriteHelper {

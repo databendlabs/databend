@@ -2,25 +2,24 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_exception::{Result, ErrorCodes};
-use common_planners::{SelectPlan, PlanNode, StagePlan};
+use common_exception::ErrorCodes;
+use common_exception::Result;
+use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
 
+use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::interpreters::IInterpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizer;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
-use crate::api::FlightClient;
-use crate::api::ExecutePlanWithShuffleAction;
-use crate::interpreters::plan_scheduler::PlanScheduler;
-use std::collections::HashSet;
 
 pub struct SelectInterpreter {
     ctx: FuseQueryContextRef,
-    select: SelectPlan,
+    select: SelectPlan
 }
 
 impl SelectInterpreter {
@@ -43,9 +42,8 @@ impl IInterpreter for SelectInterpreter {
         let remote_actions_ref = &remote_actions;
         let prepare_error_handler = move |error: ErrorCodes, end: usize| {
             let mut killed_set = HashSet::new();
-            for index in 0..end {
-                let (node, _) = &remote_actions_ref[index];
-                if let None = killed_set.get(&node.name) {
+            for (node, _) in remote_actions_ref.iter().take(end) {
+                if killed_set.get(&node.name).is_none() {
                     // TODO: kill prepared query stage
                     killed_set.insert(node.name.clone());
                 }
@@ -55,11 +53,12 @@ impl IInterpreter for SelectInterpreter {
         };
 
         let timeout = self.ctx.get_flight_client_timeout()?;
-        for index in 0..remote_actions.len() {
-            let (node, action) = &remote_actions[index];
-
+        for (index, (node, action)) in remote_actions.iter().enumerate() {
             let mut flight_client = node.get_flight_client().await?;
-            if let Err(error) = flight_client.prepare_query_stage(action.clone(), timeout).await {
+            if let Err(error) = flight_client
+                .prepare_query_stage(action.clone(), timeout)
+                .await
+            {
                 return prepare_error_handler(error, index);
             }
         }
@@ -70,4 +69,3 @@ impl IInterpreter for SelectInterpreter {
             .await
     }
 }
-

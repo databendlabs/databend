@@ -2,24 +2,21 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::hash_map::DefaultHasher;
 use std::fmt;
-use std::ops::Deref;
 
-use common_arrow::arrow::compute;
-use common_datablocks::DataBlock;
-use common_datavalues::{DataColumnarValue, DataArrayHash};
+use common_datavalues::DataArrayHash;
+use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::IFunction;
-use std::collections::hash_map::DefaultHasher;
 
 #[derive(Clone)]
 pub struct SipHashFunction {
-    display_name: String,
+    display_name: String
 }
 
 impl SipHashFunction {
@@ -37,7 +34,9 @@ impl IFunction for SipHashFunction {
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
         if args.len() != 1 {
-            return Result::Err(ErrorCodes::BadArguments("Function Error: sipHash function args length must be 1"))
+            return Result::Err(ErrorCodes::BadArguments(
+                "Function Error: sipHash function args length must be 1"
+            ));
         }
 
         match args[0] {
@@ -45,7 +44,9 @@ impl IFunction for SipHashFunction {
             DataType::LargeUtf8 => Ok(DataType::UInt64),
             DataType::Binary => Ok(DataType::UInt64),
             DataType::LargeBinary => Ok(DataType::UInt64),
-            _ => Result::Err(ErrorCodes::BadArguments("Function Error: sipHash function argument must be String"))
+            _ => Result::Err(ErrorCodes::BadArguments(
+                "Function Error: sipHash function argument must be String"
+            ))
         }
     }
 

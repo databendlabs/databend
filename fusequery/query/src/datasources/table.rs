@@ -23,7 +23,12 @@ pub trait ITable: Sync + Send {
     // Is Local or Remote.
     fn is_local(&self) -> bool;
     // Get the read source plan.
-    fn read_plan(&self, ctx: FuseQueryContextRef, scan: &ScanPlan, partitions: usize) -> Result<ReadDataSourcePlan>;
+    fn read_plan(
+        &self,
+        ctx: FuseQueryContextRef,
+        scan: &ScanPlan,
+        partitions: usize
+    ) -> Result<ReadDataSourcePlan>;
     // Read block data from the underling.
     async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream>;
 

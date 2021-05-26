@@ -57,7 +57,12 @@ impl ITable for FunctionsTable {
         true
     }
 
-    fn read_plan(&self, _ctx: FuseQueryContextRef, scan: &ScanPlan, _partitions: usize) -> Result<ReadDataSourcePlan> {
+    fn read_plan(
+        &self,
+        _ctx: FuseQueryContextRef,
+        scan: &ScanPlan,
+        _partitions: usize
+    ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),

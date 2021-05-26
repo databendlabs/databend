@@ -18,7 +18,7 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::{CreateDatabasePlan, AggregatorFinalPlan};
+use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
@@ -544,7 +544,11 @@ impl PlanParser {
                 .and_then(|builder| builder.build())
                 .and_then(|dummy_scan_plan| match dummy_scan_plan {
                     PlanNode::Scan(ref dummy_scan_plan) => table
-                        .read_plan(self.ctx.clone(), dummy_scan_plan, self.ctx.get_max_threads()? as usize)
+                        .read_plan(
+                            self.ctx.clone(),
+                            dummy_scan_plan,
+                            self.ctx.get_max_threads()? as usize
+                        )
                         .map(PlanNode::ReadSource),
                     _unreachable_plan => panic!("Logical error: cannot downcast to scan plan")
                 })

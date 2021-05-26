@@ -12,11 +12,11 @@ use lazy_static::lazy_static;
 
 use crate::arithmetics::ArithmeticFunction;
 use crate::comparisons::ComparisonFunction;
+use crate::hashes::HashesFunction;
 use crate::logics::LogicFunction;
 use crate::strings::StringFunction;
 use crate::udfs::UdfFunction;
 use crate::IFunction;
-use crate::hashes::HashesFunction;
 
 pub struct FunctionFactory;
 pub type FactoryFunc = fn(name: &str) -> Result<Box<dyn IFunction>>;

@@ -12,7 +12,11 @@ async fn test_functions_table() -> anyhow::Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
     let table = FunctionsTable::create();
-    table.read_plan(ctx.clone(), &ScanPlan::empty(), ctx.get_max_threads()? as usize)?;
+    table.read_plan(
+        ctx.clone(),
+        &ScanPlan::empty(),
+        ctx.get_max_threads()? as usize
+    )?;
 
     let stream = table.read(ctx).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -48,7 +52,7 @@ async fn test_functions_table() -> anyhow::Result<()> {
         "| siphash    |",
         "| substring  |",
         "| totypename |",
-        "+------------+"
+        "+------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 

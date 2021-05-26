@@ -7,7 +7,8 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
-use crate::{Partitions, ScanPlan};
+use crate::Partitions;
+use crate::ScanPlan;
 use crate::Statistics;
 
 // TODO: Delete the scan plan field, but it depends on plan_parser:L394
@@ -19,7 +20,7 @@ pub struct ReadDataSourcePlan {
     pub partitions: Partitions,
     pub statistics: Statistics,
     pub description: String,
-    pub scan_plan: Arc<ScanPlan>,
+    pub scan_plan: Arc<ScanPlan>
 }
 
 impl ReadDataSourcePlan {
@@ -31,7 +32,7 @@ impl ReadDataSourcePlan {
             partitions: vec![],
             statistics: Statistics::default(),
             description: "".to_string(),
-            scan_plan: Arc::new(ScanPlan::empty()),
+            scan_plan: Arc::new(ScanPlan::empty())
         }
     }
 

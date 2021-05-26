@@ -2,12 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use warp::{Filter, Rejection};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 
-use crate::clusters::ClusterRef;
-use std::fmt::{Debug, Formatter};
 use common_exception::ErrorCodes;
 use warp::reject::Reject;
+use warp::Filter;
+
+use crate::clusters::ClusterRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct ClusterNodeRequest {
@@ -16,7 +18,7 @@ pub struct ClusterNodeRequest {
     // Larger value means higher
     // priority
     pub priority: u8,
-    pub address: String,
+    pub address: String
 }
 
 pub fn cluster_handler(
@@ -72,13 +74,9 @@ fn json_body() -> impl Filter<Extract = (ClusterNodeRequest,), Error = warp::Rej
 mod handlers {
     use log::info;
 
-    use crate::api::http::v1::cluster::{ClusterNodeRequest, NoBacktraceErrorCodes};
+    use crate::api::http::v1::cluster::ClusterNodeRequest;
+    use crate::api::http::v1::cluster::NoBacktraceErrorCodes;
     use crate::clusters::ClusterRef;
-    use crate::clusters::Node;
-    use common_infallible::RwLock;
-    use warp::reply::Response;
-    use warp::http::StatusCode;
-    use warp::Rejection;
 
     pub async fn list_node(
         cluster: ClusterRef
@@ -88,19 +86,26 @@ mod handlers {
         Ok(warp::reply::json(&nodes))
     }
 
-    pub async fn add_node(req: ClusterNodeRequest, cluster: ClusterRef) -> Result<impl warp::Reply, warp::Rejection> {
+    pub async fn add_node(
+        req: ClusterNodeRequest,
+        cluster: ClusterRef
+    ) -> Result<impl warp::Reply, warp::Rejection> {
         info!("Cluster add node: {:?}", req);
-        match cluster.add_node(&req.name, req.priority, &req.address).await {
-            Ok(_) => Ok(warp::reply::with_status("".to_string(), warp::http::StatusCode::OK)),
-            Err(error_codes) => {
-                Err(warp::reject::custom(NoBacktraceErrorCodes(error_codes)))
-            }
+        match cluster
+            .add_node(&req.name, req.priority, &req.address)
+            .await
+        {
+            Ok(_) => Ok(warp::reply::with_status(
+                "".to_string(),
+                warp::http::StatusCode::OK
+            )),
+            Err(error_codes) => Err(warp::reject::custom(NoBacktraceErrorCodes(error_codes)))
         }
     }
 
     pub async fn remove_node(
         req: ClusterNodeRequest,
-        cluster: ClusterRef,
+        cluster: ClusterRef
     ) -> Result<impl warp::Reply, std::convert::Infallible> {
         info!("Cluster remove node: {:?}", req);
         // TODO(BohuTANG): error handler

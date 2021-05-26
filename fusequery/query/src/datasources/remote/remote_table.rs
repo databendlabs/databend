@@ -66,7 +66,12 @@ impl ITable for RemoteTable {
         false
     }
 
-    fn read_plan(&self, _ctx: FuseQueryContextRef, _scan: &ScanPlan, _partitions: usize) -> Result<ReadDataSourcePlan> {
+    fn read_plan(
+        &self,
+        _ctx: FuseQueryContextRef,
+        _scan: &ScanPlan,
+        _partitions: usize
+    ) -> Result<ReadDataSourcePlan> {
         Result::Err(ErrorCodes::UnImplement(
             "RemoteTable read_plan not yet implemented"
         ))

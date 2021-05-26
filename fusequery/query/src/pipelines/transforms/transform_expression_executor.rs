@@ -55,7 +55,7 @@ impl ExpressionExecutor {
         for f in block.schema().fields().iter() {
             column_map.insert(
                 f.name().clone(),
-                block.try_column_by_name(f.name())?.clone().into()
+                block.try_column_by_name(f.name())?.clone()
             );
         }
 

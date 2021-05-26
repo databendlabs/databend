@@ -2,17 +2,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
 use anyhow::Result;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 
 use crate::plan_partition::Partition;
-use crate::{Partitions, ScanPlan};
+use crate::Partitions;
 use crate::PlanNode;
 use crate::ReadDataSourcePlan;
+use crate::ScanPlan;
 use crate::Statistics;
-use std::sync::Arc;
 
 pub struct Test {}
 

@@ -5,9 +5,9 @@
 use common_exception::Result;
 use common_planners::PlanNode;
 
+use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::ProjectionPushDownOptimizer;
 use crate::sessions::FuseQueryContextRef;
-use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 
 pub trait IOptimizer {
     fn name(&self) -> &str;
@@ -22,7 +22,7 @@ impl Optimizer {
     pub fn create(ctx: FuseQueryContextRef) -> Self {
         let optimizers: Vec<Box<dyn IOptimizer>> = vec![
             Box::new(ProjectionPushDownOptimizer::create(ctx.clone())),
-            Box::new(ScattersOptimizer::create(ctx.clone()))
+            Box::new(ScattersOptimizer::create(ctx)),
         ];
         Optimizer { optimizers }
     }

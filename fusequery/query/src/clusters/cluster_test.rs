@@ -12,16 +12,35 @@ use crate::clusters::node::Node;
 async fn test_add_node_with_local() -> Result<()> {
     let cluster = Cluster::empty();
 
-    cluster.add_node(&String::from("node1"), 5, &String::from("127.0.0.1:9001")).await?;
-    assert_eq!(cluster.get_node_by_name(String::from("node1"))?.local, false);
-    cluster.add_node(&String::from("node2"), 5, &String::from("127.0.0.1:9090")).await?;
+    cluster
+        .add_node(&String::from("node1"), 5, &String::from("127.0.0.1:9001"))
+        .await?;
+    assert_eq!(
+        cluster.get_node_by_name(String::from("node1"))?.local,
+        false
+    );
+    cluster
+        .add_node(&String::from("node2"), 5, &String::from("127.0.0.1:9090"))
+        .await?;
     assert_eq!(cluster.get_node_by_name(String::from("node2"))?.local, true);
-    cluster.add_node(&String::from("node3"), 5, &String::from("localhost:9090")).await?;
+    cluster
+        .add_node(&String::from("node3"), 5, &String::from("localhost:9090"))
+        .await?;
     assert_eq!(cluster.get_node_by_name(String::from("node3"))?.local, true);
-    cluster.add_node(&String::from("node4"), 5, &String::from("github.com:9001")).await?;
-    assert_eq!(cluster.get_node_by_name(String::from("node4"))?.local, false);
-    cluster.add_node(&String::from("node5"), 5, &String::from("github.com:9090")).await?;
-    assert_eq!(cluster.get_node_by_name(String::from("node5"))?.local, false);
+    cluster
+        .add_node(&String::from("node4"), 5, &String::from("github.com:9001"))
+        .await?;
+    assert_eq!(
+        cluster.get_node_by_name(String::from("node4"))?.local,
+        false
+    );
+    cluster
+        .add_node(&String::from("node5"), 5, &String::from("github.com:9090"))
+        .await?;
+    assert_eq!(
+        cluster.get_node_by_name(String::from("node5"))?.local,
+        false
+    );
 
     Ok(())
 }
@@ -30,8 +49,12 @@ async fn test_add_node_with_local() -> Result<()> {
 async fn test_add_node_with_clone() -> Result<()> {
     let cluster = Cluster::empty();
 
-    cluster.add_node(&String::from("node1"), 5, &String::from("127.0.0.1:9001")).await?;
-    cluster.add_node(&String::from("node2"), 5, &String::from("127.0.0.1:9002")).await?;
+    cluster
+        .add_node(&String::from("node1"), 5, &String::from("127.0.0.1:9001"))
+        .await?;
+    cluster
+        .add_node(&String::from("node2"), 5, &String::from("127.0.0.1:9002"))
+        .await?;
     assert_eq!(cluster.get_nodes()?.len(), 2);
 
     let cluster_clone = cluster.clone();
@@ -52,8 +75,12 @@ async fn test_add_node_with_clone() -> Result<()> {
 async fn test_add_node_with_query_cluster() -> Result<()> {
     let cluster = Cluster::empty();
 
-    cluster.add_node(&String::from("node1"), 5, &String::from("127.0.0.1:9001")).await?;
-    cluster.add_node(&String::from("node2"), 5, &String::from("127.0.0.1:9002")).await?;
+    cluster
+        .add_node(&String::from("node1"), 5, &String::from("127.0.0.1:9001"))
+        .await?;
+    cluster
+        .add_node(&String::from("node2"), 5, &String::from("127.0.0.1:9002"))
+        .await?;
     assert_eq!(cluster.get_nodes()?.len(), 2);
 
     let query_cluster = cluster.make_query_cluster();

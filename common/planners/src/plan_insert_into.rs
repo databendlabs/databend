@@ -10,7 +10,7 @@ use common_datavalues::DataSchemaRef;
 
 /// please do not keep this, this code is just for test purpose
 type BlockStream =
-std::pin::Pin<Box<dyn futures::stream::Stream<Item=DataBlock> + Sync + Send + 'static>>;
+    std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct InsertIntoPlan {
@@ -19,12 +19,13 @@ pub struct InsertIntoPlan {
     pub schema: DataSchemaRef,
 
     #[serde(skip, default = "InsertIntoPlan::empty_stream")]
-    pub input_stream: Arc<Mutex<Option<BlockStream>>>,
+    pub input_stream: Arc<Mutex<Option<BlockStream>>>
 }
 
 impl PartialEq for InsertIntoPlan {
     fn eq(&self, other: &Self) -> bool {
-        self.db_name == other.db_name && self.tbl_name == other.tbl_name
+        self.db_name == other.db_name
+            && self.tbl_name == other.tbl_name
             && self.schema == other.schema
     }
 }

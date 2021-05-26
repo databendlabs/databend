@@ -11,7 +11,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
 
-use crate::{col, StageKind};
+use crate::col;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::EmptyPlan;
@@ -28,7 +28,6 @@ use crate::RewriteHelper;
 use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SortPlan;
-use crate::StagePlan;
 
 pub enum AggregateMode {
     Partial,

@@ -40,15 +40,19 @@ impl NumberTestData {
     pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
         let datasource = crate::datasources::DataSource::try_create()?;
         let table = datasource.get_table(self.db, self.table)?;
-        table.read_plan(self.ctx.clone(), &ScanPlan {
-            schema_name: self.db.to_string(),
-            table_schema: Arc::new(DataSchema::empty()),
-            table_args: Some(ExpressionAction::Literal(DataValue::Int64(Some(numbers)))),
-            projection: None,
-            projected_schema: Arc::new(DataSchema::empty()),
-            filters: vec![],
-            limit: None
-        }, self.ctx.get_max_threads()? as usize)
+        table.read_plan(
+            self.ctx.clone(),
+            &ScanPlan {
+                schema_name: self.db.to_string(),
+                table_schema: Arc::new(DataSchema::empty()),
+                table_args: Some(ExpressionAction::Literal(DataValue::Int64(Some(numbers)))),
+                projection: None,
+                projected_schema: Arc::new(DataSchema::empty()),
+                filters: vec![],
+                limit: None
+            },
+            self.ctx.get_max_threads()? as usize
+        )
     }
 
     pub fn number_source_transform_for_test(&self, numbers: i64) -> Result<SourceTransform> {

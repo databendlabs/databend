@@ -2,4 +2,4 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-pub static METRIC_FLIGHT_EXECUTE_COST: &str = "flight.execute.cost";
+/*pub static METRIC_FLIGHT_EXECUTE_COST: &str = "flight.execute.cost";*/

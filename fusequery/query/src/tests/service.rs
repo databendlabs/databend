@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use anyhow::Result;
+use common_infallible::RwLock;
 use rand::Rng;
 
 use crate::api::RpcService;
@@ -12,7 +13,6 @@ use crate::configs::Config;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionManagerRef;
-use common_infallible::RwLock;
 
 /// Start services and return the random address.
 pub async fn try_start_service(nums: usize) -> Result<Vec<String>> {
@@ -39,7 +39,9 @@ pub async fn try_create_context_with_nodes(nums: usize) -> Result<FuseQueryConte
     let addrs = try_start_service(nums).await?;
     let ctx = crate::tests::try_create_context()?;
     for (i, addr) in addrs.iter().enumerate() {
-        ctx.try_get_cluster()?.add_node(&format!("node{}", i), 10, addr).await?;
+        ctx.try_get_cluster()?
+            .add_node(&format!("node{}", i), 10, addr)
+            .await?;
     }
     Ok(ctx)
 }
@@ -55,7 +57,9 @@ pub async fn try_create_context_with_nodes_and_priority(
     let addrs = try_start_service(nums).await?;
     let ctx = crate::tests::try_create_context()?;
     for (i, addr) in addrs.iter().enumerate() {
-        ctx.try_get_cluster()?.add_node(&format!("node{}", i), p[i], addr).await?;
+        ctx.try_get_cluster()?
+            .add_node(&format!("node{}", i), p[i], addr)
+            .await?;
     }
     Ok(ctx)
 }
