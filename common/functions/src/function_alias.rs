@@ -38,6 +38,14 @@ impl IFunction for AliasFunction {
     fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
         Ok(columns[0].clone())
     }
+
+    fn num_arguments(&self) -> usize {
+        1
+    }
+
+    fn variadic_arguments(&self) -> Option<(usize, usize)> {
+        None
+    }
 }
 
 impl fmt::Display for AliasFunction {

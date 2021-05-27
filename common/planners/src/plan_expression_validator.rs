@@ -50,7 +50,8 @@ fn validate_function_arg(func: Box<dyn IFunction>, args: &[Expression]) -> Resul
         Some((start, end)) => {
             return if args.len() < start || args.len() > end {
                 Err(ErrorCodes::NumberArgumentsNotMatch(format!(
-                    "Expect to have [{}, {}) arguments, but got {}",
+                    "{} expect to have [{}, {}) arguments, but got {}",
+                    func.name(),
                     start,
                     end,
                     args.len()
@@ -63,7 +64,8 @@ fn validate_function_arg(func: Box<dyn IFunction>, args: &[Expression]) -> Resul
             let num = func.num_arguments();
             return if num != args.len() {
                 Err(ErrorCodes::NumberArgumentsNotMatch(format!(
-                    "Expect to have {} arguments, but got {}",
+                    "{} expect to have {} arguments, but got {}",
+                    func.name(),
                     num,
                     args.len()
                 )))
@@ -74,23 +76,15 @@ fn validate_function_arg(func: Box<dyn IFunction>, args: &[Expression]) -> Resul
     }
 }
 
+// Can works before expression,filter,having in PlanBuilder
 pub fn validate_expression(expr: &Expression) -> Result<()> {
     let validator = ExpressionValidator::new(&|expr: &Expression| match expr {
-        Expression::UnaryExpression { op, expr } => {
-            let func = FunctionFactory::get(op)?;
-            let args = vec![*expr.clone()];
-            validate_function_arg(func, &args)
-        }
-        Expression::BinaryExpression { left, op, right } => {
-            let func = FunctionFactory::get(op)?;
-            let args = vec![*left.clone(), *right.clone()];
-            validate_function_arg(func, &args)
-        }
         Expression::ScalarFunction { op, args } => {
             let func = FunctionFactory::get(op)?;
             validate_function_arg(func, args)
         }
 
+        // Currently no need to check  UnaryExpression and BinaryExpression
         // todo: AggregateFunction validation after generic AggregateFunctions
         _ => Ok(())
     });

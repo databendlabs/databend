@@ -14,7 +14,7 @@ pub trait IFunction: fmt::Display + Sync + Send + DynClone {
     fn name(&self) -> &str;
 
     fn num_arguments(&self) -> usize {
-        return 0;
+        0
     }
 
     // (1, 3) means we only accept [1, 3) arguments

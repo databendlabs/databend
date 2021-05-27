@@ -90,6 +90,14 @@ impl IFunction for ArithmeticFunction {
             }
         }
     }
+
+    fn num_arguments(&self) -> usize {
+        0
+    }
+
+    fn variadic_arguments(&self) -> Option<(usize, usize)> {
+        Some((1, 3))
+    }
 }
 
 impl fmt::Display for ArithmeticFunction {

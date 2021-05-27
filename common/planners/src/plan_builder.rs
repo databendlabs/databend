@@ -226,6 +226,7 @@ impl PlanBuilder {
 
     /// Apply a filter
     pub fn filter(&self, expr: Expression) -> Result<Self> {
+        validate_expression(&expr)?;
         Ok(Self::from(&PlanNode::Filter(FilterPlan {
             predicate: expr,
             input: Arc::new(self.plan.clone())
@@ -234,6 +235,7 @@ impl PlanBuilder {
 
     /// Apply a having
     pub fn having(&self, expr: Expression) -> Result<Self> {
+        validate_expression(&expr)?;
         Ok(Self::from(&PlanNode::Having(HavingPlan {
             predicate: expr,
             input: Arc::new(self.plan.clone())
