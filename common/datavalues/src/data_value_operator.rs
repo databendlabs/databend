@@ -8,7 +8,9 @@ pub enum DataValueAggregateOperator {
     Max,
     Sum,
     Avg,
-    Count
+    Count,
+    ArgMin,
+    ArgMax
 }
 
 impl std::fmt::Display for DataValueAggregateOperator {
@@ -18,7 +20,9 @@ impl std::fmt::Display for DataValueAggregateOperator {
             DataValueAggregateOperator::Max => "max",
             DataValueAggregateOperator::Sum => "sum",
             DataValueAggregateOperator::Avg => "avg",
-            DataValueAggregateOperator::Count => "count"
+            DataValueAggregateOperator::Count => "count",
+            DataValueAggregateOperator::ArgMin => "argMin",
+            DataValueAggregateOperator::ArgMax => "ArgMax"
         };
         write!(f, "{}", display)
     }
