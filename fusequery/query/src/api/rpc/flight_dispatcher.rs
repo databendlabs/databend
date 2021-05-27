@@ -15,7 +15,6 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_planners::PlanNode;
 use log::error;
-use tokio::runtime::Runtime;
 use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::Sender;
@@ -26,6 +25,7 @@ use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::processors::PipelineBuilder;
+use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionManagerRef;
 
 #[derive(Debug)]
@@ -45,11 +45,7 @@ pub enum Request {
     GetStream(String, Sender<Result<Receiver<Result<FlightData>>>>),
     PrepareQueryStage(Box<PrepareStageInfo>, Sender<Result<()>>),
     GetStreamInfo(String, Sender<Result<StreamInfo>>),
-    TerminalStage(String, String)
-}
-
-pub struct QueryInfo {
-    pub runtime: Runtime
+    TerminalStage(FuseQueryContextRef, String)
 }
 
 #[derive(Debug)]
@@ -60,7 +56,6 @@ pub struct FlightStreamInfo {
 }
 
 pub struct DispatcherState {
-    queries: HashMap<String, QueryInfo>,
     streams: HashMap<String, FlightStreamInfo>
 }
 
@@ -124,33 +119,10 @@ impl FlightDispatcher {
                         error!("Cannot push: {}", error);
                     }
                 }
-                Request::TerminalStage(_, _) => {
-                    // let stage_stream_prefix = format!("{}/{}", query_id, stage_id);
-                    //
-                    // let completed_streams = &dispatcher_state.streams
-                    //     .iter()
-                    //     .filter(|(id, _)| id.starts_with(&stage_stream_prefix))
-                    //     .collect::<Vec<_>>();
-                    //
-                    // for (stream_id, _) in completed_streams {
-                    //     dispatcher_state.streams.remove(stream_id);
-                    // }
-                    //
-                    // let query_stream_prefix = format!("{}/", query_id);
-                    // if let None = dispatcher_state.streams
-                    //     .iter()
-                    //     .filter(|(id, _)| id.starts_with(&query_stream_prefix))
-                    //     .next() {
-                    //     // Destroy runtime
-                    //     println!("Destroy runtime when : {:?}", &dispatcher_state.streams);
-                    //
-                    //     match dispatcher_state.queries.remove(&query_id) {
-                    //         None => {}
-                    //         Some(query_info) => {
-                    //             query_info.runtime.shutdown_background();
-                    //         }
-                    //     };
-                    // }
+                Request::TerminalStage(context, _) => {
+                    if let Err(error) = state.session_manager.try_remove_context(context) {
+                        error!("Terminal Stage error: {}", error);
+                    }
                 }
             };
         }
@@ -202,25 +174,9 @@ impl FlightDispatcher {
     fn prepare_stage(
         state: &mut DispatcherState,
         info: &PrepareStageInfo,
-        pipeline: Result<Pipeline>,
+        pipeline: Result<(FuseQueryContextRef, Pipeline)>,
         request_sender: Sender<Request>
     ) -> Result<()> {
-        if !state.queries.contains_key(&info.0) {
-            fn build_runtime(max_threads: u64) -> Result<Runtime> {
-                tokio::runtime::Builder::new_multi_thread()
-                    .enable_all()
-                    .worker_threads(max_threads as usize)
-                    .build()
-                    .map_err(|tokio_error| ErrorCodes::TokioError(format!("{}", tokio_error)))
-            }
-
-            // TODO: max_threads
-            match build_runtime(8) {
-                Err(e) => return Err(e),
-                Ok(runtime) => state.queries.insert(info.0.clone(), QueryInfo { runtime })
-            };
-        }
-
         let mut streams_data_sender = vec![];
         let (launcher_sender, mut launcher_receiver) = channel(info.3.len());
         for stream_name in &info.3 {
@@ -231,17 +187,13 @@ impl FlightDispatcher {
             state.streams.insert(stream_full_name, stream_info);
         }
 
-        let query_id = info.0.clone();
         let stage_id = info.1.clone();
-        let pipeline = pipeline?;
+        let (context, pipeline) = pipeline?;
         let flight_scatter =
             FlightScatter::try_create(info.2.schema(), info.4.clone(), streams_data_sender.len())?;
-        let query_info = state
-            .queries
-            .get_mut(&info.0)
-            .expect("No exists query info");
 
-        query_info.runtime.spawn(async move {
+        let stage_context = context.clone();
+        stage_context.execute_task(async move {
             let _ = launcher_receiver.recv().await;
 
             if let Err(error) =
@@ -266,14 +218,17 @@ impl FlightDispatcher {
 
             // Destroy Query Stage
             let _ = request_sender
-                .send(Request::TerminalStage(query_id, stage_id))
+                .send(Request::TerminalStage(context, stage_id))
                 .await;
         });
 
         Ok(())
     }
 
-    fn create_plan_pipeline(state: &ServerState, plan: &PlanNode) -> Result<Pipeline> {
+    fn create_plan_pipeline(
+        state: &ServerState,
+        plan: &PlanNode
+    ) -> Result<(FuseQueryContextRef, Pipeline)> {
         state
             .session_manager
             .clone()
@@ -281,7 +236,9 @@ impl FlightDispatcher {
             .and_then(|ctx| ctx.with_cluster(state.cluster.clone()))
             .and_then(|ctx| {
                 ctx.set_max_threads(state.conf.num_cpus)?;
-                PipelineBuilder::create(ctx, plan.clone()).build()
+                PipelineBuilder::create(ctx.clone(), plan.clone())
+                    .build()
+                    .map(move |pipeline| (ctx, pipeline))
             })
     }
 
@@ -367,7 +324,6 @@ impl FlightDispatcher {
 impl DispatcherState {
     pub fn create() -> DispatcherState {
         DispatcherState {
-            queries: HashMap::new(),
             streams: HashMap::new()
         }
     }
