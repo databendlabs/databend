@@ -107,7 +107,11 @@ impl IAggregateFunction for AggregateArgMinFunction {
     }
 
     fn merge_result(&self) -> Result<DataValue> {
-        Ok(self.state.clone())
+        Ok(if let DataValue::Struct(state) = self.state.clone() {
+            state[0].clone()
+        } else {
+            self.state.clone()
+        })
     }
 }
 

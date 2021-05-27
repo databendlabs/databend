@@ -18,13 +18,14 @@ pub struct AggregatorFunction;
 impl AggregatorFunction {
     pub fn register(map: FactoryFuncRef) -> Result<()> {
         let mut map = map.write();
+        // FuseQuery always uses lowercase function names to get functions.
         map.insert("count", AggregateCountFunction::try_create);
         map.insert("min", AggregateMinFunction::try_create);
         map.insert("max", AggregateMaxFunction::try_create);
         map.insert("sum", AggregateSumFunction::try_create);
         map.insert("avg", AggregateAvgFunction::try_create);
-        map.insert("argMin", AggregateArgMinFunction::try_create);
-        map.insert("argMax", AggregateArgMaxFunction::try_create);
+        map.insert("argmin", AggregateArgMinFunction::try_create);
+        map.insert("argmax", AggregateArgMaxFunction::try_create);
         Ok(())
     }
 }
