@@ -38,8 +38,12 @@ impl MemEngine {
     ) -> anyhow::Result<i64> {
         // TODO: support plan.engine plan.options
         let curr = self.dbs.get(&cmd.db_name);
-        if curr.is_some() && if_not_exists {
-            return Err(anyhow::anyhow!("database exists"));
+        if let Some(curr) = curr {
+            return if if_not_exists {
+                Ok(curr.db_id)
+            } else {
+                Err(anyhow::anyhow!("{} database exists", cmd.db_name))
+            };
         }
 
         let mut db = cmd
@@ -80,8 +84,12 @@ impl MemEngine {
             .table_name_to_id
             .get(&cmd.table_name);
 
-        if table_id.is_some() && if_not_exists {
-            return Err(Status::already_exists("table exists"));
+        if let Some(table_id) = table_id {
+            return if if_not_exists {
+                Ok(*table_id)
+            } else {
+                Err(Status::already_exists("table exists"))
+            };
         }
 
         let mut table = cmd
