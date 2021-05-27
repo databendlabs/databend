@@ -12,6 +12,7 @@ use common_datavalues::DataType;
 use common_exception::Result;
 
 use crate::col;
+use crate::validate_expression;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::EmptyPlan;
@@ -81,6 +82,11 @@ impl PlanBuilder {
             }
             _ => projection_exprs.push(v.clone())
         });
+
+        // Let's validate the expressions firstly
+        for expr in projection_exprs.iter() {
+            validate_expression(expr)?;
+        }
 
         // Merge fields.
         let fields = RewriteHelper::exprs_to_fields(&projection_exprs, &input_schema)?;
