@@ -29,7 +29,7 @@ impl SipHashFunction {
 
 impl IFunction for SipHashFunction {
     fn name(&self) -> &str {
-        "sipHash"
+        "siphash"
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
@@ -45,7 +45,7 @@ impl IFunction for SipHashFunction {
             DataType::Binary => Ok(DataType::UInt64),
             DataType::LargeBinary => Ok(DataType::UInt64),
             _ => Result::Err(ErrorCodes::BadArguments(
-                "Function Error: sipHash function argument must be String"
+                "Function Error: sipHash function argument must be String or Binary"
             ))
         }
     }
@@ -61,6 +61,6 @@ impl IFunction for SipHashFunction {
 
 impl fmt::Display for SipHashFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "sipHash")
+        write!(f, "siphash")
     }
 }

@@ -208,9 +208,13 @@ impl DataBlock {
             let mut block_columns = vec![];
             for scattered_column in &scattered_columns[begin_index..end_index] {
                 match scattered_column {
-                    None => panic!(""),
+                    None => {
+                        return Err(ErrorCodes::LogicalError(
+                            "Logical Error: scattered column is None."
+                        ));
+                    }
                     Some(scattered_column) => {
-                        block_columns.push(DataColumnarValue::Array(scattered_column.clone()))
+                        block_columns.push(DataColumnarValue::Array(scattered_column.clone()));
                     }
                 };
             }

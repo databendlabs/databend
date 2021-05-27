@@ -69,29 +69,3 @@ async fn test_add_node_with_clone() -> Result<()> {
 
     Ok(())
 }
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_add_node_with_query_cluster() -> Result<()> {
-    let cluster = Cluster::empty();
-
-    cluster
-        .add_node(&String::from("node1"), 5, &String::from("127.0.0.1:9001"))
-        .await?;
-    cluster
-        .add_node(&String::from("node2"), 5, &String::from("127.0.0.1:9002"))
-        .await?;
-    assert_eq!(cluster.get_nodes()?.len(), 2);
-
-    let query_cluster = cluster.make_query_cluster();
-    assert_eq!(query_cluster.get_nodes()?.len(), 2);
-
-    query_cluster.remove_node("node1".to_string())?;
-    assert_eq!(cluster.get_nodes()?.len(), 2);
-    assert_eq!(query_cluster.get_nodes()?.len(), 1);
-
-    cluster.remove_node("node2".to_string())?;
-    assert_eq!(cluster.get_nodes()?.len(), 1);
-    assert_eq!(query_cluster.get_nodes()?.len(), 1);
-
-    Ok(())
-}

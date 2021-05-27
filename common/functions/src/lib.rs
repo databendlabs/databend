@@ -18,7 +18,6 @@ mod logics;
 mod strings;
 mod udfs;
 
-pub use arithmetics::ArithmeticModuloFunction;
 pub use expressions::CastFunction;
 pub use function::IFunction;
 pub use function_alias::AliasFunction;

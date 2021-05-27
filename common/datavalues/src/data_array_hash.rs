@@ -45,7 +45,9 @@ impl<Hasher: std::hash::Hasher + Default> DataArrayHash<Hasher> {
                     Ok(DataValue::UInt64(Some(hasher.finish())))
                 }
             },
-            _ => Result::Err(ErrorCodes::BadDataValueType(""))
+            _ => Result::Err(ErrorCodes::BadDataValueType(
+                "DataArray Error: data_array_hash_with_array must be string or binary type."
+            ))
         }
     }
 
@@ -56,8 +58,7 @@ impl<Hasher: std::hash::Hasher + Default> DataArrayHash<Hasher> {
             DataType::Binary => Self::binary_data_array_hash_with_array(input),
             DataType::LargeBinary => Self::large_binary_data_array_hash_with_array(input),
             _ => Result::Err(ErrorCodes::BadDataValueType(
-                "\
-                   DataArray Error: data_array_hash_with_array must be string type."
+                " DataArray Error: data_array_hash_with_array must be string or binary type."
             ))
         }
     }

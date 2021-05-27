@@ -39,13 +39,6 @@ impl Cluster {
         })
     }
 
-    pub fn make_query_cluster(&self) -> ClusterRef {
-        Arc::new(Cluster {
-            local_port: 9090,
-            nodes: Mutex::new(self.nodes.lock().clone())
-        })
-    }
-
     pub fn is_empty(&self) -> Result<bool> {
         Ok(self.nodes.lock().len() == 0)
     }

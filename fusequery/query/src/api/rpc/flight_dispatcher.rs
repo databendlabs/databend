@@ -45,7 +45,7 @@ pub enum Request {
     GetStream(String, Sender<Result<Receiver<Result<FlightData>>>>),
     PrepareQueryStage(Box<PrepareStageInfo>, Sender<Result<()>>),
     GetStreamInfo(String, Sender<Result<StreamInfo>>),
-    TerminalStage(FuseQueryContextRef, String)
+    TerminalStage(FuseQueryContextRef, String, String)
 }
 
 #[derive(Debug)]
@@ -119,7 +119,12 @@ impl FlightDispatcher {
                         error!("Cannot push: {}", error);
                     }
                 }
-                Request::TerminalStage(context, _) => {
+                Request::TerminalStage(context, query_id, stage_id) => {
+                    let stage_stream_prefix = format!("{}/{}", query_id, stage_id);
+                    dispatcher_state
+                        .streams
+                        .retain(|name, _| !name.starts_with(&stage_stream_prefix));
+
                     if let Err(error) = state.session_manager.try_remove_context(context) {
                         error!("Terminal Stage error: {}", error);
                     }
@@ -187,6 +192,7 @@ impl FlightDispatcher {
             state.streams.insert(stream_full_name, stream_info);
         }
 
+        let query_id = info.0.clone();
         let stage_id = info.1.clone();
         let (context, pipeline) = pipeline?;
         let flight_scatter =
@@ -201,24 +207,24 @@ impl FlightDispatcher {
                     .await
             {
                 for sender in &streams_data_sender {
-                    // TODO: backtrace
-                    let clone_error = ErrorCodes::create(error.code(), error.message(), None);
+                    let clone_error =
+                        ErrorCodes::create(error.code(), error.message(), error.backtrace());
+
                     if sender.send(Err(clone_error)).await.is_err() {
-                        // TODO: log to error
+                        error!("Cannot push: {}", error);
                     }
                 }
             }
 
             for _ in 0..(streams_data_sender.len() - 1) {
                 if launcher_receiver.recv().await.is_none() {
-                    println!("launcher receiver.");
                     break;
                 }
             }
 
             // Destroy Query Stage
             let _ = request_sender
-                .send(Request::TerminalStage(context, stage_id))
+                .send(Request::TerminalStage(context, query_id, stage_id))
                 .await;
         });
 

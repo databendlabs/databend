@@ -80,7 +80,6 @@ impl DataArrayScatter {
         nums: usize
     ) -> Result<Vec<DataArrayRef>> {
         match data.data_type() {
-            // DataType::Boolean => {},
             DataType::Int8 => Self::scatter_primitive_data::<Int8Type>(data, indices, nums),
             DataType::Int16 => Self::scatter_primitive_data::<Int16Type>(data, indices, nums),
             DataType::Int32 => Self::scatter_primitive_data::<Int32Type>(data, indices, nums),
@@ -139,14 +138,6 @@ impl DataArrayScatter {
             DataType::LargeBinary => Self::scatter_large_binary_data(data, indices, nums),
             DataType::Utf8 => Self::scatter_string_data::<i32>(data, indices, nums),
             DataType::LargeUtf8 => Self::scatter_string_data::<i64>(data, indices, nums),
-            // DataType::Decimal(_, _) => {},
-            // DataType::FixedSizeBinary(i32) => {},
-            // DataType::List(Box < Field>) => {},
-            // DataType::FixedSizeList(Box<Field>, i32) => {},
-            // DataType::LargeList(Box<Field>) => {},
-            // DataType::Struct(Vec<Field>) => {},
-            // DataType::Union(Vec<Field>) => {},
-            // DataType::Dictionary(Box<DataType>, Box<DataType>) => {},
             _ => Result::Err(ErrorCodes::BadDataValueType(format!(
                 "DataType:{:?} does not implement scatter",
                 stringify!(PrimitiveArray<T>)

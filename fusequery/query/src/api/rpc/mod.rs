@@ -14,7 +14,6 @@ mod flight_data_stream;
 mod flight_dispatcher;
 mod flight_scatter;
 mod flight_service_new;
-mod metrics;
 
 use std::sync::Arc;
 

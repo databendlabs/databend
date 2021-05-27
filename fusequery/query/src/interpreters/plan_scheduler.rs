@@ -269,8 +269,6 @@ impl ReadSourceGetNodePlan {
                 }
             }
 
-            // println!("Reschedule partitions: {:?}", nodes_partitions);
-
             let nested_getter = RemoteReadSourceGetNodePlan(
                 new_read_source_plan,
                 Arc::new(nodes_partitions),
