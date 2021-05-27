@@ -1,4 +1,4 @@
-name: Stateless Tests(Cluster)
+name: Stateless(Cluster)
 on: [push, pull_request]
 
 env:
@@ -6,6 +6,7 @@ env:
 
 jobs:
   build:
+    name: "Tests"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2

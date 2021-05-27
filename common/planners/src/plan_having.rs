@@ -6,13 +6,13 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 
-use crate::ExpressionAction;
+use crate::Expression;
 use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct HavingPlan {
     /// The predicate expression, which must have Boolean type.
-    pub predicate: ExpressionAction,
+    pub predicate: Expression,
     /// The incoming logical plan
     pub input: Arc<PlanNode>
 }

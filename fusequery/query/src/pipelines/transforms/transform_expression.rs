@@ -7,16 +7,14 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_functions::IFunction;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
-
+use crate::pipelines::transforms::ExpressionExecutor;
 /// Executes certain expressions over the block and append the result column to the new block.
 /// Aims to transform a block to another format, such as add one or more columns against the Expressions.
 ///
@@ -32,34 +30,23 @@ use crate::pipelines::processors::IProcessor;
 /// So the final block:
 /// |number|c1|c2|
 pub struct ExpressionTransform {
-    // Against Functions.
-    funcs: Vec<Box<dyn IFunction>>,
     // The final schema(Build by plan_builder.expression).
-    schema: DataSchemaRef,
-    input: Arc<dyn IProcessor>
+    input: Arc<dyn IProcessor>,
+    executor: Arc<ExpressionExecutor>
 }
 
 impl ExpressionTransform {
-    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionAction>) -> Result<Self> {
-        let mut funcs = vec![];
-
-        for expr in &exprs {
-            let func = expr.to_function()?;
-            if func.is_aggregator() {
-                return Result::Err(ErrorCodes::BadTransformType(
-                    format!(
-                        "Aggregate function {} is found in ExpressionTransform, should AggregatorTransform",
-                        func
-                    )
-                ));
-            }
-            funcs.push(func);
-        }
+    pub fn try_create(
+        input_schema: DataSchemaRef,
+        output_schema: DataSchemaRef,
+        exprs: Vec<Expression>
+    ) -> Result<Self> {
+        let executor = ExpressionExecutor::try_create(input_schema, output_schema, exprs, false)?;
+        executor.validate()?;
 
         Ok(ExpressionTransform {
-            funcs,
-            schema,
-            input: Arc::new(EmptyProcessor::create())
+            input: Arc::new(EmptyProcessor::create()),
+            executor: Arc::new(executor)
         })
     }
 }
@@ -84,34 +71,18 @@ impl IProcessor for ExpressionTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let funcs = self.funcs.clone();
-        let schema = self.schema.clone();
+        let executor = self.executor.clone();
         let input_stream = self.input.execute().await?;
 
-        let executor = |schema: DataSchemaRef,
-                        funcs: &[Box<dyn IFunction>],
-                        block: Result<DataBlock>|
-         -> Result<DataBlock> {
-            let block = block?;
-            let rows = block.num_rows();
+        let executor_fn =
+            |executor: Arc<ExpressionExecutor>, block: Result<DataBlock>| -> Result<DataBlock> {
+                let block = block?;
+                executor.execute(&block)
+            };
 
-            let mut columns = Vec::from(block.columns());
-            for func in funcs {
-                match block.column_by_name(format!("{}", func).as_str()) {
-                    None => {
-                        columns.push(func.eval(&block)?.to_array(rows)?);
-                    }
-                    Some(_) => {}
-                }
-            }
-            Ok(DataBlock::create(schema, columns))
-        };
+        let stream = input_stream
+            .filter_map(move |v| executor_fn(executor.clone(), v).map(Some).transpose());
 
-        let stream = input_stream.filter_map(move |v| {
-            executor(schema.clone(), funcs.as_slice(), v)
-                .map(Some)
-                .transpose()
-        });
         Ok(Box::pin(stream))
     }
 }

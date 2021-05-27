@@ -9,7 +9,7 @@ mod plan_builder_test;
 #[cfg(test)]
 mod plan_display_test;
 #[cfg(test)]
-mod plan_expression_action_test;
+mod plan_explain_test;
 #[cfg(test)]
 mod plan_expression_test;
 #[cfg(test)]
@@ -30,9 +30,8 @@ mod plan_select_test;
 mod plan_stage_test;
 #[cfg(test)]
 mod plan_walker_test;
-
+#[cfg(test)]
 mod test;
-pub use test::Test;
 
 mod plan_aggregator_final;
 mod plan_aggregator_partial;
@@ -42,15 +41,18 @@ mod plan_database_drop;
 mod plan_display;
 mod plan_empty;
 mod plan_explain;
-mod plan_explain_test;
 mod plan_expression;
-mod plan_expression_action;
-mod plan_expression_action_column;
-mod plan_expression_action_function;
-mod plan_expression_action_literal;
-mod plan_expression_action_sort;
+mod plan_expression_chain;
+mod plan_expression_column;
+mod plan_expression_function;
+mod plan_expression_literal;
+mod plan_expression_rewriter;
+mod plan_expression_sort;
+mod plan_expression_validator;
+mod plan_expression_visitor;
 mod plan_filter;
 mod plan_having;
+mod plan_insert_into;
 mod plan_limit;
 mod plan_node;
 mod plan_partition;
@@ -79,17 +81,24 @@ pub use plan_database_drop::DropDatabasePlan;
 pub use plan_empty::EmptyPlan;
 pub use plan_explain::ExplainPlan;
 pub use plan_explain::ExplainType;
+pub use plan_expression::Expression;
 pub use plan_expression::ExpressionPlan;
-pub use plan_expression_action::ExpressionAction;
-pub use plan_expression_action_column::col;
-pub use plan_expression_action_function::add;
-pub use plan_expression_action_function::avg;
-pub use plan_expression_action_function::modular;
-pub use plan_expression_action_function::sum;
-pub use plan_expression_action_literal::lit;
-pub use plan_expression_action_sort::sort;
+pub use plan_expression_chain::*;
+pub use plan_expression_column::col;
+pub use plan_expression_function::add;
+pub use plan_expression_function::avg;
+pub use plan_expression_function::modular;
+pub use plan_expression_function::not;
+pub use plan_expression_function::sum;
+pub use plan_expression_literal::lit;
+pub use plan_expression_rewriter::ExprRewriter;
+pub use plan_expression_sort::sort;
+pub use plan_expression_validator::validate_expression;
+pub use plan_expression_visitor::ExpressionVisitor;
+pub use plan_expression_visitor::Recursion;
 pub use plan_filter::FilterPlan;
 pub use plan_having::HavingPlan;
+pub use plan_insert_into::InsertIntoPlan;
 pub use plan_limit::LimitPlan;
 pub use plan_node::PlanNode;
 pub use plan_partition::Partition;

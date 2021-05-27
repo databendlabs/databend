@@ -14,7 +14,7 @@ use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::EmptyPlan;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
 use common_planners::FilterPlan;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
@@ -101,7 +101,7 @@ impl ProjectionPushDownImpl {
 
     // Recursively walk a list of expression trees, collecting the unique set of column
     // names referenced in the expression
-    fn collect_column_names_from_expr_vec(&mut self, expr: &[ExpressionAction]) -> Result<()> {
+    fn collect_column_names_from_expr_vec(&mut self, expr: &[Expression]) -> Result<()> {
         expr.iter().fold(Ok(()), |acc, e| {
             acc.and_then(|_| self.collect_column_names_from_expr(e))
         })
@@ -109,14 +109,14 @@ impl ProjectionPushDownImpl {
 
     // Recursively walk an expression tree, collecting the unique set of column names
     // referenced in the expression
-    fn collect_column_names_from_expr(&mut self, expr: &ExpressionAction) -> Result<()> {
+    fn collect_column_names_from_expr(&mut self, expr: &Expression) -> Result<()> {
         RewriteHelper::expression_plan_children(expr)?
             .iter()
             .fold(Ok(()), |acc, e| {
                 acc.and_then(|_| self.collect_column_names_from_expr(e))
             })?;
 
-        if let ExpressionAction::Column(name) = expr {
+        if let Expression::Column(name) = expr {
             self.required_columns.insert(name.clone());
         }
         Ok(())

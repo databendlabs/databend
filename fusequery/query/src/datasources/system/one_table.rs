@@ -71,9 +71,9 @@ impl ITable for OneTable {
     }
 
     async fn read(&self, _: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
-        let block = DataBlock::create(self.schema.clone(), vec![Arc::new(UInt8Array::from(vec![
-            1u8,
-        ]))]);
+        let block = DataBlock::create_by_array(self.schema.clone(), vec![Arc::new(
+            UInt8Array::from(vec![1u8])
+        )]);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,

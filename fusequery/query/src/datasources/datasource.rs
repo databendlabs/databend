@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_flights::StoreClient;
 use common_infallible::RwLock;
 use common_planners::CreateDatabasePlan;
 use common_planners::DatabaseEngineType;
@@ -36,19 +35,23 @@ pub trait IDataSource: Sync + Send {
 
 // Maintain all the databases of user.
 pub struct DataSource {
-    conf: Config,
+    // conf: Config,
     databases: RwLock<HashMap<String, Arc<dyn IDatabase>>>,
     table_functions: RwLock<HashMap<String, Arc<dyn ITableFunction>>>,
-    store_client: RwLock<Option<StoreClient>>
+    remote_factory: RemoteFactory
 }
 
 impl DataSource {
     pub fn try_create() -> Result<Self> {
+        let conf = Config::default();
+        DataSource::try_create_with_config(&conf)
+    }
+
+    pub fn try_create_with_config(conf: &Config) -> Result<Self> {
         let mut datasource = DataSource {
-            conf: Config::default(),
             databases: Default::default(),
             table_functions: Default::default(),
-            store_client: RwLock::new(None)
+            remote_factory: RemoteFactory::new(conf)
         };
 
         datasource.register_system_database()?;
@@ -56,25 +59,6 @@ impl DataSource {
         datasource.register_default_database()?;
         datasource.register_remote_database()?;
         Ok(datasource)
-    }
-
-    pub fn try_create_with_config(conf: Config) -> Result<Self> {
-        let mut ds = Self::try_create()?;
-        ds.conf = conf;
-        Ok(ds)
-    }
-
-    async fn try_get_client(&self) -> Result<StoreClient> {
-        if self.store_client.read().is_none() {
-            let store_addr = self.conf.store_api_address.clone();
-            let username = self.conf.store_api_username.clone();
-            let password = self.conf.store_api_password.clone();
-            let client = StoreClient::try_create(&store_addr, &username, &password)
-                .await
-                .map_err(ErrorCodes::from)?;
-            *self.store_client.write() = Some(client);
-        }
-        Ok(self.store_client.read().as_ref().unwrap().clone())
     }
 
     fn insert_databases(&mut self, databases: Vec<Arc<dyn IDatabase>>) -> Result<()> {
@@ -106,8 +90,7 @@ impl DataSource {
 
     // Register remote database with Remote engine.
     fn register_remote_database(&mut self) -> Result<()> {
-        let factory = RemoteFactory::create(self.conf.clone());
-        let databases = factory.load_databases()?;
+        let databases = self.remote_factory.load_databases()?;
         self.insert_databases(databases)
     }
 
@@ -171,11 +154,15 @@ impl IDataSource for DataSource {
 
     async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
         let db_name = plan.db.as_str();
-        if self.databases.read().get(db_name).is_some() && !plan.if_not_exists {
-            return Err(ErrorCodes::UnknownDatabase(format!(
-                "Database: '{}' already exists.",
-                plan.db
-            )));
+        if self.databases.read().get(db_name).is_some() {
+            return if plan.if_not_exists {
+                Ok(())
+            } else {
+                Err(ErrorCodes::UnknownDatabase(format!(
+                    "Database: '{}' already exists.",
+                    plan.db
+                )))
+            };
         }
 
         match plan.engine {
@@ -184,9 +171,16 @@ impl IDataSource for DataSource {
                 self.databases.write().insert(plan.db, Arc::new(database));
             }
             DatabaseEngineType::Remote => {
-                let mut client = self.try_get_client().await?;
+                let mut client = self
+                    .remote_factory
+                    .store_client_provider()
+                    .try_get_client()
+                    .await?;
                 client.create_database(plan.clone()).await.map(|_| {
-                    let database = RemoteDatabase::create(self.conf.clone(), plan.db.clone());
+                    let database = RemoteDatabase::create(
+                        self.remote_factory.store_client_provider(),
+                        plan.db.clone()
+                    );
                     self.databases
                         .write()
                         .insert(plan.db.clone(), Arc::new(database));
@@ -213,7 +207,11 @@ impl IDataSource for DataSource {
         if database.is_local() {
             self.databases.write().remove(db_name);
         } else {
-            let mut client = self.try_get_client().await?;
+            let mut client = self
+                .remote_factory
+                .store_client_provider()
+                .try_get_client()
+                .await?;
             client.drop_database(plan.clone()).await.map(|_| {
                 self.databases.write().remove(plan.db.as_str());
             })?;

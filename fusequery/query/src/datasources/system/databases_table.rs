@@ -79,7 +79,7 @@ impl ITable for DatabasesTable {
                     .map(|database_name| database_name.as_str())
                     .collect();
 
-                let block = DataBlock::create(self.schema.clone(), vec![Arc::new(
+                let block = DataBlock::create_by_array(self.schema.clone(), vec![Arc::new(
                     StringArray::from(databases_name_str)
                 )]);
 

@@ -2,9 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::UInt32Builder;
 use common_arrow::arrow::compute;
 use common_datavalues::DataArrayMerge;
+use common_datavalues::DataColumnarValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
@@ -22,13 +24,21 @@ impl DataBlock {
         batch_indices.append_slice(indices)?;
         let batch_indices = batch_indices.finish();
 
-        let takes = raw
+        let columns = raw
             .columns()
             .iter()
-            .map(|array| compute::take(array.as_ref(), &batch_indices, None).unwrap())
-            .collect::<Vec<_>>();
+            .map(|column| match column {
+                DataColumnarValue::Array(array) => {
+                    let taked_array = compute::take(array.as_ref(), &batch_indices, None)?;
+                    Ok(DataColumnarValue::Array(taked_array))
+                }
+                DataColumnarValue::Constant(v, _) => {
+                    Ok(DataColumnarValue::Constant(v.clone(), indices.len()))
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
 
-        Ok(DataBlock::create(raw.schema().clone(), takes))
+        Ok(DataBlock::create(raw.schema().clone(), columns))
     }
 
     pub fn concat_blocks(blocks: &[DataBlock]) -> Result<DataBlock> {
@@ -43,16 +53,21 @@ impl DataBlock {
             }
         }
 
-        let mut values = Vec::with_capacity(first_block.num_columns());
+        let mut arrays = Vec::with_capacity(first_block.num_columns());
         for (i, _f) in blocks[0].schema().fields().iter().enumerate() {
             let mut arr = Vec::with_capacity(blocks.len());
             for block in blocks.iter() {
-                arr.push(block.column(i).as_ref());
+                arr.push(block.column(i).to_array()?);
             }
-            values.push(compute::concat(&arr)?);
+
+            let arr: Vec<&dyn Array> = arr.iter().map(|c| c.as_ref()).collect();
+            arrays.push(compute::concat(&arr)?);
         }
 
-        Ok(DataBlock::create(first_block.schema().clone(), values))
+        Ok(DataBlock::create_by_array(
+            first_block.schema().clone(),
+            arrays
+        ))
     }
 
     pub fn sort_block(
@@ -64,7 +79,7 @@ impl DataBlock {
             .iter()
             .map(|f| {
                 Ok(compute::SortColumn {
-                    values: block.try_column_by_name(&f.column_name)?.clone(),
+                    values: block.try_array_by_name(&f.column_name)?.clone(),
                     options: Some(compute::SortOptions {
                         descending: !f.asc,
                         nulls_first: f.nulls_first
@@ -74,13 +89,7 @@ impl DataBlock {
             .collect::<Result<Vec<_>>>()?;
 
         let indices = compute::lexsort_to_indices(&order_columns, limit)?;
-        let columns = block
-            .columns()
-            .iter()
-            .map(|c| compute::take(c.as_ref(), &indices, None))
-            .collect::<anyhow::Result<Vec<_>, _>>()?;
-
-        Ok(DataBlock::create(block.schema().clone(), columns))
+        DataBlock::block_take_by_indices(&block, indices.values())
     }
 
     pub fn merge_sort_block(
@@ -101,7 +110,7 @@ impl DataBlock {
         for block in [lhs, rhs].iter() {
             let columns = sort_columns_descriptions
                 .iter()
-                .map(|f| Ok(block.try_column_by_name(&f.column_name)?.clone()))
+                .map(|f| Ok(block.try_array_by_name(&f.column_name)?.clone()))
                 .collect::<Result<Vec<_>>>()?;
             sort_arrays.push(columns);
         }
@@ -128,10 +137,14 @@ impl DataBlock {
             .columns()
             .iter()
             .zip(rhs.columns().iter())
-            .map(|(a, b)| DataArrayMerge::merge_array(a, b, &indices))
+            .map(|(a, b)| {
+                let a = a.to_array()?;
+                let b = b.to_array()?;
+                DataArrayMerge::merge_array(&a, &b, &indices)
+            })
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(DataBlock::create(lhs.schema().clone(), arrays))
+        Ok(DataBlock::create_by_array(lhs.schema().clone(), arrays))
     }
 
     pub fn merge_sort_blocks(

@@ -2,17 +2,20 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+
+use crate::test::Test;
+use crate::*;
+
 #[test]
 fn test_plan_builds() -> anyhow::Result<()> {
-    use common_exception::Result;
     use pretty_assertions::assert_eq;
-
-    use crate::*;
 
     struct TestCase {
         name: &'static str,
         plan: Result<PlanNode>,
-        expect: &'static str
+        expect: &'static str,
+        err: &'static str
     }
 
     let source = Test::create().generate_source_plan_for_test(10000)?;
@@ -20,24 +23,26 @@ fn test_plan_builds() -> anyhow::Result<()> {
         TestCase {
             name: "field(*)-pass",
             plan: (PlanBuilder::from(&source)
-                .expression(&[ExpressionAction::Wildcard], "")?
+                .expression(&[Expression::Wildcard], "")?
                 .project(&[col("number")])?
                 .build()),
             expect: "\
             Projection: number:UInt64\
-            \n  Expression: *:UInt64 ()\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
+            \n  Expression: number:UInt64 ()\
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]",
+            err : "",
         },
         TestCase {
             name: "constant-alias-pass",
             plan: (PlanBuilder::from(&source)
-                .expression(&[add(lit(4), lit(5)).alias("4_5"), add(col("4_5"), lit(2))], "")?
-                .project(&[col("4_5")])?
+                .expression(&[add(lit(4), lit(5)), add(add(lit(4), lit(5)), lit(2))], "")?
+                .project(&[add(lit(4), lit(5)).alias("4_5")])?
                 .build()),
             expect: "\
-            Projection: 4_5:Int64\
-            \n  Expression: (4 + 5) as 4_5:UInt64, ((4 + 5) + 2):Int64 ()\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
+            Projection: (4 + 5) as 4_5:Int64\
+            \n  Expression: (4 + 5):Int64, ((4 + 5) + 2):Int64 ()\
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]",
+            err : "",
         },
         TestCase {
             name: "projection-simple-pass",
@@ -46,25 +51,8 @@ fn test_plan_builds() -> anyhow::Result<()> {
                 .build()),
             expect: "\
         Projection: number:UInt64\
-        \n  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
-        },
-        TestCase {
-            name: "projection-alias-pass",
-            plan: (PlanBuilder::from(&source)
-                .project(&[col("number"), col("number").alias("c1")])?
-                .build()),
-            expect:"\
-            Projection: number:UInt64, number as c1:UInt64\
-            \n  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]" 
-        },
-        TestCase {
-            name: "expression-alias-pass",
-            plan: (PlanBuilder::from(&source)
-                .expression(&[col("number"), col("number").alias("c1")], "desc")?
-                .build()),
-            expect:"\
-            Expression: number:UInt64, number as c1:UInt64 (desc)\
-            \n  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
+        \n  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]",
+        err : "",
         },
         TestCase {
             name: "expression-merge-pass",
@@ -74,7 +62,8 @@ fn test_plan_builds() -> anyhow::Result<()> {
                 .build()),
             expect:"Expression: number:UInt64, number as c2:UInt64 ()\
             \n  Expression: number:UInt64, number as c1:UInt64 ()\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]",
+            err : "",
         },
         TestCase {
             name: "expression-before-projection-pass",
@@ -85,7 +74,8 @@ fn test_plan_builds() -> anyhow::Result<()> {
             expect:"\
             Projection: c1:UInt64\
             \n  Expression: number:UInt64, number as c1:UInt64 (Before Projection)\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]",
+            err : "",
         },
         TestCase {
             name: "filter-pass",
@@ -98,14 +88,21 @@ fn test_plan_builds() -> anyhow::Result<()> {
             Projection: c1:UInt64\
             \n  Expression: number:UInt64, number as c1:UInt64 (Before Projection)\
             \n    Filter: (c1 = 1)\
-            \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]"
+            \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]",
+            err : "",
         },
     ];
 
     for test in tests {
-        let plan = test.plan?;
-        let actual_plan = format!("{:?}", plan);
-        assert_eq!(test.expect, actual_plan, "{:#?}", test.name);
+        match &test.plan {
+            Ok(plan) => {
+                let actual_plan = format!("{:?}", plan);
+                assert_eq!(test.expect, actual_plan, "{:#?}", test.name);
+            }
+            Err(e) => {
+                assert_eq!(test.err, e.message(), "{:#?}", test.name);
+            }
+        }
     }
     Ok(())
 }

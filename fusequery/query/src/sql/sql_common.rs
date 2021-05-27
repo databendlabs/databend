@@ -9,7 +9,7 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
 use sqlparser::ast::DataType as SQLDataType;
 use sqlparser::ast::DateTimeField;
 
@@ -48,7 +48,7 @@ impl SQLCommon {
         leading_precision: &Option<u64>,
         last_field: &Option<DateTimeField>,
         fractional_seconds_precision: &Option<u64>
-    ) -> Result<ExpressionAction> {
+    ) -> Result<Expression> {
         if leading_field.is_some() {
             return Result::Err(ErrorCodes::SyntaxException(format!(
                 "Unsupported Interval Expression with leading_field {:?}",
@@ -199,13 +199,13 @@ impl SQLCommon {
         }
 
         if result_month != 0 {
-            return Ok(ExpressionAction::Literal(DataValue::IntervalYearMonth(
-                Some(result_month as i32)
-            )));
+            return Ok(Expression::Literal(DataValue::IntervalYearMonth(Some(
+                result_month as i32
+            ))));
         }
 
         let result: i64 = (result_days << 32) | result_millis;
-        Ok(ExpressionAction::Literal(DataValue::IntervalDayTime(Some(
+        Ok(Expression::Literal(DataValue::IntervalDayTime(Some(
             result
         ))))
     }

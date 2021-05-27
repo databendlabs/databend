@@ -19,10 +19,11 @@ use crate::DropDatabasePlan;
 use crate::DropTablePlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
-use crate::ExpressionAction;
+use crate::Expression;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
+use crate::InsertIntoPlan;
 use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
@@ -75,7 +76,8 @@ pub trait PlanRewriter<'plan> {
             PlanNode::Having(plan) => self.rewrite_having(plan),
             PlanNode::Expression(plan) => self.rewrite_expression(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
-            PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan)
+            PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
+            PlanNode::InsertInto(plan) => self.rewrite_insert_into(plan)
         }
     }
 
@@ -84,6 +86,7 @@ pub trait PlanRewriter<'plan> {
         plan: &'plan AggregatorPartialPlan
     ) -> Result<PlanNode> {
         Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan {
+            schema: plan.schema.clone(),
             aggr_expr: plan.aggr_expr.clone(),
             group_expr: plan.group_expr.clone(),
             input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
@@ -201,12 +204,16 @@ pub trait PlanRewriter<'plan> {
     fn rewrite_drop_database(&mut self, plan: &'plan DropDatabasePlan) -> Result<PlanNode> {
         Ok(PlanNode::DropDatabase(plan.clone()))
     }
+
+    fn rewrite_insert_into(&mut self, plan: &'plan InsertIntoPlan) -> Result<PlanNode> {
+        Ok(PlanNode::InsertInto(plan.clone()))
+    }
 }
 
 pub struct RewriteHelper {}
 
 struct QueryAliasData {
-    aliases: HashMap<String, ExpressionAction>,
+    aliases: HashMap<String, Expression>,
     inside_aliases: HashSet<String>,
     // deepest alias current step in
     current_alias: String
@@ -218,7 +225,7 @@ impl RewriteHelper {
     /// SELECT (x+1) as y, y*y FROM ..
     /// ->
     /// SELECT (x+1) as y, (x+1)*(x+1) FROM ..
-    pub fn rewrite_projection_aliases(exprs: &[ExpressionAction]) -> Result<Vec<ExpressionAction>> {
+    pub fn rewrite_projection_aliases(exprs: &[Expression]) -> Result<Vec<Expression>> {
         let mut mp = HashMap::new();
         RewriteHelper::alias_exprs_to_map(&exprs, &mut mp)?;
 
@@ -235,11 +242,11 @@ impl RewriteHelper {
     }
 
     fn alias_exprs_to_map(
-        exprs: &[ExpressionAction],
-        mp: &mut HashMap<String, ExpressionAction>
+        exprs: &[Expression],
+        mp: &mut HashMap<String, Expression>
     ) -> Result<()> {
         for expr in exprs.iter() {
-            if let ExpressionAction::Alias(alias, alias_expr) = expr {
+            if let Expression::Alias(alias, alias_expr) = expr {
                 if let Some(expr_result) = mp.get(alias) {
                     let hash_result = format!("{:?}", expr_result);
                     let hash_expr = format!("{:?}", expr);
@@ -257,12 +264,9 @@ impl RewriteHelper {
         Ok(())
     }
 
-    fn expr_rewrite_alias(
-        expr: &ExpressionAction,
-        data: &mut QueryAliasData
-    ) -> Result<ExpressionAction> {
+    fn expr_rewrite_alias(expr: &Expression, data: &mut QueryAliasData) -> Result<Expression> {
         match expr {
-            ExpressionAction::Column(field) => {
+            Expression::Column(field) => {
                 // x + 1 --> x
                 if *field == data.current_alias {
                     return Ok(expr.clone());
@@ -291,25 +295,34 @@ impl RewriteHelper {
                 Ok(expr.clone())
             }
 
-            ExpressionAction::BinaryExpression { left, op, right } => {
-                let left_new = RewriteHelper::expr_rewrite_alias(left, data)?;
-                let right_new = RewriteHelper::expr_rewrite_alias(right, data)?;
+            Expression::BinaryExpression { op, left, right } => {
+                let left = RewriteHelper::expr_rewrite_alias(left, data)?;
+                let right = RewriteHelper::expr_rewrite_alias(right, data)?;
 
-                Ok(ExpressionAction::BinaryExpression {
-                    left: Box::new(left_new),
+                Ok(Expression::BinaryExpression {
                     op: op.clone(),
-                    right: Box::new(right_new)
+                    left: Box::new(left),
+                    right: Box::new(right)
                 })
             }
 
-            ExpressionAction::Function { op, args } => {
-                let new_args: Result<Vec<ExpressionAction>> = args
+            Expression::UnaryExpression { op, expr } => {
+                let expr_new = RewriteHelper::expr_rewrite_alias(expr, data)?;
+
+                Ok(Expression::UnaryExpression {
+                    op: op.clone(),
+                    expr: Box::new(expr_new)
+                })
+            }
+
+            Expression::ScalarFunction { op, args } => {
+                let new_args: Result<Vec<Expression>> = args
                     .iter()
                     .map(|v| RewriteHelper::expr_rewrite_alias(v, data))
                     .collect();
 
                 match new_args {
-                    Ok(v) => Ok(ExpressionAction::Function {
+                    Ok(v) => Ok(Expression::ScalarFunction {
                         op: op.clone(),
                         args: v
                     }),
@@ -317,7 +330,22 @@ impl RewriteHelper {
                 }
             }
 
-            ExpressionAction::Alias(alias, plan) => {
+            Expression::AggregateFunction { op, args } => {
+                let new_args: Result<Vec<Expression>> = args
+                    .iter()
+                    .map(|v| RewriteHelper::expr_rewrite_alias(v, data))
+                    .collect();
+
+                match new_args {
+                    Ok(v) => Ok(Expression::AggregateFunction {
+                        op: op.clone(),
+                        args: v
+                    }),
+                    Err(v) => Err(v)
+                }
+            }
+
+            Expression::Alias(alias, plan) => {
                 if data.inside_aliases.contains(alias) {
                     return Result::Err(ErrorCodes::SyntaxException(format!(
                         "Planner Error: Cyclic aliases: {}",
@@ -332,18 +360,18 @@ impl RewriteHelper {
                 data.inside_aliases.remove(alias);
                 data.current_alias = previous_alias;
 
-                Ok(ExpressionAction::Alias(alias.clone(), Box::new(new_expr)))
+                Ok(Expression::Alias(alias.clone(), Box::new(new_expr)))
             }
-            ExpressionAction::Cast { expr, data_type } => {
+            Expression::Cast { expr, data_type } => {
                 let new_expr = RewriteHelper::expr_rewrite_alias(expr, data)?;
-                Ok(ExpressionAction::Cast {
+                Ok(Expression::Cast {
                     expr: Box::new(new_expr),
                     data_type: data_type.clone()
                 })
             }
-            ExpressionAction::Wildcard
-            | ExpressionAction::Literal(_)
-            | ExpressionAction::Sort { .. } => Ok(expr.clone())
+            Expression::Wildcard | Expression::Literal(_) | Expression::Sort { .. } => {
+                Ok(expr.clone())
+            }
         }
     }
 
@@ -352,9 +380,9 @@ impl RewriteHelper {
     /// ->
     /// SELECT a as b ... where a>1
     pub fn rewrite_alias_expr(
-        projection_map: &HashMap<String, ExpressionAction>,
-        expr: &ExpressionAction
-    ) -> Result<ExpressionAction> {
+        projection_map: &HashMap<String, Expression>,
+        expr: &Expression
+    ) -> Result<Expression> {
         let expressions = Self::expression_plan_children(expr)?;
 
         let expressions = expressions
@@ -362,7 +390,7 @@ impl RewriteHelper {
             .map(|e| Self::rewrite_alias_expr(projection_map, e))
             .collect::<Result<Vec<_>>>()?;
 
-        if let ExpressionAction::Column(name) = expr {
+        if let Expression::Column(name) = expr {
             if let Some(expr) = projection_map.get(name) {
                 return Ok(expr.clone());
             }
@@ -372,9 +400,9 @@ impl RewriteHelper {
 
     /// replaces expressions columns by its name on the projection.
     pub fn rewrite_alias_exprs(
-        projection_map: &HashMap<String, ExpressionAction>,
-        exprs: &[ExpressionAction]
-    ) -> Result<Vec<ExpressionAction>> {
+        projection_map: &HashMap<String, Expression>,
+        exprs: &[Expression]
+    ) -> Result<Vec<Expression>> {
         exprs
             .iter()
             .map(|e| Self::rewrite_alias_expr(projection_map, e))
@@ -382,41 +410,46 @@ impl RewriteHelper {
     }
 
     /// Collect all unique projection fields to a map.
-    pub fn projection_to_map(plan: &PlanNode) -> Result<HashMap<String, ExpressionAction>> {
+    pub fn projection_to_map(plan: &PlanNode) -> Result<HashMap<String, Expression>> {
         let mut map = HashMap::new();
         Self::projections_to_map(plan, &mut map)?;
         Ok(map)
     }
 
     /// Get the expression children.
-    pub fn expression_plan_children(expr: &ExpressionAction) -> Result<Vec<ExpressionAction>> {
+    pub fn expression_plan_children(expr: &Expression) -> Result<Vec<Expression>> {
         Ok(match expr {
-            ExpressionAction::Alias(_, expr) => vec![expr.as_ref().clone()],
-            ExpressionAction::Column(_) => vec![],
-            ExpressionAction::Literal(_) => vec![],
-            ExpressionAction::BinaryExpression { left, right, .. } => {
+            Expression::Alias(_, expr) => vec![expr.as_ref().clone()],
+            Expression::Column(_) => vec![],
+            Expression::Literal(_) => vec![],
+            Expression::UnaryExpression { expr, .. } => {
+                vec![expr.as_ref().clone()]
+            }
+            Expression::BinaryExpression { left, right, .. } => {
                 vec![left.as_ref().clone(), right.as_ref().clone()]
             }
-            ExpressionAction::Function { args, .. } => args.clone(),
-            ExpressionAction::Wildcard => vec![],
-            ExpressionAction::Sort { expr, .. } => vec![expr.as_ref().clone()],
-            ExpressionAction::Cast { expr, .. } => vec![expr.as_ref().clone()]
+            Expression::ScalarFunction { args, .. } => args.clone(),
+            Expression::AggregateFunction { args, .. } => args.clone(),
+            Expression::Wildcard => vec![],
+            Expression::Sort { expr, .. } => vec![expr.as_ref().clone()],
+            Expression::Cast { expr, .. } => vec![expr.as_ref().clone()]
         })
     }
 
     /// Get the leaves of an expression.
-    pub fn expression_plan_columns(expr: &ExpressionAction) -> Result<Vec<ExpressionAction>> {
+    pub fn expression_plan_columns(expr: &Expression) -> Result<Vec<Expression>> {
         Ok(match expr {
-            ExpressionAction::Alias(_, expr) => Self::expression_plan_columns(expr)?,
-            ExpressionAction::Column(_) => vec![expr.clone()],
-            ExpressionAction::Literal(_) => vec![],
-            ExpressionAction::BinaryExpression { left, right, .. } => {
+            Expression::Alias(_, expr) => Self::expression_plan_columns(expr)?,
+            Expression::Column(_) => vec![expr.clone()],
+            Expression::Literal(_) => vec![],
+            Expression::UnaryExpression { expr, .. } => Self::expression_plan_columns(expr)?,
+            Expression::BinaryExpression { left, right, .. } => {
                 let mut l = Self::expression_plan_columns(left)?;
                 let mut r = Self::expression_plan_columns(right)?;
                 l.append(&mut r);
                 l
             }
-            ExpressionAction::Function { args, .. } => {
+            Expression::ScalarFunction { args, .. } => {
                 let mut v = vec![];
                 for arg in args {
                     let mut col = Self::expression_plan_columns(arg)?;
@@ -424,22 +457,27 @@ impl RewriteHelper {
                 }
                 v
             }
-            ExpressionAction::Wildcard => vec![],
-            ExpressionAction::Sort { expr, .. } => Self::expression_plan_columns(expr)?,
-            ExpressionAction::Cast { expr, .. } => Self::expression_plan_columns(expr)?
+            Expression::AggregateFunction { args, .. } => {
+                let mut v = vec![];
+                for arg in args {
+                    let mut col = Self::expression_plan_columns(arg)?;
+                    v.append(&mut col);
+                }
+                v
+            }
+            Expression::Wildcard => vec![],
+            Expression::Sort { expr, .. } => Self::expression_plan_columns(expr)?,
+            Expression::Cast { expr, .. } => Self::expression_plan_columns(expr)?
         })
     }
 
     /// Collect all unique projection fields to a map.
-    fn projections_to_map(
-        plan: &PlanNode,
-        map: &mut HashMap<String, ExpressionAction>
-    ) -> Result<()> {
+    fn projections_to_map(plan: &PlanNode, map: &mut HashMap<String, Expression>) -> Result<()> {
         match plan {
             PlanNode::Projection(v) => {
                 v.schema.fields().iter().enumerate().for_each(|(i, field)| {
                     let expr = match &v.expr[i] {
-                        ExpressionAction::Alias(_alias, plan) => plan.as_ref().clone(),
+                        Expression::Alias(_alias, plan) => plan.as_ref().clone(),
                         other => other.clone()
                     };
                     map.insert(field.name().clone(), expr);
@@ -448,15 +486,15 @@ impl RewriteHelper {
             // Aggregator aggr_expr is the projection
             PlanNode::AggregatorPartial(v) => {
                 for expr in &v.aggr_expr {
-                    let field = expr.to_data_field(&v.input.schema())?;
-                    map.insert(field.name().clone(), expr.clone());
+                    let column_name = expr.column_name();
+                    map.insert(column_name, expr.clone());
                 }
             }
             // Aggregator aggr_expr is the projection
             PlanNode::AggregatorFinal(v) => {
                 for expr in &v.aggr_expr {
-                    let field = expr.to_data_field(&v.input.schema())?;
-                    map.insert(field.name().clone(), expr.clone());
+                    let column_name = expr.column_name();
+                    map.insert(column_name, expr.clone());
                 }
             }
             other => {
@@ -468,22 +506,23 @@ impl RewriteHelper {
         Ok(())
     }
 
-    fn rebuild_from_exprs(
-        expr: &ExpressionAction,
-        expressions: &[ExpressionAction]
-    ) -> ExpressionAction {
+    fn rebuild_from_exprs(expr: &Expression, expressions: &[Expression]) -> Expression {
         match expr {
-            ExpressionAction::Alias(alias, _) => {
-                ExpressionAction::Alias(alias.clone(), Box::from(expressions[0].clone()))
+            Expression::Alias(alias, _) => {
+                Expression::Alias(alias.clone(), Box::from(expressions[0].clone()))
             }
-            ExpressionAction::Column(_) => expr.clone(),
-            ExpressionAction::Literal(_) => expr.clone(),
-            ExpressionAction::BinaryExpression { op, .. } => ExpressionAction::BinaryExpression {
+            Expression::Column(_) => expr.clone(),
+            Expression::Literal(_) => expr.clone(),
+            Expression::BinaryExpression { op, .. } => Expression::BinaryExpression {
                 left: Box::new(expressions[0].clone()),
                 op: op.clone(),
                 right: Box::new(expressions[1].clone())
             },
-            ExpressionAction::Function { op, .. } => ExpressionAction::Function {
+            Expression::ScalarFunction { op, .. } => Expression::ScalarFunction {
+                op: op.clone(),
+                args: expressions.to_vec()
+            },
+            Expression::AggregateFunction { op, .. } => Expression::AggregateFunction {
                 op: op.clone(),
                 args: expressions.to_vec()
             },
@@ -496,12 +535,12 @@ impl RewriteHelper {
     /// Case2: aggr is an alias, unfold aggr
     /// Case3: group and aggr are exactly the same expression
     pub fn check_aggr_in_group_expr(
-        aggr: &ExpressionAction,
+        aggr: &Expression,
         group_by_names: &HashSet<String>,
         input_schema: &DataSchemaRef
     ) -> Result<bool> {
         match aggr {
-            ExpressionAction::Alias(alias, plan) => {
+            Expression::Alias(alias, plan) => {
                 if group_by_names.contains(alias) {
                     return Ok(true);
                 } else {
@@ -515,7 +554,7 @@ impl RewriteHelper {
                 } else {
                     let columns = Self::expression_plan_columns(aggr)?;
                     for col in columns {
-                        let cn = col.to_data_field(input_schema)?.name().clone();
+                        let cn = col.column_name();
                         if !group_by_names.contains(&cn) {
                             return Ok(false);
                         }
@@ -527,7 +566,7 @@ impl RewriteHelper {
     }
 
     pub fn exprs_to_fields(
-        exprs: &[ExpressionAction],
+        exprs: &[Expression],
         input_schema: &DataSchemaRef
     ) -> Result<Vec<DataField>> {
         exprs
@@ -536,7 +575,7 @@ impl RewriteHelper {
             .collect::<Result<_>>()
     }
 
-    pub fn exprs_to_names(exprs: &[ExpressionAction], names: &mut HashSet<String>) -> Result<()> {
+    pub fn exprs_to_names(exprs: &[Expression], names: &mut HashSet<String>) -> Result<()> {
         for expr in exprs {
             let name = format!("{:?}", expr);
             names.insert(name.clone());

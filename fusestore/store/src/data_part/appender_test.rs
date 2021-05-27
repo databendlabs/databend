@@ -36,7 +36,7 @@ mod test {
 
         let col0 = Arc::new(Int64Array::from(vec![0, 1, 2]));
         let col1 = Arc::new(StringArray::from(vec!["str1", "str2", "str3"]));
-        let block = DataBlock::create(schema.clone(), vec![col0.clone(), col1.clone()]);
+        let block = DataBlock::create_by_array(schema.clone(), vec![col0.clone(), col1.clone()]);
 
         let buffer = write_in_memory(block)?;
 
@@ -76,19 +76,18 @@ mod test {
         let p = tempfile::tempdir()?;
         let fs = LocalFS::try_create(p.path().to_str().unwrap().to_string())?;
 
-        let appender = Appender::new(fs);
+        let appender = Appender::new(Arc::new(fs));
 
         let default_ipc_write_opt = IpcWriteOptions::default();
-        let flight = flight_data_from_arrow_schema(&schema, &default_ipc_write_opt);
+        let flight_schema = flight_data_from_arrow_schema(&schema, &default_ipc_write_opt);
 
         let req = futures::stream::iter(vec![
-            flight,
+            flight_schema,
             flight_data_from_arrow_batch(&batch, &default_ipc_write_opt).1, // ignore dict
         ]);
         let r = appender
             .append_data("test_tbl".to_string(), Box::pin(req))
             .await;
-        println!("r is {:?}", r);
         assert!(r.is_ok());
         Ok(())
     }

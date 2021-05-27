@@ -5,7 +5,6 @@
 use std::task::Context;
 use std::task::Poll;
 
-use common_arrow::arrow;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use futures::Stream;
@@ -41,7 +40,7 @@ impl LimitStream {
 
             let mut limited_columns = Vec::with_capacity(block.num_columns());
             for i in 0..block.num_columns() {
-                limited_columns.push(arrow::compute::limit(block.column(i), keep));
+                limited_columns.push(block.column(i).limit(keep));
             }
             Ok(Some(DataBlock::create(
                 block.schema().clone(),

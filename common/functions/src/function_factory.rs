@@ -10,7 +10,6 @@ use common_infallible::RwLock;
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
 
-use crate::aggregators::AggregatorFunction;
 use crate::arithmetics::ArithmeticFunction;
 use crate::comparisons::ComparisonFunction;
 use crate::logics::LogicFunction;
@@ -19,14 +18,13 @@ use crate::udfs::UdfFunction;
 use crate::IFunction;
 
 pub struct FunctionFactory;
-pub type FactoryFunc = fn(name: &str, args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>>;
+pub type FactoryFunc = fn(name: &str) -> Result<Box<dyn IFunction>>;
 
 pub type FactoryFuncRef = Arc<RwLock<IndexMap<&'static str, FactoryFunc>>>;
 
 lazy_static! {
     static ref FACTORY: FactoryFuncRef = {
         let map: FactoryFuncRef = Arc::new(RwLock::new(IndexMap::new()));
-        AggregatorFunction::register(map.clone()).unwrap();
         ArithmeticFunction::register(map.clone()).unwrap();
         ComparisonFunction::register(map.clone()).unwrap();
         LogicFunction::register(map.clone()).unwrap();
@@ -37,12 +35,12 @@ lazy_static! {
 }
 
 impl FunctionFactory {
-    pub fn get(name: &str, args: &[Box<dyn IFunction>]) -> Result<Box<dyn IFunction>> {
+    pub fn get(name: &str) -> Result<Box<dyn IFunction>> {
         let map = FACTORY.read();
         let creator = map.get(&*name.to_lowercase()).ok_or_else(|| {
             ErrorCodes::UnknownFunction(format!("Unsupported Function: {}", name))
         })?;
-        (creator)(name, args)
+        (creator)(name)
     }
 
     pub fn check(name: &str) -> bool {

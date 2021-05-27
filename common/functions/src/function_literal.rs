@@ -4,7 +4,6 @@
 
 use std::fmt;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
@@ -29,7 +28,7 @@ impl IFunction for LiteralFunction {
         "LiteralFunction"
     }
 
-    fn return_type(&self, _input_schema: &DataSchema) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(self.value.data_type())
     }
 
@@ -37,25 +36,16 @@ impl IFunction for LiteralFunction {
         Ok(self.value.is_null())
     }
 
-    fn eval(&self, _block: &DataBlock) -> Result<DataColumnarValue> {
-        Ok(DataColumnarValue::Scalar(self.value.clone()))
+    fn eval(&self, _columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
+        Ok(DataColumnarValue::Constant(self.value.clone(), input_rows))
     }
 
-    // For aggregate wrapper: sum(a+2) + 1
-    fn accumulate(&mut self, _block: &DataBlock) -> Result<()> {
-        Ok(())
+    fn num_arguments(&self) -> usize {
+        0
     }
 
-    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
-        Ok(vec![self.value.clone()])
-    }
-
-    fn merge(&mut self, _states: &[DataValue]) -> Result<()> {
-        Ok(())
-    }
-
-    fn merge_result(&self) -> Result<DataValue> {
-        Ok(self.value.clone())
+    fn variadic_arguments(&self) -> Option<(usize, usize)> {
+        None
     }
 }
 

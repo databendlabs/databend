@@ -75,9 +75,9 @@ impl ITable for ContributorsTable {
             .split_terminator(',')
             .map(|x| x.trim())
             .collect();
-        let block = DataBlock::create(self.schema.clone(), vec![Arc::new(StringArray::from(
-            contributors
-        ))]);
+        let block = DataBlock::create_by_array(self.schema.clone(), vec![Arc::new(
+            StringArray::from(contributors)
+        )]);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,

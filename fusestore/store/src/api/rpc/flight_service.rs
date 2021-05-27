@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-// use std::collections::HashMap;
 use std::convert::TryInto;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -177,9 +176,34 @@ impl FlightService for StoreFlightImpl {
     type DoPutStream = FlightStream<PutResult>;
     async fn do_put(
         &self,
-        _request: Request<Streaming<FlightData>>
+        request: Request<Streaming<FlightData>>
     ) -> Result<Response<Self::DoPutStream>, Status> {
-        unimplemented!()
+        info!("calling me!");
+
+        let _claim = self.check_token(&request.metadata())?;
+        let meta = request.metadata();
+
+        info!("reading meta data");
+        let (db_name, tbl_name) =
+            common_flights::get_do_put_meta(meta).map_err(|e| Status::internal(e.to_string()))?;
+        info!("meta data {}-{}", db_name, tbl_name);
+
+        info!("calling handler");
+        let append_res = self
+            .action_handler
+            .do_put(db_name, tbl_name, request.into_inner())
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        info!("handler called");
+
+        let bytes = serde_json::to_vec(&append_res).unwrap();
+        let put_res = PutResult {
+            app_metadata: bytes
+        };
+        info!("got result {:?}", append_res);
+        Ok(Response::new(Box::pin(futures::stream::once(async {
+            Ok(put_res)
+        }))))
     }
 
     type DoExchangeStream = FlightStream<FlightData>;
