@@ -50,7 +50,7 @@ impl std::fmt::Display for DataValueComparisonOperator {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum DataValueArithmeticOperator {
     Plus,
     Minus,
