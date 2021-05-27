@@ -4,8 +4,6 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::alloc::NativeType;
-use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::DurationMicrosecondArray;
 use common_arrow::arrow::array::DurationMillisecondArray;
 use common_arrow::arrow::array::DurationNanosecondArray;
@@ -14,7 +12,6 @@ use common_arrow::arrow::array::IntervalDayTimeArray;
 use common_arrow::arrow::array::IntervalYearMonthArray;
 use common_arrow::arrow::array::LargeBinaryArray;
 use common_arrow::arrow::array::LargeStringArray;
-use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::array::Time32MillisecondArray;
 use common_arrow::arrow::array::Time32SecondArray;
 use common_arrow::arrow::array::Time64MicrosecondArray;
@@ -23,10 +20,6 @@ use common_arrow::arrow::array::TimestampMicrosecondArray;
 use common_arrow::arrow::array::TimestampMillisecondArray;
 use common_arrow::arrow::array::TimestampNanosecondArray;
 use common_arrow::arrow::array::TimestampSecondArray;
-use common_arrow::arrow::datatypes::ArrowPrimitiveType;
-use common_arrow::arrow::datatypes::DataType::LargeBinary;
-use common_arrow::arrow::datatypes::Int8Type;
-use common_arrow::arrow::datatypes::UInt8Type;
 use common_exception::Result;
 
 use crate::BinaryArray;

@@ -24,16 +24,21 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct PlanScheduler;
 
+pub struct ScheduledActions {
+    pub local_plan: PlanNode,
+    pub remote_actions: Vec<(Arc<Node>, ExecutePlanWithShuffleAction)>
+}
+
 impl PlanScheduler {
     /// Schedule the plan to Local or Remote mode.
-    pub fn reschedule(
-        ctx: FuseQueryContextRef,
-        plan: &PlanNode
-    ) -> Result<(PlanNode, Vec<(Arc<Node>, ExecutePlanWithShuffleAction)>)> {
+    pub fn reschedule(ctx: FuseQueryContextRef, plan: &PlanNode) -> Result<ScheduledActions> {
         let cluster = ctx.try_get_cluster()?;
 
         if cluster.is_empty()? {
-            return Ok((plan.clone(), vec![]));
+            return Ok(ScheduledActions {
+                local_plan: plan.clone(),
+                remote_actions: vec![]
+            });
         }
 
         let mut last_stage = None;
@@ -87,16 +92,19 @@ impl PlanScheduler {
         }
 
         let local_plan = get_node_plan.get_plan(&local_node.unwrap().name, &cluster_nodes)?;
-        let mut remote_plans = vec![];
+        let mut remote_actions = vec![];
         for node in &cluster_nodes {
             for builder in &builders {
                 if let Some(action) = builder.build(&node.name, &cluster_nodes)? {
-                    remote_plans.push((node.clone(), action));
+                    remote_actions.push((node.clone(), action));
                 }
             }
         }
 
-        Ok((local_plan, remote_plans))
+        Ok(ScheduledActions {
+            local_plan,
+            remote_actions
+        })
     }
 }
 

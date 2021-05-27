@@ -14,6 +14,7 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::ExpressionAction;
 use common_planners::PlanNode;
+use log::error;
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::Receiver;
@@ -42,9 +43,9 @@ pub struct StreamInfo(pub DataSchemaRef, pub String, pub Vec<String>);
 pub enum Request {
     GetSchema(String, Sender<Result<DataSchemaRef>>),
     GetStream(String, Sender<Result<Receiver<Result<FlightData>>>>),
-    PrepareQueryStage(PrepareStageInfo, Sender<Result<()>>),
+    PrepareQueryStage(Box<PrepareStageInfo>, Sender<Result<()>>),
     GetStreamInfo(String, Sender<Result<StreamInfo>>),
-    TerminalStage(String, String)
+    TerminalStage(String, String),
 }
 
 pub struct QueryInfo {
@@ -66,12 +67,14 @@ pub struct DispatcherState {
 struct ServerState {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionManagerRef
+    session_manager: SessionManagerRef,
 }
 
 pub struct FlightDispatcher {
-    state: Arc<ServerState>
+    state: Arc<ServerState>,
 }
+
+type DataReceiver = Receiver<Result<FlightData>>;
 
 impl FlightDispatcher {
     pub fn run(&self) -> Sender<Request> {
@@ -92,75 +95,34 @@ impl FlightDispatcher {
         while let Some(request) = receiver.recv().await {
             match request {
                 Request::GetStream(id, stream_receiver) => {
-                    match dispatcher_state.streams.get_mut(&id) {
-                        None => {
-                            stream_receiver
-                                .send(Err(ErrorCodes::NotFoundStream(format!(
-                                    "Stream {} is not found",
-                                    id
-                                ))))
-                                .await;
-                        }
-                        Some(stream_info) => {
-                            match stream_info.data_receiver.take() {
-                                None => {
-                                    stream_receiver
-                                        .send(Err(ErrorCodes::DuplicateGetStream(format!(
-                                            "Stream {} has been fetched once",
-                                            id
-                                        ))))
-                                        .await;
-                                }
-                                Some(receiver) => {
-                                    stream_info.launcher_sender.send(()).await;
-                                    stream_receiver.send(Ok(receiver)).await;
-                                }
-                            };
-                        }
-                    };
+                    let receiver = Self::do_get_stream(&mut dispatcher_state, &id).await;
+                    if let Err(error) = stream_receiver.send(receiver).await {
+                        error!("Cannot push: {}", error);
+                    }
                 }
                 Request::GetSchema(id, schema_receiver) => {
-                    match dispatcher_state.streams.get(&id) {
-                        Some(stream_info) => {
-                            schema_receiver.send(Ok(stream_info.schema.clone())).await
-                        }
-                        None => {
-                            schema_receiver
-                                .send(Err(ErrorCodes::NotFoundStream(format!(
-                                    "Stream {} is not found",
-                                    id
-                                ))))
-                                .await
-                        }
-                    };
+                    let schema = Self::get_schema(&mut dispatcher_state, &id).await;
+                    if let Err(error) = schema_receiver.send(schema).await {
+                        error!("Cannot push: {}", error);
+                    }
                 }
                 Request::PrepareQueryStage(info, response_sender) => {
                     let pipeline = Self::create_plan_pipeline(&*state, &info.2);
-                    response_sender
-                        .send(Self::prepare_stage(
-                            &mut dispatcher_state,
-                            &info,
-                            pipeline,
-                            request_sender.clone()
-                        ))
-                        .await;
+                    let prepared_query = Self::prepare_stage(
+                        &mut dispatcher_state,
+                        &info,
+                        pipeline,
+                        request_sender.clone(),
+                    );
+                    if let Err(error) = response_sender.send(prepared_query).await {
+                        error!("Cannot push: {}", error);
+                    }
                 }
                 Request::GetStreamInfo(id, stream_info_receiver) => {
-                    match dispatcher_state.streams.get(&id) {
-                        Some(stream_info) => {
-                            stream_info_receiver
-                                .send(Ok(StreamInfo(stream_info.schema.clone(), id, vec![])))
-                                .await
-                        }
-                        None => {
-                            stream_info_receiver
-                                .send(Err(ErrorCodes::NotFoundStream(format!(
-                                    "Stream {} is not found",
-                                    id
-                                ))))
-                                .await
-                        }
-                    };
+                    let stream_info = Self::get_stream_info(&mut dispatcher_state, &id).await;
+                    if let Err(error) = stream_info_receiver.send(stream_info).await {
+                        error!("Cannot push: {}", error);
+                    }
                 }
                 Request::TerminalStage(_, _) => {
                     // let stage_stream_prefix = format!("{}/{}", query_id, stage_id);
@@ -195,11 +157,53 @@ impl FlightDispatcher {
         // TODO: shutdown
     }
 
+    async fn get_stream_info(state: &mut DispatcherState, id: &str) -> Result<StreamInfo> {
+        match state.streams.get(id) {
+            Some(info) => Ok(StreamInfo(info.schema.clone(), id.to_string(), vec![])),
+            None => Err(ErrorCodes::NotFoundStream(format!(
+                "Stream {} is not found",
+                id
+            )))
+        }
+    }
+
+    async fn get_schema(state: &mut DispatcherState, id: &str) -> Result<DataSchemaRef> {
+        match state.streams.get(&id.to_string()) {
+            Some(stream_info) => Ok(stream_info.schema.clone()),
+            None => Err(ErrorCodes::NotFoundStream(format!(
+                "Stream {} is not found",
+                id
+            )))
+        }
+    }
+
+    async fn do_get_stream(state: &mut DispatcherState, id: &str) -> Result<DataReceiver> {
+        match state.streams.get_mut(&id.to_string()) {
+            None => Err(ErrorCodes::NotFoundStream(format!(
+                "Stream {} is not found",
+                id
+            ))),
+            Some(stream_info) => match stream_info.data_receiver.take() {
+                None => Err(ErrorCodes::DuplicateGetStream(format!(
+                    "Stream {} has been fetched once",
+                    id
+                ))),
+                Some(receiver) => match stream_info.launcher_sender.send(()).await {
+                    Ok(_) => Ok(receiver),
+                    Err(error) => Err(ErrorCodes::TokioError(format!(
+                        "Cannot launch query stage: {}",
+                        error
+                    )))
+                }
+            }
+        }
+    }
+
     fn prepare_stage(
         state: &mut DispatcherState,
         info: &PrepareStageInfo,
         pipeline: Result<Pipeline>,
-        request_sender: Sender<Request>
+        request_sender: Sender<Request>,
     ) -> Result<()> {
         if !state.queries.contains_key(&info.0) {
             fn build_runtime(max_threads: u64) -> Result<Runtime> {
@@ -244,7 +248,7 @@ impl FlightDispatcher {
                 Self::receive_data_and_push(pipeline, flight_scatter, streams_data_sender.clone())
                     .await
             {
-                for sender in streams_data_sender {
+                for sender in &streams_data_sender {
                     // TODO: backtrace
                     let clone_error = ErrorCodes::create(error.code(), error.message(), None);
                     if sender.send(Err(clone_error)).await.is_err() {
@@ -253,10 +257,15 @@ impl FlightDispatcher {
                 }
             }
 
+            for _ in 0..(streams_data_sender.len() - 1) {
+                if launcher_receiver.recv().await.is_none() {
+                    println!("launcher receiver.");
+                    break;
+                }
+            }
+
             // Destroy Query Stage
-            request_sender
-                .send(Request::TerminalStage(query_id, stage_id))
-                .await;
+            let _ = request_sender.send(Request::TerminalStage(query_id, stage_id)).await;
         });
 
         Ok(())
@@ -295,7 +304,12 @@ impl FlightDispatcher {
                 let (dicts, values) = flight_data_from_arrow_batch(&record_batch, &options);
                 let normalized_flight_data = dicts.into_iter().chain(std::iter::once(values));
                 for flight_data in normalized_flight_data {
-                    senders[0].send(Ok(flight_data)).await;
+                    if let Err(error) = (&senders[0]).send(Ok(flight_data)).await {
+                        return Err(ErrorCodes::TokioError(format!(
+                            "Cannot push data to sender: {}",
+                            error
+                        )));
+                    }
                 }
             }
         } else {
@@ -311,16 +325,19 @@ impl FlightDispatcher {
                             .map(|column| column.to_array())
                             .collect::<Result<Vec<_>>>()?;
 
-                        let record_batch = RecordBatch::try_new(
-                            scattered_data[index].schema().clone(),
-                            scattered_columns
-                        )?;
+                        let schema = scattered_data[index].schema().clone();
+                        let record_batch = RecordBatch::try_new(schema, scattered_columns)?;
                         let (dicts, values) = flight_data_from_arrow_batch(&record_batch, &options);
                         let normalized_flight_data =
                             dicts.into_iter().chain(std::iter::once(values));
 
                         for flight_data in normalized_flight_data {
-                            (&senders[index]).send(Ok(flight_data)).await;
+                            if let Err(error) = (&senders[index]).send(Ok(flight_data)).await {
+                                return Err(ErrorCodes::TokioError(format!(
+                                    "Cannot push data to sender: {}",
+                                    error
+                                )));
+                            }
                         }
                     }
                 }
@@ -375,8 +392,14 @@ impl PrepareStageInfo {
         stage_id: String,
         plan_node: PlanNode,
         scatters: Vec<String>,
-        scatters_action: ExpressionAction
-    ) -> PrepareStageInfo {
-        PrepareStageInfo(query_id, stage_id, plan_node, scatters, scatters_action)
+        scatters_action: ExpressionAction,
+    ) -> Box<PrepareStageInfo> {
+        Box::new(PrepareStageInfo(
+            query_id,
+            stage_id,
+            plan_node,
+            scatters,
+            scatters_action,
+        ))
     }
 }

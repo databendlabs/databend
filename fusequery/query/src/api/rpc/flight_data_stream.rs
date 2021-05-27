@@ -47,7 +47,9 @@ impl FlightDataStream {
         })
     }
 
+    // It is used in testing, and later it will be used in local stream
     #[inline]
+    #[allow(dead_code)]
     pub fn from_receiver(
         schema: SchemaRef,
         inner: Receiver<Result<FlightData, ErrorCodes>>

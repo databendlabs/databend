@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_arrow::arrow::array::UInt64Builder;
-use common_exception::ErrorCodes;
 
 #[test]
 fn test_data_block_kernel_take() -> anyhow::Result<()> {

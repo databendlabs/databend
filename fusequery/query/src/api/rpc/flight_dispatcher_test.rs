@@ -2,22 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::convert::TryInto;
-
-use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
-use common_arrow::arrow_flight::FlightData;
 use common_datablocks::assert_blocks_eq;
-use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
-use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::ExpressionAction;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use tokio::sync::mpsc::channel;
-use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::Sender;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_data_stream::FlightDataStream;
@@ -31,12 +23,17 @@ use crate::sessions::SessionManager;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_stream_with_non_exists_stream() -> Result<()> {
     let stream_id = "query_id/stage_id/stream_id".to_string();
-    let (dispatcher, request_sender) = create_dispatcher()?;
+    let (_dispatcher, request_sender) = create_dispatcher()?;
 
     let (sender_v, mut receiver) = channel(1);
-    request_sender
+    let send_result = request_sender
         .send(Request::GetStream(stream_id.clone(), sender_v))
         .await;
+
+    if let Err(error) = send_result {
+        assert!(false, "Cannot push in test_get_stream_with_non_exists_stream: {}", error);
+    }
+
     match receiver.recv().await.unwrap() {
         Ok(_) => assert!(
             false,
@@ -78,19 +75,29 @@ async fn test_prepare_stage_with_no_scatter() -> Result<()> {
             ))
         };
 
-        let (dispatcher, request_sender) = create_dispatcher()?;
+        let (_dispatcher, request_sender) = create_dispatcher()?;
 
         let (prepare_stage_sender, mut prepare_stage_receiver) = channel(1);
 
         let (schema, prepare_query_stage) = create_prepare_query_stage(prepare_stage_sender)?;
-        request_sender.send(prepare_query_stage).await;
+        let send_result = request_sender.send(prepare_query_stage).await;
+
+        if let Err(error) = send_result {
+            assert!(false, "Cannot push in test_prepare_stage_with_scatter: {}", error);
+        }
+
         prepare_stage_receiver.recv().await.transpose()?;
 
         // GetStream and collect items
         let (sender_v, mut receiver) = channel(1);
-        request_sender
+        let send_result = request_sender
             .send(Request::GetStream(stream_full_id.clone(), sender_v))
             .await;
+
+        if let Err(error) = send_result {
+            assert!(false, "Cannot push in test_prepare_stage_with_scatter: {}", error);
+        }
+
         match receiver.recv().await.unwrap() {
             Err(error) => assert!(false, "{}", error),
             Ok(data_receiver) => {
@@ -143,28 +150,32 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
             ))
         };
 
-        let (dispatcher, request_sender) = create_dispatcher()?;
+        let (_dispatcher, request_sender) = create_dispatcher()?;
         let (prepare_stage_sender, mut prepare_stage_receiver) = channel(1);
 
         let (schema, prepare_query_stage) = create_prepare_query_stage(prepare_stage_sender)?;
-        request_sender.send(prepare_query_stage).await;
+        let send_result = request_sender.send(prepare_query_stage).await;
+
+        if let Err(error) = send_result {
+            assert!(false, "Cannot push in test_prepare_stage_with_scatter: {}", error);
+        }
+
         prepare_stage_receiver.recv().await.transpose()?;
 
         // GetStream and collect items
         let (sender_v, mut receiver) = channel(1);
-        request_sender
-            .send(Request::GetStream(
-                stream_prefix.clone() + "stream_1",
-                sender_v.clone()
-            ))
-            .await;
+
+        let stream_name = stream_prefix.clone() + "stream_1";
+        let send_result = request_sender.send(Request::GetStream(stream_name, sender_v.clone())).await;
+
+        if let Err(error) = send_result {
+            assert!(false, "Cannot push in test_prepare_stage_with_scatter: {}", error);
+        }
 
         match receiver.recv().await.unwrap() {
             Err(error) => assert!(false, "{}", error),
             Ok(data_receiver) => {
-                let blocks = FlightDataStream::from_receiver(schema.clone(), data_receiver)
-                    .collect::<Result<Vec<_>>>()
-                    .await;
+                let mut stream = FlightDataStream::from_receiver(schema.clone(), data_receiver);
 
                 let expect = vec![
                     "+--------+",
@@ -176,22 +187,21 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
                     "+--------+",
                 ];
 
-                assert_blocks_eq(expect, &blocks?)
+                assert_blocks_eq(expect, &[(stream.next().await.unwrap()?)])
             }
         }
 
-        request_sender
-            .send(Request::GetStream(
-                stream_prefix.clone() + "stream_2",
-                sender_v.clone()
-            ))
-            .await;
+        let stream_name = stream_prefix.clone() + "stream_2";
+        let send_result = request_sender.send(Request::GetStream(stream_name, sender_v.clone())).await;
+
+        if let Err(error) = send_result {
+            assert!(false, "Cannot push in test_prepare_stage_with_scatter: {}", error);
+        }
+
         match receiver.recv().await.unwrap() {
             Err(error) => assert!(false, "{}", error),
             Ok(data_receiver) => {
-                let blocks = FlightDataStream::from_receiver(schema.clone(), data_receiver)
-                    .collect::<Result<Vec<_>>>()
-                    .await;
+                let mut stream = FlightDataStream::from_receiver(schema.clone(), data_receiver);
 
                 let expect = vec![
                     "+--------+",
@@ -202,7 +212,7 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
                     "+--------+",
                 ];
 
-                assert_blocks_eq(expect, &blocks?)
+                assert_blocks_eq(expect, &[stream.next().await.unwrap()?])
             }
         }
     }

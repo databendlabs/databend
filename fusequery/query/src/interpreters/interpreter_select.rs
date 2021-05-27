@@ -37,9 +37,9 @@ impl IInterpreter for SelectInterpreter {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = Optimizer::create(self.ctx.clone()).optimize(&self.select.input)?;
 
-        let (local_plan, remote_actions) = PlanScheduler::reschedule(self.ctx.clone(), &plan)?;
+        let scheduled_actions = PlanScheduler::reschedule(self.ctx.clone(), &plan)?;
 
-        let remote_actions_ref = &remote_actions;
+        let remote_actions_ref = &scheduled_actions.remote_actions;
         let prepare_error_handler = move |error: ErrorCodes, end: usize| {
             let mut killed_set = HashSet::new();
             for (node, _) in remote_actions_ref.iter().take(end) {
@@ -53,7 +53,7 @@ impl IInterpreter for SelectInterpreter {
         };
 
         let timeout = self.ctx.get_flight_client_timeout()?;
-        for (index, (node, action)) in remote_actions.iter().enumerate() {
+        for (index, (node, action)) in scheduled_actions.remote_actions.iter().enumerate() {
             let mut flight_client = node.get_flight_client().await?;
             if let Err(error) = flight_client
                 .prepare_query_stage(action.clone(), timeout)
@@ -63,7 +63,7 @@ impl IInterpreter for SelectInterpreter {
             }
         }
 
-        PipelineBuilder::create(self.ctx.clone(), local_plan)
+        PipelineBuilder::create(self.ctx.clone(), scheduled_actions.local_plan.clone())
             .build()?
             .execute()
             .await

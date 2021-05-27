@@ -10,24 +10,16 @@ use common_arrow::arrow::ipc::convert;
 use common_arrow::arrow_flight::flight_descriptor::DescriptorType;
 use common_arrow::arrow_flight::flight_service_server::FlightService;
 use common_arrow::arrow_flight::Action;
-use common_arrow::arrow_flight::ActionType;
 use common_arrow::arrow_flight::Empty;
 use common_arrow::arrow_flight::FlightData;
 use common_arrow::arrow_flight::FlightDescriptor;
 use common_arrow::arrow_flight::Ticket;
-use common_arrow::parquet::data_type::AsBytes;
 use common_datavalues::DataType;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::EmptyPlan;
-use common_planners::PlanNode;
 use tokio_stream::StreamExt;
 use tonic::Request;
-use tonic::Status;
-use warp::reply::Response;
 
-use crate::api::rpc::actions::ExecutePlanWithShuffleAction;
-use crate::api::rpc::flight_dispatcher::PrepareStageInfo;
 use crate::api::rpc::flight_dispatcher::Request as DispatcherRequest;
 use crate::api::rpc::flight_service_new::FuseQueryService;
 use crate::api::rpc::from_status;
@@ -62,7 +54,10 @@ async fn test_prepare_query_stage() -> Result<()> {
         match receiver.recv().await.unwrap() {
             DispatcherRequest::PrepareQueryStage(info, sss) => {
                 // To avoid deadlock, we first return the result
-                sss.send(Ok(())).await;
+                let send_result = sss.send(Ok(())).await;
+                if let Err(error) = send_result {
+                    assert!(false, "Cannot push in test_prepare_query_stage: {}", error);
+                }
 
                 // Validate prepare stage info
                 assert_eq!(info.0, "query_id");
@@ -70,7 +65,7 @@ async fn test_prepare_query_stage() -> Result<()> {
                 assert_eq!(info.2.name(), "EmptyPlan");
                 assert_eq!(info.3, vec!["stream_1", "stream_2"]);
             }
-            other => panic!("expect PrepareQueryStage")
+            _ => panic!("expect PrepareQueryStage")
         }
     });
 
@@ -100,24 +95,37 @@ async fn test_do_get_stream() -> Result<()> {
             DispatcherRequest::GetStream(stream_id, sender) => {
                 // To avoid deadlock, we first return the result
                 let (data_sender, data_receiver) = tokio::sync::mpsc::channel(3);
-                sender.send(Ok(data_receiver)).await;
+                let send_result = sender.send(Ok(data_receiver)).await;
+
+                if let Err(error) = send_result {
+                    assert!(false, "Cannot push in test_do_get_stream: {}", error);
+                }
 
                 // Validate prepare stage info
                 assert_eq!(stream_id, "stream_id");
                 // Push some data
-                data_sender
+                let send_result = data_sender
                     .send(Err(ErrorCodes::Ok("test_error_code".to_string())))
                     .await;
-                data_sender
+
+                if let Err(error) = send_result {
+                    assert!(false, "Cannot push in test_do_get_stream: {}", error);
+                }
+
+                let send_result = data_sender
                     .send(Ok(FlightData {
                         flight_descriptor: None,
                         data_header: vec![1],
                         app_metadata: vec![2],
-                        data_body: vec![3]
+                        data_body: vec![3],
                     }))
                     .await;
+
+                if let Err(error) = send_result {
+                    assert!(false, "Cannot push in test_do_get_stream: {}", error);
+                }
             }
-            other => panic!("expect GetStream")
+            _ => panic!("expect GetStream")
         }
     });
 
@@ -157,18 +165,21 @@ async fn test_do_get_schema() -> Result<()> {
         match receiver.recv().await.unwrap() {
             DispatcherRequest::GetSchema(stream_id, sender) => {
                 // To avoid deadlock, we first return the result
-                sender
+                let send_result = sender
                     .send(Ok(Arc::new(Schema::new(vec![Field::new(
                         "field",
                         DataType::Int8,
-                        true
+                        true,
                     )]))))
                     .await;
 
                 // Validate prepare stage info
-                assert_eq!(stream_id, "test_a/test_b");
+                match send_result {
+                    Ok(_) => assert_eq!(stream_id, "test_a/test_b"),
+                    Err(error) => assert!(false, "{}", error),
+                };
             }
-            other => panic!("expect GetSchema")
+            _ => panic!("expect GetSchema")
         }
     });
 

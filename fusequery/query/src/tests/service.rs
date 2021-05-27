@@ -3,12 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use anyhow::Result;
-use common_infallible::RwLock;
 use rand::Rng;
 
 use crate::api::RpcService;
 use crate::clusters::Cluster;
-use crate::clusters::Node;
 use crate::configs::Config;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionManager;

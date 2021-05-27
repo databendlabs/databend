@@ -2,12 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
 use common_exception::Result;
 
 use crate::clusters::Cluster;
-use crate::clusters::Node;
 use crate::configs::Config;
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::IOptimizer;
@@ -168,7 +165,7 @@ async fn test_scatter_optimizer() -> Result<()> {
             )
             .await?;
 
-        ctx.with_cluster(cluster.clone());
+        ctx.with_cluster(cluster.clone())?;
         let plan = PlanParser::create(ctx.clone()).build_from_sql(test.query)?;
 
         let mut optimizer = ScattersOptimizer::create(ctx);

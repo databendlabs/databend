@@ -6,7 +6,6 @@ use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 use crate::clusters::cluster::Cluster;
-use crate::clusters::node::Node;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_add_node_with_local() -> Result<()> {

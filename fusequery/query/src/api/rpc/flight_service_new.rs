@@ -204,19 +204,21 @@ impl FlightService for FuseQueryService {
             Ok(ticket) => {
                 // Flight ticket = query_id/stage_id/stream_id
                 let (response_sender, mut receiver) = channel(1);
-                self.dispatcher_sender
-                    .send(DispatcherRequest::GetStream(
-                        ticket.to_string(),
-                        response_sender
-                    ))
-                    .await;
+                let get_stream_request =
+                    DispatcherRequest::GetStream(ticket.to_string(), response_sender);
 
-                receiver
-                    .recv()
-                    .await
-                    .transpose()
-                    .and_then(create_stream_response)
-                    .map_err(to_status)
+                match self.dispatcher_sender.send(get_stream_request).await {
+                    Err(error) => Err(Status::unavailable(format!(
+                        "Flight do_get unavailable: {}",
+                        error
+                    ))),
+                    Ok(_) => receiver
+                        .recv()
+                        .await
+                        .transpose()
+                        .and_then(create_stream_response)
+                        .map_err(to_status)
+                }
             }
         }
     }
