@@ -45,6 +45,14 @@ impl IFunction for ToTypeNameFunction {
             input_rows
         ))
     }
+
+    fn num_arguments(&self) -> usize {
+        1
+    }
+
+    fn variadic_arguments(&self) -> Option<(usize, usize)> {
+        None
+    }
 }
 
 impl fmt::Display for ToTypeNameFunction {

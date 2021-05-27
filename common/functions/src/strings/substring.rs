@@ -111,6 +111,10 @@ impl IFunction for SubstringFunction {
             compute::kernels::substring::substring(value.as_ref(), from, &end)?
         ))
     }
+
+    fn variadic_arguments(&self) -> Option<(usize, usize)> {
+        Some((2, 4))
+    }
 }
 
 impl fmt::Display for SubstringFunction {

@@ -30,7 +30,7 @@ impl CastFunction {
 
 impl IFunction for CastFunction {
     fn name(&self) -> &str {
-        "cast"
+        "CastFunction"
     }
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
@@ -51,6 +51,14 @@ impl IFunction for CastFunction {
                 &DEFAULT_DATAFUSE_CAST_OPTIONS
             )?
         ))
+    }
+
+    fn num_arguments(&self) -> usize {
+        1
+    }
+
+    fn variadic_arguments(&self) -> Option<(usize, usize)> {
+        None
     }
 }
 
