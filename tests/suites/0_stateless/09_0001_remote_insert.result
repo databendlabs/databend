@@ -1,0 +1,27 @@
+--------------
+CREATE DATABASE IF NOT EXISTS db1
+--------------
+
+--------------
+CREATE TABLE IF NOT EXISTS t1(a int, b varchar)
+--------------
+
+--------------
+INSERT INTO t1 VALUES(1, 'v1'),(2,'v2')
+--------------
+
+--------------
+SELECT * FROM t1
+--------------
+
+ERROR 1105 (HY000) at line 6: Code: 2, displayText = RemoteTable read_plan not yet implemented.
+--------------
+DROP TABLE t1
+--------------
+
+ERROR 1105 (HY000) at line 8: Code: 1002, displayText = status: Internal error: Store drop database unimplemented.
+--------------
+DROP DATABASE db1
+--------------
+
+ERROR 1105 (HY000) at line 9: Code: 1002, displayText = status: Internal error: Store drop database unimplemented.
