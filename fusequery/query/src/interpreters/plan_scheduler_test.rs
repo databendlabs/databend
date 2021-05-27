@@ -7,7 +7,7 @@ use std::sync::Arc;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::EmptyPlan;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_planners::StageKind;
@@ -26,7 +26,10 @@ async fn test_scheduler_plan_without_stage() -> Result<()> {
         PlanScheduler::reschedule(context.clone(), &PlanNode::Empty(EmptyPlan::create()))?;
 
     assert!(scheduled_actions.remote_actions.is_empty());
-    assert_eq!(scheduled_actions.local_plan, PlanNode::Empty(EmptyPlan::create()));
+    assert_eq!(
+        scheduled_actions.local_plan,
+        PlanNode::Empty(EmptyPlan::create())
+    );
 
     Ok(())
 }
@@ -38,7 +41,7 @@ async fn test_scheduler_plan_with_one_normal_stage() -> Result<()> {
         context.clone(),
         &PlanNode::Stage(StagePlan {
             kind: StageKind::Normal,
-            scatters_expr: ExpressionAction::Literal(DataValue::UInt64(Some(1))),
+            scatters_expr: Expression::Literal(DataValue::UInt64(Some(1))),
             input: Arc::new(PlanNode::Empty(EmptyPlan::create()))
         })
     );
@@ -67,7 +70,7 @@ async fn test_scheduler_plan_with_one_expansive_stage() -> Result<()> {
         context.clone(),
         &PlanNode::Stage(StagePlan {
             kind: StageKind::Expansive,
-            scatters_expr: ExpressionAction::Literal(DataValue::UInt64(Some(1))),
+            scatters_expr: Expression::Literal(DataValue::UInt64(Some(1))),
             input: Arc::new(PlanNode::Empty(EmptyPlan::create()))
         })
     );
@@ -112,32 +115,38 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
         context.clone(),
         &PlanNode::Stage(StagePlan {
             kind: StageKind::Convergent,
-            scatters_expr: ExpressionAction::Literal(DataValue::UInt64(Some(0))),
-            input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
-        }),
+            scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
+            input: Arc::new(PlanNode::Empty(EmptyPlan::create()))
+        })
     )?;
 
     assert_eq!(scheduled_actions.remote_actions.len(), 2);
-    assert_eq!(scheduled_actions.remote_actions[0].0.name, String::from("dummy_local"));
-    assert_eq!(scheduled_actions.remote_actions[0].1.scatters, vec![String::from(
-        "dummy_local"
-    )]);
+    assert_eq!(
+        scheduled_actions.remote_actions[0].0.name,
+        String::from("dummy_local")
+    );
+    assert_eq!(scheduled_actions.remote_actions[0].1.scatters, vec![
+        String::from("dummy_local")
+    ]);
     assert_eq!(
         scheduled_actions.remote_actions[0].1.scatters_action,
-        ExpressionAction::Literal(DataValue::UInt64(Some(0)))
+        Expression::Literal(DataValue::UInt64(Some(0)))
     );
     assert_eq!(
         scheduled_actions.remote_actions[0].1.plan,
         PlanNode::Empty(EmptyPlan::create())
     );
 
-    assert_eq!(scheduled_actions.remote_actions[1].0.name, String::from("dummy"));
-    assert_eq!(scheduled_actions.remote_actions[1].1.scatters, vec![String::from(
-        "dummy_local"
-    )]);
+    assert_eq!(
+        scheduled_actions.remote_actions[1].0.name,
+        String::from("dummy")
+    );
+    assert_eq!(scheduled_actions.remote_actions[1].1.scatters, vec![
+        String::from("dummy_local")
+    ]);
     assert_eq!(
         scheduled_actions.remote_actions[1].1.scatters_action,
-        ExpressionAction::Literal(DataValue::UInt64(Some(0)))
+        Expression::Literal(DataValue::UInt64(Some(0)))
     );
     assert_eq!(
         scheduled_actions.remote_actions[1].1.plan,
@@ -180,32 +189,35 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
         &PlanNode::Select(SelectPlan {
             input: Arc::new(PlanNode::Stage(StagePlan {
                 kind: StageKind::Convergent,
-                scatters_expr: ExpressionAction::Literal(DataValue::UInt64(Some(0))),
+                scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
                 input: Arc::new(PlanNode::Select(SelectPlan {
                     input: Arc::new(PlanNode::Stage(StagePlan {
                         kind: StageKind::Expansive,
-                        scatters_expr: ExpressionAction::ScalarFunction {
+                        scatters_expr: Expression::ScalarFunction {
                             op: String::from("blockNumber"),
-                            args: vec![],
+                            args: vec![]
                         },
-                        input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
+                        input: Arc::new(PlanNode::Empty(EmptyPlan::create()))
                     }))
-                })),
+                }))
             }))
-        }),
+        })
     )?;
 
     assert_eq!(scheduled_actions.remote_actions.len(), 3);
-    assert_eq!(scheduled_actions.remote_actions[0].0.name, String::from("dummy_local"));
+    assert_eq!(
+        scheduled_actions.remote_actions[0].0.name,
+        String::from("dummy_local")
+    );
     assert_eq!(scheduled_actions.remote_actions[0].1.scatters, vec![
         String::from("dummy_local"),
         String::from("dummy")
     ]);
     assert_eq!(
         scheduled_actions.remote_actions[0].1.scatters_action,
-        ExpressionAction::ScalarFunction {
+        Expression::ScalarFunction {
             op: String::from("blockNumber"),
-            args: vec![],
+            args: vec![]
         }
     );
     assert_eq!(
@@ -213,22 +225,28 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
         PlanNode::Empty(EmptyPlan::create())
     );
 
-    assert_eq!(scheduled_actions.remote_actions[1].0.name, String::from("dummy_local"));
-    assert_eq!(scheduled_actions.remote_actions[1].1.scatters, vec![String::from(
-        "dummy_local"
-    )]);
+    assert_eq!(
+        scheduled_actions.remote_actions[1].0.name,
+        String::from("dummy_local")
+    );
+    assert_eq!(scheduled_actions.remote_actions[1].1.scatters, vec![
+        String::from("dummy_local")
+    ]);
     assert_eq!(
         scheduled_actions.remote_actions[1].1.scatters_action,
-        ExpressionAction::Literal(DataValue::UInt64(Some(0)))
+        Expression::Literal(DataValue::UInt64(Some(0)))
     );
 
-    assert_eq!(scheduled_actions.remote_actions[2].0.name, String::from("dummy"));
-    assert_eq!(scheduled_actions.remote_actions[2].1.scatters, vec![String::from(
-        "dummy_local"
-    )]);
+    assert_eq!(
+        scheduled_actions.remote_actions[2].0.name,
+        String::from("dummy")
+    );
+    assert_eq!(scheduled_actions.remote_actions[2].1.scatters, vec![
+        String::from("dummy_local")
+    ]);
     assert_eq!(
         scheduled_actions.remote_actions[2].1.scatters_action,
-        ExpressionAction::Literal(DataValue::UInt64(Some(0)))
+        Expression::Literal(DataValue::UInt64(Some(0)))
     );
 
     // Perform the same plan in different nodes
@@ -282,63 +300,75 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
         &PlanNode::Select(SelectPlan {
             input: Arc::new(PlanNode::Stage(StagePlan {
                 kind: StageKind::Convergent,
-                scatters_expr: ExpressionAction::Literal(DataValue::UInt64(Some(1))),
+                scatters_expr: Expression::Literal(DataValue::UInt64(Some(1))),
                 input: Arc::new(PlanNode::Select(SelectPlan {
                     input: Arc::new(PlanNode::Stage(StagePlan {
                         kind: StageKind::Normal,
-                        scatters_expr: ExpressionAction::Literal(DataValue::UInt64(Some(0))),
-                        input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
+                        scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
+                        input: Arc::new(PlanNode::Empty(EmptyPlan::create()))
                     }))
-                })),
+                }))
             }))
-        }),
+        })
     )?;
 
     assert_eq!(scheduled_actions.remote_actions.len(), 4);
-    assert_eq!(scheduled_actions.remote_actions[0].0.name, String::from("dummy_local"));
+    assert_eq!(
+        scheduled_actions.remote_actions[0].0.name,
+        String::from("dummy_local")
+    );
     assert_eq!(scheduled_actions.remote_actions[0].1.scatters, vec![
         String::from("dummy_local"),
         String::from("dummy")
     ]);
     assert_eq!(
         scheduled_actions.remote_actions[0].1.scatters_action,
-        ExpressionAction::Literal(DataValue::UInt64(Some(0)))
+        Expression::Literal(DataValue::UInt64(Some(0)))
     );
     assert_eq!(
         scheduled_actions.remote_actions[0].1.plan,
         PlanNode::Empty(EmptyPlan::create())
     );
 
-    assert_eq!(scheduled_actions.remote_actions[2].0.name, String::from("dummy"));
+    assert_eq!(
+        scheduled_actions.remote_actions[2].0.name,
+        String::from("dummy")
+    );
     assert_eq!(scheduled_actions.remote_actions[2].1.scatters, vec![
         String::from("dummy_local"),
         String::from("dummy")
     ]);
     assert_eq!(
         scheduled_actions.remote_actions[2].1.scatters_action,
-        ExpressionAction::Literal(DataValue::UInt64(Some(0)))
+        Expression::Literal(DataValue::UInt64(Some(0)))
     );
     assert_eq!(
         scheduled_actions.remote_actions[2].1.plan,
         PlanNode::Empty(EmptyPlan::create())
     );
 
-    assert_eq!(scheduled_actions.remote_actions[1].0.name, String::from("dummy_local"));
-    assert_eq!(scheduled_actions.remote_actions[1].1.scatters, vec![String::from(
-        "dummy_local"
-    )]);
+    assert_eq!(
+        scheduled_actions.remote_actions[1].0.name,
+        String::from("dummy_local")
+    );
+    assert_eq!(scheduled_actions.remote_actions[1].1.scatters, vec![
+        String::from("dummy_local")
+    ]);
     assert_eq!(
         scheduled_actions.remote_actions[1].1.scatters_action,
-        ExpressionAction::Literal(DataValue::UInt64(Some(1)))
+        Expression::Literal(DataValue::UInt64(Some(1)))
     );
 
-    assert_eq!(scheduled_actions.remote_actions[3].0.name, String::from("dummy"));
-    assert_eq!(scheduled_actions.remote_actions[3].1.scatters, vec![String::from(
-        "dummy_local"
-    )]);
+    assert_eq!(
+        scheduled_actions.remote_actions[3].0.name,
+        String::from("dummy")
+    );
+    assert_eq!(scheduled_actions.remote_actions[3].1.scatters, vec![
+        String::from("dummy_local")
+    ]);
     assert_eq!(
         scheduled_actions.remote_actions[3].1.scatters_action,
-        ExpressionAction::Literal(DataValue::UInt64(Some(1)))
+        Expression::Literal(DataValue::UInt64(Some(1)))
     );
 
     // Perform the same plan in different nodes

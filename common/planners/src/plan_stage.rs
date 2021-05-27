@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 
-use crate::ExpressionAction;
+use crate::Expression;
 use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -20,7 +20,7 @@ pub enum StageKind {
 pub struct StagePlan {
     pub kind: StageKind,
     pub input: Arc<PlanNode>,
-    pub scatters_expr: ExpressionAction
+    pub scatters_expr: Expression
 }
 
 impl StagePlan {

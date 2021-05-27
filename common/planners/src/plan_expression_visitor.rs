@@ -4,7 +4,7 @@
 
 use common_exception::Result;
 
-use crate::ExpressionAction;
+use crate::Expression;
 
 /// Controls how the visitor recursion should proceed.
 pub enum Recursion<V: ExpressionVisitor> {
@@ -21,16 +21,16 @@ pub enum Recursion<V: ExpressionVisitor> {
 /// on `Expr::accept` for details on its use
 pub trait ExpressionVisitor: Sized {
     /// Invoked before any children of `expr` are visisted.
-    fn pre_visit(self, expr: &ExpressionAction) -> Result<Recursion<Self>>;
+    fn pre_visit(self, expr: &Expression) -> Result<Recursion<Self>>;
 
     /// Invoked after all children of `expr` are visited. Default
     /// implementation does nothing.
-    fn post_visit(self, _expr: &ExpressionAction) -> Result<Self> {
+    fn post_visit(self, _expr: &Expression) -> Result<Self> {
         Ok(self)
     }
 }
 
-impl ExpressionAction {
+impl Expression {
     /// Performs a depth first walk of an expression and
     /// its children, calling [`ExpressionVisitor::pre_visit`] and
     /// `visitor.post_visit`.
@@ -68,29 +68,29 @@ impl ExpressionAction {
 
         // recurse (and cover all expression types)
         let visitor = match self {
-            ExpressionAction::Alias(_, expr) => expr.accept(visitor),
-            ExpressionAction::BinaryExpression { left, right, .. } => {
+            Expression::Alias(_, expr) => expr.accept(visitor),
+            Expression::BinaryExpression { left, right, .. } => {
                 let mut visitor = visitor;
                 visitor = left.accept(visitor)?;
                 visitor = right.accept(visitor)?;
                 Ok(visitor)
             }
-            ExpressionAction::ScalarFunction { args, .. } => {
+            Expression::ScalarFunction { args, .. } => {
                 let mut visitor = visitor;
                 for arg in args {
                     visitor = arg.accept(visitor)?;
                 }
                 Ok(visitor)
             }
-            ExpressionAction::AggregateFunction { args, .. } => {
+            Expression::AggregateFunction { args, .. } => {
                 let mut visitor = visitor;
                 for arg in args {
                     visitor = arg.accept(visitor)?;
                 }
                 Ok(visitor)
             }
-            ExpressionAction::Cast { expr, .. } => expr.accept(visitor),
-            ExpressionAction::Sort { expr, .. } => expr.accept(visitor),
+            Expression::Cast { expr, .. } => expr.accept(visitor),
+            Expression::Sort { expr, .. } => expr.accept(visitor),
 
             _ => Ok(visitor)
         }?;

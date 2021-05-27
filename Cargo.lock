@@ -91,8 +91,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "arrow"
 version = "4.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20cdf087304d5cdd743abd621b4b1b388848d29491932dae6f676ec89ebda0ae"
+source = "git+https://github.com/apache/arrow-rs?tag=4.1.0#a5dd428f57e62db20a945e8b1895de91405958c4"
 dependencies = [
  "cfg_aliases",
  "chrono",
@@ -114,8 +113,7 @@ dependencies = [
 [[package]]
 name = "arrow-flight"
 version = "4.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be523cfd3669eee90aac4223cbc6fa8c4fd4cecf3281f061e5421e3e8aa91148"
+source = "git+https://github.com/apache/arrow-rs?tag=4.1.0#a5dd428f57e62db20a945e8b1895de91405958c4"
 dependencies = [
  "arrow",
  "bytes 1.0.1",
@@ -2573,8 +2571,7 @@ dependencies = [
 [[package]]
 name = "parquet"
 version = "4.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "193b8db290021fa28a6447df8f433e39b3caab20ee08b874d0a5c1c34aef68de"
+source = "git+https://github.com/apache/arrow-rs?tag=4.1.0#a5dd428f57e62db20a945e8b1895de91405958c4"
 dependencies = [
  "arrow",
  "base64 0.13.0",

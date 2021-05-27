@@ -23,7 +23,7 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_planners::ExplainPlan;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
 use common_planners::InsertIntoPlan;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
@@ -353,10 +353,10 @@ impl PlanParser {
             .projection
             .iter()
             .map(|e| self.sql_select_to_rex(&e, &plan.schema()))
-            .collect::<Result<Vec<ExpressionAction>>>()?
+            .collect::<Result<Vec<Expression>>>()?
             .iter()
             .flat_map(|expr| expand_wildcard(&expr, &plan.schema()))
-            .collect::<Vec<ExpressionAction>>();
+            .collect::<Vec<Expression>>();
 
         // Aliases replacement for group by, having, sorting
         // In example: Aliases=[("id", (number % 3))]
@@ -378,7 +378,7 @@ impl PlanParser {
         let having_expr_opt = select
             .having
             .as_ref()
-            .map::<Result<ExpressionAction>, _>(|having_expr| {
+            .map::<Result<Expression>, _>(|having_expr| {
                 let having_expr = self.sql_to_rex(having_expr, &plan.schema())?;
                 let having_expr = resolve_aliases_to_exprs(&having_expr, &aliases)?;
 
@@ -390,8 +390,8 @@ impl PlanParser {
         // In example: Sort=(number % 3)
         let order_by_exprs = order_by
             .iter()
-            .map(|e| -> Result<ExpressionAction> {
-                Ok(ExpressionAction::Sort {
+            .map(|e| -> Result<Expression> {
+                Ok(Expression::Sort {
                     expr: Box::new(
                         self.sql_to_rex(&e.expr, &plan.schema())
                             .and_then(|expr| resolve_aliases_to_exprs(&expr, &aliases))?
@@ -400,7 +400,7 @@ impl PlanParser {
                     nulls_first: e.nulls_first.unwrap_or(true)
                 })
             })
-            .collect::<Result<Vec<ExpressionAction>>>()?;
+            .collect::<Result<Vec<Expression>>>()?;
 
         // The outer expressions we will search through for
         // aggregates. Aggregates may be sourced from the SELECT, order by, having ...
@@ -506,16 +506,14 @@ impl PlanParser {
         &self,
         sql: &sqlparser::ast::SelectItem,
         schema: &DataSchema
-    ) -> Result<ExpressionAction> {
+    ) -> Result<Expression> {
         match sql {
             sqlparser::ast::SelectItem::UnnamedExpr(expr) => self.sql_to_rex(expr, schema),
-            sqlparser::ast::SelectItem::ExprWithAlias { expr, alias } => {
-                Ok(ExpressionAction::Alias(
-                    alias.value.clone(),
-                    Box::new(self.sql_to_rex(&expr, schema)?)
-                ))
-            }
-            sqlparser::ast::SelectItem::Wildcard => Ok(ExpressionAction::Wildcard),
+            sqlparser::ast::SelectItem::ExprWithAlias { expr, alias } => Ok(Expression::Alias(
+                alias.value.clone(),
+                Box::new(self.sql_to_rex(&expr, schema)?)
+            )),
+            sqlparser::ast::SelectItem::Wildcard => Ok(Expression::Wildcard),
             _ => Result::Err(ErrorCodes::UnImplement(format!(
                 "SelectItem: {:?} are not supported",
                 sql
@@ -634,15 +632,15 @@ impl PlanParser {
         &self,
         expr: &sqlparser::ast::Expr,
         schema: &DataSchema
-    ) -> Result<ExpressionAction> {
-        fn value_to_rex(value: &sqlparser::ast::Value) -> Result<ExpressionAction> {
+    ) -> Result<Expression> {
+        fn value_to_rex(value: &sqlparser::ast::Value) -> Result<Expression> {
             match value {
                 sqlparser::ast::Value::Number(ref n, _) => {
-                    DataValue::try_from_literal(n).map(ExpressionAction::Literal)
+                    DataValue::try_from_literal(n).map(Expression::Literal)
                 }
-                sqlparser::ast::Value::SingleQuotedString(ref value) => Ok(
-                    ExpressionAction::Literal(DataValue::Utf8(Some(value.clone())))
-                ),
+                sqlparser::ast::Value::SingleQuotedString(ref value) => {
+                    Ok(Expression::Literal(DataValue::Utf8(Some(value.clone()))))
+                }
                 sqlparser::ast::Value::Interval {
                     value,
                     leading_field,
@@ -665,17 +663,15 @@ impl PlanParser {
 
         match expr {
             sqlparser::ast::Expr::Value(value) => value_to_rex(value),
-            sqlparser::ast::Expr::Identifier(ref v) => {
-                Ok(ExpressionAction::Column(v.clone().value))
-            }
+            sqlparser::ast::Expr::Identifier(ref v) => Ok(Expression::Column(v.clone().value)),
             sqlparser::ast::Expr::BinaryOp { left, op, right } => {
-                Ok(ExpressionAction::BinaryExpression {
+                Ok(Expression::BinaryExpression {
                     op: format!("{}", op),
                     left: Box::new(self.sql_to_rex(left, schema)?),
                     right: Box::new(self.sql_to_rex(right, schema)?)
                 })
             }
-            sqlparser::ast::Expr::UnaryOp { op, expr } => Ok(ExpressionAction::UnaryExpression {
+            sqlparser::ast::Expr::UnaryOp { op, expr } => Ok(Expression::UnaryExpression {
                 op: format!("{}", op),
                 expr: Box::new(self.sql_to_rex(expr, schema)?)
             }),
@@ -707,17 +703,15 @@ impl PlanParser {
 
                 let op = e.name.to_string();
                 if AggregateFunctionFactory::get(&op).is_ok() {
-                    return Ok(ExpressionAction::AggregateFunction { op, args });
+                    return Ok(Expression::AggregateFunction { op, args });
                 }
 
-                Ok(ExpressionAction::ScalarFunction { op, args })
+                Ok(Expression::ScalarFunction { op, args })
             }
-            sqlparser::ast::Expr::Wildcard => Ok(ExpressionAction::Wildcard),
+            sqlparser::ast::Expr::Wildcard => Ok(Expression::Wildcard),
             sqlparser::ast::Expr::TypedString { data_type, value } => {
-                SQLCommon::make_data_type(data_type).map(|data_type| ExpressionAction::Cast {
-                    expr: Box::new(ExpressionAction::Literal(DataValue::Utf8(Some(
-                        value.clone()
-                    )))),
+                SQLCommon::make_data_type(data_type).map(|data_type| Expression::Cast {
+                    expr: Box::new(Expression::Literal(DataValue::Utf8(Some(value.clone())))),
                     data_type
                 })
             }
@@ -726,7 +720,7 @@ impl PlanParser {
                 .map(Box::from)
                 .and_then(|expr| {
                     SQLCommon::make_data_type(data_type)
-                        .map(|data_type| ExpressionAction::Cast { expr, data_type })
+                        .map(|data_type| Expression::Cast { expr, data_type })
                 }),
             sqlparser::ast::Expr::Substring {
                 expr,
@@ -738,14 +732,14 @@ impl PlanParser {
                 if let Some(from) = substring_from {
                     args.push(self.sql_to_rex(from, schema)?);
                 } else {
-                    args.push(ExpressionAction::Literal(DataValue::Int64(Some(1))));
+                    args.push(Expression::Literal(DataValue::Int64(Some(1))));
                 }
 
                 if let Some(len) = substring_for {
                     args.push(self.sql_to_rex(len, schema)?);
                 }
 
-                Ok(ExpressionAction::ScalarFunction {
+                Ok(Expression::ScalarFunction {
                     op: "substring".to_string(),
                     args
                 })
@@ -794,7 +788,7 @@ impl PlanParser {
     }
 
     /// Apply a having to the plan
-    fn having(&self, plan: &PlanNode, expr: Option<ExpressionAction>) -> Result<PlanNode> {
+    fn having(&self, plan: &PlanNode, expr: Option<Expression>) -> Result<PlanNode> {
         if let Some(expr) = expr {
             let expr = rebase_expr_from_input(&expr, &plan.schema())?;
             return PlanBuilder::from(&plan)
@@ -805,7 +799,7 @@ impl PlanParser {
     }
 
     /// Wrap a plan in a projection
-    fn project(&self, input: &PlanNode, exprs: &[ExpressionAction]) -> Result<PlanNode> {
+    fn project(&self, input: &PlanNode, exprs: &[Expression]) -> Result<PlanNode> {
         let exprs = exprs
             .iter()
             .map(|expr| rebase_expr_from_input(expr, &input.schema()))
@@ -820,8 +814,8 @@ impl PlanParser {
     fn aggregate(
         &self,
         input: &PlanNode,
-        aggr_exprs: &[ExpressionAction],
-        group_by_exprs: &[ExpressionAction]
+        aggr_exprs: &[Expression],
+        group_by_exprs: &[Expression]
     ) -> Result<PlanNode> {
         let aggr_exprs = aggr_exprs
             .iter()
@@ -844,7 +838,7 @@ impl PlanParser {
             .and_then(|builder| builder.build())
     }
 
-    fn sort(&self, input: &PlanNode, order_by_exprs: &[ExpressionAction]) -> Result<PlanNode> {
+    fn sort(&self, input: &PlanNode, order_by_exprs: &[Expression]) -> Result<PlanNode> {
         if order_by_exprs.is_empty() {
             return Ok(input.clone());
         }
@@ -866,7 +860,7 @@ impl PlanParser {
                 let n = self
                     .sql_to_rex(&limit_expr, &input.schema())
                     .and_then(|limit_expr| match limit_expr {
-                        ExpressionAction::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
+                        Expression::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
                         _ => Err(ErrorCodes::SyntaxException(
                             "Unexpected expression for LIMIT clause"
                         ))
@@ -881,12 +875,7 @@ impl PlanParser {
     }
 
     /// Apply a expression against exprs.
-    fn expression(
-        &self,
-        input: &PlanNode,
-        exprs: &[ExpressionAction],
-        desc: &str
-    ) -> Result<PlanNode> {
+    fn expression(&self, input: &PlanNode, exprs: &[Expression], desc: &str) -> Result<PlanNode> {
         let mut dedup_exprs = vec![];
         for expr in exprs {
             let rebased_expr = unwrap_alias_exprs(expr)
@@ -900,7 +889,7 @@ impl PlanParser {
 
         // if all expression is column expression expression, we skip this expression
         if dedup_exprs.iter().all(|expr| {
-            if let ExpressionAction::Column(_) = expr {
+            if let Expression::Column(_) = expr {
                 return true;
             }
             false

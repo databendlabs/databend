@@ -117,7 +117,7 @@ async fn test_do_get_stream() -> Result<()> {
                         flight_descriptor: None,
                         data_header: vec![1],
                         app_metadata: vec![2],
-                        data_body: vec![3],
+                        data_body: vec![3]
                     }))
                     .await;
 
@@ -169,14 +169,14 @@ async fn test_do_get_schema() -> Result<()> {
                     .send(Ok(Arc::new(Schema::new(vec![Field::new(
                         "field",
                         DataType::Int8,
-                        true,
+                        true
                     )]))))
                     .await;
 
                 // Validate prepare stage info
                 match send_result {
                     Ok(_) => assert_eq!(stream_id, "test_a/test_b"),
-                    Err(error) => assert!(false, "{}", error),
+                    Err(error) => assert!(false, "{}", error)
                 };
             }
             _ => panic!("expect GetSchema")

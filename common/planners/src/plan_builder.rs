@@ -17,7 +17,7 @@ use crate::AggregatorPartialPlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::ExplainType;
-use crate::ExpressionAction;
+use crate::Expression;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
@@ -56,13 +56,13 @@ impl PlanBuilder {
     }
 
     /// Apply a expression and merge the fields with exprs.
-    pub fn expression(&self, exprs: &[ExpressionAction], desc: &str) -> Result<Self> {
+    pub fn expression(&self, exprs: &[Expression], desc: &str) -> Result<Self> {
         let input_schema = self.plan.schema();
 
         // Get the projection expressions(Including rewrite).
         let mut projection_exprs = vec![];
         exprs.iter().for_each(|v| match v {
-            ExpressionAction::Wildcard => {
+            Expression::Wildcard => {
                 for i in 0..input_schema.fields().len() {
                     projection_exprs.push(col(input_schema.fields()[i].name()))
                 }
@@ -88,7 +88,7 @@ impl PlanBuilder {
     }
 
     /// Apply a projection.
-    pub fn project(&self, exprs: &[ExpressionAction]) -> Result<Self> {
+    pub fn project(&self, exprs: &[Expression]) -> Result<Self> {
         let input_schema = self.plan.schema();
         let fields = RewriteHelper::exprs_to_fields(exprs, &input_schema)?;
 
@@ -103,8 +103,8 @@ impl PlanBuilder {
         &self,
         mode: AggregateMode,
         schema_before_groupby: DataSchemaRef,
-        aggr_expr: &[ExpressionAction],
-        group_expr: &[ExpressionAction]
+        aggr_expr: &[Expression],
+        group_expr: &[Expression]
     ) -> Result<Self> {
         Ok(match mode {
             AggregateMode::Partial => {
@@ -149,8 +149,8 @@ impl PlanBuilder {
     /// Apply a partial aggregator plan.
     pub fn aggregate_partial(
         &self,
-        aggr_expr: &[ExpressionAction],
-        group_expr: &[ExpressionAction]
+        aggr_expr: &[Expression],
+        group_expr: &[Expression]
     ) -> Result<Self> {
         self.aggregate(
             AggregateMode::Partial,
@@ -164,8 +164,8 @@ impl PlanBuilder {
     pub fn aggregate_final(
         &self,
         schema_before_groupby: DataSchemaRef,
-        aggr_expr: &[ExpressionAction],
-        group_expr: &[ExpressionAction]
+        aggr_expr: &[Expression],
+        group_expr: &[Expression]
     ) -> Result<Self> {
         self.aggregate(
             AggregateMode::Final,
@@ -181,7 +181,7 @@ impl PlanBuilder {
         _table_name: &str,
         table_schema: &DataSchema,
         projection: Option<Vec<usize>>,
-        table_args: Option<ExpressionAction>,
+        table_args: Option<Expression>,
         limit: Option<usize>
     ) -> Result<Self> {
         let table_schema = DataSchemaRef::new(table_schema.clone());
@@ -207,7 +207,7 @@ impl PlanBuilder {
     }
 
     /// Apply a filter
-    pub fn filter(&self, expr: ExpressionAction) -> Result<Self> {
+    pub fn filter(&self, expr: Expression) -> Result<Self> {
         Ok(Self::from(&PlanNode::Filter(FilterPlan {
             predicate: expr,
             input: Arc::new(self.plan.clone())
@@ -215,14 +215,14 @@ impl PlanBuilder {
     }
 
     /// Apply a having
-    pub fn having(&self, expr: ExpressionAction) -> Result<Self> {
+    pub fn having(&self, expr: Expression) -> Result<Self> {
         Ok(Self::from(&PlanNode::Having(HavingPlan {
             predicate: expr,
             input: Arc::new(self.plan.clone())
         })))
     }
 
-    pub fn sort(&self, exprs: &[ExpressionAction]) -> Result<Self> {
+    pub fn sort(&self, exprs: &[Expression]) -> Result<Self> {
         Ok(Self::from(&PlanNode::Sort(SortPlan {
             order_by: exprs.to_vec(),
             input: Arc::new(self.plan.clone())

@@ -4,7 +4,7 @@
 
 use common_exception::Result;
 
-use crate::ExpressionAction;
+use crate::Expression;
 
 /// Trait for potentially recursively rewriting an [`Expr`] expression
 /// tree. When passed to `Expr::rewrite`, `ExprVisitor::mutate` is
@@ -13,16 +13,16 @@ use crate::ExpressionAction;
 pub trait ExprRewriter: Sized {
     /// Invoked before any children of `expr` are rewritten /
     /// visited. Default implementation returns `Ok(true)`
-    fn pre_visit(&mut self, _expr: &ExpressionAction) -> Result<bool> {
+    fn pre_visit(&mut self, _expr: &Expression) -> Result<bool> {
         Ok(true)
     }
 
     /// Invoked after all children of `expr` have been mutated and
     /// returns a potentially modified expr.
-    fn mutate(&mut self, expr: ExpressionAction) -> Result<ExpressionAction>;
+    fn mutate(&mut self, expr: Expression) -> Result<Expression>;
 }
 
-impl ExpressionAction {
+impl Expression {
     /// Performs a depth first walk of an expression and its children
     /// to rewrite an expression, consuming `self` producing a new
     /// [`Expr`].
@@ -63,45 +63,43 @@ impl ExpressionAction {
         };
         // recurse into all sub expressions(and cover all expression types)
         let expr = match self {
-            ExpressionAction::Alias(name, expr) => {
+            Expression::Alias(name, expr) => {
                 let expr = expr.rewrite(rewriter)?;
-                ExpressionAction::Alias(name, Box::new(expr))
+                Expression::Alias(name, Box::new(expr))
             }
-            ExpressionAction::BinaryExpression { op, left, right } => {
-                ExpressionAction::BinaryExpression {
-                    op,
-                    left: Box::new(left.rewrite(rewriter)?),
-                    right: Box::new(right.rewrite(rewriter)?)
-                }
-            }
-            ExpressionAction::ScalarFunction { op, args } => {
+            Expression::BinaryExpression { op, left, right } => Expression::BinaryExpression {
+                op,
+                left: Box::new(left.rewrite(rewriter)?),
+                right: Box::new(right.rewrite(rewriter)?)
+            },
+            Expression::ScalarFunction { op, args } => {
                 let mut new_args = Vec::with_capacity(args.len());
                 for arg in args {
                     new_args.push(arg.rewrite(rewriter)?);
                 }
-                ExpressionAction::ScalarFunction { op, args: new_args }
+                Expression::ScalarFunction { op, args: new_args }
             }
-            ExpressionAction::AggregateFunction { op, args } => {
+            Expression::AggregateFunction { op, args } => {
                 let mut new_args = Vec::with_capacity(args.len());
                 for arg in args {
                     new_args.push(arg.rewrite(rewriter)?);
                 }
-                ExpressionAction::AggregateFunction { op, args: new_args }
+                Expression::AggregateFunction { op, args: new_args }
             }
-            ExpressionAction::Cast { expr, data_type } => {
+            Expression::Cast { expr, data_type } => {
                 let expr = expr.rewrite(rewriter)?;
-                ExpressionAction::Cast {
+                Expression::Cast {
                     expr: Box::new(expr),
                     data_type
                 }
             }
-            ExpressionAction::Sort {
+            Expression::Sort {
                 expr,
                 asc,
                 nulls_first
             } => {
                 let expr = expr.rewrite(rewriter)?;
-                ExpressionAction::Sort {
+                Expression::Sort {
                     expr: Box::new(expr),
                     asc,
                     nulls_first

@@ -5,7 +5,7 @@
 use common_datablocks::assert_blocks_eq;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use tokio::sync::mpsc::channel;
@@ -31,7 +31,11 @@ async fn test_get_stream_with_non_exists_stream() -> Result<()> {
         .await;
 
     if let Err(error) = send_result {
-        assert!(false, "Cannot push in test_get_stream_with_non_exists_stream: {}", error);
+        assert!(
+            false,
+            "Cannot push in test_get_stream_with_non_exists_stream: {}",
+            error
+        );
     }
 
     match receiver.recv().await.unwrap() {
@@ -68,7 +72,7 @@ async fn test_prepare_stage_with_no_scatter() -> Result<()> {
                         stage_id.clone(),
                         plan.clone(),
                         vec![stream_id.clone()],
-                        ExpressionAction::Literal(DataValue::UInt64(Some(1)))
+                        Expression::Literal(DataValue::UInt64(Some(1)))
                     ),
                     sender
                 )
@@ -83,7 +87,11 @@ async fn test_prepare_stage_with_no_scatter() -> Result<()> {
         let send_result = request_sender.send(prepare_query_stage).await;
 
         if let Err(error) = send_result {
-            assert!(false, "Cannot push in test_prepare_stage_with_scatter: {}", error);
+            assert!(
+                false,
+                "Cannot push in test_prepare_stage_with_scatter: {}",
+                error
+            );
         }
 
         prepare_stage_receiver.recv().await.transpose()?;
@@ -95,7 +103,11 @@ async fn test_prepare_stage_with_no_scatter() -> Result<()> {
             .await;
 
         if let Err(error) = send_result {
-            assert!(false, "Cannot push in test_prepare_stage_with_scatter: {}", error);
+            assert!(
+                false,
+                "Cannot push in test_prepare_stage_with_scatter: {}",
+                error
+            );
         }
 
         match receiver.recv().await.unwrap() {
@@ -143,7 +155,7 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
                         stage_id.clone(),
                         plan.clone(),
                         vec!["stream_1".to_string(), "stream_2".to_string()],
-                        ExpressionAction::Column("number".to_string())
+                        Expression::Column("number".to_string())
                     ),
                     sender
                 )
@@ -157,7 +169,11 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
         let send_result = request_sender.send(prepare_query_stage).await;
 
         if let Err(error) = send_result {
-            assert!(false, "Cannot push in test_prepare_stage_with_scatter: {}", error);
+            assert!(
+                false,
+                "Cannot push in test_prepare_stage_with_scatter: {}",
+                error
+            );
         }
 
         prepare_stage_receiver.recv().await.transpose()?;
@@ -166,10 +182,16 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
         let (sender_v, mut receiver) = channel(1);
 
         let stream_name = stream_prefix.clone() + "stream_1";
-        let send_result = request_sender.send(Request::GetStream(stream_name, sender_v.clone())).await;
+        let send_result = request_sender
+            .send(Request::GetStream(stream_name, sender_v.clone()))
+            .await;
 
         if let Err(error) = send_result {
-            assert!(false, "Cannot push in test_prepare_stage_with_scatter: {}", error);
+            assert!(
+                false,
+                "Cannot push in test_prepare_stage_with_scatter: {}",
+                error
+            );
         }
 
         match receiver.recv().await.unwrap() {
@@ -192,10 +214,16 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
         }
 
         let stream_name = stream_prefix.clone() + "stream_2";
-        let send_result = request_sender.send(Request::GetStream(stream_name, sender_v.clone())).await;
+        let send_result = request_sender
+            .send(Request::GetStream(stream_name, sender_v.clone()))
+            .await;
 
         if let Err(error) = send_result {
-            assert!(false, "Cannot push in test_prepare_stage_with_scatter: {}", error);
+            assert!(
+                false,
+                "Cannot push in test_prepare_stage_with_scatter: {}",
+                error
+            );
         }
 
         match receiver.recv().await.unwrap() {

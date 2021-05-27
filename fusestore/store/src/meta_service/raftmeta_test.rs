@@ -280,7 +280,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 
     wait_for_state(0, &mut rx0, State::Leader).await?;
     wait_for_state(1, &mut rx1, State::NonVoter).await?;
-    wait_for_leader(1, &mut rx1, 0).await?;
+    wait_for_current_leader(1, &mut rx1, 0).await?;
 
     assert_write_synced(meta_nodes.clone(), "key2").await?;
 
@@ -311,7 +311,7 @@ async fn setup_leader() -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
         assert_eq!(addr0, got.unwrap().address, "nid0 is added");
 
         wait_for_state(0, &mut rx0, State::Leader).await?;
-        wait_for_leader(0, &mut rx0, 0).await?;
+        wait_for_current_leader(0, &mut rx0, 0).await?;
     }
     Ok((nid0, mn0))
 }
@@ -342,7 +342,7 @@ async fn setup_non_voter(
         assert_connection(addr).await?;
 
         wait_for_state(id, &mut rx, State::NonVoter).await?;
-        wait_for_leader(id, &mut rx, 0).await?;
+        wait_for_current_leader(id, &mut rx, 0).await?;
     }
 
     Ok((id, mn))
@@ -377,7 +377,7 @@ async fn assert_applied_index(meta_nodes: Vec<Arc<MetaNode>>, at_least: u64) -> 
     for i in 0..meta_nodes.len() {
         let mn = meta_nodes[i].clone();
         let mut rx = mn.raft.metrics();
-        wait_for_log(&format!("n{}", i,), &mut rx, at_least).await?;
+        wait_for_log(i, &mut rx, at_least).await?;
     }
     Ok(())
 }
@@ -407,13 +407,13 @@ async fn assert_connection(addr: &str) -> anyhow::Result<()> {
 
 /// Wait for the known leader of a raft to become the expected `leader_id` until a default 500 ms time out.
 #[tracing::instrument(level = "info", skip(msg,rx), fields(msg=msg.to_string().as_str()))]
-async fn wait_for_leader(
+async fn wait_for_current_leader(
     msg: impl ToString,
     rx: &mut Receiver<RaftMetrics>,
     leader_id: NodeId
 ) -> anyhow::Result<RaftMetrics> {
     wait_for(
-        &format!("{}: current_leader -> {}", msg.to_string(), leader_id),
+        format!("{}: current_leader -> {}", msg.to_string(), leader_id),
         rx,
         |x| x.current_leader == Some(leader_id)
     )
@@ -428,13 +428,13 @@ async fn wait_for_log(
     index: u64
 ) -> anyhow::Result<RaftMetrics> {
     wait_for(
-        &format!("{}: last_log_index -> {}", msg.to_string(), index),
+        format!("{}: last_log_index -> {}", msg.to_string(), index),
         rx,
         |x| x.last_log_index == index
     )
     .await?;
     wait_for(
-        &format!("{}: last_applied -> {}", msg.to_string(), index),
+        format!("{}: last_applied -> {}", msg.to_string(), index),
         rx,
         |x| x.last_applied == index
     )
@@ -449,7 +449,7 @@ async fn wait_for_state(
     state: async_raft::State
 ) -> anyhow::Result<RaftMetrics> {
     wait_for(
-        &format!("{}: state -> {:?}", msg.to_string(), state),
+        format!("{}: state -> {:?}", msg.to_string(), state),
         rx,
         |x| x.state == state
     )
@@ -467,13 +467,13 @@ where
     T: Fn(&RaftMetrics) -> bool
 {
     let timeout = Duration::from_millis(500);
-    wait_for_timeout(msg, rx, func, timeout).await
+    wait_for_with_timeout(msg, rx, func, timeout).await
 }
 
 /// Wait for raft metrics to become a state that satisfies `func`,
 /// until the specified timeout.
 #[tracing::instrument(level = "info", skip(msg,rx,func), fields(msg=msg.to_string().as_str()))]
-async fn wait_for_timeout<T>(
+async fn wait_for_with_timeout<T>(
     msg: impl ToString,
     rx: &mut Receiver<RaftMetrics>,
     func: T,

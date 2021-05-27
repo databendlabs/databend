@@ -12,7 +12,7 @@ use common_arrow::arrow_flight::FlightData;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
 use common_planners::PlanNode;
 use log::error;
 use tokio::runtime::Runtime;
@@ -34,7 +34,7 @@ pub struct PrepareStageInfo(
     pub String,
     pub PlanNode,
     pub Vec<String>,
-    pub ExpressionAction
+    pub Expression
 );
 
 #[derive(Debug)]
@@ -45,7 +45,7 @@ pub enum Request {
     GetStream(String, Sender<Result<Receiver<Result<FlightData>>>>),
     PrepareQueryStage(Box<PrepareStageInfo>, Sender<Result<()>>),
     GetStreamInfo(String, Sender<Result<StreamInfo>>),
-    TerminalStage(String, String),
+    TerminalStage(String, String)
 }
 
 pub struct QueryInfo {
@@ -67,11 +67,11 @@ pub struct DispatcherState {
 struct ServerState {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionManagerRef,
+    session_manager: SessionManagerRef
 }
 
 pub struct FlightDispatcher {
-    state: Arc<ServerState>,
+    state: Arc<ServerState>
 }
 
 type DataReceiver = Receiver<Result<FlightData>>;
@@ -112,7 +112,7 @@ impl FlightDispatcher {
                         &mut dispatcher_state,
                         &info,
                         pipeline,
-                        request_sender.clone(),
+                        request_sender.clone()
                     );
                     if let Err(error) = response_sender.send(prepared_query).await {
                         error!("Cannot push: {}", error);
@@ -203,7 +203,7 @@ impl FlightDispatcher {
         state: &mut DispatcherState,
         info: &PrepareStageInfo,
         pipeline: Result<Pipeline>,
-        request_sender: Sender<Request>,
+        request_sender: Sender<Request>
     ) -> Result<()> {
         if !state.queries.contains_key(&info.0) {
             fn build_runtime(max_threads: u64) -> Result<Runtime> {
@@ -265,7 +265,9 @@ impl FlightDispatcher {
             }
 
             // Destroy Query Stage
-            let _ = request_sender.send(Request::TerminalStage(query_id, stage_id)).await;
+            let _ = request_sender
+                .send(Request::TerminalStage(query_id, stage_id))
+                .await;
         });
 
         Ok(())
@@ -392,14 +394,14 @@ impl PrepareStageInfo {
         stage_id: String,
         plan_node: PlanNode,
         scatters: Vec<String>,
-        scatters_action: ExpressionAction,
+        scatters_action: Expression
     ) -> Box<PrepareStageInfo> {
         Box::new(PrepareStageInfo(
             query_id,
             stage_id,
             plan_node,
             scatters,
-            scatters_action,
+            scatters_action
         ))
     }
 }

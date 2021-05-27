@@ -5,7 +5,7 @@ use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::AggregatorPartialPlan;
 use common_planners::EmptyPlan;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 use common_planners::StageKind;
@@ -46,7 +46,7 @@ impl ScattersOptimizer {
                 status.push(OptimizeKind::Local);
                 Ok(PlanNode::Stage(StagePlan {
                     kind: StageKind::Convergent,
-                    scatters_expr: ExpressionAction::Literal(DataValue::UInt64(Some(0))),
+                    scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
                     input: Arc::new(plan.clone())
                 }))
             }
@@ -75,7 +75,7 @@ impl ScattersOptimizer {
             status.push(OptimizeKind::Scattered);
             return Ok(PlanNode::Stage(StagePlan {
                 kind: StageKind::Expansive,
-                scatters_expr: ExpressionAction::ScalarFunction {
+                scatters_expr: Expression::ScalarFunction {
                     op: String::from("blockNumber"),
                     args: vec![]
                 },
@@ -121,7 +121,7 @@ impl ScattersOptimizer {
                 status.push(OptimizeKind::Local);
                 Ok(PlanNode::Stage(StagePlan {
                     kind: StageKind::Convergent,
-                    scatters_expr: ExpressionAction::Literal(DataValue::UInt64(Some(0))),
+                    scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
                     input: Arc::new(PlanNode::AggregatorPartial(AggregatorPartialPlan {
                         group_expr: plan.group_expr.clone(),
                         aggr_expr: plan.aggr_expr.clone(),
@@ -135,9 +135,9 @@ impl ScattersOptimizer {
                 status.push(OptimizeKind::Scattered);
                 Ok(PlanNode::Stage(StagePlan {
                     kind: StageKind::Normal,
-                    scatters_expr: ExpressionAction::ScalarFunction {
+                    scatters_expr: Expression::ScalarFunction {
                         op: String::from("sipHash"),
-                        args: vec![ExpressionAction::Column(String::from("_group_by_key"))]
+                        args: vec![Expression::Column(String::from("_group_by_key"))]
                     },
                     input: Arc::new(PlanNode::AggregatorPartial(AggregatorPartialPlan {
                         group_expr: plan.group_expr.clone(),

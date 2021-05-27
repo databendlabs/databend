@@ -9,7 +9,7 @@ enable:
 comments:
   prs: |
     Thanks for the contribution!
-    I have applied any labels matching special text in your title and description.
+    I have applied any labels matching special text in your PR Changelog.
 
     Please review the labels and make any necessary changes.
 

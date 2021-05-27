@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 
-use crate::ExpressionAction;
+use crate::Expression;
 use crate::PlanNode;
 
 /// Evaluates an arbitrary list of expressions (essentially a
@@ -14,7 +14,7 @@ use crate::PlanNode;
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct ProjectionPlan {
     /// The list of expressions
-    pub expr: Vec<ExpressionAction>,
+    pub expr: Vec<Expression>,
     /// The schema description of the output
     pub schema: DataSchemaRef,
     /// The incoming logical plan

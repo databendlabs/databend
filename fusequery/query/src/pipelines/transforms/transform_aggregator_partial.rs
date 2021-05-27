@@ -13,7 +13,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_datavalues::StringArray;
 use common_exception::Result;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
@@ -31,7 +31,7 @@ pub struct AggregatorPartialTransform {
 }
 
 impl AggregatorPartialTransform {
-    pub fn try_create(schema: DataSchemaRef, exprs: Vec<ExpressionAction>) -> Result<Self> {
+    pub fn try_create(schema: DataSchemaRef, exprs: Vec<Expression>) -> Result<Self> {
         let funcs = exprs
             .iter()
             .map(|expr| expr.to_aggregate_function())

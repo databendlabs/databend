@@ -458,3 +458,78 @@ fn test_scalar_array_arithmetic() {
         }
     }
 }
+
+#[test]
+fn test_array_unary_arithmetic() {
+    use std::sync::Arc;
+
+    use pretty_assertions::assert_eq;
+
+    use crate::*;
+
+    #[allow(dead_code)]
+    struct ArrayTest {
+        name: &'static str,
+        args: Vec<Vec<DataArrayRef>>,
+        expect: Vec<DataArrayRef>,
+        error: Vec<&'static str>,
+        op: DataValueArithmeticOperator
+    }
+
+    let tests = vec![ArrayTest {
+        name: "unary-minus-passed",
+        args: vec![
+            vec![Arc::new(StringArray::from(vec!["xx"]))],
+            vec![Arc::new(Int8Array::from(vec![4, 3, 2, 1]))],
+            vec![Arc::new(Int16Array::from(vec![4, 3, 2, 1]))],
+            vec![Arc::new(Int32Array::from(vec![4, 3, 2, 1]))],
+            vec![Arc::new(Int64Array::from(vec![4, 3, 2, 1]))],
+            vec![Arc::new(UInt8Array::from(vec![4, 3, 2, 1]))],
+            vec![Arc::new(UInt16Array::from(vec![4, 3, 2, 1]))],
+            vec![Arc::new(UInt32Array::from(vec![4, 3, 2, 1]))],
+            vec![Arc::new(UInt64Array::from(vec![4, 3, 2, 1]))],
+            vec![Arc::new(Float32Array::from(vec![4.0, 3.0, 2.0, 1.0]))],
+            vec![Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0]))],
+        ],
+        op: DataValueArithmeticOperator::Minus,
+        expect: vec![
+            Arc::new(StringArray::from(vec![""])),
+            Arc::new(Int8Array::from(vec![-4, -3, -2, -1])),
+            Arc::new(Int16Array::from(vec![-4, -3, -2, -1])),
+            Arc::new(Int32Array::from(vec![-4, -3, -2, -1])),
+            Arc::new(Int64Array::from(vec![-4, -3, -2, -1])),
+            Arc::new(Int8Array::from(vec![-4, -3, -2, -1])),
+            Arc::new(Int16Array::from(vec![-4, -3, -2, -1])),
+            Arc::new(Int32Array::from(vec![-4, -3, -2, -1])),
+            Arc::new(Int64Array::from(vec![-4, -3, -2, -1])),
+            Arc::new(Float32Array::from(vec![-4.0, -3.0, -2.0, -1.0])),
+            Arc::new(Float64Array::from(vec![-4.0, -3.0, -2.0, -1.0])),
+        ],
+        error: vec!["Code: 10, displayText = DataValue Error: Unsupported (Utf8)."]
+    }];
+
+    for t in tests {
+        for (i, args) in t.args.iter().enumerate() {
+            let result = DataArrayArithmetic::data_array_unary_arithmetic_op(
+                t.op.clone(),
+                &DataColumnarValue::Array(args[0].clone())
+            );
+            match result {
+                Ok(v) => assert_eq!(
+                    v.as_ref(),
+                    t.expect[i].as_ref(),
+                    "failed in the test: {}, case: {}",
+                    t.name,
+                    i
+                ),
+                Err(e) => assert_eq!(
+                    t.error[i],
+                    e.to_string(),
+                    "failed in the test: {}, case: {}",
+                    t.name,
+                    i
+                )
+            }
+        }
+    }
+}

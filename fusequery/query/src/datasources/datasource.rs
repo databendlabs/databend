@@ -154,11 +154,15 @@ impl IDataSource for DataSource {
 
     async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
         let db_name = plan.db.as_str();
-        if self.databases.read().get(db_name).is_some() && !plan.if_not_exists {
-            return Err(ErrorCodes::UnknownDatabase(format!(
-                "Database: '{}' already exists.",
-                plan.db
-            )));
+        if self.databases.read().get(db_name).is_some() {
+            return if plan.if_not_exists {
+                Ok(())
+            } else {
+                Err(ErrorCodes::UnknownDatabase(format!(
+                    "Database: '{}' already exists.",
+                    plan.db
+                )))
+            };
         }
 
         match plan.engine {

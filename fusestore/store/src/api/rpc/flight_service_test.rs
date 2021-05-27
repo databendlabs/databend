@@ -95,13 +95,11 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
         // create table and fetch it
 
         // Table schema with metadata(due to serde issue).
-        let schema = Arc::new(DataSchema::new_with_metadata(
-            vec![DataField::new("number", DataType::UInt64, false)],
-            [("Key".to_string(), "Value".to_string())]
-                .iter()
-                .cloned()
-                .collect()
-        ));
+        let schema = Arc::new(DataSchema::new(vec![DataField::new(
+            "number",
+            DataType::UInt64,
+            false
+        )]));
 
         // Create table plan.
         let mut plan = CreateTablePlan {
@@ -131,13 +129,14 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
         }
 
         {
-            // create table again, override, with if_not_exists = false
+            // create table again with if_not_exists = true
+            plan.if_not_exists = true;
             let res = client.create_table(plan.clone()).await.unwrap();
-            assert_eq!(2, res.table_id, "new table id");
+            assert_eq!(1, res.table_id, "new table id");
 
             let got = client.get_table("db1".into(), "tb2".into()).await.unwrap();
             let want = GetTableActionResult {
-                table_id: 2,
+                table_id: 1,
                 db: "db1".into(),
                 name: "tb2".into(),
                 schema: schema.clone()
@@ -146,8 +145,8 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
         }
 
         {
-            // create table with if_not_exists=true
-            plan.if_not_exists = true;
+            // create table again with if_not_exists=false
+            plan.if_not_exists = false;
 
             let res = client.create_table(plan.clone()).await;
             info!("create table res: {:?}", res);
@@ -162,7 +161,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
 
             let got = client.get_table("db1".into(), "tb2".into()).await.unwrap();
             let want = GetTableActionResult {
-                table_id: 2,
+                table_id: 1,
                 db: "db1".into(),
                 name: "tb2".into(),
                 schema: schema.clone()

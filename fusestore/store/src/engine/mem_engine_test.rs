@@ -69,9 +69,24 @@ fn test_mem_engine_create_database() -> anyhow::Result<()> {
     }
 
     {
-        // create db bar failure
+        // create db bar with if_not_exists=true
         let rst = eng.create_database(cmdbar.clone(), true);
-        assert_eq!("database exists", format!("{}", rst.err().unwrap()));
+        assert_eq!(1, rst.unwrap());
+        assert_eq!(
+            Db {
+                db_id: 1,
+                ver: 1,
+                table_name_to_id: HashMap::new(),
+                tables: HashMap::new()
+            },
+            eng.get_database("bar".into()).unwrap()
+        );
+    }
+
+    {
+        // create db bar failure
+        let rst = eng.create_database(cmdbar.clone(), false);
+        assert_eq!("bar database exists", format!("{}", rst.err().unwrap()));
         assert_eq!(
             Db {
                 db_id: 1,

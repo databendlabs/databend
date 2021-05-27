@@ -10,7 +10,7 @@ use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::ActionNode;
+use common_planners::Expression;
 use common_planners::ExpressionAction;
 use common_planners::ExpressionChain;
 
@@ -29,7 +29,7 @@ impl ExpressionExecutor {
     pub fn try_create(
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
-        exprs: Vec<ExpressionAction>,
+        exprs: Vec<Expression>,
         alias_project: bool
     ) -> Result<Self> {
         let chain = ExpressionChain::try_create(input_schema.clone(), &exprs)?;
@@ -61,7 +61,7 @@ impl ExpressionExecutor {
 
         let rows = block.num_rows();
         for action in self.chain.actions.iter() {
-            if let ActionNode::Alias(alias) = action {
+            if let ExpressionAction::Alias(alias) = action {
                 if let Some(v) = alias_map.get_mut(&alias.arg_name) {
                     v.push(alias.name.clone());
                 } else {
@@ -74,11 +74,11 @@ impl ExpressionExecutor {
             }
 
             match action {
-                ActionNode::Input(input) => {
+                ExpressionAction::Input(input) => {
                     let column = block.try_column_by_name(&input.name)?.clone();
                     column_map.insert(input.name.clone(), column);
                 }
-                ActionNode::Function(f) => {
+                ExpressionAction::Function(f) => {
                     // check if it's cached
                     let arg_columns = f
                         .arg_names
@@ -97,7 +97,7 @@ impl ExpressionExecutor {
 
                     column_map.insert(f.name.clone(), column);
                 }
-                ActionNode::Constant(constant) => {
+                ExpressionAction::Constant(constant) => {
                     let column = DataColumnarValue::Constant(constant.value.clone(), rows);
                     column_map.insert(constant.name.clone(), column);
                 }

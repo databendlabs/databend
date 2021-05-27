@@ -12,7 +12,7 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
 
 use crate::pipelines::transforms::ExpressionExecutor;
 
@@ -21,17 +21,17 @@ pub struct FlightScatter(Arc<ExpressionExecutor>, String, usize);
 impl FlightScatter {
     pub fn try_create(
         schema: DataSchemaRef,
-        action: ExpressionAction,
+        action: Expression,
         num: usize
     ) -> Result<FlightScatter> {
-        let indices_expression_action = ExpressionAction::ScalarFunction {
+        let indices_expression_action = Expression::ScalarFunction {
             op: String::from("modulo"),
             args: vec![
-                ExpressionAction::Cast {
+                Expression::Cast {
                     expr: Box::new(action),
                     data_type: DataType::UInt64
                 },
-                ExpressionAction::Literal(DataValue::UInt64(Some(num as u64))),
+                Expression::Literal(DataValue::UInt64(Some(num as u64))),
             ]
         };
 

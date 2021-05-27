@@ -1,0 +1,27 @@
+--------------
+CREATE DATABASE IF NOT EXISTS db1
+--------------
+
+--------------
+CREATE TABLE IF NOT EXISTS t1(a int, b varchar)
+--------------
+
+--------------
+SELECT * FROM system.tables WHERE database='db1'
+--------------
+
++----------+------+--------+
+| database | name | engine |
++----------+------+--------+
+| db1      | t1   | remote |
++----------+------+--------+
+--------------
+DROP TABLE t1
+--------------
+
+ERROR 1105 (HY000) at line 7: Code: 1002, displayText = status: Internal error: Store drop database unimplemented.
+--------------
+DROP DATABASE db1
+--------------
+
+ERROR 1105 (HY000) at line 8: Code: 1002, displayText = status: Internal error: Store drop database unimplemented.

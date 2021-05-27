@@ -73,4 +73,31 @@ impl DataArrayArithmetic {
             }
         }
     }
+
+    #[inline]
+    pub fn data_array_unary_arithmetic_op(
+        op: DataValueArithmeticOperator,
+        value: &DataColumnarValue
+    ) -> Result<DataArrayRef> {
+        match op {
+            DataValueArithmeticOperator::Minus => {
+                let value_array = match value {
+                    DataColumnarValue::Constant(value_scalar, _) => {
+                        value_scalar.to_array_with_size(1)?
+                    }
+                    _ => value.to_array()?
+                };
+
+                let coercion_type =
+                    super::data_type::numerical_signed_coercion(&value_array.data_type())?;
+                let value_array = data_array_cast(&value_array, &coercion_type)?;
+                arrow_primitive_array_negate!(&value_array, &coercion_type)
+            }
+            // @todo support other unary operation
+            _ => Result::Err(ErrorCodes::BadArguments(format!(
+                "Unsupported unary operation: {:?} as argument",
+                op
+            )))
+        }
+    }
 }
