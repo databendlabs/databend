@@ -8,7 +8,7 @@ use common_arrow::arrow::datatypes::DataType;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::PlanNode;
@@ -19,7 +19,7 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct ConstantFoldingOptimizer {}
 
-fn is_boolean_type(schema: &DataSchemaRef, expr: &ExpressionAction) -> Result<bool> {
+fn is_boolean_type(schema: &DataSchemaRef, expr: &Expression) -> Result<bool> {
     if let DataType::Boolean = expr.to_data_field(schema)?.data_type() {
         return Ok(true);
     }
@@ -28,40 +28,38 @@ fn is_boolean_type(schema: &DataSchemaRef, expr: &ExpressionAction) -> Result<bo
 
 struct ConstantFoldingImpl {}
 
-fn constant_folding(schema: &DataSchemaRef, expr: ExpressionAction) -> Result<ExpressionAction> {
+fn constant_folding(schema: &DataSchemaRef, expr: Expression) -> Result<Expression> {
     let new_expr = match expr {
-        ExpressionAction::BinaryExpression { left, op, right } => match op.as_str() {
+        Expression::BinaryExpression { left, op, right } => match op.as_str() {
             "=" => match (left.as_ref(), right.as_ref()) {
                 (
-                    ExpressionAction::Literal(DataValue::Boolean(l)),
-                    ExpressionAction::Literal(DataValue::Boolean(r))
+                    Expression::Literal(DataValue::Boolean(l)),
+                    Expression::Literal(DataValue::Boolean(r))
                 ) => match (l, r) {
-                    (Some(l), Some(r)) => {
-                        ExpressionAction::Literal(DataValue::Boolean(Some(l == r)))
-                    }
-                    _ => ExpressionAction::Literal(DataValue::Boolean(None))
+                    (Some(l), Some(r)) => Expression::Literal(DataValue::Boolean(Some(l == r))),
+                    _ => Expression::Literal(DataValue::Boolean(None))
                 },
-                (ExpressionAction::Literal(DataValue::Boolean(b)), _)
+                (Expression::Literal(DataValue::Boolean(b)), _)
                     if is_boolean_type(schema, &right)? =>
                 {
                     match b {
                         Some(true) => *right,
                         // Fix this after we implement NOT
-                        Some(false) => ExpressionAction::BinaryExpression { left, op, right },
-                        None => ExpressionAction::Literal(DataValue::Boolean(None))
+                        Some(false) => Expression::BinaryExpression { left, op, right },
+                        None => Expression::Literal(DataValue::Boolean(None))
                     }
                 }
-                (_, ExpressionAction::Literal(DataValue::Boolean(b)))
+                (_, Expression::Literal(DataValue::Boolean(b)))
                     if is_boolean_type(schema, &left)? =>
                 {
                     match b {
                         Some(true) => *left,
                         // Fix this after we implement NOT
-                        Some(false) => ExpressionAction::BinaryExpression { left, op, right },
-                        None => ExpressionAction::Literal(DataValue::Boolean(None))
+                        Some(false) => Expression::BinaryExpression { left, op, right },
+                        None => Expression::Literal(DataValue::Boolean(None))
                     }
                 }
-                _ => ExpressionAction::BinaryExpression {
+                _ => Expression::BinaryExpression {
                     left,
                     op: "=".to_string(),
                     right
@@ -69,39 +67,37 @@ fn constant_folding(schema: &DataSchemaRef, expr: ExpressionAction) -> Result<Ex
             },
             "!=" => match (left.as_ref(), right.as_ref()) {
                 (
-                    ExpressionAction::Literal(DataValue::Boolean(l)),
-                    ExpressionAction::Literal(DataValue::Boolean(r))
+                    Expression::Literal(DataValue::Boolean(l)),
+                    Expression::Literal(DataValue::Boolean(r))
                 ) => match (l, r) {
-                    (Some(l), Some(r)) => {
-                        ExpressionAction::Literal(DataValue::Boolean(Some(l != r)))
-                    }
-                    _ => ExpressionAction::Literal(DataValue::Boolean(None))
+                    (Some(l), Some(r)) => Expression::Literal(DataValue::Boolean(Some(l != r))),
+                    _ => Expression::Literal(DataValue::Boolean(None))
                 },
-                (ExpressionAction::Literal(DataValue::Boolean(b)), _)
+                (Expression::Literal(DataValue::Boolean(b)), _)
                     if is_boolean_type(schema, &right)? =>
                 {
                     match b {
-                        Some(true) => ExpressionAction::BinaryExpression { left, op, right },
+                        Some(true) => Expression::BinaryExpression { left, op, right },
                         Some(false) => *right,
-                        None => ExpressionAction::Literal(DataValue::Boolean(None))
+                        None => Expression::Literal(DataValue::Boolean(None))
                     }
                 }
-                (_, ExpressionAction::Literal(DataValue::Boolean(b)))
+                (_, Expression::Literal(DataValue::Boolean(b)))
                     if is_boolean_type(schema, &left)? =>
                 {
                     match b {
-                        Some(true) => ExpressionAction::BinaryExpression { left, op, right },
+                        Some(true) => Expression::BinaryExpression { left, op, right },
                         Some(false) => *left,
-                        None => ExpressionAction::Literal(DataValue::Boolean(None))
+                        None => Expression::Literal(DataValue::Boolean(None))
                     }
                 }
-                _ => ExpressionAction::BinaryExpression {
+                _ => Expression::BinaryExpression {
                     left,
                     op: "!=".to_string(),
                     right
                 }
             },
-            _ => ExpressionAction::BinaryExpression { left, op, right }
+            _ => Expression::BinaryExpression { left, op, right }
         },
         expr => {
             // do nothing

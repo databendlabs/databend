@@ -6,6 +6,8 @@
 mod optimizer_constant_folding_test;
 #[cfg(test)]
 mod optimizer_projection_push_down_test;
+#[cfg(test)]
+mod optimizer_test;
 
 mod optimizer;
 mod optimizer_constant_folding;

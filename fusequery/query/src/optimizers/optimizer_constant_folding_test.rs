@@ -11,6 +11,7 @@ mod tests {
     use common_planners::*;
     use pretty_assertions::assert_eq;
 
+    use crate::optimizers::optimizer_test::*;
     use crate::optimizers::*;
 
     #[test]
@@ -31,7 +32,7 @@ mod tests {
                 DataField::new("b", DataType::Utf8, false),
                 DataField::new("c", DataType::Utf8, false),
             ]),
-            partitions: Test::generate_partitions(8, total as u64),
+            partitions: generate_partitions(8, total as u64),
             statistics: statistics.clone(),
             description: format!(
                 "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
