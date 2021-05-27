@@ -5,6 +5,8 @@
 use common_exception::Result;
 
 use crate::aggregate_function_factory::FactoryFuncRef;
+use crate::AggregateArgMaxFunction;
+use crate::AggregateArgMinFunction;
 use crate::AggregateAvgFunction;
 use crate::AggregateCountFunction;
 use crate::AggregateMaxFunction;
@@ -21,6 +23,8 @@ impl AggregatorFunction {
         map.insert("max", AggregateMaxFunction::try_create);
         map.insert("sum", AggregateSumFunction::try_create);
         map.insert("avg", AggregateAvgFunction::try_create);
+        map.insert("argMin", AggregateArgMinFunction::try_create);
+        map.insert("argMax", AggregateArgMaxFunction::try_create);
         Ok(())
     }
 }

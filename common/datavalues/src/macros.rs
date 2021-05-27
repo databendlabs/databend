@@ -241,6 +241,71 @@ macro_rules! typed_array_min_max_string_to_data_value {
         Result::Ok(DataValue::$SCALAR(value))
     }};
 }
+
+macro_rules! typed_array_values_min_max_to_data_value {
+    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $TYPE:ident, $OP:expr) => {{
+        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
+        let vals_std: &[$TYPE] = array.values();
+        let mut min_max_row_val: (u64, $TYPE) = (0, vals_std[0]);
+        for (row, val) in vals_std.iter().enumerate() {
+            match $OP {
+                DataValueAggregateOperator::ArgMin => {
+                    if *val < min_max_row_val.1 {
+                        min_max_row_val = (row as u64, *val);
+                    }
+                }
+                DataValueAggregateOperator::ArgMax => {
+                    if *val > min_max_row_val.1 {
+                        min_max_row_val = (row as u64, *val);
+                    }
+                }
+                _ => {
+                    panic!(
+                        "Unexpected {} for macro typed_array_values_min_max_to_data_value",
+                        stringify!($OP),
+                    )
+                }
+            }
+        }
+        Result::Ok(DataValue::Struct(vec![
+            DataValue::UInt64(Some(min_max_row_val.0)),
+            DataValue::$SCALAR(Some(min_max_row_val.1)),
+        ]))
+    }};
+}
+
+macro_rules! typed_array_values_min_max_string_to_data_value {
+    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:expr) => {{
+        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
+        let mut min_max_row_val: (u64, &str) = (0, array.value(0));
+        for (row, val) in array.iter().enumerate() {
+            let str_val = val.unwrap();
+            match $OP {
+                DataValueAggregateOperator::ArgMin => {
+                    if str_val < min_max_row_val.1 {
+                        min_max_row_val = (row as u64, str_val);
+                    }
+                }
+                DataValueAggregateOperator::ArgMax => {
+                    if str_val > min_max_row_val.1 {
+                        min_max_row_val = (row as u64, str_val);
+                    }
+                }
+                _ => {
+                    panic!(
+                        "Unexpected {} for macro typed_array_values_min_max_to_data_value",
+                        stringify!($OP),
+                    )
+                }
+            }
+        }
+        Result::Ok(DataValue::Struct(vec![
+            DataValue::UInt64(Some(min_max_row_val.0)),
+            DataValue::$SCALAR(Some(min_max_row_val.1.to_string())),
+        ]))
+    }};
+}
+
 // returns the sum of two data values, including coercion into $TYPE.
 macro_rules! typed_data_value_add {
     ($OLD_VALUE:expr, $DELTA:expr, $SCALAR:ident, $TYPE:ident) => {{

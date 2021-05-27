@@ -50,6 +50,24 @@ impl DataArrayAggregate {
                         value.data_type()
                     )))
                 }
+                DataValueAggregateOperator::ArgMax => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        Int8Array,
+                        Int8,
+                        i8,
+                        DataValueAggregateOperator::ArgMax
+                    )
+                }
+                DataValueAggregateOperator::ArgMin => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        Int8Array,
+                        Int8,
+                        i8,
+                        DataValueAggregateOperator::ArgMin
+                    )
+                }
             },
             DataType::Int16 => match op {
                 DataValueAggregateOperator::Min => {
@@ -70,6 +88,24 @@ impl DataArrayAggregate {
                         op,
                         value.data_type()
                     )))
+                }
+                DataValueAggregateOperator::ArgMax => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        Int16Array,
+                        Int16,
+                        i16,
+                        DataValueAggregateOperator::ArgMax
+                    )
+                }
+                DataValueAggregateOperator::ArgMin => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        Int16Array,
+                        Int16,
+                        i16,
+                        DataValueAggregateOperator::ArgMin
+                    )
                 }
             },
             DataType::Int32 => match op {
@@ -93,6 +129,24 @@ impl DataArrayAggregate {
                         value.data_type()
                     )))
                 }
+                DataValueAggregateOperator::ArgMax => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        Int32Array,
+                        Int32,
+                        i32,
+                        DataValueAggregateOperator::ArgMax
+                    )
+                }
+                DataValueAggregateOperator::ArgMin => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        Int32Array,
+                        Int32,
+                        i32,
+                        DataValueAggregateOperator::ArgMin
+                    )
+                }
             },
             DataType::Int64 => match op {
                 DataValueAggregateOperator::Min => {
@@ -114,6 +168,24 @@ impl DataArrayAggregate {
                         op,
                         value.data_type()
                     )))
+                }
+                DataValueAggregateOperator::ArgMax => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        Int64Array,
+                        Int64,
+                        i64,
+                        DataValueAggregateOperator::ArgMax
+                    )
+                }
+                DataValueAggregateOperator::ArgMin => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        Int64Array,
+                        Int64,
+                        i64,
+                        DataValueAggregateOperator::ArgMin
+                    )
                 }
             },
             DataType::UInt8 => match op {
@@ -137,6 +209,24 @@ impl DataArrayAggregate {
                         value.data_type()
                     )))
                 }
+                DataValueAggregateOperator::ArgMax => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        UInt8Array,
+                        UInt8,
+                        u8,
+                        DataValueAggregateOperator::ArgMax
+                    )
+                }
+                DataValueAggregateOperator::ArgMin => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        UInt8Array,
+                        UInt8,
+                        u8,
+                        DataValueAggregateOperator::ArgMin
+                    )
+                }
             },
             DataType::UInt16 => match op {
                 DataValueAggregateOperator::Min => {
@@ -158,6 +248,24 @@ impl DataArrayAggregate {
                         op,
                         value.data_type()
                     )))
+                }
+                DataValueAggregateOperator::ArgMax => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        UInt16Array,
+                        UInt16,
+                        u16,
+                        DataValueAggregateOperator::ArgMax
+                    )
+                }
+                DataValueAggregateOperator::ArgMin => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        UInt16Array,
+                        UInt16,
+                        u16,
+                        DataValueAggregateOperator::ArgMin
+                    )
                 }
             },
             DataType::UInt32 => match op {
@@ -181,6 +289,24 @@ impl DataArrayAggregate {
                         value.data_type()
                     )))
                 }
+                DataValueAggregateOperator::ArgMax => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        UInt32Array,
+                        UInt32,
+                        u32,
+                        DataValueAggregateOperator::ArgMax
+                    )
+                }
+                DataValueAggregateOperator::ArgMin => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        UInt32Array,
+                        UInt32,
+                        u32,
+                        DataValueAggregateOperator::ArgMin
+                    )
+                }
             },
             DataType::UInt64 => match op {
                 DataValueAggregateOperator::Min => {
@@ -201,6 +327,24 @@ impl DataArrayAggregate {
                         op,
                         value.data_type()
                     )))
+                }
+                DataValueAggregateOperator::ArgMax => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        UInt64Array,
+                        UInt64,
+                        u64,
+                        DataValueAggregateOperator::ArgMax
+                    )
+                }
+                DataValueAggregateOperator::ArgMin => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        UInt64Array,
+                        UInt64,
+                        u64,
+                        DataValueAggregateOperator::ArgMin
+                    )
                 }
             },
             DataType::Float32 => match op {
@@ -223,6 +367,24 @@ impl DataArrayAggregate {
                         value.data_type()
                     )))
                 }
+                DataValueAggregateOperator::ArgMax => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        Float32Array,
+                        Float32,
+                        f32,
+                        DataValueAggregateOperator::ArgMax
+                    )
+                }
+                DataValueAggregateOperator::ArgMin => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        Float32Array,
+                        Float32,
+                        f32,
+                        DataValueAggregateOperator::ArgMin
+                    )
+                }
             },
             DataType::Float64 => match op {
                 DataValueAggregateOperator::Min => {
@@ -244,6 +406,24 @@ impl DataArrayAggregate {
                         value.data_type()
                     )))
                 }
+                DataValueAggregateOperator::ArgMax => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        Float64Array,
+                        Float64,
+                        f64,
+                        DataValueAggregateOperator::ArgMax
+                    )
+                }
+                DataValueAggregateOperator::ArgMin => {
+                    typed_array_values_min_max_to_data_value!(
+                        value,
+                        Float64Array,
+                        Float64,
+                        f64,
+                        DataValueAggregateOperator::ArgMin
+                    )
+                }
             },
             DataType::Utf8 => match op {
                 DataValueAggregateOperator::Min => {
@@ -254,6 +434,22 @@ impl DataArrayAggregate {
                 }
                 DataValueAggregateOperator::Count => {
                     Ok(DataValue::UInt64(Some(value.len() as u64)))
+                }
+                DataValueAggregateOperator::ArgMax => {
+                    typed_array_values_min_max_string_to_data_value!(
+                        value,
+                        StringArray,
+                        Utf8,
+                        DataValueAggregateOperator::ArgMax
+                    )
+                }
+                DataValueAggregateOperator::ArgMin => {
+                    typed_array_values_min_max_string_to_data_value!(
+                        value,
+                        StringArray,
+                        Utf8,
+                        DataValueAggregateOperator::ArgMin
+                    )
                 }
                 _ => Result::Err(ErrorCodes::BadDataValueType(format!(
                     "DataValue Error: Unsupported data_array_{} for data type: {:?}",
