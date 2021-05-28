@@ -15,6 +15,7 @@ install:
 		@ pip install .
 		@ pip install -r requirements.txt
 		@ pip install \
+			mkdocs-material \
 			mkdocs-minify-plugin \
 			mkdocs-redirects
 
