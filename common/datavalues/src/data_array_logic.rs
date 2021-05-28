@@ -49,15 +49,40 @@ impl DataArrayLogic {
             }
             DataColumnarValue::Constant(v, size) => match v {
                 DataValue::UInt64(Some(vi)) => {
-                    let vb = DataValue::Boolean(Some(*vi != 0));
-                    let new_val = DataColumnarValue::Constant(vb, *size);
-                    let vec = new_val.to_array()?;
-
-                    let arr = downcast_array!(vec, BooleanArray)?;
-                    let res =
-                        Arc::new(common_arrow::arrow::compute::not(arr).map_err(ErrorCodes::from)?);
-                    let vo = DataValue::Boolean(Some(res.value(0)));
-                    Ok(DataColumnarValue::Constant(vo, *size).to_array()?)
+                    let vb = DataValue::Boolean(Some(!(*vi != 0)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                DataValue::UInt32(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi != 0)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                DataValue::UInt16(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi != 0)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                DataValue::UInt8(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi != 0)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                DataValue::Int64(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi != 0)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                DataValue::Int32(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi != 0)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                DataValue::Int16(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi != 0)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                DataValue::Int8(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi != 0)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                DataValue::Boolean(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
                 }
                 _ => Result::Err(ErrorCodes::BadDataValueType(format!(
                     "DataValue Error: Cannot do negation for val:{:?}",
