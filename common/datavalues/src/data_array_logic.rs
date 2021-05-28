@@ -47,13 +47,26 @@ impl DataArrayLogic {
                     common_arrow::arrow::compute::not(arr).map_err(ErrorCodes::from)?
                 ))
             }
-            DataColumnarValue::Constant(_v, _size) => {
-                let vec = val.to_array()?;
-                let arr = downcast_array!(vec, BooleanArray)?;
-                let res =
-                    Arc::new(common_arrow::arrow::compute::not(arr).map_err(ErrorCodes::from)?);
-                let vo = DataValue::Boolean(Some(res.value(0)));
-                DataValue::try_into_data_array(&[vo])
+            DataColumnarValue::Constant(v, size) => {
+                match v {
+                    DataValue::UInt64(Some(vi)) => {
+                        let vb = DataValue::Boolean(Some(*vi != 0));
+                        let new_val = DataColumnarValue::Constant(vb, *size);
+                        let vec = new_val.to_array()?;
+
+                        let arr = downcast_array!(vec, BooleanArray)?;
+                        let res = Arc::new(
+                            common_arrow::arrow::compute::not(arr).map_err(ErrorCodes::from)?
+                        );
+                        let vo = DataValue::Boolean(Some(res.value(0)));
+                        //DataValue::try_into_data_array(&[vo]);
+                        Ok(DataColumnarValue::Constant(vo, *size).to_array()?)
+                    }
+                    _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+                        "DataValue Error: Cannot do negation for val:{:?}",
+                        val
+                    )))
+                }
             }
         }
     }
