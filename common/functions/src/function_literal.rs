@@ -39,6 +39,14 @@ impl IFunction for LiteralFunction {
     fn eval(&self, _columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
         Ok(DataColumnarValue::Constant(self.value.clone(), input_rows))
     }
+
+    fn num_arguments(&self) -> usize {
+        0
+    }
+
+    fn variadic_arguments(&self) -> Option<(usize, usize)> {
+        None
+    }
 }
 
 impl fmt::Display for LiteralFunction {

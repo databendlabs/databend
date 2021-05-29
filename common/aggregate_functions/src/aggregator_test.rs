@@ -86,6 +86,28 @@ fn test_aggregate_function() -> Result<()> {
             expect: DataValue::Int64(Some(10)),
             error: ""
         },
+        Test {
+            name: "argMax-passed",
+            eval_nums: 1,
+            types: vec![DataType::Int64, DataType::Int64],
+            display: "argmax",
+            nullable: false,
+            func: AggregateArgMaxFunction::try_create("argmax")?,
+            columns: columns.clone(),
+            expect: DataValue::Int64(Some(1)),
+            error: ""
+        },
+        Test {
+            name: "argMin-passed",
+            eval_nums: 1,
+            types: vec![DataType::Int64, DataType::Int64],
+            display: "argmin",
+            nullable: false,
+            func: AggregateArgMinFunction::try_create("argmin")?,
+            columns: columns.clone(),
+            expect: DataValue::Int64(Some(4)),
+            error: ""
+        },
     ];
 
     for t in tests {

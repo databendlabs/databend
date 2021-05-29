@@ -5,6 +5,8 @@
 #[cfg(test)]
 mod aggregator_test;
 
+mod aggregate_arg_max;
+mod aggregate_arg_min;
 mod aggregate_avg;
 mod aggregate_count;
 mod aggregate_function;
@@ -14,6 +16,8 @@ mod aggregate_min;
 mod aggregate_sum;
 mod aggregator;
 
+pub use aggregate_arg_max::AggregateArgMaxFunction;
+pub use aggregate_arg_min::AggregateArgMinFunction;
 pub use aggregate_avg::AggregateAvgFunction;
 pub use aggregate_count::AggregateCountFunction;
 pub use aggregate_function::IAggregateFunction;

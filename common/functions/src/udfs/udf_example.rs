@@ -44,6 +44,14 @@ impl IFunction for UdfExampleFunction {
             input_rows
         ))
     }
+
+    fn num_arguments(&self) -> usize {
+        0
+    }
+
+    fn variadic_arguments(&self) -> Option<(usize, usize)> {
+        None
+    }
 }
 
 impl fmt::Display for UdfExampleFunction {

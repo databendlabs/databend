@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use common_datavalues::*;
+use common_exception::ErrorCodes;
 
 use crate::test::Test;
 use crate::*;
@@ -50,5 +51,61 @@ fn test_expression_plan() -> anyhow::Result<()> {
     \n  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
     let actual = format!("{:?}", explain);
     assert_eq!(expect, actual);
+    Ok(())
+}
+
+#[test]
+fn test_expression_validate() -> anyhow::Result<()> {
+    struct Test {
+        desc: &'static str,
+        expression: Expression,
+        error: Option<ErrorCodes>
+    }
+
+    let cases = vec![
+        Test {
+            desc: "toTypeName-not-pass",
+            expression: Expression::ScalarFunction {
+                op: "toTypeName".to_string(),
+                args: vec![]
+            },
+            error: Some(ErrorCodes::NumberArgumentsNotMatch(
+                "ToTypeNameFunction expect to have 1 arguments, but got 0"
+            ))
+        },
+        Test {
+            desc: "example-not-pass",
+            expression: Expression::ScalarFunction {
+                op: "example".to_string(),
+                args: vec![col("33")]
+            },
+            error: Some(ErrorCodes::NumberArgumentsNotMatch(
+                "UdfExampleFunction expect to have 0 arguments, but got 1"
+            ))
+        },
+        Test {
+            desc: "example-pass",
+            expression: Expression::ScalarFunction {
+                op: "example".to_string(),
+                args: vec![]
+            },
+            error: None
+        },
+    ];
+
+    for t in cases.iter() {
+        let result = validate_expression(&t.expression);
+        match t.error {
+            Some(_) => {
+                assert_eq!(
+                    t.error.as_ref().unwrap().message(),
+                    result.err().unwrap().message(),
+                    "{}",
+                    t.desc
+                );
+            }
+            None => assert!(result.is_ok(), "{}", t.desc)
+        }
+    }
     Ok(())
 }

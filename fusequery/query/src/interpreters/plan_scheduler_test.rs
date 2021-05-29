@@ -52,7 +52,7 @@ async fn test_scheduler_plan_with_one_normal_stage() -> Result<()> {
             "test_scheduler_plan_with_one_normal_stage must be failure!"
         ),
         Err(error_code) => {
-            assert_eq!(error_code.code(), 31);
+            assert_eq!(error_code.code(), 32);
             assert_eq!(
                 error_code.message(),
                 "The final stage plan must be convergent"
@@ -81,7 +81,7 @@ async fn test_scheduler_plan_with_one_expansive_stage() -> Result<()> {
             "test_scheduler_plan_with_one_expansive_stage must be failure!"
         ),
         Err(error_code) => {
-            assert_eq!(error_code.code(), 31);
+            assert_eq!(error_code.code(), 32);
             assert_eq!(
                 error_code.message(),
                 "The final stage plan must be convergent"

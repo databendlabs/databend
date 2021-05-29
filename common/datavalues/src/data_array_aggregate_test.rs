@@ -144,6 +144,68 @@ fn test_array_aggregate() {
                 "Code: 10, displayText = DataValue Error: Unsupported data_array_avg for data type: Float64.",
             ]
         },
+        ArrayTest {
+            name: "argMax-passed",
+            args: vec![
+                Arc::new(StringArray::from(vec!["x1", "x2"])),
+                Arc::new(Int8Array::from(vec![1, 2, 3, 4])),
+                Arc::new(Int16Array::from(vec![4, 3, 2, 1])),
+                Arc::new(Int32Array::from(vec![4, 3, 2, 1])),
+                Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
+                Arc::new(UInt8Array::from(vec![4, 3, 2, 1])),
+                Arc::new(UInt16Array::from(vec![4, 3, 2, 1])),
+                Arc::new(UInt32Array::from(vec![4, 3, 2, 1])),
+                Arc::new(UInt64Array::from(vec![4, 3, 2, 1])),
+                Arc::new(Float32Array::from(vec![4.0, 3.0, 2.0, 1.0])),
+                Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0])),
+            ],
+            op: DataValueAggregateOperator::ArgMax,
+            expect: vec![
+                DataValue::Struct(vec![DataValue::UInt64(Some(1)), DataValue::Utf8(Some("x2".to_string()))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(3)), DataValue::Int8(Some(4))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(0)), DataValue::Int16(Some(4))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(0)), DataValue::Int32(Some(4))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(0)), DataValue::Int64(Some(4))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(0)), DataValue::UInt8(Some(4))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(0)), DataValue::UInt16(Some(4))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(0)), DataValue::UInt32(Some(4))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(0)), DataValue::UInt64(Some(4))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(0)), DataValue::Float32(Some(4.0))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(0)), DataValue::Float64(Some(4.0))]),
+            ],
+            error: vec![""]
+        },
+        ArrayTest {
+            name: "argMin-passed",
+            args: vec![
+                Arc::new(StringArray::from(vec!["x1", "x2"])),
+                Arc::new(Int8Array::from(vec![1, 2, 3, 4])),
+                Arc::new(Int16Array::from(vec![4, 3, 2, 1])),
+                Arc::new(Int32Array::from(vec![4, 3, 2, 1])),
+                Arc::new(Int64Array::from(vec![4, 3, 2, 1])),
+                Arc::new(UInt8Array::from(vec![4, 3, 2, 1])),
+                Arc::new(UInt16Array::from(vec![4, 3, 2, 1])),
+                Arc::new(UInt32Array::from(vec![4, 3, 2, 1])),
+                Arc::new(UInt64Array::from(vec![4, 3, 2, 1])),
+                Arc::new(Float32Array::from(vec![4.0, 3.0, 2.0, 1.0])),
+                Arc::new(Float64Array::from(vec![4.0, 3.0, 2.0, 1.0])),
+            ],
+            op: DataValueAggregateOperator::ArgMin,
+            expect: vec![
+                DataValue::Struct(vec![DataValue::UInt64(Some(0)), DataValue::Utf8(Some("x1".to_string()))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(0)), DataValue::Int8(Some(1))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(3)), DataValue::Int16(Some(1))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(3)), DataValue::Int32(Some(1))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(3)), DataValue::Int64(Some(1))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(3)), DataValue::UInt8(Some(1))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(3)), DataValue::UInt16(Some(1))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(3)), DataValue::UInt32(Some(1))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(3)), DataValue::UInt64(Some(1))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(3)), DataValue::Float32(Some(1.0))]),
+                DataValue::Struct(vec![DataValue::UInt64(Some(3)), DataValue::Float64(Some(1.0))]),
+            ],
+            error: vec![""]
+        },
     ];
 
     for t in tests {
