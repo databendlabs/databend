@@ -142,9 +142,11 @@ nav:
       - Aggregate Functions:
           - AVG: sqlstatement/aggregate-functions/aggregate-avg.md
           - COUNT: sqlstatement/aggregate-functions/aggregate-count.md
-          - MAX: sqlstatement/aggregate-functions/aggregate-max.md
           - MIN: sqlstatement/aggregate-functions/aggregate-min.md
+          - MAX: sqlstatement/aggregate-functions/aggregate-max.md
           - SUM: sqlstatement/aggregate-functions/aggregate-sum.md
+          - argMin: sqlstatement/aggregate-functions/aggregate-argmin.md
+          - argMax: sqlstatement/aggregate-functions/aggregate-argmax.md
       - Information Functions:
           - DATABASE: sqlstatement/information-functions/database.md
       - String Functions:

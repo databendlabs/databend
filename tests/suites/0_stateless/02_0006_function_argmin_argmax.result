@@ -1,0 +1,58 @@
+--------------
+SELECT argMin(number, number) FROM numbers_mt(10000)
+--------------
+
++------------------------+
+| argMin(number, number) |
++------------------------+
+|                      0 |
++------------------------+
+--------------
+SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user ORDER BY salary ASC
+--------------
+
++----------+------+
+| salary   | user |
++----------+------+
+| 16661667 |    1 |
+| 16665000 |    2 |
+| 16668333 |    0 |
++----------+------+
+--------------
+SELECT argMin(user, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user)
+--------------
+
++----------------------+
+| argMin(user, salary) |
++----------------------+
+|                    1 |
++----------------------+
+--------------
+SELECT argMax(number, number) FROM numbers_mt(10000)
+--------------
+
++------------------------+
+| argMax(number, number) |
++------------------------+
+|                   9999 |
++------------------------+
+--------------
+SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user ORDER BY salary DESC
+--------------
+
++----------+------+
+| salary   | user |
++----------+------+
+| 16668333 |    0 |
+| 16665000 |    2 |
+| 16661667 |    1 |
++----------+------+
+--------------
+SELECT argMax(user, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user)
+--------------
+
++----------------------+
+| argMax(user, salary) |
++----------------------+
+|                    0 |
++----------------------+
