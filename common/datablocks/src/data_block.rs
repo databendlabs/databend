@@ -117,14 +117,6 @@ impl DataBlock {
             self.columns[idx].to_array()
         }
     }
-
-    pub fn index_by_name(&self, column_name: &str) -> Option<usize> {
-        match column_name {
-            "" => None,
-            "*" => Some(0),
-            other_column_name => self.schema.index_of(other_column_name).ok()
-        }
-    }
 }
 
 impl TryFrom<DataBlock> for RecordBatch {
