@@ -81,7 +81,7 @@ impl ITable for TablesTable {
         let names: Vec<&str> = database_tables.iter().map(|(_, v)| v.name()).collect();
         let engines: Vec<&str> = database_tables.iter().map(|(_, v)| v.engine()).collect();
 
-        let block = DataBlock::create(self.schema.clone(), vec![
+        let block = DataBlock::create_by_array(self.schema.clone(), vec![
             Arc::new(StringArray::from(databases)),
             Arc::new(StringArray::from(names)),
             Arc::new(StringArray::from(engines)),

@@ -10,26 +10,24 @@ use common_exception::Result;
 use crate::BooleanArray;
 use crate::DataArrayRef;
 use crate::DataColumnarValue;
+use crate::DataValue;
 use crate::DataValueLogicOperator;
 
 pub struct DataArrayLogic;
 
 impl DataArrayLogic {
     #[inline]
-    pub fn data_array_logic_op(
+    fn data_array_logic_binary(
         op: DataValueLogicOperator,
         left: &DataColumnarValue,
         right: &DataColumnarValue
     ) -> Result<DataArrayRef> {
         match (left, right) {
             (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
-                match op {
-                    DataValueLogicOperator::And => {
-                        array_boolean_op!(left_array, right_array, and, BooleanArray)
-                    }
-                    DataValueLogicOperator::Or => {
-                        array_boolean_op!(left_array, right_array, or, BooleanArray)
-                    }
+                if let DataValueLogicOperator::And = op {
+                    array_boolean_op!(left_array, right_array, and, BooleanArray)
+                } else {
+                    array_boolean_op!(left_array, right_array, or, BooleanArray)
                 }
             }
             _ => Result::Err(ErrorCodes::BadDataValueType(format!(
@@ -38,6 +36,69 @@ impl DataArrayLogic {
                 left.data_type(),
                 right.data_type()
             )))
+        }
+    }
+
+    fn data_array_negation(val: &DataColumnarValue) -> Result<DataArrayRef> {
+        match val {
+            DataColumnarValue::Array(array) => {
+                let arr = downcast_array!(array, BooleanArray)?;
+                Ok(Arc::new(
+                    common_arrow::arrow::compute::not(arr).map_err(ErrorCodes::from)?
+                ))
+            }
+            DataColumnarValue::Constant(v, size) => match v {
+                DataValue::UInt64(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi != 0)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                DataValue::UInt32(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi != 0)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                DataValue::UInt16(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi != 0)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                DataValue::UInt8(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi != 0)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                DataValue::Int64(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi != 0)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                DataValue::Int32(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi != 0)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                DataValue::Int16(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi != 0)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                DataValue::Int8(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi != 0)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                DataValue::Boolean(Some(vi)) => {
+                    let vb = DataValue::Boolean(Some(!(*vi)));
+                    Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
+                }
+                _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+                    "DataValue Error: Cannot do negation for val:{:?}",
+                    val
+                )))
+            }
+        }
+    }
+
+    pub fn data_array_logic_op(
+        op: DataValueLogicOperator,
+        args: &[DataColumnarValue]
+    ) -> Result<DataArrayRef> {
+        match op {
+            DataValueLogicOperator::Not => Self::data_array_negation(&args[0]),
+            _ => Self::data_array_logic_binary(op, &args[0], &args[1])
         }
     }
 }

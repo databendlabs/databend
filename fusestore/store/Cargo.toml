@@ -27,7 +27,8 @@ common-planners = {path = "../../common/planners"}
 # Crates.io dependencies
 anyhow = "1.0.40"
 # track self maintained branch with hot fixes
-async-raft = { git = "https://github.com/drmingdrmer/async-raft", branch = "rc" }
+#async-raft = { git = "https://github.com/drmingdrmer/async-raft", branch = "rc" }
+async-raft = { git = "https://github.com/drmingdrmer/async-raft", rev = "cf40344f66fdcb6cde160b3e5671ff87c88f2af8" }
 #async-raft = "0.6.0"
 async-trait = "0.1"
 env_logger = "0.8"
@@ -47,7 +48,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3"
 tempfile = "3.2.0"
-thiserror = "1.0.24"
+thiserror = "1.0.25"
 threadpool = "1.8.1"
 tokio = { version = "1.6", features = ["macros", "rt","rt-multi-thread", "sync"] }
 tokio-stream = "0.1"
@@ -59,6 +60,10 @@ uuid = { version = "0.8", features = ["serde", "v4"] }
 
 [dev-dependencies]
 pretty_assertions = "0.7"
+test-env-log = "0.2.7"
+env_logger = "*"
+tracing = {version = "0.1", default-features = false}
+tracing-subscriber = {version = "0.2.17", default-features = false, features = ["env-filter", "fmt"]}
 
 [build-dependencies]
 tonic-build = "0.4"

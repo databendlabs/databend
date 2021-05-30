@@ -54,9 +54,10 @@ impl IInterpreter for ExplainInterpreter {
             }
             _ => format!("{:?}", plan)
         };
-        let block = DataBlock::create(schema.clone(), vec![Arc::new(StringArray::from(vec![
-            result.as_str(),
-        ]))]);
+        let block =
+            DataBlock::create_by_array(schema.clone(), vec![Arc::new(StringArray::from(vec![
+                result.as_str(),
+            ]))]);
         debug!("Explain executor result: {:?}", block);
 
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))

@@ -16,11 +16,14 @@ async fn test_pipeline_display() -> anyhow::Result<()> {
     )?;
     let pipeline = PipelineBuilder::create(ctx, plan).build()?;
     let expect = "LimitTransform × 1 processor\
-    \n  AggregatorFinalTransform × 1 processor\
-    \n    Merge (AggregatorPartialTransform × 8 processors) to (AggregatorFinalTransform × 1)\
-    \n      AggregatorPartialTransform × 8 processors\
-    \n        FilterTransform × 8 processors\
-    \n          SourceTransform × 8 processors";
+    \n  ProjectionTransform × 1 processor\
+    \n    ExpressionTransform × 1 processor\
+    \n      AggregatorFinalTransform × 1 processor\
+    \n        Merge (AggregatorPartialTransform × 8 processors) to (AggregatorFinalTransform × 1)\
+    \n          AggregatorPartialTransform × 8 processors\
+    \n            ExpressionTransform × 8 processors\
+    \n              FilterTransform × 8 processors\
+    \n                SourceTransform × 8 processors";
     let actual = format!("{:?}", pipeline);
     assert_eq!(expect, actual);
     Ok(())

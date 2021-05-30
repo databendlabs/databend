@@ -1,0 +1,26 @@
+[package]
+name = "common-aggregate-functions"
+version = "0.1.0"
+authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+common-arrow = {path = "../arrow"}
+common-datablocks = {path = "../datablocks"}
+common-datavalues = {path = "../datavalues"}
+common-infallible = {path = "../infallible"}
+common-exception = {path = "../exception"}
+
+# Github dependencies
+
+# Crates.io dependencies
+anyhow = "1.0.40"
+dyn-clone = "1.0.4"
+indexmap = "1.6.1"
+lazy_static = "1.4.0"
+
+[dev-dependencies]
+pretty_assertions = "0.7"

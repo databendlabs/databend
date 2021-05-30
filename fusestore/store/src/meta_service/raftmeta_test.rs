@@ -6,8 +6,10 @@ use std::sync::Arc;
 
 use async_raft::RaftMetrics;
 use async_raft::State;
+use maplit::hashset;
 use pretty_assertions::assert_eq;
 use tokio::sync::watch::Receiver;
+use tokio::time::Duration;
 
 use crate::meta_service::ClientRequest;
 use crate::meta_service::ClientResponse;
@@ -21,7 +23,7 @@ use crate::meta_service::RaftTxId;
 use crate::tests::Seq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_state_machine_apply_add() -> anyhow::Result<()> {
+async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
     crate::tests::init_tracing();
 
     let mut sm = MemStoreStateMachine::default();
@@ -90,7 +92,7 @@ async fn test_state_machine_apply_add() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_state_machine_apply_set() -> anyhow::Result<()> {
+async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
     crate::tests::init_tracing();
 
     let mut sm = MemStoreStateMachine::default();
@@ -167,10 +169,10 @@ async fn test_state_machine_apply_set() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_node_boot() -> anyhow::Result<()> {
-    crate::tests::init_tracing();
-
     // - Start a single node meta service cluster.
     // - Test the single node is recorded by this cluster.
+
+    crate::tests::init_tracing();
 
     let addr = new_addr();
     let resp = MetaNode::boot(0, addr.clone()).await;
@@ -219,24 +221,42 @@ async fn test_meta_node_sync_to_non_voter() -> anyhow::Result<()> {
     crate::tests::init_tracing();
 
     let (_nid0, mn0) = setup_leader().await?;
-    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1, &new_addr()).await?;
+    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?;
 
-    assert_write_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
+    assert_set_file_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
 
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn test_meta_node_3_members() -> anyhow::Result<()> {
-    // - Start a cluster with 3 replicas
+    // - Bring a leader online.
+    // - Add 2 node to the cluster.
     // - Write to leader, check data is replicated.
 
-    // crate::tests::init_tracing();
-    //
-    // let (_nid0, mn0) = setup_leader().await?;
-    // let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1, "127.0.0.1:19007").await?;
-    //
-    // assert_write_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
+    crate::tests::init_tracing();
+
+    let (_nid0, mn0) = setup_leader().await?;
+    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?;
+    let (_nid2, mn2) = setup_non_voter(mn0.clone(), 2).await?;
+
+    let mut nlog = 1 + 3; // leader add a blank log, adding a node commits one log.
+
+    nlog += assert_set_file_synced(vec![mn0.clone(), mn1.clone(), mn2.clone()], "foo-1").await?;
+
+    // add node 1 and 2 as follower
+    mn0.raft.change_membership(hashset![0, 1, 2]).await?;
+    nlog += 2; // joint consensus commits 2 logs
+
+    wait_for_state(1, &mut mn1.raft.metrics(), State::Follower).await?;
+    wait_for_state(2, &mut mn2.raft.metrics(), State::Follower).await?;
+    wait_for_state(0, &mut mn0.raft.metrics(), State::Leader).await?;
+
+    wait_for_log(0, &mut mn0.raft.metrics(), nlog).await?;
+    wait_for_log(1, &mut mn1.raft.metrics(), nlog).await?;
+    wait_for_log(2, &mut mn2.raft.metrics(), nlog).await?;
+
+    assert_set_file_synced(vec![mn0.clone(), mn1.clone(), mn2.clone()], "foo-2").await?;
 
     Ok(())
 }
@@ -244,20 +264,20 @@ async fn test_meta_node_3_members() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_node_restart() -> anyhow::Result<()> {
     // TODO check restarted follower.
-    // Start a leader and a non-voter;
-    // Restart them.
-    // Check old data an new written data.
+    // - Start a leader and a non-voter;
+    // - Restart them.
+    // - Check old data an new written data.
 
     crate::tests::init_tracing();
 
     let (_nid0, mn0) = setup_leader().await?;
-    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1, &new_addr()).await?;
+    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?;
     let sto0 = mn0.sto.clone();
     let sto1 = mn1.sto.clone();
 
     let meta_nodes = vec![mn0.clone(), mn1.clone()];
 
-    assert_write_synced(meta_nodes.clone(), "key1").await?;
+    assert_set_file_synced(meta_nodes.clone(), "key1").await?;
 
     // stop
     tracing::info!("shutting down all");
@@ -277,14 +297,11 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 
     let meta_nodes = vec![mn0.clone(), mn1.clone()];
 
-    wait_for("n0 -> leader", &mut rx0, |x| x.state == State::Leader).await;
-    wait_for("n1 -> non-voter", &mut rx1, |x| x.state == State::NonVoter).await;
-    wait_for("n1.current_leader -> 0", &mut rx1, |x| {
-        x.current_leader == Some(0)
-    })
-    .await;
+    wait_for_state(0, &mut rx0, State::Leader).await?;
+    wait_for_state(1, &mut rx1, State::NonVoter).await?;
+    wait_for_current_leader(1, &mut rx1, 0).await?;
 
-    assert_write_synced(meta_nodes.clone(), "key2").await?;
+    assert_set_file_synced(meta_nodes.clone(), "key2").await?;
 
     // check old data
     assert_get_file(meta_nodes, "key1", "key1").await?;
@@ -296,45 +313,43 @@ async fn setup_leader() -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
     // Setup a cluster in which there is a leader and a non-voter.
     // asserts states are consistent
 
-    // node-0: voter, becomes leader.
-    let nid0 = 0;
-    let addr0 = new_addr();
+    let nid = 0;
+    let addr = new_addr();
 
     // boot up a single-node cluster
-    let mn0 = MetaNode::boot(nid0, addr0.clone()).await?;
-    let mut rx0 = mn0.raft.metrics();
-
-    {
-        // ensure n0 is ready
-        assert_connection(&addr0).await?;
-
-        // assert that boot() adds the node to meta.
-        let got = mn0.get_node(&nid0).await;
-        assert_eq!(addr0, got.unwrap().address, "nid0 is added");
-
-        wait_for("n0 -> leader", &mut rx0, |x| x.state == State::Leader).await;
-        wait_for("n0.current_leader -> 0", &mut rx0, |x| {
-            x.current_leader == Some(0)
-        })
-        .await;
-    }
-    Ok((nid0, mn0))
-}
-
-async fn setup_non_voter(
-    leader: Arc<MetaNode>,
-    id: NodeId,
-    addr: &str
-) -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
-    let mn = MetaNode::boot_non_voter(id, addr).await?;
+    let mn = MetaNode::boot(nid, addr.clone()).await?;
     let mut rx = mn.raft.metrics();
 
     {
-        // add node-1 to cluster as non-voter
-        let resp = leader.add_node(id, addr.to_string()).await;
-        match resp.unwrap() {
+        assert_connection(&addr).await?;
+
+        // assert that boot() adds the node to meta.
+        let got = mn.get_node(&nid).await;
+        assert_eq!(addr, got.unwrap().address, "nid0 is added");
+
+        wait_for_state(0, &mut rx, State::Leader).await?;
+        wait_for_current_leader(0, &mut rx, 0).await?;
+    }
+    Ok((nid, mn))
+}
+
+/// Start a NonVoter and setup replication from leader to it.
+/// Assert the NonVoter is ready and upto date such as the known leader, state and grpc service.
+async fn setup_non_voter(
+    leader: Arc<MetaNode>,
+    id: NodeId
+) -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
+    let addr = new_addr();
+
+    let mn = MetaNode::boot_non_voter(id, &addr).await?;
+    let mut rx = mn.raft.metrics();
+
+    {
+        // add node to cluster as a non-voter
+        let resp = leader.add_node(id, addr.clone()).await?;
+        match resp {
             ClientResponse::Node { prev: _, result } => {
-                assert_eq!(addr.to_string(), result.unwrap().address);
+                assert_eq!(addr.clone(), result.unwrap().address);
             }
             _ => {
                 panic!("expect node")
@@ -343,30 +358,22 @@ async fn setup_non_voter(
     }
 
     {
-        // ensure the MetaNode is ready
-        assert_connection(addr).await?;
-
-        wait_for(&format!("n{} -> non-voter", id), &mut rx, |x| {
-            x.state == State::NonVoter
-        })
-        .await;
-
-        wait_for(&format!("n{}.current_leader -> 0", id), &mut rx, |x| {
-            x.current_leader == Some(0)
-        })
-        .await;
+        assert_connection(&addr).await?;
+        wait_for_state(id, &mut rx, State::NonVoter).await?;
+        wait_for_current_leader(id, &mut rx, 0).await?;
     }
 
     Ok((id, mn))
 }
 
-async fn assert_write_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> anyhow::Result<()> {
+/// Write one log on leader, check all nodes replicated the log.
+/// Returns the number log committed.
+async fn assert_set_file_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> anyhow::Result<u64> {
     let leader = meta_nodes[0].clone();
 
     let last_applied = leader.raft.metrics().borrow().last_applied;
     tracing::info!("leader: last_applied={}", last_applied);
     {
-        // write a 2nd key to leader
         leader
             .write_to_local_leader(ClientRequest {
                 txid: None,
@@ -381,25 +388,14 @@ async fn assert_write_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> anyho
     assert_applied_index(meta_nodes.clone(), last_applied + 1).await?;
     assert_get_file(meta_nodes.clone(), key, key).await?;
 
-    Ok(())
+    Ok(1)
 }
 
+/// Wait nodes for applied index to be upto date: applied >= at_least.
 async fn assert_applied_index(meta_nodes: Vec<Arc<MetaNode>>, at_least: u64) -> anyhow::Result<()> {
-    // wait for nodes for applied index to be upto date: applied >= at_least.
-
-    for i in 0..meta_nodes.len() {
-        let mn = meta_nodes[i].clone();
-
-        // raft.metrics is the status of the cluster, not the status about a node.
-        // E.g., if leader applied 4th log, the next append_entry request updates the applied index to 4 on a follower or non-voter,
-        // no matter whether it actually applied the 4th log.
-        // Thus we check the applied_rx, which is the actually applied index.
-        wait_for_applied(
-            &format!("n{}", i,),
-            &mut mn.sto.applied_rx.clone(),
-            at_least
-        )
-        .await;
+    for (i, mn) in meta_nodes.iter().enumerate() {
+        let mut rx = mn.raft.metrics();
+        wait_for_log(i, &mut rx, at_least).await?;
     }
     Ok(())
 }
@@ -409,9 +405,7 @@ async fn assert_get_file(
     key: &str,
     value: &str
 ) -> anyhow::Result<()> {
-    for i in 0..meta_nodes.len() {
-        let mn = meta_nodes[i].clone();
-
+    for (i, mn) in meta_nodes.iter().enumerate() {
         let got = mn.get_file(key).await;
         assert_eq!(value.to_string(), got.unwrap(), "n{} applied value", i);
     }
@@ -427,36 +421,101 @@ async fn assert_connection(addr: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-// wait for raft metrics to a state that satisfies `func`.
-#[tracing::instrument(level = "info", skip(func, mrx))]
-async fn wait_for<T>(msg: &str, mrx: &mut Receiver<RaftMetrics>, func: T) -> RaftMetrics
-where T: Fn(&RaftMetrics) -> bool {
-    loop {
-        let latest = mrx.borrow().clone();
-        tracing::info!("start wait for {:} metrics: {:?}", msg, latest);
-        if func(&latest) {
-            tracing::info!("done  wait for {:} metrics: {:?}", msg, latest);
-            return latest;
-        }
-
-        let changed = mrx.changed().await;
-        assert!(changed.is_ok());
-    }
+/// Wait for the known leader of a raft to become the expected `leader_id` until a default 2000 ms time out.
+#[tracing::instrument(level = "info", skip(msg,rx), fields(msg=msg.to_string().as_str()))]
+async fn wait_for_current_leader(
+    msg: impl ToString,
+    rx: &mut Receiver<RaftMetrics>,
+    leader_id: NodeId
+) -> anyhow::Result<RaftMetrics> {
+    wait_for(
+        format!("{}: current_leader -> {}", msg.to_string(), leader_id),
+        rx,
+        |x| x.current_leader == Some(leader_id)
+    )
+    .await
 }
 
-// wait for the applied index to be >= `at_least`.
-#[tracing::instrument(level = "info", skip(rx))]
-async fn wait_for_applied(msg: &str, rx: &mut Receiver<u64>, at_least: u64) -> u64 {
+/// Wait for raft log to become the expected `index` until a default 2000 ms time out.
+#[tracing::instrument(level = "info", skip(msg,rx), fields(msg=msg.to_string().as_str()))]
+async fn wait_for_log(
+    msg: impl ToString,
+    rx: &mut Receiver<RaftMetrics>,
+    index: u64
+) -> anyhow::Result<RaftMetrics> {
+    wait_for(
+        format!("{}: last_log_index -> {}", msg.to_string(), index),
+        rx,
+        |x| x.last_log_index == index
+    )
+    .await?;
+    wait_for(
+        format!("{}: last_applied -> {}", msg.to_string(), index),
+        rx,
+        |x| x.last_applied == index
+    )
+    .await
+}
+
+/// Wait for raft state to become the expected `state` until a default 2000 ms time out.
+#[tracing::instrument(level = "info", skip(msg,rx), fields(msg=msg.to_string().as_str()))]
+async fn wait_for_state(
+    msg: impl ToString,
+    rx: &mut Receiver<RaftMetrics>,
+    state: async_raft::State
+) -> anyhow::Result<RaftMetrics> {
+    wait_for(
+        format!("{}: state -> {:?}", msg.to_string(), state),
+        rx,
+        |x| x.state == state
+    )
+    .await
+}
+
+/// Same as wait_for_with_timeout except it use a default timeout 2000 ms.
+#[tracing::instrument(level = "info", skip(msg,rx,func), fields(msg=msg.to_string().as_str()))]
+async fn wait_for<T>(
+    msg: impl ToString,
+    rx: &mut Receiver<RaftMetrics>,
+    func: T
+) -> anyhow::Result<RaftMetrics>
+where
+    T: Fn(&RaftMetrics) -> bool
+{
+    let timeout = Duration::from_millis(2000);
+    wait_for_with_timeout(msg, rx, func, timeout).await
+}
+
+/// Wait for raft metrics to become a state that satisfies `func`,
+/// until the specified timeout.
+#[tracing::instrument(level = "info", skip(msg,rx,func), fields(msg=msg.to_string().as_str()))]
+async fn wait_for_with_timeout<T>(
+    msg: impl ToString,
+    rx: &mut Receiver<RaftMetrics>,
+    func: T,
+    timeout: Duration
+) -> anyhow::Result<RaftMetrics>
+where
+    T: Fn(&RaftMetrics) -> bool
+{
     loop {
         let latest = rx.borrow().clone();
-        tracing::info!("start wait for {:} latest: {:?}", msg, latest);
-        if latest >= at_least {
-            tracing::info!("done  wait for {:} latest: {:?}", msg, latest);
-            return latest;
+
+        tracing::info!("start wait for {:} latest: {:?}", msg.to_string(), latest);
+        if func(&latest) {
+            tracing::info!("done wait for {:} latest: {:?}", msg.to_string(), latest);
+            return Ok(latest);
         }
 
-        let changed = rx.changed().await;
-        assert!(changed.is_ok());
+        let delay = tokio::time::sleep(timeout);
+        tokio::select! {
+            _ = delay => {
+                return Err(anyhow::anyhow!("timeout wait for {} latest: {:?}", msg.to_string(), latest));
+            }
+            changed = rx.changed() => {
+                changed?;
+            }
+        };
     }
 }
 

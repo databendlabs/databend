@@ -51,6 +51,16 @@ macro_rules! compute_self_defined_op {
     }};
 }
 
+/// Invoke a compute negate kernel on a array
+macro_rules! compute_negate {
+    ($VALUE:expr, $DT:ident) => {{
+        let vv = downcast_array!($VALUE, $DT)?;
+        Ok(Arc::new(
+            common_arrow::arrow::compute::negate(&vv).map_err(ErrorCodes::from)?
+        ))
+    }};
+}
+
 /// Invoke a compute kernel on a pair of arrays
 /// The arrow_primitive_array_op macro only evaluates for primitive types
 /// like integers and floats.
@@ -125,7 +135,27 @@ macro_rules! arrow_array_op {
     };
 }
 
-/// Invoke a compute kernel on a data array and a scalar value
+/// Invoke a negate compute kernel on an array
+/// The arrow_primitive_array_negate macro only evaluates for signed primitive types
+/// like signed integers and floats.
+macro_rules! arrow_primitive_array_negate {
+    ($VALUE:expr, $RESULT:expr) => {
+        match $RESULT {
+            DataType::Int8 => compute_negate!($VALUE, Int8Array),
+            DataType::Int16 => compute_negate!($VALUE, Int16Array),
+            DataType::Int32 => compute_negate!($VALUE, Int32Array),
+            DataType::Int64 => compute_negate!($VALUE, Int64Array),
+            DataType::Float32 => compute_negate!($VALUE, Float32Array),
+            DataType::Float64 => compute_negate!($VALUE, Float64Array),
+            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+                "Unsupported arithmetic_compute::negate for data type: {:?}",
+                ($VALUE).data_type(),
+            )))
+        }
+    };
+}
+
+/// Invoke a compute kernel on a data array and a functions value
 macro_rules! compute_op_scalar {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
         use std::convert::TryInto;
@@ -141,7 +171,7 @@ macro_rules! compute_op_scalar {
     }};
 }
 
-/// Invoke a compute kernel on a data array and a scalar value
+/// Invoke a compute kernel on a data array and a functions value
 macro_rules! compute_utf8_op_scalar {
     ($LEFT:expr, $RIGHT:expr, $OP:ident, $DT:ident) => {{
         let ll = downcast_array!($LEFT, $DT)?;
@@ -211,6 +241,71 @@ macro_rules! typed_array_min_max_string_to_data_value {
         Result::Ok(DataValue::$SCALAR(value))
     }};
 }
+
+macro_rules! typed_array_values_min_max_to_data_value {
+    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $TYPE:ident, $OP:expr) => {{
+        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
+        let vals_std: &[$TYPE] = array.values();
+        let mut min_max_row_val: (u64, $TYPE) = (0, vals_std[0]);
+        for (row, val) in vals_std.iter().enumerate() {
+            match $OP {
+                DataValueAggregateOperator::ArgMin => {
+                    if *val < min_max_row_val.1 {
+                        min_max_row_val = (row as u64, *val);
+                    }
+                }
+                DataValueAggregateOperator::ArgMax => {
+                    if *val > min_max_row_val.1 {
+                        min_max_row_val = (row as u64, *val);
+                    }
+                }
+                _ => {
+                    panic!(
+                        "Unexpected {} for macro typed_array_values_min_max_to_data_value",
+                        stringify!($OP),
+                    )
+                }
+            }
+        }
+        Result::Ok(DataValue::Struct(vec![
+            DataValue::UInt64(Some(min_max_row_val.0)),
+            DataValue::$SCALAR(Some(min_max_row_val.1)),
+        ]))
+    }};
+}
+
+macro_rules! typed_array_values_min_max_string_to_data_value {
+    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:expr) => {{
+        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
+        let mut min_max_row_val: (u64, &str) = (0, array.value(0));
+        for (row, val) in array.iter().enumerate() {
+            let str_val = val.unwrap();
+            match $OP {
+                DataValueAggregateOperator::ArgMin => {
+                    if str_val < min_max_row_val.1 {
+                        min_max_row_val = (row as u64, str_val);
+                    }
+                }
+                DataValueAggregateOperator::ArgMax => {
+                    if str_val > min_max_row_val.1 {
+                        min_max_row_val = (row as u64, str_val);
+                    }
+                }
+                _ => {
+                    panic!(
+                        "Unexpected {} for macro typed_array_values_min_max_to_data_value",
+                        stringify!($OP),
+                    )
+                }
+            }
+        }
+        Result::Ok(DataValue::Struct(vec![
+            DataValue::UInt64(Some(min_max_row_val.0)),
+            DataValue::$SCALAR(Some(min_max_row_val.1.to_string())),
+        ]))
+    }};
+}
+
 // returns the sum of two data values, including coercion into $TYPE.
 macro_rules! typed_data_value_add {
     ($OLD_VALUE:expr, $DELTA:expr, $SCALAR:ident, $TYPE:ident) => {{
@@ -282,7 +377,7 @@ macro_rules! typed_data_value_min_max {
     }};
 }
 
-// min/max of two scalar string values.
+// min/max of two functions string values.
 macro_rules! typed_data_value_min_max_string {
     ($VALUE:expr, $DELTA:expr, $SCALAR:ident, $OP:ident) => {{
         Result::Ok(DataValue::$SCALAR(match ($VALUE, $DELTA) {

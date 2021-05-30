@@ -11,10 +11,7 @@ use crate::IFunction;
 pub struct ArithmeticMulFunction;
 
 impl ArithmeticMulFunction {
-    pub fn try_create_func(
-        _display_name: &str,
-        args: &[Box<dyn IFunction>]
-    ) -> Result<Box<dyn IFunction>> {
-        ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Mul, args)
+    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn IFunction>> {
+        ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Mul)
     }
 }

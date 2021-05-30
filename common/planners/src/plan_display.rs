@@ -47,7 +47,7 @@ impl PlanNode {
                                     f,
                                     "{:?}:{:?}",
                                     plan.expr[i],
-                                    plan.schema().fields()[i].data_type()
+                                    plan.expr[i].to_data_type(&plan.input.schema()).unwrap()
                                 )?;
                             }
                             Ok(true)
@@ -62,7 +62,7 @@ impl PlanNode {
                                     f,
                                     "{:?}:{:?}",
                                     plan.exprs[i],
-                                    plan.schema().fields()[i].data_type()
+                                    plan.exprs[i].to_data_type(&plan.input.schema()).unwrap()
                                 )?;
                             }
                             write!(f, " ({})", plan.desc)?;
@@ -103,7 +103,7 @@ impl PlanNode {
                                     f,
                                     "{:?}:{:?}",
                                     expr,
-                                    expr.to_data_field(&plan.schema()).unwrap().data_type()
+                                    expr.to_data_type(&plan.schema()).unwrap()
                                 )?;
                             }
                             Ok(true)

@@ -87,8 +87,8 @@ fn create_table(results: &[DataBlock]) -> Result<Table> {
         for row in 0..batch.num_rows() {
             let mut cells = Vec::new();
             for col in 0..batch.num_columns() {
-                let column = batch.column(col);
-                cells.push(Cell::new(&array_value_to_string(&column, row)?));
+                let array = batch.column(col).to_array()?;
+                cells.push(Cell::new(&array_value_to_string(&array, row)?));
             }
             table.add_row(Row::new(cells));
         }

@@ -14,6 +14,7 @@ use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::JoinPlan;
+use crate::InsertIntoPlan;
 use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
@@ -89,7 +90,8 @@ pub trait PlanVisitor<'plan> {
             PlanNode::Stage(plan) => self.visit_stage(plan),
             PlanNode::Having(plan) => self.visit_having(plan),
             PlanNode::Expression(plan) => self.visit_expression(plan),
-            PlanNode::Join(plan) => self.visit_join(plan)
+            PlanNode::Join(plan) => self.visit_join(plan),
+            PlanNode::InsertInto(plan) => self.visit_insert_into(plan)
         }
     }
 
@@ -159,4 +161,6 @@ pub trait PlanVisitor<'plan> {
         self.visit_plan_node(join.left_input.as_ref());
         self.visit_plan_node(join.right_input.as_ref());
     }
+
+    fn visit_insert_into(&mut self, _: &'plan InsertIntoPlan) {}
 }

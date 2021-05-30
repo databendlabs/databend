@@ -5,18 +5,13 @@
 ## Dependencies
 ```markdown
 cd website/datafuse
-pip install .
-pip install \
-mkdocs-minify-plugin>=0.3 \
-mkdocs-redirects>=1.0
+make install
 ```
 
 ## Run
 ```markdown
-mkdocs serve
+make run
 ```
-
-If you modify the files in [src](src), please run `npm run build` to rebuild material first.
 
 ## Note
 

@@ -284,11 +284,7 @@ pub struct MemStore {
     /// The current hard state.
     hs: RwLock<Option<HardState>>,
     /// The current snapshot.
-    current_snapshot: RwLock<Option<MemStoreSnapshot>>,
-
-    // Channels for publishing applied index
-    pub applied_tx: watch::Sender<u64>,
-    pub applied_rx: watch::Receiver<u64>
+    current_snapshot: RwLock<Option<MemStoreSnapshot>>
 }
 
 impl MemStore {
@@ -299,15 +295,12 @@ impl MemStore {
         let hs = RwLock::new(None);
         let current_snapshot = RwLock::new(None);
 
-        let (tx, rx) = watch::channel(0);
         Self {
             id,
             log,
             sm,
             hs,
-            current_snapshot,
-            applied_tx: tx,
-            applied_rx: rx
+            current_snapshot
         }
     }
 
@@ -324,16 +317,12 @@ impl MemStore {
         let sm = RwLock::new(sm);
         let hs = RwLock::new(hs);
         let current_snapshot = RwLock::new(current_snapshot);
-        // TODO: init applied tx
-        let (tx, rx) = watch::channel(0);
         Self {
             id,
             log,
             sm,
             hs,
-            current_snapshot,
-            applied_tx: tx,
-            applied_rx: rx
+            current_snapshot
         }
     }
 
@@ -465,9 +454,6 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
     ) -> Result<ClientResponse> {
         let mut sm = self.sm.write().await;
         let resp = sm.apply(*index, data)?;
-
-        self.applied_tx.send(*index)?;
-
         Ok(resp)
     }
 
@@ -476,7 +462,6 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
         let mut sm = self.sm.write().await;
         for (index, data) in entries {
             sm.apply(**index, data)?;
-            self.applied_tx.send(**index)?;
         }
         Ok(())
     }
@@ -655,8 +640,13 @@ impl RaftNetwork<ClientRequest> for Network {
         target: NodeId,
         rpc: AppendEntriesRequest<ClientRequest>
     ) -> Result<AppendEntriesResponse> {
+        tracing::debug!("append_entries req to: id={}: {:?}", target, rpc);
+
         let mut client = self.make_client(&target).await?;
-        let resp = client.append_entries(rpc).await?;
+        let resp = client.append_entries(rpc).await;
+        tracing::debug!("append_entries resp from: id={}: {:?}", target, resp);
+
+        let resp = resp?;
         let mes = resp.into_inner();
         let resp = serde_json::from_str(&mes.data)?;
 
@@ -669,8 +659,13 @@ impl RaftNetwork<ClientRequest> for Network {
         target: NodeId,
         rpc: InstallSnapshotRequest
     ) -> Result<InstallSnapshotResponse> {
+        tracing::debug!("install_snapshot req to: id={}", target);
+
         let mut client = self.make_client(&target).await?;
-        let resp = client.install_snapshot(rpc).await?;
+        let resp = client.install_snapshot(rpc).await;
+        tracing::debug!("install_snapshot resp from: id={}: {:?}", target, resp);
+
+        let resp = resp?;
         let mes = resp.into_inner();
         let resp = serde_json::from_str(&mes.data)?;
 
@@ -679,8 +674,13 @@ impl RaftNetwork<ClientRequest> for Network {
 
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.sto.id))]
     async fn vote(&self, target: NodeId, rpc: VoteRequest) -> Result<VoteResponse> {
+        tracing::debug!("vote req to: id={} {:?}", target, rpc);
+
         let mut client = self.make_client(&target).await?;
-        let resp = client.vote(rpc).await?;
+        let resp = client.vote(rpc).await;
+        tracing::info!("vote: resp from id={} {:?}", target, resp);
+
+        let resp = resp?;
         let mes = resp.into_inner();
         let resp = serde_json::from_str(&mes.data)?;
 
@@ -810,10 +810,16 @@ impl MetaNodeBuilder {
 
 impl MetaNode {
     pub fn builder() -> MetaNodeBuilder {
+        // Set heartbeat interval to a reasonable value.
+        // The election_timeout should tolerate several heartbeat loss.
+        let heartbeat = 500; // ms
         MetaNodeBuilder {
             node_id: None,
             config: Some(
                 Config::build("foo_cluster".into())
+                    .heartbeat_interval(heartbeat)
+                    .election_timeout_min(heartbeat * 4)
+                    .election_timeout_max(heartbeat * 8)
                     .validate()
                     .expect("fail to build raft config")
             ),
@@ -1003,9 +1009,14 @@ impl MetaNode {
         // TODO after leader established, add non-voter through apis
         let node_ids = self.sto.list_non_voters().await;
         for i in node_ids.iter() {
-            self.raft.add_non_voter(*i).await?;
+            let x = self.raft.add_non_voter(*i).await;
 
-            tracing::info!("non-voter is added: {}", i);
+            tracing::info!("add_non_voter result: {:?}", x);
+            if x.is_ok() {
+                tracing::info!("non-voter is added: {}", i);
+            } else {
+                tracing::info!("non-voter already exist: {}", i);
+            }
         }
         Ok(())
     }

@@ -10,7 +10,7 @@ use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use common_streams::SortStream;
 
@@ -62,12 +62,12 @@ impl IProcessor for SortPartialTransform {
 
 pub fn get_sort_descriptions(
     schema: &DataSchemaRef,
-    exprs: &[ExpressionAction]
+    exprs: &[Expression]
 ) -> Result<Vec<SortColumnDescription>> {
     let mut sort_columns_descriptions = vec![];
     for x in exprs {
         match *x {
-            ExpressionAction::Sort {
+            Expression::Sort {
                 ref expr,
                 asc,
                 nulls_first

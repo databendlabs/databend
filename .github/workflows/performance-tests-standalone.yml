@@ -1,4 +1,4 @@
-name: Performance Tests(Standalone)
+name: Performance(Standalone)
 on: [push, pull_request]
 
 env:
@@ -6,16 +6,48 @@ env:
 
 jobs:
   build:
+    name: "Tests"
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v2
-
-      - name: Rust setup
+      - name: dependency hack on self hosted machine
         run: |
-          bash ./scripts/setup/dev_setup.sh
+          sudo wget http://archive.ubuntu.com/ubuntu/pool/main/p/psmisc/psmisc_23.3-1_amd64.deb
+          sudo dpkg -i ./psmisc_23.3-1_amd64.deb
+          sudo apt-get update
+          sudo apt-get install mysql-client -y
+          sudo apt-get install -y --no-install-recommends ca-certificates
+          sudo apt-get install -y --no-install-recommends build-essential
+          sudo apt-get install -y --no-install-recommends cmake
+          sudo apt-get install -y --no-install-recommends clang
+          sudo apt-get install -y --no-install-recommends llvm
+          sudo apt-get install -y --no-install-recommends pkg-config
+          sudo apt-get install -y --no-install-recommends lcov
+          sudo apt-get install -y --no-install-recommends python3
+          sudo apt-get install -y --no-install-recommends coreutils
+          sudo apt-get install -y --no-install-recommends python3-all-dev
+          sudo apt-get install -y --no-install-recommends python3-setuptools
+          sudo apt-get install -y --no-install-recommends python3-pip
+          sudo apt-get install -y --no-install-recommends git
 
-      - uses: actions-rs/cargo@v1
-        run: RUST_BACKTRACE=full RUSTFLAGS="-C target-cpu=native" cargo build --bin=fuse-query --release
+
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: nightly
+            override: true
+            components: rustfmt, clippy
+
+      # `cargo check` command here will use installed `nightly`
+      # as it is set as an "override" for current directory
+      - name: Run cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+
+      - name: Build native release
+        run: |
+          bash ./scripts/ci/ci-native-release-build.sh
 
       - name: Run Performance Tests with Standalone mode
         run: |

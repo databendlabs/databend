@@ -19,9 +19,9 @@ checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
 name = "ahash"
-version = "0.7.2"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f200cbb1e856866d9eade941cf3aa0c5d7dd36f74311c4273b494f4ef036957"
+checksum = "43bb833f0bf979d8475d38fbf09ed3b8a55e1885fe93ad3f93239fc6a4f17b98"
 dependencies = [
  "getrandom 0.2.2",
  "once_cell",
@@ -90,8 +90,8 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
 name = "arrow"
-version = "4.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow-rs?rev=a870b24#a870b24bd4eb76d3e0e5c718c9956a7dcdee52fd"
+version = "4.1.0"
+source = "git+https://github.com/apache/arrow-rs?tag=4.1.0#a5dd428f57e62db20a945e8b1895de91405958c4"
 dependencies = [
  "cfg_aliases",
  "chrono",
@@ -102,7 +102,7 @@ dependencies = [
  "lazy_static",
  "lexical-core",
  "multiversion",
- "num 0.3.1",
+ "num",
  "rand 0.7.3",
  "regex",
  "serde",
@@ -112,8 +112,8 @@ dependencies = [
 
 [[package]]
 name = "arrow-flight"
-version = "4.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow-rs?rev=a870b24#a870b24bd4eb76d3e0e5c718c9956a7dcdee52fd"
+version = "4.1.0"
+source = "git+https://github.com/apache/arrow-rs?tag=4.1.0#a5dd428f57e62db20a945e8b1895de91405958c4"
 dependencies = [
  "arrow",
  "bytes 1.0.1",
@@ -129,7 +129,7 @@ dependencies = [
 [[package]]
 name = "async-raft"
 version = "0.6.1"
-source = "git+https://github.com/drmingdrmer/async-raft?branch=rc#3dce97c5a42e6ddbd3e13b058dc657315ceae897"
+source = "git+https://github.com/drmingdrmer/async-raft?rev=cf40344f66fdcb6cde160b3e5671ff87c88f2af8#cf40344f66fdcb6cde160b3e5671ff87c88f2af8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -567,6 +567,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-aggregate-functions"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common-arrow",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-infallible",
+ "dyn-clone",
+ "indexmap",
+ "lazy_static",
+ "pretty_assertions",
+]
+
+[[package]]
 name = "common-arrow"
 version = "0.1.0"
 dependencies = [
@@ -620,6 +636,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-arrow",
+ "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-planners",
@@ -631,6 +648,7 @@ dependencies = [
  "prost",
  "serde",
  "serde_json",
+ "tokio",
  "tokio-stream",
  "tonic",
  "tonic-build",
@@ -661,9 +679,12 @@ name = "common-planners"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "common-aggregate-functions",
+ "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "futures",
  "pretty_assertions",
  "serde",
 ]
@@ -1259,6 +1280,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "clickhouse-srv",
+ "common-aggregate-functions",
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
@@ -1281,7 +1303,7 @@ dependencies = [
  "metrics",
  "metrics-exporter-prometheus",
  "msql-srv",
- "num 0.4.0",
+ "num",
  "num_cpus",
  "paste",
  "pretty_assertions",
@@ -1325,7 +1347,7 @@ dependencies = [
  "maplit",
  "metrics",
  "metrics-exporter-prometheus",
- "num 0.4.0",
+ "num",
  "num_cpus",
  "paste",
  "pretty_assertions",
@@ -1335,6 +1357,7 @@ dependencies = [
  "serde_json",
  "structopt",
  "tempfile",
+ "test-env-log",
  "thiserror",
  "threadpool",
  "tokio",
@@ -1502,9 +1525,9 @@ checksum = "0e4075386626662786ddb0ec9081e7c7eeb1ba31951f447ca780ef9f5d568189"
 
 [[package]]
 name = "git2"
-version = "0.13.19"
+version = "0.13.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17929de7239dea9f68aa14f94b2ab4974e7b24c1314275ffcc12a7758172fa18"
+checksum = "1d250f5f82326884bd39c2853577e70a121775db76818ffa452ed1e80de12986"
 dependencies = [
  "bitflags",
  "libc",
@@ -2137,8 +2160,7 @@ dependencies = [
 [[package]]
 name = "msql-srv"
 version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8abd5a8795c8ae6888275fa43bed844991de703a7b9850a1de9066dcf90546ea"
+source = "git+https://github.com/datafuselabs/msql-srv?rev=76b8ae3#76b8ae360080942127805ea469f322552ed53177"
 dependencies = [
  "byteorder",
  "chrono",
@@ -2252,29 +2274,15 @@ dependencies = [
 
 [[package]]
 name = "num"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b7a8e9be5e039e2ff869df49155f1c06bd01ade2117ec783e56ab0932b67a8f"
-dependencies = [
- "num-bigint 0.3.2",
- "num-complex 0.3.1",
- "num-integer",
- "num-iter",
- "num-rational 0.3.2",
- "num-traits",
-]
-
-[[package]]
-name = "num"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43db66d1170d347f9a065114077f7dccb00c1b9478c89384490a3425279a4606"
 dependencies = [
  "num-bigint 0.4.0",
- "num-complex 0.4.0",
+ "num-complex",
  "num-integer",
  "num-iter",
- "num-rational 0.4.0",
+ "num-rational",
  "num-traits",
 ]
 
@@ -2283,17 +2291,6 @@ name = "num-bigint"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "090c7f9998ee0ff65aa5b723e4009f7b217707f1fb5ea551329cc4d6231fb304"
-dependencies = [
- "autocfg 1.0.1",
- "num-integer",
- "num-traits",
-]
-
-[[package]]
-name = "num-bigint"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d0a3d5e207573f948a9e5376662aa743a2ea13f7c50a554d7af443a73fbfeba"
 dependencies = [
  "autocfg 1.0.1",
  "num-integer",
@@ -2331,15 +2328,6 @@ dependencies = [
 
 [[package]]
 name = "num-complex"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "747d632c0c558b87dbabbe6a82f3b4ae03720d0646ac5b7b4dae89394be5f2c5"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
-name = "num-complex"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26873667bbbb7c5182d4a37c1add32cdf09f841af72da53318fdb81543c15085"
@@ -2364,18 +2352,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2021c8337a54d21aca0d59a92577a029af9431cb59b909b03252b9c164fad59"
 dependencies = [
  "autocfg 1.0.1",
- "num-integer",
- "num-traits",
-]
-
-[[package]]
-name = "num-rational"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12ac428b1cb17fce6f731001d307d351ec70a6d202fc2e60f7d4c5e42d8f4f07"
-dependencies = [
- "autocfg 1.0.1",
- "num-bigint 0.3.2",
  "num-integer",
  "num-traits",
 ]
@@ -2507,17 +2483,17 @@ dependencies = [
 
 [[package]]
 name = "parquet"
-version = "4.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow-rs?rev=a870b24#a870b24bd4eb76d3e0e5c718c9956a7dcdee52fd"
+version = "4.1.0"
+source = "git+https://github.com/apache/arrow-rs?tag=4.1.0#a5dd428f57e62db20a945e8b1895de91405958c4"
 dependencies = [
  "arrow",
- "base64 0.12.3",
+ "base64 0.13.0",
  "brotli",
  "byteorder",
  "chrono",
  "flate2",
  "lz4",
- "num-bigint 0.3.2",
+ "num-bigint 0.4.0",
  "parquet-format",
  "snap",
  "thrift",
@@ -3593,6 +3569,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-env-log"
+version = "0.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3e4b132a630cc8a0d06cfcb400da67adef3d0087a94b3332d4692908f0c2544"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "textwrap"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3603,18 +3590,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.24"
+version = "1.0.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0f4a65597094d4483ddaed134f409b2cb7c1beccf25201a9f73c719254fa98e"
+checksum = "fa6f76457f59514c7eeb4e59d891395fab0b2fd1d40723ae737d64153392e9c6"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.24"
+version = "1.0.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7765189610d8241a44529806d6fd1f2e0a08734313a35d5b3a556f92b381f3c0"
+checksum = "8a36768c0fbf1bb15eca10defa29526bda730a2376c2ab4393ccfa16fb1a318d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3727,9 +3714,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.6.0"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd3076b5c8cc18138b8f8814895c11eb4de37114a5d127bafdc5e55798ceef37"
+checksum = "0a38d31d7831c6ed7aad00aa4c12d9375fd225a6dd77da1d25b707346319a975"
 dependencies = [
  "autocfg 1.0.1",
  "bytes 1.0.1",
@@ -4114,9 +4101,9 @@ checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "vergen"
-version = "5.1.6"
+version = "5.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e353cf382b185d9c8d2cfe916a0f90ffddd365856d04b541d1adb493f6d04b5"
+checksum = "59032138343003a17090952a1eaa7c1b260080b44d3dbb0d68905bd2230260ee"
 dependencies = [
  "anyhow",
  "cfg-if 1.0.0",
@@ -4332,18 +4319,18 @@ dependencies = [
 
 [[package]]
 name = "zstd"
-version = "0.7.0+zstd.1.4.9"
+version = "0.8.1+zstd.1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9428752481d8372e15b1bf779ea518a179ad6c771cca2d2c60e4fbff3cc2cd52"
+checksum = "357d6bb1bd9c6f6a55a5a15c74d01260b272f724dc60cc829b86ebd2172ac5ef"
 dependencies = [
  "zstd-safe",
 ]
 
 [[package]]
 name = "zstd-safe"
-version = "3.1.0+zstd.1.4.9"
+version = "4.1.0+zstd.1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aa1926623ad7fe406e090555387daf73db555b948134b4d73eac5eb08fb666d"
+checksum = "d30375f78e185ca4c91930f42ea2c0162f9aa29737032501f93b79266d985ae7"
 dependencies = [
  "libc",
  "zstd-sys",
@@ -4351,9 +4338,9 @@ dependencies = [
 
 [[package]]
 name = "zstd-sys"
-version = "1.5.0+zstd.1.4.9"
+version = "1.6.0+zstd.1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e6c094340240369025fc6b731b054ee2a834328fa584310ac96aa4baebdc465"
+checksum = "2141bed8922b427761470e6bbfeff255da94fa20b0bbeab0d9297fcaf71e3aa7"
 dependencies = [
  "cc",
  "libc",

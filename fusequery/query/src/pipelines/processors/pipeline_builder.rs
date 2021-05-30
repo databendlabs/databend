@@ -110,6 +110,7 @@ impl PipelineBuilder {
         self.build_impl(pipeline, &plan.input)?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ExpressionTransform::try_create(
+                plan.input.schema(),
                 plan.schema.clone(),
                 plan.exprs.clone()
             )?))
@@ -121,7 +122,9 @@ impl PipelineBuilder {
         self.build_impl(pipeline, &plan.input)?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ProjectionTransform::try_create(
-                plan.schema.clone()
+                plan.input.schema(),
+                plan.schema(),
+                plan.expr.clone()
             )?))
         })?;
         Ok(())
@@ -182,6 +185,7 @@ impl PipelineBuilder {
         self.build_impl(pipeline, &plan.input)?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
+                plan.input.schema(),
                 plan.predicate.clone(),
                 false
             )?))
@@ -193,6 +197,7 @@ impl PipelineBuilder {
         self.build_impl(pipeline, &plan.input)?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
+                plan.input.schema(),
                 plan.predicate.clone(),
                 true
             )?))

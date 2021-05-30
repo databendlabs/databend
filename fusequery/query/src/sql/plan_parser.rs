@@ -4,10 +4,17 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 
+use common_aggregate_functions::AggregateFunctionFactory;
+use common_arrow::arrow::array::ArrayRef;
+use common_arrow::arrow::array::StringArray;
 use common_arrow::arrow::datatypes::Field;
+use common_datablocks::DataBlock;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
@@ -16,7 +23,8 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_planners::ExplainPlan;
-use common_planners::ExpressionAction;
+use common_planners::Expression;
+use common_planners::InsertIntoPlan;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
@@ -24,15 +32,30 @@ use common_planners::SettingPlan;
 use common_planners::StageState;
 use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
+use sqlparser::ast::Expr;
 use sqlparser::ast::FunctionArg;
 // use sqlparser::ast::JoinConstraint;
 // use sqlparser::ast::JoinOperator;
+use sqlparser::ast::Ident;
+use sqlparser::ast::ObjectName;
 use sqlparser::ast::OrderByExpr;
+use sqlparser::ast::Query;
 use sqlparser::ast::Statement;
 
+use super::expr_common::rebase_expr_from_input;
 use crate::datasources::ITable;
 use crate::functions::ContextFunction;
 use crate::sessions::FuseQueryContextRef;
+use crate::sql::expr_common::expand_aggregate_arg_exprs;
+use crate::sql::expr_common::expand_wildcard;
+use crate::sql::expr_common::expr_as_column_expr;
+use crate::sql::expr_common::extract_aliases;
+use crate::sql::expr_common::find_aggregate_exprs;
+use crate::sql::expr_common::find_columns_not_satisfy_exprs;
+use crate::sql::expr_common::rebase_expr;
+use crate::sql::expr_common::resolve_aliases_to_exprs;
+use crate::sql::expr_common::sort_to_inner_expr;
+use crate::sql::expr_common::unwrap_alias_exprs;
 use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::sql_statement::DfDropDatabase;
 use crate::sql::sql_statement::DfUseDatabase;
@@ -95,6 +118,14 @@ impl PlanParser {
             Statement::SetVariable {
                 variable, value, ..
             } => self.set_variable_to_plan(variable, value),
+
+            Statement::Insert {
+                table_name,
+                columns,
+                source,
+                ..
+            } => self.insert_to_plan(table_name, columns, source),
+
             _ => Result::Err(ErrorCodes::SyntaxException(format!(
                 "Unsupported statement {:?}",
                 statement
@@ -171,17 +202,16 @@ impl PlanParser {
 
         let mut options = HashMap::new();
         for p in create.options.iter() {
-            options.insert(p.name.value.to_lowercase(), p.value.to_string());
+            options.insert(
+                p.name.value.to_lowercase(),
+                p.value
+                    .to_string()
+                    .trim_matches(|s| s == '\'' || s == '"')
+                    .to_string()
+            );
         }
 
-        // Schema with metadata(due to serde must set metadata).
-        let schema = Arc::new(DataSchema::new_with_metadata(
-            fields,
-            [("Key".to_string(), "Value".to_string())]
-                .iter()
-                .cloned()
-                .collect()
-        ));
+        let schema = DataSchemaRefExt::create(fields);
         Ok(PlanNode::CreateTable(CreateTablePlan {
             if_not_exists: create.if_not_exists,
             db,
@@ -210,6 +240,88 @@ impl PlanParser {
         }))
     }
 
+    fn insert_to_plan(
+        &self,
+        table_name: &ObjectName,
+        columns: &[Ident],
+        source: &Query
+    ) -> Result<PlanNode> {
+        if let sqlparser::ast::SetExpr::Values(ref vs) = source.body {
+            //            let col_num = columns.len();
+            let db_name = self.ctx.get_current_database();
+            let tbl_name = table_name
+                .0
+                .get(0)
+                .ok_or_else(|| ErrorCodes::SyntaxException("empty table name now allowed"))?
+                .value
+                .clone();
+
+            let values = &vs.0;
+            if values.is_empty() {
+                return Err(ErrorCodes::EmptyData(
+                    "empty values for insertion is not allowed"
+                ));
+            }
+
+            let all_value = values
+                .iter()
+                .all(|row| row.iter().all(|item| matches!(item, Expr::Value(_))));
+            if !all_value {
+                return Err(ErrorCodes::UnImplement(
+                    "not support value expressions other than literal value yet"
+                ));
+            }
+            // Buffers some chunks if possible
+            let chunks = values.chunks(100);
+            let fields = columns
+                .iter()
+                .map(|ident| Field::new(&ident.value, DataType::Utf8, true))
+                .collect::<Vec<_>>();
+            let schema = DataSchemaRefExt::create(fields);
+
+            let blocks: Vec<DataBlock> = chunks
+                .map(|chunk| {
+                    let transposed: Vec<Vec<String>> = (0..chunk[0].len())
+                        .map(|i| {
+                            chunk
+                                .iter()
+                                .map(|inner| match &inner[i] {
+                                    Expr::Value(v) => v.to_string(),
+                                    _ => "N/A".to_string()
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .collect();
+
+                    let cols = transposed
+                        .iter()
+                        .map(|col| {
+                            Arc::new(StringArray::from(
+                                col.iter().map(|s| s as &str).collect::<Vec<&str>>()
+                            )) as ArrayRef
+                        })
+                        .collect::<Vec<_>>();
+
+                    DataBlock::create_by_array(schema.clone(), cols)
+                })
+                .collect();
+            log::info!("data block is {:?}", blocks);
+            let input_stream = futures::stream::iter(blocks);
+            let plan_node = InsertIntoPlan {
+                db_name,
+                tbl_name,
+                schema,
+                // this is crazy, please do not keep it, I am just test driving apis
+                input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream))))
+            };
+            Ok(PlanNode::InsertInto(plan_node))
+        } else {
+            Err(ErrorCodes::UnImplement(
+                "only supports simple value tuples as source of insertion"
+            ))
+        }
+    }
+
     /// Generate a logic plan from an SQL query
     pub fn query_to_plan(&self, query: &sqlparser::ast::Query) -> Result<PlanNode> {
         match &query.body {
@@ -224,60 +336,166 @@ impl PlanParser {
     }
 
     /// Generate a logic plan from an SQL select
+    /// For example:
+    /// "select sum(number+1)+2, number%3 as id from numbers(10) where number>1 group by id having id>1 order by id desc limit 3"
     fn select_to_plan(
         &self,
         select: &sqlparser::ast::Select,
         limit: &Option<sqlparser::ast::Expr>,
         order_by: &[OrderByExpr]
     ) -> Result<PlanNode> {
-        // From.
-        let plan = self.plan_tables_with_joins(&select.from)?;
+        // Filter expression
+        // In example: Filter=(number > 1)
+        let plan = self
+            .plan_tables_with_joins(&select.from)
+            .and_then(|input| self.filter(&input, &select.selection))?;
 
-        // Filter (also known as selection) first
-        let plan = self.filter(&plan, &select.selection)?;
-
-        // Projection expressions.
+        // Projection expression
+        // In example: Projection=[(sum((number + 1)) + 2), (number % 3) as id]
         let projection_exprs = select
             .projection
             .iter()
             .map(|e| self.sql_select_to_rex(&e, &plan.schema()))
-            .collect::<Result<Vec<ExpressionAction>>>()?;
+            .collect::<Result<Vec<Expression>>>()?
+            .iter()
+            .flat_map(|expr| expand_wildcard(&expr, &plan.schema()))
+            .collect::<Vec<Expression>>();
 
-        // OrderBy expressions.
+        // Aliases replacement for group by, having, sorting
+        // In example: Aliases=[("id", (number % 3))]
+        let aliases = extract_aliases(&projection_exprs);
+
+        // Group By expression after against aliases
+        // In example: GroupBy=[(number % 3)]
+        let group_by_exprs = select
+            .group_by
+            .iter()
+            .map(|e| {
+                self.sql_to_rex(e, &plan.schema())
+                    .and_then(|expr| resolve_aliases_to_exprs(&expr, &aliases))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        // Having Expression after against aliases
+        // In example: Having=((number % 3) > 1)
+        let having_expr_opt = select
+            .having
+            .as_ref()
+            .map::<Result<Expression>, _>(|having_expr| {
+                let having_expr = self.sql_to_rex(having_expr, &plan.schema())?;
+                let having_expr = resolve_aliases_to_exprs(&having_expr, &aliases)?;
+
+                Ok(having_expr)
+            })
+            .transpose()?;
+
+        // OrderBy expression after against aliases
+        // In example: Sort=(number % 3)
         let order_by_exprs = order_by
             .iter()
-            .map(|e| -> Result<ExpressionAction> {
-                Ok(ExpressionAction::Sort {
-                    expr: Box::new(self.sql_to_rex(&e.expr, &plan.schema())?),
+            .map(|e| -> Result<Expression> {
+                Ok(Expression::Sort {
+                    expr: Box::new(
+                        self.sql_to_rex(&e.expr, &plan.schema())
+                            .and_then(|expr| resolve_aliases_to_exprs(&expr, &aliases))?
+                    ),
                     asc: e.asc.unwrap_or(true),
                     nulls_first: e.nulls_first.unwrap_or(true)
                 })
             })
-            .collect::<Result<Vec<ExpressionAction>>>()?;
+            .collect::<Result<Vec<Expression>>>()?;
 
-        // Aggregator check.
-        let has_aggregator = projection_exprs
-            .iter()
-            .map(|expr| expr.has_aggregator())
-            .fold(Ok(false), |res, item| {
-                // Zip and `||` fold
-                res.and_then(|res| item.map(|item| res || item))
-            });
+        // The outer expressions we will search through for
+        // aggregates. Aggregates may be sourced from the SELECT, order by, having ...
+        let mut expression_exprs = projection_exprs.clone();
+        // from order by
+        expression_exprs.extend_from_slice(&order_by_exprs);
+        let expression_with_sort = expression_exprs.clone();
+        // ... or from the HAVING.
+        if let Some(having_expr) = &having_expr_opt {
+            expression_exprs.push(having_expr.clone());
+        }
 
-        // Projection.
-        let plan = if !select.group_by.is_empty() || has_aggregator? {
-            self.aggregate(&plan, &projection_exprs, &select.group_by)
-                .and_then(|input| self.sort(&input, order_by))?
+        // All of the aggregate expressions (deduplicated).
+        // In example: aggr=[[sum((number + 1))]]
+        let aggr_exprs = find_aggregate_exprs(&expression_exprs);
+
+        let has_aggr = aggr_exprs.len() + group_by_exprs.len() > 0;
+        let (plan, having_expr_post_aggr_opt) = if has_aggr {
+            let aggr_projection_exprs = group_by_exprs
+                .iter()
+                .chain(aggr_exprs.iter())
+                .cloned()
+                .collect::<Vec<_>>();
+
+            let before_aggr_exprs = expand_aggregate_arg_exprs(&aggr_projection_exprs);
+
+            // Build aggregate inner expression plan and then aggregate&groupby plan.
+            // In example:
+            // inner expression=[(number + 1), (number % 3)]
+            let plan = self
+                .expression(&plan, &before_aggr_exprs, "Before GroupBy")
+                .and_then(|input| self.aggregate(&input, &aggr_exprs, &group_by_exprs))?;
+
+            // After aggregation, these are all of the columns that will be
+            // available to next phases of planning.
+            let column_exprs_post_aggr = aggr_projection_exprs
+                .iter()
+                .map(|expr| expr_as_column_expr(expr))
+                .collect::<Result<Vec<_>>>()?;
+
+            // Rewrite the SELECT expression to use the columns produced by the aggregation.
+            // In example:[col("number + 1"), col("number % 3")]
+            let select_exprs_post_aggr = expression_exprs
+                .iter()
+                .map(|expr| rebase_expr(expr, &aggr_projection_exprs))
+                .collect::<Result<Vec<_>>>()?;
+
+            if let Ok(Some(expr)) =
+                find_columns_not_satisfy_exprs(&column_exprs_post_aggr, &select_exprs_post_aggr)
+            {
+                return Err(ErrorCodes::IllegalAggregateExp(format!(
+                    "Column `{:?}` is not under aggregate function and not in GROUP BY: While processing {:?}",
+                    expr, select_exprs_post_aggr
+                )));
+            }
+
+            // Rewrite the HAVING expression to use the columns produced by the
+            // aggregation.
+            let having_expr_post_aggr_opt = if let Some(having_expr) = &having_expr_opt {
+                let having_expr_post_aggr = rebase_expr(having_expr, &aggr_projection_exprs)?;
+                if let Ok(Some(expr)) = find_columns_not_satisfy_exprs(&column_exprs_post_aggr, &[
+                    having_expr_post_aggr.clone()
+                ]) {
+                    return Err(ErrorCodes::IllegalAggregateExp(format!(
+                        "Column `{:?}` is not under aggregate function and not in GROUP BY: While processing {:?}",
+                        expr, having_expr_post_aggr
+                    )));
+                }
+                Some(having_expr_post_aggr)
+            } else {
+                None
+            };
+
+            (plan, having_expr_post_aggr_opt)
         } else {
-            self.expression(&plan, &projection_exprs, "Before Projection")
-                .and_then(|input| self.expression(&input, &order_by_exprs, "Before OrderBy"))
-                .and_then(|input| self.sort(&input, order_by))
-                .and_then(|input| self.project(&input, &projection_exprs))?
+            (plan, having_expr_opt)
         };
 
-        // Having.
-        let plan = self.having(&plan, &select.having)?;
+        let stage_phase = if order_by_exprs.is_empty() {
+            "Before Projection"
+        } else {
+            "Before OrderBy"
+        };
 
+        let plan = self.expression(&plan, &expression_with_sort, stage_phase)?;
+
+        // Having.
+        let plan = self.having(&plan, having_expr_post_aggr_opt)?;
+        // Order by
+        let plan = self.sort(&plan, &order_by_exprs)?;
+        // Projection
+        let plan = self.project(&plan, &projection_exprs)?;
         // Limit.
         let plan = self.limit(&plan, limit)?;
 
@@ -291,16 +509,14 @@ impl PlanParser {
         &self,
         sql: &sqlparser::ast::SelectItem,
         schema: &DataSchema
-    ) -> Result<ExpressionAction> {
+    ) -> Result<Expression> {
         match sql {
             sqlparser::ast::SelectItem::UnnamedExpr(expr) => self.sql_to_rex(expr, schema),
-            sqlparser::ast::SelectItem::ExprWithAlias { expr, alias } => {
-                Ok(ExpressionAction::Alias(
-                    alias.value.clone(),
-                    Box::new(self.sql_to_rex(&expr, schema)?)
-                ))
-            }
-            sqlparser::ast::SelectItem::Wildcard => Ok(ExpressionAction::Wildcard),
+            sqlparser::ast::SelectItem::ExprWithAlias { expr, alias } => Ok(Expression::Alias(
+                alias.value.clone(),
+                Box::new(self.sql_to_rex(&expr, schema)?)
+            )),
+            sqlparser::ast::SelectItem::Wildcard => Ok(Expression::Wildcard),
             _ => Result::Err(ErrorCodes::UnImplement(format!(
                 "SelectItem: {:?} are not supported",
                 sql
@@ -451,15 +667,15 @@ impl PlanParser {
         &self,
         expr: &sqlparser::ast::Expr,
         schema: &DataSchema
-    ) -> Result<ExpressionAction> {
-        fn value_to_rex(value: &sqlparser::ast::Value) -> Result<ExpressionAction> {
+    ) -> Result<Expression> {
+        fn value_to_rex(value: &sqlparser::ast::Value) -> Result<Expression> {
             match value {
                 sqlparser::ast::Value::Number(ref n, _) => {
-                    DataValue::try_from_literal(n).map(ExpressionAction::Literal)
+                    DataValue::try_from_literal(n).map(Expression::Literal)
                 }
-                sqlparser::ast::Value::SingleQuotedString(ref value) => Ok(
-                    ExpressionAction::Literal(DataValue::Utf8(Some(value.clone())))
-                ),
+                sqlparser::ast::Value::SingleQuotedString(ref value) => {
+                    Ok(Expression::Literal(DataValue::Utf8(Some(value.clone()))))
+                }
                 sqlparser::ast::Value::Interval {
                     value,
                     leading_field,
@@ -473,6 +689,9 @@ impl PlanParser {
                     last_field,
                     fractional_seconds_precision
                 ),
+                sqlparser::ast::Value::Boolean(b) => {
+                    Ok(Expression::Literal(DataValue::Boolean(Some(*b))))
+                }
                 other => Result::Err(ErrorCodes::SyntaxException(format!(
                     "Unsupported value expression: {}, type: {:?}",
                     value, other
@@ -482,22 +701,24 @@ impl PlanParser {
 
         match expr {
             sqlparser::ast::Expr::Value(value) => value_to_rex(value),
-            sqlparser::ast::Expr::Identifier(ref v) => {
-                Ok(ExpressionAction::Column(v.clone().value))
-            }
+            sqlparser::ast::Expr::Identifier(ref v) => Ok(Expression::Column(v.clone().value)),
             sqlparser::ast::Expr::BinaryOp { left, op, right } => {
-                Ok(ExpressionAction::BinaryExpression {
+                Ok(Expression::BinaryExpression {
                     op: format!("{}", op),
                     left: Box::new(self.sql_to_rex(left, schema)?),
                     right: Box::new(self.sql_to_rex(right, schema)?)
                 })
             }
+            sqlparser::ast::Expr::UnaryOp { op, expr } => Ok(Expression::UnaryExpression {
+                op: format!("{}", op),
+                expr: Box::new(self.sql_to_rex(expr, schema)?)
+            }),
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema),
             sqlparser::ast::Expr::Function(e) => {
                 let mut args = Vec::with_capacity(e.args.len());
 
                 // 1. Get the args from context by function name. such as SELECT database()
-                // common::functions::udf::database arg is ctx.get_default()
+                // common::ScalarFunctions::udf::database arg is ctx.get_default()
                 let ctx_args = ContextFunction::build_args_from_ctx(
                     e.name.to_string().as_str(),
                     self.ctx.clone()
@@ -518,17 +739,17 @@ impl PlanParser {
                     }
                 }
 
-                Ok(ExpressionAction::Function {
-                    op: e.name.to_string(),
-                    args
-                })
+                let op = e.name.to_string();
+                if AggregateFunctionFactory::get(&op).is_ok() {
+                    return Ok(Expression::AggregateFunction { op, args });
+                }
+
+                Ok(Expression::ScalarFunction { op, args })
             }
-            sqlparser::ast::Expr::Wildcard => Ok(ExpressionAction::Wildcard),
+            sqlparser::ast::Expr::Wildcard => Ok(Expression::Wildcard),
             sqlparser::ast::Expr::TypedString { data_type, value } => {
-                SQLCommon::make_data_type(data_type).map(|data_type| ExpressionAction::Cast {
-                    expr: Box::new(ExpressionAction::Literal(DataValue::Utf8(Some(
-                        value.clone()
-                    )))),
+                SQLCommon::make_data_type(data_type).map(|data_type| Expression::Cast {
+                    expr: Box::new(Expression::Literal(DataValue::Utf8(Some(value.clone())))),
                     data_type
                 })
             }
@@ -537,7 +758,7 @@ impl PlanParser {
                 .map(Box::from)
                 .and_then(|expr| {
                     SQLCommon::make_data_type(data_type)
-                        .map(|data_type| ExpressionAction::Cast { expr, data_type })
+                        .map(|data_type| Expression::Cast { expr, data_type })
                 }),
             sqlparser::ast::Expr::Substring {
                 expr,
@@ -549,16 +770,14 @@ impl PlanParser {
                 if let Some(from) = substring_from {
                     args.push(self.sql_to_rex(from, schema)?);
                 } else {
-                    args.push(ExpressionAction::Literal(DataValue::Int64(Some(1))));
+                    args.push(Expression::Literal(DataValue::Int64(Some(1))));
                 }
 
                 if let Some(len) = substring_for {
                     args.push(self.sql_to_rex(len, schema)?);
-                } else {
-                    args.push(ExpressionAction::Literal(DataValue::UInt64(None)));
                 }
 
-                Ok(ExpressionAction::Function {
+                Ok(Expression::ScalarFunction {
                     op: "substring".to_string(),
                     args
                 })
@@ -607,28 +826,25 @@ impl PlanParser {
     }
 
     /// Apply a having to the plan
-    fn having(
-        &self,
-        plan: &PlanNode,
-        predicate: &Option<sqlparser::ast::Expr>
-    ) -> Result<PlanNode> {
-        match *predicate {
-            Some(ref predicate_expr) => {
-                self.sql_to_rex(predicate_expr, &plan.schema())
-                    .and_then(|filter_expr| {
-                        PlanBuilder::from(&plan)
-                            .having(filter_expr)
-                            .and_then(|builder| builder.build())
-                    })
-            }
-            _ => Ok(plan.clone())
+    fn having(&self, plan: &PlanNode, expr: Option<Expression>) -> Result<PlanNode> {
+        if let Some(expr) = expr {
+            let expr = rebase_expr_from_input(&expr, &plan.schema())?;
+            return PlanBuilder::from(&plan)
+                .having(expr)
+                .and_then(|builder| builder.build());
         }
+        Ok(plan.clone())
     }
 
     /// Wrap a plan in a projection
-    fn project(&self, input: &PlanNode, expr: &[ExpressionAction]) -> Result<PlanNode> {
+    fn project(&self, input: &PlanNode, exprs: &[Expression]) -> Result<PlanNode> {
+        let exprs = exprs
+            .iter()
+            .map(|expr| rebase_expr_from_input(expr, &input.schema()))
+            .collect::<Result<Vec<_>>>()?;
+
         PlanBuilder::from(&input)
-            .project(expr)
+            .project(&exprs)
             .and_then(|builder| builder.build())
     }
 
@@ -636,42 +852,40 @@ impl PlanParser {
     fn aggregate(
         &self,
         input: &PlanNode,
-        aggr_expr: &[ExpressionAction],
-        group_by: &[sqlparser::ast::Expr]
+        aggr_exprs: &[Expression],
+        group_by_exprs: &[Expression]
     ) -> Result<PlanNode> {
-        let group_expr = group_by
+        let aggr_exprs = aggr_exprs
             .iter()
-            .map(|e| self.sql_to_rex(&e, &input.schema()))
-            .collect::<Result<Vec<ExpressionAction>>>()?;
+            .map(|expr| rebase_expr_from_input(expr, &input.schema()))
+            .collect::<Result<Vec<_>>>()?;
+
+        let group_by_exprs = group_by_exprs
+            .iter()
+            .map(|expr| rebase_expr_from_input(expr, &input.schema()))
+            .collect::<Result<Vec<_>>>()?;
 
         // S0: Apply a partial aggregator plan.
         // S1: Apply a fragment plan for distributed planners split.
         // S2: Apply a final aggregator plan.
         PlanBuilder::from(&input)
-            .aggregate_partial(aggr_expr, &group_expr)
-            // TODO self.ctx.get_id().unwrap()
+            .aggregate_partial(&aggr_exprs, &group_by_exprs)
+            .and_then(|builder| builder.stage(self.ctx.get_id()?, StageState::AggregatorMerge))
             .and_then(|builder| {
-                builder.stage(self.ctx.get_id().unwrap(), StageState::AggregatorMerge)
+                builder.aggregate_final(input.schema(), &aggr_exprs, &group_by_exprs)
             })
-            .and_then(|builder| builder.aggregate_final(aggr_expr, &group_expr))
             .and_then(|builder| builder.build())
     }
 
-    fn sort(&self, input: &PlanNode, order_by: &[OrderByExpr]) -> Result<PlanNode> {
-        if order_by.is_empty() {
+    fn sort(&self, input: &PlanNode, order_by_exprs: &[Expression]) -> Result<PlanNode> {
+        if order_by_exprs.is_empty() {
             return Ok(input.clone());
         }
 
-        let order_by_exprs: Vec<ExpressionAction> = order_by
+        let order_by_exprs = order_by_exprs
             .iter()
-            .map(|e| -> Result<ExpressionAction> {
-                Ok(ExpressionAction::Sort {
-                    expr: Box::new(self.sql_to_rex(&e.expr, &input.schema())?),
-                    asc: e.asc.unwrap_or(true),
-                    nulls_first: e.nulls_first.unwrap_or(true)
-                })
-            })
-            .collect::<Result<Vec<ExpressionAction>>>()?;
+            .map(|expr| rebase_expr_from_input(expr, &input.schema()))
+            .collect::<Result<Vec<_>>>()?;
 
         PlanBuilder::from(&input)
             .sort(&order_by_exprs)
@@ -685,7 +899,7 @@ impl PlanParser {
                 let n = self
                     .sql_to_rex(&limit_expr, &input.schema())
                     .and_then(|limit_expr| match limit_expr {
-                        ExpressionAction::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
+                        Expression::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
                         _ => Err(ErrorCodes::SyntaxException(
                             "Unexpected expression for LIMIT clause"
                         ))
@@ -700,18 +914,34 @@ impl PlanParser {
     }
 
     /// Apply a expression against exprs.
-    fn expression(
-        &self,
-        input: &PlanNode,
-        exprs: &[ExpressionAction],
-        desc: &str
-    ) -> Result<PlanNode> {
-        if exprs.is_empty() {
+    fn expression(&self, input: &PlanNode, exprs: &[Expression], desc: &str) -> Result<PlanNode> {
+        let mut dedup_exprs = vec![];
+        for expr in exprs {
+            let rebased_expr = unwrap_alias_exprs(expr)
+                .and_then(|e| rebase_expr_from_input(&e, &input.schema()))?;
+            let rebased_expr = sort_to_inner_expr(&rebased_expr);
+
+            if !dedup_exprs.contains(&rebased_expr) {
+                dedup_exprs.push(rebased_expr);
+            }
+        }
+
+        // if all expression is column expression expression, we skip this expression
+        if dedup_exprs.iter().all(|expr| {
+            if let Expression::Column(_) = expr {
+                return true;
+            }
+            false
+        }) {
+            return Ok(input.clone());
+        }
+
+        if dedup_exprs.is_empty() {
             return Ok(input.clone());
         }
 
         PlanBuilder::from(&input)
-            .expression(&exprs, desc)
+            .expression(&dedup_exprs, desc)
             .and_then(|builder| builder.build())
     }
 }

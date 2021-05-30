@@ -9,3 +9,5 @@ ignore:
   - "*/metrics/*"
   - "*/admins/*"
   - "*/target/*"
+  - "*/ext/*"
+  - "*/exception/*"

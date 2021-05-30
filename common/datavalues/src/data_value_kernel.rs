@@ -8,6 +8,7 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::DataArrayRef;
+use crate::DataColumnarValue;
 use crate::DataValue;
 
 impl DataValue {
@@ -21,7 +22,17 @@ impl DataValue {
     /// key-0: u8[1, 'a']
     /// key-1: u8[2, 'b']
     #[inline]
-    pub fn concat_row_to_one_key(col: &ArrayRef, row: usize, vec: &mut Vec<u8>) -> Result<()> {
+    pub fn concat_row_to_one_key(
+        col: &DataColumnarValue,
+        row: usize,
+        vec: &mut Vec<u8>
+    ) -> Result<()> {
+        let (col, row) = match col {
+            DataColumnarValue::Array(array) => (Ok(array.clone()), row),
+            DataColumnarValue::Constant(v, _) => (v.to_array_with_size(1), 0)
+        };
+        let col = col?;
+
         match col.data_type() {
             DataType::Boolean => {
                 let array = col.as_any().downcast_ref::<BooleanArray>().unwrap();
@@ -102,28 +113,28 @@ impl DataValue {
             }
             DataType::Dictionary(index_type, _) => match **index_type {
                 DataType::Int8 => {
-                    Self::dictionary_create_key_for_col::<Int8Type>(col, row, vec)?;
+                    Self::dictionary_create_key_for_col::<Int8Type>(&col, row, vec)?;
                 }
                 DataType::Int16 => {
-                    Self::dictionary_create_key_for_col::<Int16Type>(col, row, vec)?;
+                    Self::dictionary_create_key_for_col::<Int16Type>(&col, row, vec)?;
                 }
                 DataType::Int32 => {
-                    Self::dictionary_create_key_for_col::<Int32Type>(col, row, vec)?;
+                    Self::dictionary_create_key_for_col::<Int32Type>(&col, row, vec)?;
                 }
                 DataType::Int64 => {
-                    Self::dictionary_create_key_for_col::<Int64Type>(col, row, vec)?;
+                    Self::dictionary_create_key_for_col::<Int64Type>(&col, row, vec)?;
                 }
                 DataType::UInt8 => {
-                    Self::dictionary_create_key_for_col::<UInt8Type>(col, row, vec)?;
+                    Self::dictionary_create_key_for_col::<UInt8Type>(&col, row, vec)?;
                 }
                 DataType::UInt16 => {
-                    Self::dictionary_create_key_for_col::<UInt16Type>(col, row, vec)?;
+                    Self::dictionary_create_key_for_col::<UInt16Type>(&col, row, vec)?;
                 }
                 DataType::UInt32 => {
-                    Self::dictionary_create_key_for_col::<UInt32Type>(col, row, vec)?;
+                    Self::dictionary_create_key_for_col::<UInt32Type>(&col, row, vec)?;
                 }
                 DataType::UInt64 => {
-                    Self::dictionary_create_key_for_col::<UInt64Type>(col, row, vec)?;
+                    Self::dictionary_create_key_for_col::<UInt64Type>(&col, row, vec)?;
                 }
                 _ => {
                     return Result::Err(ErrorCodes::BadDataValueType(
@@ -162,7 +173,8 @@ impl DataValue {
             ))
         })?;
 
-        Self::concat_row_to_one_key(&dict_col.values(), values_index, vec)
+        let col = DataColumnarValue::Array(dict_col.values());
+        Self::concat_row_to_one_key(&col, values_index, vec)
     }
 
     /// Convert data value vectors to data array.
@@ -186,6 +198,15 @@ impl DataValue {
         }
     }
 
+    #[inline]
+    pub fn try_from_column(column: &DataColumnarValue, index: usize) -> Result<DataValue> {
+        match column {
+            DataColumnarValue::Constant(scalar, _) => Ok(scalar.clone()),
+            DataColumnarValue::Array(array) => DataValue::try_from_array(array, index)
+        }
+    }
+
+    #[inline]
     /// Converts a value in `array` at `index` into a ScalarValue
     pub fn try_from_array(array: &DataArrayRef, index: usize) -> Result<DataValue> {
         match array.data_type() {
@@ -293,7 +314,7 @@ impl DataValue {
                 Ok(DataValue::Struct(scalar_vec))
             }
             other => Result::Err(ErrorCodes::BadDataValueType(format!(
-                "DataValue Error: Can't create a scalar of array of type \"{:?}\"",
+                "DataValue Error: Can't create a functions of array of type \"{:?}\"",
                 other
             )))
         }

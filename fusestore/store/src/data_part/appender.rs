@@ -6,7 +6,6 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
 
-use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
 use common_arrow::arrow::record_batch::RecordBatch;
@@ -21,16 +20,14 @@ use uuid::Uuid;
 
 use crate::fs::IFileSystem;
 
-#[allow(dead_code)] // temporarily allowed
-pub(crate) struct Appender<FS> {
-    fs: FS // owned type? to be discussed later.
+pub(crate) struct Appender {
+    fs: Arc<dyn IFileSystem>
 }
 
-#[allow(dead_code)] // temporarily allowed
-impl<FS> Appender<FS>
-where FS: IFileSystem
-{
-    pub fn new(fs: FS) -> Self {
+pub type InputData = std::pin::Pin<Box<dyn futures::Stream<Item = FlightData> + Send>>;
+
+impl Appender {
+    pub fn new(fs: Arc<dyn IFileSystem>) -> Self {
         Appender { fs }
     }
 
@@ -40,28 +37,26 @@ where FS: IFileSystem
     pub async fn append_data(
         &self,
         path: String,
-        mut stream: std::pin::Pin<Box<dyn futures::Stream<Item = FlightData>>>
-    ) -> Result<Vec<String>> {
+        mut stream: InputData
+    ) -> Result<common_flights::AppendResult> {
         if let Some(flight_data) = stream.next().await {
             let data_schema = DataSchema::try_from(&flight_data)?;
-
             let schema_ref = Arc::new(data_schema);
-
-            let mut appended_files: Vec<String> = Vec::new();
+            let mut result = common_flights::AppendResult::default();
             while let Some(flight_data) = stream.next().await {
-                //            let mut block_stream = stream.map(move |flight_data| {
                 let batch = flight_data_to_arrow_batch(&flight_data, schema_ref.clone(), &[])?;
                 let block = DataBlock::try_from(batch)?;
-                let buffer = write_in_memory(block)?;
+                let (rows, cols, wire_bytes) =
+                    (block.num_rows(), block.num_columns(), block.memory_size());
                 let part_uuid = Uuid::new_v4().to_simple().to_string() + ".parquet";
-                let part_file_name = format!("{}/{}", path, part_uuid);
-                self.fs.add(part_file_name, &buffer).await?;
-                appended_files.push(part_uuid);
+                let location = format!("{}/{}", path, part_uuid);
+                let buffer = write_in_memory(block)?;
+                result.append_part(&location, rows, cols, wire_bytes, buffer.len());
+                self.fs.add(location, &buffer).await?;
             }
-
-            Ok(appended_files)
+            Ok(result)
         } else {
-            bail!("empty stream")
+            anyhow::bail!("Schema of input data must be provided")
         }
     }
 }

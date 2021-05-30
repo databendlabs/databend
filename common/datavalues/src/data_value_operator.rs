@@ -8,7 +8,9 @@ pub enum DataValueAggregateOperator {
     Max,
     Sum,
     Avg,
-    Count
+    Count,
+    ArgMin,
+    ArgMax
 }
 
 impl std::fmt::Display for DataValueAggregateOperator {
@@ -18,7 +20,9 @@ impl std::fmt::Display for DataValueAggregateOperator {
             DataValueAggregateOperator::Max => "max",
             DataValueAggregateOperator::Sum => "sum",
             DataValueAggregateOperator::Avg => "avg",
-            DataValueAggregateOperator::Count => "count"
+            DataValueAggregateOperator::Count => "count",
+            DataValueAggregateOperator::ArgMin => "argMin",
+            DataValueAggregateOperator::ArgMax => "ArgMax"
         };
         write!(f, "{}", display)
     }
@@ -50,7 +54,7 @@ impl std::fmt::Display for DataValueComparisonOperator {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum DataValueArithmeticOperator {
     Plus,
     Minus,
@@ -75,14 +79,16 @@ impl std::fmt::Display for DataValueArithmeticOperator {
 #[derive(Clone)]
 pub enum DataValueLogicOperator {
     And,
-    Or
+    Or,
+    Not
 }
 
 impl std::fmt::Display for DataValueLogicOperator {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let display = match &self {
             DataValueLogicOperator::And => "and",
-            DataValueLogicOperator::Or => "or"
+            DataValueLogicOperator::Or => "or",
+            DataValueLogicOperator::Not => "not"
         };
         write!(f, "{}", display)
     }
