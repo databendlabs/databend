@@ -111,11 +111,33 @@ dependencies = [
 ]
 
 [[package]]
-name = "arrow-flight"
-version = "4.1.0"
-source = "git+https://github.com/apache/arrow-rs?tag=4.1.0#a5dd428f57e62db20a945e8b1895de91405958c4"
+name = "arrow"
+version = "4.2.0"
+source = "git+https://github.com/apache/arrow-rs?tag=4.2.0#cd95d7ce13c349da8e76a781a28ec7161ed4165a"
 dependencies = [
- "arrow",
+ "cfg_aliases",
+ "chrono",
+ "csv",
+ "flatbuffers",
+ "hex",
+ "indexmap",
+ "lazy_static",
+ "lexical-core",
+ "multiversion",
+ "num",
+ "rand 0.7.3",
+ "regex",
+ "serde",
+ "serde_derive",
+ "serde_json",
+]
+
+[[package]]
+name = "arrow-flight"
+version = "4.2.0"
+source = "git+https://github.com/apache/arrow-rs?tag=4.2.0#cd95d7ce13c349da8e76a781a28ec7161ed4165a"
+dependencies = [
+ "arrow 4.2.0",
  "bytes 1.0.1",
  "futures",
  "proc-macro2",
@@ -592,7 +614,7 @@ dependencies = [
 name = "common-arrow"
 version = "0.1.0"
 dependencies = [
- "arrow",
+ "arrow 4.1.0",
  "arrow-flight",
  "parquet",
 ]
@@ -2573,7 +2595,7 @@ name = "parquet"
 version = "4.1.0"
 source = "git+https://github.com/apache/arrow-rs?tag=4.1.0#a5dd428f57e62db20a945e8b1895de91405958c4"
 dependencies = [
- "arrow",
+ "arrow 4.1.0",
  "base64 0.13.0",
  "brotli",
  "byteorder",

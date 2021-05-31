@@ -16,7 +16,7 @@ edition = "2018"
 # parquet = { version = "4.0", features = ["arrow"] }
 
 arrow = { git="https://github.com/apache/arrow-rs", tag = "4.1.0" }
-arrow-flight = { git="https://github.com/apache/arrow-rs", tag = "4.1.0" }
+arrow-flight = { git="https://github.com/apache/arrow-rs", tag = "4.2.0" }
 parquet = { git="https://github.com/apache/arrow-rs", tag = "4.1.0", features = ["arrow"] }
 
 # Crates.io dependencies
