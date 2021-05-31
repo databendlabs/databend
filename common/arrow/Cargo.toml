@@ -17,7 +17,7 @@ edition = "2018"
 
 arrow = { git="https://github.com/apache/arrow-rs", tag = "4.1.0" }
 arrow-flight = { git="https://github.com/apache/arrow-rs", tag = "4.1.0" }
-parquet = { git="https://github.com/apache/arrow-rs", tag = "4.1.0", features = ["arrow"] }
+parquet = { git="https://github.com/apache/arrow-rs", tag = "4.2.0", features = ["arrow"] }
 
 # Crates.io dependencies
 
