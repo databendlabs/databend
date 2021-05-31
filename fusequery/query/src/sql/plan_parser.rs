@@ -674,6 +674,12 @@ impl PlanParser {
                 op: format!("{}", op),
                 expr: Box::new(self.sql_to_rex(expr, schema)?)
             }),
+            sqlparser::ast::Expr::Exists(query) => {
+                    Err(ErrorCodes::UnImplement(format!(
+                        "Unsupported identifier '{:?}'",
+                        query,
+                    )))
+            }
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema),
             sqlparser::ast::Expr::Function(e) => {
                 let mut args = Vec::with_capacity(e.args.len());
