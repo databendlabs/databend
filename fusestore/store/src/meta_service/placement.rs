@@ -9,6 +9,7 @@ use std::hash::Hasher;
 use crate::meta_service::Node;
 use crate::meta_service::NodeId;
 use crate::meta_service::Slot;
+
 /// IPlacement defines the behavior of an algo to assign file to nodes.
 /// An placement algo considers the replication config, such as number of copies,
 /// and workload balancing etc.
@@ -50,4 +51,23 @@ pub trait IPlacement {
     fn get_slots(&self) -> &[Slot];
 
     fn get_node(&self, node_id: &NodeId) -> Option<&Node>;
+}
+
+/// Evenly chooses `n` elements from `m` elements
+pub fn rand_n_from_m(m: usize, n: usize) -> anyhow::Result<Vec<usize>> {
+    if m < n {
+        return Err(anyhow::anyhow!("m={} must >= n={}", m, n));
+    }
+
+    let mut chosen = Vec::with_capacity(n);
+
+    let mut need = n;
+    for i in 0..m {
+        if rand::random::<usize>() % (m - i) < need {
+            chosen.push(i);
+            need -= 1;
+        }
+    }
+
+    Ok(chosen)
 }
