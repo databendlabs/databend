@@ -39,6 +39,7 @@ use sqlparser::ast::ObjectName;
 use sqlparser::ast::OrderByExpr;
 use sqlparser::ast::Query;
 use sqlparser::ast::Statement;
+use sqlparser::ast::TableFactor;
 
 use super::expr_common::rebase_expr_from_input;
 use crate::datasources::ITable;
@@ -346,14 +347,14 @@ impl PlanParser {
         // In example: Filter=(number > 1)
         let plan = self
             .plan_tables_with_joins(&select.from)
-            .and_then(|input| self.filter(&input, &select.selection))?;
+            .and_then(|input| self.filter(&input, &select.selection, Some(select)))?;
 
         // Projection expression
         // In example: Projection=[(sum((number + 1)) + 2), (number % 3) as id]
         let projection_exprs = select
             .projection
             .iter()
-            .map(|e| self.sql_select_to_rex(&e, &plan.schema()))
+            .map(|e| self.sql_select_to_rex(&e, &plan.schema(), Some(select)))
             .collect::<Result<Vec<Expression>>>()?
             .iter()
             .flat_map(|expr| expand_wildcard(&expr, &plan.schema()))
@@ -369,7 +370,7 @@ impl PlanParser {
             .group_by
             .iter()
             .map(|e| {
-                self.sql_to_rex(e, &plan.schema())
+                self.sql_to_rex(e, &plan.schema(), Some(select))
                     .and_then(|expr| resolve_aliases_to_exprs(&expr, &aliases))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -380,7 +381,7 @@ impl PlanParser {
             .having
             .as_ref()
             .map::<Result<Expression>, _>(|having_expr| {
-                let having_expr = self.sql_to_rex(having_expr, &plan.schema())?;
+                let having_expr = self.sql_to_rex(having_expr, &plan.schema(), Some(select))?;
                 let having_expr = resolve_aliases_to_exprs(&having_expr, &aliases)?;
 
                 Ok(having_expr)
@@ -394,7 +395,7 @@ impl PlanParser {
             .map(|e| -> Result<Expression> {
                 Ok(Expression::Sort {
                     expr: Box::new(
-                        self.sql_to_rex(&e.expr, &plan.schema())
+                        self.sql_to_rex(&e.expr, &plan.schema(), Some(select))
                             .and_then(|expr| resolve_aliases_to_exprs(&expr, &aliases))?
                     ),
                     asc: e.asc.unwrap_or(true),
@@ -495,7 +496,7 @@ impl PlanParser {
         // Projection
         let plan = self.project(&plan, &projection_exprs)?;
         // Limit.
-        let plan = self.limit(&plan, limit)?;
+        let plan = self.limit(&plan, limit, Some(select))?;
 
         Ok(PlanNode::Select(SelectPlan {
             input: Arc::new(plan)
@@ -506,13 +507,14 @@ impl PlanParser {
     fn sql_select_to_rex(
         &self,
         sql: &sqlparser::ast::SelectItem,
-        schema: &DataSchema
+        schema: &DataSchema,
+        select: Option<&sqlparser::ast::Select>
     ) -> Result<Expression> {
         match sql {
-            sqlparser::ast::SelectItem::UnnamedExpr(expr) => self.sql_to_rex(expr, schema),
+            sqlparser::ast::SelectItem::UnnamedExpr(expr) => self.sql_to_rex(expr, schema, select),
             sqlparser::ast::SelectItem::ExprWithAlias { expr, alias } => Ok(Expression::Alias(
                 alias.value.clone(),
-                Box::new(self.sql_to_rex(&expr, schema)?)
+                Box::new(self.sql_to_rex(&expr, schema, select)?)
             )),
             sqlparser::ast::SelectItem::Wildcard => Ok(Expression::Wildcard),
             _ => Result::Err(ErrorCodes::UnImplement(format!(
@@ -579,10 +581,12 @@ impl PlanParser {
                     let empty_schema = Arc::new(DataSchema::empty());
                     match &args[0] {
                         FunctionArg::Named { arg, .. } => {
-                            table_args = Some(self.sql_to_rex(&arg, empty_schema.as_ref())?);
+                            table_args =
+                                Some(self.sql_to_rex(&arg, empty_schema.as_ref(), None)?);
                         }
                         FunctionArg::Unnamed(arg) => {
-                            table_args = Some(self.sql_to_rex(&arg, empty_schema.as_ref())?);
+                            table_args =
+                                Some(self.sql_to_rex(&arg, empty_schema.as_ref(), None)?);
                         }
                     }
 
@@ -622,12 +626,91 @@ impl PlanParser {
             }
         }
     }
+    fn process_compound_ident(
+        &self,
+        ids: &Vec<Ident>,
+        select: Option<&sqlparser::ast::Select>
+    ) -> Result<Expression> {
+        let mut var_names = vec![];
+        for id in ids {
+            var_names.push(id.value.clone());
+        }
+        if &var_names[0][0..1] == "@" || var_names.len() != 2 || select == None {
+            return Err(ErrorCodes::UnImplement(format!(
+                "Unsupported compound identifier '{:?}'",
+                var_names,
+            )));
+        }
+
+        let table_name = &var_names[0];
+        let from = &select.unwrap().from;
+        let obj_table_name = ObjectName(vec![Ident::new(table_name)]);
+
+        match from.len() {
+            0 => Err(ErrorCodes::SyntaxException(
+                "Missing table in the select clause"
+            )),
+            1 => match &from[0].relation {
+                TableFactor::Table {
+                    name,
+                    alias,
+                    args: _,
+                    with_hints: _
+                } => {
+                    if *name == obj_table_name {
+                        return Ok(Expression::Column(var_names.pop().unwrap()));
+                    }
+                    match alias {
+                        Some(a) => {
+                            if a.name == ids[0] {
+                                Ok(Expression::Column(var_names.pop().unwrap()))
+                            } else {
+                                Err(ErrorCodes::UnknownTable(format!(
+                                    "Unknown Table '{:?}'",
+                                    &table_name,
+                                )))
+                            }
+                        }
+                        None => Err(ErrorCodes::UnknownTable(format!(
+                            "Unknown Table '{:?}'",
+                            &table_name,
+                        )))
+                    }
+                }
+                TableFactor::Derived {
+                    lateral: _,
+                    subquery: _,
+                    alias
+                } => match alias {
+                    Some(a) => {
+                        if a.name == ids[0] {
+                            Ok(Expression::Column(var_names.pop().unwrap()))
+                        } else {
+                            Err(ErrorCodes::UnknownTable(format!(
+                                "Unknown Table '{:?}'",
+                                &table_name,
+                            )))
+                        }
+                    }
+                    None => Err(ErrorCodes::UnknownTable(format!(
+                        "Unknown Table '{:?}'",
+                        &table_name,
+                    )))
+                },
+                _ => Err(ErrorCodes::SyntaxException(
+                    "Cannot support Nested Join now"
+                ))
+            },
+            _ => Err(ErrorCodes::SyntaxException("Cannot support JOIN clause"))
+        }
+    }
 
     /// Generate a relational expression from a SQL expression
     pub fn sql_to_rex(
         &self,
         expr: &sqlparser::ast::Expr,
-        schema: &DataSchema
+        schema: &DataSchema,
+        select: Option<&sqlparser::ast::Select>
     ) -> Result<Expression> {
         fn value_to_rex(value: &sqlparser::ast::Value) -> Result<Expression> {
             match value {
@@ -666,28 +749,17 @@ impl PlanParser {
             sqlparser::ast::Expr::BinaryOp { left, op, right } => {
                 Ok(Expression::BinaryExpression {
                     op: format!("{}", op),
-                    left: Box::new(self.sql_to_rex(left, schema)?),
-                    right: Box::new(self.sql_to_rex(right, schema)?)
+                    left: Box::new(self.sql_to_rex(left, schema, select)?),
+                    right: Box::new(self.sql_to_rex(right, schema, select)?)
                 })
             }
             sqlparser::ast::Expr::UnaryOp { op, expr } => Ok(Expression::UnaryExpression {
                 op: format!("{}", op),
-                expr: Box::new(self.sql_to_rex(expr, schema)?)
+                expr: Box::new(self.sql_to_rex(expr, schema, select)?)
             }),
-            sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema),
+            sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema, select),
             sqlparser::ast::Expr::CompoundIdentifier(ids) => {
-                let mut var_names = vec![];
-                for id in ids {
-                    var_names.push(id.value.clone());
-                }
-                if &var_names[0][0..1] == "@" {
-                    Err(ErrorCodes::UnImplement(format!(
-                        "Unsupported compound identifier '{:?}'",
-                        var_names,
-                    )))
-                } else {
-                    Ok(Expression::Column(var_names.pop().unwrap()))
-                }
+                self.process_compound_ident(ids, select)
             }
             sqlparser::ast::Expr::Function(e) => {
                 let mut args = Vec::with_capacity(e.args.len());
@@ -706,10 +778,10 @@ impl PlanParser {
                 for arg in &e.args {
                     match &arg {
                         FunctionArg::Named { arg, .. } => {
-                            args.push(self.sql_to_rex(arg, schema)?);
+                            args.push(self.sql_to_rex(arg, schema, select)?);
                         }
                         FunctionArg::Unnamed(arg) => {
-                            args.push(self.sql_to_rex(arg, schema)?);
+                            args.push(self.sql_to_rex(arg, schema, select)?);
                         }
                     }
                 }
@@ -729,7 +801,7 @@ impl PlanParser {
                 })
             }
             sqlparser::ast::Expr::Cast { expr, data_type } => self
-                .sql_to_rex(expr, schema)
+                .sql_to_rex(expr, schema, select)
                 .map(Box::from)
                 .and_then(|expr| {
                     SQLCommon::make_data_type(data_type)
@@ -741,15 +813,15 @@ impl PlanParser {
                 substring_for
             } => {
                 let mut args = Vec::with_capacity(3);
-                args.push(self.sql_to_rex(expr, schema)?);
+                args.push(self.sql_to_rex(expr, schema, select)?);
                 if let Some(from) = substring_from {
-                    args.push(self.sql_to_rex(from, schema)?);
+                    args.push(self.sql_to_rex(from, schema, select)?);
                 } else {
                     args.push(Expression::Literal(DataValue::Int64(Some(1))));
                 }
 
                 if let Some(len) = substring_for {
-                    args.push(self.sql_to_rex(len, schema)?);
+                    args.push(self.sql_to_rex(len, schema, select)?);
                 }
 
                 Ok(Expression::ScalarFunction {
@@ -785,17 +857,17 @@ impl PlanParser {
     fn filter(
         &self,
         plan: &PlanNode,
-        predicate: &Option<sqlparser::ast::Expr>
+        predicate: &Option<sqlparser::ast::Expr>,
+        select: Option<&sqlparser::ast::Select>
     ) -> Result<PlanNode> {
         match *predicate {
-            Some(ref predicate_expr) => {
-                self.sql_to_rex(predicate_expr, &plan.schema())
-                    .and_then(|filter_expr| {
-                        PlanBuilder::from(&plan)
-                            .filter(filter_expr)
-                            .and_then(|builder| builder.build())
-                    })
-            }
+            Some(ref predicate_expr) => self
+                .sql_to_rex(predicate_expr, &plan.schema(), select)
+                .and_then(|filter_expr| {
+                    PlanBuilder::from(&plan)
+                        .filter(filter_expr)
+                        .and_then(|builder| builder.build())
+                }),
             _ => Ok(plan.clone())
         }
     }
@@ -868,11 +940,16 @@ impl PlanParser {
     }
 
     /// Wrap a plan in a limit
-    fn limit(&self, input: &PlanNode, limit: &Option<sqlparser::ast::Expr>) -> Result<PlanNode> {
+    fn limit(
+        &self,
+        input: &PlanNode,
+        limit: &Option<sqlparser::ast::Expr>,
+        select: Option<&sqlparser::ast::Select>
+    ) -> Result<PlanNode> {
         match *limit {
             Some(ref limit_expr) => {
                 let n = self
-                    .sql_to_rex(&limit_expr, &input.schema())
+                    .sql_to_rex(&limit_expr, &input.schema(), select)
                     .and_then(|limit_expr| match limit_expr {
                         Expression::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
                         _ => Err(ErrorCodes::SyntaxException(
