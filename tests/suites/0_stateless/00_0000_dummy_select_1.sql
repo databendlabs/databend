@@ -7,3 +7,4 @@ SELECT NOT(1=1) from numbers(3);
 SELECT TRUE;
 SELECT FALSE;
 SELECT NOT(TRUE);
+SELECT a.number FROM numbers(3) AS a;

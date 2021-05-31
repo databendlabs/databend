@@ -675,6 +675,20 @@ impl PlanParser {
                 expr: Box::new(self.sql_to_rex(expr, schema)?)
             }),
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema),
+            sqlparser::ast::Expr::CompoundIdentifier(ids) => {
+                let mut var_names = vec![];
+                for id in ids {
+                    var_names.push(id.value.clone());
+                }
+                if &var_names[0][0..1] == "@" {
+                    Err(ErrorCodes::UnImplement(format!(
+                        "Unsupported compound identifier '{:?}'",
+                        var_names,
+                    )))
+                } else {
+                    Ok(Expression::Column(var_names.pop().unwrap()))
+                }
+            }
             sqlparser::ast::Expr::Function(e) => {
                 let mut args = Vec::with_capacity(e.args.len());
 
