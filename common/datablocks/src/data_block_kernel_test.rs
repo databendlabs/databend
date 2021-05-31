@@ -173,7 +173,7 @@ fn test_scatter_block() -> anyhow::Result<()> {
     builder.append_slice(&[0, 1, 0])?;
     let indices: DataArrayRef = Arc::new(builder.finish());
 
-    let scattered = DataBlock::scatter_block(&raw, &indices, 2)?;
+    let scattered = DataBlock::scatter_block(&raw, &DataColumnarValue::Array(indices), 2)?;
     assert_eq!(scattered.len(), 2);
     assert_eq!(raw.schema(), scattered[0].schema());
     assert_eq!(raw.schema(), scattered[1].schema());

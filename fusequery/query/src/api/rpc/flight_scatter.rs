@@ -65,7 +65,7 @@ impl FlightScatterByHash {
                 "Logical error: expression executor error."
             )),
             Some(indices) => {
-                DataBlock::scatter_block(data_block, &indices.to_array()?, self.scattered_size)
+                DataBlock::scatter_block(data_block, indices, self.scattered_size)
             }
         }
     }

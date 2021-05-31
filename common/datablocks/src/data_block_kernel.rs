@@ -182,16 +182,16 @@ impl DataBlock {
 
     pub fn scatter_block(
         block: &DataBlock,
-        indices: &DataArrayRef,
+        indices: &DataColumnarValue,
         scatter_size: usize
     ) -> Result<Vec<DataBlock>> {
         let columns_size = block.num_columns();
-        let mut scattered_columns: Vec<Option<ArrayRef>> = vec![];
+        let mut scattered_columns: Vec<Option<DataColumnarValue>> = vec![];
 
         scattered_columns.resize_with(scatter_size * columns_size, || None);
 
         for column_index in 0..columns_size {
-            let column = block.column(column_index).to_array()?;
+            let column = block.column(column_index);
             let scattered_column = DataArrayScatter::scatter(&column, &indices, scatter_size)?;
 
             for scattered_index in 0..scattered_column.len() {
@@ -214,7 +214,7 @@ impl DataBlock {
                         ));
                     }
                     Some(scattered_column) => {
-                        block_columns.push(DataColumnarValue::Array(scattered_column.clone()));
+                        block_columns.push(scattered_column.clone());
                     }
                 };
             }
