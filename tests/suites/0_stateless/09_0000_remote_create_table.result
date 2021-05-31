@@ -19,9 +19,7 @@ SELECT * FROM system.tables WHERE database='db1'
 DROP TABLE t1
 --------------
 
-ERROR 1105 (HY000) at line 7: Code: 1002, displayText = status: Internal error: Store drop database unimplemented.
 --------------
 DROP DATABASE db1
 --------------
 
-ERROR 1105 (HY000) at line 8: Code: 1002, displayText = status: Internal error: Store drop database unimplemented.
