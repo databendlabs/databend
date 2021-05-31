@@ -2,7 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use core::fmt;
+use std::fs::File;
 use std::io;
+use std::io::prelude::*;
+use std::io::BufWriter;
 use std::io::Read;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
@@ -36,7 +40,9 @@ pub struct Config {
     #[structopt(long, short = "i", default_value = "0")]
     pub iterations: usize,
     #[structopt(long, short = "c", default_value = "1")]
-    pub concurrency: usize
+    pub concurrency: usize,
+    #[structopt(long, default_value = "")]
+    pub json: String
 }
 
 impl Config {
@@ -116,6 +122,11 @@ async fn main() -> Result<()> {
     run(bench.clone()).await?;
     report_text(bench.clone()).await?;
 
+    if !bench.config.json.is_empty() {
+        report_json(bench.clone(), &bench.config.json)
+            .await
+            .map_err(to_error_codes)?;
+    }
     Ok(())
 }
 
@@ -218,7 +229,7 @@ async fn report_text(bench: BenchmarkRef) -> Result<()> {
         "QPS: {}, RPS: {}, MiB/s: {}.",
         stats.queries as f64 / stats.work_time,
         stats.read_rows as f64 / stats.work_time,
-        stats.read_rows as f64 / stats.work_time / 1048576f64,
+        stats.read_bytes as f64 / stats.work_time / 1048576f64,
     );
     eprintln!();
 
@@ -241,6 +252,91 @@ async fn report_text(bench: BenchmarkRef) -> Result<()> {
     print_quantile(&stats, 99.9);
     print_quantile(&stats, 99.99);
     Ok(())
+}
+
+async fn report_json(bench: BenchmarkRef, json_path: &str) -> std::io::Result<()> {
+    if bench.queries.is_empty() {
+        return Ok(());
+    }
+
+    let stats = bench.stats.read();
+
+    let f = File::create(json_path)?;
+    let mut writer = BufWriter::new(f);
+
+    fn print_key_value<V>(
+        writer: &mut BufWriter<File>,
+        key: &str,
+        value: V,
+        with_comma: bool
+    ) -> std::io::Result<()>
+    where
+        V: fmt::Debug
+    {
+        write!(writer, "{:?}: {:?}", key, value)?;
+        if with_comma {
+            writeln!(writer, ",")
+        } else {
+            writeln!(writer)
+        }
+    }
+
+    fn print_quantile(
+        writer: &mut BufWriter<File>,
+        stats: &Stats,
+        percent: f64,
+        with_comma: bool
+    ) -> std::io::Result<()> {
+        write!(
+            writer,
+            "\"{}\": {}",
+            percent,
+            stats.sample.query(percent as f64 / 100f64).unwrap().1
+        )?;
+
+        if with_comma {
+            writeln!(writer, ",")
+        } else {
+            writeln!(writer)
+        }
+    }
+
+    writer.write_all(b"{\n\"statistics\": {\n")?;
+
+    print_key_value(
+        &mut writer,
+        "QPS",
+        stats.queries as f64 / stats.work_time,
+        true
+    )?;
+    print_key_value(
+        &mut writer,
+        "RPS",
+        stats.read_rows as f64 / stats.work_time,
+        true
+    )?;
+    print_key_value(
+        &mut writer,
+        "MiBPS",
+        stats.read_bytes as f64 / stats.work_time / 1048576f64,
+        false
+    )?;
+    writer.write_all(b"}, \n")?;
+    writer.write_all(b"\"query_time_percentiles\": {\n")?;
+
+    let mut percent = 0;
+    while percent <= 90 {
+        print_quantile(&mut writer, &stats, percent as f64, true)?;
+        percent += 10;
+    }
+
+    print_quantile(&mut writer, &stats, 95f64, true)?;
+    print_quantile(&mut writer, &stats, 99f64, true)?;
+    print_quantile(&mut writer, &stats, 99.9, true)?;
+    print_quantile(&mut writer, &stats, 99.99, false)?;
+
+    writer.write_all(b"}\n}\n")?;
+    writer.flush()
 }
 
 fn to_error_codes<T>(err: T) -> ErrorCodes
