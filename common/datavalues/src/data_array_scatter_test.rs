@@ -22,9 +22,11 @@ use common_arrow::arrow::array::TimestampNanosecondArray;
 use common_arrow::arrow::array::TimestampSecondArray;
 use common_exception::Result;
 
-use crate::{BinaryArray, DataColumnarValue, DataValue};
+use crate::BinaryArray;
 use crate::DataArrayRef;
 use crate::DataArrayScatter;
+use crate::DataColumnarValue;
+use crate::DataValue;
 use crate::Date32Array;
 use crate::Date64Array;
 use crate::Float32Array;
@@ -47,7 +49,7 @@ fn test_scatter_array_data_column() -> Result<()> {
         array: DataArrayRef,
         indices: DataArrayRef,
         expect: Vec<DataArrayRef>,
-        error: &'static str,
+        error: &'static str
     }
 
     let tests = vec![
@@ -898,7 +900,7 @@ fn test_scatter_array_data_column() -> Result<()> {
         let result = DataArrayScatter::scatter(
             &DataColumnarValue::Array(test.array.clone()),
             &DataColumnarValue::Array(test.indices.clone()),
-            2,
+            2
         );
 
         match result {
@@ -908,10 +910,19 @@ fn test_scatter_array_data_column() -> Result<()> {
                     .map(DataColumnarValue::to_array)
                     .collect::<Result<Vec<_>>>()?;
 
-                assert_eq!(scatters_array, test.expect, "failed in the test: {}", test.name);
+                assert_eq!(
+                    scatters_array, test.expect,
+                    "failed in the test: {}",
+                    test.name
+                );
             }
             Err(e) => {
-                assert_eq!(test.error, e.to_string(), "failed in the test: {}", test.name);
+                assert_eq!(
+                    test.error,
+                    e.to_string(),
+                    "failed in the test: {}",
+                    test.name
+                );
             }
         }
     }
@@ -935,7 +946,7 @@ fn test_scatter_array_with_constants_indices() -> Result<()> {
         let result = DataArrayScatter::scatter(
             &DataColumnarValue::Array(Arc::new(Int8Array::from(vec![1, 2, 3]))),
             &DataColumnarValue::Constant(data_value, 3),
-            2,
+            2
         )?;
 
         assert_eq!(result.len(), 2);
@@ -964,12 +975,12 @@ fn test_scatter_const_array_with_constants_indices() -> Result<()> {
     let result = DataArrayScatter::scatter(
         &DataColumnarValue::Constant(DataValue::Int8(Some(3)), 3),
         &DataColumnarValue::Constant(DataValue::Int8(Some(1)), 3),
-        2,
+        2
     )?;
 
     assert_eq!(result.len(), 2);
     match &result[0] {
-        DataColumnarValue::Array(data) => assert!(false, "result[0] must be a Constant"),
+        DataColumnarValue::Array(_) => assert!(false, "result[0] must be a Constant"),
         DataColumnarValue::Constant(value, len) => {
             assert_eq!(*len, 0);
             assert_eq!(value, &DataValue::Int8(Some(3)));
@@ -977,7 +988,7 @@ fn test_scatter_const_array_with_constants_indices() -> Result<()> {
     }
 
     match &result[1] {
-        DataColumnarValue::Array(data) => assert!(false, "result[1] must be a Constant"),
+        DataColumnarValue::Array(_) => assert!(false, "result[1] must be a Constant"),
         DataColumnarValue::Constant(value, len) => {
             assert_eq!(*len, 3);
             assert_eq!(value, &DataValue::Int8(Some(3)));
@@ -986,4 +997,3 @@ fn test_scatter_const_array_with_constants_indices() -> Result<()> {
 
     Ok(())
 }
-

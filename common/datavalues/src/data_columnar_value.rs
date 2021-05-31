@@ -84,12 +84,8 @@ impl DataColumnarValue {
 
     pub fn clone_empty(&self) -> DataColumnarValue {
         match self {
-            DataColumnarValue::Array(array) => {
-                DataColumnarValue::Array(array.slice(0, 0))
-            }
-            DataColumnarValue::Constant(scalar, _) => {
-                DataColumnarValue::Constant(scalar.clone(), 0)
-            }
+            DataColumnarValue::Array(array) => DataColumnarValue::Array(array.slice(0, 0)),
+            DataColumnarValue::Constant(scalar, _) => DataColumnarValue::Constant(scalar.clone(), 0)
         }
     }
 }

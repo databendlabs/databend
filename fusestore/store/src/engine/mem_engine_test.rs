@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use common_flights::status_err;
 use pretty_assertions::assert_eq;
+use tonic::Code;
 
 use crate::engine::mem_engine::MemEngine;
 use crate::protobuf::CmdCreateDatabase;
@@ -177,6 +178,97 @@ fn test_mem_engine_create_get_table() -> anyhow::Result<()> {
             status_err(got.err().unwrap()).to_string()
         );
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_mem_engine_drop_database() -> anyhow::Result<()> {
+    let eng = MemEngine::create();
+    let mut eng = eng.lock().unwrap();
+    let test_db_name = "foo";
+    let cmd = CmdCreateDatabase {
+        db_name: test_db_name.to_string(),
+        db: Some(Db {
+            db_id: -1,
+            ver: -1,
+            table_name_to_id: HashMap::new(),
+            tables: HashMap::new()
+        })
+    };
+    let _ = eng.create_database(cmd.clone(), false).unwrap();
+    let r = eng.drop_database(test_db_name, false);
+    assert!(r.is_ok());
+
+    // with flag "IF EXISTS"
+    let r = eng.drop_database(test_db_name, true);
+    assert!(r.is_ok());
+
+    let r = eng.drop_database(test_db_name, false);
+    assert!(r.is_err());
+    assert_eq!(r.unwrap_err().code(), Code::NotFound);
+    Ok(())
+}
+
+#[test]
+fn test_mem_engine_drop_table() -> anyhow::Result<()> {
+    let eng = MemEngine::create();
+    let test_db = "test_db";
+    let test_tbl = "test_tbl";
+    let mut eng = eng.lock().unwrap();
+
+    let cmd_db = CmdCreateDatabase {
+        db_name: test_db.to_string(),
+        db: Some(Db {
+            db_id: -1,
+            ver: -1,
+            table_name_to_id: HashMap::new(),
+            tables: HashMap::new()
+        })
+    };
+
+    let cmd_table = CmdCreateTable {
+        db_name: test_db.to_string(),
+        table_name: test_tbl.to_string(),
+        table: Some(Table {
+            table_id: -1,
+            ver: -1,
+            schema: vec![1, 2, 3],
+            options: maplit::hashmap! {"key".into() => "val".into()},
+            placement_policy: vec![1, 2, 3]
+        })
+    };
+
+    // create db foo
+    eng.create_database(cmd_db.clone(), false).unwrap();
+    // create table
+    eng.create_table(cmd_table.clone(), false).unwrap();
+
+    let r = eng.drop_table(test_db, test_tbl, false);
+    assert!(r.is_ok());
+
+    // with flag "IF EXISTS"
+    // table not exist
+    let r = eng.drop_table(test_db, test_tbl, true);
+    assert!(r.is_ok());
+    // db not exist
+    let r = eng.drop_table("fake_db", test_tbl, true);
+    assert!(r.is_ok());
+
+    // without flag "IF EXISTS"
+    // table not exist
+    let r = eng.drop_table(test_db, test_tbl, false);
+    assert!(r.is_err());
+    assert_eq!(r.unwrap_err().code(), Code::NotFound);
+
+    // db not exist
+    let r = eng.drop_table("fak_db", test_tbl, false);
+    assert!(r.is_err());
+    assert_eq!(r.unwrap_err().code(), Code::NotFound);
+
+    let r = eng.drop_table("fak_db", "fake_tbl", false);
+    assert!(r.is_err());
+    assert_eq!(r.unwrap_err().code(), Code::NotFound);
 
     Ok(())
 }

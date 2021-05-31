@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayData;
-use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BinaryArray;
 use common_arrow::arrow::array::BinaryBuilder;
 use common_arrow::arrow::array::BooleanBufferBuilder;
@@ -51,7 +50,9 @@ use common_arrow::arrow::datatypes::UInt8Type;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
-use crate::{DataArrayRef, DataColumnarValue, DataValue};
+use crate::DataArrayRef;
+use crate::DataColumnarValue;
+use crate::DataValue;
 
 pub struct DataArrayScatter;
 
@@ -60,7 +61,7 @@ impl DataArrayScatter {
     pub fn scatter(
         data: &DataColumnarValue,
         indices: &DataColumnarValue,
-        nums: usize,
+        nums: usize
     ) -> Result<Vec<DataColumnarValue>> {
         if data.len() != indices.len() {
             return Result::Err(ErrorCodes::BadDataArrayLength(format!(
@@ -91,7 +92,7 @@ impl DataArrayScatter {
     fn scatter_data_with_constant_indices(
         data: &DataColumnarValue,
         indices: &DataValue,
-        nums: usize,
+        nums: usize
     ) -> Result<Vec<DataColumnarValue>> {
         let scatter_data = |index: usize| -> Result<Vec<DataColumnarValue>> {
             if index >= nums {
@@ -106,7 +107,7 @@ impl DataArrayScatter {
             for res_index in 0..nums {
                 match res_index {
                     res_index if res_index == index => scattered_data_res.push(data.clone()),
-                    _ => scattered_data_res.push(data.clone_empty()),
+                    _ => scattered_data_res.push(data.clone_empty())
                 }
             }
 
@@ -129,7 +130,7 @@ impl DataArrayScatter {
     fn scatter_data(
         data: &DataArrayRef,
         indices: &[u64],
-        nums: usize,
+        nums: usize
     ) -> Result<Vec<DataColumnarValue>> {
         match data.data_type() {
             DataType::Int8 => Self::scatter_primitive_data::<Int8Type>(data, indices, nums),
@@ -201,7 +202,7 @@ impl DataArrayScatter {
     fn scatter_primitive_data<T: ArrowPrimitiveType>(
         data: &DataArrayRef,
         indices: &[u64],
-        scattered_size: usize,
+        scattered_size: usize
     ) -> Result<Vec<DataColumnarValue>> {
         let primitive_data = data
             .as_any()
@@ -247,13 +248,14 @@ impl DataArrayScatter {
                 .add_buffer(scattered_data_builder[index].finish());
 
             match data.null_count() {
-                0 => scattered_data_res.push(DataColumnarValue::Array(
-                    Arc::new(PrimitiveArray::<T>::from(builder.build())))),
+                0 => scattered_data_res.push(DataColumnarValue::Array(Arc::new(
+                    PrimitiveArray::<T>::from(builder.build())
+                ))),
                 _ => {
                     builder = builder.null_bit_buffer(scattered_null_bit[index].clone());
-                    scattered_data_res.push(DataColumnarValue::Array(
-                        Arc::new(PrimitiveArray::<T>::from(builder.build()))
-                    ));
+                    scattered_data_res.push(DataColumnarValue::Array(Arc::new(
+                        PrimitiveArray::<T>::from(builder.build())
+                    )));
                 }
             }
         }
@@ -264,7 +266,7 @@ impl DataArrayScatter {
     fn scatter_binary_data(
         data: &DataArrayRef,
         indices: &[u64],
-        scattered_size: usize,
+        scattered_size: usize
     ) -> Result<Vec<DataColumnarValue>> {
         let binary_data = data.as_any().downcast_ref::<BinaryArray>().ok_or_else(|| {
             ErrorCodes::BadDataValueType(format!(
@@ -297,7 +299,7 @@ impl DataArrayScatter {
     fn scatter_large_binary_data(
         data: &DataArrayRef,
         indices: &[u64],
-        scattered_size: usize,
+        scattered_size: usize
     ) -> Result<Vec<DataColumnarValue>> {
         let binary_data = data
             .as_any()
@@ -334,7 +336,7 @@ impl DataArrayScatter {
     fn scatter_string_data<T: StringOffsetSizeTrait>(
         data: &DataArrayRef,
         indices: &[u64],
-        scattered_size: usize,
+        scattered_size: usize
     ) -> Result<Vec<DataColumnarValue>> {
         let binary_data = data
             .as_any()
