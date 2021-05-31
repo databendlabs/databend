@@ -36,7 +36,7 @@ impl ClickHouseStream {
 
     pub fn convert_block(&self, block: DataBlock) -> Result<ClickHouseBlock> {
         let mut result = ClickHouseBlock::new();
-        if block.is_empty() && block.num_columns() == 0 {
+        if block.num_columns() == 0 {
             return Ok(result);
         }
 
@@ -122,8 +122,8 @@ impl Stream for ClickHouseStream {
     type Item = Result<ClickHouseBlock>;
 
     fn poll_next(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // some driver will skip the first block for it recognize the first block as schema
-        // so we make the first block to be empty block
+        // Some drivers will skip the first block for it recognizes the first block as schema
+        // So we make the first block to be an empty block
         if self.block_index == 0 {
             self.block_index += 1;
             let block = DataBlock::empty_with_schema(self.schema.clone());

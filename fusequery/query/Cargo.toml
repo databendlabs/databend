@@ -32,16 +32,16 @@ common-runtime = {path = "../../common/runtime"}
 common-streams = {path = "../../common/streams"}
 
 # Github dependencies
-clickhouse-srv = { git = "https://github.com/sundy-li/clickhouse-svr", rev = "24292a1" }
 msql-srv = { git = "https://github.com/datafuselabs/msql-srv", rev = "76b8ae3" }
-## clickhouse-rs = { git = "https://github.com/datafuselabs/clickhouse-rs", rev = "8e7e248"}
-clickhouse-rs = "1.0.0-alpha.1"
+clickhouse-rs = { git = "https://github.com/datafuselabs/clickhouse-rs", rev = "c4743a9"}
 
 # Crates.io dependencies
 ahash = "0.7.4"
 anyhow = "1.0.40"
 async-trait = "0.1"
 crossbeam = "0.8"
+quantiles = "0.7.1"
+clickhouse-srv = "0.2.0"
 crossbeam-queue = "0.3.2"
 env_logger = "0.8"
 futures = "0.3"

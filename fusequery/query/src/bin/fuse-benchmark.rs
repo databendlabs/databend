@@ -2,32 +2,39 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::io;
+use std::io::Read;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::time::Instant;
 
-use clickhouse_rs::row;
-use clickhouse_rs::types::Block;
-use clickhouse_rs::ClientHandle;
 use clickhouse_rs::Pool;
 use common_exception::ErrorCodes;
 use common_exception::Result;
+use common_infallible::RwLock;
 use crossbeam_queue::ArrayQueue;
 use futures::future::try_join_all;
-use futures::join;
 use futures::StreamExt;
-use log::info;
+use quantiles::ckms::CKMS;
+use rand::Rng;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
+/// echo "select avg(number) from numbers(1000000)" |  ./target/debug/fuse-benchmark -c 1  -i 10
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 #[serde(default)]
 pub struct Config {
-    #[structopt(short, long, default_value = "")]
+    #[structopt(long, default_value = "")]
     pub query: String,
 
+    #[structopt(long, short = "h", default_value = "127.0.0.1")]
+    pub host: String,
+    #[structopt(long, short = "p", default_value = "9000")]
+    pub port: u32,
     #[structopt(long, short = "i", default_value = "0")]
-    pub itertaions: usize,
+    pub iterations: usize,
     #[structopt(long, short = "c", default_value = "1")]
     pub concurrency: usize
 }
@@ -35,98 +42,208 @@ pub struct Config {
 impl Config {
     /// Load configs from args.
     pub fn load_from_args() -> Self {
-        let cfg = Config::from_args();
-        cfg
+        Config::from_args()
     }
 }
 
+type BenchmarkRef = Arc<Benchmark>;
 struct Benchmark {
     config: Config,
-    queue: ArrayQueue<String>,
+    pool: Pool,
+    queue: Arc<ArrayQueue<String>>,
     shutdown: AtomicBool,
-    executed: AtomicUsize
+    executed: AtomicUsize,
+    stats: Arc<RwLock<Stats>>,
+    queries: Vec<String>
+}
+
+impl Benchmark {
+    pub fn new(config: Config, pool: Pool, queries: Vec<String>) -> Self {
+        let queue = Arc::new(ArrayQueue::new(config.concurrency));
+        Self {
+            config,
+            queue,
+            pool,
+            shutdown: AtomicBool::new(false),
+            executed: AtomicUsize::new(0),
+            stats: Arc::new(RwLock::new(Stats::new())),
+            queries
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct Stats {
+    queries: usize,
+    errors: usize,
+    //seconds
+    work_time: f64,
+    read_rows: usize,
+    read_bytes: usize,
+    sample: CKMS<f64>
+}
+
+impl Stats {
+    pub fn new() -> Self {
+        Self {
+            queries: 0,
+            errors: 0,
+            work_time: 0f64,
+            read_rows: 0,
+            read_bytes: 0,
+            sample: CKMS::<f64>::new(0.001)
+        }
+    }
+    pub fn update(&mut self, elapsed: f64, read_rows: usize, read_bytes: usize) {
+        self.read_rows += read_rows;
+        self.read_bytes += read_bytes;
+        self.work_time += elapsed;
+        self.queries += 1;
+
+        self.sample.insert(elapsed);
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // First load configs from args.
     let conf = Config::load_from_args();
-    let benchmark = Benchmark::new(conf);
+    let database_url = format!("tcp://{}:{}?compression=lz4", conf.host, conf.port);
+    let pool = Pool::new(database_url);
+    let queries = read_queries(&conf.query)?;
 
-    benchmark.run().await?;
+    let bench = Arc::new(Benchmark::new(conf, pool, queries));
+    run(bench.clone()).await?;
+    report_text(bench.clone()).await?;
+
     Ok(())
 }
 
-impl Benchmark {
-    pub fn new(config: Config) -> Self {
-        let queue = ArrayQueue::new(config.concurrency);
-        Self {
-            config,
-            queue,
-            shutdown: AtomicBool::new(false),
-            executed: AtomicUsize::new(0)
-        }
-    }
-    async fn run(&self) -> Result<()> {
-        let database_url = "tcp://localhost:9000?compression=lz4";
-        let pool = Pool::new(database_url);
+async fn run(bench: BenchmarkRef) -> Result<()> {
+    let mut executors = vec![];
 
-        let mut executors = vec![];
-        let query = "select number from numbers(10)";
-
-        for i in 0..self.config.concurrency {
-            executors.push(self.execute(&pool))
-        }
-
-        let mut i = 0;
-        let max_iterations = self.config.itertaions;
-        loop {
-            if max_iterations > 0 && i >= max_iterations {
-                break;
+    for _i in 0..bench.config.concurrency {
+        let b = bench.clone();
+        let b2 = bench.clone();
+        executors.push(tokio::spawn(async move {
+            if let Err(e) = execute(b).await {
+                b2.shutdown.store(true, Ordering::Relaxed);
+                log::error!("Got error in query {:?}", e);
             }
-
-            dbg!("push one query");
-            self.queue.push(query.to_string());
-            i += 1;
-        }
-
-        for i in 0..self.config.itertaions {}
-
-        try_join_all(executors).await?;
-        Ok(())
+        }));
     }
 
-    async fn execute(&self, pool: &Pool) -> Result<()> {
-        loop {
-            let query = self.queue.pop();
-            if let Some(query) = query {
-                dbg!("got one query");
-
-                let mut client = pool.get_handle().await.map_err(to_error_codes)?;
-                let result = client.query(&query);
-
-                let mut stream = result.stream();
-                while let Some(row) = stream.next().await {
-                    let row = row.map_err(to_error_codes)?;
-                    let number: Option<u64> = row.get("number").map_err(to_error_codes)?;
-                    println!("Found payment {:?}", number);
-                }
-
-                self.executed.fetch_add(1, Ordering::Relaxed);
-            } else {
-                if self.shutdown.load(Ordering::Relaxed)
-                    || (self.config.itertaions > 0
-                        && self.executed.load(Ordering::Relaxed) >= self.config.itertaions)
-                {
-                    dbg!("got break query");
-                    break;
-                }
-            }
+    let mut i = 0usize;
+    let max_iterations = bench.config.iterations;
+    loop {
+        if max_iterations > 0 && i >= max_iterations {
+            break;
         }
-        Ok(())
+        let mut rng = rand::thread_rng();
+        let idx: usize = rng.gen_range(0..bench.queries.len());
+        let query = bench.queries[idx].clone();
+
+        if bench.queue.push(query).is_ok() {
+            i += 1
+        }
+    }
+
+    try_join_all(executors).await.map_err(to_error_codes)?;
+    Ok(())
+}
+
+fn read_queries(query: &str) -> Result<Vec<String>> {
+    if query.is_empty() {
+        let mut buffer = String::new();
+        io::stdin()
+            .read_to_string(&mut buffer)
+            .map_err(to_error_codes)?;
+
+        return Ok(buffer
+            .split('\n')
+            .filter(|f| !f.is_empty())
+            .map(|s| s.to_string())
+            .collect());
+    } else {
+        Ok(vec![query.to_owned()])
     }
 }
 
-fn to_error_codes(err: clickhouse_rs::errors::Error) -> ErrorCodes {
+async fn execute(bench: BenchmarkRef) -> Result<()> {
+    loop {
+        let query = bench.queue.pop();
+        if let Some(query) = query {
+            let start = Instant::now();
+            let mut client = bench.pool.get_handle().await.map_err(to_error_codes)?;
+
+            {
+                let result = client.query(&query);
+                let mut stream = result.stream();
+                while stream.next().await.is_some() {}
+            }
+
+            {
+                let progress = client.progress();
+                let mut stats = bench.stats.write();
+                stats.update(
+                    start.elapsed().as_millis() as f64 / 1000f64,
+                    progress.rows as usize,
+                    progress.bytes as usize
+                );
+            }
+            bench.executed.fetch_add(1, Ordering::Relaxed);
+        } else if bench.shutdown.load(Ordering::Relaxed)
+            || (bench.config.iterations > 0
+                && bench.executed.load(Ordering::Relaxed) >= bench.config.iterations)
+        {
+            break;
+        }
+    }
+    Ok(())
+}
+
+async fn report_text(bench: BenchmarkRef) -> Result<()> {
+    eprintln!();
+    if bench.queries.is_empty() {
+        return Ok(());
+    }
+
+    let stats = bench.stats.read();
+    eprint!("Queries {}, ", stats.queries);
+    if stats.errors > 0 {
+        eprint!("errors {}, ", stats.errors);
+    }
+
+    eprintln!(
+        "QPS: {}, RPS: {}, MiB/s: {}.",
+        stats.queries as f64 / stats.work_time,
+        stats.read_rows as f64 / stats.work_time,
+        stats.read_rows as f64 / stats.work_time / 1048576f64,
+    );
+    eprintln!();
+
+    fn print_quantile(stats: &Stats, percent: f64) {
+        eprint!("{:.3}%\t\t", percent);
+        eprintln!(
+            "{} sec.\t",
+            stats.sample.query(percent as f64 / 100f64).unwrap().1
+        );
+    }
+
+    let mut percent = 0;
+    while percent <= 90 {
+        print_quantile(&stats, percent as f64);
+        percent += 10;
+    }
+
+    print_quantile(&stats, 95f64);
+    print_quantile(&stats, 99f64);
+    print_quantile(&stats, 99.9);
+    print_quantile(&stats, 99.99);
+    Ok(())
+}
+
+fn to_error_codes<T>(err: T) -> ErrorCodes
+where T: ToString {
     anyhow::anyhow!(err.to_string()).into()
 }

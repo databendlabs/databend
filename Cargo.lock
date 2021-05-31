@@ -516,8 +516,7 @@ dependencies = [
 [[package]]
 name = "clickhouse-rs"
 version = "1.0.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41edeaeac73a2f3c39357e5dd42a08c2d41fbc5b85c35a76879dc10d87128010"
+source = "git+https://github.com/datafuselabs/clickhouse-rs?rev=c4743a9#c4743a920e744a0adf672262f6714ccfa429bcd4"
 dependencies = [
  "byteorder",
  "chrono",
@@ -550,8 +549,9 @@ dependencies = [
 
 [[package]]
 name = "clickhouse-srv"
-version = "0.1.0"
-source = "git+https://github.com/sundy-li/clickhouse-svr?rev=24292a1#24292a1341676f11e1e68c742a27b76f3cad92a2"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbf2014bc882fe34db378e3dd7b3f687f3b80ebd91d4e4d64727314a57b38959"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -1364,6 +1364,7 @@ dependencies = [
  "pnet",
  "pretty_assertions",
  "prost",
+ "quantiles",
  "rand 0.8.3",
  "run_script",
  "serde",
@@ -2997,6 +2998,12 @@ dependencies = [
  "raw-cpuid",
  "winapi 0.3.9",
 ]
+
+[[package]]
+name = "quantiles"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c10fa813fb26fb6c321a6f3085b5ade4cb4730d08d0b9e70a3759136940957f2"
 
 [[package]]
 name = "quick-error"
