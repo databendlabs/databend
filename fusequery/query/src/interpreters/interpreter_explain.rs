@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
+use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::StringArray;
@@ -37,6 +38,10 @@ impl ExplainInterpreter {
 impl IInterpreter for ExplainInterpreter {
     fn name(&self) -> &str {
         "ExplainInterpreter"
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.explain.schema()
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {

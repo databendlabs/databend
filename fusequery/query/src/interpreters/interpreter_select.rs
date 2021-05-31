@@ -5,6 +5,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::SelectPlan;
@@ -32,6 +33,10 @@ impl SelectInterpreter {
 impl IInterpreter for SelectInterpreter {
     fn name(&self) -> &str {
         "SelectInterpreter"
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.select.schema()
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {

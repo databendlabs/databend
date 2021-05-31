@@ -11,6 +11,10 @@ edition = "2018"
 name = "fuse-query"
 path = "src/bin/fuse-query.rs"
 
+[[bin]]
+name = "fuse-benchmark"
+path = "src/bin/fuse-benchmark.rs"
+
 [dependencies]
 # Workspace dependencies
 common-arrow = {path = "../../common/arrow"}
@@ -28,14 +32,17 @@ common-runtime = {path = "../../common/runtime"}
 common-streams = {path = "../../common/streams"}
 
 # Github dependencies
-clickhouse-srv = { git = "https://github.com/sundy-li/clickhouse-svr", rev = "82a8aac" }
+clickhouse-srv = { git = "https://github.com/sundy-li/clickhouse-svr", rev = "24292a1" }
 msql-srv = { git = "https://github.com/datafuselabs/msql-srv", rev = "76b8ae3" }
+## clickhouse-rs = { git = "https://github.com/datafuselabs/clickhouse-rs", rev = "8e7e248"}
+clickhouse-rs = "1.0.0-alpha.1"
 
 # Crates.io dependencies
 ahash = "0.7.4"
 anyhow = "1.0.40"
 async-trait = "0.1"
 crossbeam = "0.8"
+crossbeam-queue = "0.3.2"
 env_logger = "0.8"
 futures = "0.3"
 indexmap = "1.6.1"
