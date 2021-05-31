@@ -47,7 +47,51 @@ pub struct Meta {
     pub replication: Replication
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct MetaBuilder {
+    /// The number of slots to allocated.
+    initial_slots: Option<u64>,
+    /// The replication strategy.
+    replication: Option<Replication>
+}
+
+impl MetaBuilder {
+    /// Set the number of slots to boot up a cluster.
+    pub fn slots(mut self, n: u64) -> Self {
+        self.initial_slots = Some(n);
+        self
+    }
+
+    /// Specifies the cluster to replicate by mirror `n` copies of every file.
+    pub fn mirror_replication(mut self, n: u64) -> Self {
+        self.replication = Some(Replication::Mirror(n));
+        self
+    }
+
+    pub fn build(self) -> anyhow::Result<Meta> {
+        let initial_slots = self.initial_slots.unwrap_or(3);
+        let replication = self.replication.unwrap_or(Replication::Mirror(1));
+
+        let mut m = Meta {
+            keys: BTreeMap::new(),
+            slots: Vec::with_capacity(initial_slots as usize),
+            nodes: HashMap::new(),
+            replication
+        };
+        for _i in 0..initial_slots {
+            m.slots.push(Slot::default());
+        }
+        Ok(m)
+    }
+}
+
 impl Meta {
+    pub fn builder() -> MetaBuilder {
+        MetaBuilder {
+            ..Default::default()
+        }
+    }
+
     // Apply an op from client.
     #[tracing::instrument(level = "info", skip(self))]
     pub fn apply(&mut self, data: &ClientRequest) -> anyhow::Result<ClientResponse> {
