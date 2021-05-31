@@ -103,8 +103,8 @@ impl FlightService for FuseQueryService {
             let options = common_arrow::arrow::ipc::writer::IpcWriteOptions::default();
 
             FlightInfo {
-                schema: flight_schema_from_arrow_schema(&*stream_info.0, &options).schema,
-                flight_descriptor: Some(create_descriptor(&stream_info.1)),
+                schema: flight_schema_from_arrow_schema(&*stream_info.schema, &options).schema,
+                flight_descriptor: Some(create_descriptor(&stream_info.stream_name)),
                 endpoint: vec![],
                 total_records: -1,
                 total_bytes: -1

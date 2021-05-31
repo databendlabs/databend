@@ -20,7 +20,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::Sender;
 use tokio_stream::StreamExt;
 
-use crate::api::rpc::flight_scatter::FlightScatter;
+use crate::api::rpc::flight_scatter::FlightScatterByHash;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::pipelines::processors::Pipeline;
@@ -29,16 +29,19 @@ use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionManagerRef;
 
 #[derive(Debug)]
-pub struct PrepareStageInfo(
-    pub String,
-    pub String,
-    pub PlanNode,
-    pub Vec<String>,
-    pub Expression
-);
+pub struct PrepareStageInfo {
+    pub query_id: String,
+    pub stage_id: String,
+    pub plan: PlanNode,
+    pub scatters: Vec<String>,
+    pub scatters_expression: Expression
+}
 
 #[derive(Debug)]
-pub struct StreamInfo(pub DataSchemaRef, pub String, pub Vec<String>);
+pub struct StreamInfo {
+    pub schema: DataSchemaRef,
+    pub stream_name: String
+}
 
 pub enum Request {
     GetSchema(String, Sender<Result<DataSchemaRef>>),
@@ -102,7 +105,7 @@ impl FlightDispatcher {
                     }
                 }
                 Request::PrepareQueryStage(info, response_sender) => {
-                    let pipeline = Self::create_plan_pipeline(&*state, &info.2);
+                    let pipeline = Self::create_plan_pipeline(&*state, &info.plan);
                     let prepared_query = Self::prepare_stage(
                         &mut dispatcher_state,
                         &info,
@@ -136,7 +139,10 @@ impl FlightDispatcher {
 
     async fn get_stream_info(state: &mut DispatcherState, id: &str) -> Result<StreamInfo> {
         match state.streams.get(id) {
-            Some(info) => Ok(StreamInfo(info.schema.clone(), id.to_string(), vec![])),
+            Some(info) => Ok(StreamInfo {
+                schema: info.schema.clone(),
+                stream_name: id.to_string()
+            }),
             None => Err(ErrorCodes::NotFoundStream(format!(
                 "Stream {} is not found",
                 id
@@ -182,21 +188,25 @@ impl FlightDispatcher {
         pipeline: Result<(FuseQueryContextRef, Pipeline)>,
         request_sender: Sender<Request>
     ) -> Result<()> {
+        let scattered_to = &info.scatters;
         let mut streams_data_sender = vec![];
-        let (launcher_sender, mut launcher_receiver) = channel(info.3.len());
-        for stream_name in &info.3 {
-            let stream_full_name = format!("{}/{}/{}", info.0, info.1, stream_name);
+        let (launcher_sender, mut launcher_receiver) = channel(scattered_to.len());
+        for stream_name in scattered_to {
+            let stream_full_name = format!("{}/{}/{}", info.query_id, info.stage_id, stream_name);
             let (sender, stream_info) =
-                FlightStreamInfo::create(&info.2.schema(), &launcher_sender);
+                FlightStreamInfo::create(&info.plan.schema(), &launcher_sender);
             streams_data_sender.push(sender);
             state.streams.insert(stream_full_name, stream_info);
         }
 
-        let query_id = info.0.clone();
-        let stage_id = info.1.clone();
+        let query_id = info.query_id.clone();
+        let stage_id = info.stage_id.clone();
         let (context, pipeline) = pipeline?;
-        let flight_scatter =
-            FlightScatter::try_create(info.2.schema(), info.4.clone(), streams_data_sender.len())?;
+        let flight_scatter = FlightScatterByHash::try_create(
+            info.plan.schema(),
+            info.scatters_expression.clone(),
+            streams_data_sender.len()
+        )?;
 
         let stage_context = context.clone();
         stage_context.execute_task(async move {
@@ -252,7 +262,7 @@ impl FlightDispatcher {
     #[inline(always)]
     async fn receive_data_and_push(
         mut pipeline: Pipeline,
-        flight_scatter: FlightScatter,
+        flight_scatter: FlightScatterByHash,
         senders: Vec<Sender<Result<FlightData>>>
     ) -> Result<()> {
         use common_arrow::arrow::ipc::writer::IpcWriteOptions;
@@ -354,16 +364,16 @@ impl PrepareStageInfo {
     pub fn create(
         query_id: String,
         stage_id: String,
-        plan_node: PlanNode,
+        plan: PlanNode,
         scatters: Vec<String>,
-        scatters_action: Expression
+        scatters_expression: Expression
     ) -> Box<PrepareStageInfo> {
-        Box::new(PrepareStageInfo(
+        Box::new(PrepareStageInfo {
             query_id,
             stage_id,
-            plan_node,
+            plan,
             scatters,
-            scatters_action
-        ))
+            scatters_expression
+        })
     }
 }

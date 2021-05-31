@@ -16,14 +16,18 @@ use common_planners::Expression;
 
 use crate::pipelines::transforms::ExpressionExecutor;
 
-pub struct FlightScatter(Arc<ExpressionExecutor>, String, usize);
+pub struct FlightScatterByHash {
+    scatter_expression_executor: Arc<ExpressionExecutor>,
+    scatter_expression_name: String,
+    scattered_size: usize
+}
 
-impl FlightScatter {
+impl FlightScatterByHash {
     pub fn try_create(
         schema: DataSchemaRef,
         action: Expression,
         num: usize
-    ) -> Result<FlightScatter> {
+    ) -> Result<FlightScatterByHash> {
         let indices_expression_action = Expression::ScalarFunction {
             op: String::from("modulo"),
             args: vec![
@@ -44,23 +48,25 @@ impl FlightScatter {
         )?;
         expression_executor.validate()?;
 
-        Ok(FlightScatter(
-            Arc::new(expression_executor),
-            output_name,
-            num
-        ))
+        Ok(FlightScatterByHash {
+            scatter_expression_executor: Arc::new(expression_executor),
+            scatter_expression_name: output_name,
+            scattered_size: num
+        })
     }
 
     pub fn execute(&self, data_block: &DataBlock) -> Result<Vec<DataBlock>> {
-        let expression_executor = self.0.clone();
+        let expression_executor = self.scatter_expression_executor.clone();
         match expression_executor
             .execute(data_block)?
-            .column_by_name(&self.1)
+            .column_by_name(&self.scatter_expression_name)
         {
             None => Result::Err(ErrorCodes::LogicalError(
                 "Logical error: expression executor error."
             )),
-            Some(indices) => DataBlock::scatter_block(data_block, &indices.to_array()?, self.2)
+            Some(indices) => {
+                DataBlock::scatter_block(data_block, &indices.to_array()?, self.scattered_size)
+            }
         }
     }
 }

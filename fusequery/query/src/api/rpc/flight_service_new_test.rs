@@ -60,10 +60,10 @@ async fn test_prepare_query_stage() -> Result<()> {
                 }
 
                 // Validate prepare stage info
-                assert_eq!(info.0, "query_id");
-                assert_eq!(info.1, "stage_id");
-                assert_eq!(info.2.name(), "EmptyPlan");
-                assert_eq!(info.3, vec!["stream_1", "stream_2"]);
+                assert_eq!(info.query_id, "query_id");
+                assert_eq!(info.stage_id, "stage_id");
+                assert_eq!(info.plan.name(), "EmptyPlan");
+                assert_eq!(info.scatters, vec!["stream_1", "stream_2"]);
             }
             _ => panic!("expect PrepareQueryStage")
         }

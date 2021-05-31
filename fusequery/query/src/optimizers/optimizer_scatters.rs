@@ -117,7 +117,7 @@ impl ScattersOptimizer {
 
         match plan.group_expr.len() {
             0 => {
-                // For the final state, we need to aggregate the data
+                // If no group by we convergent it in local node
                 status.push(OptimizeKind::Local);
                 Ok(PlanNode::Stage(StagePlan {
                     kind: StageKind::Convergent,
