@@ -11,11 +11,25 @@ use std::fmt::Formatter;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::meta_service::placement::rand_n_from_m;
 use crate::meta_service::ClientRequest;
 use crate::meta_service::ClientResponse;
 use crate::meta_service::Cmd;
 use crate::meta_service::IPlacement;
 use crate::meta_service::NodeId;
+
+/// Replication defines the replication strategy.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum Replication {
+    /// n-copies mode.
+    Mirror(u64)
+}
+
+impl Default for Replication {
+    fn default() -> Self {
+        Replication::Mirror(1)
+    }
+}
 
 /// Meta data of a Dfs.
 /// Includes:
@@ -28,7 +42,9 @@ pub struct Meta {
 
     // cluster nodes, key distribution etc.
     pub slots: Vec<Slot>,
-    pub nodes: HashMap<NodeId, Node>
+    pub nodes: HashMap<NodeId, Node>,
+
+    pub replication: Replication
 }
 
 impl Meta {
@@ -67,6 +83,38 @@ impl Meta {
                 }
             }
         }
+    }
+
+    /// Initialize slots by assign nodes to everyone of them randomly, according to replicationn config.
+    pub fn init_slots(&mut self) -> anyhow::Result<()> {
+        for i in 0..self.slots.len() {
+            self.assign_rand_nodes_to_slot(i)?;
+        }
+
+        Ok(())
+    }
+
+    /// Assign `n` random nodes to a slot thus the files associated to this slot are replicated to the corresponding nodes.
+    /// This func does not cnosider nodes load and should only be used when a Dfs cluster is initiated.
+    /// TODO(xp): add another func for load based assignment
+    pub fn assign_rand_nodes_to_slot(&mut self, slot_index: usize) -> anyhow::Result<()> {
+        let n = match self.replication {
+            Replication::Mirror(x) => x
+        } as usize;
+
+        let mut node_ids = self.nodes.keys().collect::<Vec<&NodeId>>();
+        node_ids.sort();
+        let total = node_ids.len();
+        let node_indexes = rand_n_from_m(total, n)?;
+
+        let mut slot = self
+            .slots
+            .get_mut(slot_index)
+            .ok_or_else(|| anyhow::anyhow!("slot not found: {}", slot_index))?;
+
+        slot.node_ids = node_indexes.iter().map(|i| *node_ids[*i]).collect();
+
+        Ok(())
     }
 
     #[tracing::instrument(level = "info", skip(self))]
