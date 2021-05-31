@@ -60,7 +60,7 @@ impl FlightClient {
         Ok(())
     }
 
-    // Execute do_action.
+    // Execute do_get.
     async fn do_get(
         &mut self,
         ticket: Ticket,

@@ -70,7 +70,7 @@ In the cluster mode, we may have to process with some problems different from th
 - In distributed mode, the tables to be queried are always distributed in different nodes
 - For some scenarios, distributed processing is always efficient, such as GROUP BY with keys, JOIN
 - For some scenarios, we have no way of distributed processing, such as LIMIT, GROUP BY without keys
-- In order to ensure fast calculation, we need to coordinate the position of calculation and data.
+- In order to ensure fast calculation, we need to coordinate the location of calculation and data.
 
 Let's see how normal queries run on a database cluster.
 
@@ -117,6 +117,7 @@ In cluster mode, we extract all the StagePlans in the plan optimized by ScatterO
 
 For example:
 ```text
+mysql> EXPLAIN SELECT argMin(user, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user FROM numbers_local(1000000000) GROUP BY user);
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | explain                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+

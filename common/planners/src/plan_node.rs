@@ -152,7 +152,7 @@ impl PlanNode {
             PlanNode::Explain(v) => v.set_input(inputs[0]),
             PlanNode::Select(v) => v.set_input(inputs[0]),
             PlanNode::Sort(v) => v.set_input(inputs[0]),
-            _ => {}
+            _ => Err(ErrorCodes::UnImplement(format!("UnImplement set_inputs for {:?}", self)))
         }
 
         Ok(())

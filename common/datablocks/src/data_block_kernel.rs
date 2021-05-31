@@ -200,7 +200,7 @@ impl DataBlock {
             }
         }
 
-        let mut scattered_blocks = vec![];
+        let mut scattered_blocks = Vec::with_capacity(scatter_size);
         for index in 0..scatter_size {
             let begin_index = index * columns_size;
             let end_index = (index + 1) * columns_size;
