@@ -9,7 +9,7 @@ use common_datavalues::DataSchemaRef;
 
 use crate::Expression;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct ScanPlan {
     /// The name of the schema
     pub schema_name: String,

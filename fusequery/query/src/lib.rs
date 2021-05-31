@@ -14,7 +14,6 @@ pub mod interpreters;
 pub mod metrics;
 pub mod optimizers;
 pub mod pipelines;
-pub mod planners;
 pub mod servers;
 pub mod sessions;
 pub mod sql;

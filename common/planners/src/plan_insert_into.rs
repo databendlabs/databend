@@ -22,6 +22,14 @@ pub struct InsertIntoPlan {
     pub input_stream: Arc<Mutex<Option<BlockStream>>>
 }
 
+impl PartialEq for InsertIntoPlan {
+    fn eq(&self, other: &Self) -> bool {
+        self.db_name == other.db_name
+            && self.tbl_name == other.tbl_name
+            && self.schema == other.schema
+    }
+}
+
 impl InsertIntoPlan {
     pub fn empty_stream() -> Arc<Mutex<Option<BlockStream>>> {
         Default::default()

@@ -7,7 +7,6 @@ use rand::Rng;
 
 use crate::api::RpcService;
 use crate::clusters::Cluster;
-use crate::clusters::Node;
 use crate::configs::Config;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionManager;
@@ -38,12 +37,9 @@ pub async fn try_create_context_with_nodes(nums: usize) -> Result<FuseQueryConte
     let addrs = try_start_service(nums).await?;
     let ctx = crate::tests::try_create_context()?;
     for (i, addr) in addrs.iter().enumerate() {
-        ctx.try_get_cluster()?.add_node(&Node {
-            name: format!("node{}", i),
-            priority: 10,
-            address: addr.clone(),
-            local: false
-        })?;
+        ctx.try_get_cluster()?
+            .add_node(&format!("node{}", i), 10, addr)
+            .await?;
     }
     Ok(ctx)
 }
@@ -59,12 +55,9 @@ pub async fn try_create_context_with_nodes_and_priority(
     let addrs = try_start_service(nums).await?;
     let ctx = crate::tests::try_create_context()?;
     for (i, addr) in addrs.iter().enumerate() {
-        ctx.try_get_cluster()?.add_node(&Node {
-            name: format!("node{}", i),
-            priority: p[i],
-            address: addr.clone(),
-            local: false
-        })?;
+        ctx.try_get_cluster()?
+            .add_node(&format!("node{}", i), p[i], addr)
+            .await?;
     }
     Ok(ctx)
 }
@@ -78,7 +71,7 @@ async fn start_one_service() -> Result<(String, SessionManagerRef)> {
     let mut conf = Config::default();
     conf.flight_api_address = addr.clone();
 
-    let cluster = Cluster::create(conf.clone());
+    let cluster = Cluster::create_global(conf.clone())?;
     let session_manager = SessionManager::create();
     let srv = RpcService::create(conf, cluster, session_manager.clone());
     tokio::spawn(async move {

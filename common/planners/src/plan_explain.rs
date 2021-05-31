@@ -15,7 +15,7 @@ pub enum ExplainType {
     Pipeline
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct ExplainPlan {
     pub typ: ExplainType,
     pub input: Arc<PlanNode>
@@ -24,5 +24,9 @@ pub struct ExplainPlan {
 impl ExplainPlan {
     pub fn schema(&self) -> DataSchemaRef {
         self.input.schema()
+    }
+
+    pub fn set_input(&mut self, node: &PlanNode) {
+        self.input = Arc::new(node.clone());
     }
 }

@@ -6,27 +6,29 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 
+use crate::Expression;
 use crate::PlanNode;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub enum StageState {
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub enum StageKind {
     Normal,
-    Through,
-    SortMerge,
-    GroupByMerge,
-    AggregatorMerge
+    Expansive,
+    Convergent
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct StagePlan {
-    pub uuid: String,
-    pub id: usize,
-    pub state: StageState,
-    pub input: Arc<PlanNode>
+    pub kind: StageKind,
+    pub input: Arc<PlanNode>,
+    pub scatters_expr: Expression
 }
 
 impl StagePlan {
     pub fn schema(&self) -> DataSchemaRef {
         self.input.schema()
+    }
+
+    pub fn set_input(&mut self, node: &PlanNode) {
+        self.input = Arc::new(node.clone());
     }
 }

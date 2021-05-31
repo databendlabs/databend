@@ -7,16 +7,34 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::sync::Arc;
 
 use backtrace::Backtrace;
 use thiserror::Error;
+
+#[derive(Clone)]
+pub enum ErrorCodesBacktrace {
+    Serialized(Arc<String>),
+    Origin(Arc<Backtrace>)
+}
+
+impl ToString for ErrorCodesBacktrace {
+    fn to_string(&self) -> String {
+        match self {
+            ErrorCodesBacktrace::Serialized(backtrace) => Arc::as_ref(backtrace).clone(),
+            ErrorCodesBacktrace::Origin(backtrace) => {
+                format!("{:?}", backtrace)
+            }
+        }
+    }
+}
 
 #[derive(Error)]
 pub struct ErrorCodes {
     code: u16,
     display_text: String,
     cause: Option<Box<dyn std::error::Error + Sync + Send>>,
-    backtrace: Option<Backtrace>
+    backtrace: Option<ErrorCodesBacktrace>
 }
 
 impl ErrorCodes {
@@ -31,11 +49,15 @@ impl ErrorCodes {
             .unwrap_or_else(|| self.display_text.clone())
     }
 
-    pub fn backtrace(&self) -> String {
-        return match self.backtrace.as_ref() {
-            None => "".to_string(), // no backtrace
-            Some(backtrace) => format!("{:?}", backtrace)
-        };
+    pub fn backtrace(&self) -> Option<ErrorCodesBacktrace> {
+        self.backtrace.clone()
+    }
+
+    pub fn backtrace_str(&self) -> String {
+        match self.backtrace.as_ref() {
+            None => "".to_string(),
+            Some(backtrace) => backtrace.to_string()
+        }
     }
 }
 
@@ -55,7 +77,7 @@ macro_rules! build_exceptions {
                         code:$code,
                         display_text: display_text.into(),
                         cause: None,
-                        backtrace: Some(Backtrace::new()),
+                        backtrace: Some(ErrorCodesBacktrace::Origin(Arc::new(Backtrace::new()))),
                     }
                 })*
             }
@@ -93,6 +115,17 @@ build_exceptions! {
     IllegalAggregateExp(26),
     UnknownAggregateFunction(27),
     NumberArgumentsNotMatch(28),
+    NotFoundStream(29),
+    EmptyDataFromServer(30),
+    NotFoundLocalNode(31),
+    PlanScheduleError(32),
+    BadPlanInputs(33),
+    DuplicateClusterNode(34),
+    NotFoundClusterNode(35),
+    BadAddressFormat(36),
+    DnsParseError(37),
+    CannotConnectNode(38),
+    DuplicateGetStream(39),
 
     UnknownException(1000),
     TokioError(1001)
@@ -113,7 +146,10 @@ impl Debug for ErrorCodes {
             None => Ok(()), // no backtrace
             Some(backtrace) => {
                 // TODO: Custom stack frame format for print
-                write!(f, "\n\n{:?}", backtrace)
+                match backtrace {
+                    ErrorCodesBacktrace::Origin(backtrace) => write!(f, "\n\n{:?}", backtrace),
+                    ErrorCodesBacktrace::Serialized(backtrace) => write!(f, "\n\n{:?}", backtrace)
+                }
             }
         }
     }
@@ -191,13 +227,27 @@ impl From<sqlparser::parser::ParserError> for ErrorCodes {
         ErrorCodes::from_std_error(error)
     }
 }
+
 impl ErrorCodes {
     pub fn from_std_error<T: std::error::Error>(error: T) -> Self {
         ErrorCodes {
             code: 1002,
             display_text: format!("{}", error),
             cause: None,
-            backtrace: Some(Backtrace::new())
+            backtrace: Some(ErrorCodesBacktrace::Origin(Arc::new(Backtrace::new())))
+        }
+    }
+
+    pub fn create(
+        code: u16,
+        display_text: String,
+        backtrace: Option<ErrorCodesBacktrace>
+    ) -> ErrorCodes {
+        ErrorCodes {
+            code,
+            display_text,
+            cause: None,
+            backtrace
         }
     }
 }

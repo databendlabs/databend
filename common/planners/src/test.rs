@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
 use anyhow::Result;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
@@ -11,6 +13,7 @@ use crate::plan_partition::Partition;
 use crate::Partitions;
 use crate::PlanNode;
 use crate::ReadDataSourcePlan;
+use crate::ScanPlan;
 use crate::Statistics;
 
 pub struct Test {}
@@ -38,7 +41,8 @@ impl Test {
             description: format!(
                 "(Read from system.numbers_mt table, Read Rows:{}, Read Bytes:{})",
                 statistics.read_rows, statistics.read_bytes
-            )
+            ),
+            scan_plan: Arc::new(ScanPlan::empty())
         }))
     }
 

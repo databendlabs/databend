@@ -26,7 +26,7 @@ impl ToString for DatabaseEngineType {
 
 pub type DatabaseOptions = HashMap<String, String>;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateDatabasePlan {
     pub if_not_exists: bool,
     pub db: String,

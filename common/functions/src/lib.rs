@@ -13,6 +13,7 @@ mod function_alias;
 mod function_column;
 mod function_factory;
 mod function_literal;
+mod hashes;
 mod logics;
 mod strings;
 mod udfs;

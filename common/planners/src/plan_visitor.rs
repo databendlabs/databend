@@ -18,6 +18,7 @@ use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
+use crate::RemotePlan;
 use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
@@ -87,6 +88,7 @@ pub trait PlanVisitor<'plan> {
             PlanNode::UseDatabase(plan) => self.visit_use_database(plan),
             PlanNode::SetVariable(plan) => self.visit_set_variable(plan),
             PlanNode::Stage(plan) => self.visit_stage(plan),
+            PlanNode::Remote(plan) => self.visit_remote(plan),
             PlanNode::Having(plan) => self.visit_having(plan),
             PlanNode::Expression(plan) => self.visit_expression(plan),
             PlanNode::InsertInto(plan) => self.visit_insert_into(plan)
@@ -106,6 +108,8 @@ pub trait PlanVisitor<'plan> {
     fn visit_stage(&mut self, plan: &'plan StagePlan) {
         self.visit_plan_node(plan.input.as_ref());
     }
+
+    fn visit_remote(&mut self, _: &'plan RemotePlan) {}
 
     fn visit_projection(&mut self, plan: &'plan ProjectionPlan) {
         self.visit_plan_node(plan.input.as_ref());

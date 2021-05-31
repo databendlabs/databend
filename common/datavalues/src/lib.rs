@@ -19,6 +19,9 @@ mod data_value_arithmetic_test;
 #[cfg(test)]
 mod data_value_kernel_test;
 
+#[cfg(test)]
+mod data_array_scatter_test;
+
 #[macro_use]
 mod macros;
 
@@ -26,8 +29,10 @@ mod data_array;
 mod data_array_aggregate;
 mod data_array_arithmetic;
 mod data_array_comparison;
+mod data_array_hash;
 mod data_array_logic;
 mod data_array_merge_sort;
+mod data_array_scatter;
 mod data_columnar_value;
 mod data_field;
 mod data_schema;
@@ -42,8 +47,10 @@ pub use data_array::*;
 pub use data_array_aggregate::DataArrayAggregate;
 pub use data_array_arithmetic::DataArrayArithmetic;
 pub use data_array_comparison::DataArrayComparison;
+pub use data_array_hash::DataArrayHash;
 pub use data_array_logic::DataArrayLogic;
 pub use data_array_merge_sort::DataArrayMerge;
+pub use data_array_scatter::DataArrayScatter;
 pub use data_columnar_value::DataColumnarValue;
 pub use data_field::DataField;
 pub use data_schema::DataSchema;

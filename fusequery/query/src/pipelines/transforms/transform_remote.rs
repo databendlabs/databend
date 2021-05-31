@@ -5,10 +5,9 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_flights::QueryClient;
-use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::processors::EmptyProcessor;
@@ -16,26 +15,24 @@ use crate::pipelines::processors::IProcessor;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct RemoteTransform {
-    job_id: String,
-    remote_addr: String,
-    pub ctx: FuseQueryContextRef,
-    pub plan: PlanNode,
-    input: Arc<dyn IProcessor>
+    fetch_name: String,
+    fetch_node_name: String,
+    schema: DataSchemaRef,
+    pub ctx: FuseQueryContextRef
 }
 
 impl RemoteTransform {
     pub fn try_create(
         ctx: FuseQueryContextRef,
-        job_id: String,
-        remote_addr: String,
-        plan: PlanNode
+        fetch_name: String,
+        fetch_node_name: String,
+        schema: DataSchemaRef
     ) -> Result<Self> {
         Ok(Self {
-            job_id,
-            remote_addr,
-            ctx,
-            plan,
-            input: Arc::new(EmptyProcessor::create())
+            fetch_name,
+            fetch_node_name,
+            schema,
+            ctx
         })
     }
 }
@@ -46,13 +43,14 @@ impl IProcessor for RemoteTransform {
         "RemoteTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
-        self.input = input;
-        Ok(())
+    fn connect_to(&mut self, _input: Arc<dyn IProcessor>) -> Result<()> {
+        Result::Err(ErrorCodes::LogicalError(
+            "Cannot call RemoteTransform connect_to"
+        ))
     }
 
     fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
-        vec![self.input.clone()]
+        vec![Arc::new(EmptyProcessor::create())]
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -60,28 +58,14 @@ impl IProcessor for RemoteTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        async fn execute_impl(
-            ctx: FuseQueryContextRef,
-            remote_addr: &str,
-            job_id: &str,
-            plan: &PlanNode
-        ) -> anyhow::Result<SendableDataBlockStream> {
-            let mut client = QueryClient::try_create(remote_addr.to_string().clone()).await?;
-            client.set_timeout(ctx.get_flight_client_timeout()?);
-            client
-                .execute_remote_plan_action(job_id.to_string().clone(), plan)
-                .await
-        }
+        let context = self.ctx.clone();
+        let cluster = context.try_get_cluster()?;
+        let fetch_node = cluster.get_node_by_name(self.fetch_node_name.clone())?;
 
-        Ok(Box::pin(
-            execute_impl(
-                self.ctx.clone(),
-                &self.remote_addr,
-                &self.job_id,
-                &self.plan
-            )
+        let timeout = self.ctx.get_flight_client_timeout()?;
+        let mut flight_client = fetch_node.get_flight_client().await?;
+        flight_client
+            .fetch_stream(self.fetch_name.clone(), self.schema.clone(), timeout)
             .await
-            .map_err(ErrorCodes::from)?
-        ))
     }
 }

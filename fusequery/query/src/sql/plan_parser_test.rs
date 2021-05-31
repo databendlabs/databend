@@ -144,11 +144,10 @@ fn test_plan_parser() -> anyhow::Result<()> {
             \n      Having: ((number % 3) > 1)\
             \n        Expression: (sum((number + 1)) + 2):UInt64, (number % 3):UInt64 (Before OrderBy)\
             \n          AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]\
-            \n            RedistributeStage[state: AggregatorMerge, id: 0]\
-            \n              AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]\
-            \n                Expression: (number % 3):UInt64, (number + 1):UInt64 (Before GroupBy)\
-            \n                  Filter: (number > 1)\
-            \n                    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            \n            AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]\
+            \n              Expression: (number % 3):UInt64, (number + 1):UInt64 (Before GroupBy)\
+            \n                Filter: (number > 1)\
+            \n                  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
             error: ""
         },
     ];

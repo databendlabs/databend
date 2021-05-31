@@ -29,7 +29,6 @@ use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_planners::SettingPlan;
-use common_planners::StageState;
 use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
 use sqlparser::ast::Expr;
@@ -543,7 +542,11 @@ impl PlanParser {
                 .and_then(|builder| builder.build())
                 .and_then(|dummy_scan_plan| match dummy_scan_plan {
                     PlanNode::Scan(ref dummy_scan_plan) => table
-                        .read_plan(self.ctx.clone(), dummy_scan_plan)
+                        .read_plan(
+                            self.ctx.clone(),
+                            dummy_scan_plan,
+                            self.ctx.get_max_threads()? as usize
+                        )
                         .map(PlanNode::ReadSource),
                     _unreachable_plan => panic!("Logical error: cannot downcast to scan plan")
                 })
@@ -608,9 +611,10 @@ impl PlanParser {
                     })
                 };
 
+                // TODO: Move ReadSourcePlan to SelectInterpreter
                 scan.and_then(|scan| match scan {
                     PlanNode::Scan(ref scan) => table
-                        .read_plan(self.ctx.clone(), scan)
+                        .read_plan(self.ctx.clone(), scan, self.ctx.get_max_threads()? as usize)
                         .map(PlanNode::ReadSource),
                     _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan")
                 })
@@ -831,7 +835,6 @@ impl PlanParser {
         // S2: Apply a final aggregator plan.
         PlanBuilder::from(&input)
             .aggregate_partial(&aggr_exprs, &group_by_exprs)
-            .and_then(|builder| builder.stage(self.ctx.get_id()?, StageState::AggregatorMerge))
             .and_then(|builder| {
                 builder.aggregate_final(input.schema(), &aggr_exprs, &group_by_exprs)
             })

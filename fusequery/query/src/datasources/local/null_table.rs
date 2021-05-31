@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -58,7 +59,12 @@ impl ITable for NullTable {
         true
     }
 
-    fn read_plan(&self, _ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
+    fn read_plan(
+        &self,
+        _ctx: FuseQueryContextRef,
+        scan: &ScanPlan,
+        _partitions: usize
+    ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
             table: self.name().to_string(),
@@ -68,7 +74,8 @@ impl ITable for NullTable {
                 version: 0
             }],
             statistics: Statistics::default(),
-            description: format!("(Read from Null Engine table  {}.{})", self.db, self.name)
+            description: format!("(Read from Null Engine table  {}.{})", self.db, self.name),
+            scan_plan: Arc::new(scan.clone())
         })
     }
 
