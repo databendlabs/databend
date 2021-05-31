@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayData;
-use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BinaryArray;
 use common_arrow::arrow::array::BinaryBuilder;
 use common_arrow::arrow::array::BooleanBufferBuilder;
@@ -52,16 +51,18 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::DataArrayRef;
+use crate::DataColumnarValue;
+use crate::DataValue;
 
 pub struct DataArrayScatter;
 
 impl DataArrayScatter {
     #[inline]
     pub fn scatter(
-        data: &DataArrayRef,
-        indices: &DataArrayRef,
+        data: &DataColumnarValue,
+        indices: &DataColumnarValue,
         nums: usize
-    ) -> Result<Vec<DataArrayRef>> {
+    ) -> Result<Vec<DataColumnarValue>> {
         if data.len() != indices.len() {
             return Result::Err(ErrorCodes::BadDataArrayLength(format!(
                 "Selector requires data and indices to have the same number of arrays. data has {}, indices has {}.",
@@ -70,15 +71,67 @@ impl DataArrayScatter {
             )));
         }
 
-        let indices_array_values = Self::indices_values(indices)?;
-        Self::scatter_data(data, indices_array_values, nums)
+        match (data, indices) {
+            (DataColumnarValue::Array(data), DataColumnarValue::Array(indices)) => {
+                let indices_array_values = Self::indices_values(indices)?;
+                Self::scatter_data(data, indices_array_values, nums)
+            }
+            (DataColumnarValue::Constant(_, _), DataColumnarValue::Array(indices)) => {
+                let indices_array_values = Self::indices_values(indices)?;
+                Self::scatter_data(&data.to_array()?, indices_array_values, nums)
+            }
+            (DataColumnarValue::Array(_), DataColumnarValue::Constant(indices, _)) => {
+                Self::scatter_data_with_constant_indices(data, indices, nums)
+            }
+            (DataColumnarValue::Constant(_, _), DataColumnarValue::Constant(indices, _)) => {
+                Self::scatter_data_with_constant_indices(data, indices, nums)
+            }
+        }
+    }
+
+    fn scatter_data_with_constant_indices(
+        data: &DataColumnarValue,
+        indices: &DataValue,
+        nums: usize
+    ) -> Result<Vec<DataColumnarValue>> {
+        let scatter_data = |index: usize| -> Result<Vec<DataColumnarValue>> {
+            if index >= nums {
+                return Err(ErrorCodes::LogicalError(format!(
+                    "Logical error: the indices [{}] value greater than scatters size",
+                    index
+                )));
+            }
+
+            let mut scattered_data_res = Vec::with_capacity(nums);
+
+            for res_index in 0..nums {
+                match res_index {
+                    res_index if res_index == index => scattered_data_res.push(data.clone()),
+                    _ => scattered_data_res.push(data.clone_empty())
+                }
+            }
+
+            Ok(scattered_data_res)
+        };
+
+        match indices {
+            DataValue::Int8(Some(v)) => scatter_data(*v as usize),
+            DataValue::Int16(Some(v)) => scatter_data(*v as usize),
+            DataValue::Int32(Some(v)) => scatter_data(*v as usize),
+            DataValue::Int64(Some(v)) => scatter_data(*v as usize),
+            DataValue::UInt8(Some(v)) => scatter_data(*v as usize),
+            DataValue::UInt16(Some(v)) => scatter_data(*v as usize),
+            DataValue::UInt32(Some(v)) => scatter_data(*v as usize),
+            DataValue::UInt64(Some(v)) => scatter_data(*v as usize),
+            _ => Err(ErrorCodes::BadDataValueType(""))
+        }
     }
 
     fn scatter_data(
         data: &DataArrayRef,
         indices: &[u64],
         nums: usize
-    ) -> Result<Vec<DataArrayRef>> {
+    ) -> Result<Vec<DataColumnarValue>> {
         match data.data_type() {
             DataType::Int8 => Self::scatter_primitive_data::<Int8Type>(data, indices, nums),
             DataType::Int16 => Self::scatter_primitive_data::<Int16Type>(data, indices, nums),
@@ -150,7 +203,7 @@ impl DataArrayScatter {
         data: &DataArrayRef,
         indices: &[u64],
         scattered_size: usize
-    ) -> Result<Vec<DataArrayRef>> {
+    ) -> Result<Vec<DataColumnarValue>> {
         let primitive_data = data
             .as_any()
             .downcast_ref::<PrimitiveArray<T>>()
@@ -187,7 +240,7 @@ impl DataArrayScatter {
             }
         }
 
-        let mut scattered_data_res: Vec<ArrayRef> = vec![];
+        let mut scattered_data_res: Vec<DataColumnarValue> = Vec::with_capacity(scattered_size);
         for index in 0..scattered_size {
             // We don't care about time zones, which are always bound to the schema
             let mut builder = ArrayData::builder(T::DATA_TYPE)
@@ -195,10 +248,14 @@ impl DataArrayScatter {
                 .add_buffer(scattered_data_builder[index].finish());
 
             match data.null_count() {
-                0 => scattered_data_res.push(Arc::new(PrimitiveArray::<T>::from(builder.build()))),
+                0 => scattered_data_res.push(DataColumnarValue::Array(Arc::new(
+                    PrimitiveArray::<T>::from(builder.build())
+                ))),
                 _ => {
                     builder = builder.null_bit_buffer(scattered_null_bit[index].clone());
-                    scattered_data_res.push(Arc::new(PrimitiveArray::<T>::from(builder.build())));
+                    scattered_data_res.push(DataColumnarValue::Array(Arc::new(
+                        PrimitiveArray::<T>::from(builder.build())
+                    )));
                 }
             }
         }
@@ -210,7 +267,7 @@ impl DataArrayScatter {
         data: &DataArrayRef,
         indices: &[u64],
         scattered_size: usize
-    ) -> Result<Vec<ArrayRef>> {
+    ) -> Result<Vec<DataColumnarValue>> {
         let binary_data = data.as_any().downcast_ref::<BinaryArray>().ok_or_else(|| {
             ErrorCodes::BadDataValueType(format!(
                 "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
@@ -231,9 +288,9 @@ impl DataArrayScatter {
             }
         }
 
-        let mut scattered_data_res: Vec<ArrayRef> = vec![];
+        let mut scattered_data_res = Vec::with_capacity(scattered_data_builder.len());
         for mut builder in scattered_data_builder {
-            scattered_data_res.push(Arc::new(builder.finish()));
+            scattered_data_res.push(DataColumnarValue::Array(Arc::new(builder.finish())));
         }
 
         Ok(scattered_data_res)
@@ -243,7 +300,7 @@ impl DataArrayScatter {
         data: &DataArrayRef,
         indices: &[u64],
         scattered_size: usize
-    ) -> Result<Vec<ArrayRef>> {
+    ) -> Result<Vec<DataColumnarValue>> {
         let binary_data = data
             .as_any()
             .downcast_ref::<LargeBinaryArray>()
@@ -268,9 +325,9 @@ impl DataArrayScatter {
             }
         }
 
-        let mut scattered_data_res: Vec<ArrayRef> = vec![];
+        let mut scattered_data_res = Vec::with_capacity(scattered_data_builder.len());
         for mut builder in scattered_data_builder {
-            scattered_data_res.push(Arc::new(builder.finish()));
+            scattered_data_res.push(DataColumnarValue::Array(Arc::new(builder.finish())));
         }
 
         Ok(scattered_data_res)
@@ -280,7 +337,7 @@ impl DataArrayScatter {
         data: &DataArrayRef,
         indices: &[u64],
         scattered_size: usize
-    ) -> Result<Vec<ArrayRef>> {
+    ) -> Result<Vec<DataColumnarValue>> {
         let binary_data = data
             .as_any()
             .downcast_ref::<GenericStringArray<T>>()
@@ -305,9 +362,9 @@ impl DataArrayScatter {
             }
         }
 
-        let mut scattered_data_res: Vec<ArrayRef> = vec![];
+        let mut scattered_data_res = Vec::with_capacity(scattered_data_builder.len());
         for mut builder in scattered_data_builder {
-            scattered_data_res.push(Arc::new(builder.finish()));
+            scattered_data_res.push(DataColumnarValue::Array(Arc::new(builder.finish())));
         }
 
         Ok(scattered_data_res)

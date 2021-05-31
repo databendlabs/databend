@@ -25,6 +25,8 @@ use common_exception::Result;
 use crate::BinaryArray;
 use crate::DataArrayRef;
 use crate::DataArrayScatter;
+use crate::DataColumnarValue;
+use crate::DataValue;
 use crate::Date32Array;
 use crate::Date64Array;
 use crate::Float32Array;
@@ -40,7 +42,7 @@ use crate::UInt64Array;
 use crate::UInt8Array;
 
 #[test]
-fn test_scatter_array_data() -> Result<()> {
+fn test_scatter_array_data_column() -> Result<()> {
     #[allow(dead_code)]
     struct ArrayTest {
         name: &'static str,
@@ -895,19 +897,101 @@ fn test_scatter_array_data() -> Result<()> {
     ];
 
     for test in tests {
-        let result = DataArrayScatter::scatter(&test.array, &test.indices, 2);
+        let result = DataArrayScatter::scatter(
+            &DataColumnarValue::Array(test.array.clone()),
+            &DataColumnarValue::Array(test.indices.clone()),
+            2
+        );
+
         match result {
-            Ok(scattered_array) => assert_eq!(
-                scattered_array, test.expect,
-                "failed in the test: {}",
-                test.name
-            ),
-            Err(e) => assert_eq!(
-                test.error,
-                e.to_string(),
-                "failed in the test: {}",
-                test.name
-            )
+            Ok(scatters_array) => {
+                let scatters_array = scatters_array
+                    .iter()
+                    .map(DataColumnarValue::to_array)
+                    .collect::<Result<Vec<_>>>()?;
+
+                assert_eq!(
+                    scatters_array, test.expect,
+                    "failed in the test: {}",
+                    test.name
+                );
+            }
+            Err(e) => {
+                assert_eq!(
+                    test.error,
+                    e.to_string(),
+                    "failed in the test: {}",
+                    test.name
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_scatter_array_with_constants_indices() -> Result<()> {
+    let indices_values = vec![
+        DataValue::Int8(Some(1)),
+        DataValue::Int16(Some(1)),
+        DataValue::Int32(Some(1)),
+        DataValue::Int64(Some(1)),
+        DataValue::UInt8(Some(1)),
+        DataValue::UInt16(Some(1)),
+        DataValue::UInt32(Some(1)),
+        DataValue::UInt64(Some(1)),
+    ];
+    for data_value in indices_values {
+        let result = DataArrayScatter::scatter(
+            &DataColumnarValue::Array(Arc::new(Int8Array::from(vec![1, 2, 3]))),
+            &DataColumnarValue::Constant(data_value, 3),
+            2
+        )?;
+
+        assert_eq!(result.len(), 2);
+        match &result[0] {
+            DataColumnarValue::Constant(_, _) => assert!(false, "result[0] must be a DataArray"),
+            DataColumnarValue::Array(data) => {
+                assert_eq!(data.len(), 0);
+            }
+        }
+
+        match &result[1] {
+            DataColumnarValue::Constant(_, _) => assert!(false, "result[1] must be a DataArray"),
+            DataColumnarValue::Array(data) => {
+                let expect: DataArrayRef = Arc::new(Int8Array::from(vec![1, 2, 3]));
+                assert_eq!(data.len(), 3);
+                assert_eq!(data, &expect);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_scatter_const_array_with_constants_indices() -> Result<()> {
+    let result = DataArrayScatter::scatter(
+        &DataColumnarValue::Constant(DataValue::Int8(Some(3)), 3),
+        &DataColumnarValue::Constant(DataValue::Int8(Some(1)), 3),
+        2
+    )?;
+
+    assert_eq!(result.len(), 2);
+    match &result[0] {
+        DataColumnarValue::Array(_) => assert!(false, "result[0] must be a Constant"),
+        DataColumnarValue::Constant(value, len) => {
+            assert_eq!(*len, 0);
+            assert_eq!(value, &DataValue::Int8(Some(3)));
+        }
+    }
+
+    match &result[1] {
+        DataColumnarValue::Array(_) => assert!(false, "result[1] must be a Constant"),
+        DataColumnarValue::Constant(value, len) => {
+            assert_eq!(*len, 3);
+            assert_eq!(value, &DataValue::Int8(Some(3)));
         }
     }
 

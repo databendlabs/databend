@@ -23,7 +23,7 @@ fn test_data_block_scatter() -> anyhow::Result<()> {
 
     let mut builder = UInt64Builder::new(3);
     builder.append_slice(&[0, 1, 0])?;
-    let indices: DataArrayRef = Arc::new(builder.finish());
+    let indices = DataColumnarValue::Array(Arc::new(builder.finish()));
 
     let scattered = DataBlock::scatter_block(&raw, &indices, 2)?;
     assert_eq!(scattered.len(), 2);
