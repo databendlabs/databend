@@ -88,3 +88,14 @@ SELECT a.number FROM numbers(3) AS a order by a.number
 |      1 |
 |      2 |
 +--------+
+--------------
+SELECT a.number FROM (SELECT * FROM numbers(3) AS b ORDER BY b.number) AS a
+--------------
+
++--------+
+| number |
++--------+
+|      0 |
+|      1 |
+|      2 |
++--------+

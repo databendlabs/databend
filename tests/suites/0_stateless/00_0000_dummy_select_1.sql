@@ -8,3 +8,4 @@ SELECT TRUE;
 SELECT FALSE;
 SELECT NOT(TRUE);
 SELECT a.number FROM numbers(3) AS a order by a.number;
+SELECT a.number FROM (SELECT * FROM numbers(3) AS b ORDER BY b.number) AS a;
