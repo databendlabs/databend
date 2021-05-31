@@ -30,7 +30,6 @@ impl MemEngine {
         Arc::new(Mutex::new(e))
     }
 
-    #[allow(dead_code)]
     pub fn create_database(
         &mut self,
         cmd: CmdCreateDatabase,
@@ -57,6 +56,15 @@ impl MemEngine {
         self.dbs.insert(cmd.db_name, db);
 
         Ok(db_id)
+    }
+
+    pub fn drop_database(&mut self, db_name: &str, if_exists: bool) -> Result<(), Status> {
+        let entry = self.dbs.remove_entry(db_name);
+        match (entry, if_exists) {
+            (_, true) => Ok(()),
+            (Some((_id, _db)), false) => Ok(()),
+            (_, false) => Err(Status::not_found(format!("database {} not found", db_name)))
+        }
     }
 
     #[allow(dead_code)]
@@ -106,6 +114,33 @@ impl MemEngine {
         db.tables.insert(table_id, table);
 
         Ok(table_id)
+    }
+
+    pub fn drop_table(
+        &mut self,
+        db_name: &str,
+        tbl_name: &str,
+        if_exists: bool
+    ) -> Result<(), Status> {
+        let r = self.dbs.get_mut(db_name).map(|db| {
+            let name2id_removed = db.table_name_to_id.remove_entry(tbl_name);
+            let id_removed = name2id_removed
+                .as_ref()
+                .and_then(|(_, id)| db.tables.remove(&id));
+            (name2id_removed, id_removed)
+        });
+        match (r, if_exists) {
+            (_, true) => Ok(()),
+            (None, false) => Err(Status::not_found(format!("database {} not found", db_name))),
+            (Some((None, _)), false) => {
+                Err(Status::not_found(format!("table {} not found", tbl_name)))
+            }
+            (Some((Some(_), Some(_))), false) => Ok(()),
+            _ => Err(Status::internal(
+                "inconsistent meta state, mappings between names and ids are out-of-sync"
+                    .to_string()
+            ))
+        }
     }
 
     pub fn get_table(&mut self, db_name: String, table_name: String) -> Result<Table, Status> {

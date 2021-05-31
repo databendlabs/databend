@@ -14,6 +14,10 @@ use common_flights::CreateDatabaseAction;
 use common_flights::CreateDatabaseActionResult;
 use common_flights::CreateTableAction;
 use common_flights::CreateTableActionResult;
+use common_flights::DropDatabaseAction;
+use common_flights::DropDatabaseActionResult;
+use common_flights::DropTableAction;
+use common_flights::DropTableActionResult;
 use common_flights::GetTableAction;
 use common_flights::GetTableActionResult;
 use common_flights::StoreDoAction;
@@ -74,13 +78,9 @@ impl ActionHandler {
         match action {
             StoreDoAction::ReadPlan(_) => Err(Status::internal("Store read plan unimplemented")),
             StoreDoAction::CreateDatabase(a) => self.create_db(a).await,
-            StoreDoAction::DropDatabase(_) => {
-                Err(Status::internal("Store drop database unimplemented"))
-            }
+            StoreDoAction::DropDatabase(act) => self.drop_db(act).await,
             StoreDoAction::CreateTable(a) => self.create_table(a).await,
-            StoreDoAction::DropTable(_) => {
-                Err(Status::internal("Store drop database unimplemented"))
-            }
+            StoreDoAction::DropTable(act) => self.drop_table(act).await,
             StoreDoAction::GetTable(a) => self.get_table(a).await
         }
     }
@@ -170,6 +170,20 @@ impl ActionHandler {
         });
 
         Ok(rst)
+    }
+
+    async fn drop_db(&self, act: DropDatabaseAction) -> Result<StoreDoActionResult, Status> {
+        let mut meta = self.meta.lock().unwrap();
+        let _ = meta.drop_database(&act.plan.db, act.plan.if_exists)?;
+        Ok(StoreDoActionResult::DropDatabase(
+            DropDatabaseActionResult {}
+        ))
+    }
+
+    async fn drop_table(&self, act: DropTableAction) -> Result<StoreDoActionResult, Status> {
+        let mut meta = self.meta.lock().unwrap();
+        let _ = meta.drop_table(&act.plan.db, &act.plan.table, act.plan.if_exists)?;
+        Ok(StoreDoActionResult::DropTable(DropTableActionResult {}))
     }
 }
 
