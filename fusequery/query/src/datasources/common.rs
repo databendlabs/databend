@@ -20,7 +20,7 @@ impl Common {
         if part_size == 0 {
             partitions.push(Partition {
                 name: format!("{}-{}-{}", total, start, total,),
-                version: 0
+                version: 0,
             })
         } else {
             for part in 0..workers {
@@ -34,7 +34,7 @@ impl Common {
                 }
                 partitions.push(Partition {
                     name: format!("{}-{}-{}", total, part_begin, part_end,),
-                    version: 0
+                    version: 0,
                 })
             }
         }
@@ -51,7 +51,7 @@ impl Common {
         while match reader.read_until(sep, &mut line) {
             Ok(n) if n > 0 => true,
             Err(e) => return Err(e),
-            _ => false
+            _ => false,
         } {
             if *line.last().unwrap() == sep {
                 count += 1;

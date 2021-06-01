@@ -19,7 +19,7 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct LogicFunction {
-    op: DataValueLogicOperator
+    op: DataValueLogicOperator,
 }
 
 impl LogicFunction {
@@ -51,7 +51,7 @@ impl IFunction for LogicFunction {
 
     fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
         Ok(DataColumnarValue::Array(
-            DataArrayLogic::data_array_logic_op(self.op.clone(), columns)?
+            DataArrayLogic::data_array_logic_op(self.op.clone(), columns)?,
         ))
     }
 }

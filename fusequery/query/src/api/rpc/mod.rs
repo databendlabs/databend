@@ -32,19 +32,19 @@ use tonic::Status;
 struct SerializedError {
     code: u16,
     message: String,
-    backtrace: String
+    backtrace: String,
 }
 
 pub fn to_status(error: ErrorCodes) -> Status {
     let serialized_error_json = serde_json::to_string::<SerializedError>(&SerializedError {
         code: error.code(),
         message: error.message(),
-        backtrace: error.backtrace_str()
+        backtrace: error.backtrace_str(),
     });
 
     match serialized_error_json {
         Ok(serialized_error_json) => Status::internal(serialized_error_json),
-        Err(error) => Status::unknown(error.to_string())
+        Err(error) => Status::unknown(error.to_string()),
     }
 }
 
@@ -58,11 +58,11 @@ pub fn from_status(status: Status) -> ErrorCodes {
                     serialized_error.code,
                     serialized_error.message,
                     Some(ErrorCodesBacktrace::Serialized(Arc::new(
-                        serialized_error.backtrace
-                    )))
-                )
-            }
+                        serialized_error.backtrace,
+                    ))),
+                ),
+            },
         },
-        _ => ErrorCodes::UnImplement(status.to_string())
+        _ => ErrorCodes::UnImplement(status.to_string()),
     }
 }

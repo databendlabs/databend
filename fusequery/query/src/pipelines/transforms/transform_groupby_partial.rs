@@ -36,10 +36,10 @@ type GroupFuncTable = RwLock<
         Vec<u8>,
         (
             Vec<(Box<dyn IAggregateFunction>, String, Vec<String>)>,
-            Vec<DataValue>
+            Vec<DataValue>,
         ),
-        ahash::RandomState
-    >
+        ahash::RandomState,
+    >,
 >;
 
 pub struct GroupByPartialTransform {
@@ -47,21 +47,21 @@ pub struct GroupByPartialTransform {
     group_exprs: Vec<Expression>,
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>,
-    groups: GroupFuncTable
+    groups: GroupFuncTable,
 }
 
 impl GroupByPartialTransform {
     pub fn create(
         schema: DataSchemaRef,
         aggr_exprs: Vec<Expression>,
-        group_exprs: Vec<Expression>
+        group_exprs: Vec<Expression>,
     ) -> Self {
         Self {
             aggr_exprs,
             group_exprs,
             schema,
             input: Arc::new(EmptyProcessor::create()),
-            groups: RwLock::new(HashMap::default())
+            groups: RwLock::new(HashMap::default()),
         }
     }
 }
@@ -221,7 +221,7 @@ impl IProcessor for GroupByPartialTransform {
             return Ok(Box::pin(DataBlockStream::create(
                 DataSchemaRefExt::create(vec![]),
                 None,
-                vec![]
+                vec![],
             )));
         }
 
@@ -260,7 +260,7 @@ impl IProcessor for GroupByPartialTransform {
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block]
+            vec![block],
         )))
     }
 }

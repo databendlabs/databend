@@ -27,7 +27,7 @@ use crate::sessions::SessionManagerRef;
 use crate::sql::PlanParser;
 
 struct Session {
-    ctx: FuseQueryContextRef
+    ctx: FuseQueryContextRef,
 }
 
 impl Session {
@@ -42,7 +42,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
     fn on_prepare(&mut self, _: &str, writer: StatementMetaWriter<W>) -> std::io::Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
-            "Prepare is not support in DataFuse.".as_bytes()
+            "Prepare is not support in DataFuse.".as_bytes(),
         )
     }
 
@@ -50,11 +50,11 @@ impl<W: io::Write> MysqlShim<W> for Session {
         &mut self,
         _: u32,
         _: ParamParser,
-        writer: QueryResultWriter<W>
+        writer: QueryResultWriter<W>,
     ) -> std::io::Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
-            "Execute is not support in DataFuse.".as_bytes()
+            "Execute is not support in DataFuse.".as_bytes(),
         )
     }
 
@@ -80,7 +80,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
             runtime.block_on(
                 interpreter
                     .execute()
-                    .and_then(|stream| stream.collect::<Result<Vec<DataBlock>>>())
+                    .and_then(|stream| stream.collect::<Result<Vec<DataBlock>>>()),
             )
         }
 
@@ -117,7 +117,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
 pub struct MySQLHandler {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionManagerRef
+    session_manager: SessionManagerRef,
 }
 
 impl MySQLHandler {
@@ -125,7 +125,7 @@ impl MySQLHandler {
         MySQLHandler {
             conf,
             cluster,
-            session_manager
+            session_manager,
         }
     }
 

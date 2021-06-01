@@ -15,7 +15,7 @@ pub trait IOptimizer {
 }
 
 pub struct Optimizer {
-    optimizers: Vec<Box<dyn IOptimizer>>
+    optimizers: Vec<Box<dyn IOptimizer>>,
 }
 
 impl Optimizer {

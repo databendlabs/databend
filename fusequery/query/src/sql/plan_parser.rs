@@ -65,7 +65,7 @@ use crate::sql::DfStatement;
 use crate::sql::SQLCommon;
 
 pub struct PlanParser {
-    ctx: FuseQueryContextRef
+    ctx: FuseQueryContextRef,
 }
 
 impl PlanParser {
@@ -103,9 +103,9 @@ impl PlanParser {
                     "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
                     self.ctx.get_current_database()
                 )
-                .as_str()
+                .as_str(),
             ),
-            DfStatement::ShowSettings(_) => self.build_from_sql("SELECT name FROM system.settings")
+            DfStatement::ShowSettings(_) => self.build_from_sql("SELECT name FROM system.settings"),
         }
     }
 
@@ -127,7 +127,7 @@ impl PlanParser {
             _ => Result::Err(ErrorCodes::SyntaxException(format!(
                 "Unsupported statement {:?}",
                 statement
-            )))
+            ))),
         }
     }
 
@@ -136,7 +136,7 @@ impl PlanParser {
         let plan = self.sql_statement_to_plan(&explain.statement)?;
         Ok(PlanNode::Explain(ExplainPlan {
             typ: explain.typ,
-            input: Arc::new(plan)
+            input: Arc::new(plan),
         }))
     }
 
@@ -156,7 +156,7 @@ impl PlanParser {
             if_not_exists: create.if_not_exists,
             db: name,
             engine: create.engine,
-            options
+            options,
         }))
     }
 
@@ -169,7 +169,7 @@ impl PlanParser {
 
         Ok(PlanNode::DropDatabase(DropDatabasePlan {
             if_exists: drop.if_exists,
-            db: name
+            db: name,
         }))
     }
 
@@ -205,7 +205,7 @@ impl PlanParser {
                 p.value
                     .to_string()
                     .trim_matches(|s| s == '\'' || s == '"')
-                    .to_string()
+                    .to_string(),
             );
         }
 
@@ -216,7 +216,7 @@ impl PlanParser {
             table,
             schema,
             engine: create.engine,
-            options
+            options,
         }))
     }
 
@@ -234,7 +234,7 @@ impl PlanParser {
         Ok(PlanNode::DropTable(DropTablePlan {
             if_exists: drop.if_exists,
             db,
-            table
+            table,
         }))
     }
 
@@ -242,7 +242,7 @@ impl PlanParser {
         &self,
         table_name: &ObjectName,
         columns: &[Ident],
-        source: &Query
+        source: &Query,
     ) -> Result<PlanNode> {
         if let sqlparser::ast::SetExpr::Values(ref vs) = source.body {
             //            let col_num = columns.len();
@@ -257,7 +257,7 @@ impl PlanParser {
             let values = &vs.0;
             if values.is_empty() {
                 return Err(ErrorCodes::EmptyData(
-                    "empty values for insertion is not allowed"
+                    "empty values for insertion is not allowed",
                 ));
             }
 
@@ -266,7 +266,7 @@ impl PlanParser {
                 .all(|row| row.iter().all(|item| matches!(item, Expr::Value(_))));
             if !all_value {
                 return Err(ErrorCodes::UnImplement(
-                    "not support value expressions other than literal value yet"
+                    "not support value expressions other than literal value yet",
                 ));
             }
             // Buffers some chunks if possible
@@ -285,7 +285,7 @@ impl PlanParser {
                                 .iter()
                                 .map(|inner| match &inner[i] {
                                     Expr::Value(v) => v.to_string(),
-                                    _ => "N/A".to_string()
+                                    _ => "N/A".to_string(),
                                 })
                                 .collect::<Vec<_>>()
                         })
@@ -295,7 +295,7 @@ impl PlanParser {
                         .iter()
                         .map(|col| {
                             Arc::new(StringArray::from(
-                                col.iter().map(|s| s as &str).collect::<Vec<&str>>()
+                                col.iter().map(|s| s as &str).collect::<Vec<&str>>(),
                             )) as ArrayRef
                         })
                         .collect::<Vec<_>>();
@@ -310,12 +310,12 @@ impl PlanParser {
                 tbl_name,
                 schema,
                 // this is crazy, please do not keep it, I am just test driving apis
-                input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream))))
+                input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
             };
             Ok(PlanNode::InsertInto(plan_node))
         } else {
             Err(ErrorCodes::UnImplement(
-                "only supports simple value tuples as source of insertion"
+                "only supports simple value tuples as source of insertion",
             ))
         }
     }
@@ -329,7 +329,7 @@ impl PlanParser {
             _ => Result::Err(ErrorCodes::UnImplement(format!(
                 "Query {} not implemented yet",
                 query.body
-            )))
+            ))),
         }
     }
 
@@ -340,7 +340,7 @@ impl PlanParser {
         &self,
         select: &sqlparser::ast::Select,
         limit: &Option<sqlparser::ast::Expr>,
-        order_by: &[OrderByExpr]
+        order_by: &[OrderByExpr],
     ) -> Result<PlanNode> {
         // Filter expression
         // In example: Filter=(number > 1)
@@ -395,10 +395,10 @@ impl PlanParser {
                 Ok(Expression::Sort {
                     expr: Box::new(
                         self.sql_to_rex(&e.expr, &plan.schema(), Some(select))
-                            .and_then(|expr| resolve_aliases_to_exprs(&expr, &aliases))?
+                            .and_then(|expr| resolve_aliases_to_exprs(&expr, &aliases))?,
                     ),
                     asc: e.asc.unwrap_or(true),
-                    nulls_first: e.nulls_first.unwrap_or(true)
+                    nulls_first: e.nulls_first.unwrap_or(true),
                 })
             })
             .collect::<Result<Vec<Expression>>>()?;
@@ -463,7 +463,7 @@ impl PlanParser {
             let having_expr_post_aggr_opt = if let Some(having_expr) = &having_expr_opt {
                 let having_expr_post_aggr = rebase_expr(having_expr, &aggr_projection_exprs)?;
                 if let Ok(Some(expr)) = find_columns_not_satisfy_exprs(&column_exprs_post_aggr, &[
-                    having_expr_post_aggr.clone()
+                    having_expr_post_aggr.clone(),
                 ]) {
                     return Err(ErrorCodes::IllegalAggregateExp(format!(
                         "Column `{:?}` is not under aggregate function and not in GROUP BY: While processing {:?}",
@@ -498,7 +498,7 @@ impl PlanParser {
         let plan = self.limit(&plan, limit, Some(select))?;
 
         Ok(PlanNode::Select(SelectPlan {
-            input: Arc::new(plan)
+            input: Arc::new(plan),
         }))
     }
 
@@ -507,19 +507,19 @@ impl PlanParser {
         &self,
         sql: &sqlparser::ast::SelectItem,
         schema: &DataSchema,
-        select: Option<&sqlparser::ast::Select>
+        select: Option<&sqlparser::ast::Select>,
     ) -> Result<Expression> {
         match sql {
             sqlparser::ast::SelectItem::UnnamedExpr(expr) => self.sql_to_rex(expr, schema, select),
             sqlparser::ast::SelectItem::ExprWithAlias { expr, alias } => Ok(Expression::Alias(
                 alias.value.clone(),
-                Box::new(self.sql_to_rex(&expr, schema, select)?)
+                Box::new(self.sql_to_rex(&expr, schema, select)?),
             )),
             sqlparser::ast::SelectItem::Wildcard => Ok(Expression::Wildcard),
             _ => Result::Err(ErrorCodes::UnImplement(format!(
                 "SelectItem: {:?} are not supported",
                 sql
-            )))
+            ))),
         }
     }
 
@@ -527,7 +527,7 @@ impl PlanParser {
         match from.len() {
             0 => self.plan_with_dummy_source(),
             1 => self.plan_table_with_joins(&from[0]),
-            _ => Result::Err(ErrorCodes::SyntaxException("Cannot support JOIN clause"))
+            _ => Result::Err(ErrorCodes::SyntaxException("Cannot support JOIN clause")),
         }
     }
 
@@ -547,10 +547,10 @@ impl PlanParser {
                         .read_plan(
                             self.ctx.clone(),
                             dummy_scan_plan,
-                            self.ctx.get_max_threads()? as usize
+                            self.ctx.get_max_threads()? as usize,
                         )
                         .map(PlanNode::ReadSource),
-                    _unreachable_plan => panic!("Logical error: cannot downcast to scan plan")
+                    _unreachable_plan => panic!("Logical error: cannot downcast to scan plan"),
                 })
         })
     }
@@ -577,7 +577,7 @@ impl PlanParser {
                 if !args.is_empty() {
                     if name.0.len() >= 2 {
                         return Result::Err(ErrorCodes::BadArguments(
-                            "Currently table can't have arguments"
+                            "Currently table can't have arguments",
                         ));
                     }
 
@@ -609,7 +609,7 @@ impl PlanParser {
                             schema.as_ref(),
                             None,
                             table_args,
-                            None
+                            None,
                         )
                         .and_then(|builder| builder.build())
                     })
@@ -620,7 +620,7 @@ impl PlanParser {
                     PlanNode::Scan(ref scan) => table
                         .read_plan(self.ctx.clone(), scan, self.ctx.get_max_threads()? as usize)
                         .map(PlanNode::ReadSource),
-                    _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan")
+                    _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan"),
                 })
             }
             Derived { subquery, .. } => self.query_to_plan(subquery),
@@ -633,7 +633,7 @@ impl PlanParser {
     fn process_compound_ident(
         &self,
         ids: &Vec<Ident>,
-        select: Option<&sqlparser::ast::Select>
+        select: Option<&sqlparser::ast::Select>,
     ) -> Result<Expression> {
         let mut var_names = vec![];
         for id in ids {
@@ -652,14 +652,14 @@ impl PlanParser {
 
         match from.len() {
             0 => Err(ErrorCodes::SyntaxException(
-                "Missing table in the select clause"
+                "Missing table in the select clause",
             )),
             1 => match &from[0].relation {
                 TableFactor::Table {
                     name,
                     alias,
                     args: _,
-                    with_hints: _
+                    with_hints: _,
                 } => {
                     if *name == obj_table_name {
                         return Ok(Expression::Column(var_names.pop().unwrap()));
@@ -678,13 +678,13 @@ impl PlanParser {
                         None => Err(ErrorCodes::UnknownTable(format!(
                             "Unknown Table '{:?}'",
                             &table_name,
-                        )))
+                        ))),
                     }
                 }
                 TableFactor::Derived {
                     lateral: _,
                     subquery: _,
-                    alias
+                    alias,
                 } => match alias {
                     Some(a) => {
                         if a.name == ids[0] {
@@ -699,13 +699,13 @@ impl PlanParser {
                     None => Err(ErrorCodes::UnknownTable(format!(
                         "Unknown Table '{:?}'",
                         &table_name,
-                    )))
+                    ))),
                 },
                 _ => Err(ErrorCodes::SyntaxException(
-                    "Cannot support Nested Join now"
-                ))
+                    "Cannot support Nested Join now",
+                )),
             },
-            _ => Err(ErrorCodes::SyntaxException("Cannot support JOIN clause"))
+            _ => Err(ErrorCodes::SyntaxException("Cannot support JOIN clause")),
         }
     }
 
@@ -714,7 +714,7 @@ impl PlanParser {
         &self,
         expr: &sqlparser::ast::Expr,
         schema: &DataSchema,
-        select: Option<&sqlparser::ast::Select>
+        select: Option<&sqlparser::ast::Select>,
     ) -> Result<Expression> {
         fn value_to_rex(value: &sqlparser::ast::Value) -> Result<Expression> {
             match value {
@@ -729,13 +729,13 @@ impl PlanParser {
                     leading_field,
                     leading_precision,
                     last_field,
-                    fractional_seconds_precision
+                    fractional_seconds_precision,
                 } => SQLCommon::make_sql_interval_to_literal(
                     value,
                     leading_field,
                     leading_precision,
                     last_field,
-                    fractional_seconds_precision
+                    fractional_seconds_precision,
                 ),
                 sqlparser::ast::Value::Boolean(b) => {
                     Ok(Expression::Literal(DataValue::Boolean(Some(*b))))
@@ -743,7 +743,7 @@ impl PlanParser {
                 other => Result::Err(ErrorCodes::SyntaxException(format!(
                     "Unsupported value expression: {}, type: {:?}",
                     value, other
-                )))
+                ))),
             }
         }
 
@@ -754,12 +754,12 @@ impl PlanParser {
                 Ok(Expression::BinaryExpression {
                     op: format!("{}", op),
                     left: Box::new(self.sql_to_rex(left, schema, select)?),
-                    right: Box::new(self.sql_to_rex(right, schema, select)?)
+                    right: Box::new(self.sql_to_rex(right, schema, select)?),
                 })
             }
             sqlparser::ast::Expr::UnaryOp { op, expr } => Ok(Expression::UnaryExpression {
                 op: format!("{}", op),
-                expr: Box::new(self.sql_to_rex(expr, schema, select)?)
+                expr: Box::new(self.sql_to_rex(expr, schema, select)?),
             }),
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema, select),
             sqlparser::ast::Expr::CompoundIdentifier(ids) => {
@@ -772,7 +772,7 @@ impl PlanParser {
                 // common::ScalarFunctions::udf::database arg is ctx.get_default()
                 let ctx_args = ContextFunction::build_args_from_ctx(
                     e.name.to_string().as_str(),
-                    self.ctx.clone()
+                    self.ctx.clone(),
                 )?;
                 if !ctx_args.is_empty() {
                     args.extend_from_slice(ctx_args.as_slice());
@@ -801,7 +801,7 @@ impl PlanParser {
             sqlparser::ast::Expr::TypedString { data_type, value } => {
                 SQLCommon::make_data_type(data_type).map(|data_type| Expression::Cast {
                     expr: Box::new(Expression::Literal(DataValue::Utf8(Some(value.clone())))),
-                    data_type
+                    data_type,
                 })
             }
             sqlparser::ast::Expr::Cast { expr, data_type } => self
@@ -814,7 +814,7 @@ impl PlanParser {
             sqlparser::ast::Expr::Substring {
                 expr,
                 substring_from,
-                substring_for
+                substring_for,
             } => {
                 let mut args = Vec::with_capacity(3);
                 args.push(self.sql_to_rex(expr, schema, select)?);
@@ -830,27 +830,27 @@ impl PlanParser {
 
                 Ok(Expression::ScalarFunction {
                     op: "substring".to_string(),
-                    args
+                    args,
                 })
             }
             other => Result::Err(ErrorCodes::SyntaxException(format!(
                 "Unsupported expression: {}, type: {:?}",
                 expr, other
-            )))
+            ))),
         }
     }
 
     pub fn set_variable_to_plan(
         &self,
         variable: &sqlparser::ast::Ident,
-        values: &[sqlparser::ast::SetVariableValue]
+        values: &[sqlparser::ast::SetVariableValue],
     ) -> Result<PlanNode> {
         let mut vars = vec![];
         for value in values {
             let variable = variable.value.clone();
             let value = match value {
                 sqlparser::ast::SetVariableValue::Ident(v) => v.value.clone(),
-                sqlparser::ast::SetVariableValue::Literal(v) => v.to_string()
+                sqlparser::ast::SetVariableValue::Literal(v) => v.to_string(),
             };
             vars.push(VarValue { variable, value });
         }
@@ -862,7 +862,7 @@ impl PlanParser {
         &self,
         plan: &PlanNode,
         predicate: &Option<sqlparser::ast::Expr>,
-        select: Option<&sqlparser::ast::Select>
+        select: Option<&sqlparser::ast::Select>,
     ) -> Result<PlanNode> {
         match *predicate {
             Some(ref predicate_expr) => self
@@ -872,7 +872,7 @@ impl PlanParser {
                         .filter(filter_expr)
                         .and_then(|builder| builder.build())
                 }),
-            _ => Ok(plan.clone())
+            _ => Ok(plan.clone()),
         }
     }
 
@@ -904,7 +904,7 @@ impl PlanParser {
         &self,
         input: &PlanNode,
         aggr_exprs: &[Expression],
-        group_by_exprs: &[Expression]
+        group_by_exprs: &[Expression],
     ) -> Result<PlanNode> {
         let aggr_exprs = aggr_exprs
             .iter()
@@ -947,7 +947,7 @@ impl PlanParser {
         &self,
         input: &PlanNode,
         limit: &Option<sqlparser::ast::Expr>,
-        select: Option<&sqlparser::ast::Select>
+        select: Option<&sqlparser::ast::Select>,
     ) -> Result<PlanNode> {
         match *limit {
             Some(ref limit_expr) => {
@@ -956,15 +956,15 @@ impl PlanParser {
                     .and_then(|limit_expr| match limit_expr {
                         Expression::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
                         _ => Err(ErrorCodes::SyntaxException(
-                            "Unexpected expression for LIMIT clause"
-                        ))
+                            "Unexpected expression for LIMIT clause",
+                        )),
                     })?;
 
                 PlanBuilder::from(&input)
                     .limit(n)
                     .and_then(|builder| builder.build())
             }
-            _ => Ok(input.clone())
+            _ => Ok(input.clone()),
         }
     }
 

@@ -8,7 +8,7 @@ use common_datavalues::DataSchemaRef;
 pub struct RemotePlan {
     pub schema: DataSchemaRef,
     pub fetch_name: String,
-    pub fetch_nodes: Vec<String>
+    pub fetch_nodes: Vec<String>,
 }
 
 impl RemotePlan {

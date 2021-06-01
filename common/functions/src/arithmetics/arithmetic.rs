@@ -23,7 +23,7 @@ use crate::IFunction;
 #[derive(Clone)]
 pub struct ArithmeticFunction {
     depth: usize,
-    op: DataValueArithmeticOperator
+    op: DataValueArithmeticOperator,
 }
 
 impl ArithmeticFunction {
@@ -72,13 +72,13 @@ impl IFunction for ArithmeticFunction {
                     let data_value = DataValue::try_from_array(&result, 0)?;
                     Ok(DataColumnarValue::Constant(data_value, input_rows))
                 }
-                _ => Ok(DataColumnarValue::Array(result))
+                _ => Ok(DataColumnarValue::Array(result)),
             }
         } else {
             let result = DataArrayArithmetic::data_array_arithmetic_op(
                 self.op.clone(),
                 &columns[0],
-                &columns[1]
+                &columns[1],
             )?;
 
             match (&columns[0], &columns[1]) {
@@ -86,7 +86,7 @@ impl IFunction for ArithmeticFunction {
                     let data_value = DataValue::try_from_array(&result, 0)?;
                     Ok(DataColumnarValue::Constant(data_value, input_rows))
                 }
-                _ => Ok(DataColumnarValue::Array(result))
+                _ => Ok(DataColumnarValue::Array(result)),
             }
         }
     }

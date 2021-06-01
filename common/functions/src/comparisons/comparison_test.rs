@@ -22,7 +22,7 @@ fn test_comparison_function() -> Result<()> {
         columns: Vec<DataColumnarValue>,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>
+        func: Box<dyn IFunction>,
     }
 
     let schema = DataSchemaRefExt::create(vec![
@@ -42,7 +42,7 @@ fn test_comparison_function() -> Result<()> {
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
             ],
             expect: Arc::new(BooleanArray::from(vec![false, false, false, true])),
-            error: ""
+            error: "",
         },
         Test {
             name: "gt-passed",
@@ -55,7 +55,7 @@ fn test_comparison_function() -> Result<()> {
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
             ],
             expect: Arc::new(BooleanArray::from(vec![true, true, false, false])),
-            error: ""
+            error: "",
         },
         Test {
             name: "gt-eq-passed",
@@ -68,7 +68,7 @@ fn test_comparison_function() -> Result<()> {
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
             ],
             expect: Arc::new(BooleanArray::from(vec![true, true, false, true])),
-            error: ""
+            error: "",
         },
         Test {
             name: "lt-passed",
@@ -81,7 +81,7 @@ fn test_comparison_function() -> Result<()> {
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
             ],
             expect: Arc::new(BooleanArray::from(vec![false, false, true, false])),
-            error: ""
+            error: "",
         },
         Test {
             name: "lt-eq-passed",
@@ -94,7 +94,7 @@ fn test_comparison_function() -> Result<()> {
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
             ],
             expect: Arc::new(BooleanArray::from(vec![false, false, true, true])),
-            error: ""
+            error: "",
         },
         Test {
             name: "not-eq-passed",
@@ -107,7 +107,7 @@ fn test_comparison_function() -> Result<()> {
                 Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
             ],
             expect: Arc::new(BooleanArray::from(vec![true, true, true, false])),
-            error: ""
+            error: "",
         },
     ];
 

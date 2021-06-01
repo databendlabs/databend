@@ -10,14 +10,14 @@ use crate::pipelines::processors::Pipeline;
 #[derive(PartialEq)]
 enum WalkOrder {
     PreOrder,
-    PostOrder
+    PostOrder,
 }
 
 impl Pipeline {
     fn walk_base(
         order: WalkOrder,
         pipeline: &Pipeline,
-        mut visitor: impl FnMut(&Pipe) -> Result<bool>
+        mut visitor: impl FnMut(&Pipe) -> Result<bool>,
     ) -> Result<()> {
         let mut pipes = vec![];
 

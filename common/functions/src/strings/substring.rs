@@ -17,13 +17,13 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct SubstringFunction {
-    display_name: String
+    display_name: String,
 }
 
 impl SubstringFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn IFunction>> {
         Ok(Box::new(SubstringFunction {
-            display_name: display_name.to_string()
+            display_name: display_name.to_string(),
         }))
     }
 }
@@ -63,7 +63,7 @@ impl IFunction for SubstringFunction {
             other => Err(ErrorCodes::BadArguments(format!(
                 "Unsupport datatype {:?} as argument",
                 other
-            )))
+            ))),
         }?;
 
         if from >= 1 {
@@ -81,7 +81,7 @@ impl IFunction for SubstringFunction {
                             .as_any()
                             .downcast_ref::<UInt64Array>()
                             .unwrap()
-                            .value(0)
+                            .value(0),
                     );
                 }
 
@@ -93,7 +93,7 @@ impl IFunction for SubstringFunction {
                             .as_any()
                             .downcast_ref::<Int64Array>()
                             .unwrap()
-                            .value(0) as u64
+                            .value(0) as u64,
                     );
                 }
 
@@ -108,7 +108,7 @@ impl IFunction for SubstringFunction {
 
         let value = columns[0].to_array()?;
         Ok(DataColumnarValue::Array(
-            compute::kernels::substring::substring(value.as_ref(), from, &end)?
+            compute::kernels::substring::substring(value.as_ref(), from, &end)?,
         ))
     }
 

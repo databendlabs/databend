@@ -29,7 +29,7 @@ async fn test_transform_filter() -> anyhow::Result<()> {
             Ok(Box::new(FilterTransform::try_create(
                 plan.input.schema(),
                 plan.predicate.clone(),
-                false
+                false,
             )?))
         })?;
     }

@@ -15,7 +15,7 @@ fn test_data_value_kernel_concat_row_key() -> anyhow::Result<()> {
         name: &'static str,
         args: Vec<DataArrayRef>,
         expect: Vec<&'static str>,
-        error: Vec<&'static str>
+        error: Vec<&'static str>,
     }
 
     let tests = vec![ArrayTest {
@@ -46,7 +46,7 @@ fn test_data_value_kernel_concat_row_key() -> anyhow::Result<()> {
                 DataValue::concat_row_to_one_key(
                     &DataColumnarValue::Array(t.args[col].clone()),
                     row,
-                    &mut key
+                    &mut key,
                 )?;
             }
             assert_eq!(format!("{:?}", key), t.expect[row]);

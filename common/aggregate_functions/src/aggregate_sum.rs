@@ -20,7 +20,7 @@ use crate::IAggregateFunction;
 pub struct AggregateSumFunction {
     display_name: String,
     depth: usize,
-    state: DataValue
+    state: DataValue,
 }
 
 impl AggregateSumFunction {
@@ -28,7 +28,7 @@ impl AggregateSumFunction {
         Ok(Box::new(AggregateSumFunction {
             display_name: display_name.to_string(),
             depth: 0,
-            state: DataValue::Null
+            state: DataValue::Null,
         }))
     }
 }
@@ -54,19 +54,19 @@ impl IAggregateFunction for AggregateSumFunction {
         let value = match &columns[0] {
             DataColumnarValue::Array(array) => DataArrayAggregate::data_array_aggregate_op(
                 DataValueAggregateOperator::Sum,
-                array.clone()
+                array.clone(),
             ),
             DataColumnarValue::Constant(s, _) => DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Mul,
                 s.clone(),
-                DataValue::UInt64(Some(input_rows as u64))
-            )
+                DataValue::UInt64(Some(input_rows as u64)),
+            ),
         }?;
 
         self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
-            value
+            value,
         )?;
 
         Ok(())
@@ -81,7 +81,7 @@ impl IAggregateFunction for AggregateSumFunction {
         self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
-            val
+            val,
         )?;
         Ok(())
     }

@@ -17,7 +17,7 @@ use crate::datasources::ITableFunction;
 
 pub struct SystemDatabase {
     tables: HashMap<String, Arc<dyn ITable>>,
-    table_functions: HashMap<String, Arc<dyn ITableFunction>>
+    table_functions: HashMap<String, Arc<dyn ITableFunction>>,
 }
 
 impl SystemDatabase {
@@ -53,7 +53,7 @@ impl SystemDatabase {
 
         SystemDatabase {
             tables,
-            table_functions
+            table_functions,
         }
     }
 }
@@ -90,13 +90,13 @@ impl IDatabase for SystemDatabase {
 
     async fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
         Result::Err(ErrorCodes::UnImplement(
-            "Cannot create table for system database"
+            "Cannot create table for system database",
         ))
     }
 
     async fn drop_table(&self, _plan: DropTablePlan) -> Result<()> {
         Result::Err(ErrorCodes::UnImplement(
-            "Cannot drop table for system database"
+            "Cannot drop table for system database",
         ))
     }
 }

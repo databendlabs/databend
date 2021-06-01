@@ -19,14 +19,14 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct MergeProcessor {
     ctx: FuseQueryContextRef,
-    inputs: Vec<Arc<dyn IProcessor>>
+    inputs: Vec<Arc<dyn IProcessor>>,
 }
 
 impl MergeProcessor {
     pub fn create(ctx: FuseQueryContextRef) -> Self {
         MergeProcessor {
             ctx,
-            inputs: vec![]
+            inputs: vec![],
         }
     }
 }
@@ -54,7 +54,7 @@ impl IProcessor for MergeProcessor {
         let inputs = self.inputs.len();
         match inputs {
             0 => Result::Err(ErrorCodes::IllegalTransformConnectionState(
-                "Merge processor inputs cannot be zero"
+                "Merge processor inputs cannot be zero",
             )),
             1 => self.inputs[0].execute().await,
             _ => {
@@ -70,7 +70,7 @@ impl IProcessor for MergeProcessor {
                                 }
                                 return;
                             }
-                            Ok(stream) => stream
+                            Ok(stream) => stream,
                         };
 
                         while let Some(item) = stream.next().await {

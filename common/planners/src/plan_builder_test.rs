@@ -15,7 +15,7 @@ fn test_plan_builds() -> anyhow::Result<()> {
         name: &'static str,
         plan: Result<PlanNode>,
         expect: &'static str,
-        err: &'static str
+        err: &'static str,
     }
 
     let source = Test::create().generate_source_plan_for_test(10000)?;

@@ -20,7 +20,7 @@ use crate::pretty_format_blocks;
 #[derive(Clone)]
 pub struct DataBlock {
     schema: DataSchemaRef,
-    columns: Vec<DataColumnarValue>
+    columns: Vec<DataColumnarValue>,
 }
 
 impl DataBlock {
@@ -39,7 +39,7 @@ impl DataBlock {
     pub fn empty() -> Self {
         DataBlock {
             schema: Arc::new(DataSchema::empty()),
-            columns: vec![]
+            columns: vec![],
         }
     }
 
@@ -138,7 +138,7 @@ impl TryFrom<arrow::record_batch::RecordBatch> for DataBlock {
     fn try_from(v: arrow::record_batch::RecordBatch) -> Result<DataBlock> {
         Ok(DataBlock::create_by_array(
             v.schema(),
-            Vec::from(v.columns())
+            Vec::from(v.columns()),
         ))
     }
 }

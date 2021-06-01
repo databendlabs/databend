@@ -7,7 +7,7 @@ use warp::Filter;
 use crate::configs::Config;
 
 pub fn config_handler(
-    cfg: Config
+    cfg: Config,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::path!("v1" / "configs").map(move || format!("{:?}", cfg))
 }

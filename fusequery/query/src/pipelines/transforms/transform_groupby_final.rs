@@ -36,14 +36,14 @@ pub struct GroupByFinalTransform {
     schema: DataSchemaRef,
     input: Arc<dyn IProcessor>,
     groups: GroupFuncTable,
-    keys: GroupKeyTable
+    keys: GroupKeyTable,
 }
 
 impl GroupByFinalTransform {
     pub fn create(
         schema: DataSchemaRef,
         aggr_exprs: Vec<Expression>,
-        group_exprs: Vec<Expression>
+        group_exprs: Vec<Expression>,
     ) -> Self {
         Self {
             aggr_exprs,
@@ -51,7 +51,7 @@ impl GroupByFinalTransform {
             schema,
             input: Arc::new(EmptyProcessor::create()),
             groups: RwLock::new(HashMap::default()),
-            keys: RwLock::new(HashMap::default())
+            keys: RwLock::new(HashMap::default()),
         }
     }
 }
@@ -194,7 +194,7 @@ impl IProcessor for GroupByFinalTransform {
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            blocks
+            blocks,
         )))
     }
 }

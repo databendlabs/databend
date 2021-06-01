@@ -91,7 +91,7 @@ pub trait PlanVisitor<'plan> {
             PlanNode::Remote(plan) => self.visit_remote(plan),
             PlanNode::Having(plan) => self.visit_having(plan),
             PlanNode::Expression(plan) => self.visit_expression(plan),
-            PlanNode::InsertInto(plan) => self.visit_insert_into(plan)
+            PlanNode::InsertInto(plan) => self.visit_insert_into(plan),
         }
     }
 

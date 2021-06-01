@@ -29,7 +29,7 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
         .aggregate_final(
             test_source.number_schema_for_test()?,
             aggr_exprs,
-            group_exprs
+            group_exprs,
         )?
         .build()?;
 
@@ -40,7 +40,7 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
         Ok(Box::new(GroupByPartialTransform::create(
             aggr_partial.schema(),
             aggr_exprs.to_vec(),
-            group_exprs.to_vec()
+            group_exprs.to_vec(),
         )))
     })?;
     pipeline.merge_processor()?;
@@ -48,7 +48,7 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
         Ok(Box::new(GroupByFinalTransform::create(
             aggr_final.schema(),
             aggr_exprs.to_vec(),
-            group_exprs.to_vec()
+            group_exprs.to_vec(),
         )))
     })?;
 

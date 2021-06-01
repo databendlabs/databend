@@ -15,13 +15,13 @@ use crate::datasources::remote::RemoteDatabase;
 use crate::datasources::IDatabase;
 
 pub struct RemoteFactory {
-    store_client_provider: StoreClientProvider
+    store_client_provider: StoreClientProvider,
 }
 
 impl RemoteFactory {
     pub fn new(conf: &Config) -> Self {
         RemoteFactory {
-            store_client_provider: Arc::new(ClientProvider::new(conf))
+            store_client_provider: Arc::new(ClientProvider::new(conf)),
         }
     }
 
@@ -29,7 +29,7 @@ impl RemoteFactory {
         // Load databases from remote.
         let databases: Vec<Arc<dyn IDatabase>> = vec![Arc::new(RemoteDatabase::create(
             self.store_client_provider.clone(),
-            "for_test".to_string()
+            "for_test".to_string(),
         ))];
         Ok(databases)
     }
@@ -39,7 +39,7 @@ impl RemoteFactory {
     }
 }
 struct ClientProvider {
-    conf: Config
+    conf: Config,
 }
 
 impl ClientProvider {
@@ -54,7 +54,7 @@ impl IStoreClientProvider for ClientProvider {
         let client = StoreClient::try_create(
             &self.conf.store_api_address,
             &self.conf.store_api_username,
-            &self.conf.store_api_password
+            &self.conf.store_api_password,
         )
         .await
         .map_err(ErrorCodes::from)?;

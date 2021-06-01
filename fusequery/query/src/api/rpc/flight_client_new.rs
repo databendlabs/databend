@@ -18,7 +18,7 @@ use crate::api::rpc::flight_data_stream::FlightDataStream;
 use crate::api::rpc::from_status;
 
 pub struct FlightClient {
-    inner: FlightServiceClient<Channel>
+    inner: FlightServiceClient<Channel>,
 }
 
 // TODO: Integration testing required
@@ -31,14 +31,14 @@ impl FlightClient {
         &mut self,
         name: String,
         schema: SchemaRef,
-        timeout: u64
+        timeout: u64,
     ) -> Result<SendableDataBlockStream> {
         self.do_get(
             Ticket {
-                ticket: name.as_bytes().to_vec()
+                ticket: name.as_bytes().to_vec(),
             },
             schema,
-            timeout
+            timeout,
         )
         .await
     }
@@ -46,14 +46,14 @@ impl FlightClient {
     pub async fn prepare_query_stage(
         &mut self,
         action: ExecutePlanWithShuffleAction,
-        timeout: u64
+        timeout: u64,
     ) -> Result<()> {
         self.do_action(
             Action {
                 r#type: "PrepareQueryStage".to_string(),
-                body: serde_json::to_string(&action)?.as_bytes().to_vec()
+                body: serde_json::to_string(&action)?.as_bytes().to_vec(),
             },
-            timeout
+            timeout,
         )
         .await?;
 
@@ -65,7 +65,7 @@ impl FlightClient {
         &mut self,
         ticket: Ticket,
         schema: SchemaRef,
-        timeout: u64
+        timeout: u64,
     ) -> Result<SendableDataBlockStream> {
         let mut request = Request::new(ticket);
         request.set_timeout(Duration::from_secs(timeout));
@@ -74,7 +74,7 @@ impl FlightClient {
 
         Ok(Box::pin(FlightDataStream::from_remote(
             schema,
-            response?.into_inner()
+            response?.into_inner(),
         )))
     }
 
@@ -96,7 +96,7 @@ impl FlightClient {
             None => Result::Err(ErrorCodes::EmptyDataFromServer(format!(
                 "Can not receive data from flight server, action: {:?}",
                 action_type
-            )))
+            ))),
         }
     }
 }

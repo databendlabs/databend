@@ -15,7 +15,7 @@ impl DataValueAggregate {
     pub fn data_value_aggregate_op(
         op: DataValueAggregateOperator,
         left: DataValue,
-        right: DataValue
+        right: DataValue,
     ) -> Result<DataValue> {
         match (&left, &right) {
             (DataValue::Null, _) => Result::Ok(right),

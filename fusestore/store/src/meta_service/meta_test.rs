@@ -78,14 +78,14 @@ fn test_meta_builder() -> anyhow::Result<()> {
     let m = Meta::builder().build()?;
     assert_eq!(3, m.slots.len());
     let n = match m.replication {
-        Replication::Mirror(x) => x
+        Replication::Mirror(x) => x,
     };
     assert_eq!(1, n);
 
     let m = Meta::builder().slots(5).mirror_replication(8).build()?;
     assert_eq!(5, m.slots.len());
     let n = match m.replication {
-        Replication::Mirror(x) => x
+        Replication::Mirror(x) => x,
     };
     assert_eq!(8, n);
     Ok(())

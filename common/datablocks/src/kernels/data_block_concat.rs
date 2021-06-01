@@ -35,7 +35,7 @@ impl DataBlock {
 
         Ok(DataBlock::create_by_array(
             first_block.schema().clone(),
-            arrays
+            arrays,
         ))
     }
 }

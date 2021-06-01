@@ -53,7 +53,7 @@ pub type FlightStream<T> =
 /// StoreFlightImpl provides data access API-s for FuseQuery, in arrow-flight protocol.
 pub struct StoreFlightImpl {
     token: FlightToken,
-    action_handler: ActionHandler
+    action_handler: ActionHandler,
 }
 
 impl StoreFlightImpl {
@@ -61,7 +61,7 @@ impl StoreFlightImpl {
         Self {
             token: FlightToken::create(),
             // TODO pass in action handler
-            action_handler: ActionHandler::create(fs)
+            action_handler: ActionHandler::create(fs),
         }
     }
 
@@ -85,7 +85,7 @@ impl FlightService for StoreFlightImpl {
     type HandshakeStream = FlightStream<HandshakeResponse>;
     async fn handshake(
         &self,
-        request: Request<Streaming<HandshakeRequest>>
+        request: Request<Streaming<HandshakeRequest>>,
     ) -> Result<Response<Self::HandshakeStream>, Status> {
         let req = request
             .into_inner()
@@ -100,7 +100,7 @@ impl FlightService for StoreFlightImpl {
         let user = "root";
         if auth.username == user {
             let claim = FlightClaim {
-                username: user.to_string()
+                username: user.to_string(),
             };
             let token = self
                 .token
@@ -124,21 +124,21 @@ impl FlightService for StoreFlightImpl {
     type ListFlightsStream = FlightStream<FlightInfo>;
     async fn list_flights(
         &self,
-        _request: Request<Criteria>
+        _request: Request<Criteria>,
     ) -> Result<Response<Self::ListFlightsStream>, Status> {
         unimplemented!()
     }
 
     async fn get_flight_info(
         &self,
-        _request: Request<FlightDescriptor>
+        _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
         unimplemented!()
     }
 
     async fn get_schema(
         &self,
-        _request: Request<FlightDescriptor>
+        _request: Request<FlightDescriptor>,
     ) -> Result<Response<SchemaResult>, Status> {
         unimplemented!()
     }
@@ -147,7 +147,7 @@ impl FlightService for StoreFlightImpl {
         Pin<Box<dyn Stream<Item = Result<FlightData, tonic::Status>> + Send + Sync + 'static>>;
     async fn do_get(
         &self,
-        request: Request<Ticket>
+        request: Request<Ticket>,
     ) -> Result<Response<Self::DoGetStream>, Status> {
         // Check token.
         let _claim = self.check_token(&request.metadata())?;
@@ -161,7 +161,7 @@ impl FlightService for StoreFlightImpl {
 
                 let (tx, rx): (
                     Sender<Result<FlightData, tonic::Status>>,
-                    Receiver<Result<FlightData, tonic::Status>>
+                    Receiver<Result<FlightData, tonic::Status>>,
                 ) = tokio::sync::mpsc::channel(2);
 
                 self.action_handler.do_pull_file(key, tx).await?;
@@ -176,7 +176,7 @@ impl FlightService for StoreFlightImpl {
     type DoPutStream = FlightStream<PutResult>;
     async fn do_put(
         &self,
-        request: Request<Streaming<FlightData>>
+        request: Request<Streaming<FlightData>>,
     ) -> Result<Response<Self::DoPutStream>, Status> {
         info!("calling me!");
 
@@ -198,7 +198,7 @@ impl FlightService for StoreFlightImpl {
 
         let bytes = serde_json::to_vec(&append_res).unwrap();
         let put_res = PutResult {
-            app_metadata: bytes
+            app_metadata: bytes,
         };
         info!("got result {:?}", append_res);
         Ok(Response::new(Box::pin(futures::stream::once(async {
@@ -209,7 +209,7 @@ impl FlightService for StoreFlightImpl {
     type DoExchangeStream = FlightStream<FlightData>;
     async fn do_exchange(
         &self,
-        _request: Request<Streaming<FlightData>>
+        _request: Request<Streaming<FlightData>>,
     ) -> Result<Response<Self::DoExchangeStream>, Status> {
         unimplemented!()
     }
@@ -217,7 +217,7 @@ impl FlightService for StoreFlightImpl {
     type DoActionStream = FlightStream<arrow_flight::Result>;
     async fn do_action(
         &self,
-        request: Request<Action>
+        request: Request<Action>,
     ) -> Result<Response<Self::DoActionStream>, Status> {
         // Check token.
         let _claim = self.check_token(&request.metadata())?;
@@ -232,7 +232,7 @@ impl FlightService for StoreFlightImpl {
     type ListActionsStream = FlightStream<ActionType>;
     async fn list_actions(
         &self,
-        _request: Request<Empty>
+        _request: Request<Empty>,
     ) -> Result<Response<Self::ListActionsStream>, Status> {
         unimplemented!()
     }
@@ -240,7 +240,7 @@ impl FlightService for StoreFlightImpl {
 impl StoreFlightImpl {
     fn once_stream_resp(
         &self,
-        action_rst: StoreDoActionResult
+        action_rst: StoreDoActionResult,
     ) -> Result<Response<FlightStream<arrow_flight::Result>>, Status> {
         let rst = arrow_flight::Result::from(action_rst);
 

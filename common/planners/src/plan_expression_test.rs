@@ -20,7 +20,7 @@ fn test_expression_plan_format() -> anyhow::Result<()> {
         exprs: vec![col("a")],
         schema: schema.clone(),
         input: Arc::from(PlanBuilder::from(&PlanNode::Empty(EmptyPlan { schema })).build()?),
-        desc: "".to_string()
+        desc: "".to_string(),
     });
     let _ = expression.schema();
     let expect = "Expression: a:Utf8 ()";
@@ -40,12 +40,12 @@ fn test_expression_plan() -> anyhow::Result<()> {
                 .and(col("number").lt(lit(4)))
                 .and(col("number").lt_eq(lit(4)))
                 .and(col("number").gt(lit(4)))
-                .and(not(col("number").gt_eq(lit(4))))
+                .and(not(col("number").gt_eq(lit(4)))),
         )?
         .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
         typ: ExplainType::Syntax,
-        input: Arc::new(plan)
+        input: Arc::new(plan),
     });
     let expect ="Filter: (((((((number + 1) = 4) and (number != 4)) and (number < 4)) and (number <= 4)) and (number > 4)) and (not (number >= 4)))\
     \n  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
@@ -59,7 +59,7 @@ fn test_expression_validate() -> anyhow::Result<()> {
     struct Test {
         desc: &'static str,
         expression: Expression,
-        error: Option<ErrorCodes>
+        error: Option<ErrorCodes>,
     }
 
     let cases = vec![
@@ -67,29 +67,29 @@ fn test_expression_validate() -> anyhow::Result<()> {
             desc: "toTypeName-not-pass",
             expression: Expression::ScalarFunction {
                 op: "toTypeName".to_string(),
-                args: vec![]
+                args: vec![],
             },
             error: Some(ErrorCodes::NumberArgumentsNotMatch(
-                "ToTypeNameFunction expect to have 1 arguments, but got 0"
-            ))
+                "ToTypeNameFunction expect to have 1 arguments, but got 0",
+            )),
         },
         Test {
             desc: "example-not-pass",
             expression: Expression::ScalarFunction {
                 op: "example".to_string(),
-                args: vec![col("33")]
+                args: vec![col("33")],
             },
             error: Some(ErrorCodes::NumberArgumentsNotMatch(
-                "UdfExampleFunction expect to have 0 arguments, but got 1"
-            ))
+                "UdfExampleFunction expect to have 0 arguments, but got 1",
+            )),
         },
         Test {
             desc: "example-pass",
             expression: Expression::ScalarFunction {
                 op: "example".to_string(),
-                args: vec![]
+                args: vec![],
             },
-            error: None
+            error: None,
         },
     ];
 
@@ -104,7 +104,7 @@ fn test_expression_validate() -> anyhow::Result<()> {
                     t.desc
                 );
             }
-            None => assert!(result.is_ok(), "{}", t.desc)
+            None => assert!(result.is_ok(), "{}", t.desc),
         }
     }
     Ok(())

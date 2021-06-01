@@ -19,7 +19,7 @@ use crate::sessions::FuseQueryContextRef;
 pub struct NumberTestData {
     ctx: FuseQueryContextRef,
     db: &'static str,
-    table: &'static str
+    table: &'static str,
 }
 
 impl NumberTestData {
@@ -27,7 +27,7 @@ impl NumberTestData {
         NumberTestData {
             ctx,
             db: "system",
-            table: "numbers_mt"
+            table: "numbers_mt",
         }
     }
 
@@ -49,9 +49,9 @@ impl NumberTestData {
                 projection: None,
                 projected_schema: Arc::new(DataSchema::empty()),
                 filters: vec![],
-                limit: None
+                limit: None,
             },
-            self.ctx.get_max_threads()? as usize
+            self.ctx.get_max_threads()? as usize,
         )
     }
 

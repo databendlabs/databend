@@ -15,7 +15,7 @@ pub struct FormatterSettings {
     pub indent_char: &'static str,
     pub prefix: &'static str,
     pub prev_ways: usize,
-    pub prev_name: String
+    pub prev_name: String,
 }
 
 #[async_trait::async_trait]

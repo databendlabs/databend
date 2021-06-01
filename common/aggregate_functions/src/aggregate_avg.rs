@@ -20,7 +20,7 @@ use crate::IAggregateFunction;
 pub struct AggregateAvgFunction {
     display_name: String,
     depth: usize,
-    state: DataValue
+    state: DataValue,
 }
 
 impl AggregateAvgFunction {
@@ -28,7 +28,7 @@ impl AggregateAvgFunction {
         Ok(Box::new(AggregateAvgFunction {
             display_name: display_name.to_string(),
             depth: 0,
-            state: DataValue::Struct(vec![DataValue::Null, DataValue::UInt64(Some(0))])
+            state: DataValue::Struct(vec![DataValue::Null, DataValue::UInt64(Some(0))]),
         }))
     }
 }
@@ -57,13 +57,13 @@ impl IAggregateFunction for AggregateAvgFunction {
                 values[0].clone(),
                 DataArrayAggregate::data_array_aggregate_op(
                     DataValueAggregateOperator::Sum,
-                    columns[0].to_array()?
-                )?
+                    columns[0].to_array()?,
+                )?,
             )?;
             let count = DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
                 values[1].clone(),
-                DataValue::UInt64(Some(input_rows as u64))
+                DataValue::UInt64(Some(input_rows as u64)),
             )?;
 
             self.state = DataValue::Struct(vec![sum, count]);
@@ -83,12 +83,12 @@ impl IAggregateFunction for AggregateAvgFunction {
             let sum = DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
                 new_states[0].clone(),
-                old_states[0].clone()
+                old_states[0].clone(),
             )?;
             let count = DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
                 new_states[1].clone(),
-                old_states[1].clone()
+                old_states[1].clone(),
             )?;
             self.state = DataValue::Struct(vec![sum, count]);
         }
@@ -100,7 +100,7 @@ impl IAggregateFunction for AggregateAvgFunction {
             DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Div,
                 states[0].clone(),
-                states[1].clone()
+                states[1].clone(),
             )?
         } else {
             self.state.clone()

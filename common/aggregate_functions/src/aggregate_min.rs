@@ -19,7 +19,7 @@ use crate::IAggregateFunction;
 pub struct AggregateMinFunction {
     display_name: String,
     depth: usize,
-    state: DataValue
+    state: DataValue,
 }
 
 impl AggregateMinFunction {
@@ -27,7 +27,7 @@ impl AggregateMinFunction {
         Ok(Box::new(AggregateMinFunction {
             display_name: display_name.to_string(),
             depth: 0,
-            state: DataValue::Null
+            state: DataValue::Null,
         }))
     }
 }
@@ -53,15 +53,15 @@ impl IAggregateFunction for AggregateMinFunction {
         let value = match &columns[0] {
             DataColumnarValue::Array(array) => DataArrayAggregate::data_array_aggregate_op(
                 DataValueAggregateOperator::Min,
-                array.clone()
+                array.clone(),
             ),
-            DataColumnarValue::Constant(s, _) => Ok(s.clone())
+            DataColumnarValue::Constant(s, _) => Ok(s.clone()),
         }?;
 
         self.state = DataValueAggregate::data_value_aggregate_op(
             DataValueAggregateOperator::Min,
             self.state.clone(),
-            value
+            value,
         )?;
 
         Ok(())
@@ -76,7 +76,7 @@ impl IAggregateFunction for AggregateMinFunction {
         self.state = DataValueAggregate::data_value_aggregate_op(
             DataValueAggregateOperator::Min,
             self.state.clone(),
-            val
+            val,
         )?;
         Ok(())
     }

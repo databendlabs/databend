@@ -15,7 +15,7 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct DropDatabaseInterpreter {
     ctx: FuseQueryContextRef,
-    plan: DropDatabasePlan
+    plan: DropDatabasePlan,
 }
 
 impl DropDatabaseInterpreter {
@@ -37,7 +37,7 @@ impl IInterpreter for DropDatabaseInterpreter {
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,
-            vec![]
+            vec![],
         )))
     }
 }

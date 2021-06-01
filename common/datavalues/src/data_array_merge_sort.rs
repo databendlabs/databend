@@ -19,7 +19,7 @@ impl DataArrayMerge {
     pub fn merge_array(lhs: &ArrayRef, rhs: &ArrayRef, indices: &[bool]) -> Result<ArrayRef> {
         if lhs.data_type() != rhs.data_type() {
             return Result::Err(ErrorCodes::BadDataValueType(
-                "It is impossible to merge arrays of different data types."
+                "It is impossible to merge arrays of different data types.",
             ));
         }
 
@@ -69,7 +69,7 @@ impl DataArrayMerge {
         lhs: &[ArrayRef],
         rhs: &[ArrayRef],
         options: &[SortOptions],
-        limit: Option<usize>
+        limit: Option<usize>,
     ) -> Result<Vec<bool>> {
         if lhs.len() != rhs.len() {
             return Result::Err(ErrorCodes::BadDataArrayLength(
@@ -82,7 +82,7 @@ impl DataArrayMerge {
         };
         if lhs.is_empty() {
             return Result::Err(ErrorCodes::BadDataArrayLength(
-                "Merge requires lhs to have at least 1 entry."
+                "Merge requires lhs to have at least 1 entry.",
             ));
         };
         if lhs.len() != options.len() {
@@ -123,7 +123,7 @@ impl DataArrayMerge {
                             Ordering::Less
                         }
                     }
-                    (false, false) => Ordering::Equal
+                    (false, false) => Ordering::Equal,
                 };
                 if descending {
                     result = result.reverse();
@@ -144,7 +144,7 @@ impl DataArrayMerge {
 
         let limits = match limit {
             Some(limit) => limit.min(max_left + max_right),
-            _ => max_left + max_right
+            _ => max_left + max_right,
         };
 
         let mut result = Vec::with_capacity(limits);
@@ -153,7 +153,7 @@ impl DataArrayMerge {
                 (true, true) => break,
                 (false, true) => Ordering::Less,
                 (true, false) => Ordering::Greater,
-                (false, false) => (cmp)(left, right)
+                (false, false) => (cmp)(left, right),
             };
             let value = if order == Ordering::Less {
                 left += 1;

@@ -19,14 +19,14 @@ use crate::sessions::FuseQueryContextRef;
 pub struct CsvTableStream {
     ctx: FuseQueryContextRef,
     file: String,
-    schema: DataSchemaRef
+    schema: DataSchemaRef,
 }
 
 impl CsvTableStream {
     pub fn try_create(
         ctx: FuseQueryContextRef,
         schema: DataSchemaRef,
-        file: String
+        file: String,
     ) -> Result<Self> {
         Ok(CsvTableStream { ctx, file, schema })
     }
@@ -54,7 +54,7 @@ impl CsvTableStream {
             None,
             block_size,
             bounds,
-            None
+            None,
         );
 
         reader
@@ -74,7 +74,7 @@ impl Stream for CsvTableStream {
 
     fn poll_next(
         self: std::pin::Pin<&mut Self>,
-        _: &mut std::task::Context<'_>
+        _: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         let block = self.try_get_one_block()?;
         Poll::Ready(block.map(Ok))

@@ -18,7 +18,7 @@ pub struct Runtime {
     // Handle to runtime.
     handle: Handle,
     // Use to receive a drop signal when dropper is dropped.
-    _dropper: Dropper
+    _dropper: Dropper,
 }
 
 impl Runtime {
@@ -48,8 +48,8 @@ impl Runtime {
         Ok(Runtime {
             handle,
             _dropper: Dropper {
-                close: Some(send_stop)
-            }
+                close: Some(send_stop),
+            },
         })
     }
 
@@ -73,7 +73,7 @@ impl Runtime {
     pub fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
     where
         T: Future + Send + 'static,
-        T::Output: Send + 'static
+        T::Output: Send + 'static,
     {
         self.handle.spawn(task)
     }
@@ -81,7 +81,7 @@ impl Runtime {
 
 /// Dropping the dropper will cause runtime to shutdown.
 pub struct Dropper {
-    close: Option<oneshot::Sender<()>>
+    close: Option<oneshot::Sender<()>>,
 }
 
 impl Drop for Dropper {

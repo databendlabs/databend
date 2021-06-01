@@ -21,7 +21,7 @@ use uuid::Uuid;
 use crate::fs::IFileSystem;
 
 pub(crate) struct Appender {
-    fs: Arc<dyn IFileSystem>
+    fs: Arc<dyn IFileSystem>,
 }
 
 pub type InputData = std::pin::Pin<Box<dyn futures::Stream<Item = FlightData> + Send>>;
@@ -37,7 +37,7 @@ impl Appender {
     pub async fn append_data(
         &self,
         path: String,
-        mut stream: InputData
+        mut stream: InputData,
     ) -> Result<common_flights::AppendResult> {
         if let Some(flight_data) = stream.next().await {
             let data_schema = DataSchema::try_from(&flight_data)?;

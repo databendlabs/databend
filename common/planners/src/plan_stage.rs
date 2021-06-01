@@ -13,14 +13,14 @@ use crate::PlanNode;
 pub enum StageKind {
     Normal,
     Expansive,
-    Convergent
+    Convergent,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct StagePlan {
     pub kind: StageKind,
     pub input: Arc<PlanNode>,
-    pub scatters_expr: Expression
+    pub scatters_expr: Expression,
 }
 
 impl StagePlan {

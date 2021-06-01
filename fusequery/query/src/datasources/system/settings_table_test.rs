@@ -18,7 +18,7 @@ async fn test_settings_table() -> anyhow::Result<()> {
     table.read_plan(
         ctx.clone(),
         &ScanPlan::empty(),
-        ctx.get_max_threads()? as usize
+        ctx.get_max_threads()? as usize,
     )?;
 
     let stream = table.read(ctx).await?;

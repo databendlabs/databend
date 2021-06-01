@@ -21,7 +21,7 @@ fn test_cast_function() -> Result<()> {
         cast_type: DataType,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>
+        func: Box<dyn IFunction>,
     }
 
     let tests = vec![
@@ -33,7 +33,7 @@ fn test_cast_function() -> Result<()> {
             func: CastFunction::create(DataType::Int8),
             cast_type: DataType::Int8,
             expect: Arc::new(Int8Array::from(vec![4, 3, 2, 4])),
-            error: ""
+            error: "",
         },
         Test {
             name: "cast-string-to-date32-passed",
@@ -43,7 +43,7 @@ fn test_cast_function() -> Result<()> {
             func: CastFunction::create(DataType::Int32),
             cast_type: DataType::Date32,
             expect: Arc::new(Int32Array::from(vec![20210305, 20211024])),
-            error: ""
+            error: "",
         },
     ];
 

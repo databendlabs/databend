@@ -31,7 +31,7 @@ use crate::sessions::SessionManagerRef;
 use crate::sql::PlanParser;
 
 struct Session {
-    ctx: FuseQueryContextRef
+    ctx: FuseQueryContextRef,
 }
 
 impl Session {
@@ -45,13 +45,13 @@ pub fn to_clickhouse_err(res: ErrorCodes) -> clickhouse_srv::errors::Error {
         code: res.code() as u32,
         name: "DB:Exception".to_string(),
         message: res.message(),
-        stack_trace: res.backtrace_str()
+        stack_trace: res.backtrace_str(),
     })
 }
 
 enum BlockItem {
     Block(Result<ClickHouseBlock>),
-    ProgressTicker
+    ProgressTicker,
 }
 
 #[async_trait::async_trait]
@@ -59,7 +59,7 @@ impl ClickHouseSession for Session {
     async fn execute_query(
         &self,
         ctx: &mut CHContext,
-        connection: &mut Connection
+        connection: &mut Connection,
     ) -> clickhouse_srv::errors::Result<()> {
         self.ctx.reset().map_err(to_clickhouse_err)?;
         let start = Instant::now();
@@ -163,7 +163,7 @@ impl ClickHouseSession for Session {
         clickhouse_srv::types::Progress {
             rows: values.read_rows as u64,
             bytes: values.read_bytes as u64,
-            total_rows: 0
+            total_rows: 0,
         }
     }
 }
@@ -171,7 +171,7 @@ impl ClickHouseSession for Session {
 pub struct ClickHouseHandler {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionManagerRef
+    session_manager: SessionManagerRef,
 }
 
 impl ClickHouseHandler {
@@ -179,7 +179,7 @@ impl ClickHouseHandler {
         Self {
             conf,
             cluster,
-            session_manager
+            session_manager,
         }
     }
 

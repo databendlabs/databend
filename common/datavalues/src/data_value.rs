@@ -75,7 +75,7 @@ pub enum DataValue {
 
     // Container struct.
     List(Option<Vec<DataValue>>, DataType),
-    Struct(Vec<DataValue>)
+    Struct(Vec<DataValue>),
 }
 
 pub type DataValueRef = Box<DataValue>;
@@ -189,59 +189,59 @@ impl DataValue {
             DataValue::Binary(v) => Ok(Arc::new(BinaryArray::from(vec![v.as_deref(); size]))),
             DataValue::Date32(e) => match e {
                 Some(value) => Ok(Arc::new(Date32Array::from_value(*value, size))),
-                None => Ok(new_null_array(&DataType::Date32, size))
+                None => Ok(new_null_array(&DataType::Date32, size)),
             },
             DataValue::Date64(e) => match e {
                 Some(value) => Ok(Arc::new(Date64Array::from_value(*value, size))),
-                None => Ok(new_null_array(&DataType::Date64, size))
+                None => Ok(new_null_array(&DataType::Date64, size)),
             },
             DataValue::TimestampSecond(e) => match e {
                 Some(value) => Ok(Arc::new(TimestampSecondArray::from_iter_values(
-                    repeat(*value).take(size)
+                    repeat(*value).take(size),
                 ))),
                 None => Ok(new_null_array(
                     &DataType::Timestamp(TimeUnit::Second, None),
-                    size
-                ))
+                    size,
+                )),
             },
             DataValue::TimestampMillisecond(e) => match e {
                 Some(value) => Ok(Arc::new(TimestampMillisecondArray::from_iter_values(
-                    repeat(*value).take(size)
+                    repeat(*value).take(size),
                 ))),
                 None => Ok(new_null_array(
                     &DataType::Timestamp(TimeUnit::Millisecond, None),
-                    size
-                ))
+                    size,
+                )),
             },
             DataValue::TimestampMicrosecond(e) => match e {
                 Some(value) => Ok(Arc::new(TimestampMicrosecondArray::from_value(
-                    *value, size
+                    *value, size,
                 ))),
                 None => Ok(new_null_array(
                     &DataType::Timestamp(TimeUnit::Microsecond, None),
-                    size
-                ))
+                    size,
+                )),
             },
             DataValue::TimestampNanosecond(e) => match e {
                 Some(value) => Ok(Arc::new(TimestampNanosecondArray::from_value(*value, size))),
                 None => Ok(new_null_array(
                     &DataType::Timestamp(TimeUnit::Nanosecond, None),
-                    size
-                ))
+                    size,
+                )),
             },
             DataValue::IntervalDayTime(e) => match e {
                 Some(value) => Ok(Arc::new(IntervalDayTimeArray::from_value(*value, size))),
                 None => Ok(new_null_array(
                     &DataType::Interval(IntervalUnit::DayTime),
-                    size
-                ))
+                    size,
+                )),
             },
             DataValue::IntervalYearMonth(e) => match e {
                 Some(value) => Ok(Arc::new(IntervalYearMonthArray::from_value(*value, size))),
                 None => Ok(new_null_array(
                     &DataType::Interval(IntervalUnit::YearMonth),
-                    size
-                ))
+                    size,
+                )),
             },
             DataValue::List(values, data_type) => match data_type {
                 DataType::Int8 => Ok(Arc::new(build_list!(Int8Builder, Int8, values, size))),
@@ -262,7 +262,7 @@ impl DataValue {
                 other => Result::Err(ErrorCodes::BadDataValueType(format!(
                     "Unexpected type:{} for DataValue List",
                     other
-                )))
+                ))),
             },
             DataValue::Struct(v) => {
                 let mut array = vec![];
@@ -272,9 +272,9 @@ impl DataValue {
                         DataField::new(
                             format!("item_{}", i).as_str(),
                             val_array.data_type().clone(),
-                            false
+                            false,
                         ),
-                        val_array as DataArrayRef
+                        val_array as DataArrayRef,
                     ));
                 }
                 Ok(Arc::new(StructArray::from(array)))
@@ -282,7 +282,7 @@ impl DataValue {
             other => Result::Err(ErrorCodes::BadDataValueType(format!(
                 "DataValue Error: DataValue to array cannot be {:?}",
                 other
-            )))
+            ))),
         }
     }
 }
@@ -329,7 +329,7 @@ impl TryFrom<&DataType> for DataValue {
             _ => Result::Err(ErrorCodes::BadDataValueType(format!(
                 "DataValue Error: Unsupported try_from() for data type: {:?}",
                 data_type
-            )))
+            ))),
         }
     }
 }
@@ -378,7 +378,7 @@ impl fmt::Display for DataValue {
                         .join(",")
                 )
             }
-            DataValue::Struct(v) => write!(f, "{:?}", v)
+            DataValue::Struct(v) => write!(f, "{:?}", v),
         }
     }
 }
@@ -420,7 +420,7 @@ impl fmt::Debug for DataValue {
                 write!(f, "TimestampNanosecond({})", self)
             }
             DataValue::List(_, _) => write!(f, "[{}]", self),
-            DataValue::Struct(v) => write!(f, "{:?}", v)
+            DataValue::Struct(v) => write!(f, "{:?}", v),
         }
     }
 }

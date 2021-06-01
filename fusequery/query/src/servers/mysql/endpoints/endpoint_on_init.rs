@@ -32,7 +32,7 @@ pub fn done<W: std::io::Write>(writer: InitWriter<'_, W>) -> impl FnOnce(Input) 
     move |res: Input| -> Output {
         match res {
             Err(error) => MySQLOnInitEndpoint::err(error, writer),
-            Ok(value) => MySQLOnInitEndpoint::ok(value, writer)
+            Ok(value) => MySQLOnInitEndpoint::ok(value, writer),
         }
     }
 }

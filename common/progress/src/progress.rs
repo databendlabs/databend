@@ -12,14 +12,14 @@ pub type ProgressCallback = Box<dyn FnMut(&ProgressValues) + Send + Sync + 'stat
 pub struct ProgressValues {
     pub read_rows: usize,
     pub read_bytes: usize,
-    pub total_rows_to_read: usize
+    pub total_rows_to_read: usize,
 }
 
 #[derive(Debug)]
 pub struct Progress {
     read_rows: AtomicUsize,
     read_bytes: AtomicUsize,
-    total_rows_to_read: AtomicUsize
+    total_rows_to_read: AtomicUsize,
 }
 
 impl Progress {
@@ -27,7 +27,7 @@ impl Progress {
         Self {
             read_rows: AtomicUsize::new(0),
             read_bytes: AtomicUsize::new(0),
-            total_rows_to_read: AtomicUsize::new(0)
+            total_rows_to_read: AtomicUsize::new(0),
         }
     }
 
@@ -47,7 +47,7 @@ impl Progress {
         ProgressValues {
             read_rows,
             read_bytes,
-            total_rows_to_read
+            total_rows_to_read,
         }
     }
 
@@ -64,7 +64,7 @@ impl Progress {
         ProgressValues {
             read_rows,
             read_bytes,
-            total_rows_to_read
+            total_rows_to_read,
         }
     }
 

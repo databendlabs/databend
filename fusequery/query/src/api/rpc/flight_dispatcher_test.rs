@@ -72,10 +72,10 @@ async fn test_prepare_stage_with_no_scatter() -> Result<()> {
                         stage_id.clone(),
                         plan.clone(),
                         vec![stream_id.clone()],
-                        Expression::Literal(DataValue::UInt64(Some(1)))
+                        Expression::Literal(DataValue::UInt64(Some(1))),
                     ),
-                    sender
-                )
+                    sender,
+                ),
             ))
         };
 
@@ -155,10 +155,10 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
                         stage_id.clone(),
                         plan.clone(),
                         vec!["stream_1".to_string(), "stream_2".to_string()],
-                        Expression::Column("number".to_string())
+                        Expression::Column("number".to_string()),
                     ),
-                    sender
-                )
+                    sender,
+                ),
             ))
         };
 
@@ -263,13 +263,13 @@ fn generate_uuids(size: usize) -> (Option<String>, Option<String>, Option<String
         2 => (
             Some(uuid::Uuid::new_v4().to_string()),
             Some(uuid::Uuid::new_v4().to_string()),
-            None
+            None,
         ),
         3 => (
             Some(uuid::Uuid::new_v4().to_string()),
             Some(uuid::Uuid::new_v4().to_string()),
-            Some(uuid::Uuid::new_v4().to_string())
+            Some(uuid::Uuid::new_v4().to_string()),
         ),
-        _ => panic!("Logic error for generate_uuids.")
+        _ => panic!("Logic error for generate_uuids."),
     }
 }

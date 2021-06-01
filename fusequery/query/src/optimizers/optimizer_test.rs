@@ -8,7 +8,7 @@ pub fn generate_partitions(workers: u64, total: u64) -> Partitions {
     if part_size == 0 {
         partitions.push(Partition {
             name: format!("{}-{}-{}", total, 0, total,),
-            version: 0
+            version: 0,
         })
     } else {
         for part in 0..workers {
@@ -19,7 +19,7 @@ pub fn generate_partitions(workers: u64, total: u64) -> Partitions {
             }
             partitions.push(Partition {
                 name: format!("{}-{}-{}", total, part_begin, part_end,),
-                version: 0
+                version: 0,
             })
         }
     }

@@ -32,21 +32,21 @@ use crate::pipelines::transforms::ExpressionExecutor;
 pub struct ExpressionTransform {
     // The final schema(Build by plan_builder.expression).
     input: Arc<dyn IProcessor>,
-    executor: Arc<ExpressionExecutor>
+    executor: Arc<ExpressionExecutor>,
 }
 
 impl ExpressionTransform {
     pub fn try_create(
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
-        exprs: Vec<Expression>
+        exprs: Vec<Expression>,
     ) -> Result<Self> {
         let executor = ExpressionExecutor::try_create(input_schema, output_schema, exprs, false)?;
         executor.validate()?;
 
         Ok(ExpressionTransform {
             input: Arc::new(EmptyProcessor::create()),
-            executor: Arc::new(executor)
+            executor: Arc::new(executor),
         })
     }
 }

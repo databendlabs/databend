@@ -13,7 +13,7 @@ use serde::Serializer;
 #[derive(Clone, PartialEq, Debug)]
 pub enum Address {
     SocketAddress(SocketAddr),
-    Named((String, u16))
+    Named((String, u16)),
 }
 
 impl Address {
@@ -41,14 +41,14 @@ impl Address {
     pub fn hostname(&self) -> String {
         match self {
             Self::SocketAddress(addr) => addr.ip().to_string(),
-            Self::Named((hostname, _)) => hostname.clone()
+            Self::Named((hostname, _)) => hostname.clone(),
         }
     }
 
     pub fn port(&self) -> u16 {
         match self {
             Self::SocketAddress(addr) => addr.port(),
-            Self::Named((_, port)) => *port
+            Self::Named((_, port)) => *port,
         }
     }
 }
@@ -57,7 +57,7 @@ impl ToString for Address {
     fn to_string(&self) -> String {
         match self {
             Self::SocketAddress(addr) => addr.to_string(),
-            Self::Named((hostname, port)) => format!("{}:{}", hostname, port)
+            Self::Named((hostname, port)) => format!("{}:{}", hostname, port),
         }
     }
 }
@@ -74,7 +74,7 @@ impl<'de> serde::Deserialize<'de> for Address {
     where D: Deserializer<'de> {
         String::deserialize(deserializer).and_then(|address| match Address::create(&address) {
             Ok(address) => Ok(address),
-            Err(error_code) => Err(D::Error::custom(error_code))
+            Err(error_code) => Err(D::Error::custom(error_code)),
         })
     }
 }

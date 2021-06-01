@@ -25,12 +25,12 @@ impl<Hasher: std::hash::Hasher + Default> DataArrayHash<Hasher> {
     pub fn data_array_hash(input: &DataColumnarValue) -> Result<DataColumnarValue> {
         match input {
             DataColumnarValue::Array(input) => Ok(DataColumnarValue::Array(
-                Self::data_array_hash_with_array(input)?
+                Self::data_array_hash_with_array(input)?,
             )),
             DataColumnarValue::Constant(input, rows) => Ok(DataColumnarValue::Constant(
                 Self::data_array_hash_with_scalar(input)?,
-                *rows
-            ))
+                *rows,
+            )),
         }
     }
 
@@ -46,8 +46,8 @@ impl<Hasher: std::hash::Hasher + Default> DataArrayHash<Hasher> {
                 }
             },
             _ => Result::Err(ErrorCodes::BadDataValueType(
-                "DataArray Error: data_array_hash_with_array must be string or binary type."
-            ))
+                "DataArray Error: data_array_hash_with_array must be string or binary type.",
+            )),
         }
     }
 
@@ -58,13 +58,13 @@ impl<Hasher: std::hash::Hasher + Default> DataArrayHash<Hasher> {
             DataType::Binary => Self::binary_data_array_hash_with_array(input),
             DataType::LargeBinary => Self::large_binary_data_array_hash_with_array(input),
             _ => Result::Err(ErrorCodes::BadDataValueType(
-                " DataArray Error: data_array_hash_with_array must be string or binary type."
-            ))
+                " DataArray Error: data_array_hash_with_array must be string or binary type.",
+            )),
         }
     }
 
     fn string_data_array_hash_with_array<T: StringOffsetSizeTrait>(
-        data: &DataArrayRef
+        data: &DataArrayRef,
     ) -> Result<DataArrayRef> {
         let binary_data = data
             .as_any()
