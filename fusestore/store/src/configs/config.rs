@@ -39,7 +39,7 @@ impl Config {
     }
 
     /// Create configs from args.
-    pub fn create_from_args() -> Self {
+    pub fn load_from_args() -> Self {
         let mut cfg = Config::from_args();
         cfg.version = include_str!(concat!(env!("OUT_DIR"), "/version-info.txt")).to_string();
         cfg
