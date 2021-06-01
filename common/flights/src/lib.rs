@@ -29,6 +29,7 @@ pub use store_do_put::set_do_put_meta;
 pub use store_do_put::AppendResult;
 
 mod common;
+mod dns_resolver;
 mod flight_token;
 mod store_client;
 mod store_do_action;
@@ -43,4 +44,9 @@ pub mod protobuf {
 }
 
 #[cfg(test)]
+mod dns_resolver_test;
+#[cfg(test)]
 mod store_do_put_test;
+
+pub use dns_resolver::ConnectionFactory;
+pub use dns_resolver::DNSResolver;

@@ -10,8 +10,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCodes;
 use common_exception::Result;
+use common_flights::DNSResolver;
 use common_infallible::Mutex;
-use trust_dns_resolver::TokioAsyncResolver;
 
 use crate::clusters::address::Address;
 use crate::clusters::node::Node;
@@ -103,45 +103,35 @@ impl Cluster {
     }
 }
 
-fn create_dns_resolver() -> Result<TokioAsyncResolver> {
-    match TokioAsyncResolver::tokio_from_system_conf() {
-        Ok(resolver) => Ok(resolver),
-        Err(error) => Result::Err(ErrorCodes::DnsParseError(format!(
-            "DNS resolver create error: {}",
-            error
-        )))
-    }
-}
-
 async fn is_local(address: &Address, expect_port: u16) -> Result<bool> {
     if address.port() != expect_port {
         return Result::Ok(false);
     }
 
     match address {
-        Address::SocketAddress(socket_addr) => is_local_impl(socket_addr.ip()),
-        Address::Named((host, _)) => {
-            let dns_resolver = create_dns_resolver()?;
-            match dns_resolver.lookup_ip(host.as_str()).await {
-                Err(error) => Result::Err(ErrorCodes::DnsParseError(format!(
-                    "DNS resolver lookup error: {}",
-                    error
-                ))),
-                Ok(resolved_ip) => match resolved_ip.iter().next() {
-                    Some(resolved_ip) => is_local_impl(resolved_ip),
-                    None => Result::Err(ErrorCodes::DnsParseError(
-                        "Resolved hostname must be IPv4 or IPv6"
-                    ))
+        Address::SocketAddress(socket_addr) => is_local_impl(&socket_addr.ip()),
+        Address::Named((host, _)) => match DNSResolver::instance()?.resolve(host.as_str()).await {
+            Err(error) => Result::Err(ErrorCodes::DnsParseError(format!(
+                "DNS resolver lookup error: {}",
+                error
+            ))),
+            Ok(resolved_ips) => {
+                for resolved_ip in &resolved_ips {
+                    if is_local_impl(resolved_ip)? {
+                        return Ok(true);
+                    }
                 }
+
+                Ok(false)
             }
         }
     }
 }
 
-fn is_local_impl(address: IpAddr) -> Result<bool> {
+fn is_local_impl(address: &IpAddr) -> Result<bool> {
     for network_interface in &pnet::datalink::interfaces() {
         for interface_ip in &network_interface.ips {
-            if address == interface_ip.ip() {
+            if address == &interface_ip.ip() {
                 return Ok(true);
             }
         }

@@ -2,18 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
-use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_infallible::Mutex;
+use common_flights::ConnectionFactory;
 use serde::de::Error;
 use serde::Deserializer;
 use serde::Serializer;
-use tonic::transport::Channel;
-use tonic::transport::Uri;
-use warp::hyper::client::HttpConnector;
 
 use super::address::Address;
 use crate::api::FlightClient;
@@ -26,8 +20,7 @@ pub struct Node {
     pub priority: u8,
     pub address: Address,
     pub local: bool,
-    pub sequence: usize,
-    channel_generator: Arc<Mutex<ChannelGenerator>>
+    pub sequence: usize
 }
 
 impl PartialEq for Node {
@@ -50,10 +43,9 @@ impl Node {
         Ok(Node {
             name,
             priority,
-            address: address.clone(),
+            address,
             local,
-            sequence,
-            channel_generator: Arc::new(Mutex::new(ChannelGenerator::create(address)))
+            sequence
         })
     }
 
@@ -62,8 +54,7 @@ impl Node {
     }
 
     pub async fn get_flight_client(&self) -> Result<FlightClient> {
-        let channel = ChannelGenerator::create_flight_channel(self.address.clone()).await;
-        // let channel = self.channel_generator.lock().generate();
+        let channel = ConnectionFactory::create_flight_channel(self.address.clone(), None).await;
         channel.map(|channel| FlightClient::new(FlightServiceClient::new(channel)))
     }
 }
@@ -117,70 +108,6 @@ impl<'de> serde::Deserialize<'de> for Node {
         match deserialize_result {
             Ok(node) => Ok(node),
             Err(error) => Err(D::Error::custom(error))
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct ChannelGenerator {
-    address: Option<Address>,
-    channel: (Option<Channel>, Option<Arc<ErrorCodes>>)
-}
-
-impl ChannelGenerator {
-    pub fn create(address: Address) -> ChannelGenerator {
-        ChannelGenerator {
-            address: Some(address),
-            channel: (None, None)
-        }
-    }
-
-    /*pub fn generate(&mut self) -> Result<Channel> {
-        if let Some(address) = self.address.take() {
-            let channel = futures::executor::block_on(Self::create_flight_channel(address));
-
-            match channel {
-                Ok(channel) => self.channel = (Some(channel), None),
-                Err(error) => self.channel = (None, Some(Arc::new(error)))
-            }
-        }
-
-        match &self.channel {
-            (Some(channel), None) => Ok(channel.clone()),
-            (None, Some(error)) => Err(ErrorCodes::create(
-                error.code(),
-                error.message(),
-                error.backtrace()
-            )),
-            _ => Err(ErrorCodes::LogicalError(
-                "Logical error: Unreachable code for ChannelGenerator."
-            ))
-        }
-    }*/
-
-    pub async fn create_flight_channel(addr: Address) -> Result<Channel> {
-        match format!("http://{}", addr.to_string()).parse::<Uri>() {
-            Err(error) => Result::Err(ErrorCodes::BadAddressFormat(format!(
-                "Node address format is not parse: {}",
-                error
-            ))),
-            Ok(uri) => {
-                let mut inner_connector = HttpConnector::new();
-                inner_connector.set_nodelay(true);
-                inner_connector.set_keepalive(None);
-                inner_connector.enforce_http(false);
-
-                match Channel::builder(uri)
-                    .connect_with_connector(inner_connector)
-                    .await
-                {
-                    Ok(channel) => Result::Ok(channel),
-                    Err(error) => Result::Err(ErrorCodes::CannotConnectNode(format!(
-                        "Cannot to RPC server: {}",
-                        error
-                    )))
-                }
-            }
         }
     }
 }

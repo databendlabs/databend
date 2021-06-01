@@ -648,7 +648,9 @@ dependencies = [
  "common-planners",
  "common-streams",
  "futures",
+ "hyper",
  "jwt-simple",
+ "lazy_static",
  "log 0.4.14",
  "pretty_assertions",
  "prost",
@@ -658,6 +660,7 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-build",
+ "trust-dns-resolver",
 ]
 
 [[package]]
@@ -1344,7 +1347,6 @@ dependencies = [
  "tokio-stream",
  "toml",
  "tonic",
- "trust-dns-resolver",
  "uuid",
  "vergen",
  "warp",
