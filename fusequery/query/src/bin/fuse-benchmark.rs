@@ -55,25 +55,25 @@ impl Config {
 type BenchmarkRef = Arc<Benchmark>;
 struct Benchmark {
     config: Config,
-    pool: Pool,
     queue: Arc<ArrayQueue<String>>,
     shutdown: AtomicBool,
     executed: AtomicUsize,
     stats: Arc<RwLock<Stats>>,
-    queries: Vec<String>
+    queries: Vec<String>,
+    database_url: String
 }
 
 impl Benchmark {
-    pub fn new(config: Config, pool: Pool, queries: Vec<String>) -> Self {
+    pub fn new(config: Config, queries: Vec<String>, database_url: String) -> Self {
         let queue = Arc::new(ArrayQueue::new(config.concurrency));
         Self {
             config,
             queue,
-            pool,
             shutdown: AtomicBool::new(false),
             executed: AtomicUsize::new(0),
             stats: Arc::new(RwLock::new(Stats::new())),
-            queries
+            queries,
+            database_url
         }
     }
 }
@@ -115,10 +115,9 @@ async fn main() -> Result<()> {
     // First load configs from args.
     let conf = Config::load_from_args();
     let database_url = format!("tcp://{}:{}?compression=lz4", conf.host, conf.port);
-    let pool = Pool::new(database_url);
     let queries = read_queries(&conf.query)?;
 
-    let bench = Arc::new(Benchmark::new(conf, pool, queries));
+    let bench = Arc::new(Benchmark::new(conf, queries, database_url));
 
     {
         let b = bench.clone();
@@ -165,7 +164,7 @@ async fn run(bench: BenchmarkRef) -> Result<()> {
         let query = bench.queries[idx].clone();
 
         if bench.queue.push(query).is_ok() {
-            i += 1
+            i += 1;
         }
     }
 
@@ -191,6 +190,8 @@ fn read_queries(query: &str) -> Result<Vec<String>> {
 }
 
 async fn execute(bench: BenchmarkRef) -> Result<()> {
+    let pool = Pool::new(bench.database_url.clone());
+
     loop {
         if bench.shutdown.load(Ordering::Relaxed)
             || (bench.config.iterations > 0
@@ -202,7 +203,7 @@ async fn execute(bench: BenchmarkRef) -> Result<()> {
 
             if let Some(query) = query {
                 let start = Instant::now();
-                let mut client = bench.pool.get_handle().await.map_err(to_error_codes)?;
+                let mut client = pool.get_handle().await.map_err(to_error_codes)?;
 
                 {
                     let result = client.query(&query);
@@ -227,7 +228,6 @@ async fn execute(bench: BenchmarkRef) -> Result<()> {
 }
 
 async fn report_text(bench: BenchmarkRef) -> Result<()> {
-    eprintln!();
     if bench.queries.is_empty() {
         return Ok(());
     }

@@ -10,10 +10,11 @@ use common_streams::SendableDataBlockStream;
 #[async_trait::async_trait]
 pub trait IInterpreter: Sync + Send {
     fn name(&self) -> &str;
+    async fn execute(&self) -> Result<SendableDataBlockStream>;
+
     fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![])
     }
-    async fn execute(&self) -> Result<SendableDataBlockStream>;
 }
 
 pub type InterpreterPtr = std::sync::Arc<dyn IInterpreter>;

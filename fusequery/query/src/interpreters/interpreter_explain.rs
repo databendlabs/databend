@@ -40,10 +40,6 @@ impl IInterpreter for ExplainInterpreter {
         "ExplainInterpreter"
     }
 
-    fn schema(&self) -> DataSchemaRef {
-        self.explain.schema()
-    }
-
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let schema =
             DataSchemaRefExt::create(vec![DataField::new("explain", DataType::Utf8, false)]);
@@ -66,5 +62,9 @@ impl IInterpreter for ExplainInterpreter {
         debug!("Explain executor result: {:?}", block);
 
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.explain.schema()
     }
 }
