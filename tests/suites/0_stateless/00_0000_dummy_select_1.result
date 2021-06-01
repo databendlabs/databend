@@ -77,3 +77,45 @@ SELECT NOT(TRUE)
 +------------+
 |      false |
 +------------+
+--------------
+SELECT a.number FROM numbers(3) AS a order by a.number
+--------------
+
++--------+
+| number |
++--------+
+|      0 |
+|      1 |
+|      2 |
++--------+
+--------------
+SELECT a.number FROM (SELECT * FROM numbers(3) AS b ORDER BY b.number) AS a
+--------------
+
++--------+
+| number |
++--------+
+|      0 |
+|      1 |
+|      2 |
++--------+
+--------------
+SELECT b.number FROM numbers(3) AS a ORDER BY a.number
+--------------
+
+ERROR 1105 (HY000) at line 12: Code: 25, displayText = Unknown Table '"b"'.
+--------------
+SELECT a.number FROM numbers(3) AS a ORDER BY b.number
+--------------
+
+ERROR 1105 (HY000) at line 13: Code: 25, displayText = Unknown Table '"b"'.
+--------------
+SELECT b.number FROM (SELECT * FROM numbers(3) AS b ORDER BY a.number) AS a
+--------------
+
+ERROR 1105 (HY000) at line 14: Code: 25, displayText = Unknown Table '"a"'.
+--------------
+SELECT b.number FROM (SELECT * FROM numbers(3) AS b) AS a ORDER BY b.number
+--------------
+
+ERROR 1105 (HY000) at line 15: Code: 25, displayText = Unknown Table '"b"'.
