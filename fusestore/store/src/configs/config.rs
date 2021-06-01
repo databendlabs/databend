@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use structopt::StructOpt;
+use structopt_toml::StructOptToml;
 
-#[derive(Debug, StructOpt, Clone)]
+pub const FUSE_COMMIT_VERSION: &str = env!("FUSE_COMMIT_VERSION");
+
+#[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct Config {
-    #[structopt(env = "FUSE_STORE_VERSION", default_value = "Unknown")]
-    pub version: String,
-
-    #[structopt(long, env = "FUSE_STORE_LOG_LEVEL", default_value = "info")]
+    #[structopt(long, env = "FUSE_STORE_LOG_LEVEL", default_value = "INFO")]
     pub log_level: String,
 
     #[structopt(
@@ -21,27 +21,8 @@ pub struct Config {
 
     #[structopt(
         long,
-        env = "FUSE_QUERY_RPC_API_ADDRESS",
+        env = "FUSE_STORE_FLIGHT_API_ADDRESS",
         default_value = "127.0.0.1:9191"
     )]
-    pub rpc_api_address: String,
-}
-
-impl Config {
-    /// Default configs.
-    pub fn default() -> Self {
-        Config {
-            version: include_str!(concat!(env!("OUT_DIR"), "/version-info.txt")).to_string(),
-            log_level: "debug".to_string(),
-            metric_api_address: "127.0.0.1:7171".to_string(),
-            rpc_api_address: "127.0.0.1:9191".to_string(),
-        }
-    }
-
-    /// Create configs from args.
-    pub fn load_from_args() -> Self {
-        let mut cfg = Config::from_args();
-        cfg.version = include_str!(concat!(env!("OUT_DIR"), "/version-info.txt")).to_string();
-        cfg
-    }
+    pub flight_api_address: String,
 }

@@ -27,9 +27,7 @@ common-planners = {path = "../../common/planners"}
 # Crates.io dependencies
 anyhow = "1.0.40"
 # track self maintained branch with hot fixes
-#async-raft = { git = "https://github.com/drmingdrmer/async-raft", branch = "rc" }
 async-raft = { git = "https://github.com/drmingdrmer/async-raft", rev = "cf40344f66fdcb6cde160b3e5671ff87c88f2af8" }
-#async-raft = "0.6.0"
 async-trait = "0.1"
 env_logger = "0.8"
 futures = "0.3"
@@ -47,6 +45,7 @@ rand = "0.8.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3"
+structopt-toml = "0.4.5"
 tempfile = "3.2.0"
 thiserror = "1.0.25"
 threadpool = "1.8.1"
@@ -66,4 +65,5 @@ tracing = {version = "0.1", default-features = false}
 tracing-subscriber = {version = "0.2.17", default-features = false, features = ["env-filter", "fmt"]}
 
 [build-dependencies]
+common-building = {path = "../../common/building"}
 tonic-build = "0.4"

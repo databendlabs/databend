@@ -7,12 +7,11 @@ use common_exception::Result;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
+pub const FUSE_COMMIT_VERSION: &str = env!("FUSE_COMMIT_VERSION");
+
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 #[serde(default)]
 pub struct Config {
-    #[structopt(env = "FUSE_QUERY_VERSION", default_value = "")]
-    pub version: String,
-
     #[structopt(long, env = "FUSE_QUERY_LOG_LEVEL", default_value = "INFO")]
     pub log_level: String,
 
@@ -95,7 +94,6 @@ impl Config {
     /// Default configs.
     pub fn default() -> Self {
         Config {
-            version: "".to_string(),
             log_level: "debug".to_string(),
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
@@ -120,8 +118,6 @@ impl Config {
         if cfg.num_cpus == 0 {
             cfg.num_cpus = num_cpus::get() as u64;
         }
-        cfg.version = env!("FUSE_COMMIT_VERSION").to_string();
-
         cfg
     }
 
@@ -134,7 +130,6 @@ impl Config {
         if cfg.num_cpus == 0 {
             cfg.num_cpus = num_cpus::get() as u64;
         }
-        cfg.version = env!("FUSE_COMMIT_VERSION").to_string();
         Ok(cfg)
     }
 }

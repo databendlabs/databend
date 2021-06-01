@@ -2,6 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-mod config;
+pub mod config;
 
 pub use config::Config;
