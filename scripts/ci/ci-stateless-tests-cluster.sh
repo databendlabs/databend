@@ -9,4 +9,4 @@ SCRIPT_PATH="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"
 cd "$SCRIPT_PATH/../../tests" || exit
 
 echo "Starting fuse-test"
-./fuse-test '^0[^4]_' --skip-dir '1_performance' --mode 'cluster'
+./fuse-test '^0[^4]_'  --mode 'cluster'

@@ -22,6 +22,7 @@ perf.*
 # for tests in mac
 *.stderr-e
 *.stdout-e
+tests/perfs/*-result.json
 
 # python
 venv/
