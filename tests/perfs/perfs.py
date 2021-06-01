@@ -25,7 +25,7 @@ def load_config():
 
 conf = load_config()
 
-def execute(suit, output_dir):
+def execute(suit, bin_path, host, port, output_dir):
     base_cfg = conf['config']
 
     iterations = suit.get("iterations", base_cfg['iterations'])
@@ -34,7 +34,7 @@ def execute(suit, output_dir):
     suit_name = re.sub(r"\s+", '-', suit['description'])
     json_path = os.path.join(output_dir, suit_name + "-result.json")
 
-    command = 'fuse-benchmark -c {} -i {} --query "{}" --json "{}" '.format(concurrency, iterations, suit['query'], json_path)
+    command = '{} -c {} -i {} -h {} -p {} --query "{}" --json "{}" '.format(bin_path, concurrency, iterations, host, port, suit['query'], json_path)
     print("perf {}, query: {} \n".format(suit_name, suit['query']))
 
     proc = Popen(command, shell=True, env=os.environ)
@@ -64,7 +64,10 @@ def execute(suit, output_dir):
 if __name__ == '__main__':
     parser = ArgumentParser(description='fuse perf tests')
     parser.add_argument('-o', '--output', default = ".",  help='Perf results directory')
+    parser.add_argument('-b', '--bin', default = "fuse-benchmark",  help='Fuse benchmark binary')
+    parser.add_argument('--host', default = "127.0.0.1",  help='Server host')
+    parser.add_argument('-p', '--port', default = "9001",  help='Server port')
     args = parser.parse_args()
 
     for suit in conf['perfs']:
-        execute(suit, args.output)
+        execute(suit, args.bin, args.host, args.port, args.output)

@@ -16,13 +16,17 @@ faster = 0
 slower = 0
 stable = 0
 
-def compare(master, pull):
-    fs = [f for f in os.listdir(master) if f.endswith(".json")]
+stats = {}
+
+def compare(releaser, pull):
+    fs = [f for f in os.listdir(releaser) if f.endswith(".json")]
     fs_new = [f for f in os.listdir(pull) if f.endswith(".json")]
 
     files = list(set(fs).intersection(set(fs_new)))
     for name in files:
-        compare_suit(master, pull , name)
+        compare_suit(releaser, pull , name)
+
+    report(releaser, pull, files)
 
     print("Faster: {}, Slower: {}, Stable: {}".format(faster, slower, stable))
 
@@ -30,36 +34,54 @@ def compare(master, pull):
         return -1
     return 0
 
-def compare_suit(master, pull, name):
+def compare_suit(releaser, pull, name):
     global faster
     global slower
     global stable
+    global stats
 
-    m = {}
+    r = {}
     p = {}
 
-    with open(os.path.join(master, name)) as json_file:
-        m = json.load(json_file)
+    with open(os.path.join(releaser, name)) as json_file:
+        releaser_result = json.load(json_file)
 
     with open(os.path.join(pull, name)) as json_file:
-        p = json.load(json_file)
+        pull_result = json.load(json_file)
 
-    diff = p["statistics"]["MiBPS"] - m["statistics"]["MiBPS"]
-    if abs(diff) / m["statistics"]["MiBPS"] >= 0.10:
+    diff = pull_result["statistics"]["MiBPS"] - releaser_result["statistics"]["MiBPS"]
+
+    stats[name] = {
+        "state" : "stable",
+        "diff" : diff
+    }
+
+    if abs(diff) / releaser_result["statistics"]["MiBPS"] >= 0.05:
         if diff > 0:
             faster += 1
+            stats[name]['state'] = 'faster'
         else:
             slower += 1
+            stats[name]['state'] = 'slower'
     else:
         stable += 1
-    pass
 
-## python compare.py -m . -p ../xxx
+def report(releaser, pull, files):
+    ## todo render the compartions via html template
+    global stats
+
+    for name in stats:
+        state = stats[name]
+        print("name: {}, stat: {}, diff: {}".format(name, state['state'],  state['diff']))
+
+
+## python compare.py -r xxxx -p xxxx
 if __name__ == '__main__':
     parser = ArgumentParser(description='fuse perf results compare tools')
-    parser.add_argument('-m', '--master', help='Perf results directory from Master build')
+    parser.add_argument('-r', '--releaser', help='Perf results directory from release version')
     parser.add_argument('-p', '--pull',  help='Perf results directory from current build')
 
     args = parser.parse_args()
-    code = compare(args.master, args.pull)
+    code = compare(args.releaser, args.pull)
+
     sys.exit(code)
