@@ -18,13 +18,95 @@ stable = 0
 
 stats = {}
 
+def load_config():
+    with open('perfs.yaml','r') as f:
+        data = yaml.load(f, Loader=yaml.FullLoader)
+        return data
+
+conf = load_config()
+
+template = """ <html>
+
+<style>
+
+table {{
+    border: none;
+    border-spacing: 0px;
+    line-height: 1.5;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 8px 25px -5px rgba(0, 0, 0, 0.1);
+    text-align: left;
+}}
+
+th, td {{
+    border: none;
+    padding: 5px;
+    vertical-align: top;
+    background-color: #FFF;
+    font-family: sans-serif;
+}}
+
+th {{
+    border-bottom: 2px solid black;
+}}
+
+tr:nth-child(odd) td {{filter: brightness(90%);}}
+
+</style>
+
+<body>
+
+    <h2 id="changes-in-performance">
+        <a class="cancela" >Changes in Performance</a>
+    </h2>
+
+    <table class="changes-in-performance">
+        <tbody>
+            <tr id="changes-in-performance.6">
+            <th>before_score,&nbsp;s</th>
+            <th>after_score,&nbsp;s</th>
+            <th>Ratio of speedup&nbsp;(-) or slowdown&nbsp;(+)</th>
+            <th>Relative difference (after_score&nbsp;−&nbsp;before_score) / before_score</th>
+            <th>Test</th>
+            <th>Status</th>
+            <th>Query</th>
+            </tr>
+
+            {}
+        </tbody>
+    </table>
+</body>
+</html> """
+
+def create_tr(name, before_score, after_score, state, query):
+    tmp = """ </tr>
+        <tr id="changes-in-performance.{}">
+        <td>{:.3f}</td>
+        <td>{:.3f}</td>
+        <td>{}{:.3f}x</td>
+        <td>{:.3f}</td>
+        <td>{}</td>
+        <td>{}</td>
+        <td>{}</td>
+    </tr> """
+
+    return tmp.format(name, before_score, after_score,  '+' if after_score > before_score else '-',  after_score/before_score, (after_score - before_score) / before_score, name, state, query)
+
+def get_suit_by_name(name):
+    for suit in conf['perfs']:
+        suit_name = re.sub(r"\s+", '-', suit['name'])
+        if suit_name == name:
+            return suit
+    return None
+
+
 def compare(releaser, pull):
     fs = [f for f in os.listdir(releaser) if f.endswith(".json")]
-    fs_new = [f for f in os.listdir(pull) if f.endswith(".json")]
+    fs_after_score = [f for f in os.listdir(pull) if f.endswith(".json")]
 
-    files = list(set(fs).intersection(set(fs_new)))
-    for name in files:
-        compare_suit(releaser, pull , name)
+    files = list(set(fs).intersection(set(fs_after_score)))
+    for f in files:
+        suit_name = f.replace("-result.json", "")
+        compare_suit(releaser, pull, f, suit_name)
 
     report(releaser, pull, files)
 
@@ -34,7 +116,7 @@ def compare(releaser, pull):
         return -1
     return 0
 
-def compare_suit(releaser, pull, name):
+def compare_suit(releaser, pull, suit_file, suit_name):
     global faster
     global slower
     global stable
@@ -43,26 +125,29 @@ def compare_suit(releaser, pull, name):
     r = {}
     p = {}
 
-    with open(os.path.join(releaser, name)) as json_file:
+    with open(os.path.join(releaser, suit_file)) as json_file:
         releaser_result = json.load(json_file)
 
-    with open(os.path.join(pull, name)) as json_file:
+    with open(os.path.join(pull, suit_file)) as json_file:
         pull_result = json.load(json_file)
 
     diff = pull_result["statistics"]["MiBPS"] - releaser_result["statistics"]["MiBPS"]
 
-    stats[name] = {
+    stats[suit_name] = {
+        "name" : suit_name,
+        "before_score" : releaser_result["statistics"]["MiBPS"],
+        "after_score": pull_result["statistics"]["MiBPS"],
+        "diff" : diff,
         "state" : "stable",
-        "diff" : diff
     }
 
-    if abs(diff) / releaser_result["statistics"]["MiBPS"] >= 0.05:
+    if abs(diff) / stats[suit_name]["before_score"] >= 0.05:
         if diff > 0:
             faster += 1
-            stats[name]['state'] = 'faster'
+            stats[suit_name]['state'] = 'faster'
         else:
             slower += 1
-            stats[name]['state'] = 'slower'
+            stats[suit_name]['state'] = 'slower'
     else:
         stable += 1
 
@@ -70,9 +155,19 @@ def report(releaser, pull, files):
     ## todo render the compartions via html template
     global stats
 
+    trs = ""
     for name in stats:
         state = stats[name]
-        print("name: {}, stat: {}, diff: {}".format(name, state['state'],  state['diff']))
+        suit = get_suit_by_name(name)
+
+        trs += create_tr(name, state['before_score'], state['after_score'], state['state'], suit['query'])
+
+    html = template.format(trs)
+
+    with open('/tmp/performance.html','w') as f:
+        f.write(html)
+        f.close()
+
 
 
 ## python compare.py -r xxxx -p xxxx

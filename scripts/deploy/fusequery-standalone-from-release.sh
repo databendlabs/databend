@@ -3,13 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0.
 
 
-get_latest_tag() {
-  curl --silent "https://api.github.com/repos/$1/tags" | # Get latest release from GitHub api
-    grep '"name":' |                                            # Get tag line
-    sed -E 's/.*"([^"]+)".*/\1/' | grep 'v' | head -1
-}
-
-tag=`get_latest_tag "datafuselabs/datafuse"`
+tag=$1
 
 
 SCRIPT_PATH="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"

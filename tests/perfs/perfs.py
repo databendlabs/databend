@@ -31,8 +31,8 @@ def execute(suit, bin_path, host, port, output_dir):
     iterations = suit.get("iterations", base_cfg['iterations'])
     concurrency = suit.get("concurrency", base_cfg['concurrency'])
 
-    suit_name = re.sub(r"\s+", '-', suit['description'])
-    json_path = os.path.join(output_dir, suit_name + "-result.json")
+    suit_name = re.sub(r"\s+", '-', suit['name'])
+    json_path = os.path.join(output_dir, "{}-result.json".format(suit_name))
 
     command = '{} -c {} -i {} -h {} -p {} --query "{}" --json "{}" '.format(bin_path, concurrency, iterations, host, port, suit['query'], json_path)
     print("perf {}, query: {} \n".format(suit_name, suit['query']))

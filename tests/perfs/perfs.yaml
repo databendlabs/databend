@@ -5,26 +5,26 @@ config:
   concurrency: 1
 
 perfs:
-  - description: Aggregation avg
+  - name: Aggregation avg
     query: SELECT avg(number) from numbers_mt(100000000000)
 
-  - description: Aggregation count
+  - name: Aggregation count
     query: SELECT count(number) from numbers_mt(100000000000)
     iterations: 2
 
-  - description: Aggregation max
+  - name: Aggregation max
     query: SELECT max(number) from numbers_mt(100000000000);
 
-  - description: Aggregation sum
+  - name: Aggregation sum
     query: SELECT sum(number) from numbers_mt(100000000000)
 
-  - description: Sort
+  - name: Sort
     query: SELECT number FROM numbers_mt(10000000000) ORDER BY number DESC LIMIT 10
 
-  - description: Substring
+  - name: Substring
     query: SELECT substring(cast(number as text) from 3) from numbers_mt(1000000) where number > 100 order by number desc limit 10
 
-  - description: Group By
+  - name: Group By
     query: SELECT max(number) as max,sum(number) as sum FROM numbers_mt(1000000000) GROUP BY number % 3, number % 4, number % 5 ORDER BY max
 
 
