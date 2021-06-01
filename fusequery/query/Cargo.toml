@@ -69,7 +69,6 @@ tonic = "0.4"
 warp = "0.3.1"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 pnet = "0.27.2"
-trust-dns-resolver = { version = "0.20.3", features = ["system-config"] }
 
 [dev-dependencies]
 pretty_assertions = "0.7"
