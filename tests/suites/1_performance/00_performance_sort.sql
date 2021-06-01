@@ -1,1 +1,0 @@
-SELECT number FROM numbers_mt(10000000000) ORDER BY number DESC LIMIT 10;
