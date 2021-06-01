@@ -1,0 +1,11 @@
+[package]
+name = "common-building"
+version = "0.1.0"
+authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies]
+vergen = "5.1.8"
+run_script = "^0.8.0"

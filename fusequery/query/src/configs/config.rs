@@ -120,7 +120,7 @@ impl Config {
         if cfg.num_cpus == 0 {
             cfg.num_cpus = num_cpus::get() as u64;
         }
-        cfg.version = Self::commit_version();
+        cfg.version = env!("FUSE_COMMIT_VERSION").to_string();
 
         cfg
     }
@@ -134,19 +134,7 @@ impl Config {
         if cfg.num_cpus == 0 {
             cfg.num_cpus = num_cpus::get() as u64;
         }
-        cfg.version = Self::commit_version();
+        cfg.version = env!("FUSE_COMMIT_VERSION").to_string();
         Ok(cfg)
-    }
-
-    fn commit_version() -> String {
-        let build_semver = option_env!("VERGEN_BUILD_SEMVER");
-        let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
-        let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
-        let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
-
-        match (build_semver, git_sha, rustc_semver, timestamp) {
-            (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
-            _ => String::new(),
-        }
     }
 }
