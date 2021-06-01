@@ -11,6 +11,8 @@ use fuse_query::servers::ClickHouseHandler;
 use fuse_query::servers::MySQLHandler;
 use fuse_query::sessions::SessionManager;
 use log::info;
+use tokio::task::JoinError;
+use tokio::task::JoinHandle;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -29,16 +31,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .init();
 
-    info!("{:?}", conf.clone());
+    info!("{:?}", conf);
     info!("FuseQuery v-{}", conf.version);
 
-    let cluster = Cluster::create_global(conf.clone())?;
+    futures::executor::block_on(start(&conf))?;
+    Ok(())
+}
+
+async fn start(conf: &Config) -> Result<(), JoinError> {
+    let mut tasks: Vec<JoinHandle<()>> = vec![];
+
+    let cluster = Cluster::create_global(conf.clone()).unwrap();
     let session_manager = SessionManager::create();
 
     // MySQL handler.
     {
         let handler = MySQLHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
-        tokio::spawn(async move { handler.start().expect("MySQL handler error") });
+        tasks.push(tokio::spawn(async move {
+            handler.start().expect("MySQL handler error")
+        }));
 
         info!(
             "MySQL handler listening on {}:{}, Usage: mysql -h{} -P{}",
@@ -54,9 +65,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let handler =
             ClickHouseHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
 
-        tokio::spawn(async move {
+        tasks.push(tokio::spawn(async move {
             handler.start().await.expect("ClickHouse handler error");
-        });
+        }));
 
         info!(
             "ClickHouse handler listening on {}:{}, Usage: clickhouse-client --host {} --port {}",
@@ -70,18 +81,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Metric API service.
     {
         let srv = MetricService::create(conf.clone());
-        tokio::spawn(async move {
+        tasks.push(tokio::spawn(async move {
             srv.make_server().expect("Metrics service error");
-        });
+        }));
         info!("Metric API server listening on {}", conf.metric_api_address);
     }
 
     // HTTP API service.
     {
         let srv = HttpService::create(conf.clone(), cluster.clone());
-        tokio::spawn(async move {
+        tasks.push(tokio::spawn(async move {
             srv.make_server().await.expect("HTTP service error");
-        });
+        }));
         info!("HTTP API server listening on {}", conf.http_api_address);
     }
 
@@ -89,8 +100,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let srv = RpcService::create(conf.clone(), cluster.clone(), session_manager.clone());
         info!("RPC API server listening on {}", conf.flight_api_address);
-        srv.make_server().await.expect("RPC service error");
+        tasks.push(tokio::spawn(async move {
+            srv.make_server().await.expect("RPC service error");
+        }));
     }
 
+    futures::future::try_join_all(tasks).await?;
     Ok(())
 }
