@@ -11,8 +11,6 @@ use fuse_query::servers::ClickHouseHandler;
 use fuse_query::servers::MySQLHandler;
 use fuse_query::sessions::SessionManager;
 use log::info;
-use tokio::task::JoinError;
-use tokio::task::JoinHandle;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -34,14 +32,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", conf);
     info!("FuseQuery v-{}", conf.version);
 
-    futures::executor::block_on(start(&conf))?;
-    Ok(())
-}
-
-async fn start(conf: &Config) -> Result<(), JoinError> {
-    let mut tasks: Vec<JoinHandle<()>> = vec![];
-
-    let cluster = Cluster::create_global(conf.clone()).unwrap();
+    let mut tasks = vec![];
+    let cluster = Cluster::create_global(conf.clone())?;
     let session_manager = SessionManager::create();
 
     // MySQL handler.
@@ -105,6 +97,10 @@ async fn start(conf: &Config) -> Result<(), JoinError> {
         }));
     }
 
-    futures::future::try_join_all(tasks).await?;
+    // Process exit when error.
+    if let Err(_e) = futures::future::try_join_all(tasks).await {
+        std::process::exit(1);
+    }
+
     Ok(())
 }
