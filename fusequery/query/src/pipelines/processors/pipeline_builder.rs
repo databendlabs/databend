@@ -144,6 +144,7 @@ impl PipelineBuilder {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(AggregatorPartialTransform::try_create(
                     plan.schema(),
+                    plan.input.schema(),
                     plan.aggr_expr.clone(),
                 )?))
             })?;
@@ -151,6 +152,7 @@ impl PipelineBuilder {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(GroupByPartialTransform::create(
                     plan.schema(),
+                    plan.input.schema(),
                     plan.aggr_expr.clone(),
                     plan.group_expr.clone(),
                 )))
@@ -168,6 +170,7 @@ impl PipelineBuilder {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(AggregatorFinalTransform::try_create(
                     plan.schema(),
+                    plan.schema_before_groupby.clone(),
                     plan.aggr_expr.clone(),
                 )?))
             })?;
@@ -175,6 +178,7 @@ impl PipelineBuilder {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(GroupByFinalTransform::create(
                     plan.schema(),
+                    plan.schema_before_groupby.clone(),
                     plan.aggr_expr.clone(),
                     plan.group_expr.clone(),
                 )))

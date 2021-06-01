@@ -6,6 +6,7 @@ use std::fmt;
 
 use common_datavalues::DataArrayAggregate;
 use common_datavalues::DataColumnarValue;
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -19,16 +20,19 @@ use crate::IAggregateFunction;
 #[derive(Clone)]
 pub struct AggregateAvgFunction {
     display_name: String,
-    depth: usize,
     state: DataValue,
+    arguments: Vec<DataField>,
 }
 
 impl AggregateAvgFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggregateFunction>> {
+    pub fn try_create(
+        display_name: &str,
+        arguments: Vec<DataField>,
+    ) -> Result<Box<dyn IAggregateFunction>> {
         Ok(Box::new(AggregateAvgFunction {
             display_name: display_name.to_string(),
-            depth: 0,
             state: DataValue::Struct(vec![DataValue::Null, DataValue::UInt64(Some(0))]),
+            arguments,
         }))
     }
 }
@@ -38,16 +42,12 @@ impl IAggregateFunction for AggregateAvgFunction {
         "AggregateAvgFunction"
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self) -> Result<DataType> {
         Ok(DataType::Float64)
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
-    }
-
-    fn set_depth(&mut self, depth: usize) {
-        self.depth = depth;
     }
 
     fn accumulate(&mut self, columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
@@ -76,7 +76,7 @@ impl IAggregateFunction for AggregateAvgFunction {
     }
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        let val = states[self.depth].clone();
+        let val = states[0].clone();
         if let (DataValue::Struct(new_states), DataValue::Struct(old_states)) =
             (val, self.state.clone())
         {

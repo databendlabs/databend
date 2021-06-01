@@ -35,10 +35,12 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
 
     let mut pipeline = Pipeline::create(ctx.clone());
     let source = test_source.number_source_transform_for_test(5)?;
+    let source_schema = test_source.number_schema_for_test()?;
     pipeline.add_source(Arc::new(source))?;
     pipeline.add_simple_transform(|| {
         Ok(Box::new(GroupByPartialTransform::create(
             aggr_partial.schema(),
+            source_schema.clone(),
             aggr_exprs.to_vec(),
             group_exprs.to_vec(),
         )))
@@ -47,6 +49,7 @@ async fn test_transform_final_groupby() -> anyhow::Result<()> {
     pipeline.add_simple_transform(|| {
         Ok(Box::new(GroupByFinalTransform::create(
             aggr_final.schema(),
+            source_schema.clone(),
             aggr_exprs.to_vec(),
             group_exprs.to_vec(),
         )))

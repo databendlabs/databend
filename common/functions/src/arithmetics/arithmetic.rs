@@ -22,7 +22,6 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct ArithmeticFunction {
-    depth: usize,
     op: DataValueArithmeticOperator,
 }
 
@@ -43,7 +42,7 @@ impl ArithmeticFunction {
     }
 
     pub fn try_create_func(op: DataValueArithmeticOperator) -> Result<Box<dyn IFunction>> {
-        Ok(Box::new(ArithmeticFunction { depth: 0, op }))
+        Ok(Box::new(ArithmeticFunction { op }))
     }
 }
 

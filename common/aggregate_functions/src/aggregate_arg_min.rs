@@ -7,6 +7,7 @@ use std::fmt;
 
 use common_datavalues::DataArrayAggregate;
 use common_datavalues::DataColumnarValue;
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -19,16 +20,19 @@ use crate::IAggregateFunction;
 #[derive(Clone)]
 pub struct AggregateArgMinFunction {
     display_name: String,
-    depth: usize,
     state: DataValue,
+    arguments: Vec<DataField>,
 }
 
 impl AggregateArgMinFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggregateFunction>> {
+    pub fn try_create(
+        display_name: &str,
+        arguments: Vec<DataField>,
+    ) -> Result<Box<dyn IAggregateFunction>> {
         Ok(Box::new(AggregateArgMinFunction {
             display_name: display_name.to_string(),
-            depth: 0,
             state: DataValue::Struct(vec![DataValue::Null, DataValue::Null]),
+            arguments,
         }))
     }
 }
@@ -38,16 +42,12 @@ impl IAggregateFunction for AggregateArgMinFunction {
         "AggregateArgMinFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        Ok(args[0].clone())
+    fn return_type(&self) -> Result<DataType> {
+        Ok(self.arguments[0].data_type().clone())
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
-    }
-
-    fn set_depth(&mut self, depth: usize) {
-        self.depth = depth;
     }
 
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
@@ -85,7 +85,7 @@ impl IAggregateFunction for AggregateArgMinFunction {
     }
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        let arg_val = states[self.depth].clone();
+        let arg_val = states[0].clone();
         if let (DataValue::Struct(new_states), DataValue::Struct(old_states)) =
             (arg_val, self.state.clone())
         {

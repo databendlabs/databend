@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use common_datavalues::DataField;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -14,7 +15,8 @@ use crate::aggregator::AggregatorFunction;
 use crate::IAggregateFunction;
 
 pub struct AggregateFunctionFactory;
-pub type FactoryFunc = fn(name: &str) -> Result<Box<dyn IAggregateFunction>>;
+pub type FactoryFunc =
+    fn(name: &str, arguments: Vec<DataField>) -> Result<Box<dyn IAggregateFunction>>;
 
 pub type FactoryFuncRef = Arc<RwLock<IndexMap<&'static str, FactoryFunc>>>;
 
@@ -28,12 +30,12 @@ lazy_static! {
 }
 
 impl AggregateFunctionFactory {
-    pub fn get(name: &str) -> Result<Box<dyn IAggregateFunction>> {
+    pub fn get(name: &str, arguments: Vec<DataField>) -> Result<Box<dyn IAggregateFunction>> {
         let map = FACTORY.read();
         let creator = map.get(&*name.to_lowercase()).ok_or_else(|| {
             ErrorCodes::UnknownAggregateFunction(format!("Unsupported AggregateFunction: {}", name))
         })?;
-        (creator)(name)
+        (creator)(name, arguments)
     }
 
     pub fn check(name: &str) -> bool {

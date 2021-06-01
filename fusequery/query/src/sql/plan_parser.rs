@@ -9,7 +9,6 @@ use std::sync::Mutex;
 use common_aggregate_functions::AggregateFunctionFactory;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::StringArray;
-use common_arrow::arrow::datatypes::Field;
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
@@ -196,7 +195,7 @@ impl PlanParser {
                 SQLCommon::make_data_type(&column.data_type)
                     .map(|data_type| DataField::new(&column.name.value, data_type, false))
             })
-            .collect::<Result<Vec<Field>>>()?;
+            .collect::<Result<Vec<DataField>>>()?;
 
         let mut options = HashMap::new();
         for p in create.options.iter() {
@@ -273,7 +272,7 @@ impl PlanParser {
             let chunks = values.chunks(100);
             let fields = columns
                 .iter()
-                .map(|ident| Field::new(&ident.value, DataType::Utf8, true))
+                .map(|ident| DataField::new(&ident.value, DataType::Utf8, true))
                 .collect::<Vec<_>>();
             let schema = DataSchemaRefExt::create(fields);
 
@@ -791,7 +790,7 @@ impl PlanParser {
                 }
 
                 let op = e.name.to_string();
-                if AggregateFunctionFactory::get(&op).is_ok() {
+                if AggregateFunctionFactory::check(&op) {
                     return Ok(Expression::AggregateFunction { op, args });
                 }
 
