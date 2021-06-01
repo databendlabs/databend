@@ -4,5 +4,6 @@
 
 mod hash;
 mod siphash;
+mod siphash_test;
 
 pub use hash::HashesFunction;
