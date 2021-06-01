@@ -22,7 +22,7 @@ pub struct ExpressionPlan {
     pub exprs: Vec<Expression>,
     pub schema: DataSchemaRef,
     pub input: Arc<PlanNode>,
-    pub desc: String
+    pub desc: String,
 }
 
 impl ExpressionPlan {
@@ -51,7 +51,7 @@ pub enum Expression {
     BinaryExpression {
         left: Box<Expression>,
         op: String,
-        right: Box<Expression>
+        right: Box<Expression>,
     },
 
     /// ScalarFunction with a set of arguments.
@@ -68,7 +68,7 @@ pub enum Expression {
         /// The direction of the sort
         asc: bool,
         /// Whether to put Nulls before all other data values
-        nulls_first: bool
+        nulls_first: bool,
     },
     /// All fields(*) in a schema.
     Wildcard,
@@ -78,15 +78,15 @@ pub enum Expression {
         /// The expression being cast
         expr: Box<Expression>,
         /// The `DataType` the expression will yield
-        data_type: DataType
-    }
+        data_type: DataType,
+    },
 }
 
 impl Expression {
     pub fn column_name(&self) -> String {
         match self {
             Expression::Alias(name, _expr) => name.clone(),
-            _ => format!("{:?}", self)
+            _ => format!("{:?}", self),
         }
     }
 
@@ -140,10 +140,10 @@ impl Expression {
                 func.return_type(&arg_types)
             }
             Expression::Wildcard => Result::Err(ErrorCodes::IllegalDataType(
-                "Wildcard expressions are not valid to get return type"
+                "Wildcard expressions are not valid to get return type",
             )),
             Expression::Cast { data_type, .. } => Ok(data_type.clone()),
-            Expression::Sort { expr, .. } => expr.to_data_type(input_schema)
+            Expression::Sort { expr, .. } => expr.to_data_type(input_schema),
         }
     }
 
@@ -151,8 +151,8 @@ impl Expression {
         match self {
             Expression::AggregateFunction { op, .. } => AggregateFunctionFactory::get(op),
             _ => Err(ErrorCodes::LogicalError(
-                "Expression must be aggregated function"
-            ))
+                "Expression must be aggregated function",
+            )),
         }
     }
 
@@ -163,8 +163,8 @@ impl Expression {
                 Ok(arg_names)
             }
             _ => Err(ErrorCodes::LogicalError(
-                "Expression must be aggregated function"
-            ))
+                "Expression must be aggregated function",
+            )),
         }
     }
 }

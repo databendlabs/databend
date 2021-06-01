@@ -38,7 +38,7 @@ pub struct DataSource {
     // conf: Config,
     databases: RwLock<HashMap<String, Arc<dyn IDatabase>>>,
     table_functions: RwLock<HashMap<String, Arc<dyn ITableFunction>>>,
-    remote_factory: RemoteFactory
+    remote_factory: RemoteFactory,
 }
 
 impl DataSource {
@@ -51,7 +51,7 @@ impl DataSource {
         let mut datasource = DataSource {
             databases: Default::default(),
             table_functions: Default::default(),
-            remote_factory: RemoteFactory::new(conf)
+            remote_factory: RemoteFactory::new(conf),
         };
 
         datasource.register_system_database()?;
@@ -179,7 +179,7 @@ impl IDataSource for DataSource {
                 client.create_database(plan.clone()).await.map(|_| {
                     let database = RemoteDatabase::create(
                         self.remote_factory.store_client_provider(),
-                        plan.db.clone()
+                        plan.db.clone(),
                     );
                     self.databases
                         .write()

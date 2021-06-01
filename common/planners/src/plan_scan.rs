@@ -23,7 +23,7 @@ pub struct ScanPlan {
     /// Optional filter expression plan
     pub filters: Vec<Expression>,
     /// Optional limit to skip read
-    pub limit: Option<usize>
+    pub limit: Option<usize>,
 }
 
 impl ScanPlan {
@@ -39,7 +39,7 @@ impl ScanPlan {
             projection: None,
             projected_schema: Arc::new(DataSchema::empty()),
             filters: vec![],
-            limit: None
+            limit: None,
         }
     }
 }

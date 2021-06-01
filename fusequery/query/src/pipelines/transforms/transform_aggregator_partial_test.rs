@@ -31,7 +31,7 @@ async fn test_transform_partial_aggregator() -> anyhow::Result<()> {
     pipeline.add_simple_transform(|| {
         Ok(Box::new(AggregatorPartialTransform::try_create(
             aggr_partial.schema(),
-            aggr_exprs.to_vec()
+            aggr_exprs.to_vec(),
         )?))
     })?;
     pipeline.merge_processor()?;

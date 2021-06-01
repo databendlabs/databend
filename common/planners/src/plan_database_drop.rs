@@ -10,7 +10,7 @@ use common_datavalues::DataSchemaRef;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropDatabasePlan {
     pub if_exists: bool,
-    pub db: String
+    pub db: String,
 }
 
 impl DropDatabasePlan {

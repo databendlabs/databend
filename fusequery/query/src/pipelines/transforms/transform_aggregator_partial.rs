@@ -27,7 +27,7 @@ pub struct AggregatorPartialTransform {
     arg_names: Vec<Vec<String>>,
 
     schema: DataSchemaRef,
-    input: Arc<dyn IProcessor>
+    input: Arc<dyn IProcessor>,
 }
 
 impl AggregatorPartialTransform {
@@ -45,7 +45,7 @@ impl AggregatorPartialTransform {
             funcs,
             arg_names,
             schema,
-            input: Arc::new(EmptyProcessor::create())
+            input: Arc::new(EmptyProcessor::create()),
         })
     }
 }
@@ -104,7 +104,7 @@ impl IProcessor for AggregatorPartialTransform {
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block]
+            vec![block],
         )))
     }
 }

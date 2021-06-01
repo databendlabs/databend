@@ -14,13 +14,13 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct UdfExampleFunction {
-    display_name: String
+    display_name: String,
 }
 
 impl UdfExampleFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn IFunction>> {
         Ok(Box::new(UdfExampleFunction {
-            display_name: display_name.to_string()
+            display_name: display_name.to_string(),
         }))
     }
 }
@@ -41,7 +41,7 @@ impl IFunction for UdfExampleFunction {
     fn eval(&self, _columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
         Ok(DataColumnarValue::Constant(
             DataValue::Boolean(Some(true)),
-            input_rows
+            input_rows,
         ))
     }
 

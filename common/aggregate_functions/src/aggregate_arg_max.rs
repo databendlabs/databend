@@ -20,7 +20,7 @@ use crate::IAggregateFunction;
 pub struct AggregateArgMaxFunction {
     display_name: String,
     depth: usize,
-    state: DataValue
+    state: DataValue,
 }
 
 impl AggregateArgMaxFunction {
@@ -28,7 +28,7 @@ impl AggregateArgMaxFunction {
         Ok(Box::new(AggregateArgMaxFunction {
             display_name: display_name.to_string(),
             depth: 0,
-            state: DataValue::Struct(vec![DataValue::Null, DataValue::Null])
+            state: DataValue::Struct(vec![DataValue::Null, DataValue::Null]),
         }))
     }
 }
@@ -53,7 +53,7 @@ impl IAggregateFunction for AggregateArgMaxFunction {
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
         if let DataValue::Struct(max_arg_val) = DataArrayAggregate::data_array_aggregate_op(
             DataValueAggregateOperator::ArgMax,
-            columns[1].to_array()?
+            columns[1].to_array()?,
         )? {
             let index: u64 = max_arg_val[0].clone().try_into()?;
             let max_arg = DataValue::try_from_array(&columns[0].to_array()?, index as usize)?;
@@ -65,7 +65,7 @@ impl IAggregateFunction for AggregateArgMaxFunction {
                 let new_max_val = DataValueAggregate::data_value_aggregate_op(
                     DataValueAggregateOperator::Max,
                     old_max_val.clone(),
-                    max_val
+                    max_val,
                 )?;
                 self.state = DataValue::Struct(vec![
                     if new_max_val == old_max_val {
@@ -92,7 +92,7 @@ impl IAggregateFunction for AggregateArgMaxFunction {
             let new_max_val = DataValueAggregate::data_value_aggregate_op(
                 DataValueAggregateOperator::Max,
                 new_states[1].clone(),
-                old_states[1].clone()
+                old_states[1].clone(),
             )?;
             self.state = DataValue::Struct(vec![
                 if new_max_val == old_states[1] {

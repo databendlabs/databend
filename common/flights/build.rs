@@ -16,7 +16,7 @@ fn build_proto() {
     let proto_dir = Path::new(&manifest_dir).join("proto");
     let protos = [
         &Path::new(&proto_dir).join(Path::new("queryflight.proto")),
-        &Path::new(&proto_dir).join(Path::new("storeflight.proto"))
+        &Path::new(&proto_dir).join(Path::new("storeflight.proto")),
     ];
 
     for proto in protos.iter() {

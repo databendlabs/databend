@@ -13,14 +13,14 @@ use crate::fs::IFileSystem;
 use crate::fs::ListResult;
 
 pub struct LocalFS {
-    root: PathBuf
+    root: PathBuf,
 }
 
 /// IFS implementation on local file-system.
 impl LocalFS {
     pub fn try_create(root: String) -> anyhow::Result<LocalFS> {
         let f = LocalFS {
-            root: PathBuf::from(root)
+            root: PathBuf::from(root),
         };
         Ok(f)
     }
@@ -84,7 +84,7 @@ impl IFileSystem for LocalFS {
                         files.push(f);
                     }
                 }
-                Err(e) => return Err(e).context("LocalFS: fail to read entry")
+                Err(e) => return Err(e).context("LocalFS: fail to read entry"),
             }
         }
 

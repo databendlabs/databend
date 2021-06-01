@@ -32,11 +32,11 @@ use crate::SortPlan;
 
 pub enum AggregateMode {
     Partial,
-    Final
+    Final,
 }
 
 pub struct PlanBuilder {
-    plan: PlanNode
+    plan: PlanNode,
 }
 
 impl PlanBuilder {
@@ -52,7 +52,7 @@ impl PlanBuilder {
     /// Create an empty relation.
     pub fn empty() -> Self {
         Self::from(&PlanNode::Empty(EmptyPlan {
-            schema: DataSchemaRef::new(DataSchema::empty())
+            schema: DataSchemaRef::new(DataSchema::empty()),
         }))
     }
 
@@ -68,7 +68,7 @@ impl PlanBuilder {
                     projection_exprs.push(col(input_schema.fields()[i].name()))
                 }
             }
-            _ => projection_exprs.push(v.clone())
+            _ => projection_exprs.push(v.clone()),
         });
 
         // Let's validate the expressions firstly
@@ -89,7 +89,7 @@ impl PlanBuilder {
             input: Arc::new(self.plan.clone()),
             exprs: projection_exprs,
             schema: DataSchemaRefExt::create(merged),
-            desc: desc.to_string()
+            desc: desc.to_string(),
         })))
     }
 
@@ -101,7 +101,7 @@ impl PlanBuilder {
         Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
             input: Arc::new(self.plan.clone()),
             expr: exprs.to_owned(),
-            schema: DataSchemaRefExt::create(fields)
+            schema: DataSchemaRefExt::create(fields),
         })))
     }
 
@@ -110,7 +110,7 @@ impl PlanBuilder {
         mode: AggregateMode,
         schema_before_groupby: DataSchemaRef,
         aggr_expr: &[Expression],
-        group_expr: &[Expression]
+        group_expr: &[Expression],
     ) -> Result<Self> {
         Ok(match mode {
             AggregateMode::Partial => {
@@ -133,7 +133,7 @@ impl PlanBuilder {
                     input: Arc::new(self.plan.clone()),
                     aggr_expr: aggr_expr.to_vec(),
                     group_expr: group_expr.to_vec(),
-                    schema: DataSchemaRefExt::create(partial_fields)
+                    schema: DataSchemaRefExt::create(partial_fields),
                 }))
             }
             AggregateMode::Final => {
@@ -146,7 +146,7 @@ impl PlanBuilder {
                     input: Arc::new(self.plan.clone()),
                     aggr_expr: aggr_expr.to_vec(),
                     group_expr: group_expr.to_vec(),
-                    schema: DataSchemaRefExt::create(final_fields)
+                    schema: DataSchemaRefExt::create(final_fields),
                 }))
             }
         })
@@ -156,13 +156,13 @@ impl PlanBuilder {
     pub fn aggregate_partial(
         &self,
         aggr_expr: &[Expression],
-        group_expr: &[Expression]
+        group_expr: &[Expression],
     ) -> Result<Self> {
         self.aggregate(
             AggregateMode::Partial,
             self.plan.schema(),
             aggr_expr,
-            group_expr
+            group_expr,
         )
     }
 
@@ -171,13 +171,13 @@ impl PlanBuilder {
         &self,
         schema_before_groupby: DataSchemaRef,
         aggr_expr: &[Expression],
-        group_expr: &[Expression]
+        group_expr: &[Expression],
     ) -> Result<Self> {
         self.aggregate(
             AggregateMode::Final,
             schema_before_groupby,
             aggr_expr,
-            group_expr
+            group_expr,
         )
     }
 
@@ -188,7 +188,7 @@ impl PlanBuilder {
         table_schema: &DataSchema,
         projection: Option<Vec<usize>>,
         table_args: Option<Expression>,
-        limit: Option<usize>
+        limit: Option<usize>,
     ) -> Result<Self> {
         let table_schema = DataSchemaRef::new(table_schema.clone());
         let projected_schema = projection.clone().map(|p| {
@@ -198,7 +198,7 @@ impl PlanBuilder {
         });
         let projected_schema = match projected_schema {
             None => table_schema.clone(),
-            Some(v) => Arc::new(v)
+            Some(v) => Arc::new(v),
         };
 
         Ok(Self::from(&PlanNode::Scan(ScanPlan {
@@ -208,7 +208,7 @@ impl PlanBuilder {
             projection,
             table_args,
             filters: vec![],
-            limit
+            limit,
         })))
     }
 
@@ -217,7 +217,7 @@ impl PlanBuilder {
         validate_expression(&expr)?;
         Ok(Self::from(&PlanNode::Filter(FilterPlan {
             predicate: expr,
-            input: Arc::new(self.plan.clone())
+            input: Arc::new(self.plan.clone()),
         })))
     }
 
@@ -226,14 +226,14 @@ impl PlanBuilder {
         validate_expression(&expr)?;
         Ok(Self::from(&PlanNode::Having(HavingPlan {
             predicate: expr,
-            input: Arc::new(self.plan.clone())
+            input: Arc::new(self.plan.clone()),
         })))
     }
 
     pub fn sort(&self, exprs: &[Expression]) -> Result<Self> {
         Ok(Self::from(&PlanNode::Sort(SortPlan {
             order_by: exprs.to_vec(),
-            input: Arc::new(self.plan.clone())
+            input: Arc::new(self.plan.clone()),
         })))
     }
 
@@ -241,20 +241,20 @@ impl PlanBuilder {
     pub fn limit(&self, n: usize) -> Result<Self> {
         Ok(Self::from(&PlanNode::Limit(LimitPlan {
             n,
-            input: Arc::new(self.plan.clone())
+            input: Arc::new(self.plan.clone()),
         })))
     }
 
     pub fn select(&self) -> Result<Self> {
         Ok(Self::from(&PlanNode::Select(SelectPlan {
-            input: Arc::new(self.plan.clone())
+            input: Arc::new(self.plan.clone()),
         })))
     }
 
     pub fn explain(&self) -> Result<Self> {
         Ok(Self::from(&PlanNode::Explain(ExplainPlan {
             typ: ExplainType::Syntax,
-            input: Arc::new(self.plan.clone())
+            input: Arc::new(self.plan.clone()),
         })))
     }
 

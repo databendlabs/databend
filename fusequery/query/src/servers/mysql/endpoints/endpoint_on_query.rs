@@ -47,7 +47,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
                 _ => Err(ErrorCodes::UnImplement(format!(
                     "Unsupported column type:{:?}",
                     field.data_type()
-                )))
+                ))),
             }
         }
 
@@ -56,7 +56,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
                 table: "".to_string(),
                 column: field.name().to_string(),
                 coltype: column_type,
-                colflags: ColumnFlags::empty()
+                colflags: ColumnFlags::empty(),
             })
         }
 
@@ -101,7 +101,7 @@ type Output = std::io::Result<()>;
 
 // TODO: Maybe can use generic to abstract all MySQLEndpoints done function
 pub fn done<W: std::io::Write>(
-    writer: QueryResultWriter<'_, W>
+    writer: QueryResultWriter<'_, W>,
 ) -> impl FnOnce(Input) -> Output + '_ {
     move |res: Input| -> Output {
         match res {

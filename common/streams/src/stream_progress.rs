@@ -33,7 +33,7 @@ impl Stream for ProgressStream {
 
     fn poll_next(
         self: std::pin::Pin<&mut Self>,
-        ctx: &mut Context<'_>
+        ctx: &mut Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         let this = self.project();
 
@@ -44,17 +44,17 @@ impl Stream for ProgressStream {
                         let progress_values = ProgressValues {
                             read_rows: block.num_rows(),
                             read_bytes: block.memory_size(),
-                            total_rows_to_read: 0
+                            total_rows_to_read: 0,
                         };
 
                         (this.callback)(&progress_values);
                         Poll::Ready(Some(Ok(block)))
                     }
-                    Err(e) => Poll::Ready(Some(Err(e)))
+                    Err(e) => Poll::Ready(Some(Err(e))),
                 },
-                None => Poll::Ready(None)
+                None => Poll::Ready(None),
             },
-            Poll::Pending => Poll::Pending
+            Poll::Pending => Poll::Pending,
         }
     }
 }

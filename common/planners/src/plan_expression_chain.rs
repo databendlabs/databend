@@ -22,26 +22,26 @@ pub enum ExpressionAction {
     /// Constant column with known value.
     Constant(ActionConstant),
     Alias(ActionAlias),
-    Function(ActionFunction)
+    Function(ActionFunction),
 }
 
 #[derive(Debug, Clone)]
 pub struct ActionInput {
     pub name: String,
-    pub return_type: DataType
+    pub return_type: DataType,
 }
 
 #[derive(Debug, Clone)]
 pub struct ActionConstant {
     pub name: String,
-    pub value: DataValue
+    pub value: DataValue,
 }
 
 #[derive(Debug, Clone)]
 pub struct ActionAlias {
     pub name: String,
     pub arg_name: String,
-    pub arg_type: DataType
+    pub arg_type: DataType,
 }
 
 #[derive(Debug, Clone)]
@@ -51,21 +51,21 @@ pub struct ActionFunction {
     pub is_aggregated: bool,
     pub arg_names: Vec<String>,
     pub arg_types: Vec<DataType>,
-    pub return_type: DataType
+    pub return_type: DataType,
 }
 
 #[derive(Debug, Clone)]
 pub struct ExpressionChain {
     // input schema
     pub schema: DataSchemaRef,
-    pub actions: Vec<ExpressionAction>
+    pub actions: Vec<ExpressionAction>,
 }
 
 impl ExpressionChain {
     pub fn try_create(schema: DataSchemaRef, exprs: &[Expression]) -> Result<Self> {
         let mut chain = Self {
             schema,
-            actions: vec![]
+            actions: vec![],
         };
 
         for expr in exprs {
@@ -84,7 +84,7 @@ impl ExpressionChain {
                 let alias = ActionAlias {
                     name: name.clone(),
                     arg_name: sub_expr.column_name(),
-                    arg_type: return_type
+                    arg_type: return_type,
                 };
 
                 self.actions.push(ExpressionAction::Alias(alias));
@@ -93,14 +93,14 @@ impl ExpressionChain {
                 let arg_type = self.schema.field_with_name(c)?.data_type();
                 let input = ActionInput {
                     name: expr.column_name(),
-                    return_type: arg_type.clone()
+                    return_type: arg_type.clone(),
                 };
                 self.actions.push(ExpressionAction::Input(input));
             }
             Expression::Literal(l) => {
                 let value = ActionConstant {
                     name: expr.column_name(),
-                    value: l.clone()
+                    value: l.clone(),
                 };
 
                 self.actions.push(ExpressionAction::Constant(value));
@@ -108,7 +108,7 @@ impl ExpressionChain {
 
             Expression::UnaryExpression {
                 op,
-                expr: nested_expr
+                expr: nested_expr,
             } => {
                 self.add_expr(nested_expr)?;
 
@@ -121,7 +121,7 @@ impl ExpressionChain {
                     is_aggregated: false,
                     arg_names: vec![nested_expr.column_name()],
                     arg_types: arg_types.clone(),
-                    return_type: func.return_type(&arg_types)?
+                    return_type: func.return_type(&arg_types)?,
                 };
 
                 self.actions.push(ExpressionAction::Function(function));
@@ -143,7 +143,7 @@ impl ExpressionChain {
                     is_aggregated: false,
                     arg_names: vec![left.column_name(), right.column_name()],
                     arg_types: arg_types.clone(),
-                    return_type: func.return_type(&arg_types)?
+                    return_type: func.return_type(&arg_types)?,
                 };
 
                 self.actions.push(ExpressionAction::Function(function));
@@ -166,7 +166,7 @@ impl ExpressionChain {
                     is_aggregated: false,
                     arg_names: args.iter().map(|action| action.column_name()).collect(),
                     arg_types: arg_types.clone(),
-                    return_type: func.return_type(&arg_types)?
+                    return_type: func.return_type(&arg_types)?,
                 };
 
                 self.actions.push(ExpressionAction::Function(function));
@@ -189,7 +189,7 @@ impl ExpressionChain {
                     is_aggregated: true,
                     arg_names: args.iter().map(|action| action.column_name()).collect(),
                     arg_types: arg_types.clone(),
-                    return_type: func.return_type(&arg_types)?
+                    return_type: func.return_type(&arg_types)?,
                 };
 
                 self.actions.push(ExpressionAction::Function(function));
@@ -201,7 +201,7 @@ impl ExpressionChain {
             Expression::Wildcard => {}
             Expression::Cast {
                 expr: sub_expr,
-                data_type
+                data_type,
             } => {
                 self.add_expr(sub_expr)?;
                 let function = ActionFunction {
@@ -210,7 +210,7 @@ impl ExpressionChain {
                     is_aggregated: false,
                     arg_names: vec![sub_expr.column_name()],
                     arg_types: vec![sub_expr.to_data_type(&self.schema)?],
-                    return_type: data_type.clone()
+                    return_type: data_type.clone(),
                 };
 
                 self.actions.push(ExpressionAction::Function(function));
@@ -226,7 +226,7 @@ impl ExpressionAction {
             ExpressionAction::Input(input) => &input.name,
             ExpressionAction::Constant(c) => &c.name,
             ExpressionAction::Alias(a) => &a.name,
-            ExpressionAction::Function(f) => &f.name
+            ExpressionAction::Function(f) => &f.name,
         }
     }
 }
@@ -235,20 +235,20 @@ impl ActionFunction {
     pub fn to_function(&self) -> Result<Box<dyn IFunction>> {
         if self.is_aggregated {
             return Err(ErrorCodes::LogicalError(
-                "Action must be non-aggregated function"
+                "Action must be non-aggregated function",
             ));
         }
 
         match self.func_name.as_str() {
             "cast" => Ok(CastFunction::create(self.return_type.clone())),
-            _ => FunctionFactory::get(&self.func_name)
+            _ => FunctionFactory::get(&self.func_name),
         }
     }
 
     pub fn to_aggregate_function(&self) -> Result<Box<dyn IAggregateFunction>> {
         if !self.is_aggregated {
             return Err(ErrorCodes::LogicalError(
-                "Action must be aggregated function"
+                "Action must be aggregated function",
             ));
         }
         AggregateFunctionFactory::get(&self.func_name)

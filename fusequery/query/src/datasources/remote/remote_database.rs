@@ -20,7 +20,7 @@ use crate::datasources::ITableFunction;
 pub struct RemoteDatabase {
     name: String,
     store_client_provider: StoreClientProvider,
-    tables: RwLock<HashMap<String, Arc<dyn ITable>>>
+    tables: RwLock<HashMap<String, Arc<dyn ITable>>>,
 }
 
 impl RemoteDatabase {
@@ -28,7 +28,7 @@ impl RemoteDatabase {
         RemoteDatabase {
             name,
             store_client_provider,
-            tables: RwLock::new(HashMap::default())
+            tables: RwLock::new(HashMap::default()),
         }
     }
 }
@@ -88,7 +88,7 @@ impl IDatabase for RemoteDatabase {
             plan.table,
             plan.schema,
             provider.clone(),
-            plan.options
+            plan.options,
         )?;
         let mut client = provider.try_get_client().await?;
         client.create_table(clone).await.map(|_| {

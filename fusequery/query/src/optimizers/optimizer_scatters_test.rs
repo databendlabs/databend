@@ -16,7 +16,7 @@ async fn test_scatter_optimizer() -> Result<()> {
     struct Test {
         name: &'static str,
         query: &'static str,
-        expect: &'static str
+        expect: &'static str,
     }
 
     let tests = vec![
@@ -161,7 +161,7 @@ async fn test_scatter_optimizer() -> Result<()> {
             .add_node(
                 &String::from("Github"),
                 1,
-                &String::from("www.github.com:9090")
+                &String::from("www.github.com:9090"),
             )
             .await?;
 

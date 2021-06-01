@@ -14,7 +14,7 @@ use crate::configs::Config;
 use crate::localfs::LocalFS;
 
 pub struct StoreServer {
-    conf: Config
+    conf: Config,
 }
 
 impl StoreServer {

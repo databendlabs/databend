@@ -37,7 +37,7 @@ impl DataValueArithmetic {
     pub fn data_value_arithmetic_op(
         op: DataValueArithmeticOperator,
         left: DataValue,
-        right: DataValue
+        right: DataValue,
     ) -> Result<DataValue> {
         match (&left, &right) {
             (DataValue::Null, _) => Ok(right),
@@ -368,8 +368,8 @@ impl DataValueArithmetic {
                     lhs.data_type(),
                     op,
                     rhs.data_type(),
-                )))
-            }
+                ))),
+            },
         }
     }
 }

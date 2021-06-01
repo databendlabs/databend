@@ -22,20 +22,20 @@ pub struct SortMergeTransform {
     schema: DataSchemaRef,
     exprs: Vec<Expression>,
     limit: Option<usize>,
-    input: Arc<dyn IProcessor>
+    input: Arc<dyn IProcessor>,
 }
 
 impl SortMergeTransform {
     pub fn try_create(
         schema: DataSchemaRef,
         exprs: Vec<Expression>,
-        limit: Option<usize>
+        limit: Option<usize>,
     ) -> Result<Self> {
         Ok(SortMergeTransform {
             schema,
             exprs,
             limit,
-            input: Arc::new(EmptyProcessor::create())
+            input: Arc::new(EmptyProcessor::create()),
         })
     }
 }
@@ -73,14 +73,14 @@ impl IProcessor for SortMergeTransform {
             _ => vec![DataBlock::merge_sort_blocks(
                 &blocks,
                 &sort_columns_descriptions,
-                self.limit
-            )?]
+                self.limit,
+            )?],
         };
 
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            results
+            results,
         )))
     }
 }

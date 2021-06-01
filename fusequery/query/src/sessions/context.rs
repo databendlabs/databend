@@ -38,7 +38,7 @@ pub struct FuseQueryContext {
     partition_queue: Arc<RwLock<VecDeque<Partition>>>,
     current_database: Arc<RwLock<String>>,
     progress: Arc<Progress>,
-    runtime: Arc<RwLock<Runtime>>
+    runtime: Arc<RwLock<Runtime>>,
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
@@ -56,7 +56,7 @@ impl FuseQueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             current_database: Arc::new(RwLock::new(String::from("default"))),
             progress: Arc::new(Progress::create()),
-            runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(cpus)?))
+            runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(cpus)?)),
         };
         // Default settings.
         ctx.initial_settings()?;
@@ -89,7 +89,7 @@ impl FuseQueryContext {
     pub fn execute_task<T>(&self, task: T) -> JoinHandle<T::Output>
     where
         T: Future + Send + 'static,
-        T::Output: Send + 'static
+        T::Output: Send + 'static,
     {
         self.runtime.read().spawn(task)
     }
@@ -144,7 +144,7 @@ impl FuseQueryContext {
         let statistics = self.statistics.read();
         Ok(Statistics {
             read_rows: statistics.read_rows,
-            read_bytes: statistics.read_bytes
+            read_bytes: statistics.read_bytes,
         })
     }
 

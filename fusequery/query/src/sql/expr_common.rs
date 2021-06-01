@@ -19,7 +19,7 @@ pub fn expand_wildcard(expr: &Expression, schema: &DataSchemaRef) -> Vec<Express
             .iter()
             .map(|f| Expression::Column(f.name().to_string()))
             .collect::<Vec<Expression>>(),
-        _ => vec![expr.clone()]
+        _ => vec![expr.clone()],
     }
 }
 
@@ -85,7 +85,7 @@ struct Finder<'a, F>
 where F: Fn(&Expression) -> bool
 {
     test_fn: &'a F,
-    exprs: Vec<Expression>
+    exprs: Vec<Expression>,
 }
 
 impl<'a, F> Finder<'a, F>
@@ -95,7 +95,7 @@ where F: Fn(&Expression) -> bool
     fn new(test_fn: &'a F) -> Self {
         Self {
             test_fn,
-            exprs: Vec::new()
+            exprs: Vec::new(),
         }
     }
 }
@@ -133,7 +133,7 @@ where F: Fn(&Expression) -> bool {
 pub fn expr_as_column_expr(expr: &Expression) -> Result<Expression> {
     match expr {
         Expression::Column(_) => Ok(expr.clone()),
-        _ => Ok(Expression::Column(expr.column_name()))
+        _ => Ok(Expression::Column(expr.column_name())),
     }
 }
 
@@ -181,7 +181,7 @@ pub fn sort_to_inner_expr(expr: &Expression) -> Expression {
         Expression::Sort {
             expr: nest_exprs, ..
         } => *nest_exprs.clone(),
-        _ => expr.clone()
+        _ => expr.clone(),
     }
 }
 
@@ -189,14 +189,14 @@ pub fn sort_to_inner_expr(expr: &Expression) -> Expression {
 /// `Expression::Column`'s.
 pub fn find_columns_not_satisfy_exprs(
     columns: &[Expression],
-    exprs: &[Expression]
+    exprs: &[Expression],
 ) -> Result<Option<Expression>> {
     columns.iter().try_for_each(|c| match c {
         Expression::Column(_) => Ok(()),
 
         _ => Err(ErrorCodes::SyntaxException(
-            "Expression::Column are required".to_string()
-        ))
+            "Expression::Column are required".to_string(),
+        )),
     })?;
 
     let exprs = find_column_exprs(exprs);
@@ -239,21 +239,21 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
             Expression::Wildcard => Ok(Expression::Wildcard),
             Expression::Alias(alias_name, nested_expr) => Ok(Expression::Alias(
                 alias_name.clone(),
-                Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?)
+                Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?),
             )),
 
             Expression::UnaryExpression {
                 op,
-                expr: nested_expr
+                expr: nested_expr,
             } => Ok(Expression::UnaryExpression {
                 op: op.clone(),
-                expr: Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?)
+                expr: Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?),
             }),
 
             Expression::BinaryExpression { left, op, right } => Ok(Expression::BinaryExpression {
                 left: Box::new(clone_with_replacement(&**left, replacement_fn)?),
                 op: op.clone(),
-                right: Box::new(clone_with_replacement(&**right, replacement_fn)?)
+                right: Box::new(clone_with_replacement(&**right, replacement_fn)?),
             }),
 
             Expression::ScalarFunction { op, args } => Ok(Expression::ScalarFunction {
@@ -261,7 +261,7 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                 args: args
                     .iter()
                     .map(|e| clone_with_replacement(e, replacement_fn))
-                    .collect::<Result<Vec<Expression>>>()?
+                    .collect::<Result<Vec<Expression>>>()?,
             }),
 
             Expression::AggregateFunction { op, args } => Ok(Expression::AggregateFunction {
@@ -269,29 +269,29 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                 args: args
                     .iter()
                     .map(|e| clone_with_replacement(e, replacement_fn))
-                    .collect::<Result<Vec<Expression>>>()?
+                    .collect::<Result<Vec<Expression>>>()?,
             }),
 
             Expression::Sort {
                 expr: nested_expr,
                 asc,
-                nulls_first
+                nulls_first,
             } => Ok(Expression::Sort {
                 expr: Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?),
                 asc: *asc,
-                nulls_first: *nulls_first
+                nulls_first: *nulls_first,
             }),
 
             Expression::Cast {
                 expr: nested_expr,
-                data_type
+                data_type,
             } => Ok(Expression::Cast {
                 expr: Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?),
-                data_type: data_type.clone()
+                data_type: data_type.clone(),
             }),
 
-            Expression::Column(_) | Expression::Literal(_) => Ok(expr.clone())
-        }
+            Expression::Column(_) | Expression::Literal(_) => Ok(expr.clone()),
+        },
     }
 }
 
@@ -304,7 +304,7 @@ pub fn extract_aliases(exprs: &[Expression]) -> HashMap<String, Expression> {
             Expression::Alias(alias_name, nest_exprs) => {
                 Some((alias_name.clone(), *nest_exprs.clone()))
             }
-            _ => None
+            _ => None,
         })
         .collect::<HashMap<String, Expression>>()
 }
@@ -313,7 +313,7 @@ pub fn extract_aliases(exprs: &[Expression]) -> HashMap<String, Expression> {
 /// alias' underlying `expr`.
 pub fn resolve_aliases_to_exprs(
     expr: &Expression,
-    aliases: &HashMap<String, Expression>
+    aliases: &HashMap<String, Expression>,
 ) -> Result<Expression> {
     clone_with_replacement(expr, &|nest_exprs| match nest_exprs {
         Expression::Column(name) => {
@@ -323,7 +323,7 @@ pub fn resolve_aliases_to_exprs(
                 Ok(None)
             }
         }
-        _ => Ok(None)
+        _ => Ok(None),
     })
 }
 
@@ -332,6 +332,6 @@ pub fn resolve_aliases_to_exprs(
 pub fn unwrap_alias_exprs(expr: &Expression) -> Result<Expression> {
     clone_with_replacement(expr, &|nest_exprs| match nest_exprs {
         Expression::Alias(_, nested_expr) => Ok(Some(*nested_expr.clone())),
-        _ => Ok(None)
+        _ => Ok(None),
     })
 }

@@ -27,9 +27,9 @@ impl ContextFunction {
 
         Ok(match name.to_lowercase().as_str() {
             "database" => vec![Expression::Literal(DataValue::Utf8(Some(
-                ctx.get_current_database()
+                ctx.get_current_database(),
             )))],
-            _ => vec![]
+            _ => vec![],
         })
     }
 }

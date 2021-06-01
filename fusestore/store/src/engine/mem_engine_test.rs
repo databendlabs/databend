@@ -26,8 +26,8 @@ fn test_mem_engine_create_database() -> anyhow::Result<()> {
             db_id: -1,
             ver: -1,
             table_name_to_id: HashMap::new(),
-            tables: HashMap::new()
-        })
+            tables: HashMap::new(),
+        }),
     };
     let cmdbar = CmdCreateDatabase {
         db_name: "bar".into(),
@@ -35,8 +35,8 @@ fn test_mem_engine_create_database() -> anyhow::Result<()> {
             db_id: -1,
             ver: -1,
             table_name_to_id: HashMap::new(),
-            tables: HashMap::new()
-        })
+            tables: HashMap::new(),
+        }),
     };
 
     {
@@ -115,8 +115,8 @@ fn test_mem_engine_create_get_table() -> anyhow::Result<()> {
             db_id: -1,
             ver: -1,
             table_name_to_id: HashMap::new(),
-            tables: HashMap::new()
-        })
+            tables: HashMap::new(),
+        }),
     };
 
     let cmd_table = CmdCreateTable {
@@ -127,8 +127,8 @@ fn test_mem_engine_create_get_table() -> anyhow::Result<()> {
             ver: -1,
             schema: vec![1, 2, 3],
             options: maplit::hashmap! {"key".into() => "val".into()},
-            placement_policy: vec![1, 2, 3]
-        })
+            placement_policy: vec![1, 2, 3],
+        }),
     };
 
     {
@@ -193,8 +193,8 @@ fn test_mem_engine_drop_database() -> anyhow::Result<()> {
             db_id: -1,
             ver: -1,
             table_name_to_id: HashMap::new(),
-            tables: HashMap::new()
-        })
+            tables: HashMap::new(),
+        }),
     };
     let _ = eng.create_database(cmd.clone(), false).unwrap();
     let r = eng.drop_database(test_db_name, false);
@@ -223,8 +223,8 @@ fn test_mem_engine_drop_table() -> anyhow::Result<()> {
             db_id: -1,
             ver: -1,
             table_name_to_id: HashMap::new(),
-            tables: HashMap::new()
-        })
+            tables: HashMap::new(),
+        }),
     };
 
     let cmd_table = CmdCreateTable {
@@ -235,8 +235,8 @@ fn test_mem_engine_drop_table() -> anyhow::Result<()> {
             ver: -1,
             schema: vec![1, 2, 3],
             options: maplit::hashmap! {"key".into() => "val".into()},
-            placement_policy: vec![1, 2, 3]
-        })
+            placement_policy: vec![1, 2, 3],
+        }),
     };
 
     // create db foo

@@ -26,7 +26,7 @@ pub struct FilterTransform {
     input: Arc<dyn IProcessor>,
     executor: Arc<ExpressionExecutor>,
     predicate: Expression,
-    having: bool
+    having: bool,
 }
 
 impl FilterTransform {
@@ -38,7 +38,7 @@ impl FilterTransform {
             schema,
             DataSchemaRefExt::create(fields),
             vec![predicate.clone()],
-            false
+            false,
         )?;
         executor.validate()?;
 
@@ -46,7 +46,7 @@ impl FilterTransform {
             input: Arc::new(EmptyProcessor::create()),
             executor: Arc::new(executor),
             predicate,
-            having
+            having,
         })
     }
 }

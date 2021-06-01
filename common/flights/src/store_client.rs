@@ -54,7 +54,7 @@ pub type BlockStream =
 pub struct StoreClient {
     token: Vec<u8>,
     timeout: Duration,
-    client: FlightServiceClient<tonic::transport::channel::Channel>
+    client: FlightServiceClient<tonic::transport::channel::Channel>,
 }
 
 impl StoreClient {
@@ -79,7 +79,7 @@ impl StoreClient {
         let rx = Self {
             token,
             timeout,
-            client
+            client,
         };
         Ok(rx)
     }
@@ -91,7 +91,7 @@ impl StoreClient {
     /// Create database call.
     pub async fn create_database(
         &mut self,
-        plan: CreateDatabasePlan
+        plan: CreateDatabasePlan,
     ) -> anyhow::Result<CreateDatabaseActionResult> {
         let action = StoreDoAction::CreateDatabase(CreateDatabaseAction { plan });
         let rst = self.do_action(&action).await?;
@@ -105,7 +105,7 @@ impl StoreClient {
     /// Drop database call.
     pub async fn drop_database(
         &mut self,
-        plan: DropDatabasePlan
+        plan: DropDatabasePlan,
     ) -> anyhow::Result<DropDatabaseActionResult> {
         let action = StoreDoAction::DropDatabase(DropDatabaseAction { plan });
         let rst = self.do_action(&action).await?;
@@ -119,7 +119,7 @@ impl StoreClient {
     /// Create table call.
     pub async fn create_table(
         &mut self,
-        plan: CreateTablePlan
+        plan: CreateTablePlan,
     ) -> anyhow::Result<CreateTableActionResult> {
         let action = StoreDoAction::CreateTable(CreateTableAction { plan });
         let rst = self.do_action(&action).await?;
@@ -133,7 +133,7 @@ impl StoreClient {
     /// Drop table call.
     pub async fn drop_table(
         &mut self,
-        plan: DropTablePlan
+        plan: DropTablePlan,
     ) -> anyhow::Result<DropTableActionResult> {
         let action = StoreDoAction::DropTable(DropTableAction { plan });
         let rst = self.do_action(&action).await?;
@@ -148,7 +148,7 @@ impl StoreClient {
     pub async fn get_table(
         &mut self,
         db: String,
-        table: String
+        table: String,
     ) -> anyhow::Result<GetTableActionResult> {
         let action = StoreDoAction::GetTable(GetTableAction { db, table });
         let rst = self.do_action(&action).await?;
@@ -164,11 +164,11 @@ impl StoreClient {
         client: &mut FlightServiceClient<Channel>,
         timeout: Duration,
         username: &str,
-        password: &str
+        password: &str,
     ) -> anyhow::Result<Vec<u8>> {
         let auth = BasicAuth {
             username: username.to_string(),
-            password: password.to_string()
+            password: password.to_string(),
         };
         let mut payload = vec![];
         auth.encode(&mut payload)?;
@@ -222,7 +222,7 @@ impl StoreClient {
         db_name: String,
         tbl_name: String,
         scheme_ref: SchemaRef,
-        mut block_stream: BlockStream
+        mut block_stream: BlockStream,
     ) -> anyhow::Result<AppendResult> {
         let ipc_write_opt = IpcWriteOptions::default();
         let flight_schema = flight_data_from_arrow_schema(&scheme_ref, &ipc_write_opt);

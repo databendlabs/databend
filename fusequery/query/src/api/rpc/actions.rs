@@ -11,5 +11,5 @@ pub struct ExecutePlanWithShuffleAction {
     pub stage_id: String,
     pub plan: PlanNode,
     pub scatters: Vec<String>,
-    pub scatters_action: Expression
+    pub scatters_action: Expression,
 }

@@ -22,7 +22,7 @@ pub struct RemoteTable {
     pub(crate) db: String,
     name: String,
     schema: DataSchemaRef,
-    store_client_provider: StoreClientProvider
+    store_client_provider: StoreClientProvider,
 }
 
 impl RemoteTable {
@@ -32,13 +32,13 @@ impl RemoteTable {
         name: String,
         schema: DataSchemaRef,
         store_client_provider: StoreClientProvider,
-        _options: TableOptions
+        _options: TableOptions,
     ) -> Result<Box<dyn ITable>> {
         let table = Self {
             db,
             name,
             schema,
-            store_client_provider
+            store_client_provider,
         };
         Ok(Box::new(table))
     }
@@ -70,16 +70,16 @@ impl ITable for RemoteTable {
         &self,
         _ctx: FuseQueryContextRef,
         _scan: &ScanPlan,
-        _partitions: usize
+        _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
         Result::Err(ErrorCodes::UnImplement(
-            "RemoteTable read_plan not yet implemented"
+            "RemoteTable read_plan not yet implemented",
         ))
     }
 
     async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
         Result::Err(ErrorCodes::UnImplement(
-            "RemoteTable read not yet implemented"
+            "RemoteTable read not yet implemented",
         ))
     }
 
@@ -99,7 +99,7 @@ impl ITable for RemoteTable {
                     plan.db_name.clone(),
                     plan.tbl_name.clone(),
                     (&plan).schema().clone(),
-                    block_stream
+                    block_stream,
                 )
                 .await?;
         }

@@ -7,14 +7,14 @@ pub struct Statistics {
     /// Total rows of the query read.
     pub read_rows: usize,
     /// Total bytes of the query read.
-    pub read_bytes: usize
+    pub read_bytes: usize,
 }
 
 impl Statistics {
     pub fn default() -> Self {
         Statistics {
             read_rows: 0,
-            read_bytes: 0
+            read_bytes: 0,
         }
     }
 

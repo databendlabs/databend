@@ -22,7 +22,7 @@ fn test_aggregate_function() -> Result<()> {
         columns: Vec<DataColumnarValue>,
         expect: DataValue,
         error: &'static str,
-        func: Box<dyn IAggregateFunction>
+        func: Box<dyn IAggregateFunction>,
     }
 
     let columns = vec![
@@ -40,7 +40,7 @@ fn test_aggregate_function() -> Result<()> {
             func: AggregateCountFunction::try_create("count")?,
             columns: columns.clone(),
             expect: DataValue::UInt64(Some(4)),
-            error: ""
+            error: "",
         },
         Test {
             name: "max-passed",
@@ -51,7 +51,7 @@ fn test_aggregate_function() -> Result<()> {
             func: AggregateMaxFunction::try_create("max")?,
             columns: columns.clone(),
             expect: DataValue::Int64(Some(4)),
-            error: ""
+            error: "",
         },
         Test {
             name: "min-passed",
@@ -62,7 +62,7 @@ fn test_aggregate_function() -> Result<()> {
             func: AggregateMinFunction::try_create("min")?,
             columns: columns.clone(),
             expect: DataValue::Int64(Some(1)),
-            error: ""
+            error: "",
         },
         Test {
             name: "avg-passed",
@@ -73,7 +73,7 @@ fn test_aggregate_function() -> Result<()> {
             func: AggregateAvgFunction::try_create("avg")?,
             columns: columns.clone(),
             expect: DataValue::Float64(Some(2.5)),
-            error: ""
+            error: "",
         },
         Test {
             name: "sum-passed",
@@ -84,7 +84,7 @@ fn test_aggregate_function() -> Result<()> {
             func: AggregateSumFunction::try_create("sum")?,
             columns: columns.clone(),
             expect: DataValue::Int64(Some(10)),
-            error: ""
+            error: "",
         },
         Test {
             name: "argMax-passed",
@@ -95,7 +95,7 @@ fn test_aggregate_function() -> Result<()> {
             func: AggregateArgMaxFunction::try_create("argmax")?,
             columns: columns.clone(),
             expect: DataValue::Int64(Some(1)),
-            error: ""
+            error: "",
         },
         Test {
             name: "argMin-passed",
@@ -106,7 +106,7 @@ fn test_aggregate_function() -> Result<()> {
             func: AggregateArgMinFunction::try_create("argmin")?,
             columns: columns.clone(),
             expect: DataValue::Int64(Some(4)),
-            error: ""
+            error: "",
         },
     ];
 

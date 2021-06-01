@@ -11,14 +11,14 @@ pub struct AppendResult {
     pub summary: Summary,
     pub parts: Vec<PartitionInfo>,
     pub session_id: String,
-    pub tx_id: String
+    pub tx_id: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct Summary {
     pub rows: usize,
     pub wire_bytes: usize,
-    pub disk_bytes: usize
+    pub disk_bytes: usize,
 }
 impl Summary {
     pub(crate) fn increase(&mut self, rows: usize, wire_bytes: usize, disk_bytes: usize) {
@@ -34,7 +34,7 @@ pub struct PartitionInfo {
     pub cols: usize,
     pub wire_bytes: usize,
     pub disk_bytes: usize,
-    pub location: String
+    pub location: String,
 }
 
 impl AppendResult {
@@ -44,14 +44,14 @@ impl AppendResult {
         rows: usize,
         cols: usize,
         wire_bytes: usize,
-        disk_bytes: usize
+        disk_bytes: usize,
     ) {
         let part = PartitionInfo {
             rows,
             cols,
             wire_bytes,
             disk_bytes,
-            location: location.to_string()
+            location: location.to_string(),
         };
         self.parts.push(part);
         self.summary.increase(rows, wire_bytes, disk_bytes);
@@ -64,11 +64,11 @@ pub const META_KEY_TBL_NAME: &str = "fq-tbl-name-bin";
 pub fn set_do_put_meta(meta: &mut MetadataMap, db_name: &str, tbl_name: &str) {
     meta.insert_bin(
         META_KEY_DB_NAME,
-        MetadataValue::from_bytes(db_name.as_bytes())
+        MetadataValue::from_bytes(db_name.as_bytes()),
     );
     meta.insert_bin(
         META_KEY_TBL_NAME,
-        MetadataValue::from_bytes(tbl_name.as_bytes())
+        MetadataValue::from_bytes(tbl_name.as_bytes()),
     );
 }
 
@@ -76,7 +76,7 @@ pub fn get_do_put_meta(meta: &MetadataMap) -> anyhow::Result<(String, String)> {
     fn fetch_string(
         meta: &MetadataMap,
         key: &str,
-        error_msg: &'static str
+        error_msg: &'static str,
     ) -> anyhow::Result<String> {
         meta.get_bin(key)
             .and_then(|v| v.to_bytes().ok())

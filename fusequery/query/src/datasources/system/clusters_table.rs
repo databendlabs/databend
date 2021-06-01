@@ -25,7 +25,7 @@ use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ClustersTable {
-    schema: DataSchemaRef
+    schema: DataSchemaRef,
 }
 
 impl ClustersTable {
@@ -36,7 +36,7 @@ impl ClustersTable {
                 DataField::new("host", DataType::Utf8, false),
                 DataField::new("port", DataType::UInt16, false),
                 DataField::new("priority", DataType::UInt8, false),
-            ])
+            ]),
         }
     }
 }
@@ -67,7 +67,7 @@ impl ITable for ClustersTable {
         &self,
         _ctx: FuseQueryContextRef,
         scan: &ScanPlan,
-        _partitions: usize
+        _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
@@ -75,11 +75,11 @@ impl ITable for ClustersTable {
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0
+                version: 0,
             }],
             statistics: Statistics::default(),
             description: "(Read from system.clusters table)".to_string(),
-            scan_plan: Arc::new(scan.clone())
+            scan_plan: Arc::new(scan.clone()),
         })
     }
 
@@ -102,7 +102,7 @@ impl ITable for ClustersTable {
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block]
+            vec![block],
         )))
     }
 }

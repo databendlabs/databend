@@ -13,7 +13,7 @@ pub struct LimitPlan {
     /// The limit
     pub n: usize,
     /// The logical plan
-    pub input: Arc<PlanNode>
+    pub input: Arc<PlanNode>,
 }
 
 impl LimitPlan {

@@ -16,13 +16,13 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct SipHashFunction {
-    display_name: String
+    display_name: String,
 }
 
 impl SipHashFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn IFunction>> {
         Ok(Box::new(SipHashFunction {
-            display_name: display_name.to_string()
+            display_name: display_name.to_string(),
         }))
     }
 }
@@ -35,7 +35,7 @@ impl IFunction for SipHashFunction {
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
         if args.len() != 1 {
             return Result::Err(ErrorCodes::BadArguments(
-                "Function Error: sipHash function args length must be 1"
+                "Function Error: sipHash function args length must be 1",
             ));
         }
 
@@ -45,8 +45,8 @@ impl IFunction for SipHashFunction {
             DataType::Binary => Ok(DataType::UInt64),
             DataType::LargeBinary => Ok(DataType::UInt64),
             _ => Result::Err(ErrorCodes::BadArguments(
-                "Function Error: sipHash function argument must be String or Binary"
-            ))
+                "Function Error: sipHash function argument must be String or Binary",
+            )),
         }
     }
 

@@ -38,7 +38,7 @@ fn commit_info() -> String {
             hash.trim_end(),
             date
         ),
-        _ => String::new()
+        _ => String::new(),
     }
 }
 

@@ -13,7 +13,7 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct AliasFunction {
-    alias: String
+    alias: String,
 }
 
 impl AliasFunction {

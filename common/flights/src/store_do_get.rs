@@ -12,20 +12,20 @@ use common_planners::PlanNode;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ReadAction {
     pub partition: Partitions,
-    pub push_down: PlanNode
+    pub push_down: PlanNode,
 }
 
 /// Pull a file. This is used to replicate data between store servers, which is only used internally.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct PullAction {
-    pub key: String
+    pub key: String,
 }
 
 // Action wrapper for do_get.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum StoreDoGet {
     Read(ReadAction),
-    Pull(PullAction)
+    Pull(PullAction),
 }
 
 /// Try convert tonic::Request<Ticket> to StoreDoGet.

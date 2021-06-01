@@ -88,7 +88,7 @@ pub struct Config {
     pub store_api_password: String,
 
     #[structopt(long, short = "c", env = "CONFIG_FILE", default_value = "")]
-    pub config_file: String
+    pub config_file: String,
 }
 
 impl Config {
@@ -110,7 +110,7 @@ impl Config {
             store_api_address: "127.0.0.1:9191".to_string(),
             store_api_username: "root".to_string(),
             store_api_password: "root".to_string(),
-            config_file: "".to_string()
+            config_file: "".to_string(),
         }
     }
 
@@ -146,7 +146,7 @@ impl Config {
 
         match (build_semver, git_sha, rustc_semver, timestamp) {
             (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
-            _ => String::new()
+            _ => String::new(),
         }
     }
 }

@@ -16,7 +16,7 @@ fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
         name: &'static str,
         exprs: Vec<Expression>,
         expect_str: &'static str,
-        error_msg: &'static str
+        error_msg: &'static str,
     }
 
     let tests = vec![
@@ -25,40 +25,40 @@ fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
             exprs: vec![
                 Box::new(Expression::ScalarFunction {
                     op: "plus".to_string(),
-                    args: vec![lit(1i32), col("z")]
+                    args: vec![lit(1i32), col("z")],
                 })
                 .alias("x"),
                 Box::new(Expression::ScalarFunction {
                     op: "plus".to_string(),
-                    args: vec![lit(1i32), col("x")]
+                    args: vec![lit(1i32), col("x")],
                 })
                 .alias("y"),
                 Box::new(Expression::ScalarFunction {
                     op: "plus".to_string(),
-                    args: vec![lit(1i32), col("y")]
+                    args: vec![lit(1i32), col("y")],
                 })
                 .alias("z"),
             ],
             expect_str: "",
-            error_msg: "Code: 5, displayText = Planner Error: Cyclic aliases: x."
+            error_msg: "Code: 5, displayText = Planner Error: Cyclic aliases: x.",
         },
         RewriteTest {
             name: "Duplicate aliases",
             exprs: vec![
                 Box::new(Expression::ScalarFunction {
                     op: "plus".to_string(),
-                    args: vec![lit(1i32), col("z")]
+                    args: vec![lit(1i32), col("z")],
                 })
                 .alias("x"),
                 Box::new(Expression::ScalarFunction {
                     op: "plus".to_string(),
-                    args: vec![lit(1i32), col("y")]
+                    args: vec![lit(1i32), col("y")],
                 })
                 .alias("x"),
             ],
             expect_str: "",
             error_msg:
-                "Code: 5, displayText = Planner Error: Different expressions with the same alias x."
+                "Code: 5, displayText = Planner Error: Different expressions with the same alias x.",
         },
         RewriteTest {
             name: "normal",
@@ -66,60 +66,60 @@ fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
                 col("x"),
                 Box::new(Expression::ScalarFunction {
                     op: "add".to_string(),
-                    args: vec![lit(1i32), col("x")]
+                    args: vec![lit(1i32), col("x")],
                 })
                 .alias("y"),
                 Expression::ScalarFunction {
                     op: "multiply".to_string(),
-                    args: vec![col("y"), col("y")]
+                    args: vec![col("y"), col("y")],
                 },
             ],
             expect_str: "[x, add(1, x) as y, multiply(add(1, x), add(1, x))]",
-            error_msg: ""
+            error_msg: "",
         },
         RewriteTest {
             name: "normal2",
             exprs: vec![
                 Box::new(Expression::ScalarFunction {
                     op: "add".to_string(),
-                    args: vec![lit(1i32), lit(1i64)]
+                    args: vec![lit(1i32), lit(1i64)],
                 })
                 .alias("x"),
                 Box::new(Expression::ScalarFunction {
                     op: "add".to_string(),
-                    args: vec![lit(1i32), col("x")]
+                    args: vec![lit(1i32), col("x")],
                 })
                 .alias("y"),
                 Expression::ScalarFunction {
                     op: "multiply".to_string(),
-                    args: vec![col("x"), col("y")]
+                    args: vec![col("x"), col("y")],
                 },
             ],
             expect_str:
                 "[add(1, 1) as x, add(1, add(1, 1)) as y, multiply(add(1, 1), add(1, add(1, 1)))]",
-            error_msg: ""
+            error_msg: "",
         },
         RewriteTest {
             name: "x+1->x",
             exprs: vec![
                 Box::new(Expression::ScalarFunction {
                     op: "add".to_string(),
-                    args: vec![col("x"), lit(1i64)]
+                    args: vec![col("x"), lit(1i64)],
                 })
                 .alias("x"),
                 Box::new(Expression::ScalarFunction {
                     op: "add".to_string(),
-                    args: vec![lit(1i32), col("x")]
+                    args: vec![lit(1i32), col("x")],
                 })
                 .alias("y"),
                 Expression::ScalarFunction {
                     op: "multiply".to_string(),
-                    args: vec![col("x"), col("y")]
+                    args: vec![col("x"), col("y")],
                 },
             ],
             expect_str:
                 "[add(x, 1) as x, add(1, add(x, 1)) as y, multiply(add(x, 1), add(1, add(x, 1)))]",
-            error_msg: ""
+            error_msg: "",
         },
     ];
 
@@ -127,7 +127,7 @@ fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
         let result = RewriteHelper::rewrite_projection_aliases(&t.exprs);
         match &result {
             Ok(v) => assert_eq!(t.expect_str, format!("{:?}", v), "in test_case {}", t.name),
-            Err(e) => assert_eq!(t.error_msg, e.to_string(), "in test_case {}", t.name)
+            Err(e) => assert_eq!(t.error_msg, e.to_string(), "in test_case {}", t.name),
         }
     }
 
@@ -152,12 +152,12 @@ fn test_rewrite_expressions_plan() -> anyhow::Result<()> {
 
     let exprs = vec![Expression::ScalarFunction {
         op: "multiply".to_string(),
-        args: vec![col("x"), col("y")]
+        args: vec![col("x"), col("y")],
     }];
 
     let expect_plan = Expression::ScalarFunction {
         op: "multiply".to_string(),
-        args: vec![col("number"), col("number")]
+        args: vec![col("number"), col("number")],
     };
     let actual_plan = RewriteHelper::rewrite_alias_exprs(&actual, &exprs)?;
     assert_eq!(expect_plan, actual_plan[0]);

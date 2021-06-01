@@ -20,7 +20,7 @@ use crate::IAggregateFunction;
 pub struct AggregateArgMinFunction {
     display_name: String,
     depth: usize,
-    state: DataValue
+    state: DataValue,
 }
 
 impl AggregateArgMinFunction {
@@ -28,7 +28,7 @@ impl AggregateArgMinFunction {
         Ok(Box::new(AggregateArgMinFunction {
             display_name: display_name.to_string(),
             depth: 0,
-            state: DataValue::Struct(vec![DataValue::Null, DataValue::Null])
+            state: DataValue::Struct(vec![DataValue::Null, DataValue::Null]),
         }))
     }
 }
@@ -53,7 +53,7 @@ impl IAggregateFunction for AggregateArgMinFunction {
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
         if let DataValue::Struct(min_arg_val) = DataArrayAggregate::data_array_aggregate_op(
             DataValueAggregateOperator::ArgMin,
-            columns[1].to_array()?
+            columns[1].to_array()?,
         )? {
             let index: u64 = min_arg_val[0].clone().try_into()?;
             let min_arg = DataValue::try_from_array(&columns[0].to_array()?, index as usize)?;
@@ -65,7 +65,7 @@ impl IAggregateFunction for AggregateArgMinFunction {
                 let new_min_val = DataValueAggregate::data_value_aggregate_op(
                     DataValueAggregateOperator::Min,
                     old_min_val.clone(),
-                    min_val
+                    min_val,
                 )?;
                 self.state = DataValue::Struct(vec![
                     if new_min_val == old_min_val {
@@ -92,7 +92,7 @@ impl IAggregateFunction for AggregateArgMinFunction {
             let new_min_val = DataValueAggregate::data_value_aggregate_op(
                 DataValueAggregateOperator::Min,
                 new_states[1].clone(),
-                old_states[1].clone()
+                old_states[1].clone(),
             )?;
             self.state = DataValue::Struct(vec![
                 if new_min_val == old_states[1] {

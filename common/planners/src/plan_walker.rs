@@ -10,12 +10,12 @@ use crate::PlanVisitor;
 #[derive(PartialEq)]
 enum WalkOrder {
     PreOrder,
-    PostOrder
+    PostOrder,
 }
 
 struct PreOrderWalker<'a, E> {
     callback: &'a mut dyn FnMut(&PlanNode) -> Result<bool, E>,
-    state: Result<(), E>
+    state: Result<(), E>,
 }
 
 impl<'plan, 'a, E> PlanVisitor<'plan> for PreOrderWalker<'a, E> {
@@ -41,7 +41,7 @@ impl<'a, E> PreOrderWalker<'a, E> {
     fn new(callback: &'a mut dyn FnMut(&PlanNode) -> Result<bool, E>) -> PreOrderWalker<E> {
         PreOrderWalker {
             callback,
-            state: Ok(())
+            state: Ok(()),
         }
     }
 
@@ -52,7 +52,7 @@ impl<'a, E> PreOrderWalker<'a, E> {
 
 struct PostOrderWalker<'a, E> {
     callback: &'a mut dyn FnMut(&PlanNode) -> Result<bool, E>,
-    state: Result<bool, E>
+    state: Result<bool, E>,
 }
 
 impl<'plan, 'a, E> PlanVisitor<'plan> for PostOrderWalker<'a, E> {
@@ -73,7 +73,7 @@ impl<'a, E> PostOrderWalker<'a, E> {
     fn new(callback: &'a mut dyn FnMut(&PlanNode) -> Result<bool, E>) -> PostOrderWalker<E> {
         PostOrderWalker {
             callback,
-            state: Ok(true)
+            state: Ok(true),
         }
     }
 
@@ -86,7 +86,7 @@ impl PlanNode {
     fn walk_base<'a, E>(
         order: WalkOrder,
         node: &PlanNode,
-        callback: &'a mut dyn FnMut(&PlanNode) -> Result<bool, E>
+        callback: &'a mut dyn FnMut(&PlanNode) -> Result<bool, E>,
     ) -> Result<(), E> {
         match order {
             WalkOrder::PreOrder => {
@@ -111,7 +111,7 @@ impl PlanNode {
     /// A Preorder walk of this graph is A B C
     pub fn walk_preorder<E>(
         &self,
-        mut visitor: impl FnMut(&PlanNode) -> Result<bool, E>
+        mut visitor: impl FnMut(&PlanNode) -> Result<bool, E>,
     ) -> Result<(), E> {
         Self::walk_base(WalkOrder::PreOrder, self, &mut visitor)
     }
@@ -125,7 +125,7 @@ impl PlanNode {
     /// A Postorder walk of this graph is C B A
     pub fn walk_postorder<E>(
         &self,
-        mut visitor: impl FnMut(&PlanNode) -> Result<bool, E>
+        mut visitor: impl FnMut(&PlanNode) -> Result<bool, E>,
     ) -> Result<(), E> {
         Self::walk_base(WalkOrder::PostOrder, self, &mut visitor)
     }

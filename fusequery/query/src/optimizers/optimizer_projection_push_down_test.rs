@@ -33,7 +33,7 @@ fn test_projection_push_down_optimizer_1() -> anyhow::Result<()> {
     let plan = PlanNode::Projection(ProjectionPlan {
         expr: vec![col("a"), col("b"), col("c")],
         schema: output_schema,
-        input: Arc::from(PlanBuilder::from(&PlanNode::Empty(EmptyPlan { schema })).build()?)
+        input: Arc::from(PlanBuilder::from(&PlanNode::Empty(EmptyPlan { schema })).build()?),
     });
 
     let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
@@ -76,7 +76,7 @@ fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
     let total = ctx.get_max_block_size()? as u64;
     let statistics = Statistics {
         read_rows: total as usize,
-        read_bytes: ((total) * size_of::<u64>() as u64) as usize
+        read_bytes: ((total) * size_of::<u64>() as u64) as usize,
     };
     ctx.try_set_statistics(&statistics)?;
     let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
@@ -95,7 +95,7 @@ fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
             statistics.read_rows,
             statistics.read_bytes
         ),
-        scan_plan: Arc::new(ScanPlan::empty())
+        scan_plan: Arc::new(ScanPlan::empty()),
     });
 
     let filter_plan = PlanBuilder::from(&source_plan)
@@ -105,7 +105,7 @@ fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
     let plan = PlanNode::Projection(ProjectionPlan {
         expr: vec![col("a")],
         schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
-        input: Arc::from(filter_plan)
+        input: Arc::from(filter_plan),
     });
 
     let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
@@ -128,7 +128,7 @@ fn test_projection_push_down_optimizer_3() -> anyhow::Result<()> {
     let total = ctx.get_max_block_size()? as u64;
     let statistics = Statistics {
         read_rows: total as usize,
-        read_bytes: ((total) * size_of::<u64>() as u64) as usize
+        read_bytes: ((total) * size_of::<u64>() as u64) as usize,
     };
     ctx.try_set_statistics(&statistics)?;
     let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
@@ -151,7 +151,7 @@ fn test_projection_push_down_optimizer_3() -> anyhow::Result<()> {
             statistics.read_rows,
             statistics.read_bytes
         ),
-        scan_plan: Arc::new(ScanPlan::empty())
+        scan_plan: Arc::new(ScanPlan::empty()),
     });
 
     let group_exprs = &[col("a"), col("c")];

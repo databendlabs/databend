@@ -16,7 +16,7 @@ use crate::protobuf::Table;
 pub struct MemEngine {
     pub dbs: HashMap<String, Db>,
     pub next_id: i64,
-    pub next_ver: i64
+    pub next_ver: i64,
 }
 
 impl MemEngine {
@@ -25,7 +25,7 @@ impl MemEngine {
         let e = MemEngine {
             dbs: HashMap::new(),
             next_id: 0,
-            next_ver: 0
+            next_ver: 0,
         };
         Arc::new(Mutex::new(e))
     }
@@ -33,7 +33,7 @@ impl MemEngine {
     pub fn create_database(
         &mut self,
         cmd: CmdCreateDatabase,
-        if_not_exists: bool
+        if_not_exists: bool,
     ) -> anyhow::Result<i64> {
         // TODO: support plan.engine plan.options
         let curr = self.dbs.get(&cmd.db_name);
@@ -63,7 +63,7 @@ impl MemEngine {
         match (entry, if_exists) {
             (_, true) => Ok(()),
             (Some((_id, _db)), false) => Ok(()),
-            (_, false) => Err(Status::not_found(format!("database {} not found", db_name)))
+            (_, false) => Err(Status::not_found(format!("database {} not found", db_name))),
         }
     }
 
@@ -81,7 +81,7 @@ impl MemEngine {
     pub fn create_table(
         &mut self,
         cmd: CmdCreateTable,
-        if_not_exists: bool
+        if_not_exists: bool,
     ) -> Result<i64, Status> {
         // TODO: support plan.engine plan.options
 
@@ -120,7 +120,7 @@ impl MemEngine {
         &mut self,
         db_name: &str,
         tbl_name: &str,
-        if_exists: bool
+        if_exists: bool,
     ) -> Result<(), Status> {
         let r = self.dbs.get_mut(db_name).map(|db| {
             let name2id_removed = db.table_name_to_id.remove_entry(tbl_name);
@@ -138,8 +138,8 @@ impl MemEngine {
             (Some((Some(_), Some(_))), false) => Ok(()),
             _ => Err(Status::internal(
                 "inconsistent meta state, mappings between names and ids are out-of-sync"
-                    .to_string()
-            ))
+                    .to_string(),
+            )),
         }
     }
 

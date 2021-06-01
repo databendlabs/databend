@@ -23,7 +23,7 @@ use crate::pipelines::processors::IProcessor;
 pub struct AggregatorFinalTransform {
     funcs: Vec<Box<dyn IAggregateFunction>>,
     schema: DataSchemaRef,
-    input: Arc<dyn IProcessor>
+    input: Arc<dyn IProcessor>,
 }
 
 impl AggregatorFinalTransform {
@@ -35,7 +35,7 @@ impl AggregatorFinalTransform {
         Ok(AggregatorFinalTransform {
             funcs,
             schema,
-            input: Arc::new(EmptyProcessor::create())
+            input: Arc::new(EmptyProcessor::create()),
         })
     }
 }
@@ -93,14 +93,14 @@ impl IProcessor for AggregatorFinalTransform {
         if !final_result.is_empty() {
             blocks.push(DataBlock::create_by_array(
                 self.schema.clone(),
-                final_result
+                final_result,
             ));
         }
 
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            blocks
+            blocks,
         )))
     }
 }

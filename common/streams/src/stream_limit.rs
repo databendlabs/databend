@@ -15,7 +15,7 @@ use crate::SendableDataBlockStream;
 pub struct LimitStream {
     input: SendableDataBlockStream,
     limit: usize,
-    current: usize
+    current: usize,
 }
 
 impl LimitStream {
@@ -23,7 +23,7 @@ impl LimitStream {
         Ok(LimitStream {
             input,
             limit,
-            current: 0
+            current: 0,
         })
     }
 
@@ -44,7 +44,7 @@ impl LimitStream {
             }
             Ok(Some(DataBlock::create(
                 block.schema().clone(),
-                limited_columns
+                limited_columns,
             )))
         }
     }
@@ -55,11 +55,11 @@ impl Stream for LimitStream {
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
-        ctx: &mut Context<'_>
+        ctx: &mut Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         self.input.poll_next_unpin(ctx).map(|x| match x {
             Some(Ok(ref v)) => self.limit(v).transpose(),
-            other => other
+            other => other,
         })
     }
 }

@@ -23,7 +23,7 @@ use tonic::transport::Channel;
 use trust_dns_resolver::TokioAsyncResolver;
 
 pub struct DNSResolver {
-    inner: TokioAsyncResolver
+    inner: TokioAsyncResolver,
 }
 
 lazy_static! {
@@ -33,7 +33,7 @@ lazy_static! {
                 "DNS resolver create error: {}",
                 error
             ))),
-            Ok(resolver) => Ok(Arc::new(DNSResolver { inner: resolver }))
+            Ok(resolver) => Ok(Arc::new(DNSResolver { inner: resolver })),
         }
     };
 }
@@ -45,8 +45,8 @@ impl DNSResolver {
             Err(error) => Err(ErrorCodes::create(
                 error.code(),
                 error.message(),
-                error.backtrace()
-            ))
+                error.backtrace(),
+            )),
         }
     }
 
@@ -57,7 +57,7 @@ impl DNSResolver {
             Err(error) => Err(ErrorCodes::DnsParseError(format!(
                 "Cannot lookup ip {} : {}",
                 hostname, error
-            )))
+            ))),
         }
     }
 }
@@ -80,8 +80,8 @@ impl Service<Name> for DNSService {
             match resolver.resolve(name.to_string()).await {
                 Err(err) => Err(err),
                 Ok(addrs) => Ok(DNSServiceAddrs {
-                    inner: addrs.into_iter()
-                })
+                    inner: addrs.into_iter(),
+                }),
             }
         });
 
@@ -90,11 +90,11 @@ impl Service<Name> for DNSService {
 }
 
 struct DNSServiceFuture {
-    inner: JoinHandle<Result<DNSServiceAddrs>>
+    inner: JoinHandle<Result<DNSServiceAddrs>>,
 }
 
 struct DNSServiceAddrs {
-    inner: std::vec::IntoIter<IpAddr>
+    inner: std::vec::IntoIter<IpAddr>,
 }
 
 impl Iterator for DNSServiceAddrs {
@@ -115,7 +115,7 @@ impl Future for DNSServiceFuture {
             Err(join_err) => Err(ErrorCodes::TokioError(format!(
                 "Interrupted future: {}",
                 join_err
-            )))
+            ))),
         })
     }
 }
@@ -125,7 +125,7 @@ pub struct ConnectionFactory;
 impl ConnectionFactory {
     pub async fn create_flight_channel(
         addr: impl ToString,
-        timeout: Option<Duration>
+        timeout: Option<Duration>,
     ) -> Result<Channel> {
         match format!("http://{}", addr.to_string()).parse::<Uri>() {
             Err(error) => Result::Err(ErrorCodes::BadAddressFormat(format!(
@@ -149,7 +149,7 @@ impl ConnectionFactory {
                     Err(error) => Result::Err(ErrorCodes::CannotConnectNode(format!(
                         "Cannot to RPC server: {}",
                         error
-                    )))
+                    ))),
                 }
             }
         }

@@ -50,11 +50,11 @@ mod tests {
         ColumnDef {
             name: Ident {
                 value: name.into(),
-                quote_style: None
+                quote_style: None,
             },
             data_type,
             collation: None,
-            options: vec![]
+            options: vec![],
         }
     }
 
@@ -66,7 +66,7 @@ mod tests {
                 if_not_exists: false,
                 name: ObjectName(vec![Ident::new("db1")]),
                 engine: DatabaseEngineType::Remote,
-                options: vec![]
+                options: vec![],
             });
             expect_parse_ok(sql, expected)?;
         }
@@ -77,7 +77,7 @@ mod tests {
                 if_not_exists: true,
                 name: ObjectName(vec![Ident::new("db1")]),
                 engine: DatabaseEngineType::Remote,
-                options: vec![]
+                options: vec![],
             });
             expect_parse_ok(sql, expected)?;
         }
@@ -88,7 +88,7 @@ mod tests {
                 if_not_exists: false,
                 name: ObjectName(vec![Ident::new("db1")]),
                 engine: DatabaseEngineType::Local,
-                options: vec![]
+                options: vec![],
             });
             expect_parse_ok(sql, expected)?;
         }
@@ -108,7 +108,7 @@ mod tests {
             let sql = "DROP DATABASE db1";
             let expected = DfStatement::DropDatabase(DfDropDatabase {
                 if_exists: false,
-                name: ObjectName(vec![Ident::new("db1")])
+                name: ObjectName(vec![Ident::new("db1")]),
             });
             expect_parse_ok(sql, expected)?;
         }
@@ -116,7 +116,7 @@ mod tests {
             let sql = "DROP DATABASE IF EXISTS db1";
             let expected = DfStatement::DropDatabase(DfDropDatabase {
                 if_exists: true,
-                name: ObjectName(vec![Ident::new("db1")])
+                name: ObjectName(vec![Ident::new("db1")]),
             });
             expect_parse_ok(sql, expected)?;
         }
@@ -135,8 +135,8 @@ mod tests {
             engine: TableEngineType::Csv,
             options: vec![SqlOption {
                 name: Ident::new("LOCATION".to_string()),
-                value: Value::SingleQuotedString("/data/33.csv".into())
-            }]
+                value: Value::SingleQuotedString("/data/33.csv".into()),
+            }],
         });
         expect_parse_ok(sql, expected)?;
 
@@ -153,8 +153,8 @@ mod tests {
             engine: TableEngineType::Parquet,
             options: vec![SqlOption {
                 name: Ident::new("LOCATION".to_string()),
-                value: Value::SingleQuotedString("foo.parquet".into())
-            }]
+                value: Value::SingleQuotedString("foo.parquet".into()),
+            }],
         });
         expect_parse_ok(sql, expected)?;
 
@@ -162,7 +162,7 @@ mod tests {
         let sql = "CREATE TABLE t(c1 int) ENGINE = XX location = 'foo.parquet' ";
         expect_parse_error(
             sql,
-            "Expected Engine must one of Parquet, JSONEachRaw, Null or CSV, found: XX"
+            "Expected Engine must one of Parquet, JSONEachRaw, Null or CSV, found: XX",
         )?;
 
         Ok(())
@@ -174,7 +174,7 @@ mod tests {
             let sql = "DROP TABLE t1";
             let expected = DfStatement::DropTable(DfDropTable {
                 if_exists: false,
-                name: ObjectName(vec![Ident::new("t1")])
+                name: ObjectName(vec![Ident::new("t1")]),
             });
             expect_parse_ok(sql, expected)?;
         }
@@ -182,7 +182,7 @@ mod tests {
             let sql = "DROP TABLE IF EXISTS t1";
             let expected = DfStatement::DropTable(DfDropTable {
                 if_exists: true,
-                name: ObjectName(vec![Ident::new("t1")])
+                name: ObjectName(vec![Ident::new("t1")]),
             });
             expect_parse_ok(sql, expected)?;
         }
@@ -204,14 +204,14 @@ mod tests {
         expect_parse_ok(
             "USe db1",
             DfStatement::UseDatabase(DfUseDatabase {
-                name: ObjectName(vec![Ident::new("db1")])
-            })
+                name: ObjectName(vec![Ident::new("db1")]),
+            }),
         )?;
         expect_parse_ok(
             "use db1",
             DfStatement::UseDatabase(DfUseDatabase {
-                name: ObjectName(vec![Ident::new("db1")])
-            })
+                name: ObjectName(vec![Ident::new("db1")]),
+            }),
         )?;
 
         Ok(())

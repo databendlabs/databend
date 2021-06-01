@@ -61,7 +61,7 @@ impl DataArrayScatter {
     pub fn scatter(
         data: &DataColumnarValue,
         indices: &DataColumnarValue,
-        nums: usize
+        nums: usize,
     ) -> Result<Vec<DataColumnarValue>> {
         if data.len() != indices.len() {
             return Result::Err(ErrorCodes::BadDataArrayLength(format!(
@@ -92,7 +92,7 @@ impl DataArrayScatter {
     fn scatter_data_with_constant_indices(
         data: &DataColumnarValue,
         indices: &DataValue,
-        nums: usize
+        nums: usize,
     ) -> Result<Vec<DataColumnarValue>> {
         let scatter_data = |index: usize| -> Result<Vec<DataColumnarValue>> {
             if index >= nums {
@@ -107,7 +107,7 @@ impl DataArrayScatter {
             for res_index in 0..nums {
                 match res_index {
                     res_index if res_index == index => scattered_data_res.push(data.clone()),
-                    _ => scattered_data_res.push(data.clone_empty())
+                    _ => scattered_data_res.push(data.clone_empty()),
                 }
             }
 
@@ -123,14 +123,14 @@ impl DataArrayScatter {
             DataValue::UInt16(Some(v)) => scatter_data(*v as usize),
             DataValue::UInt32(Some(v)) => scatter_data(*v as usize),
             DataValue::UInt64(Some(v)) => scatter_data(*v as usize),
-            _ => Err(ErrorCodes::BadDataValueType(""))
+            _ => Err(ErrorCodes::BadDataValueType("")),
         }
     }
 
     fn scatter_data(
         data: &DataArrayRef,
         indices: &[u64],
-        nums: usize
+        nums: usize,
     ) -> Result<Vec<DataColumnarValue>> {
         match data.data_type() {
             DataType::Int8 => Self::scatter_primitive_data::<Int8Type>(data, indices, nums),
@@ -194,7 +194,7 @@ impl DataArrayScatter {
             _ => Result::Err(ErrorCodes::BadDataValueType(format!(
                 "DataType:{:?} does not implement scatter",
                 stringify!(PrimitiveArray<T>)
-            )))
+            ))),
         }
     }
 
@@ -202,7 +202,7 @@ impl DataArrayScatter {
     fn scatter_primitive_data<T: ArrowPrimitiveType>(
         data: &DataArrayRef,
         indices: &[u64],
-        scattered_size: usize
+        scattered_size: usize,
     ) -> Result<Vec<DataColumnarValue>> {
         let primitive_data = data
             .as_any()
@@ -249,12 +249,12 @@ impl DataArrayScatter {
 
             match data.null_count() {
                 0 => scattered_data_res.push(DataColumnarValue::Array(Arc::new(
-                    PrimitiveArray::<T>::from(builder.build())
+                    PrimitiveArray::<T>::from(builder.build()),
                 ))),
                 _ => {
                     builder = builder.null_bit_buffer(scattered_null_bit[index].clone());
                     scattered_data_res.push(DataColumnarValue::Array(Arc::new(
-                        PrimitiveArray::<T>::from(builder.build())
+                        PrimitiveArray::<T>::from(builder.build()),
                     )));
                 }
             }
@@ -266,7 +266,7 @@ impl DataArrayScatter {
     fn scatter_binary_data(
         data: &DataArrayRef,
         indices: &[u64],
-        scattered_size: usize
+        scattered_size: usize,
     ) -> Result<Vec<DataColumnarValue>> {
         let binary_data = data.as_any().downcast_ref::<BinaryArray>().ok_or_else(|| {
             ErrorCodes::BadDataValueType(format!(
@@ -299,7 +299,7 @@ impl DataArrayScatter {
     fn scatter_large_binary_data(
         data: &DataArrayRef,
         indices: &[u64],
-        scattered_size: usize
+        scattered_size: usize,
     ) -> Result<Vec<DataColumnarValue>> {
         let binary_data = data
             .as_any()
@@ -336,7 +336,7 @@ impl DataArrayScatter {
     fn scatter_string_data<T: StringOffsetSizeTrait>(
         data: &DataArrayRef,
         indices: &[u64],
-        scattered_size: usize
+        scattered_size: usize,
     ) -> Result<Vec<DataColumnarValue>> {
         let binary_data = data
             .as_any()
@@ -373,7 +373,7 @@ impl DataArrayScatter {
     #[inline]
     fn create_primitive_builders<T: ArrowPrimitiveType>(
         scattered_size: usize,
-        scatter_data_len: usize
+        scatter_data_len: usize,
     ) -> Vec<BufferBuilder<T::Native>> {
         let guess_scattered_len =
             ((scatter_data_len as f64) * 1.1 / (scattered_size as f64)) as usize;
@@ -385,7 +385,7 @@ impl DataArrayScatter {
     #[inline]
     fn create_binary_builders(
         scattered_size: usize,
-        scatter_data_len: usize
+        scatter_data_len: usize,
     ) -> Vec<BinaryBuilder> {
         let guess_scattered_len =
             ((scatter_data_len as f64) * 1.1 / (scattered_size as f64)) as usize;
@@ -397,7 +397,7 @@ impl DataArrayScatter {
     #[inline]
     fn create_large_binary_builders(
         scattered_size: usize,
-        scatter_data_len: usize
+        scatter_data_len: usize,
     ) -> Vec<LargeBinaryBuilder> {
         let guess_scattered_len =
             ((scatter_data_len as f64) * 1.1 / (scattered_size as f64)) as usize;
@@ -409,7 +409,7 @@ impl DataArrayScatter {
     #[inline]
     fn create_string_builders<T: StringOffsetSizeTrait>(
         scattered_size: usize,
-        scatter_data_len: usize
+        scatter_data_len: usize,
     ) -> Vec<GenericStringBuilder<T>> {
         let guess_scattered_len =
             ((scatter_data_len as f64) * 1.1 / (scattered_size as f64)) as usize;

@@ -26,7 +26,7 @@ pub struct PlanScheduler;
 
 pub struct ScheduledActions {
     pub local_plan: PlanNode,
-    pub remote_actions: Vec<(Arc<Node>, ExecutePlanWithShuffleAction)>
+    pub remote_actions: Vec<(Arc<Node>, ExecutePlanWithShuffleAction)>,
 }
 
 impl PlanScheduler {
@@ -37,7 +37,7 @@ impl PlanScheduler {
         if cluster.is_empty()? {
             return Ok(ScheduledActions {
                 local_plan: plan.clone(),
-                remote_actions: vec![]
+                remote_actions: vec![],
             });
         }
 
@@ -56,7 +56,7 @@ impl PlanScheduler {
                         ctx.get_id()?,
                         stage_id.clone(),
                         plan,
-                        &get_node_plan
+                        &get_node_plan,
                     ));
                     get_node_plan = RemoteGetNodePlan::create(ctx.get_id()?, stage_id, plan);
                 }
@@ -67,7 +67,7 @@ impl PlanScheduler {
                 _ => {
                     get_node_plan = Arc::new(Box::new(DefaultGetNodePlan(
                         node.clone(),
-                        get_node_plan.clone()
+                        get_node_plan.clone(),
                     )))
                 }
             };
@@ -78,7 +78,7 @@ impl PlanScheduler {
         if let Some(stage_plan) = last_stage {
             if stage_plan.kind != StageKind::Convergent {
                 return Result::Err(ErrorCodes::PlanScheduleError(
-                    "The final stage plan must be convergent"
+                    "The final stage plan must be convergent",
                 ));
             }
         }
@@ -87,7 +87,7 @@ impl PlanScheduler {
 
         if local_node.is_none() {
             return Result::Err(ErrorCodes::NotFoundLocalNode(
-                "The PlanScheduler must be in the query cluster"
+                "The PlanScheduler must be in the query cluster",
             ));
         }
 
@@ -103,7 +103,7 @@ impl PlanScheduler {
 
         Ok(ScheduledActions {
             local_plan,
-            remote_actions
+            remote_actions,
         })
     }
 }
@@ -123,7 +123,7 @@ struct LocalReadSourceGetNodePlan(ReadDataSourcePlan, Arc<Box<dyn GetNodePlan>>)
 struct RemoteReadSourceGetNodePlan(
     ReadDataSourcePlan,
     Arc<HashMap<String, Partitions>>,
-    Arc<Box<dyn GetNodePlan>>
+    Arc<Box<dyn GetNodePlan>>,
 );
 
 struct ReadSourceGetNodePlan(Arc<Box<dyn GetNodePlan>>);
@@ -139,7 +139,7 @@ impl GetNodePlan for DefaultGetNodePlan {
 impl GetNodePlan for EmptyGetNodePlan {
     fn get_plan(&self, _node_name: &str, _cluster_nodes: &[Arc<Node>]) -> Result<PlanNode> {
         Ok(PlanNode::Empty(EmptyPlan {
-            schema: Arc::new(DataSchema::empty())
+            schema: Arc::new(DataSchema::empty()),
         }))
     }
 }
@@ -148,12 +148,12 @@ impl RemoteGetNodePlan {
     pub fn create(
         query_id: String,
         stage_id: String,
-        plan: &StagePlan
+        plan: &StagePlan,
     ) -> Arc<Box<dyn GetNodePlan>> {
         Arc::new(Box::new(RemoteGetNodePlan(
             query_id,
             stage_id,
-            plan.clone()
+            plan.clone(),
         )))
     }
 }
@@ -167,13 +167,13 @@ impl GetNodePlan for RemoteGetNodePlan {
                         return Ok(PlanNode::Remote(RemotePlan {
                             schema: self.2.schema(),
                             fetch_name: format!("{}/{}/{}", self.0, self.1, node_name),
-                            fetch_nodes: vec![cluster_node.name.clone()]
+                            fetch_nodes: vec![cluster_node.name.clone()],
                         }));
                     }
                 }
 
                 Err(ErrorCodes::NotFoundLocalNode(
-                    "The PlanScheduler must be in the query cluster"
+                    "The PlanScheduler must be in the query cluster",
                 ))
             }
             _ => {
@@ -184,7 +184,7 @@ impl GetNodePlan for RemoteGetNodePlan {
                 Ok(PlanNode::Remote(RemotePlan {
                     schema: self.2.schema(),
                     fetch_name: format!("{}/{}/{}", self.0, self.1, node_name),
-                    fetch_nodes: all_nodes_name
+                    fetch_nodes: all_nodes_name,
                 }))
             }
         }
@@ -199,9 +199,9 @@ impl GetNodePlan for LocalReadSourceGetNodePlan {
             .count()
         {
             0 => Result::Err(ErrorCodes::NotFoundLocalNode(
-                "The PlanScheduler must be in the query cluster"
+                "The PlanScheduler must be in the query cluster",
             )),
-            _ => Ok(PlanNode::ReadSource(self.0.clone()))
+            _ => Ok(PlanNode::ReadSource(self.0.clone())),
         }
     }
 }
@@ -216,7 +216,7 @@ impl GetNodePlan for RemoteReadSourceGetNodePlan {
             partitions,
             statistics: self.0.statistics.clone(),
             description: self.0.description.clone(),
-            scan_plan: self.0.scan_plan.clone()
+            scan_plan: self.0.scan_plan.clone(),
         }))
     }
 }
@@ -226,7 +226,7 @@ impl ReadSourceGetNodePlan {
         ctx: &FuseQueryContextRef,
         plan: &ReadDataSourcePlan,
         nest_getter: &Arc<Box<dyn GetNodePlan>>,
-        cluster_nodes: &[Arc<Node>]
+        cluster_nodes: &[Arc<Node>],
     ) -> Result<Arc<Box<dyn GetNodePlan>>> {
         let table = ctx.get_table(&plan.db, &plan.table)?;
 
@@ -272,16 +272,16 @@ impl ReadSourceGetNodePlan {
             let nested_getter = RemoteReadSourceGetNodePlan(
                 new_read_source_plan,
                 Arc::new(nodes_partitions),
-                nest_getter.clone()
+                nest_getter.clone(),
             );
             return Ok(Arc::new(Box::new(ReadSourceGetNodePlan(Arc::new(
-                Box::new(nested_getter)
+                Box::new(nested_getter),
             )))));
         }
 
         let nested_getter = LocalReadSourceGetNodePlan(plan.clone(), nest_getter.clone());
         Ok(Arc::new(Box::new(ReadSourceGetNodePlan(Arc::new(
-            Box::new(nested_getter)
+            Box::new(nested_getter),
         )))))
     }
 }
@@ -299,20 +299,20 @@ impl ExecutionPlanBuilder {
         query_id: String,
         stage_id: String,
         plan: &StagePlan,
-        node_plan_getter: &Arc<Box<dyn GetNodePlan>>
+        node_plan_getter: &Arc<Box<dyn GetNodePlan>>,
     ) -> Arc<Box<ExecutionPlanBuilder>> {
         Arc::new(Box::new(ExecutionPlanBuilder(
             query_id,
             stage_id,
             plan.clone(),
-            node_plan_getter.clone()
+            node_plan_getter.clone(),
         )))
     }
 
     pub fn build(
         &self,
         node_name: &str,
-        cluster_nodes: &[Arc<Node>]
+        cluster_nodes: &[Arc<Node>],
     ) -> Result<Option<ExecutePlanWithShuffleAction>> {
         match self.2.kind {
             StageKind::Expansive => {
@@ -327,7 +327,7 @@ impl ExecutionPlanBuilder {
                             stage_id: self.1.clone(),
                             plan: self.3.get_plan(node_name, cluster_nodes)?,
                             scatters: all_nodes_name,
-                            scatters_action: self.2.scatters_expr.clone()
+                            scatters_action: self.2.scatters_expr.clone(),
                         }));
                     }
                 }
@@ -341,13 +341,13 @@ impl ExecutionPlanBuilder {
                             stage_id: self.1.clone(),
                             plan: self.3.get_plan(node_name, cluster_nodes)?,
                             scatters: vec![cluster_node.name.clone()],
-                            scatters_action: self.2.scatters_expr.clone()
+                            scatters_action: self.2.scatters_expr.clone(),
                         }));
                     }
                 }
 
                 Result::Err(ErrorCodes::NotFoundLocalNode(
-                    "The PlanScheduler must be in the query cluster"
+                    "The PlanScheduler must be in the query cluster",
                 ))
             }
             StageKind::Normal => {
@@ -360,7 +360,7 @@ impl ExecutionPlanBuilder {
                     stage_id: self.1.clone(),
                     plan: self.3.get_plan(node_name, cluster_nodes)?,
                     scatters: all_nodes_name,
-                    scatters_action: self.2.scatters_expr.clone()
+                    scatters_action: self.2.scatters_expr.clone(),
                 }))
             }
         }

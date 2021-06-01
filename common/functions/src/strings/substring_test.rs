@@ -22,7 +22,7 @@ fn test_substring_function() -> Result<()> {
         columns: Vec<DataColumnarValue>,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>
+        func: Box<dyn IFunction>,
     }
 
     let schema = DataSchemaRefExt::create(vec![
@@ -44,7 +44,7 @@ fn test_substring_function() -> Result<()> {
             ],
             func: SubstringFunction::try_create("substring")?,
             expect: Arc::new(StringArray::from(vec!["bcd"])),
-            error: ""
+            error: "",
         },
         Test {
             name: "substring-abcde-passed",
@@ -58,7 +58,7 @@ fn test_substring_function() -> Result<()> {
             ],
             func: SubstringFunction::try_create("substring")?,
             expect: Arc::new(StringArray::from(vec!["abc"])),
-            error: ""
+            error: "",
         },
         Test {
             name: "substring-abcde-passed",
@@ -72,7 +72,7 @@ fn test_substring_function() -> Result<()> {
 
             func: SubstringFunction::try_create("substring")?,
             expect: Arc::new(StringArray::from(vec!["bcde"])),
-            error: ""
+            error: "",
         },
         Test {
             name: "substring-1234567890-passed",
@@ -87,7 +87,7 @@ fn test_substring_function() -> Result<()> {
 
             func: SubstringFunction::try_create("substring")?,
             expect: Arc::new(StringArray::from(vec!["890"])),
-            error: ""
+            error: "",
         },
     ];
 

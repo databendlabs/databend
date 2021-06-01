@@ -27,7 +27,7 @@ impl DataArrayAggregate {
     #[inline]
     pub fn data_array_aggregate_op(
         op: DataValueAggregateOperator,
-        value: DataArrayRef
+        value: DataArrayRef,
     ) -> Result<DataValue> {
         match value.data_type() {
             DataType::Int8 => match op {
@@ -455,13 +455,13 @@ impl DataArrayAggregate {
                     "DataValue Error: Unsupported data_array_{} for data type: {:?}",
                     op,
                     value.data_type()
-                )))
+                ))),
             },
             _not_support_data_type => Result::Err(ErrorCodes::BadDataValueType(format!(
                 "DataValue Error: Unsupported data_array_{} for data type: {:?}",
                 op,
                 value.data_type()
-            )))
+            ))),
         }
     }
 }

@@ -16,7 +16,7 @@ use crate::sessions::FuseQueryContextRef;
 pub struct SourceTransform {
     ctx: FuseQueryContextRef,
     db: String,
-    table: String
+    table: String,
 }
 
 impl SourceTransform {
@@ -24,7 +24,7 @@ impl SourceTransform {
         Ok(SourceTransform {
             ctx,
             db: db.to_string(),
-            table: table.to_string()
+            table: table.to_string(),
         })
     }
 }
@@ -37,7 +37,7 @@ impl IProcessor for SourceTransform {
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> Result<()> {
         Result::Err(ErrorCodes::LogicalError(
-            "Cannot call SourceTransform connect_to"
+            "Cannot call SourceTransform connect_to",
         ))
     }
 

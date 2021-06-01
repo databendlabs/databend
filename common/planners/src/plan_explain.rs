@@ -12,13 +12,13 @@ use crate::PlanNode;
 pub enum ExplainType {
     Syntax,
     Graph,
-    Pipeline
+    Pipeline,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct ExplainPlan {
     pub typ: ExplainType,
-    pub input: Arc<PlanNode>
+    pub input: Arc<PlanNode>,
 }
 
 impl ExplainPlan {

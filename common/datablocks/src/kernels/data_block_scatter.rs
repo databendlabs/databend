@@ -13,7 +13,7 @@ impl DataBlock {
     pub fn scatter_block(
         block: &DataBlock,
         indices: &DataColumnarValue,
-        scatter_size: usize
+        scatter_size: usize,
     ) -> Result<Vec<DataBlock>> {
         let columns_size = block.num_columns();
         let mut scattered_columns: Vec<Option<DataColumnarValue>> = vec![];
@@ -40,7 +40,7 @@ impl DataBlock {
                 match scattered_column {
                     None => {
                         return Err(ErrorCodes::LogicalError(
-                            "Logical Error: scattered column is None."
+                            "Logical Error: scattered column is None.",
                         ));
                     }
                     Some(scattered_column) => {

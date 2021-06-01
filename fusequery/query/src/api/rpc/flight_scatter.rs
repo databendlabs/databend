@@ -19,24 +19,24 @@ use crate::pipelines::transforms::ExpressionExecutor;
 pub struct FlightScatterByHash {
     scatter_expression_executor: Arc<ExpressionExecutor>,
     scatter_expression_name: String,
-    scattered_size: usize
+    scattered_size: usize,
 }
 
 impl FlightScatterByHash {
     pub fn try_create(
         schema: DataSchemaRef,
         action: Expression,
-        num: usize
+        num: usize,
     ) -> Result<FlightScatterByHash> {
         let indices_expression_action = Expression::ScalarFunction {
             op: String::from("modulo"),
             args: vec![
                 Expression::Cast {
                     expr: Box::new(action),
-                    data_type: DataType::UInt64
+                    data_type: DataType::UInt64,
                 },
                 Expression::Literal(DataValue::UInt64(Some(num as u64))),
-            ]
+            ],
         };
 
         let output_name = indices_expression_action.column_name();
@@ -44,14 +44,14 @@ impl FlightScatterByHash {
             schema,
             DataSchemaRefExt::create(vec![DataField::new(&output_name, DataType::UInt64, false)]),
             vec![indices_expression_action],
-            false
+            false,
         )?;
         expression_executor.validate()?;
 
         Ok(FlightScatterByHash {
             scatter_expression_executor: Arc::new(expression_executor),
             scatter_expression_name: output_name,
-            scattered_size: num
+            scattered_size: num,
         })
     }
 
@@ -62,9 +62,9 @@ impl FlightScatterByHash {
             .column_by_name(&self.scatter_expression_name)
         {
             None => Result::Err(ErrorCodes::LogicalError(
-                "Logical error: expression executor error."
+                "Logical error: expression executor error.",
             )),
-            Some(indices) => DataBlock::scatter_block(data_block, indices, self.scattered_size)
+            Some(indices) => DataBlock::scatter_block(data_block, indices, self.scattered_size),
         }
     }
 }

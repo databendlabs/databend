@@ -18,7 +18,7 @@ use crate::IAggregateFunction;
 pub struct AggregateCountFunction {
     display_name: String,
     depth: usize,
-    state: DataValue
+    state: DataValue,
 }
 
 impl AggregateCountFunction {
@@ -26,7 +26,7 @@ impl AggregateCountFunction {
         Ok(Box::new(AggregateCountFunction {
             display_name: display_name.to_string(),
             depth: 0,
-            state: DataValue::Null
+            state: DataValue::Null,
         }))
     }
 }
@@ -52,7 +52,7 @@ impl IAggregateFunction for AggregateCountFunction {
         self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
-            DataValue::UInt64(Some(input_rows as u64))
+            DataValue::UInt64(Some(input_rows as u64)),
         )?;
         Ok(())
     }
@@ -66,7 +66,7 @@ impl IAggregateFunction for AggregateCountFunction {
         self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
-            val
+            val,
         )?;
         Ok(())
     }

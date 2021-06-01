@@ -23,14 +23,14 @@ pub struct Dfs {
     /// The local fs to store data copies.
     /// The distributed fs is a cluster of local-fs organized with a meta data service.
     pub local_fs: LocalFS,
-    pub meta_node: Arc<MetaNode>
+    pub meta_node: Arc<MetaNode>,
 }
 
 impl Dfs {
     pub fn create(local_fs: LocalFS, meta_node: Arc<MetaNode>) -> Dfs {
         Dfs {
             local_fs,
-            meta_node
+            meta_node,
         }
     }
 }
@@ -50,8 +50,8 @@ impl IFileSystem for Dfs {
             txid: None,
             cmd: Cmd::AddFile {
                 key: path,
-                value: "".into()
-            }
+                value: "".into(),
+            },
         };
         let _resp = self.meta_node.write(req).await?;
         Ok(())

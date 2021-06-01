@@ -21,7 +21,7 @@ mod tests {
         let total = ctx.get_max_block_size()? as u64;
         let statistics = Statistics {
             read_rows: total as usize,
-            read_bytes: ((total) * size_of::<u64>() as u64) as usize
+            read_bytes: ((total) * size_of::<u64>() as u64) as usize,
         };
         ctx.try_set_statistics(&statistics)?;
         let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
@@ -40,7 +40,7 @@ mod tests {
                 statistics.read_rows,
                 statistics.read_bytes
             ),
-            scan_plan: Arc::new(ScanPlan::empty())
+            scan_plan: Arc::new(ScanPlan::empty()),
         });
 
         let filter_plan = PlanBuilder::from(&source_plan)
@@ -50,7 +50,7 @@ mod tests {
         let plan = PlanNode::Projection(ProjectionPlan {
             expr: vec![col("a")],
             schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
-            input: Arc::from(filter_plan)
+            input: Arc::from(filter_plan),
         });
 
         let mut constant_folding = ConstantFoldingOptimizer::create(ctx);
