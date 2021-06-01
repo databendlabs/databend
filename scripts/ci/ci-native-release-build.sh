@@ -8,3 +8,6 @@ cd "$SCRIPT_PATH/../../" || exit
 
 echo "Starting build fuse-query"
 RUST_BACKTRACE=full RUSTFLAGS="-C target-cpu=native" cargo build --bin=fuse-query --release
+echo "Starting build fuse-benchmark"
+RUST_BACKTRACE=full RUSTFLAGS="-C target-cpu=native" cargo build --bin=fuse-benchmark --release
+
