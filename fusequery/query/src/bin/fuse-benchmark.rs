@@ -119,6 +119,16 @@ async fn main() -> Result<()> {
     let queries = read_queries(&conf.query)?;
 
     let bench = Arc::new(Benchmark::new(conf, pool, queries));
+
+    {
+        let b = bench.clone();
+        ctrlc::set_handler(move || {
+            println!("ctrl-c received!");
+            b.shutdown.store(true, Ordering::Relaxed);
+        })
+        .expect("Error setting Ctrl-C handler");
+    }
+
     run(bench.clone()).await?;
     report_text(bench.clone()).await?;
 
@@ -147,7 +157,7 @@ async fn run(bench: BenchmarkRef) -> Result<()> {
     let mut i = 0usize;
     let max_iterations = bench.config.iterations;
     loop {
-        if max_iterations > 0 && i >= max_iterations {
+        if (max_iterations > 0 && i >= max_iterations) || bench.shutdown.load(Ordering::Relaxed) {
             break;
         }
         let mut rng = rand::thread_rng();
@@ -182,32 +192,35 @@ fn read_queries(query: &str) -> Result<Vec<String>> {
 
 async fn execute(bench: BenchmarkRef) -> Result<()> {
     loop {
-        let query = bench.queue.pop();
-        if let Some(query) = query {
-            let start = Instant::now();
-            let mut client = bench.pool.get_handle().await.map_err(to_error_codes)?;
-
-            {
-                let result = client.query(&query);
-                let mut stream = result.stream();
-                while stream.next().await.is_some() {}
-            }
-
-            {
-                let progress = client.progress();
-                let mut stats = bench.stats.write();
-                stats.update(
-                    start.elapsed().as_millis() as f64 / 1000f64,
-                    progress.rows as usize,
-                    progress.bytes as usize
-                );
-            }
-            bench.executed.fetch_add(1, Ordering::Relaxed);
-        } else if bench.shutdown.load(Ordering::Relaxed)
+        if bench.shutdown.load(Ordering::Relaxed)
             || (bench.config.iterations > 0
                 && bench.executed.load(Ordering::Relaxed) >= bench.config.iterations)
         {
             break;
+        } else {
+            let query = bench.queue.pop();
+
+            if let Some(query) = query {
+                let start = Instant::now();
+                let mut client = bench.pool.get_handle().await.map_err(to_error_codes)?;
+
+                {
+                    let result = client.query(&query);
+                    let mut stream = result.stream();
+                    while stream.next().await.is_some() {}
+                }
+
+                {
+                    let progress = client.progress();
+                    let mut stats = bench.stats.write();
+                    stats.update(
+                        start.elapsed().as_millis() as f64 / 1000f64,
+                        progress.rows as usize,
+                        progress.bytes as usize
+                    );
+                }
+                bench.executed.fetch_add(1, Ordering::Relaxed);
+            }
         }
     }
     Ok(())
