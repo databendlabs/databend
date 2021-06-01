@@ -23,7 +23,10 @@ impl StoreServer {
     }
 
     pub async fn serve(&self) -> Result<()> {
-        let addr = self.conf.rpc_api_address.parse::<std::net::SocketAddr>()?;
+        let addr = self
+            .conf
+            .flight_api_address
+            .parse::<std::net::SocketAddr>()?;
 
         let p = tempfile::tempdir()?;
         let fs = LocalFS::try_create(p.path().to_str().unwrap().into())?;

@@ -632,7 +632,7 @@ impl PlanParser {
     }
     fn process_compound_ident(
         &self,
-        ids: &Vec<Ident>,
+        ids: &[Ident],
         select: Option<&sqlparser::ast::Select>,
     ) -> Result<Expression> {
         let mut var_names = vec![];

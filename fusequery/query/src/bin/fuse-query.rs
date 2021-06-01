@@ -30,7 +30,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .init();
 
     info!("{:?}", conf);
-    info!("FuseQuery v-{}", conf.version);
+    info!(
+        "FuseQuery v-{}",
+        fuse_query::configs::config::FUSE_COMMIT_VERSION
+    );
 
     let mut tasks = vec![];
     let cluster = Cluster::create_global(conf.clone())?;

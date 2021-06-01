@@ -13,7 +13,7 @@ pub async fn start_store_server() -> Result<String> {
     let addr = rand_local_addr();
 
     let mut conf = Config::default();
-    conf.rpc_api_address = addr.clone();
+    conf.flight_api_address = addr.clone();
 
     let srv = StoreServer::create(conf);
     tokio::spawn(async move {
