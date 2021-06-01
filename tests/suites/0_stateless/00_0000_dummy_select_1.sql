@@ -9,3 +9,7 @@ SELECT FALSE;
 SELECT NOT(TRUE);
 SELECT a.number FROM numbers(3) AS a order by a.number;
 SELECT a.number FROM (SELECT * FROM numbers(3) AS b ORDER BY b.number) AS a;
+SELECT b.number FROM numbers(3) AS a ORDER BY a.number;
+SELECT a.number FROM numbers(3) AS a ORDER BY b.number;
+SELECT b.number FROM (SELECT * FROM numbers(3) AS b ORDER BY a.number) AS a;
+SELECT b.number FROM (SELECT * FROM numbers(3) AS b) AS a ORDER BY b.number;
