@@ -28,6 +28,7 @@ use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
+use crate::RemotePlan;
 use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
@@ -73,6 +74,7 @@ pub trait PlanRewriter<'plan> {
             PlanNode::UseDatabase(plan) => self.rewrite_use_database(plan),
             PlanNode::SetVariable(plan) => self.rewrite_set_variable(plan),
             PlanNode::Stage(plan) => self.rewrite_stage(plan),
+            PlanNode::Remote(plan) => self.rewrite_remote(plan),
             PlanNode::Having(plan) => self.rewrite_having(plan),
             PlanNode::Expression(plan) => self.rewrite_expression(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
@@ -108,11 +110,14 @@ pub trait PlanRewriter<'plan> {
 
     fn rewrite_stage(&mut self, plan: &'plan StagePlan) -> Result<PlanNode> {
         Ok(PlanNode::Stage(StagePlan {
-            uuid: plan.uuid.clone(),
-            id: plan.id,
-            state: plan.state.clone(),
+            kind: plan.kind.clone(),
+            scatters_expr: plan.scatters_expr.clone(),
             input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?)
         }))
+    }
+
+    fn rewrite_remote(&mut self, plan: &'plan RemotePlan) -> Result<PlanNode> {
+        Ok(PlanNode::Remote(plan.clone()))
     }
 
     fn rewrite_projection(&mut self, plan: &'plan ProjectionPlan) -> Result<PlanNode> {

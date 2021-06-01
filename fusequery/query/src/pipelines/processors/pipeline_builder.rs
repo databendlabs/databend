@@ -15,6 +15,7 @@ use common_planners::LimitPlan;
 use common_planners::PlanNode;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
+use common_planners::RemotePlan;
 use common_planners::SortPlan;
 use common_planners::StagePlan;
 use log::info;
@@ -32,7 +33,6 @@ use crate::pipelines::transforms::RemoteTransform;
 use crate::pipelines::transforms::SortMergeTransform;
 use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
-use crate::planners::PlanScheduler;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct PipelineBuilder {
@@ -64,6 +64,7 @@ impl PipelineBuilder {
             match node {
                 PlanNode::Select(_) => Ok(true),
                 PlanNode::Stage(plan) => self.visit_stage_plan(&mut pipeline, &plan),
+                PlanNode::Remote(plan) => self.visit_remote_plan(&mut pipeline, &plan),
                 PlanNode::Expression(plan) => {
                     PipelineBuilder::visit_expression_plan(&mut pipeline, plan)
                 }
@@ -94,26 +95,22 @@ impl PipelineBuilder {
         Ok(pipeline)
     }
 
-    fn visit_stage_plan(&self, pipeline: &mut Pipeline, plan: &&StagePlan) -> Result<bool> {
-        let executors = PlanScheduler::reschedule(self.ctx.clone(), &plan.input.as_ref())?;
+    fn visit_stage_plan(&self, _: &mut Pipeline, _: &&StagePlan) -> Result<bool> {
+        Result::Err(ErrorCodes::LogicalError(
+            "Logical Error: visit_stage_plan in pipeline_builder"
+        ))
+    }
 
-        // If the executors is not empty.
-        if !executors.is_empty() {
-            // Reset.
-            pipeline.reset();
-            self.ctx.reset()?;
-
-            // Add remote transform as the new source.
-            for (address, remote_plan) in executors.iter() {
-                let remote_transform = RemoteTransform::try_create(
-                    self.ctx.clone(),
-                    self.ctx.get_id()?,
-                    address.clone(),
-                    remote_plan.clone()
-                )?;
-                pipeline.add_source(Arc::new(remote_transform))?;
-            }
+    fn visit_remote_plan(&self, pipeline: &mut Pipeline, plan: &&RemotePlan) -> Result<bool> {
+        for fetch_node in &plan.fetch_nodes {
+            pipeline.add_source(Arc::new(RemoteTransform::try_create(
+                self.ctx.clone(),
+                plan.fetch_name.clone(),
+                fetch_node.clone(),
+                plan.schema.clone()
+            )?))?;
         }
+
         Ok(true)
     }
 
@@ -268,13 +265,8 @@ impl PipelineBuilder {
         self.ctx.try_set_partitions(plan.partitions.clone())?;
 
         let max_threads = self.ctx.get_max_threads()? as usize;
-        let workers = if max_threads == 0 {
-            1
-        } else if max_threads > plan.partitions.len() {
-            plan.partitions.len()
-        } else {
-            max_threads
-        };
+        let max_threads = std::cmp::min(max_threads, plan.partitions.len());
+        let workers = std::cmp::max(max_threads, 1);
 
         for _i in 0..workers {
             let source = SourceTransform::try_create(

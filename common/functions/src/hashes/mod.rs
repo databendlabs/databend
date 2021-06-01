@@ -2,8 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-mod plan_scheduler_test;
+mod hash;
+mod siphash;
 
-mod plan_scheduler;
-
-pub use plan_scheduler::PlanScheduler;
+pub use hash::HashesFunction;

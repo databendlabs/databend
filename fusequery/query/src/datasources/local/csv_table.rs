@@ -4,6 +4,7 @@
 
 use std::any::Any;
 use std::fs::File;
+use std::sync::Arc;
 
 use anyhow::Context;
 use common_datavalues::DataSchemaRef;
@@ -77,7 +78,12 @@ impl ITable for CsvTable {
         true
     }
 
-    fn read_plan(&self, ctx: FuseQueryContextRef, _scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
+    fn read_plan(
+        &self,
+        ctx: FuseQueryContextRef,
+        scan: &ScanPlan,
+        _partitions: usize
+    ) -> Result<ReadDataSourcePlan> {
         let start_line: usize = if self.has_header { 1 } else { 0 };
         let file = &self.file;
         let lines_count = Common::count_lines(
@@ -97,7 +103,8 @@ impl ITable for CsvTable {
                 lines_count as u64
             ),
             statistics: Statistics::default(),
-            description: format!("(Read from CSV Engine table  {}.{})", self.db, self.name)
+            description: format!("(Read from CSV Engine table  {}.{})", self.db, self.name),
+            scan_plan: Arc::new(scan.clone())
         })
     }
 

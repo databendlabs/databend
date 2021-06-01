@@ -7,13 +7,17 @@ mod optimizer_constant_folding_test;
 #[cfg(test)]
 mod optimizer_projection_push_down_test;
 #[cfg(test)]
+mod optimizer_scatters_test;
+#[cfg(test)]
 mod optimizer_test;
 
 mod optimizer;
 mod optimizer_constant_folding;
 mod optimizer_projection_push_down;
+mod optimizer_scatters;
 
 pub use optimizer::IOptimizer;
 pub use optimizer::Optimizer;
 pub use optimizer_constant_folding::ConstantFoldingOptimizer;
 pub use optimizer_projection_push_down::ProjectionPushDownOptimizer;
+pub use optimizer_scatters::ScattersOptimizer;

@@ -39,6 +39,7 @@ impl DataArrayLogic {
         }
     }
 
+    #[allow(clippy::nonminimal_bool)]
     fn data_array_negation(val: &DataColumnarValue) -> Result<DataArrayRef> {
         match val {
             DataColumnarValue::Array(array) => {

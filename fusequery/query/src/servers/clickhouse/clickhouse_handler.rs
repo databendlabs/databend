@@ -45,7 +45,7 @@ pub fn to_clickhouse_err(res: ErrorCodes) -> clickhouse_srv::errors::Error {
         code: res.code() as u32,
         name: "DB:Exception".to_string(),
         message: res.message(),
-        stack_trace: res.backtrace()
+        stack_trace: res.backtrace_str()
     })
 }
 
@@ -69,6 +69,8 @@ impl ClickHouseSession for Session {
             .and_then(|built_plan| InterpreterFactory::get(self.ctx.clone(), built_plan))
             .map_err(to_clickhouse_err)?;
 
+        let schema = interpreter.schema();
+
         let mut interval_stream = IntervalStream::new(time::interval(Duration::from_millis(30)));
         let (tx, mut rx) = mpsc::channel(20);
         let cancel = Arc::new(AtomicBool::new(false));
@@ -87,7 +89,7 @@ impl ClickHouseSession for Session {
             let clickhouse_stream = interpreter
                 .execute()
                 .await
-                .map(|stream| ClickHouseStream::create(stream));
+                .map(|stream| ClickHouseStream::create(stream, schema));
 
             match clickhouse_stream {
                 Ok(mut clickhouse_stream) => {

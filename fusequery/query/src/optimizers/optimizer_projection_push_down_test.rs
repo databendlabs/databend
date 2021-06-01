@@ -61,9 +61,8 @@ fn test_projection_push_down_optimizer_group_by() -> anyhow::Result<()> {
     let expect = "\
         Projection: max(value) as c1:Utf8, name as c2:Utf8\
         \n  AggregatorFinal: groupBy=[[name]], aggr=[[max(value)]]\
-        \n    RedistributeStage[state: AggregatorMerge, id: 0]\
-        \n      AggregatorPartial: groupBy=[[name]], aggr=[[max(value)]]\
-        \n        ReadDataSource: scan partitions: [1], scan schema: [name:Utf8, value:Utf8], statistics: [read_rows: 0, read_bytes: 0]";
+        \n    AggregatorPartial: groupBy=[[name]], aggr=[[max(value)]]\
+        \n      ReadDataSource: scan partitions: [1], scan schema: [name:Utf8, value:Utf8], statistics: [read_rows: 0, read_bytes: 0]";
 
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);
@@ -95,7 +94,8 @@ fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
             "test".to_string(),
             statistics.read_rows,
             statistics.read_bytes
-        )
+        ),
+        scan_plan: Arc::new(ScanPlan::empty())
     });
 
     let filter_plan = PlanBuilder::from(&source_plan)
@@ -150,7 +150,8 @@ fn test_projection_push_down_optimizer_3() -> anyhow::Result<()> {
             "test".to_string(),
             statistics.read_rows,
             statistics.read_bytes
-        )
+        ),
+        scan_plan: Arc::new(ScanPlan::empty())
     });
 
     let group_exprs = &[col("a"), col("c")];

@@ -2,6 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::fmt::Debug;
+use std::fmt::Formatter;
+
+use common_exception::ErrorCodes;
+use warp::reject::Reject;
 use warp::Filter;
 
 use crate::clusters::ClusterRef;
@@ -70,8 +75,8 @@ mod handlers {
     use log::info;
 
     use crate::api::http::v1::cluster::ClusterNodeRequest;
+    use crate::api::http::v1::cluster::NoBacktraceErrorCodes;
     use crate::clusters::ClusterRef;
-    use crate::clusters::Node;
 
     pub async fn list_node(
         cluster: ClusterRef
@@ -84,18 +89,18 @@ mod handlers {
     pub async fn add_node(
         req: ClusterNodeRequest,
         cluster: ClusterRef
-    ) -> Result<impl warp::Reply, std::convert::Infallible> {
+    ) -> Result<impl warp::Reply, warp::Rejection> {
         info!("Cluster add node: {:?}", req);
-        // TODO(BohuTANG): error handler
-        cluster
-            .add_node(&Node {
-                name: req.name,
-                priority: req.priority,
-                address: req.address,
-                local: false
-            })
-            .unwrap();
-        Ok(warp::http::StatusCode::OK)
+        match cluster
+            .add_node(&req.name, req.priority, &req.address)
+            .await
+        {
+            Ok(_) => Ok(warp::reply::with_status(
+                "".to_string(),
+                warp::http::StatusCode::OK
+            )),
+            Err(error_codes) => Err(warp::reject::custom(NoBacktraceErrorCodes(error_codes)))
+        }
     }
 
     pub async fn remove_node(
@@ -108,3 +113,13 @@ mod handlers {
         Ok(warp::http::StatusCode::OK)
     }
 }
+
+struct NoBacktraceErrorCodes(ErrorCodes);
+
+impl Debug for NoBacktraceErrorCodes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Reject for NoBacktraceErrorCodes {}

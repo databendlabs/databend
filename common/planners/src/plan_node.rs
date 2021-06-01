@@ -5,6 +5,8 @@
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCodes;
+use common_exception::Result;
 
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
@@ -21,16 +23,19 @@ use crate::InsertIntoPlan;
 use crate::LimitPlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
+use crate::RemotePlan;
 use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::UseDatabasePlan;
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum PlanNode {
     Empty(EmptyPlan),
     Stage(StagePlan),
+    Remote(RemotePlan),
     Projection(ProjectionPlan),
     Expression(ExpressionPlan),
     AggregatorPartial(AggregatorPartialPlan),
@@ -58,6 +63,7 @@ impl PlanNode {
         match self {
             PlanNode::Empty(v) => v.schema(),
             PlanNode::Stage(v) => v.schema(),
+            PlanNode::Remote(v) => v.schema(),
             PlanNode::Scan(v) => v.schema(),
             PlanNode::Projection(v) => v.schema(),
             PlanNode::Expression(v) => v.schema(),
@@ -85,6 +91,7 @@ impl PlanNode {
             PlanNode::Empty(_) => "EmptyPlan",
             PlanNode::Stage(_) => "StagePlan",
             PlanNode::Scan(_) => "ScanPlan",
+            PlanNode::Remote(_) => "RemotePlan",
             PlanNode::Projection(_) => "ProjectionPlan",
             PlanNode::Expression(_) => "ExpressionPlan",
             PlanNode::AggregatorPartial(_) => "AggregatorPartialPlan",
@@ -126,5 +133,33 @@ impl PlanNode {
 
     pub fn input(&self, n: usize) -> Arc<PlanNode> {
         self.inputs()[n].clone()
+    }
+
+    pub fn set_inputs(&mut self, inputs: Vec<&PlanNode>) -> Result<()> {
+        if inputs.is_empty() {
+            return Result::Err(ErrorCodes::BadPlanInputs("Inputs must not be empty"));
+        }
+
+        match self {
+            PlanNode::Stage(v) => v.set_input(inputs[0]),
+            PlanNode::Projection(v) => v.set_input(inputs[0]),
+            PlanNode::Expression(v) => v.set_input(inputs[0]),
+            PlanNode::AggregatorPartial(v) => v.set_input(inputs[0]),
+            PlanNode::AggregatorFinal(v) => v.set_input(inputs[0]),
+            PlanNode::Filter(v) => v.set_input(inputs[0]),
+            PlanNode::Having(v) => v.set_input(inputs[0]),
+            PlanNode::Limit(v) => v.set_input(inputs[0]),
+            PlanNode::Explain(v) => v.set_input(inputs[0]),
+            PlanNode::Select(v) => v.set_input(inputs[0]),
+            PlanNode::Sort(v) => v.set_input(inputs[0]),
+            _ => {
+                return Err(ErrorCodes::UnImplement(format!(
+                    "UnImplement set_inputs for {:?}",
+                    self
+                )));
+            }
+        }
+
+        Ok(())
     }
 }

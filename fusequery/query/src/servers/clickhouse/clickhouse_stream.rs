@@ -12,6 +12,7 @@ use common_arrow::arrow::array::*;
 use common_arrow::arrow::datatypes::*;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
@@ -19,17 +20,23 @@ use futures::stream::Stream;
 use futures::StreamExt;
 
 pub struct ClickHouseStream {
-    input: SendableDataBlockStream
+    input: SendableDataBlockStream,
+    block_index: usize,
+    schema: DataSchemaRef
 }
 
 impl ClickHouseStream {
-    pub fn create(input: SendableDataBlockStream) -> Self {
-        ClickHouseStream { input }
+    pub fn create(input: SendableDataBlockStream, schema: DataSchemaRef) -> Self {
+        ClickHouseStream {
+            input,
+            block_index: 0,
+            schema
+        }
     }
 
     pub fn convert_block(&self, block: DataBlock) -> Result<ClickHouseBlock> {
         let mut result = ClickHouseBlock::new();
-        if block.is_empty() {
+        if block.num_columns() == 0 {
             return Ok(result);
         }
 
@@ -115,6 +122,14 @@ impl Stream for ClickHouseStream {
     type Item = Result<ClickHouseBlock>;
 
     fn poll_next(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // Some drivers will skip the first block for it recognizes the first block as schema
+        // So we make the first block to be an empty block
+        if self.block_index == 0 {
+            self.block_index += 1;
+            let block = DataBlock::empty_with_schema(self.schema.clone());
+            return Poll::Ready(Some(self.convert_block(block)));
+        }
+
         self.input.poll_next_unpin(ctx).map(|x| match x {
             Some(Ok(v)) => Some(self.convert_block(v)),
             // Some(Err(e)) => Some(Err(e)),

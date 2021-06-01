@@ -2,11 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::UInt32Builder;
 use common_arrow::arrow::compute;
 use common_datavalues::DataArrayMerge;
-use common_datavalues::DataColumnarValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
@@ -19,57 +16,6 @@ pub struct SortColumnDescription {
 }
 
 impl DataBlock {
-    pub fn block_take_by_indices(raw: &DataBlock, indices: &[u32]) -> Result<DataBlock> {
-        let mut batch_indices: UInt32Builder = UInt32Builder::new(0);
-        batch_indices.append_slice(indices)?;
-        let batch_indices = batch_indices.finish();
-
-        let columns = raw
-            .columns()
-            .iter()
-            .map(|column| match column {
-                DataColumnarValue::Array(array) => {
-                    let taked_array = compute::take(array.as_ref(), &batch_indices, None)?;
-                    Ok(DataColumnarValue::Array(taked_array))
-                }
-                DataColumnarValue::Constant(v, _) => {
-                    Ok(DataColumnarValue::Constant(v.clone(), indices.len()))
-                }
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        Ok(DataBlock::create(raw.schema().clone(), columns))
-    }
-
-    pub fn concat_blocks(blocks: &[DataBlock]) -> Result<DataBlock> {
-        if blocks.is_empty() {
-            return Result::Err(ErrorCodes::EmptyData("Can't concat empty blocks"));
-        }
-
-        let first_block = &blocks[0];
-        for block in blocks.iter() {
-            if block.schema().ne(first_block.schema()) {
-                return Result::Err(ErrorCodes::DataStructMissMatch("Schema not matched"));
-            }
-        }
-
-        let mut arrays = Vec::with_capacity(first_block.num_columns());
-        for (i, _f) in blocks[0].schema().fields().iter().enumerate() {
-            let mut arr = Vec::with_capacity(blocks.len());
-            for block in blocks.iter() {
-                arr.push(block.column(i).to_array()?);
-            }
-
-            let arr: Vec<&dyn Array> = arr.iter().map(|c| c.as_ref()).collect();
-            arrays.push(compute::concat(&arr)?);
-        }
-
-        Ok(DataBlock::create_by_array(
-            first_block.schema().clone(),
-            arrays
-        ))
-    }
-
     pub fn sort_block(
         block: &DataBlock,
         sort_columns_descriptions: &[SortColumnDescription],

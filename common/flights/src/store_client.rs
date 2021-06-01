@@ -27,7 +27,6 @@ use log::info;
 use prost::Message;
 use tonic::metadata::MetadataValue;
 use tonic::transport::Channel;
-use tonic::transport::Endpoint;
 use tonic::Request;
 
 use crate::flight_result_to_str;
@@ -40,6 +39,7 @@ use crate::store_do_action::StoreDoAction;
 use crate::store_do_action::StoreDoActionResult;
 use crate::store_do_put;
 use crate::store_do_put::AppendResult;
+use crate::ConnectionFactory;
 use crate::CreateDatabaseActionResult;
 use crate::CreateTableActionResult;
 use crate::DropTableAction;
@@ -62,8 +62,7 @@ impl StoreClient {
         // TODO configuration
         let timeout = Duration::from_secs(60);
 
-        let endpoint = Endpoint::from_shared(format!("http://{}", addr))?.timeout(timeout);
-        let channel = endpoint.connect().await?;
+        let channel = ConnectionFactory::create_flight_channel(addr, Some(timeout)).await?;
 
         let mut client = FlightServiceClient::new(channel.clone());
         let token = StoreClient::handshake(&mut client, timeout, username, password).await?;

@@ -27,8 +27,6 @@ mod plan_scan_test;
 #[cfg(test)]
 mod plan_select_test;
 #[cfg(test)]
-mod plan_stage_test;
-#[cfg(test)]
 mod plan_walker_test;
 #[cfg(test)]
 mod test;
@@ -58,6 +56,7 @@ mod plan_node;
 mod plan_partition;
 mod plan_projection;
 mod plan_read_datasource;
+mod plan_remote;
 mod plan_rewriter;
 mod plan_scan;
 mod plan_select;
@@ -105,6 +104,7 @@ pub use plan_partition::Partition;
 pub use plan_partition::Partitions;
 pub use plan_projection::ProjectionPlan;
 pub use plan_read_datasource::ReadDataSourcePlan;
+pub use plan_remote::RemotePlan;
 pub use plan_rewriter::PlanRewriter;
 pub use plan_rewriter::RewriteHelper;
 pub use plan_scan::ScanPlan;
@@ -112,8 +112,8 @@ pub use plan_select::SelectPlan;
 pub use plan_setting::SettingPlan;
 pub use plan_setting::VarValue;
 pub use plan_sort::SortPlan;
+pub use plan_stage::StageKind;
 pub use plan_stage::StagePlan;
-pub use plan_stage::StageState;
 pub use plan_statistics::Statistics;
 pub use plan_table_create::CreateTablePlan;
 pub use plan_table_create::TableEngineType;

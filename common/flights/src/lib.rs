@@ -6,10 +6,6 @@ pub use common::flight_result_to_str;
 pub use common::status_err;
 pub use flight_token::FlightClaim;
 pub use flight_token::FlightToken;
-pub use query_client::QueryClient;
-pub use query_do_action::QueryDoAction;
-pub use query_do_get::ExecutePlanAction;
-pub use query_do_get::QueryDoGet;
 pub use store_client::BlockStream;
 pub use store_client::StoreClient;
 pub use store_do_action::CreateDatabaseAction;
@@ -33,10 +29,8 @@ pub use store_do_put::set_do_put_meta;
 pub use store_do_put::AppendResult;
 
 mod common;
+mod dns_resolver;
 mod flight_token;
-mod query_client;
-mod query_do_action;
-mod query_do_get;
 mod store_client;
 mod store_do_action;
 mod store_do_get;
@@ -50,4 +44,9 @@ pub mod protobuf {
 }
 
 #[cfg(test)]
+mod dns_resolver_test;
+#[cfg(test)]
 mod store_do_put_test;
+
+pub use dns_resolver::ConnectionFactory;
+pub use dns_resolver::DNSResolver;
