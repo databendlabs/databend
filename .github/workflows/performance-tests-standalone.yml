@@ -1,5 +1,7 @@
 name: Performance(Standalone)
-on: [push, pull_request, issue_comment]
+on:
+  issue_comment:
+    types: [created, edited, deleted]
 
 env:
   CARGO_TERM_COLOR: always
@@ -7,18 +9,11 @@ env:
 jobs:
   build:
     name: "Tests"
+    if: contains(github.event.comment.html_url, '/pull/')    # check if the comments come from pull request, exclude those from issue.
     runs-on: self-hosted
     steps:
-      - uses: khan/pull-request-comment-trigger@master
-        id: check
-        with:
-          trigger: '/runperf'
-          reaction: rocket
-        env:
-          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
-      - uses: actions/checkout@v2
       - name: dependency hack on self hosted machine
-        if: steps.check.outputs.triggered == 'true'
+        if: contains(github.event.comment.body, '/runperf')
         run: |
           sudo wget http://archive.ubuntu.com/ubuntu/pool/main/p/psmisc/psmisc_23.3-1_amd64.deb
           sudo dpkg -i ./psmisc_23.3-1_amd64.deb
@@ -40,7 +35,7 @@ jobs:
 
 
       - name: Install latest nightly
-        if: steps.check.outputs.triggered == 'true'
+        if: contains(github.event.comment.body, '/runperf')
         uses: actions-rs/toolchain@v1
         with:
             toolchain: nightly
@@ -56,12 +51,12 @@ jobs:
           command: check
 
       - name: Build native release
-        if: steps.check.outputs.triggered == 'true'
+        if: contains(github.event.comment.body, '/runperf')
         run: |
           bash ./scripts/ci/ci-native-release-build.sh
 
       - name: Run Performance Tests with Standalone mode
-        if: steps.check.outputs.triggered == 'true'
+        if: contains(github.event.comment.body, '/runperf')
         run: |
           bash ./scripts/ci/ci-performance-tests-standalone.sh
           
