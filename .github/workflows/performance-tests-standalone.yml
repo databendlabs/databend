@@ -1,5 +1,7 @@
 name: Performance(Standalone)
-on: [push, pull_request]
+on: 
+  repository_dispatch:
+    types: [runperf]
 
 env:
   CARGO_TERM_COLOR: always
