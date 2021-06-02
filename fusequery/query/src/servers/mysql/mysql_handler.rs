@@ -108,7 +108,6 @@ impl<W: io::Write> MysqlShim<W> for Session {
             Err(error) => {
                 log::error!("OnInit Error: {:?}", error);
                 writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())?;
-                return Err(error);
             }
         };
 
