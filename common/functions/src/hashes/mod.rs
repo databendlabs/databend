@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#[cfg(test)]
+mod siphash_test;
+
 mod hash;
 mod siphash;
-mod siphash_test;
 
 pub use hash::HashesFunction;

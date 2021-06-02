@@ -4,16 +4,17 @@
 
 use std::collections::hash_map::DefaultHasher;
 use std::fmt;
+use std::hash::Hasher;
 
-use common_datavalues::{DataArrayHashDispatcher, FuseDataHasher};
+use common_datavalues::DataArrayHashDispatcher;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
+use common_datavalues::FuseDataHasher;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::IFunction;
-use std::hash::Hasher;
 
 #[derive(Clone)]
 pub struct SipHashFunction {
@@ -33,6 +34,10 @@ impl SipHashFunction {
 impl IFunction for SipHashFunction {
     fn name(&self) -> &str {
         "siphash"
+    }
+
+    fn num_arguments(&self) -> usize {
+        1
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
@@ -137,13 +142,13 @@ impl FuseDataHasher for SipHasher {
 
     fn hash_f32(v: &f32) -> u64 {
         let mut hasher = DefaultHasher::default();
-        hasher.write_u32(*v as u32);
+        hasher.write_u32(v.to_bits());
         hasher.finish()
     }
 
     fn hash_f64(v: &f64) -> u64 {
         let mut hasher = DefaultHasher::default();
-        hasher.write_u64(*v as u64);
+        hasher.write_u64(v.to_bits());
         hasher.finish()
     }
 

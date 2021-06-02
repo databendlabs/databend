@@ -632,7 +632,7 @@ impl PlanParser {
     }
     fn process_compound_ident(
         &self,
-        ids: &Vec<Ident>,
+        ids: &[Ident],
         select: Option<&sqlparser::ast::Select>,
     ) -> Result<Expression> {
         let mut var_names = vec![];
@@ -763,7 +763,7 @@ impl PlanParser {
             }),
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema, select),
             sqlparser::ast::Expr::CompoundIdentifier(ids) => {
-                self.process_compound_ident(ids, select)
+                self.process_compound_ident(ids.as_slice(), select)
             }
             sqlparser::ast::Expr::Function(e) => {
                 let mut args = Vec::with_capacity(e.args.len());

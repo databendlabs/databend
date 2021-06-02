@@ -5,22 +5,49 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_arrow::arrow::array::{Array, PrimitiveArray};
+use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::BinaryArray;
 use common_arrow::arrow::array::GenericStringArray;
 use common_arrow::arrow::array::LargeBinaryArray;
+use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::array::StringOffsetSizeTrait;
 use common_arrow::arrow::array::UInt64Array;
-use common_arrow::arrow::datatypes::{DataType, Int8Type, ArrowPrimitiveType, Int16Type, Int32Type, Int64Type, UInt8Type, UInt16Type, UInt32Type, UInt64Type, Float32Type, Float64Type, Date32Type, Date64Type, Time32SecondType, TimeUnit, Time32MillisecondType, Time64MicrosecondType, Time64NanosecondType, DurationSecondType, DurationMillisecondType, DurationMicrosecondType, DurationNanosecondType, IntervalUnit, IntervalYearMonthType, IntervalDayTimeType, TimestampSecondType, TimestampMillisecondType, TimestampMicrosecondType, TimestampNanosecondType};
+use common_arrow::arrow::datatypes::ArrowPrimitiveType;
+use common_arrow::arrow::datatypes::DataType;
+use common_arrow::arrow::datatypes::Date32Type;
+use common_arrow::arrow::datatypes::Date64Type;
+use common_arrow::arrow::datatypes::DurationMicrosecondType;
+use common_arrow::arrow::datatypes::DurationMillisecondType;
+use common_arrow::arrow::datatypes::DurationNanosecondType;
+use common_arrow::arrow::datatypes::DurationSecondType;
+use common_arrow::arrow::datatypes::Float32Type;
+use common_arrow::arrow::datatypes::Float64Type;
+use common_arrow::arrow::datatypes::Int16Type;
+use common_arrow::arrow::datatypes::Int32Type;
+use common_arrow::arrow::datatypes::Int64Type;
+use common_arrow::arrow::datatypes::Int8Type;
+use common_arrow::arrow::datatypes::IntervalDayTimeType;
+use common_arrow::arrow::datatypes::IntervalUnit;
+use common_arrow::arrow::datatypes::IntervalYearMonthType;
+use common_arrow::arrow::datatypes::Time32MillisecondType;
+use common_arrow::arrow::datatypes::Time32SecondType;
+use common_arrow::arrow::datatypes::Time64MicrosecondType;
+use common_arrow::arrow::datatypes::Time64NanosecondType;
+use common_arrow::arrow::datatypes::TimeUnit;
+use common_arrow::arrow::datatypes::TimestampMicrosecondType;
+use common_arrow::arrow::datatypes::TimestampMillisecondType;
+use common_arrow::arrow::datatypes::TimestampNanosecondType;
+use common_arrow::arrow::datatypes::TimestampSecondType;
+use common_arrow::arrow::datatypes::UInt16Type;
+use common_arrow::arrow::datatypes::UInt32Type;
+use common_arrow::arrow::datatypes::UInt64Type;
+use common_arrow::arrow::datatypes::UInt8Type;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::DataArrayRef;
 use crate::DataColumnarValue;
 use crate::DataValue;
-use common_arrow::parquet::column::page::Page::DataPageV2;
-use crate::data_value::DataValue::Int8;
-use common_arrow::arrow::ipc::Int;
 
 pub trait FuseDataHasher {
     fn hash_bool(v: &bool) -> u64;
@@ -46,9 +73,9 @@ pub struct DataArrayHashDispatcher<Hasher: FuseDataHasher>(PhantomData<Hasher>);
 impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
     pub fn dispatch(input: &DataColumnarValue) -> Result<DataColumnarValue> {
         match input {
-            DataColumnarValue::Array(input) => Ok(DataColumnarValue::Array(
-                Self::dispatch_array(input)?,
-            )),
+            DataColumnarValue::Array(input) => {
+                Ok(DataColumnarValue::Array(Self::dispatch_array(input)?))
+            }
             DataColumnarValue::Constant(input, rows) => Ok(DataColumnarValue::Constant(
                 Self::dispatch_constant(input)?,
                 *rows,
@@ -93,14 +120,26 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
             DataValue::Float64(Some(v)) => Ok(DataValue::UInt64(Some(Hasher::hash_f64(v)))),
             DataValue::Date32(Some(v)) => Ok(DataValue::UInt64(Some(Hasher::hash_i32(v)))),
             DataValue::Date64(Some(v)) => Ok(DataValue::UInt64(Some(Hasher::hash_i64(v)))),
-            DataValue::Utf8(Some(v)) => Ok(DataValue::UInt64(Some(Hasher::hash_bytes(v.as_bytes())))),
-            DataValue::Binary(Some(v)) => Ok(DataValue::UInt64(Some(Hasher::hash_bytes(v.as_slice())))),
+            DataValue::Utf8(Some(v)) => {
+                Ok(DataValue::UInt64(Some(Hasher::hash_bytes(v.as_bytes()))))
+            }
+            DataValue::Binary(Some(v)) => {
+                Ok(DataValue::UInt64(Some(Hasher::hash_bytes(v.as_slice()))))
+            }
             DataValue::TimestampSecond(Some(v)) => Ok(DataValue::UInt64(Some(Hasher::hash_i64(v)))),
-            DataValue::TimestampMicrosecond(Some(v)) => Ok(DataValue::UInt64(Some(Hasher::hash_i64(v)))),
-            DataValue::TimestampMillisecond(Some(v)) => Ok(DataValue::UInt64(Some(Hasher::hash_i64(v)))),
-            DataValue::TimestampNanosecond(Some(v)) => Ok(DataValue::UInt64(Some(Hasher::hash_i64(v)))),
+            DataValue::TimestampMicrosecond(Some(v)) => {
+                Ok(DataValue::UInt64(Some(Hasher::hash_i64(v))))
+            }
+            DataValue::TimestampMillisecond(Some(v)) => {
+                Ok(DataValue::UInt64(Some(Hasher::hash_i64(v))))
+            }
+            DataValue::TimestampNanosecond(Some(v)) => {
+                Ok(DataValue::UInt64(Some(Hasher::hash_i64(v))))
+            }
             DataValue::IntervalDayTime(Some(v)) => Ok(DataValue::UInt64(Some(Hasher::hash_i64(v)))),
-            DataValue::IntervalYearMonth(Some(v)) => Ok(DataValue::UInt64(Some(Hasher::hash_i32(v)))),
+            DataValue::IntervalYearMonth(Some(v)) => {
+                Ok(DataValue::UInt64(Some(Hasher::hash_i32(v))))
+            }
             _ => Result::Err(ErrorCodes::BadDataValueType(
                 "DataArray Error: data_array_hash_with_array must be string or binary type.",
             )),
@@ -110,17 +149,37 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
     fn dispatch_array(input: &DataArrayRef) -> Result<DataArrayRef> {
         match input.data_type() {
             DataType::Int8 => Self::dispatch_primitive_array(input, Int8Type {}, Hasher::hash_i8),
-            DataType::Int16 => Self::dispatch_primitive_array(input, Int16Type {}, Hasher::hash_i16),
-            DataType::Int32 => Self::dispatch_primitive_array(input, Int32Type {}, Hasher::hash_i32),
-            DataType::Int64 => Self::dispatch_primitive_array(input, Int64Type {}, Hasher::hash_i64),
+            DataType::Int16 => {
+                Self::dispatch_primitive_array(input, Int16Type {}, Hasher::hash_i16)
+            }
+            DataType::Int32 => {
+                Self::dispatch_primitive_array(input, Int32Type {}, Hasher::hash_i32)
+            }
+            DataType::Int64 => {
+                Self::dispatch_primitive_array(input, Int64Type {}, Hasher::hash_i64)
+            }
             DataType::UInt8 => Self::dispatch_primitive_array(input, UInt8Type {}, Hasher::hash_u8),
-            DataType::UInt16 => Self::dispatch_primitive_array(input, UInt16Type {}, Hasher::hash_u16),
-            DataType::UInt32 => Self::dispatch_primitive_array(input, UInt32Type {}, Hasher::hash_u32),
-            DataType::UInt64 => Self::dispatch_primitive_array(input, UInt64Type {}, Hasher::hash_u64),
-            DataType::Float32 => Self::dispatch_primitive_array(input, Float32Type {}, Hasher::hash_f32),
-            DataType::Float64 => Self::dispatch_primitive_array(input, Float64Type {}, Hasher::hash_f64),
-            DataType::Date32 => Self::dispatch_primitive_array(input, Date32Type {}, Hasher::hash_i32),
-            DataType::Date64 => Self::dispatch_primitive_array(input, Date64Type {}, Hasher::hash_i64),
+            DataType::UInt16 => {
+                Self::dispatch_primitive_array(input, UInt16Type {}, Hasher::hash_u16)
+            }
+            DataType::UInt32 => {
+                Self::dispatch_primitive_array(input, UInt32Type {}, Hasher::hash_u32)
+            }
+            DataType::UInt64 => {
+                Self::dispatch_primitive_array(input, UInt64Type {}, Hasher::hash_u64)
+            }
+            DataType::Float32 => {
+                Self::dispatch_primitive_array(input, Float32Type {}, Hasher::hash_f32)
+            }
+            DataType::Float64 => {
+                Self::dispatch_primitive_array(input, Float64Type {}, Hasher::hash_f64)
+            }
+            DataType::Date32 => {
+                Self::dispatch_primitive_array(input, Date32Type {}, Hasher::hash_i32)
+            }
+            DataType::Date64 => {
+                Self::dispatch_primitive_array(input, Date64Type {}, Hasher::hash_i64)
+            }
             DataType::Time32(TimeUnit::Second) => {
                 Self::dispatch_primitive_array(input, Time32SecondType {}, Hasher::hash_i32)
             }
@@ -173,7 +232,11 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
         }
     }
 
-    fn dispatch_primitive_array<T: ArrowPrimitiveType, F: Fn(&T::Native) -> u64>(input: &DataArrayRef, _: T, fun: F) -> Result<DataArrayRef> {
+    fn dispatch_primitive_array<T: ArrowPrimitiveType, F: Fn(&T::Native) -> u64>(
+        input: &DataArrayRef,
+        _: T,
+        fun: F,
+    ) -> Result<DataArrayRef> {
         let primitive_data = input
             .as_any()
             .downcast_ref::<PrimitiveArray<T>>()
@@ -201,7 +264,9 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
         Ok(Arc::new(hash_builder.finish()))
     }
 
-    fn dispatch_string_array<T: StringOffsetSizeTrait>(data: &DataArrayRef) -> Result<DataArrayRef> {
+    fn dispatch_string_array<T: StringOffsetSizeTrait>(
+        data: &DataArrayRef,
+    ) -> Result<DataArrayRef> {
         let binary_data = data
             .as_any()
             .downcast_ref::<GenericStringArray<T>>()
@@ -222,7 +287,8 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
                     let _ = hash_builder.append_null()?;
                 }
                 false => {
-                    let _ = hash_builder.append_value(Hasher::hash_bytes(binary_data.value(index).as_bytes()))?;
+                    let _ = hash_builder
+                        .append_value(Hasher::hash_bytes(binary_data.value(index).as_bytes()))?;
                 }
             };
         }
@@ -248,7 +314,8 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
                     let _ = hash_builder.append_null()?;
                 }
                 false => {
-                    let _ = hash_builder.append_value(Hasher::hash_bytes(binary_data.value(index)))?;
+                    let _ =
+                        hash_builder.append_value(Hasher::hash_bytes(binary_data.value(index)))?;
                 }
             };
         }
@@ -277,7 +344,8 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
                     let _ = hash_builder.append_null()?;
                 }
                 false => {
-                    let _ = hash_builder.append_value(Hasher::hash_bytes(binary_data.value(index)))?;
+                    let _ =
+                        hash_builder.append_value(Hasher::hash_bytes(binary_data.value(index)))?;
                 }
             };
         }
