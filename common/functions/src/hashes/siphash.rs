@@ -41,34 +41,28 @@ impl IFunction for SipHashFunction {
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if args.len() != 1 {
-            return Result::Err(ErrorCodes::BadArguments(
-                "Function Error: sipHash function args length must be 1",
-            ));
-        }
-
         match args[0] {
-            DataType::Int8 => Ok(DataType::UInt64),
-            DataType::Int16 => Ok(DataType::UInt64),
-            DataType::Int32 => Ok(DataType::UInt64),
-            DataType::Int64 => Ok(DataType::UInt64),
-            DataType::UInt8 => Ok(DataType::UInt64),
-            DataType::UInt16 => Ok(DataType::UInt64),
-            DataType::UInt32 => Ok(DataType::UInt64),
-            DataType::UInt64 => Ok(DataType::UInt64),
-            DataType::Float32 => Ok(DataType::UInt64),
-            DataType::Float64 => Ok(DataType::UInt64),
-            DataType::Date32 => Ok(DataType::UInt64),
-            DataType::Date64 => Ok(DataType::UInt64),
-            DataType::Time32(_) => Ok(DataType::UInt64),
-            DataType::Time64(_) => Ok(DataType::UInt64),
-            DataType::Duration(_) => Ok(DataType::UInt64),
-            DataType::Interval(_) => Ok(DataType::UInt64),
-            DataType::Timestamp(_, _) => Ok(DataType::UInt64),
-            DataType::Utf8 => Ok(DataType::UInt64),
-            DataType::LargeUtf8 => Ok(DataType::UInt64),
-            DataType::Binary => Ok(DataType::UInt64),
-            DataType::LargeBinary => Ok(DataType::UInt64),
+            DataType::Int8
+            | DataType::Int16
+            | DataType::Int32
+            | DataType::Int64
+            | DataType::UInt8
+            | DataType::UInt16
+            | DataType::UInt32
+            | DataType::UInt64
+            | DataType::Float32
+            | DataType::Float64
+            | DataType::Date32
+            | DataType::Date64
+            | DataType::Time32(_)
+            | DataType::Time64(_)
+            | DataType::Duration(_)
+            | DataType::Interval(_)
+            | DataType::Timestamp(_, _)
+            | DataType::Utf8
+            | DataType::LargeUtf8
+            | DataType::Binary
+            | DataType::LargeBinary => Ok(DataType::UInt64),
             _ => Result::Err(ErrorCodes::BadArguments(format!(
                 "Function Error: Siphash does not support {} type parameters",
                 args[0]
