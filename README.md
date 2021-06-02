@@ -91,7 +91,7 @@ Note:
 - [x] Type coercion
 - [x] Parallel Query Execution
 - [x] Distributed Query Execution
-- [x] Hash GroupBy
+- [x] Hash GroupBy(Re-shuffle)
 - [x] Merge-Sort OrderBy
 - [ ] Joins (WIP)
 
