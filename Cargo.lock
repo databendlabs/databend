@@ -129,7 +129,7 @@ dependencies = [
 [[package]]
 name = "async-raft"
 version = "0.6.1"
-source = "git+https://github.com/drmingdrmer/async-raft?branch=master#377312cd6c0c7a804730b6f950df241c28740f19"
+source = "git+https://github.com/datafuse-extras/async-raft?branch=master#377312cd6c0c7a804730b6f950df241c28740f19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -516,7 +516,7 @@ dependencies = [
 [[package]]
 name = "clickhouse-rs"
 version = "1.0.0-alpha.1"
-source = "git+https://github.com/datafuselabs/clickhouse-rs?rev=c4743a9#c4743a920e744a0adf672262f6714ccfa429bcd4"
+source = "git+https://github.com/datafuse-extras/clickhouse-rs?rev=c4743a9#c4743a920e744a0adf672262f6714ccfa429bcd4"
 dependencies = [
  "byteorder",
  "chrono",
@@ -2301,7 +2301,7 @@ dependencies = [
 [[package]]
 name = "msql-srv"
 version = "0.9.3"
-source = "git+https://github.com/datafuselabs/msql-srv?rev=76b8ae3#76b8ae360080942127805ea469f322552ed53177"
+source = "git+https://github.com/datafuse-extras/msql-srv?rev=76b8ae3#76b8ae360080942127805ea469f322552ed53177"
 dependencies = [
  "byteorder",
  "chrono",

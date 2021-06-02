@@ -27,7 +27,7 @@ common-planners = {path = "../../common/planners"}
 # Crates.io dependencies
 anyhow = "1.0.40"
 # track self maintained branch with hot fixes
-async-raft = { git = "https://github.com/drmingdrmer/async-raft", branch = "master" }
+async-raft = { git = "https://github.com/datafuse-extras/async-raft", branch = "master" }
 async-trait = "0.1"
 env_logger = "0.8"
 futures = "0.3"

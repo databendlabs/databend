@@ -32,8 +32,8 @@ common-runtime = {path = "../../common/runtime"}
 common-streams = {path = "../../common/streams"}
 
 # Github dependencies
-msql-srv = { git = "https://github.com/datafuselabs/msql-srv", rev = "76b8ae3" }
-clickhouse-rs = { git = "https://github.com/datafuselabs/clickhouse-rs", rev = "c4743a9"}
+msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "76b8ae3" }
+clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9"}
 
 # Crates.io dependencies
 ahash = "0.7.4"
