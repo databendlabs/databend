@@ -273,6 +273,7 @@ impl PipelineBuilder {
                 self.ctx.clone(),
                 plan.db.as_str(),
                 plan.table.as_str(),
+                plan.remote,
             )?;
             pipeline.add_source(Arc::new(source))?;
         }

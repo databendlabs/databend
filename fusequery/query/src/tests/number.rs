@@ -58,6 +58,6 @@ impl NumberTestData {
     pub fn number_source_transform_for_test(&self, numbers: i64) -> Result<SourceTransform> {
         let plan = self.number_read_source_plan_for_test(numbers)?;
         self.ctx.try_set_partitions(plan.partitions)?;
-        SourceTransform::try_create(self.ctx.clone(), self.db, self.table)
+        SourceTransform::try_create(self.ctx.clone(), self.db, self.table, false)
     }
 }

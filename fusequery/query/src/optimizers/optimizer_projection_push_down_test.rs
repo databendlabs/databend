@@ -96,6 +96,7 @@ fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
             statistics.read_bytes
         ),
         scan_plan: Arc::new(ScanPlan::empty()),
+        remote: false,
     });
 
     let filter_plan = PlanBuilder::from(&source_plan)
@@ -152,6 +153,7 @@ fn test_projection_push_down_optimizer_3() -> anyhow::Result<()> {
             statistics.read_bytes
         ),
         scan_plan: Arc::new(ScanPlan::empty()),
+        remote: false,
     });
 
     let group_exprs = &[col("a"), col("c")];
