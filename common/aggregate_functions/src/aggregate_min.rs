@@ -4,14 +4,9 @@
 
 use std::fmt;
 
-use common_datavalues::DataArrayAggregate;
-use common_datavalues::DataColumnarValue;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use common_datavalues::DataValueAggregate;
-use common_datavalues::DataValueAggregateOperator;
+use common_datavalues as datavalues;
+use common_datavalues::*;
+use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::IAggregateFunction;
@@ -89,5 +84,21 @@ impl IAggregateFunction for AggregateMinFunction {
 impl fmt::Display for AggregateMinFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
+    }
+}
+
+impl AggregateMinFunction {
+    pub fn min_batch(column: DataColumnarValue) -> Result<DataValue> {
+        match column {
+            DataColumnarValue::Constant(value, _) => Ok(value.clone()),
+            DataColumnarValue::Array(array) => {
+                if let Ok(v) = dispatch_primitive_array! { typed_array_op_to_data_value, array, min}
+                {
+                    Ok(v)
+                } else {
+                    dispatch_utf8_array! {typed_utf8_array_op_to_data_value, array, min_string}
+                }
+            }
+        }
     }
 }

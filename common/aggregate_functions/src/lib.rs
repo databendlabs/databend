@@ -5,6 +5,9 @@
 #[cfg(test)]
 mod aggregator_test;
 
+#[macro_use]
+mod macros;
+
 mod aggregate_arg_max;
 mod aggregate_arg_min;
 mod aggregate_avg;

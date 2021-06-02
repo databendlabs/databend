@@ -217,14 +217,6 @@ macro_rules! arrow_array_op_scalar {
     }};
 }
 
-macro_rules! typed_array_sum_to_data_value {
-    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident) => {{
-        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
-        let delta = common_arrow::arrow::compute::sum(array);
-        Result::Ok(DataValue::$SCALAR(delta))
-    }};
-}
-
 macro_rules! typed_array_min_max_to_data_value {
     ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:ident) => {{
         let array = downcast_array!($VALUES, $ARRAYTYPE)?;

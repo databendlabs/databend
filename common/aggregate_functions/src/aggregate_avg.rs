@@ -4,7 +4,6 @@
 
 use std::fmt;
 
-use common_datavalues::DataArrayAggregate;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
@@ -15,6 +14,7 @@ use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
+use crate::AggregateSumFunction;
 use crate::IAggregateFunction;
 
 #[derive(Clone)]
@@ -55,10 +55,7 @@ impl IAggregateFunction for AggregateAvgFunction {
             let sum = DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
                 values[0].clone(),
-                DataArrayAggregate::data_array_aggregate_op(
-                    DataValueAggregateOperator::Sum,
-                    columns[0].to_array()?,
-                )?,
+                AggregateSumFunction::sum_batch(columns[0].clone())?,
             )?;
             let count = DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,

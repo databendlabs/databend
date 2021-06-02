@@ -4,14 +4,9 @@
 
 use std::fmt;
 
-use common_datavalues::DataArrayAggregate;
-use common_datavalues::DataColumnarValue;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use common_datavalues::DataValueAggregate;
-use common_datavalues::DataValueAggregateOperator;
+use common_datavalues as datavalues;
+use common_datavalues::*;
+use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::IAggregateFunction;
@@ -50,14 +45,7 @@ impl IAggregateFunction for AggregateMaxFunction {
     }
 
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
-        let value = match &columns[0] {
-            DataColumnarValue::Array(array) => DataArrayAggregate::data_array_aggregate_op(
-                DataValueAggregateOperator::Max,
-                array.clone(),
-            ),
-            DataColumnarValue::Constant(s, _) => Ok(s.clone()),
-        }?;
-
+        let value = Self::max_batch(columns[0].clone())?;
         self.state = DataValueAggregate::data_value_aggregate_op(
             DataValueAggregateOperator::Max,
             self.state.clone(),
@@ -89,5 +77,29 @@ impl IAggregateFunction for AggregateMaxFunction {
 impl fmt::Display for AggregateMaxFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
+    }
+}
+
+macro_rules! typed_array_max_to_data_value {
+    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident) => {{
+        let array = datavalues::downcast_array!($VALUES, $ARRAYTYPE)?;
+        let delta = common_arrow::arrow::compute::max(array);
+        Result::Ok(DataValue::$SCALAR(delta))
+    }};
+}
+
+impl AggregateMaxFunction {
+    pub fn max_batch(column: DataColumnarValue) -> Result<DataValue> {
+        match column {
+            DataColumnarValue::Constant(value, _) => Ok(value.clone()),
+            DataColumnarValue::Array(array) => {
+                if let Ok(v) = dispatch_primitive_array! { typed_array_op_to_data_value, array, max}
+                {
+                    Ok(v)
+                } else {
+                    dispatch_utf8_array! {typed_utf8_array_op_to_data_value, array, max_string}
+                }
+            }
+        }
     }
 }

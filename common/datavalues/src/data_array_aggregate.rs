@@ -37,9 +37,7 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Max => {
                     typed_array_min_max_to_data_value!(value, Int8Array, Int8, max)
                 }
-                DataValueAggregateOperator::Sum => {
-                    typed_array_sum_to_data_value!(value, Int8Array, Int8)
-                }
+                DataValueAggregateOperator::Sum => Ok(DataValue::Boolean(Some(true))),
                 DataValueAggregateOperator::Count => {
                     Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
                 }
@@ -76,9 +74,7 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Max => {
                     typed_array_min_max_to_data_value!(value, Int16Array, Int16, max)
                 }
-                DataValueAggregateOperator::Sum => {
-                    typed_array_sum_to_data_value!(value, Int16Array, Int16)
-                }
+                DataValueAggregateOperator::Sum => Ok(DataValue::Boolean(Some(true))),
                 DataValueAggregateOperator::Count => {
                     Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
                 }
@@ -115,9 +111,7 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Max => {
                     typed_array_min_max_to_data_value!(value, Int32Array, Int32, max)
                 }
-                DataValueAggregateOperator::Sum => {
-                    typed_array_sum_to_data_value!(value, Int32Array, Int32)
-                }
+                DataValueAggregateOperator::Sum => Ok(DataValue::Boolean(Some(true))),
                 DataValueAggregateOperator::Count => {
                     Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
                 }
@@ -155,9 +149,7 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Max => {
                     typed_array_min_max_to_data_value!(value, Int64Array, Int64, max)
                 }
-                DataValueAggregateOperator::Sum => {
-                    typed_array_sum_to_data_value!(value, Int64Array, Int64)
-                }
+                DataValueAggregateOperator::Sum => Ok(DataValue::Boolean(Some(true))),
                 DataValueAggregateOperator::Count => {
                     Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
                 }
@@ -195,9 +187,7 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Max => {
                     typed_array_min_max_to_data_value!(value, UInt8Array, UInt8, max)
                 }
-                DataValueAggregateOperator::Sum => {
-                    typed_array_sum_to_data_value!(value, UInt8Array, UInt8)
-                }
+                DataValueAggregateOperator::Sum => Ok(DataValue::Boolean(Some(true))),
                 DataValueAggregateOperator::Count => {
                     Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
                 }
@@ -235,9 +225,7 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Max => {
                     typed_array_min_max_to_data_value!(value, UInt16Array, UInt16, max)
                 }
-                DataValueAggregateOperator::Sum => {
-                    typed_array_sum_to_data_value!(value, UInt16Array, UInt16)
-                }
+                DataValueAggregateOperator::Sum => Ok(DataValue::Boolean(Some(true))),
                 DataValueAggregateOperator::Count => {
                     Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
                 }
@@ -275,9 +263,7 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Max => {
                     typed_array_min_max_to_data_value!(value, UInt32Array, UInt32, max)
                 }
-                DataValueAggregateOperator::Sum => {
-                    typed_array_sum_to_data_value!(value, UInt32Array, UInt32)
-                }
+                DataValueAggregateOperator::Sum => Ok(DataValue::Boolean(Some(true))),
                 DataValueAggregateOperator::Count => {
                     Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
                 }
@@ -315,9 +301,7 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Max => {
                     typed_array_min_max_to_data_value!(value, UInt64Array, UInt64, max)
                 }
-                DataValueAggregateOperator::Sum => {
-                    typed_array_sum_to_data_value!(value, UInt64Array, UInt64)
-                }
+                DataValueAggregateOperator::Sum => Ok(DataValue::Boolean(Some(true))),
                 DataValueAggregateOperator::Count => {
                     Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
                 }
@@ -354,9 +338,7 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Max => {
                     typed_array_min_max_to_data_value!(value, Float32Array, Float32, max)
                 }
-                DataValueAggregateOperator::Sum => {
-                    typed_array_sum_to_data_value!(value, Float32Array, Float32)
-                }
+                DataValueAggregateOperator::Sum => Ok(DataValue::Boolean(Some(true))),
                 DataValueAggregateOperator::Count => {
                     Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
                 }
@@ -393,9 +375,7 @@ impl DataArrayAggregate {
                 DataValueAggregateOperator::Max => {
                     typed_array_min_max_to_data_value!(value, Float64Array, Float64, max)
                 }
-                DataValueAggregateOperator::Sum => {
-                    typed_array_sum_to_data_value!(value, Float64Array, Float64)
-                }
+                DataValueAggregateOperator::Sum => Ok(DataValue::Boolean(Some(true))),
                 DataValueAggregateOperator::Count => {
                     Result::Ok(DataValue::UInt64(Some(value.len() as u64)))
                 }
