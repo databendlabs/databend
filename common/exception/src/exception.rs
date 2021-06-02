@@ -228,6 +228,12 @@ impl From<sqlparser::parser::ParserError> for ErrorCodes {
     }
 }
 
+impl From<std::io::Error> for ErrorCodes {
+    fn from(error: std::io::Error) -> Self {
+        ErrorCodes::from_std_error(error)
+    }
+}
+
 impl ErrorCodes {
     pub fn from_std_error<T: std::error::Error>(error: T) -> Self {
         ErrorCodes {

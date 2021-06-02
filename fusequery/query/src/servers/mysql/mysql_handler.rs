@@ -37,32 +37,31 @@ impl Session {
 }
 
 impl<W: io::Write> MysqlShim<W> for Session {
-    type Error = std::io::Error;
+    type Error = ErrorCodes;
 
-    fn on_prepare(&mut self, _: &str, writer: StatementMetaWriter<W>) -> std::io::Result<()> {
+    fn on_prepare(&mut self, _: &str, writer: StatementMetaWriter<W>) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
             "Prepare is not support in DataFuse.".as_bytes(),
-        )
+        )?;
+
+        Ok(())
     }
 
-    fn on_execute(
-        &mut self,
-        _: u32,
-        _: ParamParser,
-        writer: QueryResultWriter<W>,
-    ) -> std::io::Result<()> {
+    fn on_execute(&mut self, _: u32, _: ParamParser, writer: QueryResultWriter<W>) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
             "Execute is not support in DataFuse.".as_bytes(),
-        )
+        )?;
+
+        Ok(())
     }
 
     fn on_close(&mut self, _: u32) {
         unimplemented!()
     }
 
-    fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> std::io::Result<()> {
+    fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> Result<()> {
         debug!("{}", query);
         self.ctx.reset().unwrap();
         let start = Instant::now();
@@ -102,15 +101,18 @@ impl<W: io::Write> MysqlShim<W> for Session {
         output
     }
 
-    fn on_init(&mut self, database_name: &str, writer: InitWriter<W>) -> std::io::Result<()> {
-        debug!("Use `{}` for MySQLHandler", database_name);
-        use crate::servers::mysql::endpoints::on_init_done as done;
-        self.ctx
-            .set_current_database(database_name.to_string())
-            .map(|_| Some(()))
-            .transpose()
-            .map(done(writer))
-            .unwrap()
+    fn on_init(&mut self, database_name: &str, writer: InitWriter<W>) -> Result<()> {
+        log::debug!("Use `{}` for MySQLHandler", database_name);
+        match self.ctx.set_current_database(database_name.to_string()) {
+            Ok(_) => writer.ok()?,
+            Err(error) => {
+                log::error!("OnInit Error: {:?}", error);
+                writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())?;
+                return Err(error);
+            }
+        };
+
+        Ok(())
     }
 }
 
@@ -134,7 +136,9 @@ impl MySQLHandler {
             "{}:{}",
             self.conf.mysql_handler_host, self.conf.mysql_handler_port
         ))?;
-        let pool = ThreadPool::new(self.conf.mysql_handler_thread_num as usize);
+
+        let max_session_size = self.conf.mysql_handler_thread_num as usize;
+        let session_executor = ThreadPool::new(max_session_size);
 
         for stream in listener.incoming() {
             let stream = stream?;
@@ -145,9 +149,19 @@ impl MySQLHandler {
             ctx.set_max_threads(self.conf.num_cpus)?;
 
             let session_mgr = self.session_manager.clone();
-            pool.execute(move || {
-                MysqlIntermediary::run_on_tcp(Session::create(ctx.clone()), stream).unwrap();
-                session_mgr.try_remove_context(ctx).unwrap();
+            session_executor.execute(move || {
+                if let Err(error) =
+                    MysqlIntermediary::run_on_tcp(Session::create(ctx.clone()), stream)
+                {
+                    log::error!(
+                        "Unexpected error occurred during query execution: {:?}",
+                        error
+                    );
+                }
+
+                if let Err(error) = session_mgr.try_remove_context(ctx) {
+                    log::error!("Cannot to destroy FuseQueryContext: {:?}", error);
+                }
             })
         }
         Ok(())
