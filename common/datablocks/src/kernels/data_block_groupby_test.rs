@@ -22,7 +22,7 @@ fn test_data_block_group_by() -> anyhow::Result<()> {
 
     let columns = &["a".to_string(), "b".to_string()];
     let table = DataBlock::group_by(&block, columns)?;
-    for (_, (_, block)) in table {
+    for (_, _, block) in table {
         match block.num_rows() {
             1 => {
                 let expected = vec![

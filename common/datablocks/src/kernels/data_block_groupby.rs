@@ -11,8 +11,8 @@ use crate::DataBlock;
 
 // Table for <group_key, (indices, keys) >
 type GroupIndicesTable = HashMap<Vec<u8>, (Vec<u32>, Vec<DataValue>), ahash::RandomState>;
-// Table for <group_key, (keys, blocks) >
-type GroupBlocksTable = HashMap<Vec<u8>, (Vec<DataValue>, DataBlock), ahash::RandomState>;
+// Table for <(group_key, keys, block)>
+type GroupBlocksTable = Vec<(Vec<u8>, Vec<DataValue>, DataBlock)>;
 
 impl DataBlock {
     /// Hash group based on row index by column names.
@@ -90,7 +90,7 @@ impl DataBlock {
         let mut group_blocks = GroupBlocksTable::default();
         for (group_key, (group_indices, group_keys)) in group_indices {
             let take_block = DataBlock::block_take_by_indices(&block, &group_indices)?;
-            group_blocks.insert(group_key, (group_keys, take_block));
+            group_blocks.push((group_key, group_keys, take_block));
         }
 
         Ok(group_blocks)

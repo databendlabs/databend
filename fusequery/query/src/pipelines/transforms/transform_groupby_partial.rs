@@ -127,10 +127,9 @@ impl IProcessor for GroupByPartialTransform {
 
             // 1.1 and 1.2.
             let group_blocks = DataBlock::group_by(&block, &cols)?;
-
             // 1.3 Apply take blocks to aggregate function by group_key.
             {
-                for (group_key, (group_keys, take_block)) in group_blocks {
+                for (group_key, group_keys, take_block) in group_blocks {
                     let rows = take_block.num_rows();
 
                     let mut groups = self.groups.write();
