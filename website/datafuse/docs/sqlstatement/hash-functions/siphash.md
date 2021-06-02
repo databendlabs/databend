@@ -15,7 +15,7 @@ SIPHASH(<expr>)
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | All Datafuse supported data types |
+| expr | All DataFuse supported data types |
 
 ## Return Type
 
