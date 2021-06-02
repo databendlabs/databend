@@ -1,5 +1,9 @@
 name: Performance(Standalone)
-on: [push, pull_request]
+on:
+  pull_request:
+    types: [opened]
+  issue_comment:
+    types: [created]
 
 env:
   CARGO_TERM_COLOR: always
