@@ -25,7 +25,7 @@ impl DataBlock {
     /// 4, 5
     ///
     /// grouping by [A%3]
-    /// 1.1)
+    /// 1)
     /// row_idx, group_key, A
     /// 0, 1, 1
     /// 1, 2, 2
@@ -33,11 +33,13 @@ impl DataBlock {
     /// 3, 1, 4
     /// 4, 2, 5
     ///
-    /// 1.2) make indices group(for vector compute)
+    /// 2) make indices group(for vector compute)
     /// group_key, indices
     /// 0, [2]
     /// 1, [0, 3]
     /// 2, [1, 4]
+    ///
+    /// 3) make blocks
     pub fn group_by(block: &DataBlock, column_names: &[String]) -> Result<GroupBlocksTable> {
         let mut group_indices = GroupIndicesTable::default();
 
@@ -84,6 +86,7 @@ impl DataBlock {
             }
         }
 
+        // 3) make blocks
         let mut group_blocks = GroupBlocksTable::default();
         for (group_key, (group_indices, group_keys)) in group_indices {
             let take_block = DataBlock::block_take_by_indices(&block, &group_indices)?;
