@@ -29,9 +29,6 @@ use common_flights::StoreDoActionResult;
 use common_flights::StoreDoGet;
 use futures::Stream;
 use futures::StreamExt;
-#[allow(unused_imports)]
-use log::error;
-#[allow(unused_imports)]
 use log::info;
 use prost::Message;
 use tokio::sync::mpsc::Receiver;
@@ -155,7 +152,13 @@ impl FlightService for StoreFlightImpl {
         // Action.
         let action: StoreDoGet = request.try_into()?;
         match action {
-            StoreDoGet::Read(_) => Err(Status::internal("Store read unimplemented")),
+            StoreDoGet::Read(act) => {
+                let stream =
+                    self.action_handler.read_partition(act).await.map_err(|e| {
+                        Status::internal(format!("read failure: {}", e.to_string()))
+                    })?;
+                Ok(Response::new(Box::pin(stream)))
+            }
             StoreDoGet::Pull(pull) => {
                 let key = pull.key;
 
@@ -178,29 +181,23 @@ impl FlightService for StoreFlightImpl {
         &self,
         request: Request<Streaming<FlightData>>,
     ) -> Result<Response<Self::DoPutStream>, Status> {
-        info!("calling me!");
-
         let _claim = self.check_token(&request.metadata())?;
         let meta = request.metadata();
 
-        info!("reading meta data");
         let (db_name, tbl_name) =
             common_flights::get_do_put_meta(meta).map_err(|e| Status::internal(e.to_string()))?;
-        info!("meta data {}-{}", db_name, tbl_name);
 
-        info!("calling handler");
         let append_res = self
             .action_handler
             .do_put(db_name, tbl_name, request.into_inner())
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
-        info!("handler called");
 
-        let bytes = serde_json::to_vec(&append_res).unwrap();
+        let bytes = serde_json::to_vec(&append_res).map_err(|e| Status::internal(e.to_string()))?;
         let put_res = PutResult {
             app_metadata: bytes,
         };
-        info!("got result {:?}", append_res);
+
         Ok(Response::new(Box::pin(futures::stream::once(async {
             Ok(put_res)
         }))))
@@ -237,6 +234,7 @@ impl FlightService for StoreFlightImpl {
         unimplemented!()
     }
 }
+
 impl StoreFlightImpl {
     fn once_stream_resp(
         &self,
