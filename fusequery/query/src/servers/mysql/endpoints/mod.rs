@@ -6,4 +6,5 @@ mod endpoint;
 mod endpoint_on_query;
 
 pub use self::endpoint::IMySQLEndpoint;
-pub use self::endpoint_on_query::done as on_query_done;
+pub use self::endpoint_on_query::MySQLOnQueryEndpoint;
+// pub use self::endpoint_on_query::done as on_query_done;

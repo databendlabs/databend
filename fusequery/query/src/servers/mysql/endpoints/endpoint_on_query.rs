@@ -17,12 +17,12 @@ use msql_srv::*;
 
 use crate::servers::mysql::endpoints::IMySQLEndpoint;
 
-struct MySQLOnQueryEndpoint;
+pub struct MySQLOnQueryEndpoint;
 
 impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOnQueryEndpoint {
     type Input = Vec<DataBlock>;
 
-    fn ok(blocks: Self::Input, dataset_writer: QueryResultWriter<'a, T>) -> Result<()> {
+    fn on_query_ok(blocks: Self::Input, dataset_writer: QueryResultWriter<'a, T>) -> Result<()> {
         // XXX: num_columns == 0 may is error?
         if blocks.is_empty() || (blocks[0].num_columns() == 0) {
             dataset_writer.completed(0, 0)?;
@@ -67,7 +67,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
 
         let block = blocks[0].clone();
         match convert_schema(block.schema()) {
-            Err(error) => MySQLOnQueryEndpoint::err(error, dataset_writer),
+            Err(error) => MySQLOnQueryEndpoint::on_query_err(error, dataset_writer),
             Ok(columns) => {
                 let columns_size = block.num_columns();
                 let mut row_writer = dataset_writer.start(&columns)?;
@@ -91,7 +91,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
         }
     }
 
-    fn err(error: ErrorCodes, writer: QueryResultWriter<'a, T>) -> Result<()> {
+    fn on_query_err(error: ErrorCodes, writer: QueryResultWriter<'a, T>) -> Result<()> {
         error!("OnQuery Error: {:?}", error);
         writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())?;
 
@@ -108,10 +108,10 @@ pub fn done<W: std::io::Write>(
 ) -> impl FnOnce(Input) -> Output + '_ {
     move |res: Input| -> Output {
         match res {
-            Err(error) => MySQLOnQueryEndpoint::err(error, writer),
+            Err(error) => MySQLOnQueryEndpoint::on_query_err(error, writer),
             Ok(value) => {
                 let start = Instant::now();
-                let output = MySQLOnQueryEndpoint::ok(value, writer);
+                let output = MySQLOnQueryEndpoint::on_query_ok(value, writer);
                 debug!("MySQLHandler send to client cost:{:?}", start.elapsed());
                 output
             }

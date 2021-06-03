@@ -42,9 +42,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // MySQL handler.
     {
         let handler = MySQLHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
-        tasks.push(tokio::spawn(async move {
-            handler.start().expect("MySQL handler error")
-        }));
+        handler.start();
+        // tasks.push(tokio::spawn(async move {
+        //     handler.start().await.expect("MySQL handler error")
+        // }));
 
         info!(
             "MySQL handler listening on {}:{}, Usage: mysql -h{} -P{}",
