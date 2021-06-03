@@ -86,8 +86,9 @@ impl<W: io::Write> MysqlShim<W> for Session {
         MySQLOnQueryEndpoint::on_query(writer, move || {
             let start = Instant::now();
 
-            let context = session_manager.try_create_context()?;
-            // TODO: init context
+            let context = session_manager
+                .try_create_context()?
+                .with_cluster(self.cluster.clone())?;
 
             fn build_runtime() -> Result<Runtime> {
                 tokio::runtime::Builder::new_multi_thread()

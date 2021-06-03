@@ -21,17 +21,21 @@ impl RunnableServer {
     }
 
     pub async fn shutdown(&mut self) -> Result<()> {
+        if let Err(error) = self.shutdown_sender.send(()).await {
+            return Err(ErrorCodes::TokioError(format!(
+                "Cannot shutdown, because cannot to send shutdown signal: {}", error
+            )));
+        }
+
+        Ok(())
+    }
+
+    pub async fn wait_server_terminal(&mut self) -> Result<()> {
         let join_handler = self.join_handler.take();
 
         if join_handler.is_none() {
             // The server already shutdown
             return Ok(());
-        }
-
-        if let Err(error) = self.shutdown_sender.send(()).await {
-            return Err(ErrorCodes::TokioError(format!(
-                "Cannot shutdown, because cannot to send shutdown signal: {}", error
-            )));
         }
 
         if let Err(error) = join_handler.unwrap().await {

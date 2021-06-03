@@ -36,16 +36,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let mut tasks = vec![];
+    let mut runnable_servers = vec![];
     let cluster = Cluster::create_global(conf.clone())?;
     let session_manager = SessionManager::create(conf.mysql_handler_thread_num);
 
     // MySQL handler.
     {
         let handler = MySQLHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
-        handler.start(&conf.mysql_handler_host, conf.mysql_handler_port);
-        // tasks.push(tokio::spawn(async move {
-        //     handler.start().await.expect("MySQL handler error")
-        // }));
+        runnable_servers.push(handler.start(&conf.mysql_handler_host, conf.mysql_handler_port)?);
 
         info!(
             "MySQL handler listening on {}:{}, Usage: mysql -h{} -P{}",
@@ -104,6 +102,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Process exit when error.
     if let Err(_e) = futures::future::try_join_all(tasks).await {
         std::process::exit(1);
+    }
+
+    for mut runnable_server in runnable_servers {
+        runnable_server.wait_server_terminal().await;
     }
 
     Ok(())
