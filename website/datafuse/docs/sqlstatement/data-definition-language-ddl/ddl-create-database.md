@@ -1,18 +1,18 @@
 ---
-id: ddl-drop-database
-title: DROP DATABASE
+id: ddl-create-database
+title: CREATE DATABASE
 ---
 
-Drop a database.
+Create a database.
 
 ## Syntax
 
 ```sql
-DROP DATABASE [IF EXISTS] <database_name>
+CREATE DATABASE <database_name>
 ```
 
 ## Examples
 
 ```sql
-mysql> DROP DATABASE IF EXISTS test;
+mysql> CREATE DATABASE test;
 ```
