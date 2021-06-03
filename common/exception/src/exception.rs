@@ -257,3 +257,50 @@ impl ErrorCodes {
         }
     }
 }
+
+/// Provides the `map_err_to_code` method for `Result`.
+///
+/// ```
+/// use common_exception::ToErrorCodes;
+/// use common_exception::ErrorCodes;
+///
+/// let x: std::result::Result<(), std::fmt::Error> = Err(std::fmt::Error {});
+/// let y: common_exception::Result<()> =
+///     x.map_err_to_code(ErrorCodes::UnknownException, || format!("{}", 123));
+///
+/// assert_eq!(
+///     "Code: 1000, displayText = Error.",
+///     format!("{}", y.unwrap_err())
+/// );
+/// ```
+pub trait ToErrorCodes<T, E, ToStrFn> {
+    /// Wrap the error value with ErrorCodes that is evaluated lazily
+    /// only once an error does occur.
+    ///
+    /// `err_code_fn` is one of the ErrorCodes builder function such as `ErrorCodes::Ok`.
+    /// `context_fn` builds display_text for the ErrorCodes.
+    fn map_err_to_code<ToStr, ErrFn>(self, err_code_fn: ErrFn, context_fn: ToStrFn) -> Result<T>
+    where
+        ToStr: Into<String>,
+        ErrFn: FnOnce(ToStr) -> ErrorCodes,
+        ToStrFn: FnOnce() -> ToStr;
+}
+
+impl<T, E, ToStrFn> ToErrorCodes<T, E, ToStrFn> for std::result::Result<T, E>
+where E: std::error::Error + Send + Sync + 'static
+{
+    fn map_err_to_code<ToStr, ErrFn>(self, make_exception: ErrFn, context_fn: ToStrFn) -> Result<T>
+    where
+        ToStr: Into<String>,
+        ErrFn: FnOnce(ToStr) -> ErrorCodes,
+        ToStrFn: FnOnce() -> ToStr,
+    {
+        self.map_err(|error| {
+            let mut x = make_exception(context_fn());
+            x.cause = Some(Box::new(error));
+            x
+        })
+
+        // read().with(ErrorCodes::FileKeyNotFound, || format!("{}", key))
+    }
+}

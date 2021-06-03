@@ -9,3 +9,4 @@ pub mod exception;
 
 pub use exception::ErrorCodes;
 pub use exception::Result;
+pub use exception::ToErrorCodes;
