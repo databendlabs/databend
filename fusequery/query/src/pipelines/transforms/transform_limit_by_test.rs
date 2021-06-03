@@ -23,37 +23,41 @@ async fn test_transform_limit_by() -> anyhow::Result<()> {
 
     pipeline.merge_processor()?;
 
-    let limit_by_expression = &[col("number")];
-    if let PlanNode::LimitBy(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
-        .limit_by(2, limit_by_expression)?
+    if let PlanNode::Expression(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
+        .expression(&[modular(col("number"), lit(3))], "")?
         .build()?
     {
         pipeline.add_simple_transform(|| {
-            Ok(Box::new(LimitByTransform::create(
-                plan.limit,
-                plan.limit_by.clone(),
-            )))
+            Ok(Box::new(ExpressionTransform::try_create(
+                plan.input.schema(),
+                plan.schema.clone(),
+                plan.exprs.clone(),
+            )?))
         })?;
     }
+
+    pipeline.add_simple_transform(|| {
+        Ok(Box::new(LimitByTransform::create(2, vec![col(
+            "(number % 3)",
+        )])))
+    })?;
 
     let stream = pipeline.execute().await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 1);
+    assert_eq!(block.num_columns(), 2);
 
     let expected = vec![
-        "+--------+",
-        "| number |",
-        "+--------+",
-        "| 7      |",
-        "| 6      |",
-        "| 5      |",
-        "| 4      |",
-        "| 3      |",
-        "| 2      |",
-        "| 1      |",
-        "| 0      |",
-        "+--------+",
+        "+--------+--------------+",
+        "| number | (number % 3) |",
+        "+--------+--------------+",
+        "| 2      | 2            |",
+        "| 3      | 0            |",
+        "| 4      | 1            |",
+        "| 5      | 2            |",
+        "| 6      | 0            |",
+        "| 7      | 1            |",
+        "+--------+--------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
