@@ -5,6 +5,7 @@
 use std::fmt;
 
 use common_datavalues::DataColumnarValue;
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -17,16 +18,19 @@ use crate::IAggregateFunction;
 #[derive(Clone)]
 pub struct AggregateCountFunction {
     display_name: String,
-    depth: usize,
     state: DataValue,
+    arguments: Vec<DataField>,
 }
 
 impl AggregateCountFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggregateFunction>> {
+    pub fn try_create(
+        display_name: &str,
+        arguments: Vec<DataField>,
+    ) -> Result<Box<dyn IAggregateFunction>> {
         Ok(Box::new(AggregateCountFunction {
             display_name: display_name.to_string(),
-            depth: 0,
             state: DataValue::Null,
+            arguments,
         }))
     }
 }
@@ -36,16 +40,12 @@ impl IAggregateFunction for AggregateCountFunction {
         "AggregateCountFunction"
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self) -> Result<DataType> {
         Ok(DataType::UInt64)
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
-    }
-
-    fn set_depth(&mut self, depth: usize) {
-        self.depth = depth;
     }
 
     fn accumulate(&mut self, _columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
@@ -62,7 +62,7 @@ impl IAggregateFunction for AggregateCountFunction {
     }
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        let val = states[self.depth].clone();
+        let val = states[0].clone();
         self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),

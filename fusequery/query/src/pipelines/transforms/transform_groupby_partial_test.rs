@@ -27,10 +27,13 @@ async fn test_transform_partial_groupby() -> anyhow::Result<()> {
     // Pipeline.
     let mut pipeline = Pipeline::create(ctx.clone());
     let source = test_source.number_source_transform_for_test(5)?;
+    let source_schema = test_source.number_schema_for_test()?;
+
     pipeline.add_source(Arc::new(source))?;
     pipeline.add_simple_transform(|| {
         Ok(Box::new(GroupByPartialTransform::create(
             aggr_partial.schema(),
+            source_schema.clone(),
             aggr_exprs.clone(),
             group_exprs.clone(),
         )))

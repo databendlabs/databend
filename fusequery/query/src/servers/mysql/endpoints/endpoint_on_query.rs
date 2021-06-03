@@ -5,9 +5,9 @@
 use std::time::Instant;
 
 use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::util::display::array_value_to_string;
 use common_datablocks::DataBlock;
+use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
@@ -29,7 +29,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
             return Ok(());
         }
 
-        fn convert_field_type(field: &Field) -> Result<ColumnType> {
+        fn convert_field_type(field: &DataField) -> Result<ColumnType> {
             match field.data_type() {
                 DataType::Int8 => Ok(ColumnType::MYSQL_TYPE_LONG),
                 DataType::Int16 => Ok(ColumnType::MYSQL_TYPE_LONG),
@@ -52,7 +52,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
             }
         }
 
-        fn make_column_from_field(field: &Field) -> Result<Column> {
+        fn make_column_from_field(field: &DataField) -> Result<Column> {
             convert_field_type(field).map(|column_type| Column {
                 table: "".to_string(),
                 column: field.name().to_string(),

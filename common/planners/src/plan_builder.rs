@@ -147,6 +147,7 @@ impl PlanBuilder {
                     aggr_expr: aggr_expr.to_vec(),
                     group_expr: group_expr.to_vec(),
                     schema: DataSchemaRefExt::create(final_fields),
+                    schema_before_groupby,
                 }))
             }
         })
