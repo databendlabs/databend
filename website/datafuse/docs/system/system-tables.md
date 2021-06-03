@@ -3,7 +3,7 @@ id: system-tables
 title: System Tables
 ---
 
-Most of system tables store their data in RAM. A FuseQuery server creates such system tables at the start.
+Most system tables store their data in RAM. A FuseQuery server creates such system tables at the start.
 
 ## system.numbers
 
