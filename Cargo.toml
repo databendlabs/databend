@@ -24,7 +24,10 @@ members = [
     "fusestore/store",
 
     # Benchamrks
-    "fusequery/benchmarks/nyctaxi"
+    "fusequery/benchmarks/nyctaxi",
+
+    # Fuzz
+    "fusequery/fuzz"
 ]
 
 [profile.release]
