@@ -73,6 +73,7 @@ impl ITable for DatabasesTable {
             statistics: Statistics::default(),
             description: "(Read from system.databases table)".to_string(),
             scan_plan: Arc::new(scan.clone()),
+            remote: false,
         })
     }
 

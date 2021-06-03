@@ -217,6 +217,7 @@ impl GetNodePlan for RemoteReadSourceGetNodePlan {
             statistics: self.0.statistics.clone(),
             description: self.0.description.clone(),
             scan_plan: self.0.scan_plan.clone(),
+            remote: self.0.remote,
         }))
     }
 }

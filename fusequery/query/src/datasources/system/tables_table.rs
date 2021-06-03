@@ -77,6 +77,7 @@ impl ITable for TablesTable {
             statistics: Statistics::default(),
             description: "(Read from system.functions table)".to_string(),
             scan_plan: Arc::new(scan.clone()),
+            remote: false,
         })
     }
 

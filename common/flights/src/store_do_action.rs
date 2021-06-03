@@ -13,7 +13,9 @@ use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
+use common_planners::Partition;
 use common_planners::ScanPlan;
+use common_planners::Statistics;
 use prost::Message;
 use tonic::Request;
 
@@ -71,6 +73,19 @@ pub struct GetTableActionResult {
     pub schema: DataSchemaRef,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct ScanPartitionAction {
+    pub scan_plan: ScanPlan,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct DataPartInfo {
+    pub partition: Partition,
+    pub stats: Statistics,
+}
+
+pub type ScanPartitionResult = Option<Vec<DataPartInfo>>;
+
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum StoreDoAction {
@@ -79,6 +94,7 @@ pub enum StoreDoAction {
     DropDatabase(DropDatabaseAction),
     CreateTable(CreateTableAction),
     DropTable(DropTableAction),
+    ScanPartition(ScanPartitionAction),
     GetTable(GetTableAction),
 }
 
@@ -89,6 +105,7 @@ pub enum StoreDoActionResult {
     DropDatabase(DropDatabaseActionResult),
     CreateTable(CreateTableActionResult),
     DropTable(DropTableActionResult),
+    ScanPartition(ScanPartitionResult),
     GetTable(GetTableActionResult),
 }
 

@@ -4,7 +4,7 @@
 
 pub type Partitions = Vec<Partition>;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct Partition {
     pub name: String,
     pub version: u64,
