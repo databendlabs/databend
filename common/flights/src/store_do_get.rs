@@ -18,7 +18,7 @@ pub struct ReadAction {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ScanPartitionsAction {
-    pub can_plan: ScanPlan,
+    pub scan_plan: ScanPlan,
 }
 
 /// Pull a file. This is used to replicate data between store servers, which is only used internally.
