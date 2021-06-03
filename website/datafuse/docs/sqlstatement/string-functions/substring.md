@@ -8,14 +8,14 @@ SUBSTRING function is used to extract a string containing a specific number of c
 ## Syntax
 
 ```sql
-SUBSTRING(<expr> [FROM <position_expr>] [FOR <length_expr>])
+SUBSTRING(expression [FROM position_expr] [FOR length_expr])
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | The main string from where the character to be extracted |
+| expression | The main string from where the character to be extracted |
 | position_expr | The one-indexed position expression to start at. If negative, counts from the end |
 | length_expr | The number expression of characters to extract |
 
