@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[cfg(test)]
-mod data_array_aggregate_test;
-#[cfg(test)]
 mod data_array_arithmetic_test;
 #[cfg(test)]
 mod data_array_comparison_test;
@@ -26,7 +24,6 @@ mod data_array_scatter_test;
 mod macros;
 
 mod data_array;
-mod data_array_aggregate;
 mod data_array_arithmetic;
 mod data_array_comparison;
 mod data_array_hash;
@@ -44,7 +41,6 @@ mod data_value_kernel;
 mod data_value_operator;
 
 pub use data_array::*;
-pub use data_array_aggregate::DataArrayAggregate;
 pub use data_array_arithmetic::DataArrayArithmetic;
 pub use data_array_comparison::DataArrayComparison;
 pub use data_array_hash::DataArrayHashDispatcher;

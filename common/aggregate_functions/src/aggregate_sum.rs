@@ -5,7 +5,6 @@
 use std::convert::TryFrom;
 use std::fmt;
 
-use common_datavalues as datavalues;
 use common_datavalues::*;
 use common_exception::ErrorCodes;
 use common_exception::Result;
@@ -108,7 +107,7 @@ impl AggregateSumFunction {
             DataColumnarValue::Constant(value, size) => {
                 DataValueArithmetic::data_value_arithmetic_op(
                     DataValueArithmeticOperator::Mul,
-                    value.clone(),
+                    value,
                     DataValue::UInt64(Some(size as u64)),
                 )
             }

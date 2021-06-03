@@ -29,7 +29,7 @@ fn test_array_common_aggregate() {
         args: Vec<ArrayRef>,
         expect: Vec<DataValue>,
         error: Vec<&'static str>,
-        func: Box<Fn(DataColumnarValue) -> Result<DataValue>>,
+        func: Box<dyn Fn(DataColumnarValue) -> Result<DataValue>>,
     }
 
     let tests = vec![

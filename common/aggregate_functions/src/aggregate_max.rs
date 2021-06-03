@@ -4,7 +4,6 @@
 
 use std::fmt;
 
-use common_datavalues as datavalues;
 use common_datavalues::*;
 use common_exception::ErrorCodes;
 use common_exception::Result;
@@ -80,24 +79,16 @@ impl fmt::Display for AggregateMaxFunction {
     }
 }
 
-macro_rules! typed_array_max_to_data_value {
-    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident) => {{
-        let array = datavalues::downcast_array!($VALUES, $ARRAYTYPE)?;
-        let delta = common_arrow::arrow::compute::max(array);
-        Result::Ok(DataValue::$SCALAR(delta))
-    }};
-}
-
 impl AggregateMaxFunction {
     pub fn max_batch(column: DataColumnarValue) -> Result<DataValue> {
         match column {
-            DataColumnarValue::Constant(value, _) => Ok(value.clone()),
+            DataColumnarValue::Constant(value, _) => Ok(value),
             DataColumnarValue::Array(array) => {
                 if let Ok(v) = dispatch_primitive_array! { typed_array_op_to_data_value, array, max}
                 {
                     Ok(v)
                 } else {
-                    dispatch_utf8_array! {typed_utf8_array_op_to_data_value, array, max_string}
+                    dispatch_string_array! {typed_string_array_op_to_data_value, array, max_string}
                 }
             }
         }

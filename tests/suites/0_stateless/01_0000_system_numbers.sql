@@ -5,8 +5,12 @@ SELECT avg(number) from numbers_mt(10000);
 SELECT count(number) from numbers_mt(10000);
 SELECT sum(number)/count(number) from numbers_mt(10000);
 SELECT argMin(number, number) from numbers_mt(10000);
-SELECT argMin(a, b) from (select number + 5 as a, number - 5 as b from numbers_mt(10000) JOIN numbers_mt(10000));
-SELECT argMin(b, a) from (select number + 5 as a, number - 5 as b from numbers_mt(10000) JOIN numbers_mt(10000));
+SELECT argMin(a, b) from (select number + 5 as a, number - 5 as b from numbers_mt(10000));
+SELECT argMin(b, a) from (select number + 5 as a, number - 5 as b from numbers_mt(10000));
 SELECT argMax(number, number) from numbers_mt(10000);
-SELECT argMax(a, b) from (select number + 5 as a, number - 5 as b from numbers_mt(10000) JOIN numbers_mt(10000));
-SELECT argMax(b, a) from (select number + 5 as a, number - 5 as b from numbers_mt(10000) JOIN numbers_mt(10000));
+SELECT argMax(a, b) from (select number + 5 as a, number - 5 as b from numbers_mt(10000));
+SELECT argMax(b, a) from (select number + 5 as a, number - 5 as b from numbers_mt(10000));
+
+-- test argMax, argMin fro String
+ SELECT argMax(a, b) from (select number + 5 as a, cast(number as varchar(255)) as b from numbers_mt(10000)) ;
+ SELECT argMax(b, a) from (select number + 5 as a, cast(number as varchar(255)) as b from numbers_mt(10000)) ;

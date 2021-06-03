@@ -316,6 +316,8 @@ impl TryFrom<&DataType> for DataValue {
             DataType::UInt64 => Ok(DataValue::UInt64(None)),
             DataType::Float32 => Ok(DataValue::Float32(None)),
             DataType::Float64 => Ok(DataValue::Float64(None)),
+            DataType::Utf8 => Ok(DataValue::Utf8(None)),
+
             DataType::Timestamp(TimeUnit::Second, _) => Ok(DataValue::TimestampSecond(None)),
             DataType::Timestamp(TimeUnit::Millisecond, _) => {
                 Ok(DataValue::TimestampMillisecond(None))

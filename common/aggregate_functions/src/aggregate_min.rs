@@ -4,7 +4,6 @@
 
 use std::fmt;
 
-use common_datavalues as datavalues;
 use common_datavalues::*;
 use common_exception::ErrorCodes;
 use common_exception::Result;
@@ -45,13 +44,7 @@ impl IAggregateFunction for AggregateMinFunction {
     }
 
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
-        let value = match &columns[0] {
-            DataColumnarValue::Array(array) => DataArrayAggregate::data_array_aggregate_op(
-                DataValueAggregateOperator::Min,
-                array.clone(),
-            ),
-            DataColumnarValue::Constant(s, _) => Ok(s.clone()),
-        }?;
+        let value = Self::min_batch(columns[0].clone())?;
 
         self.state = DataValueAggregate::data_value_aggregate_op(
             DataValueAggregateOperator::Min,
@@ -90,13 +83,13 @@ impl fmt::Display for AggregateMinFunction {
 impl AggregateMinFunction {
     pub fn min_batch(column: DataColumnarValue) -> Result<DataValue> {
         match column {
-            DataColumnarValue::Constant(value, _) => Ok(value.clone()),
+            DataColumnarValue::Constant(value, _) => Ok(value),
             DataColumnarValue::Array(array) => {
                 if let Ok(v) = dispatch_primitive_array! { typed_array_op_to_data_value, array, min}
                 {
                     Ok(v)
                 } else {
-                    dispatch_utf8_array! {typed_utf8_array_op_to_data_value, array, min_string}
+                    dispatch_string_array! {typed_string_array_op_to_data_value, array, min_string}
                 }
             }
         }
