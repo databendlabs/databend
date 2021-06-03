@@ -10,12 +10,12 @@ use common_exception::Result;
 use crate::DataBlock;
 
 // Table for <group_key, (indices, keys) >
-type GroupIndicesTable = HashMap<Vec<u8>, (Vec<u32>, Vec<DataValue>), ahash::RandomState>;
+pub type GroupIndicesTable = HashMap<Vec<u8>, (Vec<u32>, Vec<DataValue>), ahash::RandomState>;
 // Table for <(group_key, keys, block)>
 type GroupBlocksTable = Vec<(Vec<u8>, Vec<DataValue>, DataBlock)>;
 
 impl DataBlock {
-    /// Hash group based on row index by column names.
+    /// Hash group based on row index then return indices and keys.
     /// For example:
     /// row_idx, A
     /// 0, 1
@@ -39,8 +39,10 @@ impl DataBlock {
     /// 1, [0, 3]
     /// 2, [1, 4]
     ///
-    /// 3) make blocks
-    pub fn group_by(block: &DataBlock, column_names: &[String]) -> Result<GroupBlocksTable> {
+    pub fn group_by_get_indices(
+        block: &DataBlock,
+        column_names: &[String],
+    ) -> Result<GroupIndicesTable> {
         let mut group_indices = GroupIndicesTable::default();
 
         // 1. Get group by columns.
@@ -86,7 +88,15 @@ impl DataBlock {
             }
         }
 
-        // 3) make blocks
+        Ok(group_indices)
+    }
+
+    /// Hash group based on row index by column names.
+    ///
+    /// group_by_get_indices and make blocks.
+    pub fn group_by(block: &DataBlock, column_names: &[String]) -> Result<GroupBlocksTable> {
+        let group_indices = Self::group_by_get_indices(block, column_names)?;
+
         let mut group_blocks = GroupBlocksTable::default();
         for (group_key, (group_indices, group_keys)) in group_indices {
             let take_block = DataBlock::block_take_by_indices(&block, &group_indices)?;

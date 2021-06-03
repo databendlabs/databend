@@ -10,6 +10,7 @@ pub use transform_filter::FilterTransform;
 pub use transform_groupby_final::GroupByFinalTransform;
 pub use transform_groupby_partial::GroupByPartialTransform;
 pub use transform_limit::LimitTransform;
+pub use transform_limit_by::LimitByTransform;
 pub use transform_projection::ProjectionTransform;
 pub use transform_remote::RemoteTransform;
 pub use transform_sort_merge::SortMergeTransform;
@@ -29,6 +30,8 @@ mod transform_groupby_final_test;
 #[cfg(test)]
 mod transform_groupby_partial_test;
 #[cfg(test)]
+mod transform_limit_by_test;
+#[cfg(test)]
 mod transform_limit_test;
 #[cfg(test)]
 mod transform_projection_test;
@@ -47,6 +50,7 @@ mod transform_filter;
 mod transform_groupby_final;
 mod transform_groupby_partial;
 mod transform_limit;
+mod transform_limit_by;
 mod transform_projection;
 mod transform_remote;
 mod transform_sort_merge;
