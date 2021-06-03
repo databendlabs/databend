@@ -13,18 +13,25 @@ use metrics::counter;
 
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 pub struct SessionManager {
     sessions: RwLock<HashMap<String, FuseQueryContextRef>>,
+    max_sessions: AtomicU64
 }
 
 pub type SessionManagerRef = Arc<SessionManager>;
 
 impl SessionManager {
-    pub fn create() -> SessionManagerRef {
+    pub fn create(max_sessions: u64) -> SessionManagerRef {
         Arc::new(SessionManager {
-            sessions: RwLock::new(HashMap::new()),
+            sessions: RwLock::new(HashMap::with_capacity(max_sessions as usize)),
+            max_sessions: AtomicU64::new(max_sessions),
         })
+    }
+
+    pub fn accept_session(&self) -> bool {
+        self.max_sessions.fetch_sub(1, Ordering::SeqCst) != 0
     }
 
     pub fn try_create_context(&self) -> Result<FuseQueryContextRef> {
@@ -38,6 +45,7 @@ impl SessionManager {
     pub fn try_remove_context(&self, ctx: FuseQueryContextRef) -> Result<()> {
         counter!(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
 
+        self.max_sessions.fetch_add(1, Ordering::SeqCst);
         self.sessions.write().remove(&*ctx.get_id()?);
         Ok(())
     }

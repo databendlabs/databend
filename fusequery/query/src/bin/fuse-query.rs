@@ -37,12 +37,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut tasks = vec![];
     let cluster = Cluster::create_global(conf.clone())?;
-    let session_manager = SessionManager::create();
+    let session_manager = SessionManager::create(conf.mysql_handler_thread_num);
 
     // MySQL handler.
     {
         let handler = MySQLHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
-        handler.start();
+        handler.start(&conf.mysql_handler_host, conf.mysql_handler_port);
         // tasks.push(tokio::spawn(async move {
         //     handler.start().await.expect("MySQL handler error")
         // }));
