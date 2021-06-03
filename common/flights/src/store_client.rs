@@ -285,12 +285,12 @@ impl StoreClient {
                             .send(flight_data_from_arrow_batch(&batch, &ipc_write_opt).1)
                             .await
                         {
-                            log::info!("failed to send flight-data to downstream, breaking out");
+                            log::error!("failed to send flight-data to downstream, breaking out");
                             break;
                         }
                     }
                     Err(e) => {
-                        log::info!(
+                        log::error!(
                             "failed to convert DataBlock to RecordBatch , breaking out, {:?}",
                             e
                         );
