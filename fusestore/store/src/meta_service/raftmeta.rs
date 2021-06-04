@@ -58,11 +58,16 @@ const ERR_INCONSISTENT_LOG: &str =
 /// A Cmd is committed by raft leader before being applied.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Cmd {
-    // AKA put-if-absent. add a key-value record only when key is absent.
+    /// AKA put-if-absent. add a key-value record only when key is absent.
     AddFile { key: String, value: String },
-    // Override the record with key.
+
+    /// Override the record with key.
     SetFile { key: String, value: String },
-    // Add node if absent
+
+    /// Increment the sequence number generator specified by `key` and returns the new value.
+    IncrSeq { key: String },
+
+    /// Add node if absent
     AddNode { node_id: NodeId, node: Node },
 }
 
@@ -74,6 +79,9 @@ impl fmt::Display for Cmd {
             }
             Cmd::SetFile { key, value } => {
                 write!(f, "setfile:{}={}", key, value)
+            }
+            Cmd::IncrSeq { key } => {
+                write!(f, "incr_seq:{}", key)
             }
             Cmd::AddNode { node_id, node } => {
                 write!(f, "addnode:{}={}", node_id, node)
@@ -171,6 +179,9 @@ pub enum ClientResponse {
         // The value after applying a ClientRequest.
         result: Option<String>,
     },
+    Seq {
+        seq: u64,
+    },
     Node {
         prev: Option<Node>,
         result: Option<Node>,
@@ -185,12 +196,14 @@ impl From<ClientResponse> for RaftMes {
         RaftMes { data }
     }
 }
+
 impl From<RaftMes> for ClientResponse {
     fn from(msg: RaftMes) -> Self {
         let resp: ClientResponse = serde_json::from_str(&msg.data).expect("fail to deserialize");
         resp
     }
 }
+
 impl From<tonic::Response<RaftMes>> for ClientResponse {
     fn from(v: tonic::Response<RaftMes>) -> Self {
         let mes = v.into_inner();
@@ -198,6 +211,7 @@ impl From<tonic::Response<RaftMes>> for ClientResponse {
         resp
     }
 }
+
 impl From<(Option<String>, Option<String>)> for ClientResponse {
     fn from(v: (Option<String>, Option<String>)) -> Self {
         ClientResponse::String {
@@ -206,6 +220,13 @@ impl From<(Option<String>, Option<String>)> for ClientResponse {
         }
     }
 }
+
+impl From<u64> for ClientResponse {
+    fn from(seq: u64) -> Self {
+        ClientResponse::Seq { seq }
+    }
+}
+
 impl From<(Option<Node>, Option<Node>)> for ClientResponse {
     fn from(v: (Option<Node>, Option<Node>)) -> Self {
         ClientResponse::Node {
