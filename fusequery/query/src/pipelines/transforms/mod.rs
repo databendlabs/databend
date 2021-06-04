@@ -36,8 +36,6 @@ mod transform_limit_test;
 #[cfg(test)]
 mod transform_projection_test;
 #[cfg(test)]
-mod transform_remote_test;
-#[cfg(test)]
 mod transform_sort_test;
 #[cfg(test)]
 mod transform_source_test;
