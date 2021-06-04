@@ -5,6 +5,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_exception::exception;
+use common_exception::ErrorCodes;
 
 use crate::fs::IFileSystem;
 use crate::fs::ListResult;
@@ -57,9 +59,16 @@ impl IFileSystem for Dfs {
         Ok(())
     }
 
-    async fn read_all(&self, path: String) -> anyhow::Result<Vec<u8>> {
-        // TODO read local cached meta first
-        self.local_fs.read_all(path).await
+    async fn read_all(&self, key: String) -> exception::Result<Vec<u8>> {
+        // TODO read from remove if file is not in local fs
+        // TODO(xp): week consistency, meta may not have been replicated to this node.
+
+        // meanwhile, file meta is empty string
+        let _file_meta = self.meta_node.get_file(&key).await.ok_or_else(|| {
+            ErrorCodes::FileMetaNotFound(format!("dfs/meta: key not found: {:?}", key))
+        })?;
+
+        self.local_fs.read_all(key).await
     }
 
     async fn list(&self, path: String) -> anyhow::Result<ListResult> {

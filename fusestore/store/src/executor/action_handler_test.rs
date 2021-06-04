@@ -23,15 +23,13 @@ async fn test_action_handler_do_pull_file() -> anyhow::Result<()> {
     let root = dir.path();
 
     let fs = LocalFS::try_create(root.to_str().unwrap().to_string())?;
-    fs.add("foo".into(), "bar".as_bytes()).await?;
 
     let meta_addr = rand_local_addr();
-
-    let rst = MetaNode::boot(0, meta_addr.clone()).await;
-    assert!(rst.is_ok());
-    let mn = rst.unwrap();
+    let mn = MetaNode::boot(0, meta_addr.clone()).await?;
 
     let dfs = Dfs::create(fs, mn);
+    dfs.add("foo".into(), "bar".as_bytes()).await?;
+
     let hdlr = ActionHandler::create(Arc::new(dfs));
     {
         // pull file
