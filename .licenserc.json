@@ -1,5 +1,5 @@
 {
-    "**/*.rs": "// Copyright 2019 My Name. All rights reserved. MIT license.",
+    "**/*.rs": "// Copyright 2020-2021 The Datafuse Authors.\n//\n// SPDX-License-Identifier: Apache-2.0.",
     "ignore": [
         "**/*.yml"
       ]
