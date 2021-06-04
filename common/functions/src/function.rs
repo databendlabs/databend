@@ -17,7 +17,7 @@ pub trait IFunction: fmt::Display + Sync + Send + DynClone {
         0
     }
 
-    // (1, 3) means we only accept [1, 3) arguments
+    // (1, 2) means we only accept [1, 2] arguments
     // None means it's not variadic function
     fn variadic_arguments(&self) -> Option<(usize, usize)> {
         None

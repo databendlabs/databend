@@ -8,6 +8,7 @@ use common_datavalues::*;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
+use crate::aggregator_common::assert_unary_arguments;
 use crate::IAggregateFunction;
 
 #[derive(Clone)]
@@ -22,6 +23,8 @@ impl AggregateMaxFunction {
         display_name: &str,
         arguments: Vec<DataField>,
     ) -> Result<Box<dyn IAggregateFunction>> {
+        assert_unary_arguments(display_name, arguments.len())?;
+
         Ok(Box::new(AggregateMaxFunction {
             display_name: display_name.to_string(),
             state: DataValue::Null,
