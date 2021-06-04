@@ -1,0 +1,6 @@
+{
+    "**/*.rs": "// Copyright 2019 My Name. All rights reserved. MIT license.",
+    "ignore": [
+        "**/*.yml"
+      ]
+}
