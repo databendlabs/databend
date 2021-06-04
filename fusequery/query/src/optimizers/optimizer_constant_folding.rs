@@ -13,6 +13,7 @@ use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
+use common_tracing::tracing;
 
 use crate::optimizers::IOptimizer;
 use crate::sessions::FuseQueryContextRef;
@@ -141,6 +142,7 @@ impl IOptimizer for ConstantFoldingOptimizer {
         "ConstantFolding"
     }
 
+    #[tracing::instrument(level = "debug", skip(self, plan))]
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         let mut visitor = ConstantFoldingImpl::new();
         visitor.rewrite_plan_node(plan)

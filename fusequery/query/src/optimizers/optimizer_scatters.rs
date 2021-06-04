@@ -10,6 +10,7 @@ use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
+use common_tracing::tracing;
 
 use crate::optimizers::IOptimizer;
 use crate::sessions::FuseQueryContextRef;
@@ -156,6 +157,7 @@ impl IOptimizer for ScattersOptimizer {
         "Scatters"
     }
 
+    #[tracing::instrument(level = "debug", skip(self, plan))]
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         if self.ctx.try_get_cluster()?.is_empty()? {
             // Standalone mode.

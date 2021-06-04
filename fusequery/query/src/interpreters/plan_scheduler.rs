@@ -17,6 +17,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::RemotePlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
+use common_tracing::tracing;
 
 use crate::api::ExecutePlanWithShuffleAction;
 use crate::clusters::Node;
@@ -31,6 +32,7 @@ pub struct ScheduledActions {
 
 impl PlanScheduler {
     /// Schedule the plan to Local or Remote mode.
+    #[tracing::instrument(level = "debug", skip(ctx, plan), fields(ctx.id = ctx.get_id().as_str()))]
     pub fn reschedule(ctx: FuseQueryContextRef, plan: &PlanNode) -> Result<ScheduledActions> {
         let cluster = ctx.try_get_cluster()?;
 

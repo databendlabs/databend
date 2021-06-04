@@ -10,6 +10,7 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::interpreters::IInterpreter;
@@ -39,6 +40,7 @@ impl IInterpreter for SelectInterpreter {
         self.select.schema()
     }
 
+    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = Optimizer::create(self.ctx.clone()).optimize(&self.select.input)?;
 
