@@ -13,6 +13,7 @@ use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
+use crate::aggregator_common::assert_unary_arguments;
 use crate::AggregateSumFunction;
 use crate::IAggregateFunction;
 
@@ -28,6 +29,8 @@ impl AggregateAvgFunction {
         display_name: &str,
         arguments: Vec<DataField>,
     ) -> Result<Box<dyn IAggregateFunction>> {
+        assert_unary_arguments(display_name, arguments.len())?;
+
         Ok(Box::new(AggregateAvgFunction {
             display_name: display_name.to_string(),
             state: DataValue::Struct(vec![DataValue::Null, DataValue::UInt64(Some(0))]),

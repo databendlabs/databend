@@ -33,6 +33,8 @@ impl ToString for ErrorCodesBacktrace {
 pub struct ErrorCodes {
     code: u16,
     display_text: String,
+    // cause is only used to contain an `anyhow::Error`.
+    // TODO: remove `cause` when we completely get rid of `anyhow::Error`.
     cause: Option<Box<dyn std::error::Error + Sync + Send>>,
     backtrace: Option<ErrorCodesBacktrace>,
 }
@@ -129,6 +131,13 @@ build_exceptions! {
 
     UnknownException(1000),
     TokioError(1001)
+}
+
+// Store errors
+build_exceptions! {
+
+    FileMetaNotFound(2001),
+    FileDamaged(2002)
 }
 
 pub type Result<T> = std::result::Result<T, ErrorCodes>;
@@ -266,41 +275,38 @@ impl ErrorCodes {
 ///
 /// let x: std::result::Result<(), std::fmt::Error> = Err(std::fmt::Error {});
 /// let y: common_exception::Result<()> =
-///     x.map_err_to_code(ErrorCodes::UnknownException, || format!("{}", 123));
+///     x.map_err_to_code(ErrorCodes::UnknownException, || 123);
 ///
 /// assert_eq!(
-///     "Code: 1000, displayText = Error.",
+///     "Code: 1000, displayText = 123, cause: an error occurred when formatting an argument.",
 ///     format!("{}", y.unwrap_err())
 /// );
 /// ```
-pub trait ToErrorCodes<T, E, ToStrFn> {
+pub trait ToErrorCodes<T, E, CtxFn> {
     /// Wrap the error value with ErrorCodes that is evaluated lazily
     /// only once an error does occur.
     ///
     /// `err_code_fn` is one of the ErrorCodes builder function such as `ErrorCodes::Ok`.
     /// `context_fn` builds display_text for the ErrorCodes.
-    fn map_err_to_code<ToStr, ErrFn>(self, err_code_fn: ErrFn, context_fn: ToStrFn) -> Result<T>
+    fn map_err_to_code<ErrFn, D>(self, err_code_fn: ErrFn, context_fn: CtxFn) -> Result<T>
     where
-        ToStr: Into<String>,
-        ErrFn: FnOnce(ToStr) -> ErrorCodes,
-        ToStrFn: FnOnce() -> ToStr;
+        ErrFn: FnOnce(String) -> ErrorCodes,
+        D: Display,
+        CtxFn: FnOnce() -> D;
 }
 
-impl<T, E, ToStrFn> ToErrorCodes<T, E, ToStrFn> for std::result::Result<T, E>
+impl<T, E, CtxFn> ToErrorCodes<T, E, CtxFn> for std::result::Result<T, E>
 where E: std::error::Error + Send + Sync + 'static
 {
-    fn map_err_to_code<ToStr, ErrFn>(self, make_exception: ErrFn, context_fn: ToStrFn) -> Result<T>
+    fn map_err_to_code<ErrFn, D>(self, make_exception: ErrFn, context_fn: CtxFn) -> Result<T>
     where
-        ToStr: Into<String>,
-        ErrFn: FnOnce(ToStr) -> ErrorCodes,
-        ToStrFn: FnOnce() -> ToStr,
+        ErrFn: FnOnce(String) -> ErrorCodes,
+        D: Display,
+        CtxFn: FnOnce() -> D,
     {
         self.map_err(|error| {
-            let mut x = make_exception(context_fn());
-            x.cause = Some(Box::new(error));
-            x
+            let err_text = format!("{}, cause: {}", context_fn(), error);
+            make_exception(err_text)
         })
-
-        // read().with(ErrorCodes::FileKeyNotFound, || format!("{}", key))
     }
 }

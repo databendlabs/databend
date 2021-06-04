@@ -30,12 +30,20 @@ fn test_derive_from_std_error() {
     use crate::exception::ErrorCodes;
     use crate::exception::ToErrorCodes;
 
-    let x: std::result::Result<(), std::fmt::Error> = Err(std::fmt::Error {});
-    let y: crate::exception::Result<()> =
-        x.map_err_to_code(ErrorCodes::UnknownException, || format!("{}", 123));
+    let fmt_rst: std::result::Result<(), std::fmt::Error> = Err(std::fmt::Error {});
+
+    let rst1: crate::exception::Result<()> =
+        fmt_rst.map_err_to_code(ErrorCodes::UnknownException, || 123);
 
     assert_eq!(
-        "Code: 1000, displayText = Error.",
-        format!("{}", y.unwrap_err())
+        "Code: 1000, displayText = 123, cause: an error occurred when formatting an argument.",
+        format!("{}", rst1.as_ref().unwrap_err())
+    );
+
+    let rst2: crate::exception::Result<()> = rst1.map_err_to_code(ErrorCodes::Ok, || "wrapper");
+
+    assert_eq!(
+        "Code: 0, displayText = wrapper, cause: Code: 1000, displayText = 123, cause: an error occurred when formatting an argument..",
+        format!("{}", rst2.as_ref().unwrap_err())
     );
 }

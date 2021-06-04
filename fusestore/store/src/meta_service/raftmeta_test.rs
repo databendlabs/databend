@@ -22,6 +22,28 @@ use crate::meta_service::NodeId;
 use crate::meta_service::RaftTxId;
 use crate::tests::Seq;
 
+// test cases fro Cmd::IncrSeq:
+// case_name, txid, key, want
+pub fn cases_incr_seq() -> Vec<(&'static str, Option<RaftTxId>, &'static str, u64)> {
+    vec![
+        ("incr on none", Some(RaftTxId::new("foo", 1)), "k1", 1),
+        ("incr on existent", Some(RaftTxId::new("foo", 2)), "k1", 2),
+        (
+            "dup: same serial, even with diff key, got the previous result",
+            Some(RaftTxId::new("foo", 2)),
+            "k2",
+            2,
+        ),
+        (
+            "diff client, same serial, not a dup request",
+            Some(RaftTxId::new("bar", 2)),
+            "k2",
+            1,
+        ),
+        ("no txid, no de-dup", None, "k2", 2),
+    ]
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
     crate::tests::init_tracing();
@@ -158,6 +180,29 @@ async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
                 prev: want_prev.clone(),
                 result: want_result.clone()
             },
+            resp.unwrap(),
+            "{}",
+            name
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
+    crate::tests::init_tracing();
+
+    let cases = cases_incr_seq();
+
+    let mut sm = MemStoreStateMachine::default();
+    for (name, txid, k, want) in cases.iter() {
+        let resp = sm.apply(5, &ClientRequest {
+            txid: txid.clone(),
+            cmd: Cmd::IncrSeq { key: k.to_string() },
+        });
+        assert_eq!(
+            ClientResponse::Seq { seq: *want },
             resp.unwrap(),
             "{}",
             name

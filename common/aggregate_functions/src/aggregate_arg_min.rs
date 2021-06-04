@@ -12,6 +12,7 @@ use common_datavalues::*;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
+use crate::aggregator_common::assert_binary_arguments;
 use crate::IAggregateFunction;
 
 #[derive(Clone)]
@@ -26,6 +27,8 @@ impl AggregateArgMinFunction {
         display_name: &str,
         arguments: Vec<DataField>,
     ) -> Result<Box<dyn IAggregateFunction>> {
+        assert_binary_arguments(display_name, arguments.len())?;
+
         Ok(Box::new(AggregateArgMinFunction {
             display_name: display_name.to_string(),
             state: DataValue::Struct(vec![
