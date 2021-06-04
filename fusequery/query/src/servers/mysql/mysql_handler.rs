@@ -4,126 +4,43 @@
 
 use std::io;
 use std::net;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
+use futures::future::Either;
+use futures::future::select;
+use futures::future::TryFutureExt;
+use futures::FutureExt;
+use log::debug;
+use msql_srv::*;
+use threadpool::ThreadPool;
+use tokio::io::{AsyncWriteExt, Interest, AsyncReadExt};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::runtime::Runtime;
+use tokio::sync::mpsc::Receiver;
+use tokio_stream::StreamExt as OtherStreamExt;
+
+use common_arrow::parquet::data_type::AsBytes;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_ext::ResultExt;
 use common_ext::ResultTupleExt;
-use log::debug;
-use metrics::histogram;
-use msql_srv::*;
-use threadpool::ThreadPool;
-use tokio::runtime::Runtime;
-use tokio_stream::StreamExt as OtherStreamExt;
+use common_infallible::Mutex;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
+use crate::servers::mysql::endpoints::{IMySQLEndpoint, MySQLOnInitEndpoint, MySQLOnQueryEndpoint};
+use crate::servers::mysql::mysql_session::{Session, RejectedSession};
+use crate::servers::runnable_session::RunnableSession;
+use crate::servers::RunnableServer;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionManagerRef;
 use crate::sql::PlanParser;
-use crate::servers::mysql::endpoints::{MySQLOnQueryEndpoint, IMySQLEndpoint, MySQLOnInitEndpoint};
-use std::sync::atomic::{Ordering, AtomicU64};
-use std::sync::Arc;
-use common_infallible::Mutex;
-use std::net::SocketAddr;
-use futures::future::Either;
-use crate::servers::RunnableServer;
-use tokio::net::{TcpListener, TcpStream};
-use futures::FutureExt;
-use futures::future::select;
-use futures::future::TryFutureExt;
-use tokio::io::AsyncWriteExt;
-use crate::servers::runnable_session::RunnableSession;
-use tokio::sync::mpsc::Receiver;
-
-struct Session {
-    cluster: ClusterRef,
-    session_manager: SessionManagerRef,
-    current_database: Arc<Mutex<String>>,
-}
-
-impl Session {
-    pub fn create(cluster: ClusterRef, session_manager: SessionManagerRef) -> Self {
-        Session {
-            cluster,
-            session_manager,
-            current_database: Arc::new(Mutex::new(String::from("default"))),
-        }
-    }
-}
-
-impl<W: io::Write> MysqlShim<W> for Session {
-    type Error = ErrorCodes;
-
-    fn on_prepare(&mut self, _: &str, writer: StatementMetaWriter<W>) -> Result<()> {
-        writer.error(
-            ErrorKind::ER_UNKNOWN_ERROR,
-            "Prepare is not support in DataFuse.".as_bytes(),
-        )?;
-
-        Ok(())
-    }
-
-    fn on_execute(&mut self, _: u32, _: ParamParser, writer: QueryResultWriter<W>) -> Result<()> {
-        writer.error(
-            ErrorKind::ER_UNKNOWN_ERROR,
-            "Execute is not support in DataFuse.".as_bytes(),
-        )?;
-
-        Ok(())
-    }
-
-    fn on_close(&mut self, _: u32) {
-        // unimplemented!()
-    }
-
-    fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> Result<()> {
-        debug!("{}", query);
-        let cluster = self.cluster.clone();
-        let database = self.current_database.lock().clone();
-        let session_manager = self.session_manager.clone();
-
-        MySQLOnQueryEndpoint::on_action(writer, move || {
-            let start = Instant::now();
-
-            let context = session_manager
-                .try_create_context()?
-                .with_cluster(cluster.clone())?;
-
-            context.set_current_database(database.clone());
-
-            let query_plan = PlanParser::create(context.clone()).build_from_sql(query)?;
-            let query_interpreter = InterpreterFactory::get(context, query_plan)?;
-
-            let received_data = futures::executor::block_on(query_interpreter
-                .execute()
-                .and_then(|stream| stream.collect::<Result<Vec<DataBlock>>>()));
-
-            histogram!(
-                super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
-                start.elapsed()
-            );
-
-            received_data
-        })
-    }
-
-    fn on_init(&mut self, database_name: &str, writer: InitWriter<W>) -> Result<()> {
-        log::debug!("Use `{}` for MySQLHandler", database_name);
-        let current_database = self.current_database.clone();
-
-        MySQLOnInitEndpoint::on_action(writer, move || -> Result<()> {
-            // TODO: test database is exists.
-            *current_database.lock() = database_name.to_string();
-
-            Ok(())
-        })
-    }
-}
 
 pub struct MySQLHandler {
     conf: Config,
@@ -149,8 +66,10 @@ impl MySQLHandler {
         let listener_address = listener.local_addr()?.clone();
 
         let listener_loop = tokio::spawn(async move {
-            let rejected_executor = ThreadPool::new(1);
+            // TODO: remove unwrap()
+            let rejected_executor = common_runtime::Runtime::with_worker_threads(1).unwrap();
 
+            let max_sessions = Arc::new(Mutex::new(sessions.max_mysql_sessions()));
             loop {
                 let mut shutdown_receiver = Box::pin(receiver.recv());
                 match select(Box::pin(listener.accept()), shutdown_receiver).await {
@@ -161,21 +80,25 @@ impl MySQLHandler {
                     }
                     Either::Left((Ok((stream, socket)), future)) => {
                         shutdown_receiver = future;
+                        let mut locked_max_sessions = max_sessions.lock();
 
-                        if !sessions.accept_session() {
+                        if *locked_max_sessions != 0 {
+                            *locked_max_sessions -= 1;
+
+                            log::debug!("Received connect from {}", socket);
+                            let session = Session::create(cluster.clone(), sessions.clone());
+                            if let Err(error) = Self::accept_session(session, stream, &max_sessions) {
+                                log::error!("Unexpected error during process accept[skip]: {}", error);
+                            }
+                        } else {
                             log::debug!("Rejected connect from {}", socket);
                             Self::reject_session(stream, &rejected_executor);
-                            break;
-                        }
-
-                        log::debug!("Received connect from {}", socket);
-                        let session = Session::create(cluster.clone(), sessions.clone());
-                        if let Err(error) = Self::accept_session(session, stream) {
-                            log::error!("Unexpected error during process accept[skip]: {}", error);
                         }
                     }
                 };
             }
+
+            // TODO: join all session.
         });
 
         Ok(RunnableServer::create(listener_address, sender.clone(), listener_loop))
@@ -187,34 +110,55 @@ impl MySQLHandler {
         Ok(listener)
     }
 
-    fn reject_session(stream: TcpStream, executor: &ThreadPool) -> Result<RunnableSession> {
-        match stream.into_std() {
-            Err(error) => log::error!("{}", error),
-            Ok(stream) => {
-                stream.set_nonblocking(false)?;
-                let join_handler = std::thread::spawn(move || -> Result<()> {
-                    if let Err(error) = MysqlIntermediary::run_on_tcp(session, stream) {
-                        log::error!("Unexpected error occurred during query execution: {:?}", error);
-                    };
+    fn reject_session(mut stream: TcpStream, executor: &common_runtime::Runtime) -> Result<RunnableSession> {
+        let join_handler = executor.spawn(async move {
+            // Send handshake, packet from msql-srv. Packet[seq = 0]
+            stream.write(&vec![
+                69, 00, 00, 00, 10, 53, 46, 49, 46, 49, 48, 45, 97, 108,
+                112, 104, 97, 45, 109, 115, 113, 108, 45, 112, 114, 111,
+                120, 121, 0, 8, 0, 0, 0, 59, 88, 44, 112, 111, 95, 107,
+                125, 0, 0, 66, 33, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 62, 111, 54, 94, 87, 122, 33, 47, 107, 77, 125, 78, 0
+            ]).await?;
+            stream.flush().await?;
 
-                    Ok(())
-                });
-            }
-        };
+            let mut buffer = vec![0; 4];
+            stream.read(&mut buffer).await?;
 
-        Err(ErrorCodes::UnImplement(""))
+            // Ignore handshake response. Packet[seq = 1]
+            let len = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], 0]);
+            buffer.resize(len as usize, 0);
+            stream.read(&mut buffer).await?;
+
+            // Send error. Packet[seq = 2]
+            let mut buffer = vec![0xFF_u8];
+            buffer.extend(&(ErrorKind::ER_TOO_MANY_USER_CONNECTIONS as u16).to_le_bytes());
+            buffer.extend(&vec![b'#', b'4', b'2', b'0', b'0', b'0']);
+            buffer.extend("Rejected MySQL connection. The current accept connection has exceeded mysql_handler_thread_num config".as_bytes());
+
+            let size = buffer.len().to_le_bytes();
+            buffer.splice(0..0, [size[0], size[1], size[2], 2].iter().cloned());
+            stream.write(&buffer).await?;
+            stream.flush().await?;
+
+            Result::Ok(())
+        });
+
+        Ok(RunnableSession {})
     }
 
-    fn accept_session(session: Session, stream: TcpStream) -> Result<RunnableSession> {
+    fn accept_session(session: Session, stream: TcpStream, max_session: &Arc<Mutex<u64>>) -> Result<RunnableSession> {
         match stream.into_std() {
             Err(error) => log::error!("{}", error),
             Ok(stream) => {
                 stream.set_nonblocking(false)?;
+                let max_session = max_session.clone();
                 let join_handler = std::thread::spawn(move || -> Result<()> {
                     if let Err(error) = MysqlIntermediary::run_on_tcp(session, stream) {
                         log::error!("Unexpected error occurred during query execution: {:?}", error);
                     };
 
+                    *max_session.lock() += 1;
                     Ok(())
                 });
             }

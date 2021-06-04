@@ -10,4 +10,5 @@ mod mysql_handler_test;
 mod endpoints;
 mod mysql_handler;
 mod mysql_metrics;
+mod mysql_session;
 

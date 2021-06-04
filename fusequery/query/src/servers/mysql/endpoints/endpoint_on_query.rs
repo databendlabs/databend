@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::time::Instant;
-
 use common_arrow::arrow::datatypes::DataType;
 use common_arrow::arrow::util::display::array_value_to_string;
 use common_datablocks::DataBlock;
@@ -11,7 +9,6 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use log::debug;
 use log::error;
 use msql_srv::*;
 

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_infallible::RwLock;
+use common_infallible::{RwLock, Mutex};
 use common_planners::Partitions;
 use metrics::counter;
 
@@ -17,21 +17,21 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 pub struct SessionManager {
     sessions: RwLock<HashMap<String, FuseQueryContextRef>>,
-    max_sessions: AtomicU64
+    max_mysql_sessions: u64,
 }
 
 pub type SessionManagerRef = Arc<SessionManager>;
 
 impl SessionManager {
-    pub fn create(max_sessions: u64) -> SessionManagerRef {
+    pub fn create(max_mysql_sessions: u64) -> SessionManagerRef {
         Arc::new(SessionManager {
-            sessions: RwLock::new(HashMap::with_capacity(max_sessions as usize)),
-            max_sessions: AtomicU64::new(max_sessions),
+            sessions: RwLock::new(HashMap::with_capacity(max_mysql_sessions as usize)),
+            max_mysql_sessions,
         })
     }
 
-    pub fn accept_session(&self) -> bool {
-        self.max_sessions.fetch_sub(1, Ordering::SeqCst) != 0
+    pub fn max_mysql_sessions(&self) -> u64 {
+        self.max_mysql_sessions
     }
 
     pub fn try_create_context(&self) -> Result<FuseQueryContextRef> {
@@ -45,7 +45,6 @@ impl SessionManager {
     pub fn try_remove_context(&self, ctx: FuseQueryContextRef) -> Result<()> {
         counter!(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
 
-        self.max_sessions.fetch_add(1, Ordering::SeqCst);
         self.sessions.write().remove(&*ctx.get_id()?);
         Ok(())
     }
