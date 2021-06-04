@@ -1,6 +1,6 @@
 // Copyright 2020-2021 The Datafuse Authors.
 //
-// SPDX-Lise-Identifier: Apache-2.0.
+// SPDX-License-Identifier: Apache-2.0.
 
 use std::sync::Arc;
 
