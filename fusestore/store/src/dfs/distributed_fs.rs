@@ -41,6 +41,7 @@ impl Dfs {}
 
 #[async_trait]
 impl IFileSystem for Dfs {
+    #[tracing::instrument(level = "debug", skip(self, data))]
     async fn add(&self, path: String, data: &[u8]) -> anyhow::Result<()> {
         // add the file to local fs
 
@@ -59,6 +60,7 @@ impl IFileSystem for Dfs {
         Ok(())
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn read_all(&self, key: String) -> exception::Result<Vec<u8>> {
         // TODO read from remove if file is not in local fs
         // TODO(xp): week consistency, meta may not have been replicated to this node.
@@ -71,6 +73,7 @@ impl IFileSystem for Dfs {
         self.local_fs.read_all(key).await
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn list(&self, path: String) -> anyhow::Result<ListResult> {
         let _key = path;
 
