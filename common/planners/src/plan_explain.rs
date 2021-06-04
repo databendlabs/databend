@@ -4,7 +4,10 @@
 
 use std::sync::Arc;
 
+use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataType;
 
 use crate::PlanNode;
 
@@ -23,7 +26,7 @@ pub struct ExplainPlan {
 
 impl ExplainPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        self.input.schema()
+        DataSchemaRefExt::create(vec![DataField::new("explain", DataType::Utf8, false)])
     }
 
     pub fn set_input(&mut self, node: &PlanNode) {
