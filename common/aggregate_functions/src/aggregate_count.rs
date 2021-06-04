@@ -13,6 +13,7 @@ use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
+use crate::aggregator_common::assert_variadic_arguments;
 use crate::IAggregateFunction;
 
 #[derive(Clone)]
@@ -27,6 +28,8 @@ impl AggregateCountFunction {
         display_name: &str,
         arguments: Vec<DataField>,
     ) -> Result<Box<dyn IAggregateFunction>> {
+        assert_variadic_arguments(display_name, arguments.len(), (0, 1))?;
+
         Ok(Box::new(AggregateCountFunction {
             display_name: display_name.to_string(),
             state: DataValue::Null,

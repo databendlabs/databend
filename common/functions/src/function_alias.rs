@@ -42,10 +42,6 @@ impl IFunction for AliasFunction {
     fn num_arguments(&self) -> usize {
         1
     }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        None
-    }
 }
 
 impl fmt::Display for AliasFunction {
