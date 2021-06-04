@@ -31,6 +31,7 @@ impl LocalFS {
 
 #[async_trait]
 impl IFileSystem for LocalFS {
+    #[tracing::instrument(level = "debug", skip(self, data))]
     async fn add(&self, path: String, data: &[u8]) -> anyhow::Result<()> {
         // TODO: test atomicity: write temp file and rename it
         let p = Path::new(self.root.as_path()).join(&path);
@@ -57,14 +58,18 @@ impl IFileSystem for LocalFS {
         Ok(())
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn read_all(&self, path: String) -> exception::Result<Vec<u8>> {
         let p = Path::new(self.root.as_path()).join(&path);
+        tracing::info!("read: {}", p.as_path().display());
+
         let data = std::fs::read(p.as_path()).map_err_to_code(ErrorCodes::FileDamaged, || {
             format!("localfs: fail to read: {:?}", path)
         })?;
         Ok(data)
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn list(&self, path: String) -> anyhow::Result<ListResult> {
         let p = Path::new(self.root.as_path()).join(&path);
         let entries = std::fs::read_dir(p.as_path())
