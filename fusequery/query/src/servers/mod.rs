@@ -7,7 +7,8 @@
 mod clickhouse;
 mod mysql;
 mod runnable_server;
+mod runnable_session;
 
 pub use clickhouse::ClickHouseHandler;
-pub use mysql::MySQLHandler;
+pub use self::mysql::MySQLHandler;
 pub use runnable_server::RunnableServer;

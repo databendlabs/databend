@@ -4,6 +4,10 @@
 
 pub use self::mysql_handler::MySQLHandler;
 
+#[cfg(test)]
+mod mysql_handler_test;
+
 mod endpoints;
 mod mysql_handler;
 mod mysql_metrics;
+

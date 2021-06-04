@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // MySQL handler.
     {
         let handler = MySQLHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
-        runnable_servers.push(handler.start(&conf.mysql_handler_host, conf.mysql_handler_port)?);
+        runnable_servers.push(handler.start(&conf.mysql_handler_host, conf.mysql_handler_port).await?);
 
         info!(
             "MySQL handler listening on {}:{}, Usage: mysql -h{} -P{}",

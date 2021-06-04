@@ -6,18 +6,25 @@ use tokio::sync::mpsc::Sender;
 use common_exception::Result;
 use common_exception::ErrorCodes;
 use tokio::task::JoinHandle;
+use std::net::SocketAddr;
 
 pub struct RunnableServer {
+    listener_address: SocketAddr,
     shutdown_sender: Sender<()>,
     join_handler: Option<JoinHandle<()>>,
 }
 
 impl RunnableServer {
-    pub fn create(shutdown_sender: Sender<()>, join_handler: JoinHandle<()>) -> RunnableServer {
+    pub fn create(listener_address: SocketAddr, shutdown_sender: Sender<()>, join_handler: JoinHandle<()>) -> RunnableServer {
         RunnableServer {
+            listener_address,
             shutdown_sender,
             join_handler: Some(join_handler),
         }
+    }
+
+    pub fn listener_address(&self) -> SocketAddr {
+        self.listener_address.clone()
     }
 
     pub async fn shutdown(&mut self) -> Result<()> {

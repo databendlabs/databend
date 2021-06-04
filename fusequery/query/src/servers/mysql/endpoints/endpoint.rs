@@ -8,14 +8,14 @@ use common_exception::Result;
 pub trait IMySQLEndpoint<Writer> {
     type Input;
 
-    fn on_query<F: Fn() -> Result<Self::Input>>(writer: Writer, fun: F) -> Result<()> {
+    fn ok(data: Self::Input, writer: Writer) -> Result<()>;
+
+    fn err(error: ErrorCodes, writer: Writer) -> Result<()>;
+
+    fn on_action<F: Fn() -> Result<Self::Input>>(writer: Writer, fun: F) -> Result<()> {
         match fun() {
-            Ok(data) => Self::on_query_ok(data, writer),
-            Err(error) => Self::on_query_err(error, writer)
+            Ok(data) => Self::ok(data, writer),
+            Err(error) => Self::err(error, writer)
         }
     }
-
-    fn on_query_ok(data: Self::Input, writer: Writer) -> Result<()>;
-
-    fn on_query_err(error: ErrorCodes, writer: Writer) -> Result<()>;
 }
