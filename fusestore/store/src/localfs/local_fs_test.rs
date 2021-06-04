@@ -18,8 +18,8 @@ async fn test_localfs_read_all() -> anyhow::Result<()> {
         // read absent file
         let got = f.read_all("foo.txt".into()).await;
         assert_eq!(
-            "No such file or directory (os error 2)",
-            got.err().unwrap().root_cause().to_string()
+            "localfs: fail to read: \"foo.txt\", cause: No such file or directory (os error 2)",
+            got.err().unwrap().message()
         );
     }
     {

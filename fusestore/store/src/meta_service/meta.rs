@@ -40,6 +40,9 @@ pub struct Meta {
     /// The file names stored in this cluster
     pub keys: BTreeMap<String, String>,
 
+    /// storage of auto-incremental number.
+    pub sequences: BTreeMap<String, u64>,
+
     // cluster nodes, key distribution etc.
     pub slots: Vec<Slot>,
     pub nodes: HashMap<NodeId, Node>,
@@ -74,6 +77,7 @@ impl MetaBuilder {
 
         let mut m = Meta {
             keys: BTreeMap::new(),
+            sequences: BTreeMap::new(),
             slots: Vec::with_capacity(initial_slots as usize),
             nodes: HashMap::new(),
             replication,
@@ -111,6 +115,17 @@ impl Meta {
                 let prev = self.keys.insert(key.clone(), value.clone());
                 tracing::info!("applied SetFile: {}={}", key, value);
                 Ok((prev, Some(value.clone())).into())
+            }
+
+            Cmd::IncrSeq { ref key } => {
+                let prev = self.sequences.get(key);
+                let curr = match prev {
+                    Some(v) => v + 1,
+                    None => 1,
+                };
+                self.sequences.insert(key.clone(), curr);
+                tracing::info!("applied IncrSeq: {}={}", key, curr);
+                Ok(curr.into())
             }
 
             Cmd::AddNode {

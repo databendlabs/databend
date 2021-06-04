@@ -95,7 +95,7 @@ impl IFunction for ArithmeticFunction {
     }
 
     fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((1, 3))
+        Some((1, 2))
     }
 }
 

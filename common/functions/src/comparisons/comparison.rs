@@ -70,10 +70,6 @@ impl IFunction for ComparisonFunction {
     fn num_arguments(&self) -> usize {
         2
     }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        None
-    }
 }
 
 impl fmt::Display for ComparisonFunction {

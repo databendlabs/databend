@@ -12,22 +12,13 @@ use crate::meta_service::Cmd;
 use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
-use crate::meta_service::MetaServiceImpl;
-use crate::meta_service::MetaServiceServer;
 use crate::tests::rand_local_addr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_server_set_get() -> anyhow::Result<()> {
     let addr = rand_local_addr();
 
-    let rst = MetaNode::boot(0, addr.clone()).await;
-    assert!(rst.is_ok());
-    let mn = rst.unwrap();
-
-    let meta_srv_impl = MetaServiceImpl::create(mn);
-    let meta_srv = MetaServiceServer::new(meta_srv_impl);
-
-    serve_grpc!(addr, meta_srv);
+    let _mn = MetaNode::boot(0, addr.clone()).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
@@ -103,6 +94,36 @@ async fn test_meta_server_set_get() -> anyhow::Result<()> {
         let req = tonic::Request::new(GetReq { key: "foo".into() });
         let rst = client.get(req).await?.into_inner();
         assert_eq!("bar2", rst.value);
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_server_incr_seq() -> anyhow::Result<()> {
+    let addr = rand_local_addr();
+
+    let _mn = MetaNode::boot(0, addr.clone()).await?;
+
+    let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
+
+    let cases = crate::meta_service::raftmeta_test::cases_incr_seq();
+
+    for (name, txid, k, want) in cases.iter() {
+        let req = ClientRequest {
+            txid: txid.clone(),
+            cmd: Cmd::IncrSeq { key: k.to_string() },
+        };
+        let rst = client.write(req).await?.into_inner();
+        let resp: ClientResponse = rst.into();
+        match resp {
+            ClientResponse::Seq { seq } => {
+                assert_eq!(*want, seq, "{}", name);
+            }
+            _ => {
+                panic!("not Seq")
+            }
+        }
     }
 
     Ok(())

@@ -18,6 +18,7 @@ mod aggregate_max;
 mod aggregate_min;
 mod aggregate_sum;
 mod aggregator;
+mod aggregator_common;
 
 pub use aggregate_arg_max::AggregateArgMaxFunction;
 pub use aggregate_arg_min::AggregateArgMinFunction;
