@@ -11,7 +11,8 @@ Summary about this PR
 - Build/Testing/CI
 - Documentation
 - Website
-- Other
+- Other 
+- Not for changelog (changelog entry is not required)
 
 ## Related Issues
 
@@ -20,5 +21,6 @@ Fixes #issue
 ## Test Plan
 
 Unit Tests
+
 Stateless Tests
 

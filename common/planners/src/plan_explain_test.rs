@@ -4,6 +4,8 @@
 
 use std::sync::Arc;
 
+use common_datavalues::DataField;
+use common_datavalues::DataType;
 use pretty_assertions::assert_eq;
 
 use crate::test::Test;
@@ -28,5 +30,11 @@ fn test_explain_plan() -> anyhow::Result<()> {
     \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
     let actual = format!("{:?}", explain);
     assert_eq!(expect, actual);
+    assert_eq!(explain.schema().fields().clone(), vec![DataField::new(
+        "explain",
+        DataType::Utf8,
+        false
+    )]);
+
     Ok(())
 }

@@ -16,6 +16,7 @@ path = "src/bin/fuse-store.rs"
 common-arrow = {path = "../../common/arrow"}
 common-datablocks = {path = "../../common/datablocks"}
 common-datavalues = {path = "../../common/datavalues"}
+common-exception = {path = "../../common/exception"}
 common-flights = {path = "../../common/flights"}
 common-functions = {path = "../../common/functions"}
 common-infallible = {path = "../../common/infallible"}
@@ -58,9 +59,9 @@ tracing-subscriber = "0.2.18"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 
 [dev-dependencies]
+env_logger = "*"
 pretty_assertions = "0.7"
 test-env-log = "0.2.7"
-env_logger = "*"
 tracing = {version = "0.1", default-features = false}
 tracing-subscriber = {version = "0.2.17", default-features = false, features = ["env-filter", "fmt"]}
 

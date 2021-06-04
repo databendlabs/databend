@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
 pub struct Statistics {
     /// Total rows of the query read.
     pub read_rows: usize,

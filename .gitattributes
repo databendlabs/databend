@@ -1,4 +1,5 @@
-*.scss linguist-detectable=false
-*.js linguist-detectable=false
-*.html linguist-detectable=false
-*.ts linguist-detectable=false
+docker/* linguist-vendored
+scripts/* linguist-vendored
+deploy/* linguist-vendored
+tests/* linguist-vendored
+website/* linguist-vendored

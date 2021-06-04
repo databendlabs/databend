@@ -79,6 +79,7 @@ impl ITable for SettingsTable {
             statistics: Statistics::default(),
             description: "(Read from system.settings table)".to_string(),
             scan_plan: Arc::new(scan.clone()),
+            remote: false,
         })
     }
 

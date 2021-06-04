@@ -2,16 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt;
 
-use common_datavalues::DataArrayAggregate;
-use common_datavalues::DataColumnarValue;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use common_datavalues::DataValueAggregate;
-use common_datavalues::DataValueAggregateOperator;
+use common_arrow::arrow::array::Array;
+use common_datavalues::downcast_array;
+use common_datavalues::*;
+use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::IAggregateFunction;
@@ -19,16 +17,22 @@ use crate::IAggregateFunction;
 #[derive(Clone)]
 pub struct AggregateArgMaxFunction {
     display_name: String,
-    depth: usize,
     state: DataValue,
+    arguments: Vec<DataField>,
 }
 
 impl AggregateArgMaxFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggregateFunction>> {
+    pub fn try_create(
+        display_name: &str,
+        arguments: Vec<DataField>,
+    ) -> Result<Box<dyn IAggregateFunction>> {
         Ok(Box::new(AggregateArgMaxFunction {
             display_name: display_name.to_string(),
-            depth: 0,
-            state: DataValue::Struct(vec![DataValue::Null, DataValue::Null]),
+            state: DataValue::Struct(vec![
+                DataValue::try_from(arguments[0].data_type())?,
+                DataValue::try_from(arguments[1].data_type())?,
+            ]),
+            arguments,
         }))
     }
 }
@@ -38,23 +42,16 @@ impl IAggregateFunction for AggregateArgMaxFunction {
         "AggregateArgMaxFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        Ok(args[0].clone())
+    fn return_type(&self) -> Result<DataType> {
+        Ok(self.arguments[0].data_type().clone())
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn set_depth(&mut self, depth: usize) {
-        self.depth = depth;
-    }
-
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
-        if let DataValue::Struct(max_arg_val) = DataArrayAggregate::data_array_aggregate_op(
-            DataValueAggregateOperator::ArgMax,
-            columns[1].to_array()?,
-        )? {
+        if let DataValue::Struct(max_arg_val) = Self::arg_max_batch(columns[1].clone())? {
             let index: u64 = max_arg_val[0].clone().try_into()?;
             let max_arg = DataValue::try_from_array(&columns[0].to_array()?, index as usize)?;
             let max_val = max_arg_val[1].clone();
@@ -85,7 +82,7 @@ impl IAggregateFunction for AggregateArgMaxFunction {
     }
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        let arg_val = states[self.depth].clone();
+        let arg_val = states[0].clone();
         if let (DataValue::Struct(new_states), DataValue::Struct(old_states)) =
             (arg_val, self.state.clone())
         {
@@ -118,5 +115,88 @@ impl IAggregateFunction for AggregateArgMaxFunction {
 impl fmt::Display for AggregateArgMaxFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
+    }
+}
+
+macro_rules! typed_array_max_to_data_value {
+    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:expr $(,)?) => {{
+        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
+        let values = array.values();
+        let data = array.data();
+        let null_count = array.null_count();
+        let mut max_row_val = (0, values[0]);
+
+        if null_count == 0 {
+            for row in 1..data.len() {
+                if values[row] > max_row_val.1 {
+                    max_row_val = (row, values[row]);
+                }
+            }
+        } else {
+            for row in 1..data.len() {
+                if data.is_valid(row) && values[row] > max_row_val.1 {
+                    max_row_val = (row, values[row]);
+                }
+            }
+        }
+
+        Result::Ok(DataValue::Struct(vec![
+            DataValue::UInt64(Some(max_row_val.0 as u64)),
+            DataValue::$SCALAR(Some(max_row_val.1)),
+        ]))
+    }};
+}
+
+macro_rules! string_array_max_to_data_value {
+    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:expr $(,)?) => {{
+        fn cmp(a: &str, b: &str) -> bool {
+            a < b
+        }
+        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
+        let data = array.data();
+
+        let null_count = array.null_count();
+        let mut max_row_val = (0usize, array.value(0));
+
+        if null_count == 0 {
+            for row in 1..data.len() {
+                let item = array.value(row);
+                if cmp(&max_row_val.1, item) {
+                    max_row_val = (row, item);
+                }
+            }
+        } else {
+            for row in 1..data.len() {
+                let item = array.value(row);
+                if data.is_valid(row) && cmp(&max_row_val.1, item) {
+                    max_row_val = (row, item);
+                }
+            }
+        }
+
+        Result::Ok(DataValue::Struct(vec![
+            DataValue::UInt64(Some(max_row_val.0 as u64)),
+            DataValue::$SCALAR(Some(max_row_val.1.to_string())),
+        ]))
+    }};
+}
+
+impl AggregateArgMaxFunction {
+    pub fn arg_max_batch(column: DataColumnarValue) -> Result<DataValue> {
+        match column {
+            DataColumnarValue::Constant(value, _) => {
+                Ok(DataValue::Struct(vec![DataValue::UInt64(Some(0)), value]))
+            }
+
+            DataColumnarValue::Array(array) => {
+                if let Ok(v) =
+                    dispatch_primitive_array! { typed_array_max_to_data_value, array, argMax}
+                {
+                    Ok(v)
+                } else {
+                    dispatch_string_array! { string_array_max_to_data_value, array, argMax}
+                }
+            }
+        }
     }
 }

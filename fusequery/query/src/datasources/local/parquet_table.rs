@@ -143,6 +143,7 @@ impl ITable for ParquetTable {
                 self.db, self.name
             ),
             scan_plan: Arc::new(scan.clone()),
+            remote: false,
         })
     }
 

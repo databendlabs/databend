@@ -132,12 +132,12 @@ impl Expression {
                 func.return_type(&arg_types)
             }
             Expression::AggregateFunction { op, args } => {
-                let mut arg_types = Vec::with_capacity(args.len());
+                let mut fields = Vec::with_capacity(args.len());
                 for arg in args {
-                    arg_types.push(arg.to_data_type(input_schema)?);
+                    fields.push(arg.to_data_field(input_schema)?);
                 }
-                let func = AggregateFunctionFactory::get(op)?;
-                func.return_type(&arg_types)
+                let func = AggregateFunctionFactory::get(op, fields)?;
+                func.return_type()
             }
             Expression::Wildcard => Result::Err(ErrorCodes::IllegalDataType(
                 "Wildcard expressions are not valid to get return type",
@@ -147,20 +147,32 @@ impl Expression {
         }
     }
 
-    pub fn to_aggregate_function(&self) -> Result<Box<dyn IAggregateFunction>> {
+    pub fn to_aggregate_function(
+        &self,
+        schema: &DataSchemaRef,
+    ) -> Result<Box<dyn IAggregateFunction>> {
         match self {
-            Expression::AggregateFunction { op, .. } => AggregateFunctionFactory::get(op),
+            Expression::AggregateFunction { op, args } => {
+                let mut fields = Vec::with_capacity(args.len());
+                for arg in args.iter() {
+                    fields.push(arg.to_data_field(schema)?);
+                }
+                AggregateFunctionFactory::get(op, fields)
+            }
             _ => Err(ErrorCodes::LogicalError(
                 "Expression must be aggregated function",
             )),
         }
     }
 
-    pub fn to_aggregate_function_args(&self) -> Result<Vec<String>> {
+    pub fn to_aggregate_function_names(&self) -> Result<Vec<String>> {
         match self {
             Expression::AggregateFunction { args, .. } => {
-                let arg_names = args.iter().map(|arg| arg.column_name()).collect::<Vec<_>>();
-                Ok(arg_names)
+                let mut names = Vec::with_capacity(args.len());
+                for arg in args.iter() {
+                    names.push(arg.column_name());
+                }
+                Ok(names)
             }
             _ => Err(ErrorCodes::LogicalError(
                 "Expression must be aggregated function",

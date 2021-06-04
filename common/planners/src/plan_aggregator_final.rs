@@ -14,6 +14,7 @@ pub struct AggregatorFinalPlan {
     pub aggr_expr: Vec<Expression>,
     pub group_expr: Vec<Expression>,
     pub schema: DataSchemaRef,
+    pub schema_before_groupby: DataSchemaRef,
     pub input: Arc<PlanNode>,
 }
 

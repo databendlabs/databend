@@ -4,8 +4,10 @@
 
 use common_arrow::arrow::array::ArrayRef;
 use common_datablocks::DataBlock;
+use common_datavalues::DataColumnarValue;
 use common_flights::GetTableActionResult;
 use common_flights::StoreClient;
+use common_planners::ScanPlan;
 use log::info;
 use pretty_assertions::assert_eq;
 use test_env_log::test;
@@ -243,5 +245,91 @@ async fn test_do_append() -> anyhow::Result<()> {
         assert_eq!(p.rows, expected_rows / num_batch);
         assert_eq!(p.cols, expected_cols);
     });
+    Ok(())
+}
+#[test(tokio::test)]
+async fn test_scan_partition() -> anyhow::Result<()> {
+    use std::sync::Arc;
+
+    use common_arrow::arrow::datatypes::DataType;
+    use common_datavalues::DataField;
+    use common_datavalues::DataSchema;
+    use common_datavalues::Int64Array;
+    use common_datavalues::StringArray;
+    use common_flights::StoreClient;
+    use common_planners::CreateDatabasePlan;
+    use common_planners::CreateTablePlan;
+    use common_planners::DatabaseEngineType;
+    use common_planners::TableEngineType;
+
+    let addr = crate::tests::start_store_server().await?;
+
+    let schema = Arc::new(DataSchema::new(vec![
+        DataField::new("col_i", DataType::Int64, false),
+        DataField::new("col_s", DataType::Utf8, false),
+    ]));
+    let db_name = "test_db";
+    let tbl_name = "test_tbl";
+
+    let col0: ArrayRef = Arc::new(Int64Array::from(vec![0, 1, 2]));
+    let col1: ArrayRef = Arc::new(StringArray::from(vec!["str1", "str2", "str3"]));
+
+    let expected_rows = col0.data().len() * 2;
+    let expected_cols = 2;
+
+    let block = DataBlock::create(schema.clone(), vec![
+        DataColumnarValue::Array(col0),
+        DataColumnarValue::Array(col1),
+    ]);
+    let batches = vec![block.clone(), block];
+    let num_batch = batches.len();
+    let stream = futures::stream::iter(batches);
+
+    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+    {
+        let plan = CreateDatabasePlan {
+            if_not_exists: false,
+            db: db_name.to_string(),
+            engine: DatabaseEngineType::Local,
+            options: Default::default(),
+        };
+        client.create_database(plan.clone()).await?;
+        let plan = CreateTablePlan {
+            if_not_exists: false,
+            db: db_name.to_string(),
+            table: tbl_name.to_string(),
+            schema: schema.clone(),
+            options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
+            engine: TableEngineType::Parquet,
+        };
+        client.create_table(plan.clone()).await?;
+    }
+    let res = client
+        .append_data(
+            db_name.to_string(),
+            tbl_name.to_string(),
+            schema,
+            Box::pin(stream),
+        )
+        .await?;
+    log::info!("append res is {:?}", res);
+    let summary = res.summary;
+    assert_eq!(summary.rows, expected_rows);
+    assert_eq!(res.parts.len(), num_batch);
+    res.parts.iter().for_each(|p| {
+        assert_eq!(p.rows, expected_rows / num_batch);
+        assert_eq!(p.cols, expected_cols);
+    });
+
+    let plan = ScanPlan {
+        schema_name: tbl_name.to_string(),
+        ..ScanPlan::empty()
+    };
+    let res = client
+        .scan_partition(db_name.to_string(), tbl_name.to_string(), &plan)
+        .await;
+    // TODO d assertions, de-duplicated codes
+    println!("scan res is {:?}", res);
+
     Ok(())
 }

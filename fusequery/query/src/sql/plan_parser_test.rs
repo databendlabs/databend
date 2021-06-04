@@ -150,6 +150,13 @@ fn test_plan_parser() -> anyhow::Result<()> {
             \n                  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
             error: ""
         },
+
+        Test {
+            name: "unimplemented-cte",
+            sql: "with t as ( select sum(number) n from system.numbers_mt(1000) )select * from t",
+            expect: "",
+            error: "Code: 2, displayText = CTE is not yet implement."
+        },
     ];
 
     let ctx = crate::tests::try_create_context()?;

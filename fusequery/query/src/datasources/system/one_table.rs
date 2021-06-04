@@ -73,6 +73,7 @@ impl ITable for OneTable {
             statistics: Statistics::default(),
             description: "(Read from system.one table)".to_string(),
             scan_plan: Arc::new(scan.clone()),
+            remote: false,
         })
     }
 

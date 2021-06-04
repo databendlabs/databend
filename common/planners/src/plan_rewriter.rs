@@ -24,6 +24,7 @@ use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::InsertIntoPlan;
+use crate::LimitByPlan;
 use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
@@ -65,6 +66,7 @@ pub trait PlanRewriter<'plan> {
             PlanNode::Filter(plan) => self.rewrite_filter(plan),
             PlanNode::Sort(plan) => self.rewrite_sort(plan),
             PlanNode::Limit(plan) => self.rewrite_limit(plan),
+            PlanNode::LimitBy(plan) => self.rewrite_limit_by(plan),
             PlanNode::Scan(plan) => self.rewrite_scan(plan),
             PlanNode::ReadSource(plan) => self.rewrite_read_data_source(plan),
             PlanNode::Select(plan) => self.rewrite_select(plan),
@@ -98,6 +100,7 @@ pub trait PlanRewriter<'plan> {
     fn rewrite_aggregate_final(&mut self, plan: &'plan AggregatorFinalPlan) -> Result<PlanNode> {
         Ok(PlanNode::AggregatorFinal(AggregatorFinalPlan {
             schema: plan.schema.clone(),
+            schema_before_groupby: plan.schema_before_groupby.clone(),
             aggr_expr: plan.aggr_expr.clone(),
             group_expr: plan.group_expr.clone(),
             input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
@@ -161,6 +164,14 @@ pub trait PlanRewriter<'plan> {
     fn rewrite_limit(&mut self, plan: &'plan LimitPlan) -> Result<PlanNode> {
         Ok(PlanNode::Limit(LimitPlan {
             n: plan.n,
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+        }))
+    }
+
+    fn rewrite_limit_by(&mut self, plan: &'plan LimitByPlan) -> Result<PlanNode> {
+        Ok(PlanNode::LimitBy(LimitByPlan {
+            limit: plan.limit,
+            limit_by: plan.limit_by.clone(),
             input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
         }))
     }

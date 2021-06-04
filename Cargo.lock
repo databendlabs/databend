@@ -77,6 +77,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28b2cd92db5cbd74e8e5028f7e27dd7aa3090e89e4f2a197cc7c8dfb69c7063b"
 
 [[package]]
+name = "arbitrary"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "237430fd6ed3740afe94eefcc278ae21e050285be882804e0d6e8695f0c94691"
+
+[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -636,6 +642,7 @@ dependencies = [
 name = "common-datablocks"
 version = "0.1.0"
 dependencies = [
+ "ahash",
  "anyhow",
  "common-arrow",
  "common-datavalues",
@@ -1414,6 +1421,7 @@ dependencies = [
  "common-building",
  "common-datablocks",
  "common-datavalues",
+ "common-exception",
  "common-flights",
  "common-functions",
  "common-infallible",
@@ -1542,6 +1550,14 @@ dependencies = [
  "proc-macro-hack",
  "proc-macro-nested",
  "slab",
+]
+
+[[package]]
+name = "fuzz"
+version = "0.1.0"
+dependencies = [
+ "fuse-query",
+ "honggfuzz",
 ]
 
 [[package]]
@@ -1754,6 +1770,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77e806677ce663d0a199541030c816847b36e8dc095f70dae4a4f4ad63da5383"
 dependencies = [
  "digest 0.9.0",
+]
+
+[[package]]
+name = "honggfuzz"
+version = "0.5.54"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bea09577d948a98a5f59b7c891e274c4fb35ad52f67782b3d0cb53b9c05301f1"
+dependencies = [
+ "arbitrary",
+ "lazy_static",
+ "memmap",
 ]
 
 [[package]]
@@ -2167,6 +2194,16 @@ name = "memchr"
 version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b16bd47d9e329435e309c58469fe0791c2d0d1ba96ec0954152a5ae2b04387dc"
+
+[[package]]
+name = "memmap"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6585fd95e7bb50d6cc31e20d4cf9afb4e2ba16c5846fc76793f11218da9c475b"
+dependencies = [
+ "libc",
+ "winapi 0.3.9",
+]
 
 [[package]]
 name = "memoffset"

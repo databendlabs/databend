@@ -76,6 +76,7 @@ impl ITable for NullTable {
             statistics: Statistics::default(),
             description: format!("(Read from Null Engine table  {}.{})", self.db, self.name),
             scan_plan: Arc::new(scan.clone()),
+            remote: false,
         })
     }
 

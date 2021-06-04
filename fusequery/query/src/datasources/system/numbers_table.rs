@@ -113,6 +113,7 @@ impl ITable for NumbersTable {
                 self.table, statistics.read_rows, statistics.read_bytes
             ),
             scan_plan: Arc::new(scan.clone()),
+            remote: false,
         })
     }
 
