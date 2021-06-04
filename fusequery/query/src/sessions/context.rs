@@ -187,8 +187,8 @@ impl FuseQueryContext {
         self.settings.get_settings()
     }
 
-    pub fn get_id(&self) -> Result<String> {
-        Ok(self.uuid.as_ref().read().clone())
+    pub fn get_id(&self) -> String {
+        self.uuid.as_ref().read().clone()
     }
 
     pub fn get_current_database(&self) -> String {

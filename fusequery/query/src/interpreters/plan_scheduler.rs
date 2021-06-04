@@ -53,12 +53,12 @@ impl PlanScheduler {
 
                     last_stage = Some(plan.clone());
                     builders.push(ExecutionPlanBuilder::create(
-                        ctx.get_id()?,
+                        ctx.get_id(),
                         stage_id.clone(),
                         plan,
                         &get_node_plan,
                     ));
-                    get_node_plan = RemoteGetNodePlan::create(ctx.get_id()?, stage_id, plan);
+                    get_node_plan = RemoteGetNodePlan::create(ctx.get_id(), stage_id, plan);
                 }
                 PlanNode::ReadSource(plan) => {
                     get_node_plan =

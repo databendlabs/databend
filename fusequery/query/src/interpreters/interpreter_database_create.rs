@@ -21,6 +21,7 @@ pub struct CreateDatabaseInterpreter {
 }
 
 impl CreateDatabaseInterpreter {
+    #[tracing::instrument(level = "debug", skip(ctx, plan), fields(ctx.id = ctx.get_id().as_str()))]
     pub fn try_create(
         ctx: FuseQueryContextRef,
         plan: CreateDatabasePlan,
@@ -35,7 +36,7 @@ impl IInterpreter for CreateDatabaseInterpreter {
         "CreateDatabaseInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let datasource = self.ctx.get_datasource();
         datasource.create_database(self.plan.clone()).await?;
