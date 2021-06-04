@@ -321,12 +321,16 @@ impl PlanParser {
 
     /// Generate a logic plan from an SQL query
     pub fn query_to_plan(&self, query: &sqlparser::ast::Query) -> Result<PlanNode> {
+        if query.with.is_some() {
+            return Result::Err(ErrorCodes::UnImplement("CTE is not yet implement"));
+        }
+
         match &query.body {
             sqlparser::ast::SetExpr::Select(s) => {
                 self.select_to_plan(s.as_ref(), &query.limit, &query.order_by)
             }
             _ => Result::Err(ErrorCodes::UnImplement(format!(
-                "Query {} not implemented yet",
+                "Query {} is not yet implemented",
                 query.body
             ))),
         }
