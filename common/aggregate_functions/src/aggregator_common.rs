@@ -1,11 +1,11 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use std::fmt::Display;
 
 use common_exception::ErrorCodes;
 use common_exception::Result;
-
-// Copyright 2020-2021 The Datafuse Authors.
-//
-// SPDX-License-Identifier: Apache-2.0.
 
 pub fn assert_unary_arguments<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 1 {
