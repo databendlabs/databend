@@ -30,6 +30,7 @@ use common_planners::SelectPlan;
 use common_planners::SettingPlan;
 use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
+use common_tracing::tracing;
 use sqlparser::ast::Expr;
 use sqlparser::ast::FunctionArg;
 use sqlparser::ast::Ident;
@@ -73,6 +74,7 @@ impl PlanParser {
     }
 
     pub fn build_from_sql(&self, query: &str) -> Result<PlanNode> {
+        tracing::debug!(query);
         DfParser::parse_sql(query).and_then(|statement| {
             statement
                 .first()
@@ -109,6 +111,7 @@ impl PlanParser {
     }
 
     /// Builds plan from AST statement.
+    #[tracing::instrument(level = "debug", skip(self, statement), fields(ctx.id = self.ctx.get_id().as_str()))]
     pub fn sql_statement_to_plan(&self, statement: &sqlparser::ast::Statement) -> Result<PlanNode> {
         match statement {
             Statement::Query(query) => self.query_to_plan(query),
@@ -131,6 +134,7 @@ impl PlanParser {
     }
 
     /// Generate a logic plan from an EXPLAIN
+    #[tracing::instrument(level = "debug", skip(self, explain), fields(ctx.id = self.ctx.get_id().as_str()))]
     pub fn sql_explain_to_plan(&self, explain: &DfExplain) -> Result<PlanNode> {
         let plan = self.sql_statement_to_plan(&explain.statement)?;
         Ok(PlanNode::Explain(ExplainPlan {
@@ -140,6 +144,7 @@ impl PlanParser {
     }
 
     /// DfCreateDatabase to plan.
+    #[tracing::instrument(level = "debug", skip(self, create), fields(ctx.id = self.ctx.get_id().as_str()))]
     pub fn sql_create_database_to_plan(&self, create: &DfCreateDatabase) -> Result<PlanNode> {
         if create.name.0.is_empty() {
             return Result::Err(ErrorCodes::SyntaxException("Create database name is empty"));
@@ -160,6 +165,7 @@ impl PlanParser {
     }
 
     /// DfDropDatabase to plan.
+    #[tracing::instrument(level = "debug", skip(self, drop), fields(ctx.id = self.ctx.get_id().as_str()))]
     pub fn sql_drop_database_to_plan(&self, drop: &DfDropDatabase) -> Result<PlanNode> {
         if drop.name.0.is_empty() {
             return Result::Err(ErrorCodes::SyntaxException("Drop database name is empty"));
@@ -172,11 +178,13 @@ impl PlanParser {
         }))
     }
 
+    #[tracing::instrument(level = "debug", skip(self, use_db), fields(ctx.id = self.ctx.get_id().as_str()))]
     pub fn sql_use_database_to_plan(&self, use_db: &DfUseDatabase) -> Result<PlanNode> {
         let db = use_db.name.0[0].value.clone();
         Ok(PlanNode::UseDatabase(UseDatabasePlan { db }))
     }
 
+    #[tracing::instrument(level = "debug", skip(self, create), fields(ctx.id = self.ctx.get_id().as_str()))]
     pub fn sql_create_table_to_plan(&self, create: &DfCreateTable) -> Result<PlanNode> {
         let mut db = self.ctx.get_current_database();
         if create.name.0.is_empty() {
@@ -220,6 +228,7 @@ impl PlanParser {
     }
 
     /// DfDropTable to plan.
+    #[tracing::instrument(level = "debug", skip(self, drop), fields(ctx.id = self.ctx.get_id().as_str()))]
     pub fn sql_drop_table_to_plan(&self, drop: &DfDropTable) -> Result<PlanNode> {
         let mut db = self.ctx.get_current_database();
         if drop.name.0.is_empty() {
@@ -237,6 +246,7 @@ impl PlanParser {
         }))
     }
 
+    #[tracing::instrument(level = "debug", skip(self, table_name, columns, source), fields(ctx.id = self.ctx.get_id().as_str()))]
     fn insert_to_plan(
         &self,
         table_name: &ObjectName,
@@ -339,6 +349,7 @@ impl PlanParser {
     /// Generate a logic plan from an SQL select
     /// For example:
     /// "select sum(number+1)+2, number%3 as id from numbers(10) where number>1 group by id having id>1 order by id desc limit 3"
+    #[tracing::instrument(level = "debug", skip(self, select, limit, order_by), fields(ctx.id = self.ctx.get_id().as_str()))]
     fn select_to_plan(
         &self,
         select: &sqlparser::ast::Select,

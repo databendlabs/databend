@@ -9,22 +9,37 @@ use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Registry;
 
-pub fn init_simple_tracing() {
+pub fn init_default_tracing() {
     static START: Once = Once::new();
 
     START.call_once(|| {
-        // init without span:
-        // fmt::init();
-
-        let fmt_layer = fmt::Layer::default()
-            .with_span_events(fmt::format::FmtSpan::FULL)
-            .with_ansi(false);
-
-        let subscriber = Registry::default()
-            .with(EnvFilter::from_default_env())
-            .with(fmt_layer);
-
-        tracing::subscriber::set_global_default(subscriber)
-            .expect("error setting global tracing subscriber");
+        init_tracing(EnvFilter::from_default_env());
     });
+}
+
+pub fn init_tracing_with_level(level: &str) {
+    static START: Once = Once::new();
+
+    START.call_once(|| {
+        let log_layer_filter = match level.to_lowercase().as_str() {
+            "warn" => EnvFilter::try_new("warn").unwrap(),
+            "info" => EnvFilter::try_new("info").unwrap(),
+            "debug" => EnvFilter::try_new("debug,hyper::proto::h1=info,h2=info").unwrap(),
+            _ => EnvFilter::try_new("trace,hyper::proto::h1=info,h2=info").unwrap(),
+        };
+
+        init_tracing(log_layer_filter);
+    });
+}
+
+fn init_tracing(filter: EnvFilter) {
+    let fmt_layer = fmt::Layer::default()
+        .with_thread_ids(true)
+        .with_ansi(false)
+        .with_span_events(fmt::format::FmtSpan::FULL);
+
+    let subscriber = Registry::default().with(filter).with(fmt_layer);
+
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("error setting global tracing subscriber");
 }

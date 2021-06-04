@@ -21,7 +21,6 @@ pub struct CreateDatabaseInterpreter {
 }
 
 impl CreateDatabaseInterpreter {
-    #[tracing::instrument(level = "debug", skip(ctx, plan), fields(ctx.id = ctx.get_id().as_str()))]
     pub fn try_create(
         ctx: FuseQueryContextRef,
         plan: CreateDatabasePlan,

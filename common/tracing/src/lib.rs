@@ -4,5 +4,6 @@
 
 mod logging;
 
-pub use logging::init_simple_tracing;
+pub use logging::init_default_tracing;
+pub use logging::init_tracing_with_level;
 pub use tracing;
