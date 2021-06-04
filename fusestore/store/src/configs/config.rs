@@ -25,4 +25,27 @@ pub struct Config {
         default_value = "127.0.0.1:9191"
     )]
     pub flight_api_address: String,
+
+    #[structopt(
+        long,
+        env = "FUSE_STORE_META_API_HOST",
+        default_value = "127.0.0.1",
+        help = "The listening host for metadata communication"
+    )]
+    pub meta_api_host: String,
+
+    #[structopt(
+        long,
+        env = "FUSE_STORE_META_API_PORT",
+        default_value = "9291",
+        help = "The listening port for metadata communication"
+    )]
+    pub meta_api_port: u32,
+
+    #[structopt(
+        long,
+        env = "FUSE_STORE_BOOT",
+        help = "Whether to boot up a new cluster. If already booted, it is ignored"
+    )]
+    pub boot: bool,
 }
