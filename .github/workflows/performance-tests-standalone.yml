@@ -62,10 +62,10 @@ jobs:
       - name: Build native release
         if: steps.check.outputs.triggered == 'true'
         run: |
-          bash ./scripts/ci/ci-native-release-build.sh
+          bash ./scripts/build/build-release.sh
 
       - name: Run Performance Tests with Standalone mode
         if: steps.check.outputs.triggered == 'true'
         run: |
-          bash ./scripts/ci/ci-performance-tests-standalone.sh
+          bash ./scripts/ci/ci-run-performance-tests-standalone.sh
           
