@@ -13,8 +13,8 @@ use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DropDatabaseInterpreter;
 use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::ExplainInterpreter;
-use crate::interpreters::IInterpreter;
 use crate::interpreters::InsertIntoInterpreter;
+use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::interpreters::SettingInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
@@ -23,7 +23,7 @@ use crate::sessions::FuseQueryContextRef;
 pub struct InterpreterFactory;
 
 impl InterpreterFactory {
-    pub fn get(ctx: FuseQueryContextRef, plan: PlanNode) -> Result<Arc<dyn IInterpreter>> {
+    pub fn get(ctx: FuseQueryContextRef, plan: PlanNode) -> Result<Arc<dyn Interpreter>> {
         match plan {
             PlanNode::Select(v) => SelectInterpreter::try_create(ctx, v),
             PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx, v),

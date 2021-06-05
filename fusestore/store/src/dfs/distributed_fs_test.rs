@@ -11,7 +11,7 @@ use tempfile::tempdir;
 use tempfile::TempDir;
 
 use crate::dfs::Dfs;
-use crate::fs::IFileSystem;
+use crate::fs::FileSystem;
 use crate::localfs::LocalFS;
 use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;

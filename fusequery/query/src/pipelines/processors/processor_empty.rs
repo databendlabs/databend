@@ -11,7 +11,7 @@ use common_exception::Result;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 
 pub struct EmptyProcessor {}
 
@@ -22,7 +22,7 @@ impl EmptyProcessor {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for EmptyProcessor {
+impl Processor for EmptyProcessor {
     fn name(&self) -> &str {
         "EmptyProcessor"
     }
@@ -33,7 +33,7 @@ impl IProcessor for EmptyProcessor {
         ))
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![Arc::new(EmptyProcessor::create())]
     }
 

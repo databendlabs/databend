@@ -9,7 +9,7 @@ use common_planners::DropDatabasePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::IInterpreter;
+use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::FuseQueryContextRef;
 
@@ -25,7 +25,7 @@ impl DropDatabaseInterpreter {
 }
 
 #[async_trait::async_trait]
-impl IInterpreter for DropDatabaseInterpreter {
+impl Interpreter for DropDatabaseInterpreter {
     fn name(&self) -> &str {
         "DropDatabaseInterpreter"
     }

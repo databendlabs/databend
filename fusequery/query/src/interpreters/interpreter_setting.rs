@@ -12,7 +12,7 @@ use common_planners::SettingPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::IInterpreter;
+use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::FuseQueryContextRef;
 
@@ -28,7 +28,7 @@ impl SettingInterpreter {
 }
 
 #[async_trait::async_trait]
-impl IInterpreter for SettingInterpreter {
+impl Interpreter for SettingInterpreter {
     fn name(&self) -> &str {
         "SettingInterpreter"
     }

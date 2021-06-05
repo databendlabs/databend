@@ -15,11 +15,11 @@ use log::debug;
 use log::error;
 use msql_srv::*;
 
-use crate::servers::mysql::endpoints::IMySQLEndpoint;
+use crate::servers::mysql::endpoints::MySQLEndpoint;
 
 struct MySQLOnQueryEndpoint;
 
-impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOnQueryEndpoint {
+impl<'a, T: std::io::Write> MySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOnQueryEndpoint {
     type Input = Vec<DataBlock>;
 
     fn ok(blocks: Self::Input, dataset_writer: QueryResultWriter<'a, T>) -> Result<()> {

@@ -11,7 +11,7 @@ use common_exception::exception;
 use common_exception::ErrorCode;
 use common_tracing::tracing;
 
-use crate::fs::IFileSystem;
+use crate::fs::FileSystem;
 use crate::fs::ListResult;
 use crate::localfs::LocalFS;
 use crate::meta_service::ClientRequest;
@@ -43,7 +43,7 @@ impl Dfs {
 impl Dfs {}
 
 #[async_trait]
-impl IFileSystem for Dfs {
+impl FileSystem for Dfs {
     #[tracing::instrument(level = "debug", skip(self, data))]
     async fn add(&self, path: &str, data: &[u8]) -> anyhow::Result<()> {
         // add the file to local fs

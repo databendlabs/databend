@@ -16,13 +16,13 @@ use common_streams::SortStream;
 use common_tracing::tracing;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 
 pub struct SortPartialTransform {
     schema: DataSchemaRef,
     exprs: Vec<Expression>,
     limit: Option<usize>,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn Processor>,
 }
 
 impl SortPartialTransform {
@@ -41,17 +41,17 @@ impl SortPartialTransform {
 }
 
 #[async_trait]
-impl IProcessor for SortPartialTransform {
+impl Processor for SortPartialTransform {
     fn name(&self) -> &str {
         "SortPartialTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![self.input.clone()]
     }
 

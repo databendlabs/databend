@@ -15,8 +15,8 @@ use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_unary_arguments;
+use crate::AggregateFunction;
 use crate::AggregateSumFunction;
-use crate::IAggregateFunction;
 
 #[derive(Clone)]
 pub struct AggregateAvgFunction {
@@ -29,7 +29,7 @@ impl AggregateAvgFunction {
     pub fn try_create(
         display_name: &str,
         arguments: Vec<DataField>,
-    ) -> Result<Box<dyn IAggregateFunction>> {
+    ) -> Result<Box<dyn AggregateFunction>> {
         assert_unary_arguments(display_name, arguments.len())?;
 
         Ok(Box::new(AggregateAvgFunction {
@@ -40,7 +40,7 @@ impl AggregateAvgFunction {
     }
 }
 
-impl IAggregateFunction for AggregateAvgFunction {
+impl AggregateFunction for AggregateAvgFunction {
     fn name(&self) -> &str {
         "AggregateAvgFunction"
     }

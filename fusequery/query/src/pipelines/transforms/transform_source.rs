@@ -11,7 +11,7 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct SourceTransform {
@@ -38,7 +38,7 @@ impl SourceTransform {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for SourceTransform {
+impl Processor for SourceTransform {
     fn name(&self) -> &str {
         "SourceTransform"
     }
@@ -49,7 +49,7 @@ impl IProcessor for SourceTransform {
         ))
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![Arc::new(EmptyProcessor::create())]
     }
 
