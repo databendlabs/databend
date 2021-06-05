@@ -6,6 +6,7 @@
 use log::info;
 use pretty_assertions::assert_eq;
 
+use crate::meta_service::raftmeta_test::assert_connection;
 use crate::meta_service::ClientRequest;
 use crate::meta_service::ClientResponse;
 use crate::meta_service::Cmd;
@@ -15,10 +16,82 @@ use crate::meta_service::MetaServiceClient;
 use crate::tests::rand_local_addr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_server_set_get() -> anyhow::Result<()> {
+async fn test_meta_server_add_file() -> anyhow::Result<()> {
     let addr = rand_local_addr();
 
     let _mn = MetaNode::boot(0, addr.clone()).await?;
+    assert_connection(&addr).await?;
+
+    let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
+
+    let cases = crate::meta_service::raftmeta_test::cases_add_file();
+
+    for (name, txid, k, v, want_prev, want_rst) in cases.iter() {
+        let req = ClientRequest {
+            txid: txid.clone(),
+            cmd: Cmd::AddFile {
+                key: k.to_string(),
+                value: v.to_string(),
+            },
+        };
+        let rst = client.write(req).await?.into_inner();
+        let resp: ClientResponse = rst.into();
+        match resp {
+            ClientResponse::String { prev, result } => {
+                assert_eq!(*want_prev, prev, "{}", name);
+                assert_eq!(*want_rst, result, "{}", name);
+            }
+            _ => {
+                panic!("not String")
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_server_sed_file() -> anyhow::Result<()> {
+    let addr = rand_local_addr();
+
+    let _mn = MetaNode::boot(0, addr.clone()).await?;
+    assert_connection(&addr).await?;
+
+    let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
+
+    let cases = crate::meta_service::raftmeta_test::cases_set_file();
+
+    for (name, txid, k, v, want_prev, want_rst) in cases.iter() {
+        let req = ClientRequest {
+            txid: txid.clone(),
+            cmd: Cmd::SetFile {
+                key: k.to_string(),
+                value: v.to_string(),
+            },
+        };
+        let rst = client.write(req).await?.into_inner();
+        let resp: ClientResponse = rst.into();
+        match resp {
+            ClientResponse::String { prev, result } => {
+                assert_eq!(*want_prev, prev, "{}", name);
+                assert_eq!(*want_rst, result, "{}", name);
+            }
+            _ => {
+                panic!("not String")
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
+    // Test Cmd::AddFile, Cmd::SetFile, Cma::GetFile
+    let addr = rand_local_addr();
+
+    let _mn = MetaNode::boot(0, addr.clone()).await?;
+    assert_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
@@ -104,6 +177,7 @@ async fn test_meta_server_incr_seq() -> anyhow::Result<()> {
     let addr = rand_local_addr();
 
     let _mn = MetaNode::boot(0, addr.clone()).await?;
+    assert_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
