@@ -4,7 +4,7 @@
 use pretty_assertions::assert_eq;
 use tempfile::tempdir;
 
-use crate::fs::IFileSystem;
+use crate::fs::FileSystem;
 use crate::fs::ListResult;
 use crate::localfs::LocalFS;
 

@@ -4,8 +4,8 @@
 
 use common_exception::ErrorCodes;
 use common_exception::Result;
+use common_functions::Function;
 use common_functions::FunctionFactory;
-use common_functions::IFunction;
 
 use crate::Expression;
 use crate::ExpressionVisitor;
@@ -45,7 +45,7 @@ where F: Fn(&Expression) -> Result<()>
     }
 }
 
-fn validate_function_arg(func: Box<dyn IFunction>, args: &[Expression]) -> Result<()> {
+fn validate_function_arg(func: Box<dyn Function>, args: &[Expression]) -> Result<()> {
     match func.variadic_arguments() {
         Some((start, end)) => {
             return if args.len() < start || args.len() > end {

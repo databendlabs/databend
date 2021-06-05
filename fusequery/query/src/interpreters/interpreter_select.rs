@@ -12,9 +12,9 @@ use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::plan_scheduler::PlanScheduler;
-use crate::interpreters::IInterpreter;
+use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::optimizers::Optimizer;
+use crate::optimizers::Optimizers;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
 
@@ -30,7 +30,7 @@ impl SelectInterpreter {
 }
 
 #[async_trait::async_trait]
-impl IInterpreter for SelectInterpreter {
+impl Interpreter for SelectInterpreter {
     fn name(&self) -> &str {
         "SelectInterpreter"
     }
@@ -40,7 +40,7 @@ impl IInterpreter for SelectInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let plan = Optimizer::create(self.ctx.clone()).optimize(&self.select.input)?;
+        let plan = Optimizers::create(self.ctx.clone()).optimize(&self.select.input)?;
 
         let scheduled_actions = PlanScheduler::reschedule(self.ctx.clone(), &plan)?;
 

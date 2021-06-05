@@ -14,12 +14,12 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct MergeProcessor {
     ctx: FuseQueryContextRef,
-    inputs: Vec<Arc<dyn IProcessor>>,
+    inputs: Vec<Arc<dyn Processor>>,
 }
 
 impl MergeProcessor {
@@ -32,17 +32,17 @@ impl MergeProcessor {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for MergeProcessor {
+impl Processor for MergeProcessor {
     fn name(&self) -> &str {
         "MergeProcessor"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         self.inputs.push(input);
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         self.inputs.clone()
     }
 

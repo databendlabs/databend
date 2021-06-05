@@ -18,7 +18,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::datasources::local::CsvTableStream;
 use crate::datasources::Common;
-use crate::datasources::ITable;
+use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct CsvTable {
@@ -35,7 +35,7 @@ impl CsvTable {
         name: String,
         schema: DataSchemaRef,
         options: TableOptions,
-    ) -> Result<Box<dyn ITable>> {
+    ) -> Result<Box<dyn Table>> {
         let has_header = options.get("has_header").is_some();
         let file = match options.get("location") {
             None => {
@@ -57,7 +57,7 @@ impl CsvTable {
 }
 
 #[async_trait::async_trait]
-impl ITable for CsvTable {
+impl Table for CsvTable {
     fn name(&self) -> &str {
         &self.name
     }

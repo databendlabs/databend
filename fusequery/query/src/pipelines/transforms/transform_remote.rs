@@ -11,7 +11,7 @@ use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct RemoteTransform {
@@ -38,18 +38,18 @@ impl RemoteTransform {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for RemoteTransform {
+impl Processor for RemoteTransform {
     fn name(&self) -> &str {
         "RemoteTransform"
     }
 
-    fn connect_to(&mut self, _input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, _input: Arc<dyn Processor>) -> Result<()> {
         Result::Err(ErrorCodes::LogicalError(
             "Cannot call RemoteTransform connect_to",
         ))
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![Arc::new(EmptyProcessor::create())]
     }
 

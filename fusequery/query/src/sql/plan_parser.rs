@@ -40,7 +40,7 @@ use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 
 use super::expr_common::rebase_expr_from_input;
-use crate::datasources::ITable;
+use crate::datasources::Table;
 use crate::functions::ContextFunction;
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::expr_common::expand_aggregate_arg_exprs;
@@ -563,10 +563,10 @@ impl PlanParser {
     }
 
     fn create_relation(&self, relation: &sqlparser::ast::TableFactor) -> Result<PlanNode> {
-        use sqlparser::ast::TableFactor::*;
+        use sqlparser::ast::TableFactor as Ast;
 
         match relation {
-            Table { name, args, .. } => {
+            Ast::Table { name, args, .. } => {
                 let mut db_name = self.ctx.get_current_database();
                 let mut table_name = name.to_string();
                 if name.0.len() == 2 {
@@ -574,7 +574,7 @@ impl PlanParser {
                     table_name = name.0[1].to_string();
                 }
                 let mut table_args = None;
-                let table: Arc<dyn ITable>;
+                let table: Arc<dyn Table>;
 
                 // only table functions has table args
                 if !args.is_empty() {
@@ -626,9 +626,9 @@ impl PlanParser {
                     _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan"),
                 })
             }
-            Derived { subquery, .. } => self.query_to_plan(subquery),
-            NestedJoin(table_with_joins) => self.plan_table_with_joins(table_with_joins),
-            TableFunction { .. } => {
+            Ast::Derived { subquery, .. } => self.query_to_plan(subquery),
+            Ast::NestedJoin(table_with_joins) => self.plan_table_with_joins(table_with_joins),
+            Ast::TableFunction { .. } => {
                 Result::Err(ErrorCodes::UnImplement("Unsupported table function"))
             }
         }

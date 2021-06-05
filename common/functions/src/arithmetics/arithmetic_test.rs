@@ -29,7 +29,7 @@ fn test_arithmetic_function() -> Result<()> {
         columns: Vec<DataColumnarValue>,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>,
+        func: Box<dyn Function>,
     }
 
     let schema = DataSchemaRefExt::create(vec![

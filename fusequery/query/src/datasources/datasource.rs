@@ -20,32 +20,14 @@ use crate::datasources::remote::RemoteDatabase;
 use crate::datasources::remote::RemoteFactory;
 use crate::datasources::remote::RemoteTable;
 use crate::datasources::system::SystemFactory;
-use crate::datasources::IDatabase;
-use crate::datasources::ITable;
-use crate::datasources::ITableFunction;
-
-#[async_trait::async_trait]
-pub trait IDataSource: Sync + Send {
-    fn get_database(&self, db_name: &str) -> Result<Arc<dyn IDatabase>>;
-    fn get_databases(&self) -> Result<Vec<String>>;
-    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>>;
-    fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>>;
-    fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>>;
-    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
-    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
-
-    // This is an adhoc solution for the metadata syncing problem, far from elegant. let's tweak this later.
-    //
-    // The reason of not extending IDataSource::get_table (e.g. by adding a remote_hint parameter):
-    // Implementation of fetching remote table involves async operations which is not
-    // straight forward (but not infeasible) to do in a non-async method.
-    async fn get_remote_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>>;
-}
+use crate::datasources::Database;
+use crate::datasources::Table;
+use crate::datasources::TableFunction;
 
 // Maintain all the databases of user.
 pub struct DataSource {
-    databases: RwLock<HashMap<String, Arc<dyn IDatabase>>>,
-    table_functions: RwLock<HashMap<String, Arc<dyn ITableFunction>>>,
+    databases: RwLock<HashMap<String, Arc<dyn Database>>>,
+    table_functions: RwLock<HashMap<String, Arc<dyn TableFunction>>>,
     remote_factory: RemoteFactory,
 }
 
@@ -69,7 +51,7 @@ impl DataSource {
         Ok(datasource)
     }
 
-    fn insert_databases(&mut self, databases: Vec<Arc<dyn IDatabase>>) -> Result<()> {
+    fn insert_databases(&mut self, databases: Vec<Arc<dyn Database>>) -> Result<()> {
         let mut db_lock = self.databases.write();
         for database in databases {
             db_lock.insert(database.name().to_lowercase(), database.clone());
@@ -112,9 +94,8 @@ impl DataSource {
     }
 }
 
-#[async_trait::async_trait]
-impl IDataSource for DataSource {
-    fn get_database(&self, db_name: &str) -> Result<Arc<dyn IDatabase>> {
+impl DataSource {
+    pub fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
         let db_lock = self.databases.read();
         let database = db_lock.get(db_name).ok_or_else(|| {
             ErrorCodes::UnknownDatabase(format!("Unknown database: '{}'", db_name))
@@ -122,7 +103,7 @@ impl IDataSource for DataSource {
         Ok(database.clone())
     }
 
-    fn get_databases(&self) -> Result<Vec<String>> {
+    pub fn get_databases(&self) -> Result<Vec<String>> {
         let mut results = vec![];
         for (k, _v) in self.databases.read().iter() {
             results.push(k.clone());
@@ -130,7 +111,7 @@ impl IDataSource for DataSource {
         Ok(results)
     }
 
-    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
+    pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
         let db_lock = self.databases.read();
         let database = db_lock.get(db_name).ok_or_else(|| {
             ErrorCodes::UnknownDatabase(format!("Unknown database: '{}'", db_name))
@@ -140,7 +121,11 @@ impl IDataSource for DataSource {
         Ok(table.clone())
     }
 
-    async fn get_remote_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
+    pub async fn get_remote_table(
+        &self,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
         match self.get_table(db_name, table_name) {
             Ok(t) if t.is_local() => Err(ErrorCodes::LogicalError(format!(
                 "local table {}.{} exists, which is used as remote",
@@ -170,7 +155,7 @@ impl IDataSource for DataSource {
         }
     }
 
-    fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn ITable>)>> {
+    pub fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn Table>)>> {
         let mut results = vec![];
         for (k, v) in self.databases.read().iter() {
             let tables = v.get_tables()?;
@@ -181,7 +166,7 @@ impl IDataSource for DataSource {
         Ok(results)
     }
 
-    fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>> {
+    pub fn get_table_function(&self, name: &str) -> Result<Arc<dyn TableFunction>> {
         let table_func_lock = self.table_functions.read();
         let table = table_func_lock.get(name).ok_or_else(|| {
             ErrorCodes::UnknownTableFunction(format!("Unknown table function: '{}'", name))
@@ -190,7 +175,7 @@ impl IDataSource for DataSource {
         Ok(table.clone())
     }
 
-    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
+    pub async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
         let db_name = plan.db.as_str();
         if self.databases.read().get(db_name).is_some() {
             return if plan.if_not_exists {
@@ -228,7 +213,7 @@ impl IDataSource for DataSource {
         Ok(())
     }
 
-    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
+    pub async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
         let db_name = plan.db.as_str();
         if self.databases.read().get(db_name).is_none() {
             return if plan.if_exists {

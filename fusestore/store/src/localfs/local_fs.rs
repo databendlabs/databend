@@ -12,7 +12,7 @@ use common_exception::exception;
 use common_exception::ErrorCodes;
 use common_exception::ToErrorCodes;
 
-use crate::fs::IFileSystem;
+use crate::fs::FileSystem;
 use crate::fs::ListResult;
 
 pub struct LocalFS {
@@ -30,7 +30,7 @@ impl LocalFS {
 }
 
 #[async_trait]
-impl IFileSystem for LocalFS {
+impl FileSystem for LocalFS {
     #[tracing::instrument(level = "debug", skip(self, data))]
     async fn add(&self, path: String, data: &[u8]) -> anyhow::Result<()> {
         // TODO: test atomicity: write temp file and rename it

@@ -10,11 +10,11 @@ use common_streams::LimitStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 
 pub struct LimitTransform {
     limit: usize,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn Processor>,
 }
 
 impl LimitTransform {
@@ -27,17 +27,17 @@ impl LimitTransform {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for LimitTransform {
+impl Processor for LimitTransform {
     fn name(&self) -> &str {
         "LimitTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![self.input.clone()]
     }
 

@@ -8,9 +8,9 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
-use crate::pipelines::processors::IProcessor;
 use crate::pipelines::processors::MergeProcessor;
 use crate::pipelines::processors::Pipe;
+use crate::pipelines::processors::Processor;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct Pipeline {
@@ -51,7 +51,7 @@ impl Pipeline {
             .ok_or_else(|| ErrorCodes::IllegalPipelineState("Pipeline last pipe can not be none"))
     }
 
-    pub fn add_source(&mut self, source: Arc<dyn IProcessor>) -> Result<()> {
+    pub fn add_source(&mut self, source: Arc<dyn Processor>) -> Result<()> {
         if self.pipes.first().is_none() {
             let mut first = Pipe::create();
             first.add(source);
@@ -72,7 +72,7 @@ impl Pipeline {
     ///
     pub fn add_simple_transform(
         &mut self,
-        f: impl Fn() -> Result<Box<dyn IProcessor>>,
+        f: impl Fn() -> Result<Box<dyn Processor>>,
     ) -> Result<()> {
         let last_pipe = self.last_pipe()?;
         let mut new_pipe = Pipe::create();

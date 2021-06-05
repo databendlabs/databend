@@ -28,6 +28,6 @@ pub use pipe::Pipe;
 pub use pipeline::Pipeline;
 pub use pipeline_builder::PipelineBuilder;
 pub use processor::FormatterSettings;
-pub use processor::IProcessor;
+pub use processor::Processor;
 pub use processor_empty::EmptyProcessor;
 pub use processor_merge::MergeProcessor;

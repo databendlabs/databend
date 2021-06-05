@@ -23,9 +23,8 @@ use uuid::Uuid;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterRef;
 use crate::datasources::DataSource;
-use crate::datasources::IDataSource;
-use crate::datasources::ITable;
-use crate::datasources::ITableFunction;
+use crate::datasources::Table;
+use crate::datasources::TableFunction;
 use crate::sessions::Settings;
 
 #[derive(Clone)]
@@ -33,7 +32,7 @@ pub struct FuseQueryContext {
     uuid: Arc<RwLock<String>>,
     settings: Settings,
     cluster: Arc<RwLock<ClusterRef>>,
-    datasource: Arc<dyn IDataSource>,
+    datasource: Arc<DataSource>,
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Partition>>>,
     current_database: Arc<RwLock<String>>,
@@ -158,11 +157,11 @@ impl FuseQueryContext {
         Ok(cluster.clone())
     }
 
-    pub fn get_datasource(&self) -> Arc<dyn IDataSource> {
+    pub fn get_datasource(&self) -> Arc<DataSource> {
         self.datasource.clone()
     }
 
-    pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
+    pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
         self.datasource.get_table(db_name, table_name)
     }
 
@@ -175,11 +174,11 @@ impl FuseQueryContext {
         &self,
         db_name: &str,
         table_name: &str,
-    ) -> Result<Arc<dyn ITable>> {
+    ) -> Result<Arc<dyn Table>> {
         self.datasource.get_remote_table(db_name, table_name).await
     }
 
-    pub fn get_table_function(&self, function_name: &str) -> Result<Arc<dyn ITableFunction>> {
+    pub fn get_table_function(&self, function_name: &str) -> Result<Arc<dyn TableFunction>> {
         self.datasource.get_table_function(function_name)
     }
 

@@ -6,7 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_aggregate_functions::IAggregateFunction;
+use common_aggregate_functions::AggregateFunction;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataSchemaRef;
@@ -20,14 +20,14 @@ use futures::stream::StreamExt;
 use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 
 pub struct AggregatorPartialTransform {
-    funcs: Vec<Box<dyn IAggregateFunction>>,
+    funcs: Vec<Box<dyn AggregateFunction>>,
     arg_names: Vec<Vec<String>>,
 
     schema: DataSchemaRef,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn Processor>,
 }
 
 impl AggregatorPartialTransform {
@@ -56,17 +56,17 @@ impl AggregatorPartialTransform {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for AggregatorPartialTransform {
+impl Processor for AggregatorPartialTransform {
     fn name(&self) -> &str {
         "AggregatorPartialTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![self.input.clone()]
     }
 

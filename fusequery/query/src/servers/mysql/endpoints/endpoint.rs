@@ -5,7 +5,7 @@
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
-pub trait IMySQLEndpoint<Writer> {
+pub trait MySQLEndpoint<Writer> {
     type Input;
 
     fn ok(data: Self::Input, writer: Writer) -> Result<()>;

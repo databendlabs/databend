@@ -26,7 +26,7 @@ use crossbeam::channel::Receiver;
 use crossbeam::channel::Sender;
 use tokio::task;
 
-use crate::datasources::ITable;
+use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ParquetTable {
@@ -42,7 +42,7 @@ impl ParquetTable {
         name: String,
         schema: DataSchemaRef,
         options: TableOptions,
-    ) -> Result<Box<dyn ITable>> {
+    ) -> Result<Box<dyn Table>> {
         let file = options.get("location");
         return match file {
             Some(file) => {
@@ -102,7 +102,7 @@ fn read_file(
 }
 
 #[async_trait::async_trait]
-impl ITable for ParquetTable {
+impl Table for ParquetTable {
     fn name(&self) -> &str {
         &self.name
     }

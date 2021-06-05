@@ -22,7 +22,7 @@ use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::datasources::ITable;
+use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct FunctionsTable {
@@ -41,7 +41,7 @@ impl FunctionsTable {
 }
 
 #[async_trait::async_trait]
-impl ITable for FunctionsTable {
+impl Table for FunctionsTable {
     fn name(&self) -> &str {
         "functions"
     }

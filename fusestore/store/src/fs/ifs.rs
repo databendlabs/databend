@@ -9,7 +9,7 @@ use crate::fs::ListResult;
 
 /// Abstract storage layer API.
 #[async_trait]
-pub trait IFileSystem
+pub trait FileSystem
 where Self: Sync + Send
 {
     /// Add file atomically.

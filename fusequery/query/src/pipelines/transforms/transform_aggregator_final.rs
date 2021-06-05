@@ -6,7 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_aggregate_functions::IAggregateFunction;
+use common_aggregate_functions::AggregateFunction;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
@@ -18,12 +18,12 @@ use futures::stream::StreamExt;
 use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 
 pub struct AggregatorFinalTransform {
-    funcs: Vec<Box<dyn IAggregateFunction>>,
+    funcs: Vec<Box<dyn AggregateFunction>>,
     schema: DataSchemaRef,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn Processor>,
 }
 
 impl AggregatorFinalTransform {
@@ -45,17 +45,17 @@ impl AggregatorFinalTransform {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for AggregatorFinalTransform {
+impl Processor for AggregatorFinalTransform {
     fn name(&self) -> &str {
         "AggregatorFinalTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![self.input.clone()]
     }
 

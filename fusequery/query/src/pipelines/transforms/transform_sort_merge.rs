@@ -15,14 +15,14 @@ use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::transform_sort_partial::get_sort_descriptions;
 
 pub struct SortMergeTransform {
     schema: DataSchemaRef,
     exprs: Vec<Expression>,
     limit: Option<usize>,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn Processor>,
 }
 
 impl SortMergeTransform {
@@ -41,17 +41,17 @@ impl SortMergeTransform {
 }
 
 #[async_trait]
-impl IProcessor for SortMergeTransform {
+impl Processor for SortMergeTransform {
     fn name(&self) -> &str {
         "SortMergeTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![self.input.clone()]
     }
 

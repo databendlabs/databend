@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_aggregate_functions::IAggregateFunction;
+use common_aggregate_functions::AggregateFunction;
 use common_arrow::arrow::array::BinaryBuilder;
 use common_arrow::arrow::array::StringBuilder;
 use common_datablocks::DataBlock;
@@ -25,14 +25,14 @@ use futures::stream::StreamExt;
 use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 
 // Table for <group_key, ((function, column_name, args), keys) >
 type GroupFuncTable = RwLock<
     HashMap<
         Vec<u8>,
         (
-            Vec<(Box<dyn IAggregateFunction>, String, Vec<String>)>,
+            Vec<(Box<dyn AggregateFunction>, String, Vec<String>)>,
             Vec<DataValue>,
         ),
         ahash::RandomState,
@@ -44,7 +44,7 @@ pub struct GroupByPartialTransform {
     group_exprs: Vec<Expression>,
     schema: DataSchemaRef,
     schema_before_groupby: DataSchemaRef,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn Processor>,
     groups: GroupFuncTable,
 }
 
@@ -67,17 +67,17 @@ impl GroupByPartialTransform {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for GroupByPartialTransform {
+impl Processor for GroupByPartialTransform {
     fn name(&self) -> &str {
         "GroupByPartialTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![self.input.clone()]
     }
 

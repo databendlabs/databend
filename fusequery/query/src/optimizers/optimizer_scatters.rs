@@ -15,7 +15,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
 
-use crate::optimizers::IOptimizer;
+use crate::optimizers::Optimizer;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ScattersOptimizer {
@@ -155,7 +155,7 @@ impl ScattersOptimizer {
     }
 }
 
-impl IOptimizer for ScattersOptimizer {
+impl Optimizer for ScattersOptimizer {
     fn name(&self) -> &str {
         "Scatters"
     }

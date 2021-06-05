@@ -20,7 +20,7 @@ use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::datasources::ITable;
+use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct SettingsTable {
@@ -41,7 +41,7 @@ impl SettingsTable {
 }
 
 #[async_trait::async_trait]
-impl ITable for SettingsTable {
+impl Table for SettingsTable {
     fn name(&self) -> &str {
         "settings"
     }

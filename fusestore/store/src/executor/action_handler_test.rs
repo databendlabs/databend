@@ -15,7 +15,7 @@ use tokio::sync::mpsc::Sender;
 
 use crate::dfs::Dfs;
 use crate::executor::ActionHandler;
-use crate::fs::IFileSystem;
+use crate::fs::FileSystem;
 use crate::localfs::LocalFS;
 use crate::meta_service::MetaNode;
 use crate::tests::rand_local_addr;

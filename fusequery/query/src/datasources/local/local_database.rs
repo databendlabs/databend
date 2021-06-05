@@ -15,12 +15,12 @@ use common_planners::TableEngineType;
 use crate::datasources::local::CsvTable;
 use crate::datasources::local::NullTable;
 use crate::datasources::local::ParquetTable;
-use crate::datasources::IDatabase;
-use crate::datasources::ITable;
-use crate::datasources::ITableFunction;
+use crate::datasources::Database;
+use crate::datasources::Table;
+use crate::datasources::TableFunction;
 
 pub struct LocalDatabase {
-    tables: RwLock<HashMap<String, Arc<dyn ITable>>>,
+    tables: RwLock<HashMap<String, Arc<dyn Table>>>,
 }
 
 impl LocalDatabase {
@@ -32,7 +32,7 @@ impl LocalDatabase {
 }
 
 #[async_trait::async_trait]
-impl IDatabase for LocalDatabase {
+impl Database for LocalDatabase {
     fn name(&self) -> &str {
         "local"
     }
@@ -45,7 +45,7 @@ impl IDatabase for LocalDatabase {
         true
     }
 
-    fn get_table(&self, table_name: &str) -> Result<Arc<dyn ITable>> {
+    fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let table_lock = self.tables.read();
         let table = table_lock
             .get(table_name)
@@ -53,11 +53,11 @@ impl IDatabase for LocalDatabase {
         Ok(table.clone())
     }
 
-    fn get_tables(&self) -> Result<Vec<Arc<dyn ITable>>> {
+    fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         Ok(self.tables.read().values().cloned().collect())
     }
 
-    fn get_table_functions(&self) -> Result<Vec<Arc<dyn ITableFunction>>> {
+    fn get_table_functions(&self) -> Result<Vec<Arc<dyn TableFunction>>> {
         Ok(vec![])
     }
 

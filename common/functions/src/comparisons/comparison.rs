@@ -18,7 +18,7 @@ use crate::comparisons::ComparisonLtEqFunction;
 use crate::comparisons::ComparisonLtFunction;
 use crate::comparisons::ComparisonNotEqFunction;
 use crate::FactoryFuncRef;
-use crate::IFunction;
+use crate::Function;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
@@ -39,12 +39,12 @@ impl ComparisonFunction {
         Ok(())
     }
 
-    pub fn try_create_func(op: DataValueComparisonOperator) -> Result<Box<dyn IFunction>> {
+    pub fn try_create_func(op: DataValueComparisonOperator) -> Result<Box<dyn Function>> {
         Ok(Box::new(ComparisonFunction { op }))
     }
 }
 
-impl IFunction for ComparisonFunction {
+impl Function for ComparisonFunction {
     fn name(&self) -> &str {
         "ComparisonFunction"
     }

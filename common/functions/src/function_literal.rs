@@ -10,7 +10,7 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
-use crate::IFunction;
+use crate::Function;
 
 #[derive(Clone, Debug)]
 pub struct LiteralFunction {
@@ -18,12 +18,12 @@ pub struct LiteralFunction {
 }
 
 impl LiteralFunction {
-    pub fn try_create(value: DataValue) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(value: DataValue) -> Result<Box<dyn Function>> {
         Ok(Box::new(LiteralFunction { value }))
     }
 }
 
-impl IFunction for LiteralFunction {
+impl Function for LiteralFunction {
     fn name(&self) -> &str {
         "LiteralFunction"
     }

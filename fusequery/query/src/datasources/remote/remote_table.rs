@@ -19,7 +19,7 @@ use common_planners::TableOptions;
 use common_streams::SendableDataBlockStream;
 
 use crate::datasources::remote::StoreClientProvider;
-use crate::datasources::ITable;
+use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
 
 #[allow(dead_code)]
@@ -37,7 +37,7 @@ impl RemoteTable {
         schema: DataSchemaRef,
         store_client_provider: StoreClientProvider,
         _options: TableOptions,
-    ) -> Result<Box<dyn ITable>> {
+    ) -> Result<Box<dyn Table>> {
         let table = Self {
             db,
             name,
@@ -49,7 +49,7 @@ impl RemoteTable {
 }
 
 #[async_trait::async_trait]
-impl ITable for RemoteTable {
+impl Table for RemoteTable {
     fn name(&self) -> &str {
         &self.name
     }

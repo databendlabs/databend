@@ -14,7 +14,7 @@ use common_datavalues::FuseDataHasher;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
-use crate::IFunction;
+use crate::Function;
 
 #[derive(Clone)]
 pub struct SipHashFunction {
@@ -24,14 +24,14 @@ pub struct SipHashFunction {
 struct SipHasher;
 
 impl SipHashFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(SipHashFunction {
             display_name: display_name.to_string(),
         }))
     }
 }
 
-impl IFunction for SipHashFunction {
+impl Function for SipHashFunction {
     fn name(&self) -> &str {
         "siphash"
     }

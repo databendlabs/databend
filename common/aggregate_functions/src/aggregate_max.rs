@@ -9,7 +9,7 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_unary_arguments;
-use crate::IAggregateFunction;
+use crate::AggregateFunction;
 
 #[derive(Clone)]
 pub struct AggregateMaxFunction {
@@ -22,7 +22,7 @@ impl AggregateMaxFunction {
     pub fn try_create(
         display_name: &str,
         arguments: Vec<DataField>,
-    ) -> Result<Box<dyn IAggregateFunction>> {
+    ) -> Result<Box<dyn AggregateFunction>> {
         assert_unary_arguments(display_name, arguments.len())?;
 
         Ok(Box::new(AggregateMaxFunction {
@@ -33,7 +33,7 @@ impl AggregateMaxFunction {
     }
 }
 
-impl IAggregateFunction for AggregateMaxFunction {
+impl AggregateFunction for AggregateMaxFunction {
     fn name(&self) -> &str {
         "AggregateMaxFunction"
     }

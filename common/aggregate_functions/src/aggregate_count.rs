@@ -14,7 +14,7 @@ use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_variadic_arguments;
-use crate::IAggregateFunction;
+use crate::AggregateFunction;
 
 #[derive(Clone)]
 pub struct AggregateCountFunction {
@@ -27,7 +27,7 @@ impl AggregateCountFunction {
     pub fn try_create(
         display_name: &str,
         arguments: Vec<DataField>,
-    ) -> Result<Box<dyn IAggregateFunction>> {
+    ) -> Result<Box<dyn AggregateFunction>> {
         assert_variadic_arguments(display_name, arguments.len(), (0, 1))?;
 
         Ok(Box::new(AggregateCountFunction {
@@ -38,7 +38,7 @@ impl AggregateCountFunction {
     }
 }
 
-impl IAggregateFunction for AggregateCountFunction {
+impl AggregateFunction for AggregateCountFunction {
     fn name(&self) -> &str {
         "AggregateCountFunction"
     }

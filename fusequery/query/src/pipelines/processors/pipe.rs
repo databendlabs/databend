@@ -4,11 +4,11 @@
 
 use std::sync::Arc;
 
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 
 #[derive(Clone)]
 pub struct Pipe {
-    processors: Vec<Arc<dyn IProcessor>>,
+    processors: Vec<Arc<dyn Processor>>,
 }
 
 impl Pipe {
@@ -24,20 +24,20 @@ impl Pipe {
         self.processors[0].name()
     }
 
-    pub fn processors(&self) -> Vec<Arc<dyn IProcessor>> {
+    pub fn processors(&self) -> Vec<Arc<dyn Processor>> {
         self.processors.clone()
     }
 
-    pub fn processor_by_index(&self, index: usize) -> Arc<dyn IProcessor> {
+    pub fn processor_by_index(&self, index: usize) -> Arc<dyn Processor> {
         self.processors[index].clone()
     }
 
     /// The first processor of the pipe.
-    pub fn first(&self) -> Arc<dyn IProcessor> {
+    pub fn first(&self) -> Arc<dyn Processor> {
         self.processors[0].clone()
     }
 
-    pub fn add(&mut self, processor: Arc<dyn IProcessor>) {
+    pub fn add(&mut self, processor: Arc<dyn Processor>) {
         self.processors.push(processor);
     }
 }

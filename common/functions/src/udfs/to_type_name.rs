@@ -10,7 +10,7 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
-use crate::IFunction;
+use crate::Function;
 
 #[derive(Clone)]
 pub struct ToTypeNameFunction {
@@ -18,14 +18,14 @@ pub struct ToTypeNameFunction {
 }
 
 impl ToTypeNameFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(ToTypeNameFunction {
             display_name: display_name.to_string(),
         }))
     }
 }
 
-impl IFunction for ToTypeNameFunction {
+impl Function for ToTypeNameFunction {
     fn name(&self) -> &str {
         "ToTypeNameFunction"
     }

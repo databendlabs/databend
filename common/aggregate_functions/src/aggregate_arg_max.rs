@@ -13,7 +13,7 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_binary_arguments;
-use crate::IAggregateFunction;
+use crate::AggregateFunction;
 
 #[derive(Clone)]
 pub struct AggregateArgMaxFunction {
@@ -26,7 +26,7 @@ impl AggregateArgMaxFunction {
     pub fn try_create(
         display_name: &str,
         arguments: Vec<DataField>,
-    ) -> Result<Box<dyn IAggregateFunction>> {
+    ) -> Result<Box<dyn AggregateFunction>> {
         assert_binary_arguments(display_name, arguments.len())?;
 
         Ok(Box::new(AggregateArgMaxFunction {
@@ -40,7 +40,7 @@ impl AggregateArgMaxFunction {
     }
 }
 
-impl IAggregateFunction for AggregateArgMaxFunction {
+impl AggregateFunction for AggregateArgMaxFunction {
     fn name(&self) -> &str {
         "AggregateArgMaxFunction"
     }

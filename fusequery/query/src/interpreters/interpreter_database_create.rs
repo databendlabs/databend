@@ -9,7 +9,7 @@ use common_planners::CreateDatabasePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::IInterpreter;
+use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::FuseQueryContextRef;
 
@@ -28,7 +28,7 @@ impl CreateDatabaseInterpreter {
 }
 
 #[async_trait::async_trait]
-impl IInterpreter for CreateDatabaseInterpreter {
+impl Interpreter for CreateDatabaseInterpreter {
     fn name(&self) -> &str {
         "CreateDatabaseInterpreter"
     }

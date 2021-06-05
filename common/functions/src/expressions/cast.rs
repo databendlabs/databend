@@ -11,7 +11,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
 
-use crate::function::IFunction;
+use crate::function::Function;
 
 /// provide Datafuse default cast options
 pub const DEFAULT_DATAFUSE_CAST_OPTIONS: CastOptions = CastOptions { safe: false };
@@ -23,12 +23,12 @@ pub struct CastFunction {
 }
 
 impl CastFunction {
-    pub fn create(cast_type: DataType) -> Box<dyn IFunction> {
+    pub fn create(cast_type: DataType) -> Box<dyn Function> {
         Box::new(Self { cast_type })
     }
 }
 
-impl IFunction for CastFunction {
+impl Function for CastFunction {
     fn name(&self) -> &str {
         "CastFunction"
     }

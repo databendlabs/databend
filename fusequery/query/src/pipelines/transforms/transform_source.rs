@@ -10,7 +10,7 @@ use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct SourceTransform {
@@ -37,18 +37,18 @@ impl SourceTransform {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for SourceTransform {
+impl Processor for SourceTransform {
     fn name(&self) -> &str {
         "SourceTransform"
     }
 
-    fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, _: Arc<dyn Processor>) -> Result<()> {
         Result::Err(ErrorCodes::LogicalError(
             "Cannot call SourceTransform connect_to",
         ))
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![Arc::new(EmptyProcessor::create())]
     }
 

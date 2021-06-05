@@ -10,7 +10,7 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
-use crate::IFunction;
+use crate::Function;
 
 #[derive(Clone, Debug)]
 pub struct ColumnFunction {
@@ -19,7 +19,7 @@ pub struct ColumnFunction {
 }
 
 impl ColumnFunction {
-    pub fn try_create(value: &str) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(value: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(ColumnFunction {
             value: value.to_string(),
             saved: None,
@@ -27,7 +27,7 @@ impl ColumnFunction {
     }
 }
 
-impl IFunction for ColumnFunction {
+impl Function for ColumnFunction {
     fn name(&self) -> &str {
         "ColumnFunction"
     }

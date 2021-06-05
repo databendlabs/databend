@@ -24,7 +24,7 @@ pub use aggregate_arg_max::AggregateArgMaxFunction;
 pub use aggregate_arg_min::AggregateArgMinFunction;
 pub use aggregate_avg::AggregateAvgFunction;
 pub use aggregate_count::AggregateCountFunction;
-pub use aggregate_function::IAggregateFunction;
+pub use aggregate_function::AggregateFunction;
 pub use aggregate_function_factory::AggregateFunctionFactory;
 pub use aggregate_max::AggregateMaxFunction;
 pub use aggregate_min::AggregateMinFunction;
