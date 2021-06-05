@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: "CLA Assistant"
-        if: (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA') || github.event_name == 'pull_request_target'
+        if: (github.event.comment.body == 'recheck' || github.event.comment.body == 'I hereby agree to the terms of the CLA available at{{':'}} https://datafuse.rs/policies/cla/') || github.event_name == 'pull_request_target'
         uses: cla-assistant/github-action@v2.1.3-beta
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -18,8 +18,8 @@ jobs:
           PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         with:
           # You do not need to create this file manually.
-          path-to-signatures: 'cla/signatures/version-1/cla.json'
-          path-to-document: 'https://github.com/datafuselabs/datafuse/blob/master/cla/agreements/DCLA.md'
+          path-to-signatures: 'cla/signatures.json'
+          path-to-document: 'https://datafuse.rs/policies/cla/'
           # branch should not be protected
           branch: 'master'
           allowlist: datafuse-bot,dependabot*
