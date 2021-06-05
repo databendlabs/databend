@@ -13,7 +13,7 @@ use common_datavalues::UInt64Array;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::IFunction;
+use crate::Function;
 
 #[derive(Clone)]
 pub struct SubstringFunction {
@@ -21,14 +21,14 @@ pub struct SubstringFunction {
 }
 
 impl SubstringFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(SubstringFunction {
             display_name: display_name.to_string(),
         }))
     }
 }
 
-impl IFunction for SubstringFunction {
+impl Function for SubstringFunction {
     fn name(&self) -> &str {
         "substring"
     }

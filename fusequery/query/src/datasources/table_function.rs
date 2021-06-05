@@ -4,12 +4,12 @@
 
 use std::sync::Arc;
 
-use crate::datasources::ITable;
+use crate::datasources::Table;
 
-pub trait ITableFunction: Sync + Send + ITable {
+pub trait TableFunction: Sync + Send + Table {
     fn function_name(&self) -> &str;
     fn db(&self) -> &str;
 
-    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn ITable + 'a>
+    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
     where Self: 'a;
 }

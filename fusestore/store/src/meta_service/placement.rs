@@ -23,7 +23,7 @@ use crate::meta_service::Slot;
 ///
 /// A default consistent-hash like impl is provided for most cases.
 /// With this algo user only need to impl two methods: get_slots() and get_node().
-pub trait IPlacement {
+pub trait Placement {
     /// Returns the Node-s that are responsible to store a copy of a file.
     fn nodes_to_store_key(&self, key: &str) -> Vec<Node> {
         let slot_idx = self.slot_index_for_key(key);

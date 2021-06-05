@@ -13,7 +13,7 @@ pub use meta::Meta;
 pub use meta::Node;
 pub use meta::Slot;
 pub use meta_service_impl::MetaServiceImpl;
-pub use placement::IPlacement;
+pub use placement::Placement;
 pub use raftmeta::ClientRequest;
 pub use raftmeta::ClientResponse;
 pub use raftmeta::Cmd;

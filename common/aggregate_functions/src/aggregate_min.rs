@@ -10,7 +10,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_unary_arguments;
-use crate::IAggregateFunction;
+use crate::AggregateFunction;
 
 #[derive(Clone)]
 pub struct AggregateMinFunction {
@@ -23,7 +23,7 @@ impl AggregateMinFunction {
     pub fn try_create(
         display_name: &str,
         arguments: Vec<DataField>,
-    ) -> Result<Box<dyn IAggregateFunction>> {
+    ) -> Result<Box<dyn AggregateFunction>> {
         assert_unary_arguments(display_name, arguments.len())?;
 
         Ok(Box::new(AggregateMinFunction {
@@ -34,7 +34,7 @@ impl AggregateMinFunction {
     }
 }
 
-impl IAggregateFunction for AggregateMinFunction {
+impl AggregateFunction for AggregateMinFunction {
     fn name(&self) -> &str {
         "AggregateMinFunction"
     }

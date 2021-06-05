@@ -22,7 +22,7 @@ fn test_to_type_name_function() -> Result<()> {
         columns: Vec<DataColumnarValue>,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>,
+        func: Box<dyn Function>,
     }
 
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Boolean, false)]);

@@ -12,7 +12,6 @@ use common_planners::Expression;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 
-use crate::datasources::IDataSource;
 use crate::pipelines::transforms::SourceTransform;
 use crate::sessions::FuseQueryContextRef;
 

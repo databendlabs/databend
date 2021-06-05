@@ -9,10 +9,10 @@ use common_exception::Result;
 use common_flights::StoreClient;
 
 use crate::configs::Config;
-use crate::datasources::remote::store_client_provider::IStoreClientProvider;
 use crate::datasources::remote::store_client_provider::StoreClientProvider;
+use crate::datasources::remote::store_client_provider::TryGetStoreClient;
 use crate::datasources::remote::RemoteDatabase;
-use crate::datasources::IDatabase;
+use crate::datasources::Database;
 
 pub struct RemoteFactory {
     store_client_provider: StoreClientProvider,
@@ -25,9 +25,9 @@ impl RemoteFactory {
         }
     }
 
-    pub fn load_databases(&self) -> Result<Vec<Arc<dyn IDatabase>>> {
+    pub fn load_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
         // Load databases from remote.
-        let databases: Vec<Arc<dyn IDatabase>> = vec![Arc::new(RemoteDatabase::create(
+        let databases: Vec<Arc<dyn Database>> = vec![Arc::new(RemoteDatabase::create(
             self.store_client_provider.clone(),
             "for_test".to_string(),
         ))];
@@ -49,7 +49,7 @@ impl ClientProvider {
 }
 
 #[async_trait::async_trait]
-impl IStoreClientProvider for ClientProvider {
+impl TryGetStoreClient for ClientProvider {
     async fn try_get_client(&self) -> Result<StoreClient> {
         let client = StoreClient::try_create(
             &self.conf.store_api_address,

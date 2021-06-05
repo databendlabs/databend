@@ -7,8 +7,7 @@ async fn test_datasource() -> anyhow::Result<()> {
     use common_planners::*;
     use pretty_assertions::assert_eq;
 
-    use crate::datasources::IDataSource;
-    use crate::datasources::*;
+    use crate::datasources::DataSource;
 
     let datasource = DataSource::try_create()?;
 

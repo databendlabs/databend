@@ -12,11 +12,11 @@ use indexmap::IndexMap;
 use lazy_static::lazy_static;
 
 use crate::aggregator::AggregatorFunction;
-use crate::IAggregateFunction;
+use crate::AggregateFunction;
 
 pub struct AggregateFunctionFactory;
 pub type FactoryFunc =
-    fn(name: &str, arguments: Vec<DataField>) -> Result<Box<dyn IAggregateFunction>>;
+    fn(name: &str, arguments: Vec<DataField>) -> Result<Box<dyn AggregateFunction>>;
 
 pub type FactoryCombinatorFunc = fn(
     name: &str,
