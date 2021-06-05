@@ -15,7 +15,6 @@ use crate::meta_service::ClientRequest;
 use crate::meta_service::ClientResponse;
 use crate::meta_service::Cmd;
 use crate::meta_service::GetReq;
-use crate::meta_service::MemStoreStateMachine;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::NodeId;
@@ -390,7 +389,7 @@ async fn assert_get_file(
     Ok(())
 }
 
-async fn assert_connection(addr: &str) -> anyhow::Result<()> {
+pub async fn assert_connection(addr: &str) -> anyhow::Result<()> {
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
     let req = tonic::Request::new(GetReq { key: "foo".into() });

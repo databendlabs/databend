@@ -1,25 +1,13 @@
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
-use std::sync::Arc;
 
-use async_raft::RaftMetrics;
-use async_raft::State;
-use maplit::hashset;
 use pretty_assertions::assert_eq;
-use tokio::sync::watch::Receiver;
-use tokio::time::Duration;
 
 use crate::meta_service::ClientRequest;
 use crate::meta_service::ClientResponse;
 use crate::meta_service::Cmd;
-use crate::meta_service::GetReq;
 use crate::meta_service::MemStoreStateMachine;
-use crate::meta_service::MetaNode;
-use crate::meta_service::MetaServiceClient;
-use crate::meta_service::NodeId;
-use crate::meta_service::RaftTxId;
-use crate::tests::Seq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
