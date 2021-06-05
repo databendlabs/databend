@@ -574,10 +574,8 @@ impl PlanParser {
     }
 
     fn create_relation(&self, relation: &sqlparser::ast::TableFactor) -> Result<PlanNode> {
-        use sqlparser::ast::TableFactor as Ast;
-
         match relation {
-            Ast::Table { name, args, .. } => {
+            TableFactor::Table { name, args, .. } => {
                 let mut db_name = self.ctx.get_current_database();
                 let mut table_name = name.to_string();
                 if name.0.len() == 2 {
