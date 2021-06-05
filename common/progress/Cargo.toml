@@ -8,12 +8,11 @@ edition = "2018"
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-infallible = {path = "../infallible"}
 
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.40"
 
 [dev-dependencies]
+anyhow = "1.0.40"
 pretty_assertions = "0.7"
