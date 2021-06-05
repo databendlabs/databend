@@ -563,10 +563,8 @@ impl PlanParser {
     }
 
     fn create_relation(&self, relation: &sqlparser::ast::TableFactor) -> Result<PlanNode> {
-        use sqlparser::ast::TableFactor as Ast;
-
         match relation {
-            Ast::Table { name, args, .. } => {
+            TableFactor::Table { name, args, .. } => {
                 let mut db_name = self.ctx.get_current_database();
                 let mut table_name = name.to_string();
                 if name.0.len() == 2 {
@@ -626,9 +624,11 @@ impl PlanParser {
                     _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan"),
                 })
             }
-            Ast::Derived { subquery, .. } => self.query_to_plan(subquery),
-            Ast::NestedJoin(table_with_joins) => self.plan_table_with_joins(table_with_joins),
-            Ast::TableFunction { .. } => {
+            TableFactor::Derived { subquery, .. } => self.query_to_plan(subquery),
+            TableFactor::NestedJoin(table_with_joins) => {
+                self.plan_table_with_joins(table_with_joins)
+            }
+            TableFactor::TableFunction { .. } => {
                 Result::Err(ErrorCodes::UnImplement("Unsupported table function"))
             }
         }
