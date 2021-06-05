@@ -9,7 +9,6 @@ edition = "2018"
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-arrow = {path = "../arrow"}
-common-datablocks = {path = "../datablocks"}
 common-datavalues = {path = "../datavalues"}
 common-infallible = {path = "../infallible"}
 common-exception = {path = "../exception"}
@@ -23,4 +22,5 @@ indexmap = "1.6.1"
 lazy_static = "1.4.0"
 
 [dev-dependencies]
+common-datablocks = {path = "../datablocks"}
 pretty_assertions = "0.7"

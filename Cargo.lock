@@ -611,7 +611,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-arrow",
- "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-infallible",
@@ -745,7 +744,6 @@ name = "common-progress"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "common-infallible",
  "pretty_assertions",
 ]
 
@@ -755,7 +753,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-exception",
- "futures",
  "tokio",
 ]
 
@@ -768,7 +765,6 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-functions",
  "common-progress",
  "crossbeam 0.8.1",
  "futures",
