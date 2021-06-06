@@ -114,10 +114,13 @@ Note:
 * [Architecture](https://datafuse.rs/overview/architecture/)
 * [Performance](https://datafuse.rs/overview/performance/)
 
-## Contributing
+## Current roadmap
 
-* [Contribution Guide](https://datafuse.rs/development/contributing/)
-* [Coding Guidelines](https://datafuse.rs/development/coding-guidelines/)
+Datafuse is currently in **Alpha** and is not ready to be used in production.
+
+| Feature                                         | Status    | Release Target | Progress        |  Comments     |
+| ----------------------------------------------- | --------- | -------------- | --------------- | ------------- |
+| Compute&Storage integration | PROGRESS  |  v0.5 | [Track](https://github.com/datafuselabs/datafuse/issues/745) |  |
 
 ## Roadmap
 
@@ -128,11 +131,11 @@ Note:
 - [ ] 0.5 Support join
 - [ ] 1.0 Support TPC-H benchmark
 
-## Release Status
+## Contributing
 
-Datafuse is currently in **Alpha** and is not ready to be used in production.
+* [Contribution Guide](https://datafuse.rs/development/contributing/)
+* [Coding Guidelines](https://datafuse.rs/development/coding-guidelines/)
 
-We are doing our best to release R1.
 
 ## License
 
