@@ -53,6 +53,10 @@ impl Expression {
         binary_expr(self.clone(), "and", other)
     }
 
+    pub fn or(&self, other: Expression) -> Expression {
+        binary_expr(self.clone(), "or", other)
+    }
+
     /// Equal.
     pub fn eq(&self, other: Expression) -> Expression {
         binary_expr(self.clone(), "=", other)
