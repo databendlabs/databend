@@ -20,7 +20,7 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct SelectInterpreter {
     ctx: FuseQueryContextRef,
-    select: SelectPlan
+    select: SelectPlan,
 }
 
 impl SelectInterpreter {
@@ -49,7 +49,7 @@ impl IInterpreter for SelectInterpreter {
             let mut killed_set = HashSet::new();
             for (node, _) in remote_actions_ref.iter().take(end) {
                 if killed_set.get(&node.name).is_none() {
-                    // TODO: kill prepared query stage
+                    // TODO: ISSUE-204 kill prepared query stage
                     killed_set.insert(node.name.clone());
                 }
             }

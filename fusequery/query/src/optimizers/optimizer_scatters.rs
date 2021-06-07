@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use std::sync::Arc;
 
 use common_datavalues::DataSchema;
@@ -15,12 +19,12 @@ use crate::optimizers::IOptimizer;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ScattersOptimizer {
-    ctx: FuseQueryContextRef
+    ctx: FuseQueryContextRef,
 }
 
 enum OptimizeKind {
     Local,
-    Scattered
+    Scattered,
 }
 
 impl ScattersOptimizer {
@@ -31,7 +35,7 @@ impl ScattersOptimizer {
     fn converge_stage_if_scattered(
         &mut self,
         plan: &PlanNode,
-        status: &mut Vec<OptimizeKind>
+        status: &mut Vec<OptimizeKind>,
     ) -> Result<PlanNode> {
         match status.pop() {
             None => {
@@ -47,7 +51,7 @@ impl ScattersOptimizer {
                 Ok(PlanNode::Stage(StagePlan {
                     kind: StageKind::Convergent,
                     scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
-                    input: Arc::new(plan.clone())
+                    input: Arc::new(plan.clone()),
                 }))
             }
         }
@@ -56,7 +60,7 @@ impl ScattersOptimizer {
     fn optimize_read_plan(
         &mut self,
         plan: &ReadDataSourcePlan,
-        status: &mut Vec<OptimizeKind>
+        status: &mut Vec<OptimizeKind>,
     ) -> Result<PlanNode> {
         let read_table = self
             .ctx
@@ -77,9 +81,9 @@ impl ScattersOptimizer {
                 kind: StageKind::Expansive,
                 scatters_expr: Expression::ScalarFunction {
                     op: String::from("blockNumber"),
-                    args: vec![]
+                    args: vec![],
                 },
-                input: Arc::new(PlanNode::ReadSource(plan.clone()))
+                input: Arc::new(PlanNode::ReadSource(plan.clone())),
             }));
         }
 
@@ -99,7 +103,7 @@ impl ScattersOptimizer {
         &mut self,
         plan: &AggregatorPartialPlan,
         input: PlanNode,
-        status: &mut Vec<OptimizeKind>
+        status: &mut Vec<OptimizeKind>,
     ) -> Result<PlanNode> {
         if let Some(OptimizeKind::Local) = status.pop() {
             // Keep running in standalone mode
@@ -111,7 +115,7 @@ impl ScattersOptimizer {
                 group_expr: plan.group_expr.clone(),
                 aggr_expr: plan.aggr_expr.clone(),
                 schema: plan.schema.clone(),
-                input: Arc::new(input)
+                input: Arc::new(input),
             }));
         }
 
@@ -126,8 +130,8 @@ impl ScattersOptimizer {
                         group_expr: plan.group_expr.clone(),
                         aggr_expr: plan.aggr_expr.clone(),
                         schema: plan.schema.clone(),
-                        input: Arc::new(input)
-                    }))
+                        input: Arc::new(input),
+                    })),
                 }))
             }
             _ => {
@@ -137,14 +141,14 @@ impl ScattersOptimizer {
                     kind: StageKind::Normal,
                     scatters_expr: Expression::ScalarFunction {
                         op: String::from("sipHash"),
-                        args: vec![Expression::Column(String::from("_group_by_key"))]
+                        args: vec![Expression::Column(String::from("_group_by_key"))],
                     },
                     input: Arc::new(PlanNode::AggregatorPartial(AggregatorPartialPlan {
                         group_expr: plan.group_expr.clone(),
                         aggr_expr: plan.aggr_expr.clone(),
                         schema: plan.schema.clone(),
-                        input: Arc::new(input)
-                    }))
+                        input: Arc::new(input),
+                    })),
                 }))
             }
         }
@@ -164,7 +168,7 @@ impl IOptimizer for ScattersOptimizer {
 
         let mut status_rpn = vec![];
         let mut rewritten_node = PlanNode::Empty(EmptyPlan {
-            schema: Arc::new(DataSchema::empty())
+            schema: Arc::new(DataSchema::empty()),
         });
 
         plan.walk_postorder(|node| -> Result<bool> {

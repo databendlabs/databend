@@ -4,7 +4,6 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::datatypes::Schema;
 use common_arrow::arrow::ipc::convert;
 use common_arrow::arrow_flight::flight_descriptor::DescriptorType;
@@ -14,6 +13,7 @@ use common_arrow::arrow_flight::Empty;
 use common_arrow::arrow_flight::FlightData;
 use common_arrow::arrow_flight::FlightDescriptor;
 use common_arrow::arrow_flight::Ticket;
+use common_datavalues::DataField;
 use common_datavalues::DataType;
 use common_exception::ErrorCodes;
 use common_exception::Result;
@@ -65,7 +65,7 @@ async fn test_prepare_query_stage() -> Result<()> {
                 assert_eq!(info.plan.name(), "EmptyPlan");
                 assert_eq!(info.scatters, vec!["stream_1", "stream_2"]);
             }
-            _ => panic!("expect PrepareQueryStage")
+            _ => panic!("expect PrepareQueryStage"),
         }
     });
 
@@ -80,7 +80,7 @@ async fn test_prepare_query_stage() -> Result<()> {
         Err(error) => assert!(false, "test_prepare_query_stage error: {:?}", error),
         Ok(_) => join_handler
             .await
-            .expect("Receive unexpect prepare stage info")
+            .expect("Receive unexpect prepare stage info"),
     };
 
     Ok(())
@@ -117,7 +117,7 @@ async fn test_do_get_stream() -> Result<()> {
                         flight_descriptor: None,
                         data_header: vec![1],
                         app_metadata: vec![2],
-                        data_body: vec![3]
+                        data_body: vec![3],
                     }))
                     .await;
 
@@ -125,13 +125,13 @@ async fn test_do_get_stream() -> Result<()> {
                     assert!(false, "Cannot push in test_do_get_stream: {}", error);
                 }
             }
-            _ => panic!("expect GetStream")
+            _ => panic!("expect GetStream"),
         }
     });
 
     let response = service
         .do_get(Request::new(Ticket {
-            ticket: "stream_id".as_bytes().to_vec()
+            ticket: "stream_id".as_bytes().to_vec(),
         }))
         .await;
 
@@ -166,20 +166,20 @@ async fn test_do_get_schema() -> Result<()> {
             DispatcherRequest::GetSchema(stream_id, sender) => {
                 // To avoid deadlock, we first return the result
                 let send_result = sender
-                    .send(Ok(Arc::new(Schema::new(vec![Field::new(
+                    .send(Ok(Arc::new(Schema::new(vec![DataField::new(
                         "field",
                         DataType::Int8,
-                        true
+                        true,
                     )]))))
                     .await;
 
                 // Validate prepare stage info
                 match send_result {
                     Ok(_) => assert_eq!(stream_id, "test_a/test_b"),
-                    Err(error) => assert!(false, "{}", error)
+                    Err(error) => assert!(false, "{}", error),
                 };
             }
-            _ => panic!("expect GetSchema")
+            _ => panic!("expect GetSchema"),
         }
     });
 
@@ -187,7 +187,7 @@ async fn test_do_get_schema() -> Result<()> {
         .get_schema(Request::new(FlightDescriptor {
             r#type: DescriptorType::Path as i32,
             cmd: vec![],
-            path: vec!["test_a".to_string(), "test_b".to_string()]
+            path: vec!["test_a".to_string(), "test_b".to_string()],
         }))
         .await;
 
@@ -201,7 +201,7 @@ async fn test_do_get_schema() -> Result<()> {
     assert!(schema.is_ok());
     assert_eq!(
         schema.unwrap(),
-        Schema::new(vec![Field::new("field", DataType::Int8, true)])
+        Schema::new(vec![DataField::new("field", DataType::Int8, true)])
     );
 
     Ok(())

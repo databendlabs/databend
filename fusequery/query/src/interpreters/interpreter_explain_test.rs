@@ -14,7 +14,7 @@ async fn test_explain_interpreter() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     if let PlanNode::Explain(plan) = PlanParser::create(ctx.clone()).build_from_sql(
-        "explain select number from numbers_mt(10) where (number+1)=4 having (number+1)=4"
+        "explain select number from numbers_mt(10) where (number+1)=4 having (number+1)=4",
     )? {
         let executor = ExplainInterpreter::try_create(ctx, plan)?;
         assert_eq!(executor.name(), "ExplainInterpreter");

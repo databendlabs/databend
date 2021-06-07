@@ -43,7 +43,7 @@ pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct FuseQueryService {
-    dispatcher_sender: Sender<DispatcherRequest>
+    dispatcher_sender: Sender<DispatcherRequest>,
 }
 
 impl FuseQueryService {
@@ -61,10 +61,10 @@ impl FlightService for FuseQueryService {
 
     async fn handshake(
         &self,
-        _: StreamRequest<HandshakeRequest>
+        _: StreamRequest<HandshakeRequest>,
     ) -> Response<Self::HandshakeStream> {
         Result::Err(Status::unimplemented(
-            "FuseQuery does not implement handshake."
+            "FuseQuery does not implement handshake.",
         ))
     }
 
@@ -72,7 +72,7 @@ impl FlightService for FuseQueryService {
 
     async fn list_flights(&self, _: Request<Criteria>) -> Response<Self::ListFlightsStream> {
         Result::Err(Status::unimplemented(
-            "FuseQuery does not implement list_flights."
+            "FuseQuery does not implement list_flights.",
         ))
     }
 
@@ -86,7 +86,7 @@ impl FlightService for FuseQueryService {
                 path: stream_full_name
                     .split('/')
                     .map(|str| str.to_string())
-                    .collect::<Vec<_>>()
+                    .collect::<Vec<_>>(),
             }
         }
 
@@ -107,14 +107,14 @@ impl FlightService for FuseQueryService {
                 flight_descriptor: Some(create_descriptor(&stream_info.stream_name)),
                 endpoint: vec![],
                 total_records: -1,
-                total_bytes: -1
+                total_bytes: -1,
             }
         }
 
         type ResponseSchema = common_exception::Result<RawResponse<FlightInfo>>;
         fn create_flight_info_response(receive_schema: Option<StreamInfo>) -> ResponseSchema {
             Ok(RawResponse::new(create_flight_info(
-                receive_schema.unwrap()
+                receive_schema.unwrap(),
             )))
         }
 
@@ -125,7 +125,7 @@ impl FlightService for FuseQueryService {
                 self.dispatcher_sender
                     .send(DispatcherRequest::GetStreamInfo(
                         descriptor.path.join("/"),
-                        response_sender
+                        response_sender,
                     ))
                     .await
                     .map_err(|error| Status::unknown(error.to_string()))?;
@@ -140,7 +140,7 @@ impl FlightService for FuseQueryService {
             _unimplemented_type => Err(Status::unimplemented(format!(
                 "FuseQuery does not implement Flight type: {}",
                 descriptor.r#type
-            )))
+            ))),
         }
     }
 
@@ -164,7 +164,7 @@ impl FlightService for FuseQueryService {
                 self.dispatcher_sender
                     .send(DispatcherRequest::GetSchema(
                         descriptor.path.join("/"),
-                        response_sender
+                        response_sender,
                     ))
                     .await
                     .map_err(|error| Status::unknown(error.to_string()))?;
@@ -179,7 +179,7 @@ impl FlightService for FuseQueryService {
             _unimplemented_type => Err(Status::unimplemented(format!(
                 "FuseQuery does not implement Flight type: {}",
                 descriptor.r#type
-            )))
+            ))),
         }
     }
 
@@ -190,7 +190,7 @@ impl FlightService for FuseQueryService {
         fn create_stream(receiver: DataReceiver) -> FlightStream<FlightData> {
             // TODO: Tracking progress is shown in the system.shuffles table
             Box::pin(
-                ReceiverStream::new(receiver).map(|flight_data| flight_data.map_err(to_status))
+                ReceiverStream::new(receiver).map(|flight_data| flight_data.map_err(to_status)),
             ) as FlightStream<FlightData>
         }
 
@@ -217,7 +217,7 @@ impl FlightService for FuseQueryService {
                         .await
                         .transpose()
                         .and_then(create_stream_response)
-                        .map_err(to_status)
+                        .map_err(to_status),
                 }
             }
         }
@@ -227,7 +227,7 @@ impl FlightService for FuseQueryService {
 
     async fn do_put(&self, _: StreamRequest<FlightData>) -> Response<Self::DoPutStream> {
         Result::Err(Status::unimplemented(
-            "FuseQuery does not implement do_put."
+            "FuseQuery does not implement do_put.",
         ))
     }
 
@@ -235,7 +235,7 @@ impl FlightService for FuseQueryService {
 
     async fn do_exchange(&self, _: StreamRequest<FlightData>) -> Response<Self::DoExchangeStream> {
         Result::Err(Status::unimplemented(
-            "FuseQuery does not implement do_exchange."
+            "FuseQuery does not implement do_exchange.",
         ))
     }
 
@@ -246,7 +246,7 @@ impl FlightService for FuseQueryService {
 
         fn once(result: common_exception::Result<FlightResult>) -> FlightStream<FlightResult> {
             Box::pin(tokio_stream::once::<Result<FlightResult, Status>>(
-                result.map_err(to_status)
+                result.map_err(to_status),
             )) as FlightStream<FlightResult>
         }
 
@@ -255,7 +255,7 @@ impl FlightService for FuseQueryService {
                 Err(utf_8_error) => Err(Status::invalid_argument(utf_8_error.to_string())),
                 Ok(prepare_stage_info_str) => {
                     let action = serde_json::from_str::<ExecutePlanWithShuffleAction>(
-                        prepare_stage_info_str
+                        prepare_stage_info_str,
                     )
                     .map_err(ErrorCodes::from)
                     .map_err(to_status)?;
@@ -268,9 +268,9 @@ impl FlightService for FuseQueryService {
                                 action.stage_id,
                                 action.plan,
                                 action.scatters,
-                                action.scatters_action
+                                action.scatters_action,
                             ),
-                            response_sender
+                            response_sender,
                         ))
                         .await
                         .map_err(|error| Status::unknown(error.to_string()))?;
@@ -280,14 +280,14 @@ impl FlightService for FuseQueryService {
                             .recv()
                             .await
                             .transpose()
-                            .map(|_| FlightResult { body: vec![] })
+                            .map(|_| FlightResult { body: vec![] }),
                     )))
                 }
             },
             _ => Result::Err(Status::unimplemented(format!(
                 "FuseQuery does not implement action: {}.",
                 action.r#type
-            )))
+            ))),
         }
     }
 

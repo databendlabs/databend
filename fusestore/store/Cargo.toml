@@ -16,6 +16,7 @@ path = "src/bin/fuse-store.rs"
 common-arrow = {path = "../../common/arrow"}
 common-datablocks = {path = "../../common/datablocks"}
 common-datavalues = {path = "../../common/datavalues"}
+common-exception = {path = "../../common/exception"}
 common-flights = {path = "../../common/flights"}
 common-functions = {path = "../../common/functions"}
 common-infallible = {path = "../../common/infallible"}
@@ -27,9 +28,7 @@ common-planners = {path = "../../common/planners"}
 # Crates.io dependencies
 anyhow = "1.0.40"
 # track self maintained branch with hot fixes
-#async-raft = { git = "https://github.com/drmingdrmer/async-raft", branch = "rc" }
-async-raft = { git = "https://github.com/drmingdrmer/async-raft", rev = "cf40344f66fdcb6cde160b3e5671ff87c88f2af8" }
-#async-raft = "0.6.0"
+async-raft = { git = "https://github.com/datafuse-extras/async-raft", branch = "master" }
 async-trait = "0.1"
 env_logger = "0.8"
 futures = "0.3"
@@ -38,7 +37,6 @@ lazy_static = "1.4.0"
 log = "0.4"
 metrics = "0.16.0"
 metrics-exporter-prometheus = "0.5.0"
-maplit = "1.0.2"
 num = "0.4"
 num_cpus = "1.0"
 paste = "^1.0"
@@ -47,6 +45,7 @@ rand = "0.8.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3"
+structopt-toml = "0.4.5"
 tempfile = "3.2.0"
 thiserror = "1.0.25"
 threadpool = "1.8.1"
@@ -55,15 +54,16 @@ tokio-stream = "0.1"
 tonic = "0.4"
 tracing = "0.1.26"
 tracing-futures = { version = "0.2.5", default-features = false }
-tracing-subscriber = "0.2.18"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 
 [dev-dependencies]
+env_logger = "*"
 pretty_assertions = "0.7"
 test-env-log = "0.2.7"
-env_logger = "*"
 tracing = {version = "0.1", default-features = false}
-tracing-subscriber = {version = "0.2.17", default-features = false, features = ["env-filter", "fmt"]}
+tracing-subscriber = "0.2.18"
+maplit = "1.0.2"
 
 [build-dependencies]
+common-building = {path = "../../common/building"}
 tonic-build = "0.4"

@@ -18,7 +18,7 @@ pub struct RemoteTransform {
     fetch_name: String,
     fetch_node_name: String,
     schema: DataSchemaRef,
-    pub ctx: FuseQueryContextRef
+    pub ctx: FuseQueryContextRef,
 }
 
 impl RemoteTransform {
@@ -26,13 +26,13 @@ impl RemoteTransform {
         ctx: FuseQueryContextRef,
         fetch_name: String,
         fetch_node_name: String,
-        schema: DataSchemaRef
+        schema: DataSchemaRef,
     ) -> Result<Self> {
         Ok(Self {
             fetch_name,
             fetch_node_name,
             schema,
-            ctx
+            ctx,
         })
     }
 }
@@ -45,7 +45,7 @@ impl IProcessor for RemoteTransform {
 
     fn connect_to(&mut self, _input: Arc<dyn IProcessor>) -> Result<()> {
         Result::Err(ErrorCodes::LogicalError(
-            "Cannot call RemoteTransform connect_to"
+            "Cannot call RemoteTransform connect_to",
         ))
     }
 

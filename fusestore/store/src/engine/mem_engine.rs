@@ -5,6 +5,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use common_flights::AppendResult;
+use common_flights::DataPartInfo;
+use common_planners::Partition;
+use common_planners::Statistics;
 use tonic::Status;
 
 use crate::protobuf::CmdCreateDatabase;
@@ -15,8 +19,9 @@ use crate::protobuf::Table;
 // MemEngine is a prototype storage that is primarily used for testing purposes.
 pub struct MemEngine {
     pub dbs: HashMap<String, Db>,
+    pub tbl_parts: HashMap<String, HashMap<String, Vec<DataPartInfo>>>,
     pub next_id: i64,
-    pub next_ver: i64
+    pub next_ver: i64,
 }
 
 impl MemEngine {
@@ -24,8 +29,9 @@ impl MemEngine {
     pub fn create() -> Arc<Mutex<MemEngine>> {
         let e = MemEngine {
             dbs: HashMap::new(),
+            tbl_parts: HashMap::new(),
             next_id: 0,
-            next_ver: 0
+            next_ver: 0,
         };
         Arc::new(Mutex::new(e))
     }
@@ -33,7 +39,7 @@ impl MemEngine {
     pub fn create_database(
         &mut self,
         cmd: CmdCreateDatabase,
-        if_not_exists: bool
+        if_not_exists: bool,
     ) -> anyhow::Result<i64> {
         // TODO: support plan.engine plan.options
         let curr = self.dbs.get(&cmd.db_name);
@@ -59,11 +65,12 @@ impl MemEngine {
     }
 
     pub fn drop_database(&mut self, db_name: &str, if_exists: bool) -> Result<(), Status> {
+        self.remove_db_data_parts(db_name);
         let entry = self.dbs.remove_entry(db_name);
         match (entry, if_exists) {
             (_, true) => Ok(()),
             (Some((_id, _db)), false) => Ok(()),
-            (_, false) => Err(Status::not_found(format!("database {} not found", db_name)))
+            (_, false) => Err(Status::not_found(format!("database {} not found", db_name))),
         }
     }
 
@@ -81,7 +88,7 @@ impl MemEngine {
     pub fn create_table(
         &mut self,
         cmd: CmdCreateTable,
-        if_not_exists: bool
+        if_not_exists: bool,
     ) -> Result<i64, Status> {
         // TODO: support plan.engine plan.options
 
@@ -120,8 +127,9 @@ impl MemEngine {
         &mut self,
         db_name: &str,
         tbl_name: &str,
-        if_exists: bool
+        if_exists: bool,
     ) -> Result<(), Status> {
+        self.remove_table_data_parts(db_name, tbl_name);
         let r = self.dbs.get_mut(db_name).map(|db| {
             let name2id_removed = db.table_name_to_id.remove_entry(tbl_name);
             let id_removed = name2id_removed
@@ -138,8 +146,8 @@ impl MemEngine {
             (Some((Some(_), Some(_))), false) => Ok(()),
             _ => Err(Status::internal(
                 "inconsistent meta state, mappings between names and ids are out-of-sync"
-                    .to_string()
-            ))
+                    .to_string(),
+            )),
         }
     }
 
@@ -158,6 +166,60 @@ impl MemEngine {
         Ok(table.clone())
     }
 
+    pub fn get_data_parts(&self, db_name: &str, table_name: &str) -> Option<Vec<DataPartInfo>> {
+        let parts = self.tbl_parts.get(db_name);
+        parts.and_then(|m| m.get(table_name)).map(Clone::clone)
+    }
+
+    pub fn append_data_parts(
+        &mut self,
+        db_name: &str,
+        table_name: &str,
+        append_res: &AppendResult,
+    ) {
+        let part_info = || {
+            append_res
+                .parts
+                .iter()
+                .map(|p| {
+                    let loc = &p.location;
+                    DataPartInfo {
+                        partition: Partition {
+                            name: loc.clone(),
+                            version: 0,
+                        },
+                        stats: Statistics {
+                            read_bytes: p.disk_bytes,
+                            read_rows: p.rows,
+                        },
+                    }
+                })
+                .collect::<Vec<_>>()
+        };
+        self.tbl_parts
+            .entry(db_name.to_string())
+            .and_modify(move |e| {
+                e.entry(table_name.to_string())
+                    .and_modify(|v| v.append(&mut part_info()))
+                    .or_insert_with(part_info);
+            })
+            .or_insert_with(|| {
+                [(table_name.to_string(), part_info())]
+                    .iter()
+                    .cloned()
+                    .collect()
+            });
+    }
+
+    pub fn remove_table_data_parts(&mut self, db_name: &str, table_name: &str) {
+        self.tbl_parts
+            .remove(db_name)
+            .and_then(|mut t| t.remove(table_name));
+    }
+
+    pub fn remove_db_data_parts(&mut self, db_name: &str) {
+        self.tbl_parts.remove(db_name);
+    }
     pub fn create_id(&mut self) -> i64 {
         let id = self.next_id;
         self.next_id += 1;

@@ -16,7 +16,7 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct UseDatabaseInterpreter {
     ctx: FuseQueryContextRef,
-    plan: UseDatabasePlan
+    plan: UseDatabasePlan,
 }
 
 impl UseDatabaseInterpreter {

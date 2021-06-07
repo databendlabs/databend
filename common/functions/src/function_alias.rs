@@ -13,7 +13,7 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct AliasFunction {
-    alias: String
+    alias: String,
 }
 
 impl AliasFunction {
@@ -41,10 +41,6 @@ impl IFunction for AliasFunction {
 
     fn num_arguments(&self) -> usize {
         1
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        None
     }
 }
 

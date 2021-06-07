@@ -4,7 +4,6 @@
 //
 
 use common_exception::Result;
-use trust_dns_resolver::TokioAsyncResolver;
 
 use crate::DNSResolver;
 

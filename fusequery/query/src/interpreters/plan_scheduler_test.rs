@@ -42,8 +42,8 @@ async fn test_scheduler_plan_with_one_normal_stage() -> Result<()> {
         &PlanNode::Stage(StagePlan {
             kind: StageKind::Normal,
             scatters_expr: Expression::Literal(DataValue::UInt64(Some(1))),
-            input: Arc::new(PlanNode::Empty(EmptyPlan::create()))
-        })
+            input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
+        }),
     );
 
     match reschedule_res {
@@ -71,8 +71,8 @@ async fn test_scheduler_plan_with_one_expansive_stage() -> Result<()> {
         &PlanNode::Stage(StagePlan {
             kind: StageKind::Expansive,
             scatters_expr: Expression::Literal(DataValue::UInt64(Some(1))),
-            input: Arc::new(PlanNode::Empty(EmptyPlan::create()))
-        })
+            input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
+        }),
     );
 
     match reschedule_res {
@@ -116,8 +116,8 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
         &PlanNode::Stage(StagePlan {
             kind: StageKind::Convergent,
             scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
-            input: Arc::new(PlanNode::Empty(EmptyPlan::create()))
-        })
+            input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
+        }),
     )?;
 
     assert_eq!(scheduled_actions.remote_actions.len(), 2);
@@ -161,7 +161,7 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
         _ => assert!(
             false,
             "test_scheduler_plan_with_one_convergent_stage must be have Remote plan!"
-        )
+        ),
     }
 
     Ok(())
@@ -195,13 +195,13 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
                         kind: StageKind::Expansive,
                         scatters_expr: Expression::ScalarFunction {
                             op: String::from("blockNumber"),
-                            args: vec![]
+                            args: vec![],
                         },
-                        input: Arc::new(PlanNode::Empty(EmptyPlan::create()))
-                    }))
-                }))
-            }))
-        })
+                        input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
+                    })),
+                })),
+            })),
+        }),
     )?;
 
     assert_eq!(scheduled_actions.remote_actions.len(), 3);
@@ -253,7 +253,7 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
     match (
         &scheduled_actions.remote_actions[1].1.plan,
         &scheduled_actions.remote_actions[2].1.plan,
-        &scheduled_actions.local_plan
+        &scheduled_actions.local_plan,
     ) {
         (PlanNode::Select(left), PlanNode::Select(right), PlanNode::Select(finalize)) => {
             match (&*left.input, &*right.input, &*finalize.input) {
@@ -272,7 +272,7 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
         _ => assert!(
             false,
             "test_scheduler_plan_with_convergent_and_expansive_stage must be have Select plan!"
-        )
+        ),
     };
 
     Ok(())
@@ -305,11 +305,11 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
                     input: Arc::new(PlanNode::Stage(StagePlan {
                         kind: StageKind::Normal,
                         scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
-                        input: Arc::new(PlanNode::Empty(EmptyPlan::create()))
-                    }))
-                }))
-            }))
-        })
+                        input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
+                    })),
+                })),
+            })),
+        }),
     )?;
 
     assert_eq!(scheduled_actions.remote_actions.len(), 4);
@@ -375,7 +375,7 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     match (
         &scheduled_actions.remote_actions[1].1.plan,
         &scheduled_actions.remote_actions[3].1.plan,
-        &scheduled_actions.local_plan
+        &scheduled_actions.local_plan,
     ) {
         (PlanNode::Select(left), PlanNode::Select(right), PlanNode::Select(finalize)) => {
             match (&*left.input, &*right.input, &*finalize.input) {
@@ -394,7 +394,7 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
         _ => assert!(
             false,
             "test_scheduler_plan_with_convergent_and_expansive_stage must be have Select plan!"
-        )
+        ),
     };
 
     Ok(())
@@ -408,7 +408,7 @@ async fn create_env() -> Result<(FuseQueryContextRef, ClusterRef)> {
         .add_node(
             &String::from("dummy_local"),
             1,
-            &String::from("localhost:9090")
+            &String::from("localhost:9090"),
         )
         .await?;
     cluster

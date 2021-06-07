@@ -4,30 +4,31 @@
 
 use std::fmt;
 
-use common_datavalues::DataArrayAggregate;
-use common_datavalues::DataColumnarValue;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use common_datavalues::DataValueAggregate;
-use common_datavalues::DataValueAggregateOperator;
+use common_datavalues::*;
+use common_exception::ErrorCodes;
 use common_exception::Result;
 
+use crate::aggregator_common::assert_unary_arguments;
 use crate::IAggregateFunction;
 
 #[derive(Clone)]
 pub struct AggregateMaxFunction {
     display_name: String,
-    depth: usize,
-    state: DataValue
+    state: DataValue,
+    arguments: Vec<DataField>,
 }
 
 impl AggregateMaxFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggregateFunction>> {
+    pub fn try_create(
+        display_name: &str,
+        arguments: Vec<DataField>,
+    ) -> Result<Box<dyn IAggregateFunction>> {
+        assert_unary_arguments(display_name, arguments.len())?;
+
         Ok(Box::new(AggregateMaxFunction {
             display_name: display_name.to_string(),
-            depth: 0,
-            state: DataValue::Null
+            state: DataValue::Null,
+            arguments,
         }))
     }
 }
@@ -37,31 +38,20 @@ impl IAggregateFunction for AggregateMaxFunction {
         "AggregateMaxFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        Ok(args[0].clone())
+    fn return_type(&self) -> Result<DataType> {
+        Ok(self.arguments[0].data_type().clone())
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn set_depth(&mut self, depth: usize) {
-        self.depth = depth;
-    }
-
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
-        let value = match &columns[0] {
-            DataColumnarValue::Array(array) => DataArrayAggregate::data_array_aggregate_op(
-                DataValueAggregateOperator::Max,
-                array.clone()
-            ),
-            DataColumnarValue::Constant(s, _) => Ok(s.clone())
-        }?;
-
+        let value = Self::max_batch(columns[0].clone())?;
         self.state = DataValueAggregate::data_value_aggregate_op(
             DataValueAggregateOperator::Max,
             self.state.clone(),
-            value
+            value,
         )?;
 
         Ok(())
@@ -72,11 +62,11 @@ impl IAggregateFunction for AggregateMaxFunction {
     }
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        let val = states[self.depth].clone();
+        let val = states[0].clone();
         self.state = DataValueAggregate::data_value_aggregate_op(
             DataValueAggregateOperator::Max,
             self.state.clone(),
-            val
+            val,
         )?;
         Ok(())
     }
@@ -89,5 +79,21 @@ impl IAggregateFunction for AggregateMaxFunction {
 impl fmt::Display for AggregateMaxFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
+    }
+}
+
+impl AggregateMaxFunction {
+    pub fn max_batch(column: DataColumnarValue) -> Result<DataValue> {
+        match column {
+            DataColumnarValue::Constant(value, _) => Ok(value),
+            DataColumnarValue::Array(array) => {
+                if let Ok(v) = dispatch_primitive_array! { typed_array_op_to_data_value, array, max}
+                {
+                    Ok(v)
+                } else {
+                    dispatch_string_array! {typed_string_array_op_to_data_value, array, max_string}
+                }
+            }
+        }
     }
 }

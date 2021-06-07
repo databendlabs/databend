@@ -13,7 +13,9 @@ use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
+use common_planners::Partition;
 use common_planners::ScanPlan;
+use common_planners::Statistics;
 use prost::Message;
 use tonic::Request;
 
@@ -21,39 +23,39 @@ use crate::protobuf::FlightStoreRequest;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ReadPlanAction {
-    pub scan: ScanPlan
+    pub scan: ScanPlan,
 }
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct ReadPlanActionResult {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CreateDatabaseAction {
-    pub plan: CreateDatabasePlan
+    pub plan: CreateDatabasePlan,
 }
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseActionResult {
-    pub database_id: i64
+    pub database_id: i64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DropDatabaseAction {
-    pub plan: DropDatabasePlan
+    pub plan: DropDatabasePlan,
 }
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DropDatabaseActionResult {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CreateTableAction {
-    pub plan: CreateTablePlan
+    pub plan: CreateTablePlan,
 }
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateTableActionResult {
-    pub table_id: i64
+    pub table_id: i64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DropTableAction {
-    pub plan: DropTablePlan
+    pub plan: DropTablePlan,
 }
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DropTableActionResult {}
@@ -61,15 +63,28 @@ pub struct DropTableActionResult {}
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetTableAction {
     pub db: String,
-    pub table: String
+    pub table: String,
 }
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetTableActionResult {
     pub table_id: i64,
     pub db: String,
     pub name: String,
-    pub schema: DataSchemaRef
+    pub schema: DataSchemaRef,
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct ScanPartitionAction {
+    pub scan_plan: ScanPlan,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct DataPartInfo {
+    pub partition: Partition,
+    pub stats: Statistics,
+}
+
+pub type ScanPartitionResult = Option<Vec<DataPartInfo>>;
 
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -79,7 +94,8 @@ pub enum StoreDoAction {
     DropDatabase(DropDatabaseAction),
     CreateTable(CreateTableAction),
     DropTable(DropTableAction),
-    GetTable(GetTableAction)
+    ScanPartition(ScanPartitionAction),
+    GetTable(GetTableAction),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -89,7 +105,8 @@ pub enum StoreDoActionResult {
     DropDatabase(DropDatabaseActionResult),
     CreateTable(CreateTableActionResult),
     DropTable(DropTableActionResult),
-    GetTable(GetTableActionResult)
+    ScanPartition(ScanPartitionResult),
+    GetTable(GetTableActionResult),
 }
 
 /// Try convert tonic::Request<Action> to DoActionAction.
@@ -118,13 +135,13 @@ impl TryInto<Request<Action>> for &StoreDoAction {
 
     fn try_into(self) -> Result<Request<Action>, Self::Error> {
         let flight_request = FlightStoreRequest {
-            body: serde_json::to_string(&self)?
+            body: serde_json::to_string(&self)?,
         };
         let mut buf = vec![];
         flight_request.encode(&mut buf)?;
         let request = tonic::Request::new(Action {
             r#type: "".to_string(),
-            body: buf
+            body: buf,
         });
         Ok(request)
     }

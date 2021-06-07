@@ -6,17 +6,21 @@ use fuse_store::api::StoreServer;
 use fuse_store::configs::Config;
 use fuse_store::metrics::MetricService;
 use log::info;
+use structopt::StructOpt;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let conf = Config::create_from_args();
+    let conf = Config::from_args();
     env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or(conf.log_level.to_lowercase().as_str())
+        env_logger::Env::default().default_filter_or(conf.log_level.to_lowercase().as_str()),
     )
     .init();
 
     info!("{:?}", conf.clone());
-    info!("FuseStore v-{}", conf.version);
+    info!(
+        "FuseStore v-{}",
+        fuse_store::configs::config::FUSE_COMMIT_VERSION
+    );
 
     // Metric API service.
     {
@@ -30,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // RPC API service.
     {
         let srv = StoreServer::create(conf.clone());
-        info!("RPC API server listening on {}", conf.rpc_api_address);
+        info!("RPC API server listening on {}", conf.flight_api_address);
         srv.serve().await.expect("RPC service error");
     }
 

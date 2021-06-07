@@ -58,12 +58,17 @@ const ERR_INCONSISTENT_LOG: &str =
 /// A Cmd is committed by raft leader before being applied.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Cmd {
-    // AKA put-if-absent. add a key-value record only when key is absent.
+    /// AKA put-if-absent. add a key-value record only when key is absent.
     AddFile { key: String, value: String },
-    // Override the record with key.
+
+    /// Override the record with key.
     SetFile { key: String, value: String },
-    // Add node if absent
-    AddNode { node_id: NodeId, node: Node }
+
+    /// Increment the sequence number generator specified by `key` and returns the new value.
+    IncrSeq { key: String },
+
+    /// Add node if absent
+    AddNode { node_id: NodeId, node: Node },
 }
 
 impl fmt::Display for Cmd {
@@ -74,6 +79,9 @@ impl fmt::Display for Cmd {
             }
             Cmd::SetFile { key, value } => {
                 write!(f, "setfile:{}={}", key, value)
+            }
+            Cmd::IncrSeq { key } => {
+                write!(f, "incr_seq:{}", key)
             }
             Cmd::AddNode { node_id, node } => {
                 write!(f, "addnode:{}={}", node_id, node)
@@ -91,14 +99,14 @@ pub struct RaftTxId {
     /// The serial number of this request.
     /// TODO(xp): a client must generate consistent `client` and globally unique serial.
     /// TODO(xp): in this impl the state machine records only one serial, which implies serial must be monotonic incremental for every client.
-    pub serial: u64
+    pub serial: u64,
 }
 
 impl RaftTxId {
     pub fn new(client: &str, serial: u64) -> Self {
         Self {
             client: client.to_string(),
-            serial
+            serial,
         }
     }
 }
@@ -114,7 +122,7 @@ pub struct ClientRequest {
     pub txid: Option<RaftTxId>,
 
     /// The action a client want to take.
-    pub cmd: Cmd
+    pub cmd: Cmd,
 }
 
 impl AppData for ClientRequest {}
@@ -122,7 +130,7 @@ impl AppData for ClientRequest {}
 impl tonic::IntoRequest<RaftMes> for ClientRequest {
     fn into_request(self) -> tonic::Request<RaftMes> {
         let mes = RaftMes {
-            data: serde_json::to_string(&self).expect("fail to serialize")
+            data: serde_json::to_string(&self).expect("fail to serialize"),
         };
         tonic::Request::new(mes)
     }
@@ -130,7 +138,7 @@ impl tonic::IntoRequest<RaftMes> for ClientRequest {
 impl tonic::IntoRequest<RaftMes> for AppendEntriesRequest<ClientRequest> {
     fn into_request(self) -> tonic::Request<RaftMes> {
         let mes = RaftMes {
-            data: serde_json::to_string(&self).expect("fail to serialize")
+            data: serde_json::to_string(&self).expect("fail to serialize"),
         };
         tonic::Request::new(mes)
     }
@@ -138,7 +146,7 @@ impl tonic::IntoRequest<RaftMes> for AppendEntriesRequest<ClientRequest> {
 impl tonic::IntoRequest<RaftMes> for InstallSnapshotRequest {
     fn into_request(self) -> tonic::Request<RaftMes> {
         let mes = RaftMes {
-            data: serde_json::to_string(&self).expect("fail to serialize")
+            data: serde_json::to_string(&self).expect("fail to serialize"),
         };
         tonic::Request::new(mes)
     }
@@ -146,7 +154,7 @@ impl tonic::IntoRequest<RaftMes> for InstallSnapshotRequest {
 impl tonic::IntoRequest<RaftMes> for VoteRequest {
     fn into_request(self) -> tonic::Request<RaftMes> {
         let mes = RaftMes {
-            data: serde_json::to_string(&self).expect("fail to serialize")
+            data: serde_json::to_string(&self).expect("fail to serialize"),
         };
         tonic::Request::new(mes)
     }
@@ -169,12 +177,15 @@ pub enum ClientResponse {
         // The value before applying a ClientRequest.
         prev: Option<String>,
         // The value after applying a ClientRequest.
-        result: Option<String>
+        result: Option<String>,
+    },
+    Seq {
+        seq: u64,
     },
     Node {
         prev: Option<Node>,
-        result: Option<Node>
-    }
+        result: Option<Node>,
+    },
 }
 
 impl AppDataResponse for ClientResponse {}
@@ -185,12 +196,14 @@ impl From<ClientResponse> for RaftMes {
         RaftMes { data }
     }
 }
+
 impl From<RaftMes> for ClientResponse {
     fn from(msg: RaftMes) -> Self {
         let resp: ClientResponse = serde_json::from_str(&msg.data).expect("fail to deserialize");
         resp
     }
 }
+
 impl From<tonic::Response<RaftMes>> for ClientResponse {
     fn from(v: tonic::Response<RaftMes>) -> Self {
         let mes = v.into_inner();
@@ -198,19 +211,27 @@ impl From<tonic::Response<RaftMes>> for ClientResponse {
         resp
     }
 }
+
 impl From<(Option<String>, Option<String>)> for ClientResponse {
     fn from(v: (Option<String>, Option<String>)) -> Self {
         ClientResponse::String {
             prev: v.0,
-            result: v.1
+            result: v.1,
         }
     }
 }
+
+impl From<u64> for ClientResponse {
+    fn from(seq: u64) -> Self {
+        ClientResponse::Seq { seq }
+    }
+}
+
 impl From<(Option<Node>, Option<Node>)> for ClientResponse {
     fn from(v: (Option<Node>, Option<Node>)) -> Self {
         ClientResponse::Node {
             prev: v.0,
-            result: v.1
+            result: v.1,
         }
     }
 }
@@ -219,7 +240,7 @@ impl From<(Option<Node>, Option<Node>)> for ClientResponse {
 #[derive(Clone, Debug, Error)]
 pub enum ShutdownError {
     #[error("unsafe storage error")]
-    UnsafeStorageError
+    UnsafeStorageError,
 }
 
 /// The application snapshot type which the `MemStore` works with.
@@ -232,7 +253,7 @@ pub struct MemStoreSnapshot {
     /// The last memberhsip config included in this snapshot.
     pub membership: MembershipConfig,
     /// The data of the state machine at the time of this snapshot.
-    pub data: Vec<u8>
+    pub data: Vec<u8>,
 }
 
 /// The state machine of the `MemStore`.
@@ -243,7 +264,7 @@ pub struct MemStoreStateMachine {
     /// (serial, ClientResponse)
     pub client_serial_responses: HashMap<String, (u64, ClientResponse)>,
 
-    pub meta: Meta
+    pub meta: Meta,
 }
 
 impl MemStoreStateMachine {
@@ -284,7 +305,7 @@ pub struct MemStore {
     /// The current hard state.
     hs: RwLock<Option<HardState>>,
     /// The current snapshot.
-    current_snapshot: RwLock<Option<MemStoreSnapshot>>
+    current_snapshot: RwLock<Option<MemStoreSnapshot>>,
 }
 
 impl MemStore {
@@ -300,7 +321,7 @@ impl MemStore {
             log,
             sm,
             hs,
-            current_snapshot
+            current_snapshot,
         }
     }
 
@@ -311,7 +332,7 @@ impl MemStore {
         log: BTreeMap<u64, Entry<ClientRequest>>,
         sm: MemStoreStateMachine,
         hs: Option<HardState>,
-        current_snapshot: Option<MemStoreSnapshot>
+        current_snapshot: Option<MemStoreSnapshot>,
     ) -> Self {
         let log = RwLock::new(log);
         let sm = RwLock::new(sm);
@@ -322,7 +343,7 @@ impl MemStore {
             log,
             sm,
             hs,
-            current_snapshot
+            current_snapshot,
         }
     }
 
@@ -353,11 +374,11 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
         let cfg_opt = log.values().rev().find_map(|entry| match &entry.payload {
             EntryPayload::ConfigChange(cfg) => Some(cfg.membership.clone()),
             EntryPayload::SnapshotPointer(snap) => Some(snap.membership.clone()),
-            _ => None
+            _ => None,
         });
         Ok(match cfg_opt {
             Some(cfg) => cfg,
-            None => MembershipConfig::new_initial(self.id)
+            None => MembershipConfig::new_initial(self.id),
         })
     }
 
@@ -371,7 +392,7 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
             Some(inner) => {
                 let (last_log_index, last_log_term) = match log.values().rev().next() {
                     Some(log) => (log.index, log.term),
-                    None => (0, 0)
+                    None => (0, 0),
                 };
                 let last_applied_log = sm.last_applied_log;
                 let st = InitialState {
@@ -379,7 +400,7 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
                     last_log_term,
                     last_applied_log,
                     hard_state: inner.clone(),
-                    membership
+                    membership,
                 };
                 tracing::info!("build initial state from storage: {:?}", st);
                 Ok(st)
@@ -450,7 +471,7 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
     async fn apply_entry_to_state_machine(
         &self,
         index: &u64,
-        data: &ClientRequest
+        data: &ClientRequest,
     ) -> Result<ClientResponse> {
         let mut sm = self.sm.write().await;
         let resp = sm.apply(*index, data)?;
@@ -486,7 +507,7 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
                 .skip_while(|entry| entry.index > last_applied_log)
                 .find_map(|entry| match &entry.payload {
                     EntryPayload::ConfigChange(cfg) => Some(cfg.membership.clone()),
-                    _ => None
+                    _ => None,
                 })
                 .unwrap_or_else(|| MembershipConfig::new_initial(self.id));
         } // Release log read lock.
@@ -507,15 +528,15 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
                     last_applied_log,
                     term,
                     "".into(),
-                    membership_config.clone()
-                )
+                    membership_config.clone(),
+                ),
             );
 
             let snapshot = MemStoreSnapshot {
                 index: last_applied_log,
                 term,
                 membership: membership_config.clone(),
-                data
+                data,
             };
             snapshot_bytes = serde_json::to_vec(&snapshot)?;
             *current_snapshot = Some(snapshot);
@@ -529,7 +550,7 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
             term,
             index: last_applied_log,
             membership: membership_config.clone(),
-            snapshot: Box::new(Cursor::new(snapshot_bytes))
+            snapshot: Box::new(Cursor::new(snapshot_bytes)),
         })
     }
 
@@ -545,7 +566,7 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
         term: u64,
         delete_through: Option<u64>,
         id: String,
-        snapshot: Box<Self::Snapshot>
+        snapshot: Box<Self::Snapshot>,
     ) -> Result<()> {
         tracing::info!(
             { snapshot_size = snapshot.get_ref().len() },
@@ -564,7 +585,7 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
                 .skip_while(|entry| entry.index > index)
                 .find_map(|entry| match &entry.payload {
                     EntryPayload::ConfigChange(cfg) => Some(cfg.membership.clone()),
-                    _ => None
+                    _ => None,
                 })
                 .unwrap_or_else(|| MembershipConfig::new_initial(self.id));
 
@@ -572,11 +593,11 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
                 Some(through) => {
                     *log = log.split_off(&(through + 1));
                 }
-                None => log.clear()
+                None => log.clear(),
             }
             log.insert(
                 index,
-                Entry::new_snapshot_pointer(index, term, id, membership_config)
+                Entry::new_snapshot_pointer(index, term, id, membership_config),
             );
         }
 
@@ -602,16 +623,16 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
                     index: snapshot.index,
                     term: snapshot.term,
                     membership: snapshot.membership.clone(),
-                    snapshot: Box::new(Cursor::new(reader))
+                    snapshot: Box::new(Cursor::new(reader)),
                 }))
             }
-            None => Ok(None)
+            None => Ok(None),
         }
     }
 }
 
 pub struct Network {
-    sto: Arc<MemStore>
+    sto: Arc<MemStore>,
 }
 
 impl Network {
@@ -622,7 +643,7 @@ impl Network {
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.sto.id))]
     pub async fn make_client(
         &self,
-        node_id: &NodeId
+        node_id: &NodeId,
     ) -> anyhow::Result<MetaServiceClient<Channel>> {
         let addr = self.sto.get_node_addr(node_id).await?;
         tracing::info!("connect: id={}: {}", node_id, addr);
@@ -638,7 +659,7 @@ impl RaftNetwork<ClientRequest> for Network {
     async fn append_entries(
         &self,
         target: NodeId,
-        rpc: AppendEntriesRequest<ClientRequest>
+        rpc: AppendEntriesRequest<ClientRequest>,
     ) -> Result<AppendEntriesResponse> {
         tracing::debug!("append_entries req to: id={}: {:?}", target, rpc);
 
@@ -657,7 +678,7 @@ impl RaftNetwork<ClientRequest> for Network {
     async fn install_snapshot(
         &self,
         target: NodeId,
-        rpc: InstallSnapshotRequest
+        rpc: InstallSnapshotRequest,
     ) -> Result<InstallSnapshotResponse> {
         tracing::debug!("install_snapshot req to: id={}", target);
 
@@ -699,7 +720,7 @@ pub struct MetaNode {
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
-    pub join_handles: Mutex<Vec<JoinHandle<anyhow::Result<()>>>>
+    pub join_handles: Mutex<Vec<JoinHandle<anyhow::Result<()>>>>,
 }
 
 impl MemStore {
@@ -742,7 +763,7 @@ pub struct MetaNodeBuilder {
     config: Option<Config>,
     sto: Option<Arc<MemStore>>,
     monitor_metrics: bool,
-    start_grpc_service: bool
+    start_grpc_service: bool,
 }
 
 impl MetaNodeBuilder {
@@ -774,7 +795,7 @@ impl MetaNodeBuilder {
             raft,
             running_tx: tx,
             running_rx: rx,
-            join_handles: Mutex::new(Vec::new())
+            join_handles: Mutex::new(Vec::new()),
         });
 
         if self.monitor_metrics {
@@ -821,11 +842,11 @@ impl MetaNode {
                     .election_timeout_min(heartbeat * 4)
                     .election_timeout_max(heartbeat * 8)
                     .validate()
-                    .expect("fail to build raft config")
+                    .expect("fail to build raft config"),
             ),
             sto: None,
             monitor_metrics: true,
-            start_grpc_service: true
+            start_grpc_service: true,
         }
     }
 
@@ -1050,9 +1071,9 @@ impl MetaNode {
                     node_id,
                     node: Node {
                         name: "".to_string(),
-                        address: addr
-                    }
-                }
+                        address: addr,
+                    },
+                },
             })
             .await?;
         Ok(_resp)
@@ -1111,7 +1132,7 @@ impl MetaNode {
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn write_to_local_leader(
         &self,
-        req: ClientRequest
+        req: ClientRequest,
     ) -> anyhow::Result<ClientResponse> {
         // TODO: respond ForwardToLeader error
         let write_rst = self.raft.client_write(ClientWriteRequest::new(req)).await;
@@ -1122,7 +1143,7 @@ impl MetaNode {
             Ok(v) => v,
             // ClientWriteError::RaftError(re)
             // ClientWriteError::ForwardToLeader(_req, _node_id)
-            Err(e) => return Err(anyhow::anyhow!("{:}", e))
+            Err(e) => return Err(anyhow::anyhow!("{:}", e)),
         };
 
         Ok(resp.data)

@@ -5,6 +5,6 @@
 #[cfg(test)]
 mod config_test;
 
-mod config;
+pub mod config;
 
 pub use config::Config;

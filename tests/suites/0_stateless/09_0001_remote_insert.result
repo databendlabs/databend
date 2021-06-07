@@ -3,18 +3,23 @@ CREATE DATABASE IF NOT EXISTS db1
 --------------
 
 --------------
-CREATE TABLE IF NOT EXISTS t1(a int, b varchar)
+CREATE TABLE IF NOT EXISTS t1(a varchar, b varchar)
 --------------
 
 --------------
-INSERT INTO t1 VALUES(1, 'v1'),(2,'v2')
+INSERT INTO t1(a,b) VALUES('1', 'v1'),('2','v2')
 --------------
 
 --------------
 SELECT * FROM t1
 --------------
 
-ERROR 1105 (HY000) at line 6: Code: 2, displayText = RemoteTable read_plan not yet implemented.
++------+------+
+| a    | b    |
++------+------+
+| '1'  | 'v1' |
+| '2'  | 'v2' |
++------+------+
 --------------
 DROP TABLE t1
 --------------

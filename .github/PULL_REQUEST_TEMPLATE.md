@@ -1,3 +1,5 @@
+I hereby agree to the terms of the CLA available at: https://datafuse.rs/policies/cla/
+
 ## Summary
 
 Summary about this PR
@@ -11,7 +13,8 @@ Summary about this PR
 - Build/Testing/CI
 - Documentation
 - Website
-- Other
+- Other 
+- Not for changelog (changelog entry is not required)
 
 ## Related Issues
 
@@ -20,5 +23,6 @@ Fixes #issue
 ## Test Plan
 
 Unit Tests
+
 Stateless Tests
 

@@ -27,7 +27,7 @@ pub trait ITable: Sync + Send {
         &self,
         ctx: FuseQueryContextRef,
         scan: &ScanPlan,
-        partitions: usize
+        partitions: usize,
     ) -> Result<ReadDataSourcePlan>;
     // Read block data from the underling.
     async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream>;
@@ -36,7 +36,7 @@ pub trait ITable: Sync + Send {
     async fn append_data(
         &self,
         _ctx: FuseQueryContextRef,
-        _insert_plan: InsertIntoPlan
+        _insert_plan: InsertIntoPlan,
     ) -> Result<()> {
         Err(ErrorCodes::UnImplement(format!(
             "append data for local table {} is not implemented",

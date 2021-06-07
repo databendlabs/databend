@@ -34,10 +34,10 @@ fn constant_folding(schema: &DataSchemaRef, expr: Expression) -> Result<Expressi
             "=" => match (left.as_ref(), right.as_ref()) {
                 (
                     Expression::Literal(DataValue::Boolean(l)),
-                    Expression::Literal(DataValue::Boolean(r))
+                    Expression::Literal(DataValue::Boolean(r)),
                 ) => match (l, r) {
                     (Some(l), Some(r)) => Expression::Literal(DataValue::Boolean(Some(l == r))),
-                    _ => Expression::Literal(DataValue::Boolean(None))
+                    _ => Expression::Literal(DataValue::Boolean(None)),
                 },
                 (Expression::Literal(DataValue::Boolean(b)), _)
                     if is_boolean_type(schema, &right)? =>
@@ -46,7 +46,7 @@ fn constant_folding(schema: &DataSchemaRef, expr: Expression) -> Result<Expressi
                         Some(true) => *right,
                         // Fix this after we implement NOT
                         Some(false) => Expression::BinaryExpression { left, op, right },
-                        None => Expression::Literal(DataValue::Boolean(None))
+                        None => Expression::Literal(DataValue::Boolean(None)),
                     }
                 }
                 (_, Expression::Literal(DataValue::Boolean(b)))
@@ -56,22 +56,22 @@ fn constant_folding(schema: &DataSchemaRef, expr: Expression) -> Result<Expressi
                         Some(true) => *left,
                         // Fix this after we implement NOT
                         Some(false) => Expression::BinaryExpression { left, op, right },
-                        None => Expression::Literal(DataValue::Boolean(None))
+                        None => Expression::Literal(DataValue::Boolean(None)),
                     }
                 }
                 _ => Expression::BinaryExpression {
                     left,
                     op: "=".to_string(),
-                    right
-                }
+                    right,
+                },
             },
             "!=" => match (left.as_ref(), right.as_ref()) {
                 (
                     Expression::Literal(DataValue::Boolean(l)),
-                    Expression::Literal(DataValue::Boolean(r))
+                    Expression::Literal(DataValue::Boolean(r)),
                 ) => match (l, r) {
                     (Some(l), Some(r)) => Expression::Literal(DataValue::Boolean(Some(l != r))),
-                    _ => Expression::Literal(DataValue::Boolean(None))
+                    _ => Expression::Literal(DataValue::Boolean(None)),
                 },
                 (Expression::Literal(DataValue::Boolean(b)), _)
                     if is_boolean_type(schema, &right)? =>
@@ -79,7 +79,7 @@ fn constant_folding(schema: &DataSchemaRef, expr: Expression) -> Result<Expressi
                     match b {
                         Some(true) => Expression::BinaryExpression { left, op, right },
                         Some(false) => *right,
-                        None => Expression::Literal(DataValue::Boolean(None))
+                        None => Expression::Literal(DataValue::Boolean(None)),
                     }
                 }
                 (_, Expression::Literal(DataValue::Boolean(b)))
@@ -88,16 +88,16 @@ fn constant_folding(schema: &DataSchemaRef, expr: Expression) -> Result<Expressi
                     match b {
                         Some(true) => Expression::BinaryExpression { left, op, right },
                         Some(false) => *left,
-                        None => Expression::Literal(DataValue::Boolean(None))
+                        None => Expression::Literal(DataValue::Boolean(None)),
                     }
                 }
                 _ => Expression::BinaryExpression {
                     left,
                     op: "!=".to_string(),
-                    right
-                }
+                    right,
+                },
             },
-            _ => Expression::BinaryExpression { left, op, right }
+            _ => Expression::BinaryExpression { left, op, right },
         },
         expr => {
             // do nothing

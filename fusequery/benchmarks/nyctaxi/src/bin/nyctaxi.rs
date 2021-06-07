@@ -33,7 +33,7 @@ struct Opt {
 
     /// Path to data files
     #[structopt(parse(from_os_str), required = true, short = "p", long = "path")]
-    path: PathBuf
+    path: PathBuf,
 }
 
 // cargo run --release --bin nyctaxi --path /xx/xx.csv
@@ -64,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         table: "nyctaxi".to_string(),
         schema: nyctaxi_schema(),
         engine: TableEngineType::Csv,
-        options
+        options,
     };
     database.create_table(create_table_plan).await?;
 

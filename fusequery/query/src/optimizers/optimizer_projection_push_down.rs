@@ -30,7 +30,7 @@ pub struct ProjectionPushDownOptimizer {}
 
 struct ProjectionPushDownImpl {
     pub required_columns: HashSet<String>,
-    pub has_projection: bool
+    pub has_projection: bool,
 }
 
 impl<'plan> PlanRewriter<'plan> for ProjectionPushDownImpl {
@@ -82,7 +82,8 @@ impl<'plan> PlanRewriter<'plan> for ProjectionPushDownImpl {
                     partitions: plan.partitions.clone(),
                     statistics: plan.statistics.clone(),
                     description: plan.description.to_string(),
-                    scan_plan: plan.scan_plan.clone()
+                    scan_plan: plan.scan_plan.clone(),
+                    remote: plan.remote,
                 })
             })
     }
@@ -96,7 +97,7 @@ impl ProjectionPushDownImpl {
     pub fn new() -> ProjectionPushDownImpl {
         ProjectionPushDownImpl {
             required_columns: HashSet::new(),
-            has_projection: false
+            has_projection: false,
         }
     }
 

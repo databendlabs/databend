@@ -13,7 +13,7 @@ use crate::meta_service::MetaService;
 use crate::meta_service::RaftMes;
 
 pub struct MetaServiceImpl {
-    pub meta_node: Arc<MetaNode>
+    pub meta_node: Arc<MetaNode>,
 }
 
 impl MetaServiceImpl {
@@ -29,7 +29,7 @@ impl MetaService for MetaServiceImpl {
     #[tracing::instrument(level = "info", skip(self))]
     async fn write(
         &self,
-        request: tonic::Request<RaftMes>
+        request: tonic::Request<RaftMes>,
     ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
         let mes = request.into_inner();
         let req: ClientRequest = mes.try_into()?;
@@ -48,7 +48,7 @@ impl MetaService for MetaServiceImpl {
     #[tracing::instrument(level = "info", skip(self))]
     async fn get(
         &self,
-        request: tonic::Request<GetReq>
+        request: tonic::Request<GetReq>,
     ) -> Result<tonic::Response<GetReply>, tonic::Status> {
         let req = request.into_inner();
         let resp = self.meta_node.get_file(&req.key).await;
@@ -56,13 +56,13 @@ impl MetaService for MetaServiceImpl {
             Some(v) => GetReply {
                 ok: true,
                 key: req.key,
-                value: v
+                value: v,
             },
             None => GetReply {
                 ok: false,
                 key: req.key,
-                value: "".into()
-            }
+                value: "".into(),
+            },
         };
 
         Ok(tonic::Response::new(rst))
@@ -71,7 +71,7 @@ impl MetaService for MetaServiceImpl {
     #[tracing::instrument(level = "info", skip(self))]
     async fn append_entries(
         &self,
-        request: tonic::Request<RaftMes>
+        request: tonic::Request<RaftMes>,
     ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
         let req = request.into_inner();
 
@@ -93,7 +93,7 @@ impl MetaService for MetaServiceImpl {
     #[tracing::instrument(level = "info", skip(self))]
     async fn install_snapshot(
         &self,
-        request: tonic::Request<RaftMes>
+        request: tonic::Request<RaftMes>,
     ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
         let req = request.into_inner();
 
@@ -115,7 +115,7 @@ impl MetaService for MetaServiceImpl {
     #[tracing::instrument(level = "info", skip(self))]
     async fn vote(
         &self,
-        request: tonic::Request<RaftMes>
+        request: tonic::Request<RaftMes>,
     ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
         let req = request.into_inner();
 

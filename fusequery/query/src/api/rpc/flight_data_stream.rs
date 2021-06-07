@@ -22,7 +22,7 @@ impl FlightDataStream {
     #[inline]
     pub fn from_remote(
         schema: SchemaRef,
-        inner: Streaming<FlightData>
+        inner: Streaming<FlightData>,
     ) -> impl Stream<Item = Result<DataBlock, ErrorCodes>> {
         inner.map(move |flight_data| -> Result<DataBlock, ErrorCodes> {
             match flight_data {
@@ -40,7 +40,7 @@ impl FlightDataStream {
 
                     Ok(
                         flight_data_to_arrow_batch(&flight_data, schema.clone(), &[])
-                            .map(create_data_block)?
+                            .map(create_data_block)?,
                     )
                 }
             }
@@ -52,7 +52,7 @@ impl FlightDataStream {
     #[allow(dead_code)]
     pub fn from_receiver(
         schema: SchemaRef,
-        inner: Receiver<Result<FlightData, ErrorCodes>>
+        inner: Receiver<Result<FlightData, ErrorCodes>>,
     ) -> impl Stream<Item = Result<DataBlock, ErrorCodes>> {
         ReceiverStream::new(inner).map(move |flight_data| match flight_data {
             Err(error_code) => Err(error_code),
@@ -69,7 +69,7 @@ impl FlightDataStream {
 
                 Ok(
                     flight_data_to_arrow_batch(&flight_data, schema.clone(), &[])
-                        .map(create_data_block)?
+                        .map(create_data_block)?,
                 )
             }
         })

@@ -11,7 +11,6 @@ fn test_config() -> common_exception::Result<()> {
     // Default.
     {
         let expect = Config {
-            version: "".to_string(),
             log_level: "debug".to_string(),
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
@@ -26,7 +25,7 @@ fn test_config() -> common_exception::Result<()> {
             store_api_address: "127.0.0.1:9191".to_string(),
             store_api_username: "root".to_string(),
             store_api_password: "root".to_string(),
-            config_file: "".to_string()
+            config_file: "".to_string(),
         };
         let actual = Config::default();
         assert_eq!(actual, expect);

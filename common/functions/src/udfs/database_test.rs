@@ -20,7 +20,7 @@ fn test_database_function() -> anyhow::Result<()> {
         columns: Vec<DataColumnarValue>,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>
+        func: Box<dyn IFunction>,
     }
 
     let tests = vec![Test {
@@ -33,7 +33,7 @@ fn test_database_function() -> anyhow::Result<()> {
             Arc::new(Int64Array::from(vec![4])).into(),
         ],
         expect: Arc::new(StringArray::from(vec!["default"])),
-        error: ""
+        error: "",
     }];
 
     for t in tests {

@@ -25,7 +25,7 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct ExplainInterpreter {
     ctx: FuseQueryContextRef,
-    explain: ExplainPlan
+    explain: ExplainPlan,
 }
 
 impl ExplainInterpreter {
@@ -53,7 +53,7 @@ impl IInterpreter for ExplainInterpreter {
                 let pipeline = PipelineBuilder::create(self.ctx.clone(), plan).build()?;
                 format!("{:?}", pipeline)
             }
-            _ => format!("{:?}", plan)
+            _ => format!("{:?}", plan),
         };
         let block =
             DataBlock::create_by_array(schema.clone(), vec![Arc::new(StringArray::from(vec![

@@ -1,5 +1,9 @@
 name: Performance(Standalone)
-on: [push, pull_request]
+on:
+  pull_request:
+    types: [ opened ]
+  issue_comment:
+    types: [ created ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -9,8 +13,16 @@ jobs:
     name: "Tests"
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v2
+      - uses: khan/pull-request-comment-trigger@master
+        id: check
+        with:
+          trigger: '/runperf'
+          prefix_only: 'true'
+          reaction: rocket
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
       - name: dependency hack on self hosted machine
+        if: steps.check.outputs.triggered == 'true'
         run: |
           sudo wget http://archive.ubuntu.com/ubuntu/pool/main/p/psmisc/psmisc_23.3-1_amd64.deb
           sudo dpkg -i ./psmisc_23.3-1_amd64.deb
@@ -32,6 +44,7 @@ jobs:
 
 
       - name: Install latest nightly
+        if: steps.check.outputs.triggered == 'true'
         uses: actions-rs/toolchain@v1
         with:
             toolchain: nightly
@@ -41,14 +54,18 @@ jobs:
       # `cargo check` command here will use installed `nightly`
       # as it is set as an "override" for current directory
       - name: Run cargo check
+        if: steps.check.outputs.triggered == 'true'
         uses: actions-rs/cargo@v1
         with:
           command: check
 
       - name: Build native release
+        if: steps.check.outputs.triggered == 'true'
         run: |
-          bash ./scripts/ci/ci-native-release-build.sh
+          bash ./scripts/build/build-release.sh
 
       - name: Run Performance Tests with Standalone mode
+        if: steps.check.outputs.triggered == 'true'
         run: |
-          bash ./scripts/ci/ci-performance-tests-standalone.sh
+          bash ./scripts/ci/ci-run-performance-tests-standalone.sh
+          

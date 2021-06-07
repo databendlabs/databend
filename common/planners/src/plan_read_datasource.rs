@@ -20,7 +20,8 @@ pub struct ReadDataSourcePlan {
     pub partitions: Partitions,
     pub statistics: Statistics,
     pub description: String,
-    pub scan_plan: Arc<ScanPlan>
+    pub scan_plan: Arc<ScanPlan>,
+    pub remote: bool,
 }
 
 impl ReadDataSourcePlan {
@@ -32,7 +33,8 @@ impl ReadDataSourcePlan {
             partitions: vec![],
             statistics: Statistics::default(),
             description: "".to_string(),
-            scan_plan: Arc::new(ScanPlan::empty())
+            scan_plan: Arc::new(ScanPlan::empty()),
+            remote: false,
         }
     }
 

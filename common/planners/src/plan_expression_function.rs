@@ -9,7 +9,7 @@ fn binary_expr(l: Expression, op: &str, r: Expression) -> Expression {
     Expression::BinaryExpression {
         op: op.to_string(),
         left: Box::new(l),
-        right: Box::new(r)
+        right: Box::new(r),
     }
 }
 
@@ -22,7 +22,7 @@ pub fn add(left: Expression, right: Expression) -> Expression {
 pub fn not(other: Expression) -> Expression {
     Expression::UnaryExpression {
         op: "not".to_string(),
-        expr: Box::new(other)
+        expr: Box::new(other),
     }
 }
 
@@ -35,7 +35,8 @@ pub fn modular(left: Expression, right: Expression) -> Expression {
 pub fn sum(other: Expression) -> Expression {
     Expression::AggregateFunction {
         op: "sum".to_string(),
-        args: vec![other]
+        distinct: false,
+        args: vec![other],
     }
 }
 
@@ -43,7 +44,8 @@ pub fn sum(other: Expression) -> Expression {
 pub fn avg(other: Expression) -> Expression {
     Expression::AggregateFunction {
         op: "avg".to_string(),
-        args: vec![other]
+        distinct: false,
+        args: vec![other],
     }
 }
 
@@ -51,6 +53,10 @@ impl Expression {
     /// And.
     pub fn and(&self, other: Expression) -> Expression {
         binary_expr(self.clone(), "and", other)
+    }
+
+    pub fn or(&self, other: Expression) -> Expression {
+        binary_expr(self.clone(), "or", other)
     }
 
     /// Equal.

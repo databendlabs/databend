@@ -11,7 +11,6 @@ edition = "2018"
 common-arrow = {path = "../arrow"}
 common-datablocks = {path = "../datablocks"}
 common-datavalues = {path = "../datavalues"}
-common-functions = {path = "../functions"}
 common-progress = {path = "../progress"}
 common-exception = {path = "../exception"}
 

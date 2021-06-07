@@ -20,7 +20,7 @@ pub enum DataColumnarValue {
     // Array of values.
     Array(DataArrayRef),
     // A Single value.
-    Constant(DataValue, usize)
+    Constant(DataValue, usize),
 }
 
 impl DataColumnarValue {
@@ -28,7 +28,7 @@ impl DataColumnarValue {
     pub fn data_type(&self) -> DataType {
         let x = match self {
             DataColumnarValue::Array(v) => v.data_type().clone(),
-            DataColumnarValue::Constant(v, _) => v.data_type()
+            DataColumnarValue::Constant(v, _) => v.data_type(),
         };
         x
     }
@@ -37,7 +37,7 @@ impl DataColumnarValue {
     pub fn to_array(&self) -> Result<DataArrayRef> {
         match self {
             DataColumnarValue::Array(array) => Ok(array.clone()),
-            DataColumnarValue::Constant(scalar, size) => scalar.to_array_with_size(*size)
+            DataColumnarValue::Constant(scalar, size) => scalar.to_array_with_size(*size),
         }
     }
 
@@ -45,7 +45,7 @@ impl DataColumnarValue {
     pub fn len(&self) -> usize {
         match self {
             DataColumnarValue::Array(array) => array.len(),
-            DataColumnarValue::Constant(_, size) => *size
+            DataColumnarValue::Constant(_, size) => *size,
         }
     }
 
@@ -53,7 +53,7 @@ impl DataColumnarValue {
     pub fn is_empty(&self) -> bool {
         match self {
             DataColumnarValue::Array(array) => array.len() == 0,
-            DataColumnarValue::Constant(_, size) => *size == 0
+            DataColumnarValue::Constant(_, size) => *size == 0,
         }
     }
 
@@ -64,7 +64,7 @@ impl DataColumnarValue {
             DataColumnarValue::Constant(scalar, size) => scalar
                 .to_array_with_size(*size)
                 .map(|arr| arr.get_array_memory_size())
-                .unwrap_or(0)
+                .unwrap_or(0),
         }
     }
 
@@ -85,7 +85,9 @@ impl DataColumnarValue {
     pub fn clone_empty(&self) -> DataColumnarValue {
         match self {
             DataColumnarValue::Array(array) => DataColumnarValue::Array(array.slice(0, 0)),
-            DataColumnarValue::Constant(scalar, _) => DataColumnarValue::Constant(scalar.clone(), 0)
+            DataColumnarValue::Constant(scalar, _) => {
+                DataColumnarValue::Constant(scalar.clone(), 0)
+            }
         }
     }
 }

@@ -5,6 +5,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_exception::exception;
+use common_exception::ErrorCodes;
 
 use crate::fs::IFileSystem;
 use crate::fs::ListResult;
@@ -23,14 +25,14 @@ pub struct Dfs {
     /// The local fs to store data copies.
     /// The distributed fs is a cluster of local-fs organized with a meta data service.
     pub local_fs: LocalFS,
-    pub meta_node: Arc<MetaNode>
+    pub meta_node: Arc<MetaNode>,
 }
 
 impl Dfs {
     pub fn create(local_fs: LocalFS, meta_node: Arc<MetaNode>) -> Dfs {
         Dfs {
             local_fs,
-            meta_node
+            meta_node,
         }
     }
 }
@@ -39,6 +41,7 @@ impl Dfs {}
 
 #[async_trait]
 impl IFileSystem for Dfs {
+    #[tracing::instrument(level = "debug", skip(self, data))]
     async fn add(&self, path: String, data: &[u8]) -> anyhow::Result<()> {
         // add the file to local fs
 
@@ -50,18 +53,27 @@ impl IFileSystem for Dfs {
             txid: None,
             cmd: Cmd::AddFile {
                 key: path,
-                value: "".into()
-            }
+                value: "".into(),
+            },
         };
         let _resp = self.meta_node.write(req).await?;
         Ok(())
     }
 
-    async fn read_all(&self, path: String) -> anyhow::Result<Vec<u8>> {
-        // TODO read local cached meta first
-        self.local_fs.read_all(path).await
+    #[tracing::instrument(level = "debug", skip(self))]
+    async fn read_all(&self, key: String) -> exception::Result<Vec<u8>> {
+        // TODO read from remove if file is not in local fs
+        // TODO(xp): week consistency, meta may not have been replicated to this node.
+
+        // meanwhile, file meta is empty string
+        let _file_meta = self.meta_node.get_file(&key).await.ok_or_else(|| {
+            ErrorCodes::FileMetaNotFound(format!("dfs/meta: key not found: {:?}", key))
+        })?;
+
+        self.local_fs.read_all(key).await
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn list(&self, path: String) -> anyhow::Result<ListResult> {
         let _key = path;
 

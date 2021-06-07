@@ -49,7 +49,7 @@ fn test_scatter_array_data_column() -> Result<()> {
         array: DataArrayRef,
         indices: DataArrayRef,
         expect: Vec<DataArrayRef>,
-        error: &'static str
+        error: &'static str,
     }
 
     let tests = vec![
@@ -61,7 +61,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Int8Array::from(vec![1, 3])),
                 Arc::new(Int8Array::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-Int16",
@@ -71,7 +71,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Int16Array::from(vec![1, 3])),
                 Arc::new(Int16Array::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-Int32",
@@ -81,7 +81,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Int32Array::from(vec![1, 3])),
                 Arc::new(Int32Array::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-Int64",
@@ -91,7 +91,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Int64Array::from(vec![1, 3])),
                 Arc::new(Int64Array::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-UInt8",
@@ -101,7 +101,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(UInt8Array::from(vec![1, 3])),
                 Arc::new(UInt8Array::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-UInt16",
@@ -111,7 +111,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(UInt16Array::from(vec![1, 3])),
                 Arc::new(UInt16Array::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-UInt32",
@@ -121,7 +121,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(UInt32Array::from(vec![1, 3])),
                 Arc::new(UInt32Array::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-UInt64",
@@ -131,7 +131,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(UInt64Array::from(vec![1, 3])),
                 Arc::new(UInt64Array::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-Float32",
@@ -141,7 +141,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Float32Array::from(vec![1., 3.])),
                 Arc::new(Float32Array::from(vec![2.])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-Float64",
@@ -151,7 +151,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Float64Array::from(vec![1., 3.])),
                 Arc::new(Float64Array::from(vec![2.])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-Date32",
@@ -161,7 +161,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Date32Array::from(vec![1, 3])),
                 Arc::new(Date32Array::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-Date64",
@@ -171,7 +171,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Date64Array::from(vec![1, 3])),
                 Arc::new(Date64Array::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-TimestampSecond",
@@ -181,7 +181,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(TimestampSecondArray::from_vec(vec![1, 3], None)),
                 Arc::new(TimestampSecondArray::from_vec(vec![2], None)),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-TimestampMillisecond",
@@ -191,7 +191,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(TimestampMillisecondArray::from_vec(vec![1, 3], None)),
                 Arc::new(TimestampMillisecondArray::from_vec(vec![2], None)),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-TimestampMicrosecond",
@@ -201,7 +201,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(TimestampMicrosecondArray::from_vec(vec![1, 3], None)),
                 Arc::new(TimestampMicrosecondArray::from_vec(vec![2], None)),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-TimestampNanosecond",
@@ -211,7 +211,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(TimestampNanosecondArray::from_vec(vec![1, 3], None)),
                 Arc::new(TimestampNanosecondArray::from_vec(vec![2], None)),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-Time32Second",
@@ -221,7 +221,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Time32SecondArray::from(vec![1, 3])),
                 Arc::new(Time32SecondArray::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-Time32Millisecond",
@@ -231,7 +231,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Time32MillisecondArray::from(vec![1, 3])),
                 Arc::new(Time32MillisecondArray::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-Time64Microsecond",
@@ -241,7 +241,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Time64MicrosecondArray::from(vec![1, 3])),
                 Arc::new(Time64MicrosecondArray::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-Time64Nanosecond",
@@ -251,7 +251,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Time64NanosecondArray::from(vec![1, 3])),
                 Arc::new(Time64NanosecondArray::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-IntervalYearMonth",
@@ -261,7 +261,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(IntervalYearMonthArray::from(vec![1, 3])),
                 Arc::new(IntervalYearMonthArray::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-IntervalDayTime",
@@ -271,7 +271,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(IntervalDayTimeArray::from(vec![1, 3])),
                 Arc::new(IntervalDayTimeArray::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-DurationSecond",
@@ -281,7 +281,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(DurationSecondArray::from(vec![1, 3])),
                 Arc::new(DurationSecondArray::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-DurationMillisecond",
@@ -291,7 +291,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(DurationMillisecondArray::from(vec![1, 3])),
                 Arc::new(DurationMillisecondArray::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-DurationMicrosecond",
@@ -301,7 +301,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(DurationMicrosecondArray::from(vec![1, 3])),
                 Arc::new(DurationMicrosecondArray::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-DurationNanosecond",
@@ -311,7 +311,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(DurationNanosecondArray::from(vec![1, 3])),
                 Arc::new(DurationNanosecondArray::from(vec![2])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-Binary",
@@ -325,7 +325,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(BinaryArray::from(vec![&vec![1_u8][..], &vec![3_u8][..]])),
                 Arc::new(BinaryArray::from(vec![&vec![2_u8][..]])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-LargeBinary",
@@ -342,7 +342,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 ])),
                 Arc::new(LargeBinaryArray::from(vec![&vec![2_u8][..]])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-String",
@@ -352,7 +352,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(StringArray::from(vec!["1", "3"])),
                 Arc::new(StringArray::from(vec!["2"])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "non-null-LargeString",
@@ -362,7 +362,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(LargeStringArray::from(vec!["1", "3"])),
                 Arc::new(LargeStringArray::from(vec!["2"])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-Int8",
@@ -379,7 +379,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Int8Array::from(vec![None, Some(2), None])),
                 Arc::new(Int8Array::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-Int16",
@@ -396,7 +396,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Int16Array::from(vec![None, Some(2), None])),
                 Arc::new(Int16Array::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-Int32",
@@ -413,7 +413,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Int32Array::from(vec![None, Some(2), None])),
                 Arc::new(Int32Array::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-Int64",
@@ -430,7 +430,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Int64Array::from(vec![None, Some(2), None])),
                 Arc::new(Int64Array::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-UInt8",
@@ -447,7 +447,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(UInt8Array::from(vec![None, Some(2), None])),
                 Arc::new(UInt8Array::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-UInt16",
@@ -464,7 +464,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(UInt16Array::from(vec![None, Some(2), None])),
                 Arc::new(UInt16Array::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-UInt32",
@@ -481,7 +481,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(UInt32Array::from(vec![None, Some(2), None])),
                 Arc::new(UInt32Array::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-UInt64",
@@ -498,7 +498,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(UInt64Array::from(vec![None, Some(2), None])),
                 Arc::new(UInt64Array::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-Float32",
@@ -515,7 +515,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Float32Array::from(vec![None, Some(2.), None])),
                 Arc::new(Float32Array::from(vec![Some(1.), None, Some(3.)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-Float64",
@@ -532,7 +532,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Float64Array::from(vec![None, Some(2.), None])),
                 Arc::new(Float64Array::from(vec![Some(1.), None, Some(3.)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-Date32",
@@ -549,7 +549,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Date32Array::from(vec![None, Some(2), None])),
                 Arc::new(Date32Array::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-Date64",
@@ -566,83 +566,83 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Date64Array::from(vec![None, Some(2), None])),
                 Arc::new(Date64Array::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-TimestampSecond",
             array: Arc::new(TimestampSecondArray::from_opt_vec(
                 vec![None, Some(1), None, Some(2), None, Some(3)],
-                None
+                None,
             )),
             indices: Arc::new(UInt64Array::from(vec![0, 1, 1, 0, 0, 1])),
             expect: vec![
                 Arc::new(TimestampSecondArray::from_opt_vec(
                     vec![None, Some(2), None],
-                    None
+                    None,
                 )),
                 Arc::new(TimestampSecondArray::from_opt_vec(
                     vec![Some(1), None, Some(3)],
-                    None
+                    None,
                 )),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-TimestampMillisecond",
             array: Arc::new(TimestampMillisecondArray::from_opt_vec(
                 vec![None, Some(1), None, Some(2), None, Some(3)],
-                None
+                None,
             )),
             indices: Arc::new(UInt64Array::from(vec![0, 1, 1, 0, 0, 1])),
             expect: vec![
                 Arc::new(TimestampMillisecondArray::from_opt_vec(
                     vec![None, Some(2), None],
-                    None
+                    None,
                 )),
                 Arc::new(TimestampMillisecondArray::from_opt_vec(
                     vec![Some(1), None, Some(3)],
-                    None
+                    None,
                 )),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-TimestampMicrosecond",
             array: Arc::new(TimestampMicrosecondArray::from_opt_vec(
                 vec![None, Some(1), None, Some(2), None, Some(3)],
-                None
+                None,
             )),
             indices: Arc::new(UInt64Array::from(vec![0, 1, 1, 0, 0, 1])),
             expect: vec![
                 Arc::new(TimestampMicrosecondArray::from_opt_vec(
                     vec![None, Some(2), None],
-                    None
+                    None,
                 )),
                 Arc::new(TimestampMicrosecondArray::from_opt_vec(
                     vec![Some(1), None, Some(3)],
-                    None
+                    None,
                 )),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-TimestampNanosecond",
             array: Arc::new(TimestampNanosecondArray::from_opt_vec(
                 vec![None, Some(1), None, Some(2), None, Some(3)],
-                None
+                None,
             )),
             indices: Arc::new(UInt64Array::from(vec![0, 1, 1, 0, 0, 1])),
             expect: vec![
                 Arc::new(TimestampNanosecondArray::from_opt_vec(
                     vec![None, Some(2), None],
-                    None
+                    None,
                 )),
                 Arc::new(TimestampNanosecondArray::from_opt_vec(
                     vec![Some(1), None, Some(3)],
-                    None
+                    None,
                 )),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-Time32Second",
@@ -659,7 +659,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Time32SecondArray::from(vec![None, Some(2), None])),
                 Arc::new(Time32SecondArray::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-Time32Millisecond",
@@ -676,7 +676,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Time32MillisecondArray::from(vec![None, Some(2), None])),
                 Arc::new(Time32MillisecondArray::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-Time64Microsecond",
@@ -693,7 +693,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Time64MicrosecondArray::from(vec![None, Some(2), None])),
                 Arc::new(Time64MicrosecondArray::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-Time64Nanosecond",
@@ -710,7 +710,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(Time64NanosecondArray::from(vec![None, Some(2), None])),
                 Arc::new(Time64NanosecondArray::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-IntervalYearMonth",
@@ -727,7 +727,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(IntervalYearMonthArray::from(vec![None, Some(2), None])),
                 Arc::new(IntervalYearMonthArray::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-IntervalDayTime",
@@ -744,7 +744,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(IntervalDayTimeArray::from(vec![None, Some(2), None])),
                 Arc::new(IntervalDayTimeArray::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-DurationSecond",
@@ -761,7 +761,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(DurationSecondArray::from(vec![None, Some(2), None])),
                 Arc::new(DurationSecondArray::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-DurationMillisecond",
@@ -778,7 +778,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(DurationMillisecondArray::from(vec![None, Some(2), None])),
                 Arc::new(DurationMillisecondArray::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-DurationMicrosecond",
@@ -795,7 +795,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(DurationMicrosecondArray::from(vec![None, Some(2), None])),
                 Arc::new(DurationMicrosecondArray::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-DurationNanosecond",
@@ -812,7 +812,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(DurationNanosecondArray::from(vec![None, Some(2), None])),
                 Arc::new(DurationNanosecondArray::from(vec![Some(1), None, Some(3)])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-Binary",
@@ -833,7 +833,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                     Some(&vec![3_u8][..]),
                 ])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-LargeBinary",
@@ -858,7 +858,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                     Some(&vec![3_u8][..]),
                 ])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-String",
@@ -875,7 +875,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(StringArray::from(vec![None, Some("2"), None])),
                 Arc::new(StringArray::from(vec![Some("1"), None, Some("3")])),
             ],
-            error: ""
+            error: "",
         },
         ArrayTest {
             name: "null-LargeString",
@@ -892,7 +892,7 @@ fn test_scatter_array_data_column() -> Result<()> {
                 Arc::new(LargeStringArray::from(vec![None, Some("2"), None])),
                 Arc::new(LargeStringArray::from(vec![Some("1"), None, Some("3")])),
             ],
-            error: ""
+            error: "",
         },
     ];
 
@@ -900,7 +900,7 @@ fn test_scatter_array_data_column() -> Result<()> {
         let result = DataArrayScatter::scatter(
             &DataColumnarValue::Array(test.array.clone()),
             &DataColumnarValue::Array(test.indices.clone()),
-            2
+            2,
         );
 
         match result {
@@ -946,7 +946,7 @@ fn test_scatter_array_with_constants_indices() -> Result<()> {
         let result = DataArrayScatter::scatter(
             &DataColumnarValue::Array(Arc::new(Int8Array::from(vec![1, 2, 3]))),
             &DataColumnarValue::Constant(data_value, 3),
-            2
+            2,
         )?;
 
         assert_eq!(result.len(), 2);
@@ -975,7 +975,7 @@ fn test_scatter_const_array_with_constants_indices() -> Result<()> {
     let result = DataArrayScatter::scatter(
         &DataColumnarValue::Constant(DataValue::Int8(Some(3)), 3),
         &DataColumnarValue::Constant(DataValue::Int8(Some(1)), 3),
-        2
+        2,
     )?;
 
     assert_eq!(result.len(), 2);

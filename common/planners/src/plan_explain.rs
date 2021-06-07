@@ -4,7 +4,10 @@
 
 use std::sync::Arc;
 
+use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataType;
 
 use crate::PlanNode;
 
@@ -12,18 +15,18 @@ use crate::PlanNode;
 pub enum ExplainType {
     Syntax,
     Graph,
-    Pipeline
+    Pipeline,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct ExplainPlan {
     pub typ: ExplainType,
-    pub input: Arc<PlanNode>
+    pub input: Arc<PlanNode>,
 }
 
 impl ExplainPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        self.input.schema()
+        DataSchemaRefExt::create(vec![DataField::new("explain", DataType::Utf8, false)])
     }
 
     pub fn set_input(&mut self, node: &PlanNode) {

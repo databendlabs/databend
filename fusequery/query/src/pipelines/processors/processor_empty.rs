@@ -29,7 +29,7 @@ impl IProcessor for EmptyProcessor {
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> Result<()> {
         Result::Err(ErrorCodes::IllegalTransformConnectionState(
-            "Cannot call EmptyProcessor connect_to"
+            "Cannot call EmptyProcessor connect_to",
         ))
     }
 
@@ -45,7 +45,7 @@ impl IProcessor for EmptyProcessor {
         Ok(Box::pin(DataBlockStream::create(
             Arc::new(DataSchema::empty()),
             None,
-            vec![]
+            vec![],
         )))
     }
 }

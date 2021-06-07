@@ -16,15 +16,22 @@ use crate::sessions::FuseQueryContextRef;
 pub struct SourceTransform {
     ctx: FuseQueryContextRef,
     db: String,
-    table: String
+    table: String,
+    remote: bool,
 }
 
 impl SourceTransform {
-    pub fn try_create(ctx: FuseQueryContextRef, db: &str, table: &str) -> Result<Self> {
+    pub fn try_create(
+        ctx: FuseQueryContextRef,
+        db: &str,
+        table: &str,
+        remote: bool,
+    ) -> Result<Self> {
         Ok(SourceTransform {
             ctx,
             db: db.to_string(),
-            table: table.to_string()
+            table: table.to_string(),
+            remote,
         })
     }
 }
@@ -37,7 +44,7 @@ impl IProcessor for SourceTransform {
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> Result<()> {
         Result::Err(ErrorCodes::LogicalError(
-            "Cannot call SourceTransform connect_to"
+            "Cannot call SourceTransform connect_to",
         ))
     }
 
@@ -50,7 +57,14 @@ impl IProcessor for SourceTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let table = self.ctx.get_table(self.db.as_str(), self.table.as_str())?;
+        let table = if self.remote {
+            self.ctx
+                .get_remote_table(self.db.as_str(), self.table.as_str())
+                .await?
+        } else {
+            self.ctx.get_table(self.db.as_str(), self.table.as_str())?
+        };
+
         table.read(self.ctx.clone()).await
     }
 }

@@ -16,7 +16,7 @@ fn test_projection_plan() -> anyhow::Result<()> {
     let projection = PlanNode::Projection(ProjectionPlan {
         expr: vec![col("a")],
         schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
-        input: Arc::from(PlanBuilder::from(&PlanNode::Empty(EmptyPlan { schema })).build()?)
+        input: Arc::from(PlanBuilder::from(&PlanNode::Empty(EmptyPlan { schema })).build()?),
     });
     let _ = projection.schema();
     let expect = "Projection: a:Utf8";

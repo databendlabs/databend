@@ -18,7 +18,7 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct SettingInterpreter {
     ctx: FuseQueryContextRef,
-    set: SettingPlan
+    set: SettingPlan,
 }
 
 impl SettingInterpreter {

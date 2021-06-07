@@ -5,16 +5,17 @@
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use anyhow::Result;
 use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
 use tonic::transport::Server;
 
 use crate::api::rpc::StoreFlightImpl;
 use crate::configs::Config;
+use crate::dfs::Dfs;
 use crate::localfs::LocalFS;
+use crate::meta_service::MetaNode;
 
 pub struct StoreServer {
-    conf: Config
+    conf: Config,
 }
 
 impl StoreServer {
@@ -22,14 +23,29 @@ impl StoreServer {
         Self { conf }
     }
 
-    pub async fn serve(&self) -> Result<()> {
-        let addr = self.conf.rpc_api_address.parse::<std::net::SocketAddr>()?;
+    pub async fn serve(&self) -> anyhow::Result<()> {
+        let addr = self
+            .conf
+            .flight_api_address
+            .parse::<std::net::SocketAddr>()?;
 
+        // TODO(xp): add local fs dir to config and use it.
         let p = tempfile::tempdir()?;
         let fs = LocalFS::try_create(p.path().to_str().unwrap().into())?;
 
-        // Flight service:
-        let flight_impl = StoreFlightImpl::create(self.conf.clone(), Arc::new(fs));
+        let meta_addr = format!("{}:{}", self.conf.meta_api_host, self.conf.meta_api_port);
+
+        // TODO(xp): support non-boot mode.
+        //           for now it can only be run in single-node cluster mode.
+        // if !self.conf.boot {
+        //     todo!("non-boot mode is not impl yet")
+        // }
+
+        let mn = MetaNode::boot(0, meta_addr.clone()).await?;
+
+        let dfs = Dfs::create(fs, mn);
+
+        let flight_impl = StoreFlightImpl::create(self.conf.clone(), Arc::new(dfs));
         let flight_srv = FlightServiceServer::new(flight_impl);
 
         Server::builder()

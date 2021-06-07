@@ -1,15 +1,22 @@
 // Copyright 2020-2021 The Datafuse Authors.
 //
-// SPDX-Lise-Identifier: Apache-2.0.
+// SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 use common_arrow::arrow::datatypes::Schema;
+use common_arrow::arrow::ipc::writer::IpcWriteOptions;
 use common_arrow::arrow_flight;
+use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
 use common_arrow::arrow_flight::FlightData;
+use common_arrow::parquet::arrow::ArrowReader;
+use common_arrow::parquet::arrow::ParquetFileArrowReader;
+use common_arrow::parquet::file::reader::SerializedFileReader;
+use common_arrow::parquet::file::serialized_reader::SliceableCursor;
 use common_flights::CreateDatabaseAction;
 use common_flights::CreateDatabaseActionResult;
 use common_flights::CreateTableAction;
@@ -20,11 +27,12 @@ use common_flights::DropTableAction;
 use common_flights::DropTableActionResult;
 use common_flights::GetTableAction;
 use common_flights::GetTableActionResult;
+use common_flights::ReadAction;
+use common_flights::ScanPartitionAction;
 use common_flights::StoreDoAction;
 use common_flights::StoreDoActionResult;
-#[allow(unused_imports)]
-use log::error;
-#[allow(unused_imports)]
+use common_planners::PlanNode;
+use futures::Stream;
 use log::info;
 use tokio::sync::mpsc::Sender;
 use tokio_stream::StreamExt;
@@ -41,14 +49,17 @@ use crate::protobuf::Table;
 
 pub struct ActionHandler {
     meta: Arc<Mutex<MemEngine>>,
-    fs: Arc<dyn IFileSystem>
+    fs: Arc<dyn IFileSystem>,
 }
+
+type DoGetStream =
+    Pin<Box<dyn Stream<Item = Result<FlightData, tonic::Status>> + Send + Sync + 'static>>;
 
 impl ActionHandler {
     pub fn create(fs: Arc<dyn IFileSystem>) -> Self {
         ActionHandler {
             meta: MemEngine::create(),
-            fs
+            fs,
         }
     }
 
@@ -57,7 +68,7 @@ impl ActionHandler {
     pub async fn do_pull_file(
         &self,
         key: String,
-        tx: Sender<Result<FlightData, tonic::Status>>
+        tx: Sender<Result<FlightData, tonic::Status>>,
     ) -> Result<(), Status> {
         // TODO: stream read if the file is too large.
         let buf = self
@@ -81,7 +92,8 @@ impl ActionHandler {
             StoreDoAction::DropDatabase(act) => self.drop_db(act).await,
             StoreDoAction::CreateTable(a) => self.create_table(a).await,
             StoreDoAction::DropTable(act) => self.drop_table(act).await,
-            StoreDoAction::GetTable(a) => self.get_table(a).await
+            StoreDoAction::GetTable(a) => self.get_table(a).await,
+            StoreDoAction::ScanPartition(act) => self.scan_partitions(&act),
         }
     }
 
@@ -96,8 +108,8 @@ impl ActionHandler {
                 db_id: -1,
                 ver: -1,
                 table_name_to_id: HashMap::new(),
-                tables: HashMap::new()
-            })
+                tables: HashMap::new(),
+            }),
         };
 
         let database_id = meta
@@ -105,7 +117,7 @@ impl ActionHandler {
             .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(StoreDoActionResult::CreateDatabase(
-            CreateDatabaseActionResult { database_id }
+            CreateDatabaseActionResult { database_id },
         ))
     }
 
@@ -130,19 +142,19 @@ impl ActionHandler {
             options: plan.options,
 
             // TODO
-            placement_policy: vec![]
+            placement_policy: vec![],
         };
 
         let cmd = CmdCreateTable {
             db_name,
             table_name,
-            table: Some(table)
+            table: Some(table),
         };
 
         let table_id = meta.create_table(cmd, plan.if_not_exists)?;
 
         Ok(StoreDoActionResult::CreateTable(CreateTableActionResult {
-            table_id
+            table_id,
         }))
     }
 
@@ -166,7 +178,7 @@ impl ActionHandler {
             table_id: table.table_id,
             db: db_name,
             name: table_name,
-            schema: Arc::new(schema)
+            schema: Arc::new(schema),
         });
 
         Ok(rst)
@@ -176,7 +188,7 @@ impl ActionHandler {
         let mut meta = self.meta.lock().unwrap();
         let _ = meta.drop_database(&act.plan.db, act.plan.if_exists)?;
         Ok(StoreDoActionResult::DropDatabase(
-            DropDatabaseActionResult {}
+            DropDatabaseActionResult {},
         ))
     }
 
@@ -185,16 +197,13 @@ impl ActionHandler {
         let _ = meta.drop_table(&act.plan.db, &act.plan.table, act.plan.if_exists)?;
         Ok(StoreDoActionResult::DropTable(DropTableActionResult {}))
     }
-}
 
-impl ActionHandler {
     pub(crate) async fn do_put(
         &self,
         db_name: String,
         table_name: String,
-        parts: Streaming<FlightData>
+        parts: Streaming<FlightData>,
     ) -> anyhow::Result<common_flights::AppendResult> {
-        log::info!("calling do_put");
         {
             let mut meta = self.meta.lock().unwrap();
             let _tbl_meta = meta.get_table(db_name.clone(), table_name.clone())?;
@@ -209,12 +218,75 @@ impl ActionHandler {
             .take_while(|item| item.is_ok())
             .map(|item| item.unwrap());
 
-        info!("calling appender");
         let res = appender
-            .append_data(db_name + "/" + &table_name, Box::pin(parts))
-            .await;
+            .append_data(format!("{}/{}", &db_name, &table_name), Box::pin(parts))
+            .await?;
 
-        info!("leaving with {:?}", res);
-        res
+        let mut meta = self.meta.lock().unwrap();
+        meta.append_data_parts(&db_name, &table_name, &res);
+        Ok(res)
+    }
+
+    fn scan_partitions(&self, cmd: &ScanPartitionAction) -> Result<StoreDoActionResult, Status> {
+        let schema = &cmd.scan_plan.schema_name;
+        let splits: Vec<&str> = schema.split('/').collect();
+        // TODO error handling
+        println!("schema {}, splits {:?}", schema, splits);
+        let db_name = splits[0];
+        let tbl_name = splits[1];
+
+        let meta = self.meta.lock().unwrap();
+        Ok(StoreDoActionResult::ScanPartition(
+            meta.get_data_parts(db_name, tbl_name),
+        ))
+    }
+
+    pub async fn read_partition(&self, action: ReadAction) -> anyhow::Result<DoGetStream> {
+        log::info!("entering read");
+        let part_file = action.partition.name;
+
+        let plan = if let PlanNode::ReadSource(read_source_plan) = action.push_down {
+            read_source_plan
+        } else {
+            anyhow::bail!("invalid PlanNode passed in")
+        };
+
+        let content = self.fs.read_all(part_file.to_string()).await?;
+        let cursor = SliceableCursor::new(content);
+
+        let file_reader = SerializedFileReader::new(cursor)?;
+        let mut arrow_reader = ParquetFileArrowReader::new(Arc::new(file_reader));
+
+        // before push_down is passed in, we returns all the columns
+        let schema = plan.schema;
+        let projection = (0..schema.fields().len()).collect::<Vec<_>>();
+
+        // TODO config
+        let batch_size = 2048;
+
+        let batch_reader = arrow_reader.get_record_reader_by_columns(projection, batch_size)?;
+
+        // For simplicity, we do the conversion in-memory, to be optimized later
+        // TODO consider using `parquet_table` and `stream_parquet`
+        let write_opt = IpcWriteOptions::default();
+        let flights =
+            batch_reader
+                .into_iter()
+                .map(|batch| {
+                    batch.map(
+                    |b| flight_data_from_arrow_batch(&b, &write_opt).1, /*dictionary ignored*/
+                ).map_err(|arrow_err| Status::internal(arrow_err.to_string()))
+                })
+                .collect::<Vec<_>>();
+        let stream = futures::stream::iter(flights);
+
+        // This is not gonna work, cause `ParquetFileArrowReader` and `ParquetFileArrowReader` are neither Send nor Sync
+        //
+        // # let stream = futures::stream::iter(reader.into_iter());
+        // # let stream =
+        // #     stream.map(move |batch| flight_data_from_arrow_batch(&batch.unwrap(), &write_opt).1);
+        // # let stream = stream.map(|v| Ok(v));
+
+        Ok(Box::pin(stream))
     }
 }

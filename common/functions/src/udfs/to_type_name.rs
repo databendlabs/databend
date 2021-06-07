@@ -14,13 +14,13 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct ToTypeNameFunction {
-    display_name: String
+    display_name: String,
 }
 
 impl ToTypeNameFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn IFunction>> {
         Ok(Box::new(ToTypeNameFunction {
-            display_name: display_name.to_string()
+            display_name: display_name.to_string(),
         }))
     }
 }
@@ -42,16 +42,12 @@ impl IFunction for ToTypeNameFunction {
         let type_name = format!("{}", columns[0].data_type());
         Ok(DataColumnarValue::Constant(
             DataValue::Utf8(Some(type_name)),
-            input_rows
+            input_rows,
         ))
     }
 
     fn num_arguments(&self) -> usize {
         1
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        None
     }
 }
 

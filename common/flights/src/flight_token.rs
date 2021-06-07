@@ -7,12 +7,12 @@ use jwt_simple::prelude::*;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct FlightClaim {
-    pub username: String
+    pub username: String,
 }
 
 #[derive(Clone)]
 pub struct FlightToken {
-    key: HS256Key
+    key: HS256Key,
 }
 
 impl FlightToken {

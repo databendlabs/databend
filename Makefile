@@ -1,29 +1,27 @@
 HUB ?= datafusedev
 TAG ?= latest
+
 # Setup dev toolchain
 setup:
 	bash ./scripts/setup/dev_setup.sh
 
-test:
-	cargo test
-
-bench:
-	cargo bench
-
 run:
-	RUST_BACKTRACE=full RUSTFLAGS="-C target-cpu=native" cargo run --bin=fuse-query --release
-
-runquery:
-	RUST_BACKTRACE=full RUSTFLAGS="-C target-cpu=native" cargo run --bin=fuse-query --release
-
-runstore:
-	RUST_BACKTRACE=full RUSTFLAGS="-C target-cpu=native" cargo run --bin=fuse-store --release
+	bash ./scripts/deploy/fusequery-standalone.sh
 
 build:
-	RUSTFLAGS="-C target-cpu=native" cargo build --release
+	bash ./scripts/build/build-native.sh
 
 profile:
-	RUSTFLAGS="-g" cargo flamegraph --bin=fuse-query
+	bash ./scripts/ci/ci-run-profile.sh
+
+unit-test:
+	bash ./scripts/ci/ci-run-unit-tests.sh
+
+stateless-test:
+	bash ./scripts/build/build-debug.sh
+	bash ./scripts/ci/ci-run-stateless-tests.sh
+
+test: unit-test stateless-test
 
 fmt:
 	cargo fmt
@@ -42,4 +40,4 @@ runhelm:
 clean:
 	cargo clean
 
-.PHONY: setup test bench run runquery runstore runhelm build fmt lint docker coverage clean
+.PHONY: setup test bench run runhelm build fmt lint docker coverage clean

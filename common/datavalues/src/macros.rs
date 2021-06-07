@@ -23,7 +23,7 @@ macro_rules! compute_op {
         let ll = downcast_array!($LEFT, $DT)?;
         let rr = downcast_array!($RIGHT, $DT)?;
         Ok(Arc::new(
-            common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCodes::from)?
+            common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCodes::from)?,
         ))
     }};
 }
@@ -35,18 +35,7 @@ macro_rules! compute_utf8_op {
         let rr = downcast_array!($RIGHT, $DT)?;
         Ok(Arc::new(
             (paste::expr! {common_arrow::arrow::compute::[<$OP _utf8>]}(&ll, &rr))
-                .map_err(ErrorCodes::from)?
-        ))
-    }};
-}
-
-/// Invoke a self defined compute kernel on a pair of arrays
-macro_rules! compute_self_defined_op {
-    ($LEFT:expr, $RIGHT:expr, $OP:tt, $DT:ident) => {{
-        let ll = downcast_array!($LEFT, $DT)?;
-        let rr = downcast_array!($RIGHT, $DT)?;
-        Ok(Arc::new(
-            common_arrow::arrow::compute::math_op(&ll, &rr, $OP).map_err(ErrorCodes::from)?
+                .map_err(ErrorCodes::from)?,
         ))
     }};
 }
@@ -56,7 +45,7 @@ macro_rules! compute_negate {
     ($VALUE:expr, $DT:ident) => {{
         let vv = downcast_array!($VALUE, $DT)?;
         Ok(Arc::new(
-            common_arrow::arrow::compute::negate(&vv).map_err(ErrorCodes::from)?
+            common_arrow::arrow::compute::negate(&vv).map_err(ErrorCodes::from)?,
         ))
     }};
 }
@@ -81,31 +70,7 @@ macro_rules! arrow_primitive_array_op {
                 "Unsupported arithmetic_compute::{} for data type: {:?}",
                 stringify!($OP),
                 ($LEFT).data_type(),
-            )))
-        }
-    };
-}
-
-/// Invoke a compute kernel on a pair of arrays
-/// The arrow_primitive_array_self_defined_op macro only evaluates for primitive types
-/// like integers and floats.
-macro_rules! arrow_primitive_array_self_defined_op {
-    ($LEFT:expr, $RIGHT:expr, $RESULT:expr, $OP:tt) => {
-        match $RESULT {
-            DataType::Int8 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Int8Array),
-            DataType::Int16 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Int16Array),
-            DataType::Int32 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Int32Array),
-            DataType::Int64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Int64Array),
-            DataType::UInt8 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt8Array),
-            DataType::UInt16 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt16Array),
-            DataType::UInt32 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt32Array),
-            DataType::UInt64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt64Array),
-            DataType::Float32 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Float32Array),
-            DataType::Float64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Float64Array),
-            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
-                "Unsupported arithmetic_compute::math_op for data type: {:?}",
-                ($LEFT).data_type(),
-            )))
+            ))),
         }
     };
 }
@@ -130,7 +95,7 @@ macro_rules! arrow_array_op {
                 "Unsupported arithmetic_compute::{} for data type: {:?}",
                 stringify!($OP),
                 ($LEFT).data_type(),
-            )))
+            ))),
         }
     };
 }
@@ -150,7 +115,7 @@ macro_rules! arrow_primitive_array_negate {
             _ => Result::Err(ErrorCodes::BadDataValueType(format!(
                 "Unsupported arithmetic_compute::negate for data type: {:?}",
                 ($VALUE).data_type(),
-            )))
+            ))),
         }
     };
 }
@@ -164,9 +129,9 @@ macro_rules! compute_op_scalar {
         Ok(Arc::new(
             (paste::expr! {common_arrow::arrow::compute::[<$OP _scalar>]}(
                 &ll,
-                $RIGHT.try_into().map_err(ErrorCodes::from)?
+                $RIGHT.try_into().map_err(ErrorCodes::from)?,
             ))
-            .map_err(ErrorCodes::from)?
+            .map_err(ErrorCodes::from)?,
         ))
     }};
 }
@@ -179,9 +144,9 @@ macro_rules! compute_utf8_op_scalar {
             Ok(Arc::new(
                 (paste::expr! {common_arrow::arrow::compute::[<$OP _utf8_scalar>]}(
                     &ll,
-                    &string_value
+                    &string_value,
                 ))
-                .map_err(ErrorCodes::from)?
+                .map_err(ErrorCodes::from)?,
             ))
         } else {
             Result::Err(ErrorCodes::BadDataValueType(format!(
@@ -211,98 +176,9 @@ macro_rules! arrow_array_op_scalar {
             other => Result::Err(ErrorCodes::BadDataValueType(format!(
                 "DataValue Error: Unsupported data type {:?}",
                 other
-            )))
+            ))),
         };
         Ok(result?)
-    }};
-}
-
-macro_rules! typed_array_sum_to_data_value {
-    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident) => {{
-        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
-        let delta = common_arrow::arrow::compute::sum(array);
-        Result::Ok(DataValue::$SCALAR(delta))
-    }};
-}
-
-macro_rules! typed_array_min_max_to_data_value {
-    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:ident) => {{
-        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
-        let value = common_arrow::arrow::compute::$OP(array);
-        Result::Ok(DataValue::$SCALAR(value))
-    }};
-}
-
-macro_rules! typed_array_min_max_string_to_data_value {
-    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:ident) => {{
-        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
-        let value = common_arrow::arrow::compute::$OP(array);
-        let value = value.and_then(|e| Some(e.to_string()));
-        Result::Ok(DataValue::$SCALAR(value))
-    }};
-}
-
-macro_rules! typed_array_values_min_max_to_data_value {
-    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $TYPE:ident, $OP:expr) => {{
-        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
-        let vals_std: &[$TYPE] = array.values();
-        let mut min_max_row_val: (u64, $TYPE) = (0, vals_std[0]);
-        for (row, val) in vals_std.iter().enumerate() {
-            match $OP {
-                DataValueAggregateOperator::ArgMin => {
-                    if *val < min_max_row_val.1 {
-                        min_max_row_val = (row as u64, *val);
-                    }
-                }
-                DataValueAggregateOperator::ArgMax => {
-                    if *val > min_max_row_val.1 {
-                        min_max_row_val = (row as u64, *val);
-                    }
-                }
-                _ => {
-                    panic!(
-                        "Unexpected {} for macro typed_array_values_min_max_to_data_value",
-                        stringify!($OP),
-                    )
-                }
-            }
-        }
-        Result::Ok(DataValue::Struct(vec![
-            DataValue::UInt64(Some(min_max_row_val.0)),
-            DataValue::$SCALAR(Some(min_max_row_val.1)),
-        ]))
-    }};
-}
-
-macro_rules! typed_array_values_min_max_string_to_data_value {
-    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:expr) => {{
-        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
-        let mut min_max_row_val: (u64, &str) = (0, array.value(0));
-        for (row, val) in array.iter().enumerate() {
-            let str_val = val.unwrap();
-            match $OP {
-                DataValueAggregateOperator::ArgMin => {
-                    if str_val < min_max_row_val.1 {
-                        min_max_row_val = (row as u64, str_val);
-                    }
-                }
-                DataValueAggregateOperator::ArgMax => {
-                    if str_val > min_max_row_val.1 {
-                        min_max_row_val = (row as u64, str_val);
-                    }
-                }
-                _ => {
-                    panic!(
-                        "Unexpected {} for macro typed_array_values_min_max_to_data_value",
-                        stringify!($OP),
-                    )
-                }
-            }
-        }
-        Result::Ok(DataValue::Struct(vec![
-            DataValue::UInt64(Some(min_max_row_val.0)),
-            DataValue::$SCALAR(Some(min_max_row_val.1.to_string())),
-        ]))
     }};
 }
 
@@ -313,7 +189,7 @@ macro_rules! typed_data_value_add {
             (None, None) => None,
             (Some(a), None) => Some(a.clone() as $TYPE),
             (None, Some(b)) => Some(b.clone() as $TYPE),
-            (Some(a), Some(b)) => Some((*a as $TYPE) + (*b as $TYPE))
+            (Some(a), Some(b)) => Some((*a as $TYPE) + (*b as $TYPE)),
         }))
     }};
 }
@@ -325,7 +201,7 @@ macro_rules! typed_data_value_sub {
             (None, None) => None,
             (Some(a), None) => Some(a.clone() as $TYPE),
             (None, Some(b)) => Some(b.clone() as $TYPE),
-            (Some(a), Some(b)) => Some((*a as $TYPE) - (*b as $TYPE))
+            (Some(a), Some(b)) => Some((*a as $TYPE) - (*b as $TYPE)),
         }))
     }};
 }
@@ -337,7 +213,7 @@ macro_rules! typed_data_value_mul {
             (None, None) => None,
             (Some(a), None) => Some(a.clone() as $TYPE),
             (None, Some(b)) => Some(b.clone() as $TYPE),
-            (Some(a), Some(b)) => Some((*a as $TYPE) * (*b as $TYPE))
+            (Some(a), Some(b)) => Some((*a as $TYPE) * (*b as $TYPE)),
         }))
     }};
 }
@@ -349,7 +225,7 @@ macro_rules! typed_data_value_div {
             (None, None) => None,
             (Some(a), None) => Some(a.clone() as f64),
             (None, Some(b)) => Some(b.clone() as f64),
-            (Some(a), Some(b)) => Some((*a as f64) / (*b as f64))
+            (Some(a), Some(b)) => Some((*a as f64) / (*b as f64)),
         }))
     }};
 }
@@ -361,7 +237,7 @@ macro_rules! typed_data_value_modulo {
             (None, None) => None,
             (Some(a), None) => Some(a.clone() as $TYPE),
             (None, Some(b)) => Some(b.clone() as $TYPE),
-            (Some(a), Some(b)) => Some((*a as $TYPE) % (*b as $TYPE))
+            (Some(a), Some(b)) => Some((*a as $TYPE) % (*b as $TYPE)),
         }))
     }};
 }
@@ -372,7 +248,7 @@ macro_rules! typed_data_value_min_max {
             (None, None) => None,
             (Some(a), None) => Some(a.clone()),
             (None, Some(b)) => Some(b.clone()),
-            (Some(a), Some(b)) => Some((*a).$OP(*b))
+            (Some(a), Some(b)) => Some((*a).$OP(*b)),
         }))
     }};
 }
@@ -384,7 +260,7 @@ macro_rules! typed_data_value_min_max_string {
             (None, None) => None,
             (Some(a), None) => Some(a.clone()),
             (None, Some(b)) => Some(b.clone()),
-            (Some(a), Some(b)) => Some((a).$OP(b).clone())
+            (Some(a), Some(b)) => Some((a).$OP(b).clone()),
         }))
     }};
 }
@@ -393,7 +269,7 @@ macro_rules! format_data_value_with_option {
     ($F:expr, $EXPR:expr) => {{
         match $EXPR {
             Some(e) => write!($F, "{}", e),
-            None => write!($F, "NULL")
+            None => write!($F, "NULL"),
         }
     }};
 }
@@ -404,7 +280,7 @@ macro_rules! array_boolean_op {
         let ll = downcast_array!($LEFT, $DT)?;
         let rr = downcast_array!($RIGHT, $DT)?;
         Ok(Arc::new(
-            common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCodes::from)?
+            common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCodes::from)?,
         ))
     }};
 }
@@ -415,7 +291,7 @@ macro_rules! typed_cast_from_array_to_data_value {
         let array = downcast_array!($array, $ARRAYTYPE)?;
         Result::Ok(DataValue::$SCALAR(match array.is_null($index) {
             true => None,
-            false => Some(array.value($index).into())
+            false => Some(array.value($index).into()),
         }))
     }};
 }
@@ -432,7 +308,7 @@ macro_rules! typed_cast_from_data_value_to_std {
                         "DataValue Error:  Cannot convert {:?} to {}",
                         value,
                         std::any::type_name::<Self>()
-                    ))
+                    )),
                 }
             }
         }
@@ -446,7 +322,7 @@ macro_rules! build_list {
             None => {
                 return Ok(common_arrow::arrow::array::new_null_array(
                     &DataType::List(Box::new(DataField::new("item", DataType::$SCALAR_TY, true))),
-                    $SIZE
+                    $SIZE,
                 ))
             }
             Some(values) => {
@@ -463,7 +339,7 @@ macro_rules! build_list {
                             }
                             _ => {
                                 return Result::Err(ErrorCodes::BadDataValueType(
-                                    "Incompatible DataValue for list"
+                                    "Incompatible DataValue for list",
                                 ))
                             }
                         };
@@ -490,7 +366,7 @@ macro_rules! try_build_array {
                 }
                 _ => {
                     return Result::Err(ErrorCodes::BadDataValueType(
-                        "Incompatible DataValue for list"
+                        "Incompatible DataValue for list",
                     ))
                 }
             };

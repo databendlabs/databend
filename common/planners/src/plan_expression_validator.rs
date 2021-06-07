@@ -16,7 +16,7 @@ struct ExpressionValidator<'a, F>
 where F: Fn(&Expression) -> Result<()>
 {
     error: Option<ErrorCodes>,
-    test_fn: &'a F
+    test_fn: &'a F,
 }
 
 impl<'a, F> ExpressionValidator<'a, F>
@@ -26,7 +26,7 @@ where F: Fn(&Expression) -> Result<()>
     fn new(test_fn: &'a F) -> Self {
         Self {
             error: None,
-            test_fn
+            test_fn,
         }
     }
 }
@@ -39,8 +39,8 @@ where F: Fn(&Expression) -> Result<()>
             Ok(()) => Ok(Recursion::Continue(self)),
             Err(e) => Ok(Recursion::Stop(ExpressionValidator {
                 error: Some(e),
-                test_fn: self.test_fn
-            }))
+                test_fn: self.test_fn,
+            })),
         }
     }
 }
@@ -50,7 +50,7 @@ fn validate_function_arg(func: Box<dyn IFunction>, args: &[Expression]) -> Resul
         Some((start, end)) => {
             return if args.len() < start || args.len() > end {
                 Err(ErrorCodes::NumberArgumentsNotMatch(format!(
-                    "{} expect to have [{}, {}) arguments, but got {}",
+                    "{} expect to have [{}, {}] arguments, but got {}",
                     func.name(),
                     start,
                     end,
@@ -86,12 +86,12 @@ pub fn validate_expression(expr: &Expression) -> Result<()> {
 
         // Currently no need to check  UnaryExpression and BinaryExpression
         // todo: AggregateFunction validation after generic AggregateFunctions
-        _ => Ok(())
+        _ => Ok(()),
     });
 
     let validator = expr.accept(validator)?;
     match validator.error {
         Some(err) => Err(err),
-        None => Ok(())
+        None => Ok(()),
     }
 }

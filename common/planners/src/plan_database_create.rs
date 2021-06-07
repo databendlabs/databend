@@ -12,14 +12,14 @@ use common_datavalues::DataSchemaRef;
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum DatabaseEngineType {
     Local,
-    Remote
+    Remote,
 }
 
 impl ToString for DatabaseEngineType {
     fn to_string(&self) -> String {
         match self {
             DatabaseEngineType::Local => "Local".into(),
-            DatabaseEngineType::Remote => "Remote".into()
+            DatabaseEngineType::Remote => "Remote".into(),
         }
     }
 }
@@ -31,7 +31,7 @@ pub struct CreateDatabasePlan {
     pub if_not_exists: bool,
     pub db: String,
     pub engine: DatabaseEngineType,
-    pub options: DatabaseOptions
+    pub options: DatabaseOptions,
 }
 
 impl CreateDatabasePlan {

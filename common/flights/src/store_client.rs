@@ -12,14 +12,19 @@ use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
+use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
 use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::BasicAuth;
 use common_arrow::arrow_flight::HandshakeRequest;
+use common_arrow::arrow_flight::Ticket;
 use common_datablocks::DataBlock;
+use common_exception::ErrorCodes;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
+use common_planners::ScanPlan;
+use common_streams::SendableDataBlockStream;
 use futures::stream;
 use futures::SinkExt;
 use futures::StreamExt;
@@ -37,6 +42,7 @@ use crate::store_do_action::DropDatabaseAction;
 use crate::store_do_action::DropDatabaseActionResult;
 use crate::store_do_action::StoreDoAction;
 use crate::store_do_action::StoreDoActionResult;
+use crate::store_do_get::ReadAction;
 use crate::store_do_put;
 use crate::store_do_put::AppendResult;
 use crate::ConnectionFactory;
@@ -46,6 +52,9 @@ use crate::DropTableAction;
 use crate::DropTableActionResult;
 use crate::GetTableAction;
 use crate::GetTableActionResult;
+use crate::ScanPartitionAction;
+use crate::ScanPartitionResult;
+use crate::StoreDoGet;
 
 pub type BlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;
@@ -54,7 +63,7 @@ pub type BlockStream =
 pub struct StoreClient {
     token: Vec<u8>,
     timeout: Duration,
-    client: FlightServiceClient<tonic::transport::channel::Channel>
+    client: FlightServiceClient<tonic::transport::channel::Channel>,
 }
 
 impl StoreClient {
@@ -79,7 +88,7 @@ impl StoreClient {
         let rx = Self {
             token,
             timeout,
-            client
+            client,
         };
         Ok(rx)
     }
@@ -91,7 +100,7 @@ impl StoreClient {
     /// Create database call.
     pub async fn create_database(
         &mut self,
-        plan: CreateDatabasePlan
+        plan: CreateDatabasePlan,
     ) -> anyhow::Result<CreateDatabaseActionResult> {
         let action = StoreDoAction::CreateDatabase(CreateDatabaseAction { plan });
         let rst = self.do_action(&action).await?;
@@ -105,7 +114,7 @@ impl StoreClient {
     /// Drop database call.
     pub async fn drop_database(
         &mut self,
-        plan: DropDatabasePlan
+        plan: DropDatabasePlan,
     ) -> anyhow::Result<DropDatabaseActionResult> {
         let action = StoreDoAction::DropDatabase(DropDatabaseAction { plan });
         let rst = self.do_action(&action).await?;
@@ -119,7 +128,7 @@ impl StoreClient {
     /// Create table call.
     pub async fn create_table(
         &mut self,
-        plan: CreateTablePlan
+        plan: CreateTablePlan,
     ) -> anyhow::Result<CreateTableActionResult> {
         let action = StoreDoAction::CreateTable(CreateTableAction { plan });
         let rst = self.do_action(&action).await?;
@@ -133,7 +142,7 @@ impl StoreClient {
     /// Drop table call.
     pub async fn drop_table(
         &mut self,
-        plan: DropTablePlan
+        plan: DropTablePlan,
     ) -> anyhow::Result<DropTableActionResult> {
         let action = StoreDoAction::DropTable(DropTableAction { plan });
         let rst = self.do_action(&action).await?;
@@ -148,7 +157,7 @@ impl StoreClient {
     pub async fn get_table(
         &mut self,
         db: String,
-        table: String
+        table: String,
     ) -> anyhow::Result<GetTableActionResult> {
         let action = StoreDoAction::GetTable(GetTableAction { db, table });
         let rst = self.do_action(&action).await?;
@@ -159,16 +168,53 @@ impl StoreClient {
         anyhow::bail!("invalid response")
     }
 
+    pub async fn scan_partition(
+        &mut self,
+        db_name: String,
+        tbl_name: String,
+        scan_plan: &ScanPlan,
+    ) -> anyhow::Result<ScanPartitionResult> {
+        let mut plan = scan_plan.clone();
+        plan.schema_name = format!("{}/{}", db_name, tbl_name);
+        let action = StoreDoAction::ScanPartition(ScanPartitionAction { scan_plan: plan });
+        let rst = self.do_action(&action).await?;
+
+        if let StoreDoActionResult::ScanPartition(rst) = rst {
+            return Ok(rst);
+        }
+        anyhow::bail!("invalid response")
+    }
+
+    /// Get partition.
+    pub async fn read_partition(
+        &mut self,
+        schema: SchemaRef,
+        read_action: &ReadAction,
+    ) -> anyhow::Result<SendableDataBlockStream> {
+        let cmd = StoreDoGet::Read(read_action.clone());
+        let mut req = tonic::Request::<Ticket>::from(&cmd);
+        req.set_timeout(self.timeout);
+        let res = self.client.do_get(req).await?.into_inner();
+        let res_stream = res.map(move |item| {
+            item.map_err(|status| ErrorCodes::TokioError(status.to_string()))
+                .and_then(|item| {
+                    flight_data_to_arrow_batch(&item, schema.clone(), &[]).map_err(ErrorCodes::from)
+                })
+                .and_then(DataBlock::try_from)
+        });
+        Ok(Box::pin(res_stream))
+    }
+
     /// Handshake.
     async fn handshake(
         client: &mut FlightServiceClient<Channel>,
         timeout: Duration,
         username: &str,
-        password: &str
+        password: &str,
     ) -> anyhow::Result<Vec<u8>> {
         let auth = BasicAuth {
             username: username.to_string(),
-            password: password.to_string()
+            password: password.to_string(),
         };
         let mut payload = vec![];
         auth.encode(&mut payload)?;
@@ -222,7 +268,7 @@ impl StoreClient {
         db_name: String,
         tbl_name: String,
         scheme_ref: SchemaRef,
-        mut block_stream: BlockStream
+        mut block_stream: BlockStream,
     ) -> anyhow::Result<AppendResult> {
         let ipc_write_opt = IpcWriteOptions::default();
         let flight_schema = flight_data_from_arrow_schema(&scheme_ref, &ipc_write_opt);
@@ -233,17 +279,23 @@ impl StoreClient {
         tokio::spawn(async move {
             while let Some(block) = block_stream.next().await {
                 info!("next data block");
-                if let Ok(batch) = RecordBatch::try_from(block) {
-                    if let Err(_e) = tx
-                        .send(flight_data_from_arrow_batch(&batch, &ipc_write_opt).1)
-                        .await
-                    {
-                        log::info!("failed to send flight-data to downstream, breaking out");
+                match RecordBatch::try_from(block) {
+                    Ok(batch) => {
+                        if let Err(_e) = tx
+                            .send(flight_data_from_arrow_batch(&batch, &ipc_write_opt).1)
+                            .await
+                        {
+                            log::error!("failed to send flight-data to downstream, breaking out");
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "failed to convert DataBlock to RecordBatch , breaking out, {:?}",
+                            e
+                        );
                         break;
                     }
-                } else {
-                    log::info!("failed to convert DataBlock to RecordBatch , breaking out");
-                    break;
                 }
             }
         });

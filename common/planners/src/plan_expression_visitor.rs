@@ -12,7 +12,7 @@ pub enum Recursion<V: ExpressionVisitor> {
     Continue(V),
     /// Do not visit the children of this expression, though the walk
     /// of parents of this expression will not be affected
-    Stop(V)
+    Stop(V),
 }
 
 /// Encode the traversal of an expression tree. When passed to
@@ -63,7 +63,7 @@ impl Expression {
         let visitor = match visitor.pre_visit(self)? {
             Recursion::Continue(visitor) => visitor,
             // If the recursion should stop, do not visit children
-            Recursion::Stop(visitor) => return Ok(visitor)
+            Recursion::Stop(visitor) => return Ok(visitor),
         };
 
         // recurse (and cover all expression types)
@@ -92,7 +92,7 @@ impl Expression {
             Expression::Cast { expr, .. } => expr.accept(visitor),
             Expression::Sort { expr, .. } => expr.accept(visitor),
 
-            _ => Ok(visitor)
+            _ => Ok(visitor),
         }?;
 
         visitor.post_visit(self)

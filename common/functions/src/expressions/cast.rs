@@ -19,7 +19,7 @@ pub const DEFAULT_DATAFUSE_CAST_OPTIONS: CastOptions = CastOptions { safe: false
 #[derive(Clone)]
 pub struct CastFunction {
     /// The data type to cast to
-    cast_type: DataType
+    cast_type: DataType,
 }
 
 impl CastFunction {
@@ -48,17 +48,13 @@ impl IFunction for CastFunction {
             compute::kernels::cast::cast_with_options(
                 &value,
                 &self.cast_type,
-                &DEFAULT_DATAFUSE_CAST_OPTIONS
-            )?
+                &DEFAULT_DATAFUSE_CAST_OPTIONS,
+            )?,
         ))
     }
 
     fn num_arguments(&self) -> usize {
         1
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        None
     }
 }
 

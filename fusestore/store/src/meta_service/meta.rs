@@ -22,7 +22,7 @@ use crate::meta_service::NodeId;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Replication {
     /// n-copies mode.
-    Mirror(u64)
+    Mirror(u64),
 }
 
 impl Default for Replication {
@@ -40,11 +40,14 @@ pub struct Meta {
     /// The file names stored in this cluster
     pub keys: BTreeMap<String, String>,
 
+    /// storage of auto-incremental number.
+    pub sequences: BTreeMap<String, u64>,
+
     // cluster nodes, key distribution etc.
     pub slots: Vec<Slot>,
     pub nodes: HashMap<NodeId, Node>,
 
-    pub replication: Replication
+    pub replication: Replication,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -52,7 +55,7 @@ pub struct MetaBuilder {
     /// The number of slots to allocated.
     initial_slots: Option<u64>,
     /// The replication strategy.
-    replication: Option<Replication>
+    replication: Option<Replication>,
 }
 
 impl MetaBuilder {
@@ -74,9 +77,10 @@ impl MetaBuilder {
 
         let mut m = Meta {
             keys: BTreeMap::new(),
+            sequences: BTreeMap::new(),
             slots: Vec::with_capacity(initial_slots as usize),
             nodes: HashMap::new(),
-            replication
+            replication,
         };
         for _i in 0..initial_slots {
             m.slots.push(Slot::default());
@@ -113,9 +117,20 @@ impl Meta {
                 Ok((prev, Some(value.clone())).into())
             }
 
+            Cmd::IncrSeq { ref key } => {
+                let prev = self.sequences.get(key);
+                let curr = match prev {
+                    Some(v) => v + 1,
+                    None => 1,
+                };
+                self.sequences.insert(key.clone(), curr);
+                tracing::info!("applied IncrSeq: {}={}", key, curr);
+                Ok(curr.into())
+            }
+
             Cmd::AddNode {
                 ref node_id,
-                ref node
+                ref node,
             } => {
                 if self.nodes.contains_key(node_id) {
                     let prev = self.nodes.get(node_id);
@@ -143,7 +158,7 @@ impl Meta {
     /// TODO(xp): add another func for load based assignment
     pub fn assign_rand_nodes_to_slot(&mut self, slot_index: usize) -> anyhow::Result<()> {
         let n = match self.replication {
-            Replication::Mirror(x) => x
+            Replication::Mirror(x) => x,
         } as usize;
 
         let mut node_ids = self.nodes.keys().collect::<Vec<&NodeId>>();
@@ -180,13 +195,13 @@ impl Meta {
 /// A slot is assigned to several physical servers(normally 3 for durability).
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Slot {
-    pub node_ids: Vec<NodeId>
+    pub node_ids: Vec<NodeId>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Node {
     pub name: String,
-    pub address: String
+    pub address: String,
 }
 
 impl Display for Node {

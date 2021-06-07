@@ -21,21 +21,21 @@ pub type ClusterRef = Arc<Cluster>;
 
 pub struct Cluster {
     local_port: u16,
-    nodes: Mutex<HashMap<String, Arc<Node>>>
+    nodes: Mutex<HashMap<String, Arc<Node>>>,
 }
 
 impl Cluster {
     pub fn create_global(cfg: Config) -> Result<ClusterRef> {
         Ok(Arc::new(Cluster {
             nodes: Mutex::new(HashMap::new()),
-            local_port: Address::create(&cfg.flight_api_address)?.port()
+            local_port: Address::create(&cfg.flight_api_address)?.port(),
         }))
     }
 
     pub fn empty() -> ClusterRef {
         Arc::new(Cluster {
             local_port: 9090,
-            nodes: Mutex::new(HashMap::new())
+            nodes: Mutex::new(HashMap::new()),
         })
     }
 
@@ -60,7 +60,7 @@ impl Cluster {
                     priority,
                     address.clone(),
                     address_is_local,
-                    new_node_sequence
+                    new_node_sequence,
                 )?));
 
                 Ok(())
@@ -74,7 +74,7 @@ impl Cluster {
             None => Err(ErrorCodes::NotFoundClusterNode(format!(
                 "The node \"{}\" not found in the cluster",
                 name
-            )))
+            ))),
         }
     }
 
@@ -124,7 +124,7 @@ async fn is_local(address: &Address, expect_port: u16) -> Result<bool> {
 
                 Ok(false)
             }
-        }
+        },
     }
 }
 

@@ -29,7 +29,7 @@ fn test_arithmetic_function() -> Result<()> {
         columns: Vec<DataColumnarValue>,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>
+        func: Box<dyn IFunction>,
     }
 
     let schema = DataSchemaRefExt::create(vec![
@@ -51,7 +51,7 @@ fn test_arithmetic_function() -> Result<()> {
                 ((Arc::new(Int64Array::from(vec![1, 2, 3, 4]))) as ArrayRef).into(),
             ],
             expect: Arc::new(Int64Array::from(vec![5, 5, 5, 5])),
-            error: ""
+            error: "",
         },
         Test {
             name: "add-diff-passed",
@@ -65,7 +65,7 @@ fn test_arithmetic_function() -> Result<()> {
                 ((Arc::new(Int64Array::from(vec![1, 2, 3, 4]))) as ArrayRef).into(),
             ],
             expect: Arc::new(Int64Array::from(vec![5, 5, 5, 5])),
-            error: ""
+            error: "",
         },
         Test {
             name: "sub-int64-passed",
@@ -79,7 +79,7 @@ fn test_arithmetic_function() -> Result<()> {
                 ((Arc::new(Int64Array::from(vec![1, 2, 3]))) as ArrayRef).into(),
             ],
             expect: Arc::new(Int64Array::from(vec![3, 1, -1])),
-            error: ""
+            error: "",
         },
         Test {
             name: "mul-int64-passed",
@@ -93,7 +93,7 @@ fn test_arithmetic_function() -> Result<()> {
                 ((Arc::new(Int64Array::from(vec![1, 2, 3]))) as ArrayRef).into(),
             ],
             expect: Arc::new(Int64Array::from(vec![4, 6, 6])),
-            error: ""
+            error: "",
         },
         Test {
             name: "div-int64-passed",
@@ -107,7 +107,7 @@ fn test_arithmetic_function() -> Result<()> {
                 ((Arc::new(Int64Array::from(vec![1, 2, 3]))) as ArrayRef).into(),
             ],
             expect: Arc::new(Float64Array::from(vec![4.0, 1.5, 0.6666666666666666])),
-            error: ""
+            error: "",
         },
         Test {
             name: "mod-int64-passed",
@@ -121,7 +121,7 @@ fn test_arithmetic_function() -> Result<()> {
                 ((Arc::new(Int64Array::from(vec![1, 2, 3]))) as ArrayRef).into(),
             ],
             expect: Arc::new(Int64Array::from(vec![0, 1, 2])),
-            error: ""
+            error: "",
         },
     ];
 

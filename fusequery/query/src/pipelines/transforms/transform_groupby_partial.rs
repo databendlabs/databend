@@ -27,41 +27,41 @@ use log::info;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
 
-// Table for <group_key, (indices, keys) >
-type GroupIndicesTable = HashMap<Vec<u8>, (Vec<u32>, Vec<DataValue>), ahash::RandomState>;
-
 // Table for <group_key, ((function, column_name, args), keys) >
 type GroupFuncTable = RwLock<
     HashMap<
         Vec<u8>,
         (
             Vec<(Box<dyn IAggregateFunction>, String, Vec<String>)>,
-            Vec<DataValue>
+            Vec<DataValue>,
         ),
-        ahash::RandomState
-    >
+        ahash::RandomState,
+    >,
 >;
 
 pub struct GroupByPartialTransform {
     aggr_exprs: Vec<Expression>,
     group_exprs: Vec<Expression>,
     schema: DataSchemaRef,
+    schema_before_groupby: DataSchemaRef,
     input: Arc<dyn IProcessor>,
-    groups: GroupFuncTable
+    groups: GroupFuncTable,
 }
 
 impl GroupByPartialTransform {
     pub fn create(
         schema: DataSchemaRef,
+        schema_before_groupby: DataSchemaRef,
         aggr_exprs: Vec<Expression>,
-        group_exprs: Vec<Expression>
+        group_exprs: Vec<Expression>,
     ) -> Self {
         Self {
             aggr_exprs,
             group_exprs,
             schema,
+            schema_before_groupby,
             input: Arc::new(EmptyProcessor::create()),
-            groups: RwLock::new(HashMap::default())
+            groups: RwLock::new(HashMap::default()),
         }
     }
 }
@@ -96,12 +96,12 @@ impl IProcessor for GroupByPartialTransform {
     ///
     /// grouping by [A%3]
     /// 1.1)
-    /// row_idx, group_key
-    /// 0, 1
-    /// 1, 2
-    /// 2, 0
-    /// 3, 1
-    /// 4, 2
+    /// row_idx, group_key, A
+    /// 0, 1, 1
+    /// 1, 2, 2
+    /// 2, 0, 3
+    /// 3, 1, 4
+    /// 4, 2, 5
     ///
     /// 1.2) make indices group(for vector compute)
     /// group_key, indices
@@ -111,68 +111,29 @@ impl IProcessor for GroupByPartialTransform {
     ///
     /// 1.3) apply aggregate function(SUM(A)) to the take block
     /// group_key, SUM(A)
-    /// 0,
-    /// 1, 5
-    /// 2, 7
+    /// <0, 3>
+    /// <1, 1+4>
+    /// <2, 2+5>
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let group_len = self.group_exprs.len();
         let aggr_len = self.aggr_exprs.len();
         let start = Instant::now();
+        let schema_before_groupby = self.schema_before_groupby.clone();
 
         let mut stream = self.input.execute().await?;
 
         while let Some(block) = stream.next().await {
             let block = block?;
-            let mut group_indices = GroupIndicesTable::default();
-            let mut group_columns = Vec::with_capacity(group_len);
+            let cols = self
+                .group_exprs
+                .iter()
+                .map(|x| x.column_name())
+                .collect::<Vec<_>>();
 
-            // 1.1 Eval the group expr columns.
-            {
-                for expr in &self.group_exprs {
-                    group_columns.push(block.try_column_by_name(&expr.column_name())?);
-                }
-            }
-
-            // 1.2 Make group with indices.
-            {
-                let mut group_key_len = 0;
-                for col in &group_columns {
-                    let typ = col.data_type();
-                    if common_datavalues::is_integer(&typ) {
-                        group_key_len += common_datavalues::numeric_byte_size(&typ)?;
-                    } else {
-                        group_key_len += 4;
-                    }
-                }
-
-                let mut group_key = Vec::with_capacity(group_key_len);
-                for row in 0..block.num_rows() {
-                    group_key.clear();
-
-                    for col in &group_columns {
-                        DataValue::concat_row_to_one_key(col, row, &mut group_key)?;
-                    }
-
-                    match group_indices.get_mut(&group_key) {
-                        None => {
-                            let mut group_values = Vec::with_capacity(group_key.len());
-                            for col in &group_columns {
-                                group_values.push(DataValue::try_from_column(col, row)?);
-                            }
-                            group_indices
-                                .insert(group_key.clone(), (vec![row as u32], group_values));
-                        }
-                        Some((v, _)) => {
-                            v.push(row as u32);
-                        }
-                    }
-                }
-            }
-
+            // 1.1 and 1.2.
+            let group_blocks = DataBlock::group_by(&block, &cols)?;
             // 1.3 Apply take blocks to aggregate function by group_key.
             {
-                for (group_key, (group_indices, values)) in group_indices {
-                    let take_block = DataBlock::block_take_by_indices(&block, &group_indices)?;
+                for (group_key, group_keys, take_block) in group_blocks {
                     let rows = take_block.num_rows();
 
                     let mut groups = self.groups.write();
@@ -181,10 +142,10 @@ impl IProcessor for GroupByPartialTransform {
                         None => {
                             let mut aggr_funcs = vec![];
                             for expr in &self.aggr_exprs {
-                                let mut func = expr.to_aggregate_function()?;
+                                let mut func =
+                                    expr.to_aggregate_function(&schema_before_groupby)?;
                                 let name = expr.column_name();
-                                let args = expr.to_aggregate_function_args()?;
-
+                                let args = expr.to_aggregate_function_names()?;
                                 let arg_columns = args
                                     .iter()
                                     .map(|arg| {
@@ -192,11 +153,10 @@ impl IProcessor for GroupByPartialTransform {
                                     })
                                     .collect::<Result<Vec<DataColumnarValue>>>()?;
                                 func.accumulate(&arg_columns, rows)?;
-
                                 aggr_funcs.push((func, name, args));
                             }
 
-                            groups.insert(group_key.clone(), (aggr_funcs, values));
+                            groups.insert(group_key.clone(), (aggr_funcs, group_keys));
                         }
                         // Accumulate result against the take block by indices.
                         Some((aggr_funcs, _)) => {
@@ -221,7 +181,7 @@ impl IProcessor for GroupByPartialTransform {
             return Ok(Box::pin(DataBlockStream::create(
                 DataSchemaRefExt::create(vec![]),
                 None,
-                vec![]
+                vec![],
             )));
         }
 
@@ -260,7 +220,7 @@ impl IProcessor for GroupByPartialTransform {
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block]
+            vec![block],
         )))
     }
 }

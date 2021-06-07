@@ -22,7 +22,7 @@ pub struct ExpressionPlan {
     pub exprs: Vec<Expression>,
     pub schema: DataSchemaRef,
     pub input: Arc<PlanNode>,
-    pub desc: String
+    pub desc: String,
 }
 
 impl ExpressionPlan {
@@ -52,7 +52,7 @@ pub enum Expression {
     BinaryExpression {
         left: Box<Expression>,
         op: String,
-        right: Box<Expression>
+        right: Box<Expression>,
     },
 
     /// ScalarFunction with a set of arguments.
@@ -60,7 +60,11 @@ pub enum Expression {
     ScalarFunction { op: String, args: Vec<Expression> },
 
     /// AggregateFunction with a set of arguments.
-    AggregateFunction { op: String, args: Vec<Expression> },
+    AggregateFunction {
+        op: String,
+        distinct: bool,
+        args: Vec<Expression>,
+    },
 
     /// A sort expression, that can be used to sort values.
     Sort {
@@ -69,7 +73,7 @@ pub enum Expression {
         /// The direction of the sort
         asc: bool,
         /// Whether to put Nulls before all other data values
-        nulls_first: bool
+        nulls_first: bool,
     },
     /// All fields(*) in a schema.
     Wildcard,
@@ -79,15 +83,15 @@ pub enum Expression {
         /// The expression being cast
         expr: Box<Expression>,
         /// The `DataType` the expression will yield
-        data_type: DataType
-    }
+        data_type: DataType,
+    },
 }
 
 impl Expression {
     pub fn column_name(&self) -> String {
         match self {
             Expression::Alias(name, _expr) => name.clone(),
-            _ => format!("{:?}", self)
+            _ => format!("{:?}", self),
         }
     }
 
@@ -133,40 +137,53 @@ impl Expression {
                 let func = FunctionFactory::get(op)?;
                 func.return_type(&arg_types)
             }
-            Expression::AggregateFunction { op, args } => {
-                let mut arg_types = Vec::with_capacity(args.len());
-                for arg in args {
-                    arg_types.push(arg.to_data_type(input_schema)?);
-                }
-                let func = AggregateFunctionFactory::get(op)?;
-                func.return_type(&arg_types)
+            Expression::AggregateFunction { .. } => {
+                let func = self.to_aggregate_function(input_schema)?;
+                func.return_type()
             }
             Expression::Wildcard => Result::Err(ErrorCodes::IllegalDataType(
-                "Wildcard expressions are not valid to get return type"
+                "Wildcard expressions are not valid to get return type",
             )),
             Expression::Cast { data_type, .. } => Ok(data_type.clone()),
-            Expression::Sort { expr, .. } => expr.to_data_type(input_schema)
+            Expression::Sort { expr, .. } => expr.to_data_type(input_schema),
         }
     }
 
-    pub fn to_aggregate_function(&self) -> Result<Box<dyn IAggregateFunction>> {
+    pub fn to_aggregate_function(
+        &self,
+        schema: &DataSchemaRef,
+    ) -> Result<Box<dyn IAggregateFunction>> {
         match self {
-            Expression::AggregateFunction { op, .. } => AggregateFunctionFactory::get(op),
-            _ => Err(ErrorCodes::LogicalError(
-                "Expression must be aggregated function"
-            ))
-        }
-    }
+            Expression::AggregateFunction { op, distinct, args } => {
+                let mut func_name = op.clone();
+                if *distinct {
+                    func_name += "Distinct";
+                }
 
-    pub fn to_aggregate_function_args(&self) -> Result<Vec<String>> {
-        match self {
-            Expression::AggregateFunction { args, .. } => {
-                let arg_names = args.iter().map(|arg| arg.column_name()).collect::<Vec<_>>();
-                Ok(arg_names)
+                let mut fields = Vec::with_capacity(args.len());
+                for arg in args.iter() {
+                    fields.push(arg.to_data_field(schema)?);
+                }
+                AggregateFunctionFactory::get(&func_name, fields)
             }
             _ => Err(ErrorCodes::LogicalError(
-                "Expression must be aggregated function"
-            ))
+                "Expression must be aggregated function",
+            )),
+        }
+    }
+
+    pub fn to_aggregate_function_names(&self) -> Result<Vec<String>> {
+        match self {
+            Expression::AggregateFunction { args, .. } => {
+                let mut names = Vec::with_capacity(args.len());
+                for arg in args.iter() {
+                    names.push(arg.column_name());
+                }
+                Ok(names)
+            }
+            _ => Err(ErrorCodes::LogicalError(
+                "Expression must be aggregated function",
+            )),
         }
     }
 }
@@ -199,8 +216,11 @@ impl fmt::Debug for Expression {
                 write!(f, ")")
             }
 
-            Expression::AggregateFunction { op, args } => {
+            Expression::AggregateFunction { op, distinct, args } => {
                 write!(f, "{}(", op)?;
+                if *distinct {
+                    write!(f, "distinct ")?;
+                }
                 for (i, _) in args.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;

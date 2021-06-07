@@ -26,7 +26,7 @@ pub struct CsvTable {
     name: String,
     schema: DataSchemaRef,
     file: String,
-    has_header: bool
+    has_header: bool,
 }
 
 impl CsvTable {
@@ -34,16 +34,16 @@ impl CsvTable {
         db: String,
         name: String,
         schema: DataSchemaRef,
-        options: TableOptions
+        options: TableOptions,
     ) -> Result<Box<dyn ITable>> {
         let has_header = options.get("has_header").is_some();
         let file = match options.get("location") {
             None => {
                 return Result::Err(ErrorCodes::BadOption(
-                    "CSV Engine must contains file location options"
+                    "CSV Engine must contains file location options",
                 ));
             }
-            Some(v) => v.clone()
+            Some(v) => v.clone(),
         };
 
         Ok(Box::new(Self {
@@ -51,7 +51,7 @@ impl CsvTable {
             name,
             schema,
             file,
-            has_header
+            has_header,
         }))
     }
 }
@@ -82,14 +82,14 @@ impl ITable for CsvTable {
         &self,
         ctx: FuseQueryContextRef,
         scan: &ScanPlan,
-        _partitions: usize
+        _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
         let start_line: usize = if self.has_header { 1 } else { 0 };
         let file = &self.file;
         let lines_count = Common::count_lines(
             File::open(file.clone())
                 .with_context(|| format!("Cannot find file:{}", file))
-                .map_err(ErrorCodes::from)?
+                .map_err(ErrorCodes::from)?,
         )
         .map_err(|e| ErrorCodes::CannotReadFile(e.to_string()))?;
 
@@ -100,11 +100,12 @@ impl ITable for CsvTable {
             partitions: Common::generate_parts(
                 start_line as u64,
                 ctx.get_max_threads()?,
-                lines_count as u64
+                lines_count as u64,
             ),
             statistics: Statistics::default(),
             description: format!("(Read from CSV Engine table  {}.{})", self.db, self.name),
-            scan_plan: Arc::new(scan.clone())
+            scan_plan: Arc::new(scan.clone()),
+            remote: false,
         })
     }
 
@@ -112,7 +113,7 @@ impl ITable for CsvTable {
         Ok(Box::pin(CsvTableStream::try_create(
             ctx,
             self.schema.clone(),
-            self.file.clone()
+            self.file.clone(),
         )?))
     }
 }

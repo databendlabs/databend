@@ -19,7 +19,7 @@ pub struct InsertIntoPlan {
     pub schema: DataSchemaRef,
 
     #[serde(skip, default = "InsertIntoPlan::empty_stream")]
-    pub input_stream: Arc<Mutex<Option<BlockStream>>>
+    pub input_stream: Arc<Mutex<Option<BlockStream>>>,
 }
 
 impl PartialEq for InsertIntoPlan {

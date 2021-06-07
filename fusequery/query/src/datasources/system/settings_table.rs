@@ -24,7 +24,7 @@ use crate::datasources::ITable;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct SettingsTable {
-    schema: DataSchemaRef
+    schema: DataSchemaRef,
 }
 
 impl SettingsTable {
@@ -35,7 +35,7 @@ impl SettingsTable {
                 DataField::new("value", DataType::Utf8, false),
                 DataField::new("default_value", DataType::Utf8, false),
                 DataField::new("description", DataType::Utf8, false),
-            ])
+            ]),
         }
     }
 }
@@ -66,7 +66,7 @@ impl ITable for SettingsTable {
         &self,
         _ctx: FuseQueryContextRef,
         scan: &ScanPlan,
-        _partitions: usize
+        _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
@@ -74,11 +74,12 @@ impl ITable for SettingsTable {
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0
+                version: 0,
             }],
             statistics: Statistics::default(),
             description: "(Read from system.settings table)".to_string(),
-            scan_plan: Arc::new(scan.clone())
+            scan_plan: Arc::new(scan.clone()),
+            remote: false,
         })
     }
 
@@ -111,7 +112,7 @@ impl ITable for SettingsTable {
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block]
+            vec![block],
         )))
     }
 }

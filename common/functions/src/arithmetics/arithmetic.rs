@@ -22,8 +22,7 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct ArithmeticFunction {
-    depth: usize,
-    op: DataValueArithmeticOperator
+    op: DataValueArithmeticOperator,
 }
 
 impl ArithmeticFunction {
@@ -43,7 +42,7 @@ impl ArithmeticFunction {
     }
 
     pub fn try_create_func(op: DataValueArithmeticOperator) -> Result<Box<dyn IFunction>> {
-        Ok(Box::new(ArithmeticFunction { depth: 0, op }))
+        Ok(Box::new(ArithmeticFunction { op }))
     }
 }
 
@@ -72,13 +71,13 @@ impl IFunction for ArithmeticFunction {
                     let data_value = DataValue::try_from_array(&result, 0)?;
                     Ok(DataColumnarValue::Constant(data_value, input_rows))
                 }
-                _ => Ok(DataColumnarValue::Array(result))
+                _ => Ok(DataColumnarValue::Array(result)),
             }
         } else {
             let result = DataArrayArithmetic::data_array_arithmetic_op(
                 self.op.clone(),
                 &columns[0],
-                &columns[1]
+                &columns[1],
             )?;
 
             match (&columns[0], &columns[1]) {
@@ -86,7 +85,7 @@ impl IFunction for ArithmeticFunction {
                     let data_value = DataValue::try_from_array(&result, 0)?;
                     Ok(DataColumnarValue::Constant(data_value, input_rows))
                 }
-                _ => Ok(DataColumnarValue::Array(result))
+                _ => Ok(DataColumnarValue::Array(result)),
             }
         }
     }
@@ -96,7 +95,7 @@ impl IFunction for ArithmeticFunction {
     }
 
     fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((1, 3))
+        Some((1, 2))
     }
 }
 

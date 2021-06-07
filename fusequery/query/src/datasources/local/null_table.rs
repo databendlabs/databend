@@ -22,7 +22,7 @@ use crate::sessions::FuseQueryContextRef;
 pub struct NullTable {
     db: String,
     name: String,
-    schema: DataSchemaRef
+    schema: DataSchemaRef,
 }
 
 impl NullTable {
@@ -30,7 +30,7 @@ impl NullTable {
         db: String,
         name: String,
         schema: DataSchemaRef,
-        _options: TableOptions
+        _options: TableOptions,
     ) -> Result<Box<dyn ITable>> {
         let table = Self { db, name, schema };
         Ok(Box::new(table))
@@ -63,7 +63,7 @@ impl ITable for NullTable {
         &self,
         _ctx: FuseQueryContextRef,
         scan: &ScanPlan,
-        _partitions: usize
+        _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
@@ -71,11 +71,12 @@ impl ITable for NullTable {
             schema: self.schema.clone(),
             partitions: vec![Partition {
                 name: "".to_string(),
-                version: 0
+                version: 0,
             }],
             statistics: Statistics::default(),
             description: format!("(Read from Null Engine table  {}.{})", self.db, self.name),
-            scan_plan: Arc::new(scan.clone())
+            scan_plan: Arc::new(scan.clone()),
+            remote: false,
         })
     }
 
@@ -85,7 +86,7 @@ impl ITable for NullTable {
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block]
+            vec![block],
         )))
     }
 }

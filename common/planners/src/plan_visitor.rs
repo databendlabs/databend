@@ -14,6 +14,7 @@ use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::InsertIntoPlan;
+use crate::LimitByPlan;
 use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
@@ -77,6 +78,7 @@ pub trait PlanVisitor<'plan> {
             PlanNode::Filter(plan) => self.visit_filter(plan),
             PlanNode::Sort(plan) => self.visit_sort(plan),
             PlanNode::Limit(plan) => self.visit_limit(plan),
+            PlanNode::LimitBy(plan) => self.visit_limit_by(plan),
             PlanNode::Scan(plan) => self.visit_scan(plan),
             PlanNode::ReadSource(plan) => self.visit_read_data_source(plan),
             PlanNode::Select(plan) => self.visit_select(plan),
@@ -91,7 +93,7 @@ pub trait PlanVisitor<'plan> {
             PlanNode::Remote(plan) => self.visit_remote(plan),
             PlanNode::Having(plan) => self.visit_having(plan),
             PlanNode::Expression(plan) => self.visit_expression(plan),
-            PlanNode::InsertInto(plan) => self.visit_insert_into(plan)
+            PlanNode::InsertInto(plan) => self.visit_insert_into(plan),
         }
     }
 
@@ -132,6 +134,10 @@ pub trait PlanVisitor<'plan> {
     }
 
     fn visit_limit(&mut self, plan: &'plan LimitPlan) {
+        self.visit_plan_node(plan.input.as_ref());
+    }
+
+    fn visit_limit_by(&mut self, plan: &'plan LimitByPlan) {
         self.visit_plan_node(plan.input.as_ref());
     }
 

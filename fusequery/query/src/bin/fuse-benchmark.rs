@@ -42,7 +42,7 @@ pub struct Config {
     #[structopt(long, short = "c", default_value = "1")]
     pub concurrency: usize,
     #[structopt(long, default_value = "")]
-    pub json: String
+    pub json: String,
 }
 
 impl Config {
@@ -60,7 +60,7 @@ struct Benchmark {
     executed: AtomicUsize,
     stats: Arc<RwLock<Stats>>,
     queries: Vec<String>,
-    database_url: String
+    database_url: String,
 }
 
 impl Benchmark {
@@ -73,7 +73,7 @@ impl Benchmark {
             executed: AtomicUsize::new(0),
             stats: Arc::new(RwLock::new(Stats::new())),
             queries,
-            database_url
+            database_url,
         }
     }
 }
@@ -86,7 +86,7 @@ struct Stats {
     work_time: f64,
     read_rows: usize,
     read_bytes: usize,
-    sample: CKMS<f64>
+    sample: CKMS<f64>,
 }
 
 impl Stats {
@@ -97,7 +97,7 @@ impl Stats {
             work_time: 0f64,
             read_rows: 0,
             read_bytes: 0,
-            sample: CKMS::<f64>::new(0.001)
+            sample: CKMS::<f64>::new(0.001),
         }
     }
     pub fn update(&mut self, elapsed: f64, read_rows: usize, read_bytes: usize) {
@@ -217,7 +217,7 @@ async fn execute(bench: BenchmarkRef) -> Result<()> {
                     stats.update(
                         start.elapsed().as_millis() as f64 / 1000f64,
                         progress.rows as usize,
-                        progress.bytes as usize
+                        progress.bytes as usize,
                     );
                 }
                 bench.executed.fetch_add(1, Ordering::Relaxed);
@@ -281,10 +281,10 @@ async fn report_json(bench: BenchmarkRef, json_path: &str) -> std::io::Result<()
         writer: &mut BufWriter<File>,
         key: &str,
         value: V,
-        with_comma: bool
+        with_comma: bool,
     ) -> std::io::Result<()>
     where
-        V: fmt::Debug
+        V: fmt::Debug,
     {
         write!(writer, "{:?}: {:?}", key, value)?;
         if with_comma {
@@ -298,7 +298,7 @@ async fn report_json(bench: BenchmarkRef, json_path: &str) -> std::io::Result<()
         writer: &mut BufWriter<File>,
         stats: &Stats,
         percent: f64,
-        with_comma: bool
+        with_comma: bool,
     ) -> std::io::Result<()> {
         write!(
             writer,
@@ -320,19 +320,19 @@ async fn report_json(bench: BenchmarkRef, json_path: &str) -> std::io::Result<()
         &mut writer,
         "QPS",
         stats.queries as f64 / stats.work_time,
-        true
+        true,
     )?;
     print_key_value(
         &mut writer,
         "RPS",
         stats.read_rows as f64 / stats.work_time,
-        true
+        true,
     )?;
     print_key_value(
         &mut writer,
         "MiBPS",
         stats.read_bytes as f64 / stats.work_time / 1048576f64,
-        false
+        false,
     )?;
     writer.write_all(b"}, \n")?;
     writer.write_all(b"\"query_time_percentiles\": {\n")?;

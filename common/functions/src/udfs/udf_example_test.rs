@@ -24,7 +24,7 @@ fn test_udf_example_function() -> anyhow::Result<()> {
         columns: Vec<DataColumnarValue>,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>
+        func: Box<dyn IFunction>,
     }
 
     let schema = DataSchemaRefExt::create(vec![
@@ -42,7 +42,7 @@ fn test_udf_example_function() -> anyhow::Result<()> {
             Arc::new(BooleanArray::from(vec![true, false, true, true])).into(),
         ],
         expect: Arc::new(BooleanArray::from(vec![true, true, true, true])),
-        error: ""
+        error: "",
     }];
 
     for t in tests {

@@ -34,13 +34,13 @@ pub struct PrepareStageInfo {
     pub stage_id: String,
     pub plan: PlanNode,
     pub scatters: Vec<String>,
-    pub scatters_expression: Expression
+    pub scatters_expression: Expression,
 }
 
 #[derive(Debug)]
 pub struct StreamInfo {
     pub schema: DataSchemaRef,
-    pub stream_name: String
+    pub stream_name: String,
 }
 
 pub enum Request {
@@ -48,28 +48,28 @@ pub enum Request {
     GetStream(String, Sender<Result<Receiver<Result<FlightData>>>>),
     PrepareQueryStage(Box<PrepareStageInfo>, Sender<Result<()>>),
     GetStreamInfo(String, Sender<Result<StreamInfo>>),
-    TerminalStage(FuseQueryContextRef, String, String)
+    TerminalStage(FuseQueryContextRef, String, String),
 }
 
 #[derive(Debug)]
 pub struct FlightStreamInfo {
     schema: DataSchemaRef,
     data_receiver: Option<Receiver<Result<FlightData>>>,
-    launcher_sender: Sender<()>
+    launcher_sender: Sender<()>,
 }
 
 pub struct DispatcherState {
-    streams: HashMap<String, FlightStreamInfo>
+    streams: HashMap<String, FlightStreamInfo>,
 }
 
 struct ServerState {
     conf: Config,
     cluster: ClusterRef,
-    session_manager: SessionManagerRef
+    session_manager: SessionManagerRef,
 }
 
 pub struct FlightDispatcher {
-    state: Arc<ServerState>
+    state: Arc<ServerState>,
 }
 
 type DataReceiver = Receiver<Result<FlightData>>;
@@ -87,7 +87,7 @@ impl FlightDispatcher {
     async fn dispatch(
         state: Arc<ServerState>,
         mut receiver: Receiver<Request>,
-        request_sender: Sender<Request>
+        request_sender: Sender<Request>,
     ) {
         let mut dispatcher_state = DispatcherState::create();
         while let Some(request) = receiver.recv().await {
@@ -110,7 +110,7 @@ impl FlightDispatcher {
                         &mut dispatcher_state,
                         &info,
                         pipeline,
-                        request_sender.clone()
+                        request_sender.clone(),
                     );
                     if let Err(error) = response_sender.send(prepared_query).await {
                         error!("Cannot push: {}", error);
@@ -141,12 +141,12 @@ impl FlightDispatcher {
         match state.streams.get(id) {
             Some(info) => Ok(StreamInfo {
                 schema: info.schema.clone(),
-                stream_name: id.to_string()
+                stream_name: id.to_string(),
             }),
             None => Err(ErrorCodes::NotFoundStream(format!(
                 "Stream {} is not found",
                 id
-            )))
+            ))),
         }
     }
 
@@ -156,7 +156,7 @@ impl FlightDispatcher {
             None => Err(ErrorCodes::NotFoundStream(format!(
                 "Stream {} is not found",
                 id
-            )))
+            ))),
         }
     }
 
@@ -176,9 +176,9 @@ impl FlightDispatcher {
                     Err(error) => Err(ErrorCodes::TokioError(format!(
                         "Cannot launch query stage: {}",
                         error
-                    )))
-                }
-            }
+                    ))),
+                },
+            },
         }
     }
 
@@ -186,7 +186,7 @@ impl FlightDispatcher {
         state: &mut DispatcherState,
         info: &PrepareStageInfo,
         pipeline: Result<(FuseQueryContextRef, Pipeline)>,
-        request_sender: Sender<Request>
+        request_sender: Sender<Request>,
     ) -> Result<()> {
         let scattered_to = &info.scatters;
         let mut streams_data_sender = vec![];
@@ -205,7 +205,7 @@ impl FlightDispatcher {
         let flight_scatter = FlightScatterByHash::try_create(
             info.plan.schema(),
             info.scatters_expression.clone(),
-            streams_data_sender.len()
+            streams_data_sender.len(),
         )?;
 
         let stage_context = context.clone();
@@ -243,7 +243,7 @@ impl FlightDispatcher {
 
     fn create_plan_pipeline(
         state: &ServerState,
-        plan: &PlanNode
+        plan: &PlanNode,
     ) -> Result<(FuseQueryContextRef, Pipeline)> {
         state
             .session_manager
@@ -263,7 +263,7 @@ impl FlightDispatcher {
     async fn receive_data_and_push(
         mut pipeline: Pipeline,
         flight_scatter: FlightScatterByHash,
-        senders: Vec<Sender<Result<FlightData>>>
+        senders: Vec<Sender<Result<FlightData>>>,
     ) -> Result<()> {
         use common_arrow::arrow::ipc::writer::IpcWriteOptions;
         use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
@@ -325,14 +325,14 @@ impl FlightDispatcher {
     pub fn new(
         conf: Config,
         cluster: ClusterRef,
-        session_manager: SessionManagerRef
+        session_manager: SessionManagerRef,
     ) -> FlightDispatcher {
         FlightDispatcher {
             state: Arc::new(ServerState {
                 conf,
                 cluster,
-                session_manager
-            })
+                session_manager,
+            }),
         }
     }
 }
@@ -340,7 +340,7 @@ impl FlightDispatcher {
 impl DispatcherState {
     pub fn create() -> DispatcherState {
         DispatcherState {
-            streams: HashMap::new()
+            streams: HashMap::new(),
         }
     }
 }
@@ -348,14 +348,14 @@ impl DispatcherState {
 impl FlightStreamInfo {
     pub fn create(
         schema: &SchemaRef,
-        launcher_sender: &Sender<()>
+        launcher_sender: &Sender<()>,
     ) -> (Sender<Result<FlightData>>, FlightStreamInfo) {
         // TODO: Back pressure buffer size
         let (sender, receive) = channel(5);
         (sender, FlightStreamInfo {
             schema: schema.clone(),
             data_receiver: Some(receive),
-            launcher_sender: launcher_sender.clone()
+            launcher_sender: launcher_sender.clone(),
         })
     }
 }
@@ -366,14 +366,14 @@ impl PrepareStageInfo {
         stage_id: String,
         plan: PlanNode,
         scatters: Vec<String>,
-        scatters_expression: Expression
+        scatters_expression: Expression,
     ) -> Box<PrepareStageInfo> {
         Box::new(PrepareStageInfo {
             query_id,
             stage_id,
             plan,
             scatters,
-            scatters_expression
+            scatters_expression,
         })
     }
 }

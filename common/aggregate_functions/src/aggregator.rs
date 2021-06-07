@@ -12,6 +12,7 @@ use crate::AggregateCountFunction;
 use crate::AggregateMaxFunction;
 use crate::AggregateMinFunction;
 use crate::AggregateSumFunction;
+use crate::AggregateUniqFunction;
 
 pub struct AggregatorFunction;
 
@@ -26,6 +27,12 @@ impl AggregatorFunction {
         map.insert("avg", AggregateAvgFunction::try_create);
         map.insert("argmin", AggregateArgMinFunction::try_create);
         map.insert("argmax", AggregateArgMaxFunction::try_create);
+
+        {
+            map.insert("countdistinct", AggregateUniqFunction::try_create);
+            map.insert("uniq", AggregateUniqFunction::try_create);
+        }
+
         Ok(())
     }
 }

@@ -27,25 +27,30 @@ pub struct AggregatorPartialTransform {
     arg_names: Vec<Vec<String>>,
 
     schema: DataSchemaRef,
-    input: Arc<dyn IProcessor>
+    input: Arc<dyn IProcessor>,
 }
 
 impl AggregatorPartialTransform {
-    pub fn try_create(schema: DataSchemaRef, exprs: Vec<Expression>) -> Result<Self> {
+    pub fn try_create(
+        schema: DataSchemaRef,
+        schema_before_groupby: DataSchemaRef,
+        exprs: Vec<Expression>,
+    ) -> Result<Self> {
         let funcs = exprs
             .iter()
-            .map(|expr| expr.to_aggregate_function())
+            .map(|expr| expr.to_aggregate_function(&schema_before_groupby))
             .collect::<Result<Vec<_>>>()?;
+
         let arg_names = exprs
             .iter()
-            .map(|expr| expr.to_aggregate_function_args())
+            .map(|expr| expr.to_aggregate_function_names())
             .collect::<Result<Vec<_>>>()?;
 
         Ok(AggregatorPartialTransform {
             funcs,
             arg_names,
             schema,
-            input: Arc::new(EmptyProcessor::create())
+            input: Arc::new(EmptyProcessor::create()),
         })
     }
 }
@@ -104,7 +109,7 @@ impl IProcessor for AggregatorPartialTransform {
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block]
+            vec![block],
         )))
     }
 }

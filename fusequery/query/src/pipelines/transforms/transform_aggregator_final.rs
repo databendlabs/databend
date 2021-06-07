@@ -23,19 +23,23 @@ use crate::pipelines::processors::IProcessor;
 pub struct AggregatorFinalTransform {
     funcs: Vec<Box<dyn IAggregateFunction>>,
     schema: DataSchemaRef,
-    input: Arc<dyn IProcessor>
+    input: Arc<dyn IProcessor>,
 }
 
 impl AggregatorFinalTransform {
-    pub fn try_create(schema: DataSchemaRef, exprs: Vec<Expression>) -> Result<Self> {
+    pub fn try_create(
+        schema: DataSchemaRef,
+        schema_before_groupby: DataSchemaRef,
+        exprs: Vec<Expression>,
+    ) -> Result<Self> {
         let funcs = exprs
             .iter()
-            .map(|expr| expr.to_aggregate_function())
+            .map(|expr| expr.to_aggregate_function(&schema_before_groupby))
             .collect::<Result<Vec<_>>>()?;
         Ok(AggregatorFinalTransform {
             funcs,
             schema,
-            input: Arc::new(EmptyProcessor::create())
+            input: Arc::new(EmptyProcessor::create()),
         })
     }
 }
@@ -93,14 +97,14 @@ impl IProcessor for AggregatorFinalTransform {
         if !final_result.is_empty() {
             blocks.push(DataBlock::create_by_array(
                 self.schema.clone(),
-                final_result
+                final_result,
             ));
         }
 
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            blocks
+            blocks,
         )))
     }
 }

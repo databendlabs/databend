@@ -20,7 +20,7 @@ impl DataArrayLogic {
     fn data_array_logic_binary(
         op: DataValueLogicOperator,
         left: &DataColumnarValue,
-        right: &DataColumnarValue
+        right: &DataColumnarValue,
     ) -> Result<DataArrayRef> {
         match (left, right) {
             (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
@@ -35,7 +35,7 @@ impl DataArrayLogic {
                 op,
                 left.data_type(),
                 right.data_type()
-            )))
+            ))),
         }
     }
 
@@ -45,7 +45,7 @@ impl DataArrayLogic {
             DataColumnarValue::Array(array) => {
                 let arr = downcast_array!(array, BooleanArray)?;
                 Ok(Arc::new(
-                    common_arrow::arrow::compute::not(arr).map_err(ErrorCodes::from)?
+                    common_arrow::arrow::compute::not(arr).map_err(ErrorCodes::from)?,
                 ))
             }
             DataColumnarValue::Constant(v, size) => match v {
@@ -88,18 +88,18 @@ impl DataArrayLogic {
                 _ => Result::Err(ErrorCodes::BadDataValueType(format!(
                     "DataValue Error: Cannot do negation for val:{:?}",
                     val
-                )))
-            }
+                ))),
+            },
         }
     }
 
     pub fn data_array_logic_op(
         op: DataValueLogicOperator,
-        args: &[DataColumnarValue]
+        args: &[DataColumnarValue],
     ) -> Result<DataArrayRef> {
         match op {
             DataValueLogicOperator::Not => Self::data_array_negation(&args[0]),
-            _ => Self::data_array_logic_binary(op, &args[0], &args[1])
+            _ => Self::data_array_logic_binary(op, &args[0], &args[1]),
         }
     }
 }

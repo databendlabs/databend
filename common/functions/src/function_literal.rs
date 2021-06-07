@@ -14,7 +14,7 @@ use crate::IFunction;
 
 #[derive(Clone, Debug)]
 pub struct LiteralFunction {
-    value: DataValue
+    value: DataValue,
 }
 
 impl LiteralFunction {
@@ -42,10 +42,6 @@ impl IFunction for LiteralFunction {
 
     fn num_arguments(&self) -> usize {
         0
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        None
     }
 }
 

@@ -32,13 +32,13 @@ impl DataArrayComparison {
     pub fn data_array_comparison_op(
         op: DataValueComparisonOperator,
         left: &DataColumnarValue,
-        right: &DataColumnarValue
+        right: &DataColumnarValue,
     ) -> Result<DataArrayRef> {
         match (left, right) {
             (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
                 let coercion_type = super::data_type::equal_coercion(
                     &left_array.data_type(),
-                    &right_array.data_type()
+                    &right_array.data_type(),
                 )?;
                 let left_array = data_array_cast(&left_array, &coercion_type)?;
                 let right_array = data_array_cast(&right_array, &coercion_type)?;
@@ -124,11 +124,11 @@ impl DataArrayComparison {
             }
             (
                 DataColumnarValue::Constant(left_scala, rows),
-                DataColumnarValue::Constant(right_scalar, _)
+                DataColumnarValue::Constant(right_scalar, _),
             ) => {
                 let coercion_type = super::data_type::equal_coercion(
                     &left_scala.data_type(),
-                    &right_scalar.data_type()
+                    &right_scalar.data_type(),
                 )?;
                 let left_array =
                     data_array_cast(&left_scala.to_array_with_size(*rows)?, &coercion_type)?;

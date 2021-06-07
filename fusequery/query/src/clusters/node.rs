@@ -20,7 +20,7 @@ pub struct Node {
     pub priority: u8,
     pub address: Address,
     pub local: bool,
-    pub sequence: usize
+    pub sequence: usize,
 }
 
 impl PartialEq for Node {
@@ -38,14 +38,14 @@ impl Node {
         priority: u8,
         address: Address,
         local: bool,
-        sequence: usize
+        sequence: usize,
     ) -> Result<Node> {
         Ok(Node {
             name,
             priority,
             address,
             local,
-            sequence
+            sequence,
         })
     }
 
@@ -68,7 +68,7 @@ impl serde::Serialize for Node {
             priority: u8,
             address: Address,
             local: bool,
-            sequence: usize
+            sequence: usize,
         }
 
         NodeSerializeView::serialize(
@@ -77,9 +77,9 @@ impl serde::Serialize for Node {
                 priority: self.priority,
                 address: self.address.clone(),
                 local: self.local,
-                sequence: self.sequence
+                sequence: self.sequence,
             },
-            serializer
+            serializer,
         )
     }
 }
@@ -93,7 +93,7 @@ impl<'de> serde::Deserialize<'de> for Node {
             pub priority: u8,
             pub address: Address,
             pub local: bool,
-            pub sequence: usize
+            pub sequence: usize,
         }
 
         let node_deserialize_view = NodeDeserializeView::deserialize(deserializer)?;
@@ -102,12 +102,12 @@ impl<'de> serde::Deserialize<'de> for Node {
             node_deserialize_view.priority,
             node_deserialize_view.address.clone(),
             node_deserialize_view.local,
-            node_deserialize_view.sequence
+            node_deserialize_view.sequence,
         );
 
         match deserialize_result {
             Ok(node) => Ok(node),
-            Err(error) => Err(D::Error::custom(error))
+            Err(error) => Err(D::Error::custom(error)),
         }
     }
 }

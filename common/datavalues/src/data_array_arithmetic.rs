@@ -30,23 +30,23 @@ impl DataArrayArithmetic {
     pub fn data_array_arithmetic_op(
         op: DataValueArithmeticOperator,
         left: &DataColumnarValue,
-        right: &DataColumnarValue
+        right: &DataColumnarValue,
     ) -> Result<DataArrayRef> {
         let (left_array, right_array) = match (left, right) {
             (
                 DataColumnarValue::Constant(left_scalar, _),
-                DataColumnarValue::Constant(right_scalar, _)
+                DataColumnarValue::Constant(right_scalar, _),
             ) => (
                 left_scalar.to_array_with_size(1)?,
-                right_scalar.to_array_with_size(1)?
+                right_scalar.to_array_with_size(1)?,
             ),
-            _ => (left.to_array()?, right.to_array()?)
+            _ => (left.to_array()?, right.to_array()?),
         };
 
         let coercion_type = super::data_type::numerical_arithmetic_coercion(
             &op,
             &left_array.data_type(),
-            &right_array.data_type()
+            &right_array.data_type(),
         )?;
         let left_array = data_array_cast(&left_array, &coercion_type)?;
         let right_array = data_array_cast(&right_array, &coercion_type)?;
@@ -64,12 +64,7 @@ impl DataArrayArithmetic {
                 arrow_primitive_array_op!(&left_array, &right_array, &coercion_type, divide)
             }
             DataValueArithmeticOperator::Modulo => {
-                arrow_primitive_array_self_defined_op!(
-                    &left_array,
-                    &right_array,
-                    &coercion_type,
-                    (|a, b| a % b)
-                )
+                arrow_primitive_array_op!(&left_array, &right_array, &coercion_type, modulus)
             }
         }
     }
@@ -77,7 +72,7 @@ impl DataArrayArithmetic {
     #[inline]
     pub fn data_array_unary_arithmetic_op(
         op: DataValueArithmeticOperator,
-        value: &DataColumnarValue
+        value: &DataColumnarValue,
     ) -> Result<DataArrayRef> {
         match op {
             DataValueArithmeticOperator::Minus => {
@@ -85,7 +80,7 @@ impl DataArrayArithmetic {
                     DataColumnarValue::Constant(value_scalar, _) => {
                         value_scalar.to_array_with_size(1)?
                     }
-                    _ => value.to_array()?
+                    _ => value.to_array()?,
                 };
 
                 let coercion_type =
@@ -97,7 +92,7 @@ impl DataArrayArithmetic {
             _ => Result::Err(ErrorCodes::BadArguments(format!(
                 "Unsupported unary operation: {:?} as argument",
                 op
-            )))
+            ))),
         }
     }
 }

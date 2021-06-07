@@ -77,6 +77,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28b2cd92db5cbd74e8e5028f7e27dd7aa3090e89e4f2a197cc7c8dfb69c7063b"
 
 [[package]]
+name = "arbitrary"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "237430fd6ed3740afe94eefcc278ae21e050285be882804e0d6e8695f0c94691"
+
+[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -90,10 +96,9 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
 name = "arrow"
-version = "4.2.0"
-source = "git+https://github.com/apache/arrow-rs?tag=4.2.0#cd95d7ce13c349da8e76a781a28ec7161ed4165a"
+version = "5.0.0-SNAPSHOT"
+source = "git+https://github.com/apache/arrow-rs?rev=0a165748c924b3752cc00ff86e56917427985872#0a165748c924b3752cc00ff86e56917427985872"
 dependencies = [
- "cfg_aliases",
  "chrono",
  "csv",
  "flatbuffers",
@@ -112,8 +117,8 @@ dependencies = [
 
 [[package]]
 name = "arrow-flight"
-version = "4.2.0"
-source = "git+https://github.com/apache/arrow-rs?tag=4.2.0#cd95d7ce13c349da8e76a781a28ec7161ed4165a"
+version = "5.0.0-SNAPSHOT"
+source = "git+https://github.com/apache/arrow-rs?rev=0a165748c924b3752cc00ff86e56917427985872#0a165748c924b3752cc00ff86e56917427985872"
 dependencies = [
  "arrow",
  "bytes 1.0.1",
@@ -129,7 +134,7 @@ dependencies = [
 [[package]]
 name = "async-raft"
 version = "0.6.1"
-source = "git+https://github.com/drmingdrmer/async-raft?rev=cf40344f66fdcb6cde160b3e5671ff87c88f2af8#cf40344f66fdcb6cde160b3e5671ff87c88f2af8"
+source = "git+https://github.com/datafuse-extras/async-raft?branch=master#377312cd6c0c7a804730b6f950df241c28740f19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -211,9 +216,9 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
 name = "backtrace"
-version = "0.3.59"
+version = "0.3.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4717cfcbfaa661a0fd48f8453951837ae7e8f81e481fbb136e3202d72805a744"
+checksum = "b7815ea54e4d821e791162e078acbebfd6d8c8939cd559c9335dceb1c8ca7282"
 dependencies = [
  "addr2line",
  "cc",
@@ -469,12 +474,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
-name = "cfg_aliases"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
-
-[[package]]
 name = "chrono"
 version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -516,7 +515,7 @@ dependencies = [
 [[package]]
 name = "clickhouse-rs"
 version = "1.0.0-alpha.1"
-source = "git+https://github.com/datafuselabs/clickhouse-rs?rev=c4743a9#c4743a920e744a0adf672262f6714ccfa429bcd4"
+source = "git+https://github.com/datafuse-extras/clickhouse-rs?rev=c4743a9#c4743a920e744a0adf672262f6714ccfa429bcd4"
 dependencies = [
  "byteorder",
  "chrono",
@@ -605,7 +604,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-arrow",
- "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-infallible",
@@ -625,9 +623,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-building"
+version = "0.1.0"
+dependencies = [
+ "run_script",
+ "vergen",
+]
+
+[[package]]
 name = "common-datablocks"
 version = "0.1.0"
 dependencies = [
+ "ahash",
  "anyhow",
  "common-arrow",
  "common-datavalues",
@@ -642,6 +649,7 @@ dependencies = [
  "anyhow",
  "common-arrow",
  "common-exception",
+ "ordered-float 2.5.1",
  "paste",
  "pretty_assertions",
  "serde",
@@ -730,7 +738,6 @@ name = "common-progress"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "common-infallible",
  "pretty_assertions",
 ]
 
@@ -740,7 +747,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-exception",
- "futures",
  "tokio",
 ]
 
@@ -753,7 +759,6 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-functions",
  "common-progress",
  "crossbeam 0.8.1",
  "futures",
@@ -1349,6 +1354,7 @@ dependencies = [
  "clickhouse-srv",
  "common-aggregate-functions",
  "common-arrow",
+ "common-building",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -1380,7 +1386,6 @@ dependencies = [
  "prost",
  "quantiles",
  "rand 0.8.3",
- "run_script",
  "serde",
  "serde_json",
  "sqlparser",
@@ -1392,7 +1397,6 @@ dependencies = [
  "toml",
  "tonic",
  "uuid",
- "vergen",
  "warp",
 ]
 
@@ -1404,8 +1408,10 @@ dependencies = [
  "async-raft",
  "async-trait",
  "common-arrow",
+ "common-building",
  "common-datablocks",
  "common-datavalues",
+ "common-exception",
  "common-flights",
  "common-functions",
  "common-infallible",
@@ -1427,6 +1433,7 @@ dependencies = [
  "serde",
  "serde_json",
  "structopt",
+ "structopt-toml",
  "tempfile",
  "test-env-log",
  "thiserror",
@@ -1533,6 +1540,14 @@ dependencies = [
  "proc-macro-hack",
  "proc-macro-nested",
  "slab",
+]
+
+[[package]]
+name = "fuzz"
+version = "0.1.0"
+dependencies = [
+ "fuse-query",
+ "honggfuzz",
 ]
 
 [[package]]
@@ -1745,6 +1760,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77e806677ce663d0a199541030c816847b36e8dc095f70dae4a4f4ad63da5383"
 dependencies = [
  "digest 0.9.0",
+]
+
+[[package]]
+name = "honggfuzz"
+version = "0.5.54"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bea09577d948a98a5f59b7c891e274c4fb35ad52f67782b3d0cb53b9c05301f1"
+dependencies = [
+ "arbitrary",
+ "lazy_static",
+ "memmap",
 ]
 
 [[package]]
@@ -2160,6 +2186,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b16bd47d9e329435e309c58469fe0791c2d0d1ba96ec0954152a5ae2b04387dc"
 
 [[package]]
+name = "memmap"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6585fd95e7bb50d6cc31e20d4cf9afb4e2ba16c5846fc76793f11218da9c475b"
+dependencies = [
+ "libc",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "memoffset"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2291,8 +2327,8 @@ dependencies = [
 
 [[package]]
 name = "msql-srv"
-version = "0.9.3"
-source = "git+https://github.com/datafuselabs/msql-srv?rev=76b8ae3#76b8ae360080942127805ea469f322552ed53177"
+version = "0.9.5"
+source = "git+https://github.com/datafuse-extras/msql-srv?rev=5a7ae3d#5a7ae3d6ce9da91427a7ddd2ac029108f5eca990"
 dependencies = [
  "byteorder",
  "chrono",
@@ -2534,9 +2570,12 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.24.0"
+version = "0.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a5b3dd1c072ee7963717671d1ca129f1048fda25edea6b752bfc71ac8854170"
+checksum = "f8bc1d42047cf336f0f939c99e97183cf31551bf0f2865a2ec9c8d91fd4ffb5e"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "once_cell"
@@ -2627,8 +2666,8 @@ dependencies = [
 
 [[package]]
 name = "parquet"
-version = "4.2.0"
-source = "git+https://github.com/apache/arrow-rs?tag=4.2.0#cd95d7ce13c349da8e76a781a28ec7161ed4165a"
+version = "5.0.0-SNAPSHOT"
+source = "git+https://github.com/apache/arrow-rs?rev=0a165748c924b3752cc00ff86e56917427985872#0a165748c924b3752cc00ff86e56917427985872"
 dependencies = [
  "arrow",
  "base64 0.13.0",
@@ -3609,9 +3648,8 @@ dependencies = [
 
 [[package]]
 name = "sqlparser"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fa863a2dfc4879a35647c51dadf495a2ad53745eaf3723fda27006e745fb0ba"
+version = "0.9.1-alpha.0"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=35ef0ee#35ef0eee3857c59827b2587bc813218a00dce264"
 dependencies = [
  "log 0.4.14",
 ]

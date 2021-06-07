@@ -22,7 +22,7 @@ pub struct ExpressionExecutor {
     output_schema: DataSchemaRef,
     chain: Arc<ExpressionChain>,
     // whether to perform alias action in executor
-    alias_project: bool
+    alias_project: bool,
 }
 
 impl ExpressionExecutor {
@@ -30,7 +30,7 @@ impl ExpressionExecutor {
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
-        alias_project: bool
+        alias_project: bool,
     ) -> Result<Self> {
         let chain = ExpressionChain::try_create(input_schema.clone(), &exprs)?;
 
@@ -38,7 +38,7 @@ impl ExpressionExecutor {
             input_schema,
             output_schema,
             chain: Arc::new(chain),
-            alias_project
+            alias_project,
         })
     }
 
@@ -55,7 +55,7 @@ impl ExpressionExecutor {
         for f in block.schema().fields().iter() {
             column_map.insert(
                 f.name().clone(),
-                block.try_column_by_name(f.name())?.clone()
+                block.try_column_by_name(f.name())?.clone(),
             );
         }
 
@@ -86,7 +86,7 @@ impl ExpressionExecutor {
                         .map(|arg| {
                             column_map.get(arg).cloned().ok_or_else(|| {
                                 ErrorCodes::LogicalError(
-                                    "Arguments must be prepared before function transform"
+                                    "Arguments must be prepared before function transform",
                                 )
                             })
                         })
@@ -132,7 +132,7 @@ impl ExpressionExecutor {
         // projection to remove unused columns
         Ok(DataBlock::create(
             self.output_schema.clone(),
-            project_columns
+            project_columns,
         ))
     }
 }

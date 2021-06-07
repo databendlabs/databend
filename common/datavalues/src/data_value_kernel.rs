@@ -25,11 +25,11 @@ impl DataValue {
     pub fn concat_row_to_one_key(
         col: &DataColumnarValue,
         row: usize,
-        vec: &mut Vec<u8>
+        vec: &mut Vec<u8>,
     ) -> Result<()> {
         let (col, row) = match col {
             DataColumnarValue::Array(array) => (Ok(array.clone()), row),
-            DataColumnarValue::Constant(v, _) => (v.to_array_with_size(1), 0)
+            DataColumnarValue::Constant(v, _) => (v.to_array_with_size(1), 0),
         };
         let col = col?;
 
@@ -160,7 +160,7 @@ impl DataValue {
     fn dictionary_create_key_for_col<K: ArrowDictionaryKeyType>(
         col: &ArrayRef,
         row: usize,
-        vec: &mut Vec<u8>
+        vec: &mut Vec<u8>,
     ) -> Result<()> {
         let dict_col = col.as_any().downcast_ref::<DictionaryArray<K>>().unwrap();
 
@@ -173,7 +173,7 @@ impl DataValue {
             ))
         })?;
 
-        let col = DataColumnarValue::Array(dict_col.values());
+        let col = DataColumnarValue::Array(dict_col.values().clone());
         Self::concat_row_to_one_key(&col, values_index, vec)
     }
 
@@ -194,7 +194,7 @@ impl DataValue {
             other => Result::Err(ErrorCodes::BadDataValueType(format!(
                 "Unexpected type:{} for DataValue List",
                 other
-            )))
+            ))),
         }
     }
 
@@ -202,7 +202,7 @@ impl DataValue {
     pub fn try_from_column(column: &DataColumnarValue, index: usize) -> Result<DataValue> {
         match column {
             DataColumnarValue::Constant(scalar, _) => Ok(scalar.clone()),
-            DataColumnarValue::Array(array) => DataValue::try_from_array(array, index)
+            DataColumnarValue::Array(array) => DataValue::try_from_array(array, index),
         }
     }
 
@@ -316,7 +316,7 @@ impl DataValue {
             other => Result::Err(ErrorCodes::BadDataValueType(format!(
                 "DataValue Error: Can't create a functions of array of type \"{:?}\"",
                 other
-            )))
+            ))),
         }
     }
 
@@ -329,7 +329,7 @@ impl DataValue {
                     Ok(DataValue::Int64(Some(n)))
                 }
             }
-            Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?)))
+            Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?))),
         }
     }
 }

@@ -70,7 +70,7 @@ impl Expression {
             Expression::BinaryExpression { op, left, right } => Expression::BinaryExpression {
                 op,
                 left: Box::new(left.rewrite(rewriter)?),
-                right: Box::new(right.rewrite(rewriter)?)
+                right: Box::new(right.rewrite(rewriter)?),
             },
             Expression::ScalarFunction { op, args } => {
                 let mut new_args = Vec::with_capacity(args.len());
@@ -79,33 +79,37 @@ impl Expression {
                 }
                 Expression::ScalarFunction { op, args: new_args }
             }
-            Expression::AggregateFunction { op, args } => {
+            Expression::AggregateFunction { op, distinct, args } => {
                 let mut new_args = Vec::with_capacity(args.len());
                 for arg in args {
                     new_args.push(arg.rewrite(rewriter)?);
                 }
-                Expression::AggregateFunction { op, args: new_args }
+                Expression::AggregateFunction {
+                    op,
+                    distinct,
+                    args: new_args,
+                }
             }
             Expression::Cast { expr, data_type } => {
                 let expr = expr.rewrite(rewriter)?;
                 Expression::Cast {
                     expr: Box::new(expr),
-                    data_type
+                    data_type,
                 }
             }
             Expression::Sort {
                 expr,
                 asc,
-                nulls_first
+                nulls_first,
             } => {
                 let expr = expr.rewrite(rewriter)?;
                 Expression::Sort {
                     expr: Box::new(expr),
                     asc,
-                    nulls_first
+                    nulls_first,
                 }
             }
-            _ => self
+            _ => self,
         };
 
         // now rewrite this expression itself

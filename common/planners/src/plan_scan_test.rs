@@ -17,10 +17,10 @@ fn test_scan_plan() -> anyhow::Result<()> {
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "a",
             DataType::Utf8,
-            false
+            false,
         )]),
         filters: vec![],
-        limit: None
+        limit: None,
     });
     let _ = scan.schema();
     let expect = "";

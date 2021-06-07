@@ -15,7 +15,7 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
         query: &'static str,
         plan: &'static str,
         pipeline: &'static str,
-        block: Vec<&'static str>
+        block: Vec<&'static str>,
     }
 
     let tests = vec![

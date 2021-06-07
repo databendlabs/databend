@@ -15,7 +15,7 @@ use thiserror::Error;
 #[derive(Clone)]
 pub enum ErrorCodesBacktrace {
     Serialized(Arc<String>),
-    Origin(Arc<Backtrace>)
+    Origin(Arc<Backtrace>),
 }
 
 impl ToString for ErrorCodesBacktrace {
@@ -33,8 +33,10 @@ impl ToString for ErrorCodesBacktrace {
 pub struct ErrorCodes {
     code: u16,
     display_text: String,
+    // cause is only used to contain an `anyhow::Error`.
+    // TODO: remove `cause` when we completely get rid of `anyhow::Error`.
     cause: Option<Box<dyn std::error::Error + Sync + Send>>,
-    backtrace: Option<ErrorCodesBacktrace>
+    backtrace: Option<ErrorCodesBacktrace>,
 }
 
 impl ErrorCodes {
@@ -56,7 +58,7 @@ impl ErrorCodes {
     pub fn backtrace_str(&self) -> String {
         match self.backtrace.as_ref() {
             None => "".to_string(),
-            Some(backtrace) => backtrace.to_string()
+            Some(backtrace) => backtrace.to_string(),
         }
     }
 }
@@ -131,6 +133,13 @@ build_exceptions! {
     TokioError(1001)
 }
 
+// Store errors
+build_exceptions! {
+
+    FileMetaNotFound(2001),
+    FileDamaged(2002)
+}
+
 pub type Result<T> = std::result::Result<T, ErrorCodes>;
 
 impl Debug for ErrorCodes {
@@ -148,7 +157,7 @@ impl Debug for ErrorCodes {
                 // TODO: Custom stack frame format for print
                 match backtrace {
                     ErrorCodesBacktrace::Origin(backtrace) => write!(f, "\n\n{:?}", backtrace),
-                    ErrorCodesBacktrace::Serialized(backtrace) => write!(f, "\n\n{:?}", backtrace)
+                    ErrorCodesBacktrace::Serialized(backtrace) => write!(f, "\n\n{:?}", backtrace),
                 }
             }
         }
@@ -168,13 +177,13 @@ impl Display for ErrorCodes {
 
 #[derive(Error)]
 enum OtherErrors {
-    AnyHow { error: anyhow::Error }
+    AnyHow { error: anyhow::Error },
 }
 
 impl Display for OtherErrors {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            OtherErrors::AnyHow { error } => write!(f, "{}", error)
+            OtherErrors::AnyHow { error } => write!(f, "{}", error),
         }
     }
 }
@@ -182,7 +191,7 @@ impl Display for OtherErrors {
 impl Debug for OtherErrors {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            OtherErrors::AnyHow { error } => write!(f, "{:?}", error)
+            OtherErrors::AnyHow { error } => write!(f, "{:?}", error),
         }
     }
 }
@@ -193,7 +202,7 @@ impl From<anyhow::Error> for ErrorCodes {
             code: 1002,
             display_text: String::from(""),
             cause: Some(Box::new(OtherErrors::AnyHow { error })),
-            backtrace: None
+            backtrace: None,
         }
     }
 }
@@ -228,26 +237,76 @@ impl From<sqlparser::parser::ParserError> for ErrorCodes {
     }
 }
 
+impl From<std::io::Error> for ErrorCodes {
+    fn from(error: std::io::Error) -> Self {
+        ErrorCodes::from_std_error(error)
+    }
+}
+
 impl ErrorCodes {
     pub fn from_std_error<T: std::error::Error>(error: T) -> Self {
         ErrorCodes {
             code: 1002,
             display_text: format!("{}", error),
             cause: None,
-            backtrace: Some(ErrorCodesBacktrace::Origin(Arc::new(Backtrace::new())))
+            backtrace: Some(ErrorCodesBacktrace::Origin(Arc::new(Backtrace::new()))),
         }
     }
 
     pub fn create(
         code: u16,
         display_text: String,
-        backtrace: Option<ErrorCodesBacktrace>
+        backtrace: Option<ErrorCodesBacktrace>,
     ) -> ErrorCodes {
         ErrorCodes {
             code,
             display_text,
             cause: None,
-            backtrace
+            backtrace,
         }
+    }
+}
+
+/// Provides the `map_err_to_code` method for `Result`.
+///
+/// ```
+/// use common_exception::ToErrorCodes;
+/// use common_exception::ErrorCodes;
+///
+/// let x: std::result::Result<(), std::fmt::Error> = Err(std::fmt::Error {});
+/// let y: common_exception::Result<()> =
+///     x.map_err_to_code(ErrorCodes::UnknownException, || 123);
+///
+/// assert_eq!(
+///     "Code: 1000, displayText = 123, cause: an error occurred when formatting an argument.",
+///     format!("{}", y.unwrap_err())
+/// );
+/// ```
+pub trait ToErrorCodes<T, E, CtxFn> {
+    /// Wrap the error value with ErrorCodes that is evaluated lazily
+    /// only once an error does occur.
+    ///
+    /// `err_code_fn` is one of the ErrorCodes builder function such as `ErrorCodes::Ok`.
+    /// `context_fn` builds display_text for the ErrorCodes.
+    fn map_err_to_code<ErrFn, D>(self, err_code_fn: ErrFn, context_fn: CtxFn) -> Result<T>
+    where
+        ErrFn: FnOnce(String) -> ErrorCodes,
+        D: Display,
+        CtxFn: FnOnce() -> D;
+}
+
+impl<T, E, CtxFn> ToErrorCodes<T, E, CtxFn> for std::result::Result<T, E>
+where E: std::error::Error + Send + Sync + 'static
+{
+    fn map_err_to_code<ErrFn, D>(self, make_exception: ErrFn, context_fn: CtxFn) -> Result<T>
+    where
+        ErrFn: FnOnce(String) -> ErrorCodes,
+        D: Display,
+        CtxFn: FnOnce() -> D,
+    {
+        self.map_err(|error| {
+            let err_text = format!("{}, cause: {}", context_fn(), error);
+            make_exception(err_text)
+        })
     }
 }

@@ -24,7 +24,7 @@ fn test_data_block_sort() -> anyhow::Result<()> {
         let options = vec![SortColumnDescription {
             column_name: "a".to_owned(),
             asc: true,
-            nulls_first: false
+            nulls_first: false,
         }];
         let results = DataBlock::sort_block(&raw, &options, Some(3))?;
         assert_eq!(raw.schema(), results.schema());
@@ -45,7 +45,7 @@ fn test_data_block_sort() -> anyhow::Result<()> {
         let options = vec![SortColumnDescription {
             column_name: "a".to_owned(),
             asc: false,
-            nulls_first: false
+            nulls_first: false,
         }];
         let results = DataBlock::sort_block(&raw, &options, Some(3))?;
         assert_eq!(raw.schema(), results.schema());

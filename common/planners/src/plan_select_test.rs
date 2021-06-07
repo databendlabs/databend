@@ -14,7 +14,7 @@ fn test_select_wildcard_plan() -> anyhow::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]);
     let plan = PlanBuilder::create(schema).project(&[col("a")])?.build()?;
     let select = PlanNode::Select(SelectPlan {
-        input: Arc::new(plan)
+        input: Arc::new(plan),
     });
     let expect = "Projection: a:Utf8";
 

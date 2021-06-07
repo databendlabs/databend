@@ -7,12 +7,11 @@ use common_exception::Result;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
+pub const FUSE_COMMIT_VERSION: &str = env!("FUSE_COMMIT_VERSION");
+
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 #[serde(default)]
 pub struct Config {
-    #[structopt(env = "FUSE_QUERY_VERSION", default_value = "")]
-    pub version: String,
-
     #[structopt(long, env = "FUSE_QUERY_LOG_LEVEL", default_value = "INFO")]
     pub log_level: String,
 
@@ -88,14 +87,13 @@ pub struct Config {
     pub store_api_password: String,
 
     #[structopt(long, short = "c", env = "CONFIG_FILE", default_value = "")]
-    pub config_file: String
+    pub config_file: String,
 }
 
 impl Config {
     /// Default configs.
     pub fn default() -> Self {
         Config {
-            version: "".to_string(),
             log_level: "debug".to_string(),
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
@@ -110,7 +108,7 @@ impl Config {
             store_api_address: "127.0.0.1:9191".to_string(),
             store_api_username: "root".to_string(),
             store_api_password: "root".to_string(),
-            config_file: "".to_string()
+            config_file: "".to_string(),
         }
     }
 
@@ -120,8 +118,6 @@ impl Config {
         if cfg.num_cpus == 0 {
             cfg.num_cpus = num_cpus::get() as u64;
         }
-        cfg.version = Self::commit_version();
-
         cfg
     }
 
@@ -134,19 +130,6 @@ impl Config {
         if cfg.num_cpus == 0 {
             cfg.num_cpus = num_cpus::get() as u64;
         }
-        cfg.version = Self::commit_version();
         Ok(cfg)
-    }
-
-    fn commit_version() -> String {
-        let build_semver = option_env!("VERGEN_BUILD_SEMVER");
-        let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
-        let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
-        let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
-
-        match (build_semver, git_sha, rustc_semver, timestamp) {
-            (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
-            _ => String::new()
-        }
     }
 }

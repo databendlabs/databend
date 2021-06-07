@@ -18,20 +18,20 @@ use crate::pipelines::transforms::ExpressionExecutor;
 
 pub struct ProjectionTransform {
     executor: Arc<ExpressionExecutor>,
-    input: Arc<dyn IProcessor>
+    input: Arc<dyn IProcessor>,
 }
 
 impl ProjectionTransform {
     pub fn try_create(
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
-        exprs: Vec<Expression>
+        exprs: Vec<Expression>,
     ) -> Result<Self> {
         let executor = ExpressionExecutor::try_create(input_schema, output_schema, exprs, true)?;
 
         Ok(ProjectionTransform {
             executor: Arc::new(executor),
-            input: Arc::new(EmptyProcessor::create())
+            input: Arc::new(EmptyProcessor::create()),
         })
     }
 }

@@ -12,7 +12,7 @@ pub struct DropTablePlan {
     pub if_exists: bool,
     pub db: String,
     /// The table name
-    pub table: String
+    pub table: String,
 }
 
 impl DropTablePlan {

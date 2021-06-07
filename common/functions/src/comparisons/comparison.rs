@@ -22,7 +22,7 @@ use crate::IFunction;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
-    op: DataValueComparisonOperator
+    op: DataValueComparisonOperator,
 }
 
 impl ComparisonFunction {
@@ -61,7 +61,7 @@ impl IFunction for ComparisonFunction {
         let result = DataArrayComparison::data_array_comparison_op(
             self.op.clone(),
             &columns[0],
-            &columns[1]
+            &columns[1],
         )?;
 
         Ok(result.into())
@@ -69,10 +69,6 @@ impl IFunction for ComparisonFunction {
 
     fn num_arguments(&self) -> usize {
         2
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        None
     }
 }
 

@@ -3,6 +3,7 @@
 members = [
     # Common
     "common/arrow",
+    "common/building",
     "common/datablocks",
     "common/datavalues",
     "common/flights",
@@ -23,7 +24,10 @@ members = [
     "fusestore/store",
 
     # Benchamrks
-    "fusequery/benchmarks/nyctaxi"
+    "fusequery/benchmarks/nyctaxi",
+
+    # Fuzz
+    "fusequery/fuzz"
 ]
 
 [profile.release]
