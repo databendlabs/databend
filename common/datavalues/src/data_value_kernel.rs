@@ -173,7 +173,7 @@ impl DataValue {
             ))
         })?;
 
-        let col = DataColumnarValue::Array(dict_col.values());
+        let col = DataColumnarValue::Array(dict_col.values().clone());
         Self::concat_row_to_one_key(&col, values_index, vec)
     }
 
