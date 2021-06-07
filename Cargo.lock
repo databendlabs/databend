@@ -2326,8 +2326,8 @@ dependencies = [
 
 [[package]]
 name = "msql-srv"
-version = "0.9.3"
-source = "git+https://github.com/datafuse-extras/msql-srv?rev=76b8ae3#76b8ae360080942127805ea469f322552ed53177"
+version = "0.9.5"
+source = "git+https://github.com/datafuse-extras/msql-srv?rev=5a7ae3d#5a7ae3d6ce9da91427a7ddd2ac029108f5eca990"
 dependencies = [
  "byteorder",
  "chrono",
@@ -3647,9 +3647,8 @@ dependencies = [
 
 [[package]]
 name = "sqlparser"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fa863a2dfc4879a35647c51dadf495a2ad53745eaf3723fda27006e745fb0ba"
+version = "0.9.1-alpha.0"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=35ef0ee#35ef0eee3857c59827b2587bc813218a00dce264"
 dependencies = [
  "log 0.4.14",
 ]
