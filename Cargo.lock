@@ -669,7 +669,7 @@ dependencies = [
  "backtrace",
  "common-arrow",
  "serde_json",
- "sqlparser 0.9.0",
+ "sqlparser",
  "thiserror",
 ]
 
@@ -1394,7 +1394,7 @@ dependencies = [
  "rand 0.8.3",
  "serde",
  "serde_json",
- "sqlparser 0.9.1-alpha.0",
+ "sqlparser",
  "structopt",
  "structopt-toml",
  "threadpool",
@@ -3650,15 +3650,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9dae7e047abc519c96350e9484a96c6bf1492348af912fd3446dd2dc323f6268"
 dependencies = [
  "der",
-]
-
-[[package]]
-name = "sqlparser"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fa863a2dfc4879a35647c51dadf495a2ad53745eaf3723fda27006e745fb0ba"
-dependencies = [
- "log 0.4.14",
 ]
 
 [[package]]
