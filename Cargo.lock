@@ -649,6 +649,7 @@ dependencies = [
  "anyhow",
  "common-arrow",
  "common-exception",
+ "ordered-float 2.5.1",
  "paste",
  "pretty_assertions",
  "serde",

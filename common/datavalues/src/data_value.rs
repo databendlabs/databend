@@ -97,6 +97,8 @@ impl DataValue {
                 | DataValue::Float64(None)
                 | DataValue::Binary(None)
                 | DataValue::Utf8(None)
+                | DataValue::Date32(None)
+                | DataValue::Date64(None)
                 | DataValue::TimestampMillisecond(None)
                 | DataValue::TimestampMicrosecond(None)
                 | DataValue::TimestampNanosecond(None)

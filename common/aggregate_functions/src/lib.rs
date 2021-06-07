@@ -17,6 +17,7 @@ mod aggregate_function_factory;
 mod aggregate_max;
 mod aggregate_min;
 mod aggregate_sum;
+mod aggregate_uniq;
 mod aggregator;
 mod aggregator_common;
 
@@ -29,4 +30,5 @@ pub use aggregate_function_factory::AggregateFunctionFactory;
 pub use aggregate_max::AggregateMaxFunction;
 pub use aggregate_min::AggregateMinFunction;
 pub use aggregate_sum::AggregateSumFunction;
+pub use aggregate_uniq::AggregateUniqFunction;
 pub use aggregator::AggregatorFunction;
