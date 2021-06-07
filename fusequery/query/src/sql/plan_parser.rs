@@ -795,7 +795,11 @@ impl PlanParser {
 
                 let op = e.name.to_string();
                 if AggregateFunctionFactory::check(&op) {
-                    return Ok(Expression::AggregateFunction { op, args });
+                    return Ok(Expression::AggregateFunction {
+                        op,
+                        distinct: e.distinct,
+                        args,
+                    });
                 }
 
                 Ok(Expression::ScalarFunction { op, args })

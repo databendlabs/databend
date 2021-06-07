@@ -346,7 +346,7 @@ impl RewriteHelper {
                 }
             }
 
-            Expression::AggregateFunction { op, args } => {
+            Expression::AggregateFunction { op, distinct, args } => {
                 let new_args: Result<Vec<Expression>> = args
                     .iter()
                     .map(|v| RewriteHelper::expr_rewrite_alias(v, data))
@@ -355,6 +355,7 @@ impl RewriteHelper {
                 match new_args {
                     Ok(v) => Ok(Expression::AggregateFunction {
                         op: op.clone(),
+                        distinct: *distinct,
                         args: v,
                     }),
                     Err(v) => Err(v),
@@ -538,8 +539,9 @@ impl RewriteHelper {
                 op: op.clone(),
                 args: expressions.to_vec(),
             },
-            Expression::AggregateFunction { op, .. } => Expression::AggregateFunction {
+            Expression::AggregateFunction { op, distinct, .. } => Expression::AggregateFunction {
                 op: op.clone(),
+                distinct: *distinct,
                 args: expressions.to_vec(),
             },
             other => other.clone(),

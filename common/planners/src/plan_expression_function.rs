@@ -35,6 +35,7 @@ pub fn modular(left: Expression, right: Expression) -> Expression {
 pub fn sum(other: Expression) -> Expression {
     Expression::AggregateFunction {
         op: "sum".to_string(),
+        distinct: false,
         args: vec![other],
     }
 }
@@ -43,6 +44,7 @@ pub fn sum(other: Expression) -> Expression {
 pub fn avg(other: Expression) -> Expression {
     Expression::AggregateFunction {
         op: "avg".to_string(),
+        distinct: false,
         args: vec![other],
     }
 }

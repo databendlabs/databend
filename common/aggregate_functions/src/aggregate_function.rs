@@ -16,7 +16,27 @@ pub trait IAggregateFunction: fmt::Display + Sync + Send + DynClone {
     fn return_type(&self) -> Result<DataType>;
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool>;
 
-    fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()>;
+    // accumulate is to accumulate the columns in batch mod
+    // if some aggregate functions wants to iterate over the columns row by row, it doesn't need to implement this function
+    // You should only implement either of `accumulate` and `accumulate_scalar`
+    fn accumulate(&mut self, columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
+        if columns.is_empty() {
+            return Ok(());
+        };
+
+        (0..input_rows).try_for_each(|index| {
+            let v = columns
+                .iter()
+                .map(|column| DataValue::try_from_column(column, index))
+                .collect::<Result<Vec<_>>>()?;
+            self.accumulate_scalar(&v)
+        })
+    }
+
+    fn accumulate_scalar(&mut self, _values: &[DataValue]) -> Result<()> {
+        Ok(())
+    }
+
     fn accumulate_result(&self) -> Result<Vec<DataValue>>;
     fn merge(&mut self, _states: &[DataValue]) -> Result<()>;
     fn merge_result(&self) -> Result<DataValue>;

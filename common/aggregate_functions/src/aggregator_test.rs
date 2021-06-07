@@ -253,6 +253,17 @@ fn test_aggregate_function() -> Result<()> {
             expect: DataValue::Int64(Some(4)),
             error: "Code: 28, displayText = argmin expect to have two arguments, but got 1.",
         },
+        Test {
+            name: "uniq-passed",
+            eval_nums: 1,
+            args: vec![args[0].clone()],
+            display: "uniq",
+            nullable: false,
+            func_name: "uniq",
+            columns: vec![columns[0].clone()],
+            expect: DataValue::UInt64(Some(4)),
+            error: "",
+        },
     ];
 
     for t in tests {
