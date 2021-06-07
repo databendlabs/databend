@@ -40,17 +40,6 @@ macro_rules! compute_utf8_op {
     }};
 }
 
-/// Invoke a self defined compute kernel on a pair of arrays
-macro_rules! compute_self_defined_op {
-    ($LEFT:expr, $RIGHT:expr, $OP:tt, $DT:ident) => {{
-        let ll = downcast_array!($LEFT, $DT)?;
-        let rr = downcast_array!($RIGHT, $DT)?;
-        Ok(Arc::new(
-            common_arrow::arrow::compute::math_op(&ll, &rr, $OP).map_err(ErrorCodes::from)?,
-        ))
-    }};
-}
-
 /// Invoke a compute negate kernel on a array
 macro_rules! compute_negate {
     ($VALUE:expr, $DT:ident) => {{
@@ -80,30 +69,6 @@ macro_rules! arrow_primitive_array_op {
             _ => Result::Err(ErrorCodes::BadDataValueType(format!(
                 "Unsupported arithmetic_compute::{} for data type: {:?}",
                 stringify!($OP),
-                ($LEFT).data_type(),
-            ))),
-        }
-    };
-}
-
-/// Invoke a compute kernel on a pair of arrays
-/// The arrow_primitive_array_self_defined_op macro only evaluates for primitive types
-/// like integers and floats.
-macro_rules! arrow_primitive_array_self_defined_op {
-    ($LEFT:expr, $RIGHT:expr, $RESULT:expr, $OP:tt) => {
-        match $RESULT {
-            DataType::Int8 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Int8Array),
-            DataType::Int16 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Int16Array),
-            DataType::Int32 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Int32Array),
-            DataType::Int64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Int64Array),
-            DataType::UInt8 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt8Array),
-            DataType::UInt16 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt16Array),
-            DataType::UInt32 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt32Array),
-            DataType::UInt64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt64Array),
-            DataType::Float32 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Float32Array),
-            DataType::Float64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Float64Array),
-            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
-                "Unsupported arithmetic_compute::math_op for data type: {:?}",
                 ($LEFT).data_type(),
             ))),
         }

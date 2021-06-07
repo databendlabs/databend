@@ -64,12 +64,7 @@ impl DataArrayArithmetic {
                 arrow_primitive_array_op!(&left_array, &right_array, &coercion_type, divide)
             }
             DataValueArithmeticOperator::Modulo => {
-                arrow_primitive_array_self_defined_op!(
-                    &left_array,
-                    &right_array,
-                    &coercion_type,
-                    (|a, b| a % b)
-                )
+                arrow_primitive_array_op!(&left_array, &right_array, &coercion_type, modulus)
             }
         }
     }
