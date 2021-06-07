@@ -761,11 +761,12 @@ impl PlanParser {
                 op: format!("{}", op),
                 expr: Box::new(self.sql_to_rex(expr, schema, select)?)
             }),
-            sqlparser::ast::Expr::Exists(query) => {
-                    Err(ErrorCodes::UnImplement(format!(
-                        "Unsupported identifier '{:?}'",
-                        query,
-                    )))
+            sqlparser::ast::Expr::Exists(q) => {
+                    //Err(ErrorCodes::UnImplement(format!(
+                    //    "Unsupported identifier '{:?}'",
+                    //    query,
+                    //)))
+                Ok(Expression::Exists(Box::new(self.query_to_plan(q)?)))
             }
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema, select),
             sqlparser::ast::Expr::CompoundIdentifier(ids) => {

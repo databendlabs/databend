@@ -105,7 +105,12 @@ impl ExpressionChain {
 
                 self.actions.push(ExpressionAction::Constant(value));
             }
-
+            Expression::Exists(p) => {
+                println!("plan: {:?}", p);
+                return Err(ErrorCodes::UnImplement(
+                    "Action for Exists not implemented yet",
+                ));
+            }
             Expression::UnaryExpression {
                 op,
                 expr: nested_expr

@@ -43,7 +43,8 @@ pub enum Expression {
     Column(String),
     /// Constant value.
     Literal(DataValue),
-
+    /// select * from t where xxx and exists (subquery)
+    Exists(Box<PlanNode>),
     /// A unary expression such as "NOT foo"
     UnaryExpression { op: String, expr: Box<Expression> },
 
@@ -108,6 +109,7 @@ impl Expression {
             Expression::Alias(_, expr) => expr.to_data_type(input_schema),
             Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
             Expression::Literal(v) => Ok(v.data_type()),
+            Expression::Exists(_p) => Ok(DataType::Boolean),
             Expression::BinaryExpression { op, left, right } => {
                 let arg_types = vec![
                     left.to_data_type(input_schema)?,
@@ -176,6 +178,7 @@ impl fmt::Debug for Expression {
             Expression::Alias(alias, v) => write!(f, "{:?} as {:#}", v, alias),
             Expression::Column(ref v) => write!(f, "{:#}", v),
             Expression::Literal(ref v) => write!(f, "{:#}", v),
+            Expression::Exists(ref v) => write!(f, "{:?}", v),
             Expression::BinaryExpression { op, left, right } => {
                 write!(f, "({:?} {} {:?})", left, op, right,)
             }
