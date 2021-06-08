@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::ops::Bound::Included;
+use std::ops::Bound::Unbounded;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -74,25 +76,21 @@ impl IFileSystem for Dfs {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn list(&self, path: String) -> anyhow::Result<ListResult> {
-        let _key = path;
+    async fn list(&self, prefix: String) -> anyhow::Result<ListResult> {
+        let sm = self.meta_node.sto.get_state_machine().await;
+        let meta = &sm.meta;
 
-        // TODO read local meta cache to list
+        let mut files: Vec<String> = Vec::new();
+        for (k, _v) in meta.keys.range((Included(prefix.clone()), Unbounded)) {
+            if !k.starts_with(prefix.as_str()) {
+                break;
+            }
+            files.push(k.clone());
+        }
 
-        // let meta = self.meta.lock().await;
-        // let mut files = vec![];
-        // for (k, _v) in meta.keys.range(key.clone()..) {
-        //     if !k.starts_with(key.as_str()) {
-        //         break;
-        //     }
-        //     files.push(k.to_string());
-        // }
-
-        // Ok(ListResult {
-        //     dirs: vec![],
-        //     files,
-        // })
-
-        todo!("dirs and files")
+        Ok(ListResult {
+            dirs: vec![],
+            files,
+        })
     }
 }
