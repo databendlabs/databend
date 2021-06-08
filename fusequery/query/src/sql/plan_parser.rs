@@ -799,7 +799,7 @@ impl PlanParser {
                         "count" => args
                             .iter()
                             .map(|c| match c {
-                                Expression::Wildcard => common_planners::lit(164),
+                                Expression::Wildcard => common_planners::lit(0i64),
                                 _ => c.clone(),
                             })
                             .collect(),
