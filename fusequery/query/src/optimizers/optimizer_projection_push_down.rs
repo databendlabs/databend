@@ -22,7 +22,6 @@ use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::RewriteHelper;
 use common_planners::SortPlan;
-use common_tracing::tracing;
 
 use crate::optimizers::IOptimizer;
 use crate::sessions::FuseQueryContextRef;
@@ -165,7 +164,6 @@ impl IOptimizer for ProjectionPushDownOptimizer {
         "ProjectionPushDown"
     }
 
-    #[tracing::instrument(level = "debug", skip(self, plan))]
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         let mut visitor = ProjectionPushDownImpl::new();
         visitor.rewrite_plan_node(plan)

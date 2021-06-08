@@ -111,7 +111,7 @@ impl PlanParser {
     }
 
     /// Builds plan from AST statement.
-    #[tracing::instrument(level = "debug", skip(self, statement), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, statement))]
     pub fn sql_statement_to_plan(&self, statement: &sqlparser::ast::Statement) -> Result<PlanNode> {
         match statement {
             Statement::Query(query) => self.query_to_plan(query),
@@ -134,7 +134,7 @@ impl PlanParser {
     }
 
     /// Generate a logic plan from an EXPLAIN
-    #[tracing::instrument(level = "debug", skip(self, explain), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, explain))]
     pub fn sql_explain_to_plan(&self, explain: &DfExplain) -> Result<PlanNode> {
         let plan = self.sql_statement_to_plan(&explain.statement)?;
         Ok(PlanNode::Explain(ExplainPlan {
@@ -312,7 +312,6 @@ impl PlanParser {
                     DataBlock::create_by_array(schema.clone(), cols)
                 })
                 .collect();
-            log::info!("data block is {:?}", blocks);
             let input_stream = futures::stream::iter(blocks);
             let plan_node = InsertIntoPlan {
                 db_name,
@@ -349,7 +348,7 @@ impl PlanParser {
     /// Generate a logic plan from an SQL select
     /// For example:
     /// "select sum(number+1)+2, number%3 as id from numbers(10) where number>1 group by id having id>1 order by id desc limit 3"
-    #[tracing::instrument(level = "debug", skip(self, select, limit, order_by), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, select, limit, order_by))]
     fn select_to_plan(
         &self,
         select: &sqlparser::ast::Select,

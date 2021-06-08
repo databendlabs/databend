@@ -32,7 +32,7 @@ pub struct ScheduledActions {
 
 impl PlanScheduler {
     /// Schedule the plan to Local or Remote mode.
-    #[tracing::instrument(level = "debug", skip(ctx, plan), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(ctx, plan))]
     pub fn reschedule(ctx: FuseQueryContextRef, plan: &PlanNode) -> Result<ScheduledActions> {
         let cluster = ctx.try_get_cluster()?;
 

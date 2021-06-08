@@ -35,7 +35,7 @@ impl IInterpreter for CreateDatabaseInterpreter {
         "CreateDatabaseInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let datasource = self.ctx.get_datasource();
         datasource.create_database(self.plan.clone()).await?;

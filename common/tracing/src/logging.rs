@@ -34,8 +34,7 @@ pub fn init_tracing_with_level(level: &str) {
 
 fn init_tracing(filter: EnvFilter) {
     let fmt_layer = fmt::Layer::default()
-        .with_thread_ids(true)
-        .with_ansi(false)
+        .with_ansi(true)
         .with_span_events(fmt::format::FmtSpan::FULL);
 
     let subscriber = Registry::default().with(filter).with(fmt_layer);
