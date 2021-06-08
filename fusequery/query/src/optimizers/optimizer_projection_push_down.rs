@@ -83,6 +83,7 @@ impl<'plan> PlanRewriter<'plan> for ProjectionPushDownImpl {
                     statistics: plan.statistics.clone(),
                     description: plan.description.to_string(),
                     scan_plan: plan.scan_plan.clone(),
+                    remote: plan.remote,
                 })
             })
     }

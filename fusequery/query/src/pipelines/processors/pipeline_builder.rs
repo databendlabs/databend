@@ -11,6 +11,7 @@ use common_planners::AggregatorPartialPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::HavingPlan;
+use common_planners::LimitByPlan;
 use common_planners::LimitPlan;
 use common_planners::PlanNode;
 use common_planners::ProjectionPlan;
@@ -27,6 +28,7 @@ use crate::pipelines::transforms::ExpressionTransform;
 use crate::pipelines::transforms::FilterTransform;
 use crate::pipelines::transforms::GroupByFinalTransform;
 use crate::pipelines::transforms::GroupByPartialTransform;
+use crate::pipelines::transforms::LimitByTransform;
 use crate::pipelines::transforms::LimitTransform;
 use crate::pipelines::transforms::ProjectionTransform;
 use crate::pipelines::transforms::RemoteTransform;
@@ -83,6 +85,9 @@ impl PipelineBuilder {
                     PipelineBuilder::visit_sort_plan(limit, &mut pipeline, plan)
                 }
                 PlanNode::Limit(plan) => PipelineBuilder::visit_limit_plan(&mut pipeline, plan),
+                PlanNode::LimitBy(plan) => {
+                    PipelineBuilder::visit_limit_by_plan(&mut pipeline, plan)
+                }
                 PlanNode::ReadSource(plan) => self.visit_read_data_source_plan(&mut pipeline, plan),
                 other => Result::Err(ErrorCodes::UnknownPlan(format!(
                     "Build pipeline from the plan node unsupported:{:?}",
@@ -144,6 +149,7 @@ impl PipelineBuilder {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(AggregatorPartialTransform::try_create(
                     plan.schema(),
+                    plan.input.schema(),
                     plan.aggr_expr.clone(),
                 )?))
             })?;
@@ -151,6 +157,7 @@ impl PipelineBuilder {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(GroupByPartialTransform::create(
                     plan.schema(),
+                    plan.input.schema(),
                     plan.aggr_expr.clone(),
                     plan.group_expr.clone(),
                 )))
@@ -168,6 +175,7 @@ impl PipelineBuilder {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(AggregatorFinalTransform::try_create(
                     plan.schema(),
+                    plan.schema_before_groupby.clone(),
                     plan.aggr_expr.clone(),
                 )?))
             })?;
@@ -175,6 +183,7 @@ impl PipelineBuilder {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(GroupByFinalTransform::create(
                     plan.schema(),
+                    plan.schema_before_groupby.clone(),
                     plan.aggr_expr.clone(),
                     plan.group_expr.clone(),
                 )))
@@ -256,6 +265,17 @@ impl PipelineBuilder {
         Ok(false)
     }
 
+    fn visit_limit_by_plan(pipeline: &mut Pipeline, plan: &LimitByPlan) -> Result<bool> {
+        pipeline.merge_processor()?;
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(LimitByTransform::create(
+                plan.limit,
+                plan.limit_by.clone(),
+            )))
+        })?;
+        Ok(false)
+    }
+
     fn visit_read_data_source_plan(
         &self,
         pipeline: &mut Pipeline,
@@ -273,6 +293,7 @@ impl PipelineBuilder {
                 self.ctx.clone(),
                 plan.db.as_str(),
                 plan.table.as_str(),
+                plan.remote,
             )?;
             pipeline.add_source(Arc::new(source))?;
         }

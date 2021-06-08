@@ -32,8 +32,10 @@ common-runtime = {path = "../../common/runtime"}
 common-streams = {path = "../../common/streams"}
 
 # Github dependencies
-msql-srv = { git = "https://github.com/datafuselabs/msql-srv", rev = "76b8ae3" }
-clickhouse-rs = { git = "https://github.com/datafuselabs/clickhouse-rs", rev = "c4743a9"}
+msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "5a7ae3d" }
+clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9"}
+sqlparser =  { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "35ef0ee"}
+
 
 # Crates.io dependencies
 ahash = "0.7.4"
@@ -58,7 +60,6 @@ prost = "0.7"
 rand = "0.8.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sqlparser = "0.9"
 structopt = "0.3"
 structopt-toml = "0.4.5"
 threadpool = "1.8.1"

@@ -166,6 +166,19 @@ impl FuseQueryContext {
         self.datasource.get_table(db_name, table_name)
     }
 
+    // This is an adhoc solution for the metadata syncing problem, far from elegant. let's tweak this later.
+    //
+    // The reason of not extending IDataSource::get_table (e.g. by adding a remote_hint parameter):
+    // Implementation of fetching remote table involves async operations which is not
+    // straight forward (but not infeasible) to do in a non-async method.
+    pub async fn get_remote_table(
+        &self,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Arc<dyn ITable>> {
+        self.datasource.get_remote_table(db_name, table_name).await
+    }
+
     pub fn get_table_function(&self, function_name: &str) -> Result<Arc<dyn ITableFunction>> {
         self.datasource.get_table_function(function_name)
     }

@@ -22,6 +22,7 @@ use crate::Expression;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
+use crate::LimitByPlan;
 use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
@@ -147,6 +148,7 @@ impl PlanBuilder {
                     aggr_expr: aggr_expr.to_vec(),
                     group_expr: group_expr.to_vec(),
                     schema: DataSchemaRefExt::create(final_fields),
+                    schema_before_groupby,
                 }))
             }
         })
@@ -242,6 +244,14 @@ impl PlanBuilder {
         Ok(Self::from(&PlanNode::Limit(LimitPlan {
             n,
             input: Arc::new(self.plan.clone()),
+        })))
+    }
+
+    pub fn limit_by(&self, n: usize, exprs: &[Expression]) -> Result<Self> {
+        Ok(Self::from(&PlanNode::LimitBy(LimitByPlan {
+            limit: n,
+            input: Arc::new(self.plan.clone()),
+            limit_by: exprs.to_vec(),
         })))
     }
 

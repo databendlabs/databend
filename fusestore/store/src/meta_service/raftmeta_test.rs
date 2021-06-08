@@ -15,26 +15,45 @@ use crate::meta_service::ClientRequest;
 use crate::meta_service::ClientResponse;
 use crate::meta_service::Cmd;
 use crate::meta_service::GetReq;
-use crate::meta_service::MemStoreStateMachine;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::NodeId;
 use crate::meta_service::RaftTxId;
 use crate::tests::Seq;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
-    crate::tests::init_tracing();
+// test cases fro Cmd::IncrSeq:
+// case_name, txid, key, want
+pub fn cases_incr_seq() -> Vec<(&'static str, Option<RaftTxId>, &'static str, u64)> {
+    vec![
+        ("incr on none", Some(RaftTxId::new("foo", 1)), "k1", 1),
+        ("incr on existent", Some(RaftTxId::new("foo", 2)), "k1", 2),
+        (
+            "dup: same serial, even with diff key, got the previous result",
+            Some(RaftTxId::new("foo", 2)),
+            "k2",
+            2,
+        ),
+        (
+            "diff client, same serial, not a dup request",
+            Some(RaftTxId::new("bar", 2)),
+            "k2",
+            1,
+        ),
+        ("no txid, no de-dup", None, "k2", 2),
+    ]
+}
 
-    let mut sm = MemStoreStateMachine::default();
-    let cases: Vec<(
-        &str,
-        Option<RaftTxId>,
-        &str,
-        &str,
-        Option<String>,
-        Option<String>,
-    )> = vec![
+// test cases for Cmd::AddFile
+// case_name, txid, key, value, want_prev, want_result
+pub fn cases_add_file() -> Vec<(
+    &'static str,
+    Option<RaftTxId>,
+    &'static str,
+    &'static str,
+    Option<String>,
+    Option<String>,
+)> {
+    vec![
         (
             "add on none",
             Some(RaftTxId::new("foo", 1)),
@@ -68,42 +87,20 @@ async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
             Some("v3".to_string()),
         ),
         ("no txid", None, "k3", "v4", None, Some("v4".to_string())),
-    ];
-    for (name, txid, k, v, want_prev, want_result) in cases.iter() {
-        let resp = sm.apply(5, &ClientRequest {
-            txid: txid.clone(),
-            cmd: Cmd::AddFile {
-                key: k.to_string(),
-                value: v.to_string(),
-            },
-        });
-        assert_eq!(
-            ClientResponse::String {
-                prev: want_prev.clone(),
-                result: want_result.clone()
-            },
-            resp.unwrap(),
-            "{}",
-            name
-        );
-    }
-
-    Ok(())
+    ]
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
-    crate::tests::init_tracing();
-
-    let mut sm = MemStoreStateMachine::default();
-    let cases: Vec<(
-        &str,
-        Option<RaftTxId>,
-        &str,
-        &str,
-        Option<String>,
-        Option<String>,
-    )> = vec![
+// test cases for Cmd::SetFile
+// case_name, txid, key, value, want_prev, want_result
+pub fn cases_set_file() -> Vec<(
+    &'static str,
+    Option<RaftTxId>,
+    &'static str,
+    &'static str,
+    Option<String>,
+    Option<String>,
+)> {
+    vec![
         (
             "set on none",
             Some(RaftTxId::new("foo", 1)),
@@ -144,27 +141,7 @@ async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
             Some("v3".to_string()),
             Some("v4".to_string()),
         ),
-    ];
-    for (name, txid, k, v, want_prev, want_result) in cases.iter() {
-        let resp = sm.apply(5, &ClientRequest {
-            txid: txid.clone(),
-            cmd: Cmd::SetFile {
-                key: k.to_string(),
-                value: v.to_string(),
-            },
-        });
-        assert_eq!(
-            ClientResponse::String {
-                prev: want_prev.clone(),
-                result: want_result.clone()
-            },
-            resp.unwrap(),
-            "{}",
-            name
-        );
-    }
-
-    Ok(())
+    ]
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -412,7 +389,7 @@ async fn assert_get_file(
     Ok(())
 }
 
-async fn assert_connection(addr: &str) -> anyhow::Result<()> {
+pub async fn assert_connection(addr: &str) -> anyhow::Result<()> {
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
     let req = tonic::Request::new(GetReq { key: "foo".into() });

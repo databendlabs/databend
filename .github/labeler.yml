@@ -47,6 +47,10 @@ labels:
       - '\bDocumentation?\b'
       - '\bWebsite?\b'
     exclude: []
+  'pr-not-for-changelog':
+    include:
+      - '\bNot for changelog?\b'
+    exclude: []
   'pr-other':
     include:
       - '\bOther?\b'

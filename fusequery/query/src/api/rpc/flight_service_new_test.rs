@@ -4,7 +4,6 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::datatypes::Schema;
 use common_arrow::arrow::ipc::convert;
 use common_arrow::arrow_flight::flight_descriptor::DescriptorType;
@@ -14,6 +13,7 @@ use common_arrow::arrow_flight::Empty;
 use common_arrow::arrow_flight::FlightData;
 use common_arrow::arrow_flight::FlightDescriptor;
 use common_arrow::arrow_flight::Ticket;
+use common_datavalues::DataField;
 use common_datavalues::DataType;
 use common_exception::ErrorCodes;
 use common_exception::Result;
@@ -166,7 +166,7 @@ async fn test_do_get_schema() -> Result<()> {
             DispatcherRequest::GetSchema(stream_id, sender) => {
                 // To avoid deadlock, we first return the result
                 let send_result = sender
-                    .send(Ok(Arc::new(Schema::new(vec![Field::new(
+                    .send(Ok(Arc::new(Schema::new(vec![DataField::new(
                         "field",
                         DataType::Int8,
                         true,
@@ -201,7 +201,7 @@ async fn test_do_get_schema() -> Result<()> {
     assert!(schema.is_ok());
     assert_eq!(
         schema.unwrap(),
-        Schema::new(vec![Field::new("field", DataType::Int8, true)])
+        Schema::new(vec![DataField::new("field", DataType::Int8, true)])
     );
 
     Ok(())

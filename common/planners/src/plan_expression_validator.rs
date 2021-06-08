@@ -50,7 +50,7 @@ fn validate_function_arg(func: Box<dyn IFunction>, args: &[Expression]) -> Resul
         Some((start, end)) => {
             return if args.len() < start || args.len() > end {
                 Err(ErrorCodes::NumberArgumentsNotMatch(format!(
-                    "{} expect to have [{}, {}) arguments, but got {}",
+                    "{} expect to have [{}, {}] arguments, but got {}",
                     func.name(),
                     start,
                     end,

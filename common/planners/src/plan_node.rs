@@ -20,6 +20,7 @@ use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::InsertIntoPlan;
+use crate::LimitByPlan;
 use crate::LimitPlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
@@ -44,6 +45,7 @@ pub enum PlanNode {
     Having(HavingPlan),
     Sort(SortPlan),
     Limit(LimitPlan),
+    LimitBy(LimitByPlan),
     Scan(ScanPlan),
     ReadSource(ReadDataSourcePlan),
     Select(SelectPlan),
@@ -72,6 +74,7 @@ impl PlanNode {
             PlanNode::Filter(v) => v.schema(),
             PlanNode::Having(v) => v.schema(),
             PlanNode::Limit(v) => v.schema(),
+            PlanNode::LimitBy(v) => v.schema(),
             PlanNode::ReadSource(v) => v.schema(),
             PlanNode::Select(v) => v.schema(),
             PlanNode::Explain(v) => v.schema(),
@@ -99,6 +102,7 @@ impl PlanNode {
             PlanNode::Filter(_) => "FilterPlan",
             PlanNode::Having(_) => "HavingPlan",
             PlanNode::Limit(_) => "LimitPlan",
+            PlanNode::LimitBy(_) => "LimitByPlan",
             PlanNode::ReadSource(_) => "ReadSourcePlan",
             PlanNode::Select(_) => "SelectPlan",
             PlanNode::Explain(_) => "ExplainPlan",

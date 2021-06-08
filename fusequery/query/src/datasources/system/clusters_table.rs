@@ -80,6 +80,7 @@ impl ITable for ClustersTable {
             statistics: Statistics::default(),
             description: "(Read from system.clusters table)".to_string(),
             scan_plan: Arc::new(scan.clone()),
+            remote: false,
         })
     }
 

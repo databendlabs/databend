@@ -4,6 +4,7 @@
 
 use common_aggregate_functions::AggregateFunctionFactory;
 use common_aggregate_functions::IAggregateFunction;
+use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -48,10 +49,15 @@ pub struct ActionAlias {
 pub struct ActionFunction {
     pub name: String,
     pub func_name: String,
+    pub return_type: DataType,
     pub is_aggregated: bool,
+
+    // for functions
     pub arg_names: Vec<String>,
     pub arg_types: Vec<DataType>,
-    pub return_type: DataType,
+
+    // only for aggregate functions
+    pub arg_fields: Vec<DataField>,
 }
 
 #[derive(Debug, Clone)]
@@ -121,6 +127,7 @@ impl ExpressionChain {
                     is_aggregated: false,
                     arg_names: vec![nested_expr.column_name()],
                     arg_types: arg_types.clone(),
+                    arg_fields: vec![],
                     return_type: func.return_type(&arg_types)?,
                 };
 
@@ -143,6 +150,7 @@ impl ExpressionChain {
                     is_aggregated: false,
                     arg_names: vec![left.column_name(), right.column_name()],
                     arg_types: arg_types.clone(),
+                    arg_fields: vec![],
                     return_type: func.return_type(&arg_types)?,
                 };
 
@@ -166,30 +174,28 @@ impl ExpressionChain {
                     is_aggregated: false,
                     arg_names: args.iter().map(|action| action.column_name()).collect(),
                     arg_types: arg_types.clone(),
+                    arg_fields: vec![],
                     return_type: func.return_type(&arg_types)?,
                 };
 
                 self.actions.push(ExpressionAction::Function(function));
             }
 
-            Expression::AggregateFunction { op, args } => {
-                for expr in args.iter() {
-                    self.add_expr(expr)?;
+            Expression::AggregateFunction { op, args, .. } => {
+                let mut arg_fields = Vec::with_capacity(args.len());
+                for arg in args.iter() {
+                    arg_fields.push(arg.to_data_field(&self.schema)?);
                 }
 
-                let func = AggregateFunctionFactory::get(op)?;
-                let arg_types = args
-                    .iter()
-                    .map(|action| action.to_data_type(&self.schema))
-                    .collect::<Result<Vec<_>>>()?;
-
+                let func = expr.to_aggregate_function(&self.schema)?;
                 let function = ActionFunction {
                     name: expr.column_name(),
                     func_name: op.clone(),
                     is_aggregated: true,
-                    arg_names: args.iter().map(|action| action.column_name()).collect(),
-                    arg_types: arg_types.clone(),
-                    return_type: func.return_type(&arg_types)?,
+                    arg_types: vec![],
+                    arg_names: vec![],
+                    arg_fields,
+                    return_type: func.return_type()?,
                 };
 
                 self.actions.push(ExpressionAction::Function(function));
@@ -210,6 +216,7 @@ impl ExpressionChain {
                     is_aggregated: false,
                     arg_names: vec![sub_expr.column_name()],
                     arg_types: vec![sub_expr.to_data_type(&self.schema)?],
+                    arg_fields: vec![],
                     return_type: data_type.clone(),
                 };
 
@@ -251,6 +258,6 @@ impl ActionFunction {
                 "Action must be aggregated function",
             ));
         }
-        AggregateFunctionFactory::get(&self.func_name)
+        AggregateFunctionFactory::get(&self.func_name, self.arg_fields.clone())
     }
 }

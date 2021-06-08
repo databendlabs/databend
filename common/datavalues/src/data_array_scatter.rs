@@ -105,26 +105,29 @@ impl DataArrayScatter {
             let mut scattered_data_res = Vec::with_capacity(nums);
 
             for res_index in 0..nums {
-                match res_index {
-                    res_index if res_index == index => scattered_data_res.push(data.clone()),
-                    _ => scattered_data_res.push(data.clone_empty()),
+                if res_index == index {
+                    scattered_data_res.push(data.clone());
+                } else {
+                    scattered_data_res.push(data.clone_empty());
                 }
             }
 
             Ok(scattered_data_res)
         };
 
-        match indices {
-            DataValue::Int8(Some(v)) => scatter_data(*v as usize),
-            DataValue::Int16(Some(v)) => scatter_data(*v as usize),
-            DataValue::Int32(Some(v)) => scatter_data(*v as usize),
-            DataValue::Int64(Some(v)) => scatter_data(*v as usize),
-            DataValue::UInt8(Some(v)) => scatter_data(*v as usize),
-            DataValue::UInt16(Some(v)) => scatter_data(*v as usize),
-            DataValue::UInt32(Some(v)) => scatter_data(*v as usize),
-            DataValue::UInt64(Some(v)) => scatter_data(*v as usize),
-            _ => Err(ErrorCodes::BadDataValueType("")),
-        }
+        let v = match indices {
+            DataValue::Int8(Some(v)) => *v as usize,
+            DataValue::Int16(Some(v)) => *v as usize,
+            DataValue::Int32(Some(v)) => *v as usize,
+            DataValue::Int64(Some(v)) => *v as usize,
+            DataValue::UInt8(Some(v)) => *v as usize,
+            DataValue::UInt16(Some(v)) => *v as usize,
+            DataValue::UInt32(Some(v)) => *v as usize,
+            DataValue::UInt64(Some(v)) => *v as usize,
+            _ => return Err(ErrorCodes::BadDataValueType("")),
+        };
+
+        scatter_data(v)
     }
 
     fn scatter_data(

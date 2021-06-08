@@ -38,3 +38,5 @@ mod meta_test;
 mod placement_test;
 #[cfg(test)]
 mod raftmeta_test;
+#[cfg(test)]
+mod state_machine_test;

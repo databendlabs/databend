@@ -6,28 +6,92 @@
 use log::info;
 use pretty_assertions::assert_eq;
 
+use crate::meta_service::raftmeta_test::assert_connection;
 use crate::meta_service::ClientRequest;
 use crate::meta_service::ClientResponse;
 use crate::meta_service::Cmd;
 use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
-use crate::meta_service::MetaServiceImpl;
-use crate::meta_service::MetaServiceServer;
 use crate::tests::rand_local_addr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_server_set_get() -> anyhow::Result<()> {
+async fn test_meta_server_add_file() -> anyhow::Result<()> {
     let addr = rand_local_addr();
 
-    let rst = MetaNode::boot(0, addr.clone()).await;
-    assert!(rst.is_ok());
-    let mn = rst.unwrap();
+    let _mn = MetaNode::boot(0, addr.clone()).await?;
+    assert_connection(&addr).await?;
 
-    let meta_srv_impl = MetaServiceImpl::create(mn);
-    let meta_srv = MetaServiceServer::new(meta_srv_impl);
+    let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
-    serve_grpc!(addr, meta_srv);
+    let cases = crate::meta_service::raftmeta_test::cases_add_file();
+
+    for (name, txid, k, v, want_prev, want_rst) in cases.iter() {
+        let req = ClientRequest {
+            txid: txid.clone(),
+            cmd: Cmd::AddFile {
+                key: k.to_string(),
+                value: v.to_string(),
+            },
+        };
+        let rst = client.write(req).await?.into_inner();
+        let resp: ClientResponse = rst.into();
+        match resp {
+            ClientResponse::String { prev, result } => {
+                assert_eq!(*want_prev, prev, "{}", name);
+                assert_eq!(*want_rst, result, "{}", name);
+            }
+            _ => {
+                panic!("not String")
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_server_sed_file() -> anyhow::Result<()> {
+    let addr = rand_local_addr();
+
+    let _mn = MetaNode::boot(0, addr.clone()).await?;
+    assert_connection(&addr).await?;
+
+    let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
+
+    let cases = crate::meta_service::raftmeta_test::cases_set_file();
+
+    for (name, txid, k, v, want_prev, want_rst) in cases.iter() {
+        let req = ClientRequest {
+            txid: txid.clone(),
+            cmd: Cmd::SetFile {
+                key: k.to_string(),
+                value: v.to_string(),
+            },
+        };
+        let rst = client.write(req).await?.into_inner();
+        let resp: ClientResponse = rst.into();
+        match resp {
+            ClientResponse::String { prev, result } => {
+                assert_eq!(*want_prev, prev, "{}", name);
+                assert_eq!(*want_rst, result, "{}", name);
+            }
+            _ => {
+                panic!("not String")
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
+    // Test Cmd::AddFile, Cmd::SetFile, Cma::GetFile
+    let addr = rand_local_addr();
+
+    let _mn = MetaNode::boot(0, addr.clone()).await?;
+    assert_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
@@ -103,6 +167,37 @@ async fn test_meta_server_set_get() -> anyhow::Result<()> {
         let req = tonic::Request::new(GetReq { key: "foo".into() });
         let rst = client.get(req).await?.into_inner();
         assert_eq!("bar2", rst.value);
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_server_incr_seq() -> anyhow::Result<()> {
+    let addr = rand_local_addr();
+
+    let _mn = MetaNode::boot(0, addr.clone()).await?;
+    assert_connection(&addr).await?;
+
+    let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
+
+    let cases = crate::meta_service::raftmeta_test::cases_incr_seq();
+
+    for (name, txid, k, want) in cases.iter() {
+        let req = ClientRequest {
+            txid: txid.clone(),
+            cmd: Cmd::IncrSeq { key: k.to_string() },
+        };
+        let rst = client.write(req).await?.into_inner();
+        let resp: ClientResponse = rst.into();
+        match resp {
+            ClientResponse::Seq { seq } => {
+                assert_eq!(*want, seq, "{}", name);
+            }
+            _ => {
+                panic!("not Seq")
+            }
+        }
     }
 
     Ok(())

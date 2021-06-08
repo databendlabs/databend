@@ -40,17 +40,6 @@ macro_rules! compute_utf8_op {
     }};
 }
 
-/// Invoke a self defined compute kernel on a pair of arrays
-macro_rules! compute_self_defined_op {
-    ($LEFT:expr, $RIGHT:expr, $OP:tt, $DT:ident) => {{
-        let ll = downcast_array!($LEFT, $DT)?;
-        let rr = downcast_array!($RIGHT, $DT)?;
-        Ok(Arc::new(
-            common_arrow::arrow::compute::math_op(&ll, &rr, $OP).map_err(ErrorCodes::from)?,
-        ))
-    }};
-}
-
 /// Invoke a compute negate kernel on a array
 macro_rules! compute_negate {
     ($VALUE:expr, $DT:ident) => {{
@@ -80,30 +69,6 @@ macro_rules! arrow_primitive_array_op {
             _ => Result::Err(ErrorCodes::BadDataValueType(format!(
                 "Unsupported arithmetic_compute::{} for data type: {:?}",
                 stringify!($OP),
-                ($LEFT).data_type(),
-            ))),
-        }
-    };
-}
-
-/// Invoke a compute kernel on a pair of arrays
-/// The arrow_primitive_array_self_defined_op macro only evaluates for primitive types
-/// like integers and floats.
-macro_rules! arrow_primitive_array_self_defined_op {
-    ($LEFT:expr, $RIGHT:expr, $RESULT:expr, $OP:tt) => {
-        match $RESULT {
-            DataType::Int8 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Int8Array),
-            DataType::Int16 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Int16Array),
-            DataType::Int32 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Int32Array),
-            DataType::Int64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Int64Array),
-            DataType::UInt8 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt8Array),
-            DataType::UInt16 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt16Array),
-            DataType::UInt32 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt32Array),
-            DataType::UInt64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt64Array),
-            DataType::Float32 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Float32Array),
-            DataType::Float64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Float64Array),
-            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
-                "Unsupported arithmetic_compute::math_op for data type: {:?}",
                 ($LEFT).data_type(),
             ))),
         }
@@ -214,95 +179,6 @@ macro_rules! arrow_array_op_scalar {
             ))),
         };
         Ok(result?)
-    }};
-}
-
-macro_rules! typed_array_sum_to_data_value {
-    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident) => {{
-        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
-        let delta = common_arrow::arrow::compute::sum(array);
-        Result::Ok(DataValue::$SCALAR(delta))
-    }};
-}
-
-macro_rules! typed_array_min_max_to_data_value {
-    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:ident) => {{
-        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
-        let value = common_arrow::arrow::compute::$OP(array);
-        Result::Ok(DataValue::$SCALAR(value))
-    }};
-}
-
-macro_rules! typed_array_min_max_string_to_data_value {
-    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:ident) => {{
-        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
-        let value = common_arrow::arrow::compute::$OP(array);
-        let value = value.and_then(|e| Some(e.to_string()));
-        Result::Ok(DataValue::$SCALAR(value))
-    }};
-}
-
-macro_rules! typed_array_values_min_max_to_data_value {
-    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $TYPE:ident, $OP:expr) => {{
-        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
-        let vals_std: &[$TYPE] = array.values();
-        let mut min_max_row_val: (u64, $TYPE) = (0, vals_std[0]);
-        for (row, val) in vals_std.iter().enumerate() {
-            match $OP {
-                DataValueAggregateOperator::ArgMin => {
-                    if *val < min_max_row_val.1 {
-                        min_max_row_val = (row as u64, *val);
-                    }
-                }
-                DataValueAggregateOperator::ArgMax => {
-                    if *val > min_max_row_val.1 {
-                        min_max_row_val = (row as u64, *val);
-                    }
-                }
-                _ => {
-                    panic!(
-                        "Unexpected {} for macro typed_array_values_min_max_to_data_value",
-                        stringify!($OP),
-                    )
-                }
-            }
-        }
-        Result::Ok(DataValue::Struct(vec![
-            DataValue::UInt64(Some(min_max_row_val.0)),
-            DataValue::$SCALAR(Some(min_max_row_val.1)),
-        ]))
-    }};
-}
-
-macro_rules! typed_array_values_min_max_string_to_data_value {
-    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:expr) => {{
-        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
-        let mut min_max_row_val: (u64, &str) = (0, array.value(0));
-        for (row, val) in array.iter().enumerate() {
-            let str_val = val.unwrap();
-            match $OP {
-                DataValueAggregateOperator::ArgMin => {
-                    if str_val < min_max_row_val.1 {
-                        min_max_row_val = (row as u64, str_val);
-                    }
-                }
-                DataValueAggregateOperator::ArgMax => {
-                    if str_val > min_max_row_val.1 {
-                        min_max_row_val = (row as u64, str_val);
-                    }
-                }
-                _ => {
-                    panic!(
-                        "Unexpected {} for macro typed_array_values_min_max_to_data_value",
-                        stringify!($OP),
-                    )
-                }
-            }
-        }
-        Result::Ok(DataValue::Struct(vec![
-            DataValue::UInt64(Some(min_max_row_val.0)),
-            DataValue::$SCALAR(Some(min_max_row_val.1.to_string())),
-        ]))
     }};
 }
 

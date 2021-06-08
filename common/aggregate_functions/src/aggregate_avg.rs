@@ -4,31 +4,37 @@
 
 use std::fmt;
 
-use common_datavalues::DataArrayAggregate;
 use common_datavalues::DataColumnarValue;
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_datavalues::DataValueAggregateOperator;
 use common_datavalues::DataValueArithmetic;
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
+use crate::aggregator_common::assert_unary_arguments;
+use crate::AggregateSumFunction;
 use crate::IAggregateFunction;
 
 #[derive(Clone)]
 pub struct AggregateAvgFunction {
     display_name: String,
-    depth: usize,
     state: DataValue,
+    arguments: Vec<DataField>,
 }
 
 impl AggregateAvgFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggregateFunction>> {
+    pub fn try_create(
+        display_name: &str,
+        arguments: Vec<DataField>,
+    ) -> Result<Box<dyn IAggregateFunction>> {
+        assert_unary_arguments(display_name, arguments.len())?;
+
         Ok(Box::new(AggregateAvgFunction {
             display_name: display_name.to_string(),
-            depth: 0,
             state: DataValue::Struct(vec![DataValue::Null, DataValue::UInt64(Some(0))]),
+            arguments,
         }))
     }
 }
@@ -38,7 +44,7 @@ impl IAggregateFunction for AggregateAvgFunction {
         "AggregateAvgFunction"
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self) -> Result<DataType> {
         Ok(DataType::Float64)
     }
 
@@ -46,19 +52,12 @@ impl IAggregateFunction for AggregateAvgFunction {
         Ok(false)
     }
 
-    fn set_depth(&mut self, depth: usize) {
-        self.depth = depth;
-    }
-
     fn accumulate(&mut self, columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
         if let DataValue::Struct(values) = self.state.clone() {
             let sum = DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
                 values[0].clone(),
-                DataArrayAggregate::data_array_aggregate_op(
-                    DataValueAggregateOperator::Sum,
-                    columns[0].to_array()?,
-                )?,
+                AggregateSumFunction::sum_batch(columns[0].clone())?,
             )?;
             let count = DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,
@@ -76,7 +75,7 @@ impl IAggregateFunction for AggregateAvgFunction {
     }
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        let val = states[self.depth].clone();
+        let val = states[0].clone();
         if let (DataValue::Struct(new_states), DataValue::Struct(old_states)) =
             (val, self.state.clone())
         {

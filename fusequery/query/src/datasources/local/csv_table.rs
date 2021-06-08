@@ -105,6 +105,7 @@ impl ITable for CsvTable {
             statistics: Statistics::default(),
             description: format!("(Read from CSV Engine table  {}.{})", self.db, self.name),
             scan_plan: Arc::new(scan.clone()),
+            remote: false,
         })
     }
 

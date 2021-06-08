@@ -2,33 +2,40 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt;
 
-use common_datavalues::DataArrayAggregate;
-use common_datavalues::DataColumnarValue;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use common_datavalues::DataValueAggregate;
-use common_datavalues::DataValueAggregateOperator;
+use common_arrow::arrow::array::Array;
+use common_datavalues::downcast_array;
+use common_datavalues::*;
+use common_exception::ErrorCodes;
 use common_exception::Result;
 
+use crate::aggregator_common::assert_binary_arguments;
 use crate::IAggregateFunction;
 
 #[derive(Clone)]
 pub struct AggregateArgMinFunction {
     display_name: String,
-    depth: usize,
     state: DataValue,
+    arguments: Vec<DataField>,
 }
 
 impl AggregateArgMinFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IAggregateFunction>> {
+    pub fn try_create(
+        display_name: &str,
+        arguments: Vec<DataField>,
+    ) -> Result<Box<dyn IAggregateFunction>> {
+        assert_binary_arguments(display_name, arguments.len())?;
+
         Ok(Box::new(AggregateArgMinFunction {
             display_name: display_name.to_string(),
-            depth: 0,
-            state: DataValue::Struct(vec![DataValue::Null, DataValue::Null]),
+            state: DataValue::Struct(vec![
+                DataValue::try_from(arguments[0].data_type())?,
+                DataValue::try_from(arguments[1].data_type())?,
+            ]),
+            arguments,
         }))
     }
 }
@@ -38,23 +45,16 @@ impl IAggregateFunction for AggregateArgMinFunction {
         "AggregateArgMinFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        Ok(args[0].clone())
+    fn return_type(&self) -> Result<DataType> {
+        Ok(self.arguments[0].data_type().clone())
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn set_depth(&mut self, depth: usize) {
-        self.depth = depth;
-    }
-
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
-        if let DataValue::Struct(min_arg_val) = DataArrayAggregate::data_array_aggregate_op(
-            DataValueAggregateOperator::ArgMin,
-            columns[1].to_array()?,
-        )? {
+        if let DataValue::Struct(min_arg_val) = Self::arg_min_batch(columns[1].clone())? {
             let index: u64 = min_arg_val[0].clone().try_into()?;
             let min_arg = DataValue::try_from_array(&columns[0].to_array()?, index as usize)?;
             let min_val = min_arg_val[1].clone();
@@ -85,7 +85,7 @@ impl IAggregateFunction for AggregateArgMinFunction {
     }
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        let arg_val = states[self.depth].clone();
+        let arg_val = states[0].clone();
         if let (DataValue::Struct(new_states), DataValue::Struct(old_states)) =
             (arg_val, self.state.clone())
         {
@@ -118,5 +118,88 @@ impl IAggregateFunction for AggregateArgMinFunction {
 impl fmt::Display for AggregateArgMinFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
+    }
+}
+
+macro_rules! typed_array_min_to_data_value {
+    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:expr $(,)?) => {{
+        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
+        let data = array.data();
+        let values = array.values();
+        let null_count = array.null_count();
+        let mut min_row_val = (0, values[0]);
+
+        if null_count == 0 {
+            for row in 1..data.len() {
+                if values[row] < min_row_val.1 {
+                    min_row_val = (row, values[row]);
+                }
+            }
+        } else {
+            for row in 1..data.len() {
+                if data.is_valid(row) && values[row] > min_row_val.1 {
+                    min_row_val = (row, values[row]);
+                }
+            }
+        }
+
+        Result::Ok(DataValue::Struct(vec![
+            DataValue::UInt64(Some(min_row_val.0 as u64)),
+            DataValue::$SCALAR(Some(min_row_val.1)),
+        ]))
+    }};
+}
+
+macro_rules! string_array_min_to_data_value {
+    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:expr $(,)?) => {{
+        fn cmp(a: &str, b: &str) -> bool {
+            a < b
+        }
+        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
+        let data = array.data();
+
+        let null_count = array.null_count();
+        let mut min_row_val = (0usize, array.value(0));
+
+        if null_count == 0 {
+            for row in 1..data.len() {
+                let item = array.value(row);
+                if cmp(&min_row_val.1, item) {
+                    min_row_val = (row, item);
+                }
+            }
+        } else {
+            for row in 1..data.len() {
+                let item = array.value(row);
+                if data.is_valid(row) && cmp(&min_row_val.1, item) {
+                    min_row_val = (row, item);
+                }
+            }
+        }
+
+        Result::Ok(DataValue::Struct(vec![
+            DataValue::UInt64(Some(min_row_val.0 as u64)),
+            DataValue::$SCALAR(Some(min_row_val.1.to_string())),
+        ]))
+    }};
+}
+
+impl AggregateArgMinFunction {
+    pub fn arg_min_batch(column: DataColumnarValue) -> Result<DataValue> {
+        match column {
+            DataColumnarValue::Constant(value, _) => {
+                Ok(DataValue::Struct(vec![DataValue::UInt64(Some(0)), value]))
+            }
+
+            DataColumnarValue::Array(array) => {
+                if let Ok(v) =
+                    dispatch_primitive_array! { typed_array_min_to_data_value, array, argMin}
+                {
+                    Ok(v)
+                } else {
+                    dispatch_string_array! { string_array_min_to_data_value, array, argMin}
+                }
+            }
+        }
     }
 }
