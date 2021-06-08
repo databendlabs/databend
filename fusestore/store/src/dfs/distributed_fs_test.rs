@@ -50,7 +50,7 @@ async fn test_distributed_fs_single_node_read_all() -> anyhow::Result<()> {
 
         // read file and check
 
-        let got = dfs.read_all(key.to_string()).await?;
+        let got = dfs.read_all(key).await?;
         assert_eq!(
             content.to_string().as_bytes(),
             got,
@@ -95,7 +95,7 @@ async fn test_distributed_fs_single_node_list() -> anyhow::Result<()> {
     ];
 
     for (prefix, want) in cases.iter() {
-        let got = dfs.list(prefix.to_string()).await?;
+        let got = dfs.list(prefix).await?;
         assert_eq!(want.len(), got.files.len());
         for (i, w) in want.iter().enumerate() {
             assert_eq!(w.to_string(), got.files[i]);

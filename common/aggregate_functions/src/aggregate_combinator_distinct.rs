@@ -55,7 +55,7 @@ impl AggregateDistinctCombinator {
             _ => arguments.clone(),
         };
 
-        let nested = nested_creator(nested_name, nested_arguments.clone())?;
+        let nested = nested_creator(nested_name, nested_arguments)?;
         Ok(Box::new(AggregateDistinctCombinator {
             nested_name: nested_name.to_owned(),
             arguments,
