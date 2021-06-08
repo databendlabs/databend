@@ -8,15 +8,15 @@ use common_exception::ErrorCodes;
 use tokio::task::JoinHandle;
 use std::net::SocketAddr;
 
-pub struct RunnableServer {
+pub struct RunningServer {
     listener_address: SocketAddr,
     shutdown_sender: Sender<()>,
     join_handler: Option<JoinHandle<()>>,
 }
 
-impl RunnableServer {
-    pub fn create(listener_address: SocketAddr, shutdown_sender: Sender<()>, join_handler: JoinHandle<()>) -> RunnableServer {
-        RunnableServer {
+impl RunningServer {
+    pub fn create(listener_address: SocketAddr, shutdown_sender: Sender<()>, join_handler: JoinHandle<()>) -> RunningServer {
+        RunningServer {
             listener_address,
             shutdown_sender,
             join_handler: Some(join_handler),

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_exception::{Result, ErrorCodes, ToErrorCodes};
-use crate::servers::{MySQLHandler, RunnableServer};
+use crate::servers::{MySQLHandler, RunningServer};
 use crate::configs::Config;
 use crate::clusters::Cluster;
 use crate::sessions::SessionManager;
