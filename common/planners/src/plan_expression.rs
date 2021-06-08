@@ -44,7 +44,7 @@ pub enum Expression {
     /// Constant value.
     Literal(DataValue),
     /// select * from t where xxx and exists (subquery)
-    Exists(Box<PlanNode>),
+    Exists(Arc<PlanNode>),
     /// A unary expression such as "NOT foo"
     UnaryExpression { op: String, expr: Box<Expression> },
 

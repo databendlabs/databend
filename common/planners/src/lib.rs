@@ -78,6 +78,7 @@ pub use expr_common::expand_wildcard;
 pub use expr_common::expr_as_column_expr;
 pub use expr_common::extract_aliases;
 pub use expr_common::find_aggregate_exprs;
+pub use expr_common::find_exists_exprs;
 pub use expr_common::find_columns_not_satisfy_exprs;
 pub use expr_common::rebase_expr;
 pub use expr_common::resolve_aliases_to_exprs;
