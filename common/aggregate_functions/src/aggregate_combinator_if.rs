@@ -89,7 +89,6 @@ impl IAggregateFunction for AggregateIfCombinator {
         Ok(())
     }
 
-    // serialize as Vec<DataValue::List>
     fn accumulate_result(&self) -> Result<Vec<DataValue>> {
         self.nested.accumulate_result()
     }

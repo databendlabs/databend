@@ -13,6 +13,7 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 
 use crate::aggregate_function_factory::FactoryFunc;
+use crate::aggregator_common::assert_variadic_arguments;
 use crate::AggregateCountFunction;
 use crate::IAggregateFunction;
 
@@ -46,9 +47,15 @@ impl AggregateDistinctCombinator {
         arguments: Vec<DataField>,
         nested_creator: FactoryFunc,
     ) -> Result<Box<dyn IAggregateFunction>> {
-        let nested = nested_creator(nested_name, arguments.clone())?;
+        let name = format!("DistinctCombinator({})", nested_name);
+        assert_variadic_arguments(&name, arguments.len(), (1, 32))?;
 
-        let name = format!("DistinctCombinator({})", nested.name());
+        let nested_arguments = match nested_name {
+            "count" | "uniq" => vec![],
+            _ => arguments.clone(),
+        };
+
+        let nested = nested_creator(nested_name, nested_arguments.clone())?;
         Ok(Box::new(AggregateDistinctCombinator {
             nested_name: nested_name.to_owned(),
             arguments,
@@ -154,6 +161,8 @@ impl IAggregateFunction for AggregateDistinctCombinator {
         } else {
             // accumulate_scalar
             let mut nested = self.nested.clone();
+
+            // todo: make it parallelized
             self.state.iter().try_for_each(|group_values| {
                 let values = group_values.0.iter().map(|v| v.into()).collect::<Vec<_>>();
                 nested.accumulate_scalar(&values)
