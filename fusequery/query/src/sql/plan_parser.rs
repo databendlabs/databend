@@ -795,6 +795,16 @@ impl PlanParser {
 
                 let op = e.name.to_string();
                 if AggregateFunctionFactory::check(&op) {
+                    let args = match op.to_lowercase().as_str() {
+                        "count" => args
+                            .iter()
+                            .map(|c| match c {
+                                Expression::Wildcard => common_planners::lit(164),
+                                _ => c.clone(),
+                            })
+                            .collect(),
+                        _ => args,
+                    };
                     return Ok(Expression::AggregateFunction {
                         op,
                         distinct: e.distinct,
