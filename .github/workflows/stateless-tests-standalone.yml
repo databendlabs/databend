@@ -20,4 +20,4 @@ jobs:
 
       - name: Run Stateless Tests with Standalone mode
         run: |
-          bash ./scripts/ci/ci-stateless-tests-standalone.sh
+          bash ./scripts/ci/ci-run-stateless-tests-standalone.sh

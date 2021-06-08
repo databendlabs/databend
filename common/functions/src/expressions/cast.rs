@@ -56,10 +56,6 @@ impl IFunction for CastFunction {
     fn num_arguments(&self) -> usize {
         1
     }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        None
-    }
 }
 
 impl fmt::Display for CastFunction {

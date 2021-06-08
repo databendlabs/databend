@@ -31,20 +31,3 @@ pub fn rand_local_addr() -> String {
     let addr = format!("127.0.0.1:{}", port);
     return addr;
 }
-
-macro_rules! serve_grpc {
-    ($addr:expr, $srv:expr) => {
-        let addr = $addr.parse::<std::net::SocketAddr>()?;
-
-        let srv = tonic::transport::Server::builder().add_service($srv);
-
-        tokio::spawn(async move {
-            srv.serve(addr)
-                .await
-                .map_err(|e| anyhow::anyhow!("Flight service error: {:?}", e))?;
-            Ok::<(), anyhow::Error>(())
-        });
-
-        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-    };
-}

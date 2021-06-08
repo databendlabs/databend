@@ -147,6 +147,7 @@ nav:
           - SUM: sqlstatement/aggregate-functions/aggregate-sum.md
           - argMin: sqlstatement/aggregate-functions/aggregate-argmin.md
           - argMax: sqlstatement/aggregate-functions/aggregate-argmax.md
+          - countDistinct: sqlstatement/aggregate-functions/aggregate-count-distinct.md
       - Hash Functions:
           - SIPHASH: sqlstatement/hash-functions/siphash.md
       - Information Functions:

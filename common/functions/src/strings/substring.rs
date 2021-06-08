@@ -112,8 +112,10 @@ impl IFunction for SubstringFunction {
         ))
     }
 
+    // substring(str, from)
+    // substring(str, from, end)
     fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((2, 4))
+        Some((2, 3))
     }
 }
 

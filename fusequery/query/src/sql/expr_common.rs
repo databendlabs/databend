@@ -264,13 +264,16 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                     .collect::<Result<Vec<Expression>>>()?,
             }),
 
-            Expression::AggregateFunction { op, args } => Ok(Expression::AggregateFunction {
-                op: op.clone(),
-                args: args
-                    .iter()
-                    .map(|e| clone_with_replacement(e, replacement_fn))
-                    .collect::<Result<Vec<Expression>>>()?,
-            }),
+            Expression::AggregateFunction { op, distinct, args } => {
+                Ok(Expression::AggregateFunction {
+                    op: op.clone(),
+                    distinct: *distinct,
+                    args: args
+                        .iter()
+                        .map(|e| clone_with_replacement(e, replacement_fn))
+                        .collect::<Result<Vec<Expression>>>()?,
+                })
+            }
 
             Expression::Sort {
                 expr: nested_expr,

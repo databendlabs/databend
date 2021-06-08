@@ -242,32 +242,60 @@ fn test_aggregate_function() -> Result<()> {
             expect: DataValue::Int64(Some(4)),
             error: "",
         },
+        Test {
+            name: "argMin-notpassed",
+            eval_nums: 1,
+            args: vec![args[0].clone()],
+            display: "argmin",
+            nullable: false,
+            func_name: "argmin",
+            columns: columns.clone(),
+            expect: DataValue::Int64(Some(4)),
+            error: "Code: 28, displayText = argmin expect to have two arguments, but got 1.",
+        },
+        Test {
+            name: "uniq-passed",
+            eval_nums: 1,
+            args: vec![args[0].clone()],
+            display: "uniq",
+            nullable: false,
+            func_name: "uniq",
+            columns: vec![columns[0].clone()],
+            expect: DataValue::UInt64(Some(4)),
+            error: "",
+        },
     ];
 
     for t in tests {
         let rows = t.columns[0].len();
 
-        let mut func1 = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
+        let func = || -> Result<()> {
+            let mut func1 = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
 
-        for _ in 0..t.eval_nums {
-            func1.accumulate(&t.columns, rows)?;
+            for _ in 0..t.eval_nums {
+                func1.accumulate(&t.columns, rows)?;
+            }
+            let state1 = func1.accumulate_result()?;
+
+            let mut func2 = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
+            for _ in 1..t.eval_nums {
+                func2.accumulate(&t.columns, rows)?;
+            }
+            let state2 = func2.accumulate_result()?;
+
+            let mut final_func = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
+            final_func.merge(&*state1)?;
+            final_func.merge(&*state2)?;
+
+            let result = final_func.merge_result()?;
+            assert_eq!(&t.expect, &result);
+            assert_eq!(t.display, format!("{:}", final_func));
+            Ok(())
+        };
+
+        if let Err(e) = func() {
+            assert_eq!(t.error, e.to_string());
         }
-        let state1 = func1.accumulate_result()?;
-
-        let mut func2 = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
-        for _ in 1..t.eval_nums {
-            func2.accumulate(&t.columns, rows)?;
-        }
-        let state2 = func2.accumulate_result()?;
-
-        let mut final_func = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
-        final_func.merge(&*state1)?;
-        final_func.merge(&*state2)?;
-
-        let result = final_func.merge_result()?;
-
-        assert_eq!(&t.expect, &result);
-        assert_eq!(t.display, format!("{:}", final_func));
     }
     Ok(())
 }

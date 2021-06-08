@@ -8,6 +8,9 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use async_trait::async_trait;
+use common_exception::exception;
+use common_exception::ErrorCodes;
+use common_exception::ToErrorCodes;
 
 use crate::fs::IFileSystem;
 use crate::fs::ListResult;
@@ -28,7 +31,8 @@ impl LocalFS {
 
 #[async_trait]
 impl IFileSystem for LocalFS {
-    async fn add<'a>(&'a self, path: String, data: &[u8]) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "debug", skip(self, data))]
+    async fn add(&self, path: String, data: &[u8]) -> anyhow::Result<()> {
         // TODO: test atomicity: write temp file and rename it
         let p = Path::new(self.root.as_path()).join(&path);
         let mut an = p.ancestors();
@@ -54,14 +58,19 @@ impl IFileSystem for LocalFS {
         Ok(())
     }
 
-    async fn read_all<'a>(&'a self, path: String) -> anyhow::Result<Vec<u8>> {
+    #[tracing::instrument(level = "debug", skip(self))]
+    async fn read_all(&self, path: String) -> exception::Result<Vec<u8>> {
         let p = Path::new(self.root.as_path()).join(&path);
-        let data = std::fs::read(p.as_path())
-            .with_context(|| format!("LocalFS: fail to read {}", path))?;
+        tracing::info!("read: {}", p.as_path().display());
+
+        let data = std::fs::read(p.as_path()).map_err_to_code(ErrorCodes::FileDamaged, || {
+            format!("localfs: fail to read: {:?}", path)
+        })?;
         Ok(data)
     }
 
-    async fn list<'a>(&'a self, path: String) -> anyhow::Result<ListResult> {
+    #[tracing::instrument(level = "debug", skip(self))]
+    async fn list(&self, path: String) -> anyhow::Result<ListResult> {
         let p = Path::new(self.root.as_path()).join(&path);
         let entries = std::fs::read_dir(p.as_path())
             .with_context(|| format!("LocalFS: fail to list {}", path))?;

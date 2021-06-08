@@ -42,13 +42,10 @@ To submit your pull request:
 2. Open an regular [issue](https://github.com/datafuselabs/datafuse/issues/new/choose) for binding the pull request.
 3. Submit a [draft pull requests](https://github.blog/2019-02-14-introducing-draft-pull-requests/), tag your work in progress.
 4. If you have added code that should be tested, add unit tests.
-5. Verify and ensure that the unit test suite passes, `make test`.
-6. Verify and ensure that stateless test passes:
-   * standalone: `./scripts/ci/ci-stateless-tests-standalone.sh`
-   * cluster: `./scripts/ci/ci-stateless-tests-cluster.sh`
-
-7. Make sure your code passes both linters, `make lint`.
-8. Change the status to “Ready for review”.
+5. Verify and ensure that the test suites passes, `make test`.
+6. Make sure your code passes both linters, `make lint`.
+7. Change the status to “Ready for review”.
+8. Watch out the replies from the @datafuse-bots, she will be your guide.
 
 ## Code of Conduct
 Please refer to the [Code of Conduct](../policies/code-of-conduct.md), which describes the expectations for interactions within the community.

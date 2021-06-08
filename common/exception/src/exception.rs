@@ -133,6 +133,13 @@ build_exceptions! {
     TokioError(1001)
 }
 
+// Store errors
+build_exceptions! {
+
+    FileMetaNotFound(2001),
+    FileDamaged(2002)
+}
+
 pub type Result<T> = std::result::Result<T, ErrorCodes>;
 
 impl Debug for ErrorCodes {

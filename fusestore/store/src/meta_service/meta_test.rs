@@ -3,6 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use crate::meta_service::meta::Replication;
+use crate::meta_service::ClientRequest;
+use crate::meta_service::ClientResponse;
+use crate::meta_service::Cmd;
 use crate::meta_service::Meta;
 use crate::meta_service::Node;
 use crate::meta_service::Slot;
@@ -88,5 +91,36 @@ fn test_meta_builder() -> anyhow::Result<()> {
         Replication::Mirror(x) => x,
     };
     assert_eq!(8, n);
+    Ok(())
+}
+
+// TODO test apply:AddFile,SetFile,AddNode
+
+#[test]
+fn test_meta_apply_incr_seq() -> anyhow::Result<()> {
+    let mut m = Meta::builder().build()?;
+
+    for i in 0..3 {
+        // incr "foo"
+
+        let resp = m.apply(&ClientRequest {
+            txid: None,
+            cmd: Cmd::IncrSeq {
+                key: "foo".to_string(),
+            },
+        })?;
+        assert_eq!(ClientResponse::Seq { seq: i + 1 }, resp);
+
+        // incr "bar"
+
+        let resp = m.apply(&ClientRequest {
+            txid: None,
+            cmd: Cmd::IncrSeq {
+                key: "bar".to_string(),
+            },
+        })?;
+        assert_eq!(ClientResponse::Seq { seq: i + 1 }, resp);
+    }
+
     Ok(())
 }

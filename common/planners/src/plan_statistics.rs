@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug, Default)]
 pub struct Statistics {
     /// Total rows of the query read.
     pub read_rows: usize,
@@ -11,15 +11,7 @@ pub struct Statistics {
 }
 
 impl Statistics {
-    pub fn default() -> Self {
-        Statistics {
-            read_rows: 0,
-            read_bytes: 0,
-        }
-    }
-
     pub fn clear(&mut self) {
-        self.read_rows = 0;
-        self.read_bytes = 0;
+        *self = Self::default();
     }
 }

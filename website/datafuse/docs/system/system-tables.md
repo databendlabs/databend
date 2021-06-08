@@ -51,30 +51,23 @@ mysql> SELECT * FROM system.settings;
 Contains information about normal and aggregate functions.
 
 ```
-mysql> SELECT * FROM system.functions;
-+-------+
-| name  |
-+-------+
-| +     |
-| -     |
-| *     |
-| /     |
-| =     |
-| <     |
-| >     |
-| <=    |
-| >=    |
-| !=    |
-| <>    |
-| and   |
-| or    |
-| count |
-| min   |
-| max   |
-| sum   |
-| avg   |
-+-------+
-18 rows in set (0.00 sec)
+mysql> SELECT * FROM system.functions limit 10;
++----------+--------------+
+| name     | is_aggregate |
++----------+--------------+
+| +        |        false |
+| plus     |        false |
+| -        |        false |
+| minus    |        false |
+| *        |        false |
+| multiply |        false |
+| /        |        false |
+| divide   |        false |
+| %        |        false |
+| modulo   |        false |
++----------+--------------+
+10 rows in set (0.01 sec)
+
 ```
 ## system.contributors
 

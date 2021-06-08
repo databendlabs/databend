@@ -806,7 +806,11 @@ impl PlanParser {
 
                 let op = e.name.to_string();
                 if AggregateFunctionFactory::check(&op) {
-                    return Ok(Expression::AggregateFunction { op, args });
+                    return Ok(Expression::AggregateFunction {
+                        op,
+                        distinct: e.distinct,
+                        args,
+                    });
                 }
 
                 Ok(Expression::ScalarFunction { op, args })
@@ -846,6 +850,24 @@ impl PlanParser {
                     op: "substring".to_string(),
                     args,
                 })
+            }
+            sqlparser::ast::Expr::Between {
+                expr,
+                negated,
+                low,
+                high,
+            } => {
+                let expression = self.sql_to_rex(expr, schema, select)?;
+                let low_expression = self.sql_to_rex(low, schema, select)?;
+                let high_expression = self.sql_to_rex(high, schema, select)?;
+                match *negated {
+                    false => Ok(expression
+                        .gt_eq(low_expression)
+                        .and(expression.lt_eq(high_expression))),
+                    true => Ok(expression
+                        .lt(low_expression)
+                        .or(expression.gt(high_expression))),
+                }
             }
             other => Result::Err(ErrorCodes::SyntaxException(format!(
                 "Unsupported expression: {}, type: {:?}",
