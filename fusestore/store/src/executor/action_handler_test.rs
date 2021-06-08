@@ -65,7 +65,7 @@ async fn bring_up_dfs_action_handler(
     let dfs = Dfs::create(fs, mn);
     for (key, content) in files.iter() {
         dfs.add((*key).into(), (*content).as_bytes()).await?;
-        tracing::debug!("added file: {} {:?}", *key, *content);
+        tracing::debug!("dfs added file: {} {:?}", *key, *content);
     }
 
     let ah = ActionHandler::create(Arc::new(dfs));
