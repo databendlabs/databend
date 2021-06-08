@@ -47,9 +47,9 @@ impl PipelineBuilder {
         PipelineBuilder { ctx, plan }
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     pub fn build(&self) -> Result<Pipeline> {
-        tracing::debug!("Received plan:\n{:?}", self.plan);
+        tracing::info!("Received plan:\n{:?}", self.plan);
 
         let mut limit = None;
         self.plan.walk_preorder(|node| -> Result<bool> {
@@ -96,7 +96,7 @@ impl PipelineBuilder {
                 ))),
             }
         })?;
-        tracing::debug!("Pipeline:\n{:?}", pipeline);
+        tracing::info!("Pipeline:\n{:?}", pipeline);
 
         Ok(pipeline)
     }

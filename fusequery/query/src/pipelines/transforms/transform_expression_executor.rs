@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
@@ -13,6 +14,7 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_planners::ExpressionAction;
 use common_planners::ExpressionChain;
+use common_tracing::tracing;
 
 /// ExpressionExecutor is a helper struct for expressions and projections
 /// Aggregate functions is not covered, because all expressions in aggregate functions functions are executed.
@@ -47,6 +49,9 @@ impl ExpressionExecutor {
     }
 
     pub fn execute(&self, block: &DataBlock) -> Result<DataBlock> {
+        tracing::info!("execute: {:?}", self.chain.actions);
+        let start = Instant::now();
+
         let mut column_map: HashMap<String, DataColumnarValue> = HashMap::new();
 
         // a + 1 as b, a + 1 as c
@@ -105,6 +110,9 @@ impl ExpressionExecutor {
                 _ => {}
             }
         }
+
+        let delta = start.elapsed();
+        tracing::info!("Aggregator partial cost: {:?}", delta);
 
         if self.alias_project {
             for (k, v) in alias_map.iter() {

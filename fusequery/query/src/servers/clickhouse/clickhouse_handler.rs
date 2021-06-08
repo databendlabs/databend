@@ -14,7 +14,6 @@ use clickhouse_srv::types::Block as ClickHouseBlock;
 use clickhouse_srv::*;
 use common_exception::ErrorCodes;
 use common_exception::Result;
-use common_tracing::tracing;
 use log::error;
 use metrics::histogram;
 use tokio::net::TcpListener;
@@ -57,7 +56,6 @@ enum BlockItem {
 
 #[async_trait::async_trait]
 impl ClickHouseSession for Session {
-    #[tracing::instrument(level = "debug", skip(self, ctx, connection), fields(ID = self.ctx.get_id().as_str()))]
     async fn execute_query(
         &self,
         ctx: &mut CHContext,
