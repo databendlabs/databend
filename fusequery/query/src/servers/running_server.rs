@@ -7,18 +7,21 @@ use common_exception::Result;
 use common_exception::ErrorCodes;
 use tokio::task::JoinHandle;
 use std::net::SocketAddr;
+use std::sync::Arc;
+use common_infallible::Mutex;
+use futures::future::AbortHandle;
 
 pub struct RunningServer {
     listener_address: SocketAddr,
-    shutdown_sender: Sender<()>,
+    abort_handle: AbortHandle,
     join_handler: Option<JoinHandle<()>>,
 }
 
 impl RunningServer {
-    pub fn create(listener_address: SocketAddr, shutdown_sender: Sender<()>, join_handler: JoinHandle<()>) -> RunningServer {
+    pub fn create(listener_address: SocketAddr, abort_handle: AbortHandle, join_handler: JoinHandle<()>) -> RunningServer {
         RunningServer {
             listener_address,
-            shutdown_sender,
+            abort_handle,
             join_handler: Some(join_handler),
         }
     }
@@ -27,14 +30,8 @@ impl RunningServer {
         self.listener_address.clone()
     }
 
-    pub async fn shutdown(&mut self) -> Result<()> {
-        if let Err(error) = self.shutdown_sender.send(()).await {
-            return Err(ErrorCodes::TokioError(format!(
-                "Cannot shutdown, because cannot to send shutdown signal: {}", error
-            )));
-        }
-
-        Ok(())
+    pub async fn shutdown(&self) {
+        self.abort_handle.abort();
     }
 
     pub async fn wait_server_terminal(&mut self) -> Result<()> {

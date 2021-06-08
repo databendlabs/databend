@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
-use futures::future::Either;
+use futures::future::{Either, AbortHandle, Abortable};
 use futures::future::select;
 use futures::future::TryFutureExt;
 use futures::FutureExt;
@@ -41,6 +41,7 @@ use crate::servers::RunningServer;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionManagerRef;
 use crate::sql::PlanParser;
+use tokio_stream::wrappers::TcpListenerStream;
 
 pub struct MySQLHandler {
     conf: Config,
@@ -60,52 +61,55 @@ impl MySQLHandler {
     pub async fn start(&self, hostname: &str, port: u16) -> Result<RunningServer> {
         let cluster = self.cluster.clone();
         let sessions = self.session_manager.clone();
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
-
-        let listener = Self::listener_tcp(hostname, port).await?;
-        let listener_address = listener.local_addr()?.clone();
         let rejected_executor = common_runtime::Runtime::with_worker_threads(1)?;
+
+        let (abort_handle, mut reg) = AbortHandle::new_pair();
+        let (stream, listener_addr) = Self::listener_tcp(hostname, port).await?;
 
         let listener_loop = tokio::spawn(async move {
             let max_sessions = Arc::new(Mutex::new(sessions.max_mysql_sessions()));
+
+            let mut abortable_listener_stream = Abortable::new(stream, reg);
+
             loop {
-                let mut shutdown_receiver = Box::pin(receiver.recv());
-                match select(Box::pin(listener.accept()), shutdown_receiver).await {
-                    Either::Right((_, _)) => break,
-                    Either::Left((Err(error), future)) => {
-                        shutdown_receiver = future;
-                        log::error!("Unexpected error during process accept[skip]: {}", error);
-                    }
-                    Either::Left((Ok((stream, socket)), future)) => {
-                        shutdown_receiver = future;
+                match abortable_listener_stream.next().await {
+                    None => break,
+                    Some(Err(error)) => log::error!("Unexpected error during process accept[skip]: {}", error),
+                    Some(Ok(tcp_stream)) => {
                         let mut locked_max_sessions = max_sessions.lock();
 
                         if *locked_max_sessions != 0 {
                             *locked_max_sessions -= 1;
 
-                            log::debug!("Received connect from {}", socket);
+                            if let Ok(addr) = tcp_stream.peer_addr() {
+                                log::debug!("Received connect from {}", addr);
+                            }
+
                             let session = Session::create(cluster.clone(), sessions.clone());
-                            if let Err(error) = Self::accept_session(session, stream, &max_sessions) {
+                            if let Err(error) = Self::accept_session(session, tcp_stream, &max_sessions) {
                                 log::error!("Unexpected error during process accept[skip]: {}", error);
                             }
                         } else {
-                            log::debug!("Rejected connect from {}", socket);
-                            Self::reject_session(stream, &rejected_executor);
+                            if let Ok(addr) = tcp_stream.peer_addr() {
+                                log::debug!("Rejected connect from {}", addr);
+                            }
+
+                            Self::reject_session(tcp_stream, &rejected_executor);
                         }
                     }
-                };
+                }
             }
-
             // TODO: join all session.
         });
 
-        Ok(RunningServer::create(listener_address, sender.clone(), listener_loop))
+        Ok(RunningServer::create(listener_addr, abort_handle, listener_loop))
     }
 
-    async fn listener_tcp(hostname: &str, port: u16) -> Result<TcpListener> {
+    async fn listener_tcp(hostname: &str, port: u16) -> Result<(TcpListenerStream, SocketAddr)> {
         let address = format!("{}:{}", hostname, port);
         let listener = tokio::net::TcpListener::bind(address).await?;
-        Ok(listener)
+        let listener_addr = listener.local_addr()?;
+        Ok((TcpListenerStream::new(listener), listener_addr))
     }
 
     async fn reject_mysql_connection(mut stream: TcpStream) -> Result<()> {
