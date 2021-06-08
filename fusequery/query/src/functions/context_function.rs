@@ -29,6 +29,9 @@ impl ContextFunction {
             "database" => vec![Expression::Literal(DataValue::Utf8(Some(
                 ctx.get_current_database(),
             )))],
+            "version" => vec![Expression::Literal(DataValue::Utf8(Some(
+                ctx.get_fuse_version(),
+            )))],
             _ => vec![],
         })
     }
