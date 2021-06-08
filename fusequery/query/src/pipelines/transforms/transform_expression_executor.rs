@@ -4,7 +4,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
@@ -50,7 +49,6 @@ impl ExpressionExecutor {
 
     pub fn execute(&self, block: &DataBlock) -> Result<DataBlock> {
         tracing::info!("execute expression chain: {:?}", self.chain.actions);
-        let start = Instant::now();
 
         let mut column_map: HashMap<String, DataColumnarValue> = HashMap::new();
 
@@ -110,9 +108,6 @@ impl ExpressionExecutor {
                 _ => {}
             }
         }
-
-        let delta = start.elapsed();
-        tracing::info!("Aggregator partial cost: {:?}", delta);
 
         if self.alias_project {
             for (k, v) in alias_map.iter() {

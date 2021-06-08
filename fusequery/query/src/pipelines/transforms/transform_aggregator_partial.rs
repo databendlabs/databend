@@ -76,12 +76,12 @@ impl IProcessor for AggregatorPartialTransform {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::info!("execute...");
+        let start = Instant::now();
 
         let mut funcs = self.funcs.clone();
         let mut stream = self.input.execute().await?;
         let arg_names = self.arg_names.clone();
 
-        let start = Instant::now();
         while let Some(block) = stream.next().await {
             let block = block?;
             let rows = block.num_rows();
