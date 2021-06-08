@@ -27,7 +27,9 @@ async fn test_transform_limit() -> anyhow::Result<()> {
         .limit(2)?
         .build()?
     {
-        pipeline.add_simple_transform(|| Ok(Box::new(LimitTransform::try_create(plan.n)?)))?;
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(LimitTransform::try_create(plan.n, plan.offset)?))
+        })?;
     }
 
     let stream = pipeline.execute().await?;

@@ -11,7 +11,8 @@ fn test_limit_plan() -> anyhow::Result<()> {
     use crate::*;
 
     let limit = PlanNode::Limit(LimitPlan {
-        n: 33,
+        n: Some(33),
+        offset: 0,
         input: Arc::from(PlanBuilder::empty().build()?),
     });
     let expect = "Limit: 33";

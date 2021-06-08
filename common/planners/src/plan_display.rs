@@ -109,7 +109,17 @@ impl PlanNode {
                             Ok(true)
                         }
                         PlanNode::Limit(plan) => {
-                            write!(f, "Limit: {}", plan.n)?;
+                            match (plan.n, plan.offset) {
+                                (Some(n), 0) => {
+                                    write!(f, "Limit: {}", n)?;
+                                },
+                                (Some(n), offset) => {
+                                    write!(f, "Limit: {}, {}", n, offset)?;
+                                },
+                                (None, offset) => {
+                                    write!(f, "Limit: all, {}", offset)?;
+                                }
+                            }
                             Ok(true)
                         }
                         PlanNode::ReadSource(plan) => {

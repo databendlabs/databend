@@ -55,7 +55,7 @@ impl PipelineBuilder {
         self.plan.walk_preorder(|node| -> Result<bool> {
             match node {
                 PlanNode::Limit(ref limit_plan) => {
-                    limit = Some(limit_plan.n);
+                    limit = limit_plan.n;
                     Ok(true)
                 }
                 _ => Ok(true),
@@ -262,7 +262,9 @@ impl PipelineBuilder {
 
     fn visit_limit_plan(pipeline: &mut Pipeline, plan: &LimitPlan) -> Result<bool> {
         pipeline.merge_processor()?;
-        pipeline.add_simple_transform(|| Ok(Box::new(LimitTransform::try_create(plan.n)?)))?;
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(LimitTransform::try_create(plan.n, plan.offset)?))
+        })?;
         Ok(false)
     }
 

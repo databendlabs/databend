@@ -14,37 +14,81 @@ use crate::SendableDataBlockStream;
 
 pub struct LimitStream {
     input: SendableDataBlockStream,
-    limit: usize,
+    limit: Option<usize>,
+    offset: usize,
     current: usize,
 }
 
 impl LimitStream {
-    pub fn try_create(input: SendableDataBlockStream, limit: usize) -> Result<Self> {
+    pub fn try_create(
+        input: SendableDataBlockStream,
+        limit: Option<usize>,
+        offset: usize,
+    ) -> Result<Self> {
         Ok(LimitStream {
             input,
             limit,
+            offset,
             current: 0,
         })
     }
 
     pub fn limit(&mut self, block: &DataBlock) -> Result<Option<DataBlock>> {
         let rows = block.num_rows();
-        if self.current == self.limit {
+
+        // There are two intervals:
+        // r1: [current, current + rows)
+        // r2: [offset, offset + limit), note that limit may be infinite.
+        //
+        // There are 6 possible relationships between r1 and r2:
+        //
+        // TODO: We can clean some codes while RFC 2497-if-let-chains stable.
+        // https://github.com/rust-lang/rust/issues/53668
+        if self.current + rows <= self.offset {
+            // case 1: no overlap. r1.r <= r2.l.
+            // output nothing.
+            self.current += rows;
             Ok(None)
-        } else if (self.current + rows) < self.limit {
+        } else if self
+            .limit
+            .map(|limit| self.offset + limit == self.current)
+            .unwrap_or(false)
+        {
+            // case 2: no overlap. r2.r == r1.l.
+            // output nothing.
+            Ok(None)
+        } else if self.current <= self.offset
+            && self
+                .limit
+                .map(|limit| self.current + rows >= self.offset + limit)
+                .unwrap_or(false)
+        {
+            // case 3: r1 contains r2.
+            // output r2.
+            self.current = self.offset + self.limit.unwrap();
+            Ok(Some(block.slice(self.offset, self.limit.unwrap())))
+        } else if self.offset <= self.current
+            && self
+                .limit
+                .map(|limit| self.offset + limit >= self.current + rows)
+                .unwrap_or(true)
+        {
+            // case 4: r2 contains r1.
+            // output r1.
             self.current += rows;
             Ok(Some(block.clone()))
+        } else if self.current <= self.offset {
+            // case 5: overlap and r1 in the left. r1.l <= r2.l
+            self.current += rows;
+            Ok(Some(
+                block.slice(self.offset, self.current + rows - self.offset),
+            ))
         } else {
-            let keep = self.limit - self.current;
-            self.current = self.limit;
-
-            let mut limited_columns = Vec::with_capacity(block.num_columns());
-            for i in 0..block.num_columns() {
-                limited_columns.push(block.column(i).limit(keep));
-            }
-            Ok(Some(DataBlock::create(
-                block.schema().clone(),
-                limited_columns,
+            // case 6: overlap and r2 in the left.
+            self.current = self.offset + self.limit.unwrap();
+            Ok(Some(block.slice(
+                self.current,
+                self.offset + self.limit.unwrap() - self.current,
             )))
         }
     }

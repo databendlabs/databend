@@ -164,6 +164,7 @@ pub trait PlanRewriter<'plan> {
     fn rewrite_limit(&mut self, plan: &'plan LimitPlan) -> Result<PlanNode> {
         Ok(PlanNode::Limit(LimitPlan {
             n: plan.n,
+            offset: plan.offset,
             input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
         }))
     }

@@ -14,14 +14,16 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
 
 pub struct LimitTransform {
-    limit: usize,
+    limit: Option<usize>,
+    offset: usize,
     input: Arc<dyn IProcessor>,
 }
 
 impl LimitTransform {
-    pub fn try_create(limit: usize) -> Result<Self> {
+    pub fn try_create(limit: Option<usize>, offset: usize) -> Result<Self> {
         Ok(LimitTransform {
             limit,
+            offset,
             input: Arc::new(EmptyProcessor::create()),
         })
     }
@@ -51,6 +53,7 @@ impl IProcessor for LimitTransform {
         Ok(Box::pin(LimitStream::try_create(
             self.input.execute().await?,
             self.limit,
+            self.offset,
         )?))
     }
 }
