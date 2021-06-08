@@ -6,6 +6,7 @@ setup:
 	bash ./scripts/setup/dev_setup.sh
 
 run:
+	bash ./scripts/build/build-debug.sh
 	bash ./scripts/deploy/fusequery-standalone.sh
 
 build:
