@@ -31,6 +31,7 @@ mod plan_walker_test;
 #[cfg(test)]
 mod test;
 
+mod expr_common;
 mod plan_aggregator_final;
 mod plan_aggregator_partial;
 mod plan_builder;
@@ -71,6 +72,17 @@ mod plan_use_database;
 mod plan_visitor;
 mod plan_walker;
 
+pub use expr_common::rebase_expr_from_input;
+pub use expr_common::expand_aggregate_arg_exprs;
+pub use expr_common::expand_wildcard;
+pub use expr_common::expr_as_column_expr;
+pub use expr_common::extract_aliases;
+pub use expr_common::find_aggregate_exprs;
+pub use expr_common::find_columns_not_satisfy_exprs;
+pub use expr_common::rebase_expr;
+pub use expr_common::resolve_aliases_to_exprs;
+pub use expr_common::sort_to_inner_expr;
+pub use expr_common::unwrap_alias_exprs;
 pub use plan_aggregator_final::AggregatorFinalPlan;
 pub use plan_aggregator_partial::AggregatorPartialPlan;
 pub use plan_builder::PlanBuilder;

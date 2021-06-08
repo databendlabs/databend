@@ -7,7 +7,6 @@ mod plan_parser_test;
 #[cfg(test)]
 mod sql_parser_test;
 
-mod expr_common;
 mod plan_parser;
 mod sql_common;
 mod sql_parser;
