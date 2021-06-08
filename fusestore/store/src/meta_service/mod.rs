@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-mod meta;
-mod meta_service_impl;
+pub mod meta;
+pub mod meta_service_impl;
 pub mod placement;
-mod raftmeta;
+pub mod raftmeta;
+pub mod state_machine;
 
 pub use async_raft::NodeId;
 pub use meta::Meta;
@@ -17,11 +18,11 @@ pub use raftmeta::ClientRequest;
 pub use raftmeta::ClientResponse;
 pub use raftmeta::Cmd;
 pub use raftmeta::MemStore;
-pub use raftmeta::MemStoreStateMachine;
 pub use raftmeta::MetaNode;
 pub use raftmeta::Network;
 pub use raftmeta::RaftTxId;
 pub use raftmeta::ShutdownError;
+pub use state_machine::MemStoreStateMachine;
 
 pub use crate::protobuf::meta_service_client::MetaServiceClient;
 pub use crate::protobuf::meta_service_server::MetaService;

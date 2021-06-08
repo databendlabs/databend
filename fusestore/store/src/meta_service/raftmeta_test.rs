@@ -19,6 +19,7 @@ use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::NodeId;
 use crate::meta_service::RaftTxId;
+use crate::tests::assert_meta_connection;
 use crate::tests::Seq;
 
 // test cases fro Cmd::IncrSeq:
@@ -298,7 +299,7 @@ async fn setup_leader() -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
     let mut rx = mn.raft.metrics();
 
     {
-        assert_connection(&addr).await?;
+        assert_meta_connection(&addr).await?;
 
         // assert that boot() adds the node to meta.
         let got = mn.get_node(&nid).await;
@@ -335,7 +336,7 @@ async fn setup_non_voter(
     }
 
     {
-        assert_connection(&addr).await?;
+        assert_meta_connection(&addr).await?;
         wait_for_state(id, &mut rx, State::NonVoter).await?;
         wait_for_current_leader(id, &mut rx, 0).await?;
     }
@@ -386,15 +387,6 @@ async fn assert_get_file(
         let got = mn.get_file(key).await;
         assert_eq!(value.to_string(), got.unwrap(), "n{} applied value", i);
     }
-    Ok(())
-}
-
-pub async fn assert_connection(addr: &str) -> anyhow::Result<()> {
-    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-    let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
-    let req = tonic::Request::new(GetReq { key: "foo".into() });
-    let rst = client.get(req).await?.into_inner();
-    assert_eq!("", rst.value, "connected");
     Ok(())
 }
 

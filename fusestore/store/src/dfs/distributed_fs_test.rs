@@ -2,8 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashMap;
+
+use maplit::hashmap;
 use pretty_assertions::assert_eq;
 use tempfile::tempdir;
+use tempfile::TempDir;
 
 use crate::dfs::Dfs;
 use crate::fs::IFileSystem;
@@ -11,6 +15,7 @@ use crate::localfs::LocalFS;
 use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
+use crate::tests::assert_meta_connection;
 use crate::tests::rand_local_addr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -20,33 +25,39 @@ async fn test_distributed_fs_single_node() -> anyhow::Result<()> {
     // - Test read_all()
     // - Test reading an absent file.
 
+    let files = hashmap! {
+        "foo" => "bar",
+        "ping" => "pong",
+        "who/is/hiding/deeply" => "jerry"
+    };
     let dir = tempdir()?;
-    let root = dir.path();
-
-    let fs = LocalFS::try_create(root.to_str().unwrap().to_string())?;
-
-    let meta_addr = rand_local_addr();
-
-    let rst = MetaNode::boot(0, meta_addr.clone()).await;
-    assert!(rst.is_ok());
-    let mn = rst.unwrap();
-
-    let dfs = Dfs::create(fs, mn);
+    let (meta_addr, dfs) = bring_up_dfs(&dir, files.clone()).await?;
     {
-        let rst = dfs.add("foo".into(), "bar".as_bytes()).await;
-        rst.unwrap();
-
-        // check meta changes
-
         let mut client = MetaServiceClient::connect(format!("http://{}", meta_addr)).await?;
-        let req = tonic::Request::new(GetReq { key: "foo".into() });
-        let rst = client.get(req).await?.into_inner();
-        assert_eq!("", rst.value);
 
-        // read file and check
+        for (key, content) in files.iter() {
+            // check meta changes
 
-        let got = dfs.read_all("foo".into()).await?;
-        assert_eq!("bar".to_string().as_bytes(), got);
+            let req = tonic::Request::new(GetReq {
+                key: key.to_string(),
+            });
+            let rst = client.get(req).await?.into_inner();
+
+            // meanwhile the meta value is empty for every file
+            assert_eq!("", rst.value);
+
+            // read file and check
+
+            let got = dfs.read_all(key.to_string()).await?;
+            assert_eq!(
+                content.to_string().as_bytes(),
+                got,
+                "read content of file: {}",
+                key
+            );
+        }
+
+        // test absent file
 
         let got = dfs.read_all("absent".into()).await;
         assert!(got.is_err());
@@ -58,4 +69,23 @@ async fn test_distributed_fs_single_node() -> anyhow::Result<()> {
         // TODO: test a file presents in meta but not found on local fs.
     }
     Ok(())
+}
+
+// Start an dfs.
+// And feed files into dfs.
+async fn bring_up_dfs(root: &TempDir, files: HashMap<&str, &str>) -> anyhow::Result<(String, Dfs)> {
+    let root = root.path().to_str().unwrap().to_string();
+    let fs = LocalFS::try_create(root)?;
+
+    let meta_addr = rand_local_addr();
+    let mn = MetaNode::boot(0, meta_addr.clone()).await?;
+    assert_meta_connection(&meta_addr).await?;
+
+    let dfs = Dfs::create(fs, mn);
+    for (key, content) in files.iter() {
+        dfs.add((*key).into(), (*content).as_bytes()).await?;
+        tracing::debug!("dfs added file: {} {:?}", *key, *content);
+    }
+
+    Ok((meta_addr, dfs))
 }
