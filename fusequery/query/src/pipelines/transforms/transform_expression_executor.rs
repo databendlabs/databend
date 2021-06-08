@@ -49,7 +49,7 @@ impl ExpressionExecutor {
     }
 
     pub fn execute(&self, block: &DataBlock) -> Result<DataBlock> {
-        tracing::info!("execute: {:?}", self.chain.actions);
+        tracing::info!("execute expression chain: {:?}", self.chain.actions);
         let start = Instant::now();
 
         let mut column_map: HashMap<String, DataColumnarValue> = HashMap::new();

@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::fmt;
+
 use common_aggregate_functions::AggregateFunctionFactory;
 use common_aggregate_functions::IAggregateFunction;
 use common_datavalues::DataField;
@@ -16,7 +18,7 @@ use common_functions::IFunction;
 
 use crate::Expression;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum ExpressionAction {
     /// Column which must be in input.
     Input(ActionInput),
@@ -24,6 +26,25 @@ pub enum ExpressionAction {
     Constant(ActionConstant),
     Alias(ActionAlias),
     Function(ActionFunction),
+}
+
+impl fmt::Debug for ExpressionAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ExpressionAction::Input(v) => {
+                write!(f, "{:?}", v.name)
+            }
+            ExpressionAction::Constant(v) => {
+                write!(f, "{:?}", v.name)
+            }
+            ExpressionAction::Alias(v) => {
+                write!(f, "{:?}", v.name)
+            }
+            ExpressionAction::Function(v) => {
+                write!(f, "{:?}", v.name)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
