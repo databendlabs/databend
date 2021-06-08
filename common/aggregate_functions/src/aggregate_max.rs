@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::any::Any;
 use std::fmt;
 
 use common_datavalues::*;
@@ -46,12 +47,26 @@ impl IAggregateFunction for AggregateMaxFunction {
         Ok(false)
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
         let value = Self::max_batch(columns[0].clone())?;
         self.state = DataValueAggregate::data_value_aggregate_op(
             DataValueAggregateOperator::Max,
             self.state.clone(),
             value,
+        )?;
+
+        Ok(())
+    }
+
+    fn accumulate_scalar(&mut self, values: &[DataValue]) -> Result<()> {
+        self.state = DataValueAggregate::data_value_aggregate_op(
+            DataValueAggregateOperator::Max,
+            self.state.clone(),
+            values[0].clone(),
         )?;
 
         Ok(())

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::any::Any;
 use std::collections::hash_map::RandomState;
 use std::collections::HashSet;
 use std::convert::TryFrom;
@@ -11,46 +12,68 @@ use common_datavalues::*;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 
-use crate::aggregator_common::assert_variadic_arguments;
+use crate::aggregate_function_factory::FactoryFunc;
+use crate::AggregateCountFunction;
 use crate::IAggregateFunction;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 struct DataGroupValues(Vec<DataGroupValue>);
 
 #[derive(Clone)]
-pub struct AggregateUniqFunction {
-    display_name: String,
-    arguments: Vec<DataField>,
+pub struct AggregateDistinctCombinator {
+    name: String,
 
+    nested_name: String,
+    arguments: Vec<DataField>,
+    nested: Box<dyn IAggregateFunction>,
     state: HashSet<DataGroupValues, RandomState>,
 }
 
-impl AggregateUniqFunction {
-    pub fn try_create(
-        display_name: &str,
+impl AggregateDistinctCombinator {
+    pub fn try_create_uniq(
+        nested_name: &str,
         arguments: Vec<DataField>,
     ) -> Result<Box<dyn IAggregateFunction>> {
-        assert_variadic_arguments(display_name, arguments.len(), (1, 32))?;
-
-        Ok(Box::new(AggregateUniqFunction {
-            display_name: display_name.to_string(),
+        AggregateDistinctCombinator::try_create(
+            nested_name,
             arguments,
+            AggregateCountFunction::try_create,
+        )
+    }
+
+    pub fn try_create(
+        nested_name: &str,
+        arguments: Vec<DataField>,
+        nested_creator: FactoryFunc,
+    ) -> Result<Box<dyn IAggregateFunction>> {
+        let nested = nested_creator(nested_name, arguments.clone())?;
+
+        let name = format!("DistinctCombinator({})", nested.name());
+        Ok(Box::new(AggregateDistinctCombinator {
+            nested_name: nested_name.to_owned(),
+            arguments,
+            nested,
+            name,
             state: HashSet::new(),
         }))
     }
 }
 
-impl IAggregateFunction for AggregateUniqFunction {
+impl IAggregateFunction for AggregateDistinctCombinator {
     fn name(&self) -> &str {
-        "AggregateUniqFunction"
+        &self.name
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(self.arguments[0].data_type().clone())
+        self.nested.return_type()
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
+    fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
+        self.nested.nullable(input_schema)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     fn accumulate_scalar(&mut self, values: &[DataValue]) -> Result<()> {
@@ -120,14 +143,30 @@ impl IAggregateFunction for AggregateUniqFunction {
     }
 
     fn merge_result(&self) -> Result<DataValue> {
-        Ok(DataValue::UInt64(Some(self.state.len() as u64)))
+        // faster path for count
+        if self
+            .nested
+            .as_any()
+            .downcast_ref::<AggregateCountFunction>()
+            .is_some()
+        {
+            Ok(DataValue::UInt64(Some(self.state.len() as u64)))
+        } else {
+            // accumulate_scalar
+            let mut nested = self.nested.clone();
+            self.state.iter().try_for_each(|group_values| {
+                let values = group_values.0.iter().map(|v| v.into()).collect::<Vec<_>>();
+                nested.accumulate_scalar(&values)
+            })?;
+
+            // merge_result
+            nested.merge_result()
+        }
     }
 }
 
-impl fmt::Display for AggregateUniqFunction {
+impl fmt::Display for AggregateDistinctCombinator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.display_name)
+        write!(f, "{}", self.nested_name)
     }
 }
-
-impl AggregateUniqFunction {}
