@@ -15,6 +15,9 @@ path = "src/bin/fuse-query.rs"
 name = "fuse-benchmark"
 path = "src/bin/fuse-benchmark.rs"
 
+[features]
+simd = ["common-arrow/simd"]
+
 [dependencies]
 # Workspace dependencies
 common-arrow = {path = "../../common/arrow"}
