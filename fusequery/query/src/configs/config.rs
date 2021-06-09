@@ -4,10 +4,24 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use lazy_static::lazy_static;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
-pub const FUSE_COMMIT_VERSION: &str = env!("FUSE_COMMIT_VERSION");
+lazy_static! {
+    pub static ref FUSE_COMMIT_VERSION: String = {
+        let build_semver = option_env!("VERGEN_BUILD_SEMVER");
+        let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
+        let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
+        let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
+
+        let ver = match (build_semver, git_sha, rustc_semver, timestamp) {
+            (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
+            _ => String::new(),
+        };
+        ver
+    };
+}
 
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 #[serde(default)]

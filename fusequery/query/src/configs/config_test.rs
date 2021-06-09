@@ -59,3 +59,10 @@ fn test_config() -> common_exception::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_fuse_commit_version() -> anyhow::Result<()> {
+    let v = &crate::configs::config::FUSE_COMMIT_VERSION;
+    assert!(v.len() > 0);
+    Ok(())
+}
