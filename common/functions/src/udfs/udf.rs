@@ -4,6 +4,7 @@
 
 use common_exception::Result;
 
+use crate::udfs::sleep::SleepFunction;
 use crate::udfs::DatabaseFunction;
 use crate::udfs::ToTypeNameFunction;
 use crate::udfs::UdfExampleFunction;
@@ -18,6 +19,7 @@ impl UdfFunction {
         map.insert("example", UdfExampleFunction::try_create);
         map.insert("totypename", ToTypeNameFunction::try_create);
         map.insert("database", DatabaseFunction::try_create);
+        map.insert("sleep", SleepFunction::try_create);
         Ok(())
     }
 }

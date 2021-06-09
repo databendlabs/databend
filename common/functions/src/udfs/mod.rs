@@ -10,6 +10,7 @@ mod to_type_name_test;
 mod udf_example_test;
 
 mod database;
+mod sleep;
 mod to_type_name;
 mod udf;
 mod udf_example;
