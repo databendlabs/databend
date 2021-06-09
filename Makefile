@@ -20,9 +20,6 @@ build:
 build-debug:
 	bash ./scripts/build/build-debug.sh
 
-profile:
-	bash ./scripts/ci/ci-run-profile.sh
-
 unit-test:
 	bash ./scripts/ci/ci-run-unit-tests.sh
 
@@ -42,11 +39,13 @@ lint:
 docker:
 	docker build --network host -f docker/Dockerfile -t ${HUB}/fuse-query:${TAG} .
 
-runhelm:
+run-helm:
 	helm upgrade --install datafuse ./charts/datafuse \
 		--set image.repository=${HUB}/fuse-query --set image.tag=${TAG} --set configs.mysqlPort=3308
+profile:
+	bash ./scripts/ci/ci-run-profile.sh
 
 clean:
 	cargo clean
 
-.PHONY: setup test bench run runhelm build fmt lint docker coverage clean
+.PHONY: setup test run build fmt lint docker clean
