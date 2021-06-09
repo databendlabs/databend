@@ -998,6 +998,7 @@ impl PlanParser {
             (None, None) => Ok(input.clone()),
             (limit, offset) => {
                 let n = limit
+                    .as_ref()
                     .map(|limit_expr| {
                         self.sql_to_rex(&limit_expr, &input.schema(), select)
                             .and_then(|limit_expr| match limit_expr {
@@ -1010,8 +1011,9 @@ impl PlanParser {
                     .transpose()?;
 
                 let offset = offset
+                    .as_ref()
                     .map(|offset| {
-                        let offset_expr = offset.value;
+                        let offset_expr = &offset.value;
                         self.sql_to_rex(&offset_expr, &input.schema(), select)
                             .and_then(|offset_expr| match offset_expr {
                                 Expression::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
@@ -1027,7 +1029,6 @@ impl PlanParser {
                     .limit_offset(n, offset)
                     .and_then(|builder| builder.build())
             }
-            _ => Ok(input.clone()),
         }
     }
 
