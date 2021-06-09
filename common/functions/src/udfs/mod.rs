@@ -8,6 +8,8 @@ mod database_test;
 mod to_type_name_test;
 #[cfg(test)]
 mod udf_example_test;
+#[cfg(test)]
+mod version_test;
 
 mod database;
 mod to_type_name;
