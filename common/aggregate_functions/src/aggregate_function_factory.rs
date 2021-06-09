@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use common_datavalues::DataField;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use indexmap::IndexMap;
@@ -43,8 +43,8 @@ lazy_static! {
 
 impl AggregateFunctionFactory {
     pub fn get(name: &str, arguments: Vec<DataField>) -> Result<Box<dyn IAggregateFunction>> {
-        let not_found_error = || -> ErrorCodes {
-            ErrorCodes::UnknownAggregateFunction(format!("Unsupported AggregateFunction: {}", name))
+        let not_found_error = || -> ErrorCode {
+            ErrorCode::UnknownAggregateFunction(format!("Unsupported AggregateFunction: {}", name))
         };
 
         let lower_name = name.to_lowercase();

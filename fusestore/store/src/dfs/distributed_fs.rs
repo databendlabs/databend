@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_exception::exception;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 
 use crate::fs::IFileSystem;
 use crate::fs::ListResult;
@@ -69,7 +69,7 @@ impl IFileSystem for Dfs {
 
         // meanwhile, file meta is empty string
         let _file_meta = self.meta_node.get_file(key).await.ok_or_else(|| {
-            ErrorCodes::FileMetaNotFound(format!("dfs/meta: key not found: {:?}", key))
+            ErrorCode::FileMetaNotFound(format!("dfs/meta: key not found: {:?}", key))
         })?;
 
         self.local_fs.read_all(key).await

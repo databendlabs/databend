@@ -6,7 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
@@ -44,7 +44,7 @@ impl IProcessor for RemoteTransform {
     }
 
     fn connect_to(&mut self, _input: Arc<dyn IProcessor>) -> Result<()> {
-        Result::Err(ErrorCodes::LogicalError(
+        Result::Err(ErrorCode::LogicalError(
             "Cannot call RemoteTransform connect_to",
         ))
     }

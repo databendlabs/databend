@@ -6,7 +6,7 @@ use std::any::Any;
 use std::fmt;
 
 use common_datavalues::*;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_unary_arguments;

@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_planners::ExpressionVisitor;
@@ -194,7 +194,7 @@ pub fn find_columns_not_satisfy_exprs(
     columns.iter().try_for_each(|c| match c {
         Expression::Column(_) => Ok(()),
 
-        _ => Err(ErrorCodes::SyntaxException(
+        _ => Err(ErrorCode::SyntaxException(
             "Expression::Column are required".to_string(),
         )),
     })?;

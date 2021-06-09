@@ -11,7 +11,7 @@ use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::FuseDataHasher;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::IFunction;
@@ -63,7 +63,7 @@ impl IFunction for SipHashFunction {
             | DataType::LargeUtf8
             | DataType::Binary
             | DataType::LargeBinary => Ok(DataType::UInt64),
-            _ => Result::Err(ErrorCodes::BadArguments(format!(
+            _ => Result::Err(ErrorCode::BadArguments(format!(
                 "Function Error: Siphash does not support {} type parameters",
                 args[0]
             ))),

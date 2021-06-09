@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use common_datavalues::*;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 
 use crate::test::Test;
 use crate::*;
@@ -59,7 +59,7 @@ fn test_expression_validate() -> anyhow::Result<()> {
     struct Test {
         desc: &'static str,
         expression: Expression,
-        error: Option<ErrorCodes>,
+        error: Option<ErrorCode>,
     }
 
     let cases = vec![
@@ -69,7 +69,7 @@ fn test_expression_validate() -> anyhow::Result<()> {
                 op: "toTypeName".to_string(),
                 args: vec![],
             },
-            error: Some(ErrorCodes::NumberArgumentsNotMatch(
+            error: Some(ErrorCode::NumberArgumentsNotMatch(
                 "ToTypeNameFunction expect to have 1 arguments, but got 0",
             )),
         },
@@ -79,7 +79,7 @@ fn test_expression_validate() -> anyhow::Result<()> {
                 op: "example".to_string(),
                 args: vec![col("33")],
             },
-            error: Some(ErrorCodes::NumberArgumentsNotMatch(
+            error: Some(ErrorCode::NumberArgumentsNotMatch(
                 "UdfExampleFunction expect to have 0 arguments, but got 1",
             )),
         },

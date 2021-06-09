@@ -6,7 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use log::error;
@@ -53,7 +53,7 @@ impl IProcessor for MergeProcessor {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let inputs = self.inputs.len();
         match inputs {
-            0 => Result::Err(ErrorCodes::IllegalTransformConnectionState(
+            0 => Result::Err(ErrorCode::IllegalTransformConnectionState(
                 "Merge processor inputs cannot be zero",
             )),
             1 => self.inputs[0].execute().await,

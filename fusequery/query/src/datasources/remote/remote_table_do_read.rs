@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_flights::ReadAction;
 use common_planners::PlanNode;
@@ -50,7 +50,7 @@ impl RemoteTable {
                 let r = client.read_partition(schema, &parts).await;
                 r.unwrap_or_else(|e| {
                     Box::pin(futures::stream::once(async move {
-                        Err(ErrorCodes::CannotReadFile(format!(
+                        Err(ErrorCode::CannotReadFile(format!(
                             "get partition failure. partition [{:?}], error {}",
                             &parts, e
                         )))

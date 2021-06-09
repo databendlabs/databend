@@ -12,7 +12,7 @@ use common_datavalues as datavalues;
 use common_datavalues::BooleanArray;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;

@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use anyhow::Context;
 use async_trait::async_trait;
 use common_exception::exception;
-use common_exception::ErrorCodes;
-use common_exception::ToErrorCodes;
+use common_exception::ErrorCode;
+use common_exception::ToErrorCode;
 
 use crate::fs::IFileSystem;
 use crate::fs::ListResult;
@@ -63,7 +63,7 @@ impl IFileSystem for LocalFS {
         let p = Path::new(self.root.as_path()).join(path);
         tracing::info!("read: {}", p.as_path().display());
 
-        let data = std::fs::read(p.as_path()).map_err_to_code(ErrorCodes::FileDamaged, || {
+        let data = std::fs::read(p.as_path()).map_err_to_code(ErrorCode::FileDamaged, || {
             format!("localfs: fail to read: {:?}", path)
         })?;
         Ok(data)

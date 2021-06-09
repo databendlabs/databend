@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::CreateTablePlan;
@@ -49,7 +49,7 @@ impl IDatabase for LocalDatabase {
         let table_lock = self.tables.read();
         let table = table_lock
             .get(table_name)
-            .ok_or_else(|| ErrorCodes::UnknownTable(format!("Unknown table: '{}'", table_name)))?;
+            .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name)))?;
         Ok(table.clone())
     }
 
@@ -69,7 +69,7 @@ impl IDatabase for LocalDatabase {
             return if plan.if_not_exists {
                 Ok(())
             } else {
-                return Err(ErrorCodes::UnImplement(format!(
+                return Err(ErrorCode::UnImplement(format!(
                     "Table: '{}.{}' already exists.",
                     db_name, table_name,
                 )));
@@ -87,7 +87,7 @@ impl IDatabase for LocalDatabase {
                 NullTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
             }
             _ => {
-                return Result::Err(ErrorCodes::UnImplement(format!(
+                return Result::Err(ErrorCode::UnImplement(format!(
                     "Local database does not support '{:?}' table engine",
                     plan.engine
                 )));
@@ -106,7 +106,7 @@ impl IDatabase for LocalDatabase {
             return if plan.if_exists {
                 Ok(())
             } else {
-                Err(ErrorCodes::UnknownTable(format!(
+                Err(ErrorCode::UnknownTable(format!(
                     "Unknown table: '{}.{}'",
                     plan.db, plan.table
                 )))
