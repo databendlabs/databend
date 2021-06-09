@@ -152,6 +152,7 @@ nav:
           - SIPHASH: sqlstatement/hash-functions/siphash.md
       - Information Functions:
           - DATABASE: sqlstatement/information-functions/database.md
+          - VERSION: sqlstatement/information-functions/version.md
       - Other Functions:
           - ToTypeName: sqlstatement/other-functions/totypename.md
       - String Functions:
