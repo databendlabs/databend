@@ -60,7 +60,7 @@ impl FuseQueryContext {
             runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(cpus)?)),
             version: format!(
                 "FuseQuery v-{}",
-                crate::configs::config::FUSE_COMMIT_VERSION
+                *crate::configs::config::FUSE_COMMIT_VERSION
             ),
         };
         // Default settings.
