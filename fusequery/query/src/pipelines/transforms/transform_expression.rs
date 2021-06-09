@@ -41,7 +41,13 @@ impl ExpressionTransform {
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
     ) -> Result<Self> {
-        let executor = ExpressionExecutor::try_create(input_schema, output_schema, exprs, false)?;
+        let executor = ExpressionExecutor::try_create(
+            "expression executor",
+            input_schema,
+            output_schema,
+            exprs,
+            false,
+        )?;
         executor.validate()?;
 
         Ok(ExpressionTransform {

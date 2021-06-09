@@ -16,6 +16,7 @@ members = [
     "common/streams",
     "common/exception",
     "common/ext",
+    "common/tracing",
 
     # FuseQuery
     "fusequery/query",

@@ -4,10 +4,8 @@
 
 #[macro_use]
 pub mod service;
-pub mod logging;
 pub mod seq;
 
-pub use logging::init_tracing;
 pub use seq::Seq;
 pub use service::assert_meta_connection;
 pub use service::rand_local_addr;

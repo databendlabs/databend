@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 
+use common_tracing::tracing;
 use serde::Deserialize;
 use serde::Serialize;
 

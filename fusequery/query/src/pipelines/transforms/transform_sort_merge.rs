@@ -12,6 +12,7 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 use futures::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
@@ -60,6 +61,8 @@ impl IProcessor for SortMergeTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        tracing::info!("execute...");
+
         let sort_columns_descriptions = get_sort_descriptions(&self.schema, &self.exprs)?;
         let mut blocks = vec![];
         let mut stream = self.input.execute().await?;

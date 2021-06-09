@@ -32,6 +32,7 @@ use async_raft::Raft;
 use async_raft::RaftMetrics;
 use async_raft::RaftNetwork;
 use async_raft::RaftStorage;
+use common_tracing::tracing;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;

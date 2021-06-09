@@ -19,7 +19,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::RemotePlan;
 use common_planners::SortPlan;
 use common_planners::StagePlan;
-use log::info;
+use common_tracing::tracing;
 
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::transforms::AggregatorFinalTransform;
@@ -47,8 +47,9 @@ impl PipelineBuilder {
         PipelineBuilder { ctx, plan }
     }
 
+    #[tracing::instrument(level = "info", skip(self))]
     pub fn build(&self) -> Result<Pipeline> {
-        info!("Received for plan:\n{:?}", self.plan);
+        tracing::info!("Received plan:\n{:?}", self.plan);
 
         let mut limit = None;
         self.plan.walk_preorder(|node| -> Result<bool> {
@@ -95,7 +96,7 @@ impl PipelineBuilder {
                 ))),
             }
         })?;
-        info!("Pipeline:\n{:?}", pipeline);
+        tracing::info!("Pipeline:\n{:?}", pipeline);
 
         Ok(pipeline)
     }

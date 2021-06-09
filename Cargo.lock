@@ -769,6 +769,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-tracing"
+version = "0.1.0"
+dependencies = [
+ "tracing",
+ "tracing-futures",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1367,6 +1376,7 @@ dependencies = [
  "common-progress",
  "common-runtime",
  "common-streams",
+ "common-tracing",
  "criterion",
  "crossbeam 0.8.1",
  "crossbeam-queue 0.3.2",
@@ -1417,6 +1427,7 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-planners",
+ "common-tracing",
  "env_logger",
  "futures",
  "indexmap",
@@ -1443,9 +1454,6 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-build",
- "tracing",
- "tracing-futures",
- "tracing-subscriber",
  "uuid",
 ]
 

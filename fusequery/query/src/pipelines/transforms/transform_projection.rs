@@ -4,12 +4,14 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
@@ -27,7 +29,13 @@ impl ProjectionTransform {
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
     ) -> Result<Self> {
-        let executor = ExpressionExecutor::try_create(input_schema, output_schema, exprs, true)?;
+        let executor = ExpressionExecutor::try_create(
+            "projection executor",
+            input_schema,
+            output_schema,
+            exprs,
+            true,
+        )?;
 
         Ok(ProjectionTransform {
             executor: Arc::new(executor),
@@ -56,13 +64,19 @@ impl IProcessor for ProjectionTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        tracing::info!("execute...");
+
         let executor = self.executor.clone();
         let input_stream = self.input.execute().await?;
 
         let executor_fn =
             |executor: Arc<ExpressionExecutor>, block: Result<DataBlock>| -> Result<DataBlock> {
                 let block = block?;
-                executor.execute(&block)
+                let start = Instant::now();
+                let r = executor.execute(&block);
+                let delta = start.elapsed();
+                tracing::info!("Projection cost: {:?}", delta);
+                r
             };
 
         let stream = input_stream

@@ -8,6 +8,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_tracing::tracing;
 use serde::Deserialize;
 use serde::Serialize;
 
