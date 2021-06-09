@@ -36,7 +36,6 @@ impl DataArrayArithmetic {
         match right {
             DataColumnarValue::Array(right_array) => {
                 let left_array = left.to_array()?;
-
                 Ok(DataColumnarValue::Array(Self::array_array_arithmetic_op(
                     op,
                     &left_array,
@@ -45,7 +44,6 @@ impl DataArrayArithmetic {
             }
             DataColumnarValue::Constant(right_value, _) => {
                 let mut all_const = false;
-
                 let left_array = match left {
                     DataColumnarValue::Array(array) => array.clone(),
                     DataColumnarValue::Constant(scalar, _) => {
@@ -54,7 +52,6 @@ impl DataArrayArithmetic {
                     }
                 };
                 let result = Self::array_scalar_arithmetic_op(op, &left_array, right_value)?;
-
                 if all_const {
                     let scalar = DataValue::try_from_array(&result, 0)?;
                     Ok(DataColumnarValue::Constant(scalar, left.len()))
@@ -74,11 +71,12 @@ impl DataArrayArithmetic {
         let coercion_type = super::data_type::numerical_arithmetic_coercion(
             &op,
             &left_array.data_type(),
-            &left_array.data_type(),
+            &right_array.data_type(),
         )?;
 
         let left_array = data_array_cast(left_array, &coercion_type)?;
         let right_array = data_array_cast(right_array, &coercion_type)?;
+
         match op {
             DataValueArithmeticOperator::Plus => {
                 arrow_primitive_array_op!(&left_array, &right_array, &coercion_type, add)
@@ -109,6 +107,7 @@ impl DataArrayArithmetic {
             &left.data_type(),
             &right_value.data_type(),
         )?;
+
         let left_array = data_array_cast(left, &coercion_type)?;
         let right_value = right_value.cast(&coercion_type)?;
 
