@@ -108,8 +108,9 @@ impl ExpressionExecutor {
                     column_map.insert(constant.name.clone(), column);
                 }
                 ExpressionAction::Exists(exists) => {
-                    let column = DataColumnarValue::Constant(exists.value.clone(), rows);
-                    column_map.insert(exists.name.clone(), column);
+                    println!("exists.name={}, val={:?}", exists.name, column_map.get(&exists.name));
+                    //let column = DataColumnarValue::Constant(exists.value.clone(), rows);
+                    //column_map.insert(exists.name.clone(), column);
                 }
                 _ => {}
             }

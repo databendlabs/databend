@@ -64,7 +64,7 @@ pub struct ActionFunction {
 #[derive(Debug, Clone)]
 pub struct ActionExists {
     pub name: String,
-    pub value: DataValue,
+    //pub value: DataValue,
 }
 
 #[derive(Debug, Clone)]
@@ -122,7 +122,7 @@ impl ExpressionChain {
                 println!("plan: {:?}", p);
                 let value = ActionExists {
                     name: format!("{:?}", expr),
-                    value: DataValue::Boolean(Some(true)),
+                    //value: DataValue::Boolean(Some(true)),
                 };
                 self.actions.push(ExpressionAction::Exists(value));
                 //return Err(ErrorCodes::UnImplement(
