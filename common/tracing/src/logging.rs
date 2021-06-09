@@ -21,13 +21,7 @@ pub fn init_tracing_with_level(level: &str) {
     static START: Once = Once::new();
 
     START.call_once(|| {
-        let log_layer_filter = match level.to_lowercase().as_str() {
-            "warn" => EnvFilter::try_new("warn").unwrap(),
-            "info" => EnvFilter::try_new("info").unwrap(),
-            "debug" => EnvFilter::try_new("debug,hyper::proto::h1=info,h2=info").unwrap(),
-            _ => EnvFilter::try_new("trace,hyper::proto::h1=info,h2=info").unwrap(),
-        };
-
+        let log_layer_filter = EnvFilter::try_new(level).unwrap();
         init_tracing(log_layer_filter);
     });
 }
