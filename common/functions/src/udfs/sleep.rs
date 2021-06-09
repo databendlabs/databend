@@ -30,7 +30,7 @@ impl SleepFunction {
 
 impl IFunction for SleepFunction {
     fn name(&self) -> &str {
-        "sleep"
+        "SleepFunction"
     }
 
     fn num_arguments(&self) -> usize {

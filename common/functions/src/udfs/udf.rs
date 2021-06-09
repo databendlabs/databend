@@ -4,8 +4,8 @@
 
 use common_exception::Result;
 
-use crate::udfs::sleep::SleepFunction;
 use crate::udfs::DatabaseFunction;
+use crate::udfs::SleepFunction;
 use crate::udfs::ToTypeNameFunction;
 use crate::udfs::UdfExampleFunction;
 use crate::udfs::VersionFunction;
