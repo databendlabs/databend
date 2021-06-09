@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use async_raft::RaftMetrics;
 use async_raft::State;
+use common_tracing::tracing;
 use maplit::hashset;
 use pretty_assertions::assert_eq;
 use tokio::sync::watch::Receiver;
@@ -149,7 +150,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     // - Start a single node meta service cluster.
     // - Test the single node is recorded by this cluster.
 
-    crate::tests::init_tracing();
+    common_tracing::init_default_tracing();
 
     let addr = new_addr();
     let resp = MetaNode::boot(0, addr.clone()).await;
@@ -167,7 +168,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
 async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     // - Start a leader then shutdown.
 
-    crate::tests::init_tracing();
+    common_tracing::init_default_tracing();
 
     let (_nid0, mn0) = setup_leader().await?;
 
@@ -195,7 +196,7 @@ async fn test_meta_node_sync_to_non_voter() -> anyhow::Result<()> {
     // - Start a leader and a non-voter;
     // - Write to leader, check on non-voter.
 
-    crate::tests::init_tracing();
+    common_tracing::init_default_tracing();
 
     let (_nid0, mn0) = setup_leader().await?;
     let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?;
@@ -211,7 +212,7 @@ async fn test_meta_node_3_members() -> anyhow::Result<()> {
     // - Add 2 node to the cluster.
     // - Write to leader, check data is replicated.
 
-    crate::tests::init_tracing();
+    common_tracing::init_default_tracing();
 
     let (_nid0, mn0) = setup_leader().await?;
     let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?;
@@ -245,7 +246,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     // - Restart them.
     // - Check old data an new written data.
 
-    crate::tests::init_tracing();
+    common_tracing::init_default_tracing();
 
     let (_nid0, mn0) = setup_leader().await?;
     let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?;

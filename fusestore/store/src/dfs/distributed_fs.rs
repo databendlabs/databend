@@ -7,6 +7,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_exception::exception;
 use common_exception::ErrorCodes;
+use common_tracing::tracing;
 
 use crate::fs::IFileSystem;
 use crate::fs::ListResult;

@@ -1427,6 +1427,7 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-planners",
+ "common-tracing",
  "env_logger",
  "futures",
  "indexmap",
@@ -1453,9 +1454,6 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-build",
- "tracing",
- "tracing-futures",
- "tracing-subscriber",
  "uuid",
 ]
 
