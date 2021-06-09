@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::any::Any;
 use std::fmt;
 
 use common_datavalues::DataColumnarValue;
@@ -52,6 +53,10 @@ impl IAggregateFunction for AggregateAvgFunction {
         Ok(false)
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn accumulate(&mut self, columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
         if let DataValue::Struct(values) = self.state.clone() {
             let sum = DataValueArithmetic::data_value_arithmetic_op(
@@ -63,6 +68,25 @@ impl IAggregateFunction for AggregateAvgFunction {
                 DataValueArithmeticOperator::Plus,
                 values[1].clone(),
                 DataValue::UInt64(Some(input_rows as u64)),
+            )?;
+
+            self.state = DataValue::Struct(vec![sum, count]);
+        }
+        Ok(())
+    }
+
+    fn accumulate_scalar(&mut self, scalar_values: &[DataValue]) -> Result<()> {
+        if let DataValue::Struct(values) = self.state.clone() {
+            let sum = DataValueArithmetic::data_value_arithmetic_op(
+                DataValueArithmeticOperator::Plus,
+                values[0].clone(),
+                scalar_values[0].clone(),
+            )?;
+
+            let count = DataValueArithmetic::data_value_arithmetic_op(
+                DataValueArithmeticOperator::Plus,
+                values[1].clone(),
+                DataValue::UInt64(Some(1u64)),
             )?;
 
             self.state = DataValue::Struct(vec![sum, count]);

@@ -10,7 +10,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::CastFunction;
 use common_functions::FunctionFactory;
@@ -262,7 +262,7 @@ impl ExpressionAction {
 impl ActionFunction {
     pub fn to_function(&self) -> Result<Box<dyn IFunction>> {
         if self.is_aggregated {
-            return Err(ErrorCodes::LogicalError(
+            return Err(ErrorCode::LogicalError(
                 "Action must be non-aggregated function",
             ));
         }
@@ -275,7 +275,7 @@ impl ActionFunction {
 
     pub fn to_aggregate_function(&self) -> Result<Box<dyn IAggregateFunction>> {
         if !self.is_aggregated {
-            return Err(ErrorCodes::LogicalError(
+            return Err(ErrorCode::LogicalError(
                 "Action must be aggregated function",
             ));
         }

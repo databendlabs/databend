@@ -4,7 +4,7 @@
 
 use std::net::SocketAddr;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::de::Error;
 use serde::Deserializer;
@@ -23,14 +23,14 @@ impl Address {
         }
 
         match address.find(':') {
-            None => Err(ErrorCodes::BadAddressFormat(format!(
+            None => Err(ErrorCode::BadAddressFormat(format!(
                 "Address must contain port, help: {}:port",
                 address
             ))),
             Some(index) => {
                 let (address, port) = address.split_at(index);
                 let port = port.trim_start_matches(':').parse::<u16>().map_err(|_| {
-                    ErrorCodes::BadAddressFormat("The address port must between 0 and 65535")
+                    ErrorCode::BadAddressFormat("The address port must between 0 and 65535")
                 })?;
 
                 Ok(Address::Named((address.to_string(), port)))

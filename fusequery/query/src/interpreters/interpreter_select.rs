@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
@@ -47,7 +47,7 @@ impl IInterpreter for SelectInterpreter {
         let scheduled_actions = PlanScheduler::reschedule(self.ctx.clone(), &plan)?;
 
         let remote_actions_ref = &scheduled_actions.remote_actions;
-        let prepare_error_handler = move |error: ErrorCodes, end: usize| {
+        let prepare_error_handler = move |error: ErrorCode, end: usize| {
             let mut killed_set = HashSet::new();
             for (node, _) in remote_actions_ref.iter().take(end) {
                 if killed_set.get(&node.name).is_none() {

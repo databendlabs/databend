@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::fmt;
@@ -45,7 +44,7 @@ use tokio::sync::RwLockWriteGuard;
 use tokio::task::JoinHandle;
 use tonic::transport::channel::Channel;
 
-use crate::meta_service::Meta;
+use crate::meta_service::MemStoreStateMachine;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::MetaServiceServer;
@@ -255,44 +254,6 @@ pub struct MemStoreSnapshot {
     pub membership: MembershipConfig,
     /// The data of the state machine at the time of this snapshot.
     pub data: Vec<u8>,
-}
-
-/// The state machine of the `MemStore`.
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
-pub struct MemStoreStateMachine {
-    pub last_applied_log: u64,
-    /// A mapping of client IDs to their state info:
-    /// (serial, ClientResponse)
-    pub client_serial_responses: HashMap<String, (u64, ClientResponse)>,
-
-    pub meta: Meta,
-}
-
-impl MemStoreStateMachine {
-    /// Apply an log entry to state machine.
-    ///
-    /// If a duplicated log entry is detected by checking data.txid, no update
-    /// will be made and the previous resp is returned. In this way a client is able to re-send a
-    /// command safely in case of network failure etc.
-    #[tracing::instrument(level = "info", skip(self))]
-    pub fn apply(&mut self, index: u64, data: &ClientRequest) -> Result<ClientResponse> {
-        self.last_applied_log = index;
-        if let Some(ref txid) = data.txid {
-            if let Some((serial, resp)) = self.client_serial_responses.get(&txid.client) {
-                if serial == &txid.serial {
-                    return Ok(resp.clone());
-                }
-            }
-        }
-
-        let resp = self.meta.apply(data)?;
-
-        if let Some(ref txid) = data.txid {
-            self.client_serial_responses
-                .insert(txid.client.clone(), (txid.serial, resp.clone()));
-        }
-        Ok(resp)
-    }
 }
 
 /// An in-memory storage system implementing the `async_raft::RaftStorage` trait.

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
@@ -90,7 +90,7 @@ pub fn get_sort_descriptions(
                 });
             }
             _ => {
-                return Result::Err(ErrorCodes::BadTransformType(format!(
+                return Result::Err(ErrorCode::BadTransformType(format!(
                     "Sort expression must be ExpressionPlan::Sort, but got: {:?}",
                     x
                 )));

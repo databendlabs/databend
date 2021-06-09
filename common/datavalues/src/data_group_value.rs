@@ -5,7 +5,7 @@
 use std::convert::From;
 use std::convert::TryFrom;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use ordered_float::OrderedFloat;
 
@@ -34,7 +34,7 @@ pub enum DataGroupValue {
 }
 
 impl TryFrom<&DataValue> for DataGroupValue {
-    type Error = ErrorCodes;
+    type Error = ErrorCode;
 
     fn try_from(value: &DataValue) -> Result<Self> {
         Ok(match value {
@@ -68,14 +68,14 @@ impl TryFrom<&DataValue> for DataGroupValue {
             | DataValue::UInt32(None)
             | DataValue::UInt64(None)
             | DataValue::Utf8(None) => {
-                return Err(ErrorCodes::BadDataValueType(format!(
+                return Err(ErrorCode::BadDataValueType(format!(
                     "Cannot convert a DataValue holding NULL ({:?})",
                     value
                 )));
             }
 
             v => {
-                return Err(ErrorCodes::BadDataValueType(format!(
+                return Err(ErrorCode::BadDataValueType(format!(
                     "Cannot convert a DataValue  with associated DataType ({:?})",
                     v.data_type()
                 )));

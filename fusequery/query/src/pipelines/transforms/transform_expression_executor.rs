@@ -8,7 +8,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_planners::ExpressionAction;
@@ -96,7 +96,7 @@ impl ExpressionExecutor {
                         .iter()
                         .map(|arg| {
                             column_map.get(arg).cloned().ok_or_else(|| {
-                                ErrorCodes::LogicalError(
+                                ErrorCode::LogicalError(
                                     "Arguments must be prepared before function transform",
                                 )
                             })
@@ -120,7 +120,7 @@ impl ExpressionExecutor {
         if self.alias_project {
             for (k, v) in alias_map.iter() {
                 let column = column_map.get(k).cloned().ok_or_else(|| {
-                    ErrorCodes::LogicalError("Arguments must be prepared before alias transform")
+                    ErrorCode::LogicalError("Arguments must be prepared before alias transform")
                 })?;
 
                 for name in v.iter() {
@@ -132,7 +132,7 @@ impl ExpressionExecutor {
         let mut project_columns = Vec::with_capacity(self.output_schema.fields().len());
         for f in self.output_schema.fields() {
             let column = column_map.get(f.name()).ok_or_else(|| {
-                ErrorCodes::LogicalError(format!(
+                ErrorCode::LogicalError(format!(
                     "Projection column: {} not exists in {:?}, there are bugs!",
                     f.name(),
                     column_map.keys()

@@ -6,13 +6,13 @@
 use log::info;
 use pretty_assertions::assert_eq;
 
-use crate::meta_service::raftmeta_test::assert_connection;
 use crate::meta_service::ClientRequest;
 use crate::meta_service::ClientResponse;
 use crate::meta_service::Cmd;
 use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
+use crate::tests::assert_meta_connection;
 use crate::tests::rand_local_addr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -20,7 +20,7 @@ async fn test_meta_server_add_file() -> anyhow::Result<()> {
     let addr = rand_local_addr();
 
     let _mn = MetaNode::boot(0, addr.clone()).await?;
-    assert_connection(&addr).await?;
+    assert_meta_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
@@ -55,7 +55,7 @@ async fn test_meta_server_sed_file() -> anyhow::Result<()> {
     let addr = rand_local_addr();
 
     let _mn = MetaNode::boot(0, addr.clone()).await?;
-    assert_connection(&addr).await?;
+    assert_meta_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
@@ -91,7 +91,7 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
     let addr = rand_local_addr();
 
     let _mn = MetaNode::boot(0, addr.clone()).await?;
-    assert_connection(&addr).await?;
+    assert_meta_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
@@ -177,7 +177,7 @@ async fn test_meta_server_incr_seq() -> anyhow::Result<()> {
     let addr = rand_local_addr();
 
     let _mn = MetaNode::boot(0, addr.clone()).await?;
-    assert_connection(&addr).await?;
+    assert_meta_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 

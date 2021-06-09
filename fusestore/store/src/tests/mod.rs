@@ -7,5 +7,6 @@ pub mod service;
 pub mod seq;
 
 pub use seq::Seq;
+pub use service::assert_meta_connection;
 pub use service::rand_local_addr;
 pub use service::start_store_server;
