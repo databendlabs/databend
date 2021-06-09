@@ -105,31 +105,3 @@ impl<W: io::Write> MysqlShim<W> for Session {
         })
     }
 }
-
-pub struct RejectedSession;
-
-impl<W: io::Write> MysqlShim<W> for RejectedSession {
-    type Error = ErrorCode;
-
-    fn on_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {
-        writer.error(ErrorKind::ER_TOO_MANY_USER_CONNECTIONS, "".as_bytes())?;
-        Ok(())
-    }
-
-    fn on_execute(&mut self, _: u32, _: ParamParser<'_>, writer: QueryResultWriter<'_, W>) -> Result<()> {
-        writer.error(ErrorKind::ER_TOO_MANY_USER_CONNECTIONS, "".as_bytes())?;
-        Ok(())
-    }
-
-    fn on_close(&mut self, _: u32) {}
-
-    fn on_query(&mut self, _: &str, writer: QueryResultWriter<'_, W>) -> Result<()> {
-        writer.error(ErrorKind::ER_TOO_MANY_USER_CONNECTIONS, "".as_bytes())?;
-        Ok(())
-    }
-
-    fn on_init(&mut self, _: &str, writer: InitWriter<'_, W>) -> Result<()> {
-        writer.error(ErrorKind::ER_TOO_MANY_USER_CONNECTIONS, "".as_bytes())?;
-        Ok(())
-    }
-}

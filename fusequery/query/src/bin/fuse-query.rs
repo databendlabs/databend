@@ -10,6 +10,7 @@ use fuse_query::metrics::MetricService;
 use fuse_query::servers::ClickHouseHandler;
 use fuse_query::servers::MySQLHandler;
 use fuse_query::sessions::SessionManager;
+use fuse_query::servers::Abortable;
 use log::info;
 
 #[tokio::main]

@@ -21,7 +21,6 @@ common-arrow = {path = "../../common/arrow"}
 common-datablocks = {path = "../../common/datablocks"}
 common-datavalues = {path = "../../common/datavalues"}
 common-exception = {path = "../../common/exception"}
-common-ext = {path= "../../common/ext"}
 common-flights = {path = "../../common/flights"}
 common-functions = {path = "../../common/functions"}
 common-aggregate-functions = {path = "../../common/aggregate_functions" }

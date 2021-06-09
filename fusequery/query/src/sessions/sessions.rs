@@ -34,6 +34,14 @@ impl SessionManager {
         self.max_mysql_sessions
     }
 
+    pub fn add_reject_mysql_session(&self) {
+
+    }
+
+    pub fn add_accepted_mysql_session(&self) {
+
+    }
+
     pub fn try_create_context(&self) -> Result<FuseQueryContextRef> {
         counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
 

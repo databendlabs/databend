@@ -11,4 +11,5 @@ mod endpoints;
 mod mysql_handler;
 mod mysql_metrics;
 mod mysql_session;
+mod reject_connection;
 

@@ -7,8 +7,9 @@
 mod clickhouse;
 mod mysql;
 mod running_server;
-mod active_session;
+mod abortable;
 
 pub use clickhouse::ClickHouseHandler;
 pub use self::mysql::MySQLHandler;
 pub use running_server::RunningServer;
+pub use abortable::Abortable;
