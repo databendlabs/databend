@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", conf);
     info!(
         "FuseQuery v-{}",
-        fuse_query::configs::config::FUSE_COMMIT_VERSION
+        *fuse_query::configs::config::FUSE_COMMIT_VERSION
     );
 
     let mut tasks = vec![];
