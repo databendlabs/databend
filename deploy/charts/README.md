@@ -15,7 +15,7 @@ git clone https://github.com/datafuselabs/datafuse.git
 
 ###  Run Helm 
 
-`make runhelm` in project root directory,
+`make run-helm` in project root directory,
 
 when successful install you will get a note like this,
 
