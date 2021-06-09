@@ -7,6 +7,7 @@ use common_exception::Result;
 use crate::udfs::DatabaseFunction;
 use crate::udfs::ToTypeNameFunction;
 use crate::udfs::UdfExampleFunction;
+use crate::udfs::VersionFunction;
 use crate::FactoryFuncRef;
 
 #[derive(Clone)]
@@ -18,6 +19,7 @@ impl UdfFunction {
         map.insert("example", UdfExampleFunction::try_create);
         map.insert("totypename", ToTypeNameFunction::try_create);
         map.insert("database", DatabaseFunction::try_create);
+        map.insert("version", VersionFunction::try_create);
         Ok(())
     }
 }
