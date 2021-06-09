@@ -39,9 +39,9 @@ lazy_static! {
 impl FunctionFactory {
     pub fn get(name: &str) -> Result<Box<dyn IFunction>> {
         let map = FACTORY.read();
-        let creator = map.get(&*name.to_lowercase()).ok_or_else(|| {
-            ErrorCode::UnknownFunction(format!("Unsupported Function: {}", name))
-        })?;
+        let creator = map
+            .get(&*name.to_lowercase())
+            .ok_or_else(|| ErrorCode::UnknownFunction(format!("Unsupported Function: {}", name)))?;
         (creator)(name)
     }
 

@@ -704,9 +704,7 @@ impl PlanParser {
                         &table_name,
                     ))),
                 },
-                _ => Err(ErrorCode::SyntaxException(
-                    "Cannot support Nested Join now",
-                )),
+                _ => Err(ErrorCode::SyntaxException("Cannot support Nested Join now")),
             },
             _ => Err(ErrorCode::SyntaxException("Cannot support JOIN clause")),
         }
