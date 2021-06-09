@@ -195,7 +195,7 @@ impl fmt::Debug for Expression {
             Expression::Alias(alias, v) => write!(f, "{:?} as {:#}", v, alias),
             Expression::Column(ref v) => write!(f, "{:#}", v),
             Expression::Literal(ref v) => write!(f, "{:#}", v),
-            Expression::Exists(ref v) => write!(f, "{:?}", v),
+            Expression::Exists(ref v) => write!(f, "Exists({:?})", v),
             Expression::BinaryExpression { op, left, right } => {
                 write!(f, "({:?} {} {:?})", left, op, right,)
             }

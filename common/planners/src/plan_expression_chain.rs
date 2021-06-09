@@ -24,6 +24,7 @@ pub enum ExpressionAction {
     Constant(ActionConstant),
     Alias(ActionAlias),
     Function(ActionFunction),
+    Exists(ActionExists),
 }
 
 #[derive(Debug, Clone)]
@@ -58,6 +59,12 @@ pub struct ActionFunction {
 
     // only for aggregate functions
     pub arg_fields: Vec<DataField>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ActionExists {
+    pub name: String,
+    pub value: DataValue,
 }
 
 #[derive(Debug, Clone)]
@@ -113,9 +120,14 @@ impl ExpressionChain {
             }
             Expression::Exists(p) => {
                 println!("plan: {:?}", p);
-                return Err(ErrorCodes::UnImplement(
-                    "Action for Exists not implemented yet",
-                ));
+                let value = ActionExists {
+                    name: "exists".to_string(),
+                    value: DataValue::Boolean(Some(true)),
+                };
+                self.actions.push(ExpressionAction::Exists(value));
+                //return Err(ErrorCodes::UnImplement(
+                //    "Action for Exists not implemented yet",
+                //));
             }
             Expression::UnaryExpression {
                 op,
@@ -239,6 +251,7 @@ impl ExpressionAction {
             ExpressionAction::Constant(c) => &c.name,
             ExpressionAction::Alias(a) => &a.name,
             ExpressionAction::Function(f) => &f.name,
+            ExpressionAction::Exists(f) => &f.name,
         }
     }
 }

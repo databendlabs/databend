@@ -9,6 +9,7 @@ use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::ExpressionPlan;
+use common_planners::Expression;
 use common_planners::FilterPlan;
 use common_planners::HavingPlan;
 use common_planners::LimitByPlan;
@@ -19,6 +20,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::RemotePlan;
 use common_planners::SortPlan;
 use common_planners::StagePlan;
+use common_planners::find_exists_exprs;
 use log::info;
 
 use crate::pipelines::processors::Pipeline;
@@ -51,15 +53,34 @@ impl PipelineBuilder {
         info!("Received for plan:\n{:?}", self.plan);
 
         let mut limit = None;
+        let mut exists_vec = Vec::new();
+
         self.plan.walk_preorder(|node| -> Result<bool> {
+            println!("node: {:?}", node);
             match node {
                 PlanNode::Limit(ref limit_plan) => {
                     limit = Some(limit_plan.n);
                     Ok(true)
                 }
+                PlanNode::Filter(ref filter_plan) => {
+                    exists_vec = find_exists_exprs(&[filter_plan.predicate.clone()]);
+                    Ok(true)
+                }
                 _ => Ok(true),
             }
         })?;
+
+        let exists_res_vec = Vec::<bool>::new();
+        //async {
+            for exst in exists_vec {
+                if let  Expression::Exists(p) = exst {
+                    let mut exst_pipeline = PipelineBuilder::create(self.ctx.clone(), (*p).clone()).build()?;
+                    let stream = exst_pipeline.execute();
+                    //let stream = exst_pipeline.execute().await;
+                    //println!("stream: {:?}", stream);
+                }
+            }
+        //}
 
         let mut pipeline = Pipeline::create(self.ctx.clone());
         self.plan.walk_postorder(|node| -> Result<bool> {

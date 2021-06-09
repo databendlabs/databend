@@ -79,6 +79,7 @@ impl ExpressionExecutor {
                     column_map.insert(input.name.clone(), column);
                 }
                 ExpressionAction::Function(f) => {
+                    println!("f: {:?}", f);
                     // check if it's cached
                     let arg_columns = f
                         .arg_names
@@ -101,7 +102,10 @@ impl ExpressionExecutor {
                     let column = DataColumnarValue::Constant(constant.value.clone(), rows);
                     column_map.insert(constant.name.clone(), column);
                 }
-
+                ExpressionAction::Exists(exists) => {
+                    let column = DataColumnarValue::Constant(exists.value.clone(), rows);
+                    column_map.insert(exists.name.clone(), column);
+                }
                 _ => {}
             }
         }

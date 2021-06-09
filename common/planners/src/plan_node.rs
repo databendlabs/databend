@@ -126,11 +126,13 @@ impl PlanNode {
             PlanNode::AggregatorFinal(v) => vec![v.input.clone()],
             PlanNode::Filter(v) => {
                 let exists_input = v.get_inputs_from_expr();
-                let mut res = vec![v.input.clone()];
-                if let Some(mut vp) = exists_input {
-                    res.append(&mut vp);
-                }
-                res
+                if let Some(vp) = exists_input {
+                    let mut res = vp.clone();
+                    res.append(&mut vec![v.input.clone()]);
+                    res
+                } else {
+                    vec![v.input.clone()]
+                } 
             }
             PlanNode::Having(v) => vec![v.input.clone()],
             PlanNode::Limit(v) => vec![v.input.clone()],
