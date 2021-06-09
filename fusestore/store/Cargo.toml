@@ -11,6 +11,10 @@ edition = "2018"
 name = "fuse-store"
 path = "src/bin/fuse-store.rs"
 
+[features]
+default = ["simd"]
+simd = ["common-arrow/simd"]
+
 [dependencies]
 # Workspace dependencies
 common-arrow = {path = "../../common/arrow"}

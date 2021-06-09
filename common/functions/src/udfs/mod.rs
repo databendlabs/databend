@@ -8,14 +8,18 @@ mod database_test;
 mod to_type_name_test;
 #[cfg(test)]
 mod udf_example_test;
+#[cfg(test)]
+mod version_test;
 
 mod database;
 mod sleep;
 mod to_type_name;
 mod udf;
 mod udf_example;
+mod version;
 
 pub use database::DatabaseFunction;
 pub use to_type_name::ToTypeNameFunction;
 pub use udf::UdfFunction;
 pub use udf_example::UdfExampleFunction;
+pub use version::VersionFunction;
