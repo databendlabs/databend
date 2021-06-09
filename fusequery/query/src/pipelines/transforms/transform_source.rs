@@ -5,9 +5,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
@@ -43,7 +44,7 @@ impl IProcessor for SourceTransform {
     }
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> Result<()> {
-        Result::Err(ErrorCodes::LogicalError(
+        Result::Err(ErrorCode::LogicalError(
             "Cannot call SourceTransform connect_to",
         ))
     }
@@ -57,6 +58,13 @@ impl IProcessor for SourceTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        tracing::info!(
+            "execute, table:{:#}.{:#}, is_remote:{:#}...",
+            self.db,
+            self.table,
+            self.remote
+        );
+
         let table = if self.remote {
             self.ctx
                 .get_remote_table(self.db.as_str(), self.table.as_str())

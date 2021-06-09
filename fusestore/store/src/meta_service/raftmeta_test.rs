@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use async_raft::RaftMetrics;
 use async_raft::State;
+use common_tracing::tracing;
 use maplit::hashset;
 use pretty_assertions::assert_eq;
 use tokio::sync::watch::Receiver;
@@ -14,11 +15,10 @@ use tokio::time::Duration;
 use crate::meta_service::ClientRequest;
 use crate::meta_service::ClientResponse;
 use crate::meta_service::Cmd;
-use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
-use crate::meta_service::MetaServiceClient;
 use crate::meta_service::NodeId;
 use crate::meta_service::RaftTxId;
+use crate::tests::assert_meta_connection;
 use crate::tests::Seq;
 
 // test cases fro Cmd::IncrSeq:
@@ -149,7 +149,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     // - Start a single node meta service cluster.
     // - Test the single node is recorded by this cluster.
 
-    crate::tests::init_tracing();
+    common_tracing::init_default_tracing();
 
     let addr = new_addr();
     let resp = MetaNode::boot(0, addr.clone()).await;
@@ -167,7 +167,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
 async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     // - Start a leader then shutdown.
 
-    crate::tests::init_tracing();
+    common_tracing::init_default_tracing();
 
     let (_nid0, mn0) = setup_leader().await?;
 
@@ -195,7 +195,7 @@ async fn test_meta_node_sync_to_non_voter() -> anyhow::Result<()> {
     // - Start a leader and a non-voter;
     // - Write to leader, check on non-voter.
 
-    crate::tests::init_tracing();
+    common_tracing::init_default_tracing();
 
     let (_nid0, mn0) = setup_leader().await?;
     let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?;
@@ -211,7 +211,7 @@ async fn test_meta_node_3_members() -> anyhow::Result<()> {
     // - Add 2 node to the cluster.
     // - Write to leader, check data is replicated.
 
-    crate::tests::init_tracing();
+    common_tracing::init_default_tracing();
 
     let (_nid0, mn0) = setup_leader().await?;
     let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?;
@@ -245,7 +245,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     // - Restart them.
     // - Check old data an new written data.
 
-    crate::tests::init_tracing();
+    common_tracing::init_default_tracing();
 
     let (_nid0, mn0) = setup_leader().await?;
     let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?;
@@ -298,7 +298,7 @@ async fn setup_leader() -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
     let mut rx = mn.raft.metrics();
 
     {
-        assert_connection(&addr).await?;
+        assert_meta_connection(&addr).await?;
 
         // assert that boot() adds the node to meta.
         let got = mn.get_node(&nid).await;
@@ -335,7 +335,7 @@ async fn setup_non_voter(
     }
 
     {
-        assert_connection(&addr).await?;
+        assert_meta_connection(&addr).await?;
         wait_for_state(id, &mut rx, State::NonVoter).await?;
         wait_for_current_leader(id, &mut rx, 0).await?;
     }
@@ -386,15 +386,6 @@ async fn assert_get_file(
         let got = mn.get_file(key).await;
         assert_eq!(value.to_string(), got.unwrap(), "n{} applied value", i);
     }
-    Ok(())
-}
-
-pub async fn assert_connection(addr: &str) -> anyhow::Result<()> {
-    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-    let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
-    let req = tonic::Request::new(GetReq { key: "foo".into() });
-    let rst = client.get(req).await?.into_inner();
-    assert_eq!("", rst.value, "connected");
     Ok(())
 }
 

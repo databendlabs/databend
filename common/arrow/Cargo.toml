@@ -6,6 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2018"
 
+[features]
+simd = ["arrow/simd"]
+
 [dependencies] # In alphabetical order
 # Workspace dependencies
 

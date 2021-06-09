@@ -4,6 +4,7 @@
 
 use common_exception::Result;
 use common_planners::PlanNode;
+use common_tracing::tracing;
 
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::ProjectionPushDownOptimizer;
@@ -30,7 +31,9 @@ impl Optimizer {
     pub fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         let mut plan = plan.clone();
         for optimizer in self.optimizers.iter_mut() {
+            tracing::info!("Before {} \n{:?}", optimizer.name(), plan);
             plan = optimizer.optimize(&plan)?;
+            tracing::info!("After {} \n{:?}", optimizer.name(), plan);
         }
         Ok(plan)
     }

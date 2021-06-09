@@ -2,11 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::any::Any;
 use std::convert::TryFrom;
 use std::fmt;
 
 use common_datavalues::*;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_unary_arguments;
@@ -48,6 +49,10 @@ impl IAggregateFunction for AggregateSumFunction {
         Ok(false)
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
         let value = Self::sum_batch(columns[0].clone())?;
 
@@ -55,6 +60,16 @@ impl IAggregateFunction for AggregateSumFunction {
             DataValueArithmeticOperator::Plus,
             self.state.clone(),
             value,
+        )?;
+
+        Ok(())
+    }
+
+    fn accumulate_scalar(&mut self, values: &[DataValue]) -> Result<()> {
+        self.state = DataValueArithmetic::data_value_arithmetic_op(
+            DataValueArithmeticOperator::Plus,
+            self.state.clone(),
+            values[0].clone(),
         )?;
 
         Ok(())
@@ -97,7 +112,7 @@ impl AggregateSumFunction {
             DataType::Float32 => Ok(DataType::Float32),
             DataType::Float64 => Ok(DataType::Float64),
 
-            other => Err(ErrorCodes::BadDataValueType(format!(
+            other => Err(ErrorCode::BadDataValueType(format!(
                 "SUM does not support type '{:?}'",
                 other
             ))),

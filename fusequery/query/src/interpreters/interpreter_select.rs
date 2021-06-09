@@ -6,10 +6,11 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::interpreters::IInterpreter;
@@ -39,13 +40,14 @@ impl IInterpreter for SelectInterpreter {
         self.select.schema()
     }
 
+    #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = Optimizer::create(self.ctx.clone()).optimize(&self.select.input)?;
 
         let scheduled_actions = PlanScheduler::reschedule(self.ctx.clone(), &plan)?;
 
         let remote_actions_ref = &scheduled_actions.remote_actions;
-        let prepare_error_handler = move |error: ErrorCodes, end: usize| {
+        let prepare_error_handler = move |error: ErrorCode, end: usize| {
             let mut killed_set = HashSet::new();
             for (node, _) in remote_actions_ref.iter().take(end) {
                 if killed_set.get(&node.name).is_none() {

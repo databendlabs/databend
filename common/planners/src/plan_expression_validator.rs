@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::FunctionFactory;
 use common_functions::IFunction;
@@ -15,7 +15,7 @@ use crate::Recursion;
 struct ExpressionValidator<'a, F>
 where F: Fn(&Expression) -> Result<()>
 {
-    error: Option<ErrorCodes>,
+    error: Option<ErrorCode>,
     test_fn: &'a F,
 }
 
@@ -49,7 +49,7 @@ fn validate_function_arg(func: Box<dyn IFunction>, args: &[Expression]) -> Resul
     match func.variadic_arguments() {
         Some((start, end)) => {
             return if args.len() < start || args.len() > end {
-                Err(ErrorCodes::NumberArgumentsNotMatch(format!(
+                Err(ErrorCode::NumberArgumentsNotMatch(format!(
                     "{} expect to have [{}, {}] arguments, but got {}",
                     func.name(),
                     start,
@@ -63,7 +63,7 @@ fn validate_function_arg(func: Box<dyn IFunction>, args: &[Expression]) -> Resul
         None => {
             let num = func.num_arguments();
             return if num != args.len() {
-                Err(ErrorCodes::NumberArgumentsNotMatch(format!(
+                Err(ErrorCode::NumberArgumentsNotMatch(format!(
                     "{} expect to have {} arguments, but got {}",
                     func.name(),
                     num,

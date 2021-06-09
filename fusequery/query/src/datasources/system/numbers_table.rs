@@ -11,7 +11,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_planners::ReadDataSourcePlan;
@@ -89,7 +89,7 @@ impl ITable for NumbersTable {
                 total = v as u64;
             }
         } else {
-            return Result::Err(ErrorCodes::BadArguments(format!(
+            return Result::Err(ErrorCode::BadArguments(format!(
                 "Must have one argument for table: system.{}",
                 self.name()
             )));

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::any::Any;
 use std::fmt;
 
 use common_datavalues::DataColumnarValue;
@@ -16,9 +17,10 @@ pub trait IAggregateFunction: fmt::Display + Sync + Send + DynClone {
     fn return_type(&self) -> Result<DataType>;
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool>;
 
+    fn as_any(&self) -> &dyn Any;
+
     // accumulate is to accumulate the columns in batch mod
     // if some aggregate functions wants to iterate over the columns row by row, it doesn't need to implement this function
-    // You should only implement either of `accumulate` and `accumulate_scalar`
     fn accumulate(&mut self, columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
         if columns.is_empty() {
             return Ok(());
@@ -33,9 +35,8 @@ pub trait IAggregateFunction: fmt::Display + Sync + Send + DynClone {
         })
     }
 
-    fn accumulate_scalar(&mut self, _values: &[DataValue]) -> Result<()> {
-        Ok(())
-    }
+    // must be implemented even we implement `accumulate`, because the combinator need this function
+    fn accumulate_scalar(&mut self, _values: &[DataValue]) -> Result<()>;
 
     fn accumulate_result(&self) -> Result<Vec<DataValue>>;
     fn merge(&mut self, _states: &[DataValue]) -> Result<()>;

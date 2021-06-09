@@ -6,9 +6,10 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
@@ -44,7 +45,7 @@ impl IProcessor for RemoteTransform {
     }
 
     fn connect_to(&mut self, _input: Arc<dyn IProcessor>) -> Result<()> {
-        Result::Err(ErrorCodes::LogicalError(
+        Result::Err(ErrorCode::LogicalError(
             "Cannot call RemoteTransform connect_to",
         ))
     }
@@ -58,6 +59,12 @@ impl IProcessor for RemoteTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        tracing::info!(
+            "execute, fetch name:{:#}, node name:{:#}...",
+            self.fetch_name,
+            self.fetch_node_name
+        );
+
         let context = self.ctx.clone();
         let cluster = context.try_get_cluster()?;
         let fetch_node = cluster.get_node_by_name(self.fetch_node_name.clone())?;

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 pub trait IMySQLEndpoint<Writer> {
@@ -10,5 +10,5 @@ pub trait IMySQLEndpoint<Writer> {
 
     fn ok(data: Self::Input, writer: Writer) -> Result<()>;
 
-    fn err(error: ErrorCodes, writer: Writer) -> Result<()>;
+    fn err(error: ErrorCode, writer: Writer) -> Result<()>;
 }

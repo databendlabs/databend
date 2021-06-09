@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
@@ -76,7 +76,7 @@ impl IDatabase for SystemDatabase {
         let table = self
             .tables
             .get(table_name)
-            .ok_or_else(|| ErrorCodes::UnknownTable(format!("Unknown table: '{}'", table_name)))?;
+            .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name)))?;
         Ok(table.clone())
     }
 
@@ -89,13 +89,13 @@ impl IDatabase for SystemDatabase {
     }
 
     async fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
-        Result::Err(ErrorCodes::UnImplement(
+        Result::Err(ErrorCode::UnImplement(
             "Cannot create table for system database",
         ))
     }
 
     async fn drop_table(&self, _plan: DropTablePlan) -> Result<()> {
-        Result::Err(ErrorCodes::UnImplement(
+        Result::Err(ErrorCode::UnImplement(
             "Cannot drop table for system database",
         ))
     }

@@ -13,7 +13,7 @@ use common_arrow::arrow::datatypes::*;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use futures::stream::Stream;
@@ -107,7 +107,7 @@ impl ClickHouseStream {
                 }
 
                 _ => {
-                    return Err(ErrorCodes::from(anyhow!(
+                    return Err(ErrorCode::from(anyhow!(
                         "Unsupported column type:{:?}",
                         column.data_type()
                     )))

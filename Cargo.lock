@@ -108,6 +108,7 @@ dependencies = [
  "lexical-core",
  "multiversion",
  "num",
+ "packed_simd_2",
  "rand 0.7.3",
  "regex",
  "serde",
@@ -768,6 +769,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-tracing"
+version = "0.1.0"
+dependencies = [
+ "tracing",
+ "tracing-futures",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1366,6 +1376,7 @@ dependencies = [
  "common-progress",
  "common-runtime",
  "common-streams",
+ "common-tracing",
  "criterion",
  "crossbeam 0.8.1",
  "crossbeam-queue 0.3.2",
@@ -1416,6 +1427,7 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-planners",
+ "common-tracing",
  "env_logger",
  "futures",
  "indexmap",
@@ -1442,9 +1454,6 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-build",
- "tracing",
- "tracing-futures",
- "tracing-subscriber",
  "uuid",
 ]
 
@@ -1826,9 +1835,9 @@ checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
-version = "0.14.8"
+version = "0.14.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3f71a7eea53a3f8257a7b4795373ff886397178cd634430ea94e12d7fe4fe34"
+checksum = "07d6baa1b441335f3ce5098ac421fb6547c46dda735ca1bc6d0153c838f9dd83"
 dependencies = [
  "bytes 1.0.1",
  "futures-channel",
@@ -1840,7 +1849,7 @@ dependencies = [
  "httparse",
  "httpdate",
  "itoa",
- "pin-project",
+ "pin-project-lite",
  "socket2 0.4.0",
  "tokio",
  "tower-service",
@@ -2055,6 +2064,12 @@ dependencies = [
  "libz-sys",
  "pkg-config",
 ]
+
+[[package]]
+name = "libm"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fc7aa29613bd6a620df431842069224d8bc9011086b1db4c0e0cd47fa03ec9a"
 
 [[package]]
 name = "libm"
@@ -2497,7 +2512,7 @@ dependencies = [
  "autocfg 0.1.7",
  "byteorder",
  "lazy_static",
- "libm",
+ "libm 0.2.1",
  "num-integer",
  "num-iter",
  "num-traits",
@@ -2555,7 +2570,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a64b1ec5cda2586e284722486d802acf1f7dbdc623e2bfc57e65ca1cd099290"
 dependencies = [
  "autocfg 1.0.1",
- "libm",
+ "libm 0.2.1",
 ]
 
 [[package]]
@@ -2637,6 +2652,16 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "sha2 0.9.5",
+]
+
+[[package]]
+name = "packed_simd_2"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e64858a2d3733fdd61adfdd6da89aa202f7ff0e741d2fc7ed1e452ba9dc99d7"
+dependencies = [
+ "cfg-if 0.1.10",
+ "libm 0.1.4",
 ]
 
 [[package]]

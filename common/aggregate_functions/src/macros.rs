@@ -26,7 +26,7 @@ macro_rules! dispatch_primitive_array {
             DataType::Float32 => $DISPATCH_M! {$ARRAY,Float32Array,Float32,$OP, $($opt,)*},
             DataType::Float64 => $DISPATCH_M! {$ARRAY,Float64Array,Float64,$OP, $($opt,)*},
 
-            other => Err(ErrorCodes::BadDataValueType(format!(
+            other => Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Unsupported aggregate operation: {} for data type: {}",
                 stringify!($OP),
                 other,
@@ -50,7 +50,7 @@ macro_rules! dispatch_string_array {
         match $ARRAY.data_type() {
             DataType::Utf8 => $DISPATCH_M! {$ARRAY,StringArray,Utf8,$OP, $($opt,)*},
 
-            other => Err(ErrorCodes::BadDataValueType(format!(
+            other => Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Unsupported aggregate operation: {} for data type: {}",
                 stringify!($OP),
                 other,

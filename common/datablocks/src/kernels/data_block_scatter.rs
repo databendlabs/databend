@@ -4,7 +4,7 @@
 
 use common_datavalues::DataArrayScatter;
 use common_datavalues::DataColumnarValue;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataBlock;
@@ -39,7 +39,7 @@ impl DataBlock {
             for scattered_column in &scattered_columns[begin_index..end_index] {
                 match scattered_column {
                     None => {
-                        return Err(ErrorCodes::LogicalError(
+                        return Err(ErrorCode::LogicalError(
                             "Logical Error: scattered column is None.",
                         ));
                     }

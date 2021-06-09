@@ -13,16 +13,16 @@ use backtrace::Backtrace;
 use thiserror::Error;
 
 #[derive(Clone)]
-pub enum ErrorCodesBacktrace {
+pub enum ErrorCodeBacktrace {
     Serialized(Arc<String>),
     Origin(Arc<Backtrace>),
 }
 
-impl ToString for ErrorCodesBacktrace {
+impl ToString for ErrorCodeBacktrace {
     fn to_string(&self) -> String {
         match self {
-            ErrorCodesBacktrace::Serialized(backtrace) => Arc::as_ref(backtrace).clone(),
-            ErrorCodesBacktrace::Origin(backtrace) => {
+            ErrorCodeBacktrace::Serialized(backtrace) => Arc::as_ref(backtrace).clone(),
+            ErrorCodeBacktrace::Origin(backtrace) => {
                 format!("{:?}", backtrace)
             }
         }
@@ -30,16 +30,16 @@ impl ToString for ErrorCodesBacktrace {
 }
 
 #[derive(Error)]
-pub struct ErrorCodes {
+pub struct ErrorCode {
     code: u16,
     display_text: String,
     // cause is only used to contain an `anyhow::Error`.
     // TODO: remove `cause` when we completely get rid of `anyhow::Error`.
     cause: Option<Box<dyn std::error::Error + Sync + Send>>,
-    backtrace: Option<ErrorCodesBacktrace>,
+    backtrace: Option<ErrorCodeBacktrace>,
 }
 
-impl ErrorCodes {
+impl ErrorCode {
     pub fn code(&self) -> u16 {
         self.code
     }
@@ -51,7 +51,7 @@ impl ErrorCodes {
             .unwrap_or_else(|| self.display_text.clone())
     }
 
-    pub fn backtrace(&self) -> Option<ErrorCodesBacktrace> {
+    pub fn backtrace(&self) -> Option<ErrorCodeBacktrace> {
         self.backtrace.clone()
     }
 
@@ -72,14 +72,14 @@ macro_rules! as_item {
 macro_rules! build_exceptions {
     ($($body:tt($code:expr)),*) => {
         as_item! {
-            impl ErrorCodes {
+            impl ErrorCode {
                 $(
-                pub fn $body(display_text: impl Into<String>) -> ErrorCodes {
-                    ErrorCodes {
+                pub fn $body(display_text: impl Into<String>) -> ErrorCode {
+                    ErrorCode {
                         code:$code,
                         display_text: display_text.into(),
                         cause: None,
-                        backtrace: Some(ErrorCodesBacktrace::Origin(Arc::new(Backtrace::new()))),
+                        backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
                     }
                 })*
             }
@@ -140,9 +140,9 @@ build_exceptions! {
     FileDamaged(2002)
 }
 
-pub type Result<T> = std::result::Result<T, ErrorCodes>;
+pub type Result<T> = std::result::Result<T, ErrorCode>;
 
-impl Debug for ErrorCodes {
+impl Debug for ErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -156,15 +156,15 @@ impl Debug for ErrorCodes {
             Some(backtrace) => {
                 // TODO: Custom stack frame format for print
                 match backtrace {
-                    ErrorCodesBacktrace::Origin(backtrace) => write!(f, "\n\n{:?}", backtrace),
-                    ErrorCodesBacktrace::Serialized(backtrace) => write!(f, "\n\n{:?}", backtrace),
+                    ErrorCodeBacktrace::Origin(backtrace) => write!(f, "\n\n{:?}", backtrace),
+                    ErrorCodeBacktrace::Serialized(backtrace) => write!(f, "\n\n{:?}", backtrace),
                 }
             }
         }
     }
 }
 
-impl Display for ErrorCodes {
+impl Display for ErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -196,9 +196,9 @@ impl Debug for OtherErrors {
     }
 }
 
-impl From<anyhow::Error> for ErrorCodes {
+impl From<anyhow::Error> for ErrorCode {
     fn from(error: anyhow::Error) -> Self {
-        ErrorCodes {
+        ErrorCode {
             code: 1002,
             display_text: String::from(""),
             cause: Some(Box::new(OtherErrors::AnyHow { error })),
@@ -207,58 +207,58 @@ impl From<anyhow::Error> for ErrorCodes {
     }
 }
 
-impl From<std::num::ParseIntError> for ErrorCodes {
+impl From<std::num::ParseIntError> for ErrorCode {
     fn from(error: std::num::ParseIntError) -> Self {
-        ErrorCodes::from_std_error(error)
+        ErrorCode::from_std_error(error)
     }
 }
 
-impl From<std::num::ParseFloatError> for ErrorCodes {
+impl From<std::num::ParseFloatError> for ErrorCode {
     fn from(error: std::num::ParseFloatError) -> Self {
-        ErrorCodes::from_std_error(error)
+        ErrorCode::from_std_error(error)
     }
 }
 
-impl From<common_arrow::arrow::error::ArrowError> for ErrorCodes {
+impl From<common_arrow::arrow::error::ArrowError> for ErrorCode {
     fn from(error: common_arrow::arrow::error::ArrowError) -> Self {
-        ErrorCodes::from_std_error(error)
+        ErrorCode::from_std_error(error)
     }
 }
 
-impl From<serde_json::Error> for ErrorCodes {
+impl From<serde_json::Error> for ErrorCode {
     fn from(error: serde_json::Error) -> Self {
-        ErrorCodes::from_std_error(error)
+        ErrorCode::from_std_error(error)
     }
 }
 
-impl From<sqlparser::parser::ParserError> for ErrorCodes {
+impl From<sqlparser::parser::ParserError> for ErrorCode {
     fn from(error: sqlparser::parser::ParserError) -> Self {
-        ErrorCodes::from_std_error(error)
+        ErrorCode::from_std_error(error)
     }
 }
 
-impl From<std::io::Error> for ErrorCodes {
+impl From<std::io::Error> for ErrorCode {
     fn from(error: std::io::Error) -> Self {
-        ErrorCodes::from_std_error(error)
+        ErrorCode::from_std_error(error)
     }
 }
 
-impl ErrorCodes {
+impl ErrorCode {
     pub fn from_std_error<T: std::error::Error>(error: T) -> Self {
-        ErrorCodes {
+        ErrorCode {
             code: 1002,
             display_text: format!("{}", error),
             cause: None,
-            backtrace: Some(ErrorCodesBacktrace::Origin(Arc::new(Backtrace::new()))),
+            backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
         }
     }
 
     pub fn create(
         code: u16,
         display_text: String,
-        backtrace: Option<ErrorCodesBacktrace>,
-    ) -> ErrorCodes {
-        ErrorCodes {
+        backtrace: Option<ErrorCodeBacktrace>,
+    ) -> ErrorCode {
+        ErrorCode {
             code,
             display_text,
             cause: None,
@@ -270,37 +270,37 @@ impl ErrorCodes {
 /// Provides the `map_err_to_code` method for `Result`.
 ///
 /// ```
-/// use common_exception::ToErrorCodes;
-/// use common_exception::ErrorCodes;
+/// use common_exception::ToErrorCode;
+/// use common_exception::ErrorCode;
 ///
 /// let x: std::result::Result<(), std::fmt::Error> = Err(std::fmt::Error {});
 /// let y: common_exception::Result<()> =
-///     x.map_err_to_code(ErrorCodes::UnknownException, || 123);
+///     x.map_err_to_code(ErrorCode::UnknownException, || 123);
 ///
 /// assert_eq!(
 ///     "Code: 1000, displayText = 123, cause: an error occurred when formatting an argument.",
 ///     format!("{}", y.unwrap_err())
 /// );
 /// ```
-pub trait ToErrorCodes<T, E, CtxFn> {
-    /// Wrap the error value with ErrorCodes that is evaluated lazily
+pub trait ToErrorCode<T, E, CtxFn> {
+    /// Wrap the error value with ErrorCode that is evaluated lazily
     /// only once an error does occur.
     ///
-    /// `err_code_fn` is one of the ErrorCodes builder function such as `ErrorCodes::Ok`.
-    /// `context_fn` builds display_text for the ErrorCodes.
+    /// `err_code_fn` is one of the ErrorCode builder function such as `ErrorCode::Ok`.
+    /// `context_fn` builds display_text for the ErrorCode.
     fn map_err_to_code<ErrFn, D>(self, err_code_fn: ErrFn, context_fn: CtxFn) -> Result<T>
     where
-        ErrFn: FnOnce(String) -> ErrorCodes,
+        ErrFn: FnOnce(String) -> ErrorCode,
         D: Display,
         CtxFn: FnOnce() -> D;
 }
 
-impl<T, E, CtxFn> ToErrorCodes<T, E, CtxFn> for std::result::Result<T, E>
+impl<T, E, CtxFn> ToErrorCode<T, E, CtxFn> for std::result::Result<T, E>
 where E: std::error::Error + Send + Sync + 'static
 {
     fn map_err_to_code<ErrFn, D>(self, make_exception: ErrFn, context_fn: CtxFn) -> Result<T>
     where
-        ErrFn: FnOnce(String) -> ErrorCodes,
+        ErrFn: FnOnce(String) -> ErrorCode,
         D: Display,
         CtxFn: FnOnce() -> D,
     {

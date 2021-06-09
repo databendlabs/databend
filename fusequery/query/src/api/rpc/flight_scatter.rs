@@ -10,7 +10,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 
@@ -41,6 +41,7 @@ impl FlightScatterByHash {
 
         let output_name = indices_expression_action.column_name();
         let expression_executor = ExpressionExecutor::try_create(
+            "indices expression in FlightScatterByHash",
             schema,
             DataSchemaRefExt::create(vec![DataField::new(&output_name, DataType::UInt64, false)]),
             vec![indices_expression_action],
@@ -61,7 +62,7 @@ impl FlightScatterByHash {
             .execute(data_block)?
             .column_by_name(&self.scatter_expression_name)
         {
-            None => Result::Err(ErrorCodes::LogicalError(
+            None => Result::Err(ErrorCode::LogicalError(
                 "Logical error: expression executor error.",
             )),
             Some(indices) => DataBlock::scatter_block(data_block, indices, self.scattered_size),

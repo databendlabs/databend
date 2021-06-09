@@ -10,7 +10,7 @@ use common_arrow::arrow::datatypes::SchemaRef;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::FlightData;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_planners::PlanNode;
@@ -143,7 +143,7 @@ impl FlightDispatcher {
                 schema: info.schema.clone(),
                 stream_name: id.to_string(),
             }),
-            None => Err(ErrorCodes::NotFoundStream(format!(
+            None => Err(ErrorCode::NotFoundStream(format!(
                 "Stream {} is not found",
                 id
             ))),
@@ -153,7 +153,7 @@ impl FlightDispatcher {
     async fn get_schema(state: &mut DispatcherState, id: &str) -> Result<DataSchemaRef> {
         match state.streams.get(&id.to_string()) {
             Some(stream_info) => Ok(stream_info.schema.clone()),
-            None => Err(ErrorCodes::NotFoundStream(format!(
+            None => Err(ErrorCode::NotFoundStream(format!(
                 "Stream {} is not found",
                 id
             ))),
@@ -162,18 +162,18 @@ impl FlightDispatcher {
 
     async fn do_get_stream(state: &mut DispatcherState, id: &str) -> Result<DataReceiver> {
         match state.streams.get_mut(&id.to_string()) {
-            None => Err(ErrorCodes::NotFoundStream(format!(
+            None => Err(ErrorCode::NotFoundStream(format!(
                 "Stream {} is not found",
                 id
             ))),
             Some(stream_info) => match stream_info.data_receiver.take() {
-                None => Err(ErrorCodes::DuplicateGetStream(format!(
+                None => Err(ErrorCode::DuplicateGetStream(format!(
                     "Stream {} has been fetched once",
                     id
                 ))),
                 Some(receiver) => match stream_info.launcher_sender.send(()).await {
                     Ok(_) => Ok(receiver),
-                    Err(error) => Err(ErrorCodes::TokioError(format!(
+                    Err(error) => Err(ErrorCode::TokioError(format!(
                         "Cannot launch query stage: {}",
                         error
                     ))),
@@ -218,7 +218,7 @@ impl FlightDispatcher {
             {
                 for sender in &streams_data_sender {
                     let clone_error =
-                        ErrorCodes::create(error.code(), error.message(), error.backtrace());
+                        ErrorCode::create(error.code(), error.message(), error.backtrace());
 
                     if sender.send(Err(clone_error)).await.is_err() {
                         error!("Cannot push: {}", error);
@@ -280,7 +280,7 @@ impl FlightDispatcher {
                 let normalized_flight_data = dicts.into_iter().chain(std::iter::once(values));
                 for flight_data in normalized_flight_data {
                     if let Err(error) = (&senders[0]).send(Ok(flight_data)).await {
-                        return Err(ErrorCodes::TokioError(format!(
+                        return Err(ErrorCode::TokioError(format!(
                             "Cannot push data to sender: {}",
                             error
                         )));
@@ -308,7 +308,7 @@ impl FlightDispatcher {
 
                         for flight_data in normalized_flight_data {
                             if let Err(error) = (&senders[index]).send(Ok(flight_data)).await {
-                                return Err(ErrorCodes::TokioError(format!(
+                                return Err(ErrorCode::TokioError(format!(
                                     "Cannot push data to sender: {}",
                                     error
                                 )));

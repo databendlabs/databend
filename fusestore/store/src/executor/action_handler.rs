@@ -63,8 +63,8 @@ impl ActionHandler {
         }
     }
 
-    /// Handle pull-file reqeust, which is used internally for replicating data copies.
-    /// In FuseStore impl there is no internal file id etc, thus replication use the same `key` in communacation with FuseQuery as in internal replication.
+    /// Handle pull-file request, which is used internally for replicating data copies.
+    /// In FuseStore impl there is no internal file id etc, thus replication use the same `key` in communication with FuseQuery as in internal replication.
     pub async fn do_pull_file(
         &self,
         key: String,
@@ -73,7 +73,7 @@ impl ActionHandler {
         // TODO: stream read if the file is too large.
         let buf = self
             .fs
-            .read_all(key)
+            .read_all(&key)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
@@ -251,7 +251,7 @@ impl ActionHandler {
             anyhow::bail!("invalid PlanNode passed in")
         };
 
-        let content = self.fs.read_all(part_file.to_string()).await?;
+        let content = self.fs.read_all(&part_file).await?;
         let cursor = SliceableCursor::new(content);
 
         let file_reader = SerializedFileReader::new(cursor)?;

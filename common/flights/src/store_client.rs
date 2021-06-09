@@ -18,7 +18,7 @@ use common_arrow::arrow_flight::BasicAuth;
 use common_arrow::arrow_flight::HandshakeRequest;
 use common_arrow::arrow_flight::Ticket;
 use common_datablocks::DataBlock;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -196,9 +196,9 @@ impl StoreClient {
         req.set_timeout(self.timeout);
         let res = self.client.do_get(req).await?.into_inner();
         let res_stream = res.map(move |item| {
-            item.map_err(|status| ErrorCodes::TokioError(status.to_string()))
+            item.map_err(|status| ErrorCode::TokioError(status.to_string()))
                 .and_then(|item| {
-                    flight_data_to_arrow_batch(&item, schema.clone(), &[]).map_err(ErrorCodes::from)
+                    flight_data_to_arrow_batch(&item, schema.clone(), &[]).map_err(ErrorCode::from)
                 })
                 .and_then(DataBlock::try_from)
         });

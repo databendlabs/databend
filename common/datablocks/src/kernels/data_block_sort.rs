@@ -4,7 +4,7 @@
 
 use common_arrow::arrow::compute;
 use common_datavalues::DataArrayMerge;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataBlock;
@@ -99,7 +99,7 @@ impl DataBlock {
         limit: Option<usize>,
     ) -> Result<DataBlock> {
         match blocks.len() {
-            0 => Result::Err(ErrorCodes::EmptyData("Can't merge empty blocks")),
+            0 => Result::Err(ErrorCode::EmptyData("Can't merge empty blocks")),
             1 => Ok(blocks[0].clone()),
             2 => DataBlock::merge_sort_block(
                 &blocks[0],

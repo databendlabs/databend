@@ -8,11 +8,12 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use common_streams::SortStream;
+use common_tracing::tracing;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
@@ -59,6 +60,8 @@ impl IProcessor for SortPartialTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        tracing::info!("execute...");
+
         Ok(Box::pin(SortStream::try_create(
             self.input.execute().await?,
             get_sort_descriptions(&self.schema, &self.exprs)?,
@@ -87,7 +90,7 @@ pub fn get_sort_descriptions(
                 });
             }
             _ => {
-                return Result::Err(ErrorCodes::BadTransformType(format!(
+                return Result::Err(ErrorCode::BadTransformType(format!(
                     "Sort expression must be ExpressionPlan::Sort, but got: {:?}",
                     x
                 )));

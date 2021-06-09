@@ -9,8 +9,9 @@ use std::path::PathBuf;
 use anyhow::Context;
 use async_trait::async_trait;
 use common_exception::exception;
-use common_exception::ErrorCodes;
-use common_exception::ToErrorCodes;
+use common_exception::ErrorCode;
+use common_exception::ToErrorCode;
+use common_tracing::tracing;
 
 use crate::fs::IFileSystem;
 use crate::fs::ListResult;
@@ -32,9 +33,9 @@ impl LocalFS {
 #[async_trait]
 impl IFileSystem for LocalFS {
     #[tracing::instrument(level = "debug", skip(self, data))]
-    async fn add(&self, path: String, data: &[u8]) -> anyhow::Result<()> {
+    async fn add(&self, path: &str, data: &[u8]) -> anyhow::Result<()> {
         // TODO: test atomicity: write temp file and rename it
-        let p = Path::new(self.root.as_path()).join(&path);
+        let p = Path::new(self.root.as_path()).join(path);
         let mut an = p.ancestors();
         let _tail = an.next();
         let base = an.next();
@@ -59,19 +60,19 @@ impl IFileSystem for LocalFS {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn read_all(&self, path: String) -> exception::Result<Vec<u8>> {
-        let p = Path::new(self.root.as_path()).join(&path);
+    async fn read_all(&self, path: &str) -> exception::Result<Vec<u8>> {
+        let p = Path::new(self.root.as_path()).join(path);
         tracing::info!("read: {}", p.as_path().display());
 
-        let data = std::fs::read(p.as_path()).map_err_to_code(ErrorCodes::FileDamaged, || {
+        let data = std::fs::read(p.as_path()).map_err_to_code(ErrorCode::FileDamaged, || {
             format!("localfs: fail to read: {:?}", path)
         })?;
         Ok(data)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn list(&self, path: String) -> anyhow::Result<ListResult> {
-        let p = Path::new(self.root.as_path()).join(&path);
+    async fn list(&self, path: &str) -> anyhow::Result<ListResult> {
+        let p = Path::new(self.root.as_path()).join(path);
         let entries = std::fs::read_dir(p.as_path())
             .with_context(|| format!("LocalFS: fail to list {}", path))?;
 

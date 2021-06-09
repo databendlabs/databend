@@ -2,13 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::fmt;
+
 use common_aggregate_functions::AggregateFunctionFactory;
 use common_aggregate_functions::IAggregateFunction;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::CastFunction;
 use common_functions::FunctionFactory;
@@ -16,7 +18,7 @@ use common_functions::IFunction;
 
 use crate::Expression;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum ExpressionAction {
     /// Column which must be in input.
     Input(ActionInput),
@@ -24,6 +26,25 @@ pub enum ExpressionAction {
     Constant(ActionConstant),
     Alias(ActionAlias),
     Function(ActionFunction),
+}
+
+impl fmt::Debug for ExpressionAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ExpressionAction::Input(v) => {
+                write!(f, "INPUT {:?}", v.name)
+            }
+            ExpressionAction::Constant(v) => {
+                write!(f, "CONSTANT {:?}", v.name)
+            }
+            ExpressionAction::Alias(v) => {
+                write!(f, "ALIAS {:?}", v.name)
+            }
+            ExpressionAction::Function(v) => {
+                write!(f, "FUNCTION {:?}", v.name)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -241,7 +262,7 @@ impl ExpressionAction {
 impl ActionFunction {
     pub fn to_function(&self) -> Result<Box<dyn IFunction>> {
         if self.is_aggregated {
-            return Err(ErrorCodes::LogicalError(
+            return Err(ErrorCode::LogicalError(
                 "Action must be non-aggregated function",
             ));
         }
@@ -254,7 +275,7 @@ impl ActionFunction {
 
     pub fn to_aggregate_function(&self) -> Result<Box<dyn IAggregateFunction>> {
         if !self.is_aggregated {
-            return Err(ErrorCodes::LogicalError(
+            return Err(ErrorCode::LogicalError(
                 "Action must be aggregated function",
             ));
         }
