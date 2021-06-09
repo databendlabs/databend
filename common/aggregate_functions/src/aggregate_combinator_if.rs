@@ -6,7 +6,7 @@ use std::any::Any;
 use std::fmt;
 
 use common_datavalues::*;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::aggregate_function_factory::FactoryFunc;
@@ -33,7 +33,7 @@ impl AggregateIfCombinator {
         let argument_len = arguments.len();
 
         if argument_len == 0 {
-            return Err(ErrorCodes::NumberArgumentsNotMatch(format!(
+            return Err(ErrorCode::NumberArgumentsNotMatch(format!(
                 "{} expect to have more than one argument",
                 name
             )));
@@ -42,7 +42,7 @@ impl AggregateIfCombinator {
         match arguments[argument_len - 1].data_type() {
             DataType::Boolean => {}
             other => {
-                return Err(ErrorCodes::BadArguments(format!(
+                return Err(ErrorCode::BadArguments(format!(
                     "The type of the last argument for {} must be boolean type, but got {:?}",
                     name, other
                 )));

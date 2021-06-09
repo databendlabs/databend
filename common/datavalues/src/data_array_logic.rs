@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::BooleanArray;
@@ -30,7 +30,7 @@ impl DataArrayLogic {
                     array_boolean_op!(left_array, right_array, or, BooleanArray)
                 }
             }
-            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+            _ => Result::Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Cannot do data_array {}, left:{:?}, right:{:?}",
                 op,
                 left.data_type(),
@@ -45,7 +45,7 @@ impl DataArrayLogic {
             DataColumnarValue::Array(array) => {
                 let arr = downcast_array!(array, BooleanArray)?;
                 Ok(Arc::new(
-                    common_arrow::arrow::compute::not(arr).map_err(ErrorCodes::from)?,
+                    common_arrow::arrow::compute::not(arr).map_err(ErrorCode::from)?,
                 ))
             }
             DataColumnarValue::Constant(v, size) => match v {
@@ -85,7 +85,7 @@ impl DataArrayLogic {
                     let vb = DataValue::Boolean(Some(!(*vi)));
                     Ok(DataColumnarValue::Constant(vb, *size).to_array()?)
                 }
-                _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+                _ => Result::Err(ErrorCode::BadDataValueType(format!(
                     "DataValue Error: Cannot do negation for val:{:?}",
                     val
                 ))),

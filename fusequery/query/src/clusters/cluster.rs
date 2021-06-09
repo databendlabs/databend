@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Arc;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_flights::DNSResolver;
 use common_infallible::Mutex;
@@ -50,7 +50,7 @@ impl Cluster {
         let new_node_sequence = nodes.len();
 
         match nodes.entry(name.to_string()) {
-            Occupied(_) => Err(ErrorCodes::DuplicateClusterNode(format!(
+            Occupied(_) => Err(ErrorCode::DuplicateClusterNode(format!(
                 "The node \"{}\" already exists in the cluster",
                 name
             ))),
@@ -71,7 +71,7 @@ impl Cluster {
     pub fn remove_node(&self, name: String) -> Result<()> {
         match self.nodes.lock().remove(&*name) {
             Some(_) => Ok(()),
-            None => Err(ErrorCodes::NotFoundClusterNode(format!(
+            None => Err(ErrorCode::NotFoundClusterNode(format!(
                 "The node \"{}\" not found in the cluster",
                 name
             ))),
@@ -84,7 +84,7 @@ impl Cluster {
             .get(&name)
             .map(Clone::clone)
             .ok_or_else(|| {
-                ErrorCodes::NotFoundClusterNode(format!(
+                ErrorCode::NotFoundClusterNode(format!(
                     "The node \"{}\" not found in the cluster",
                     name
                 ))
@@ -111,7 +111,7 @@ async fn is_local(address: &Address, expect_port: u16) -> Result<bool> {
     match address {
         Address::SocketAddress(socket_addr) => is_local_impl(&socket_addr.ip()),
         Address::Named((host, _)) => match DNSResolver::instance()?.resolve(host.as_str()).await {
-            Err(error) => Result::Err(ErrorCodes::DnsParseError(format!(
+            Err(error) => Result::Err(ErrorCode::DnsParseError(format!(
                 "DNS resolver lookup error: {}",
                 error
             ))),

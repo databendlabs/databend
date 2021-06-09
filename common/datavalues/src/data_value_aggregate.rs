@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataValue;
@@ -26,7 +26,7 @@ impl DataValueAggregate {
                 DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, Int8, i8),
                 DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(1))),
                 _ => {
-                    Result::Err(ErrorCodes::BadDataValueType(
+                    Result::Err(ErrorCode::BadDataValueType(
                         format!(
                             "DataValue Error: Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                             op,
@@ -42,7 +42,7 @@ impl DataValueAggregate {
                 DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, Int16, i16),
                 DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(1))),
                 _ => {
-                    Result::Err(ErrorCodes::BadDataValueType(
+                    Result::Err(ErrorCode::BadDataValueType(
                         format!(
                             "DataValue Error: Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                             op,
@@ -58,7 +58,7 @@ impl DataValueAggregate {
                 DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, Int32, i32),
                 DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(1))),
                 _ => {
-                    Result::Err(ErrorCodes::BadDataValueType(
+                    Result::Err(ErrorCode::BadDataValueType(
                         format!(
                             "DataValue Error: Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                             op,
@@ -74,7 +74,7 @@ impl DataValueAggregate {
                 DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, Int64, i64),
                 DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(1))),
                 _ => {
-                    Result::Err(ErrorCodes::BadDataValueType(
+                    Result::Err(ErrorCode::BadDataValueType(
                         format!(
                             "DataValue Error: Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                             op,
@@ -90,7 +90,7 @@ impl DataValueAggregate {
                 DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, UInt8, u8),
                 DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(1))),
                 _ => {
-                    Result::Err(ErrorCodes::BadDataValueType(
+                    Result::Err(ErrorCode::BadDataValueType(
                         format!(
                             "DataValue Error: Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                             op,
@@ -106,7 +106,7 @@ impl DataValueAggregate {
                 DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, UInt16, u16),
                 DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(1))),
                 _ => {
-                    Result::Err(ErrorCodes::BadDataValueType(
+                    Result::Err(ErrorCode::BadDataValueType(
                         format!(
                             "DataValue Error: Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                             op,
@@ -122,7 +122,7 @@ impl DataValueAggregate {
                 DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, UInt32, u32),
                 DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(1))),
                 _ => {
-                    Result::Err(ErrorCodes::BadDataValueType(
+                    Result::Err(ErrorCode::BadDataValueType(
                         format!(
                             "DataValue Error: Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                             op,
@@ -138,7 +138,7 @@ impl DataValueAggregate {
                 DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, UInt64, u64),
                 DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(1))),
                 _ => {
-                    Result::Err(ErrorCodes::BadDataValueType(
+                    Result::Err(ErrorCode::BadDataValueType(
                         format!(
                             "DataValue Error: Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                             op,
@@ -154,7 +154,7 @@ impl DataValueAggregate {
                 DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, Float32, f32),
                 DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(1))),
                 _ => {
-                    Result::Err(ErrorCodes::BadDataValueType(
+                    Result::Err(ErrorCode::BadDataValueType(
                         format!(
                             "DataValue Error: Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                             op,
@@ -170,7 +170,7 @@ impl DataValueAggregate {
                 DataValueAggregateOperator::Sum => typed_data_value_add!(lhs, rhs, Float64, f64),
                 DataValueAggregateOperator::Count => Result::Ok(DataValue::UInt64(Some(1))),
                 _ => {
-                    Result::Err(ErrorCodes::BadDataValueType(
+                    Result::Err(ErrorCode::BadDataValueType(
                         format!(
                             "DataValue Error: Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                             op,
@@ -184,7 +184,7 @@ impl DataValueAggregate {
                 DataValueAggregateOperator::Min => typed_data_value_min_max_string!(lhs, rhs, Utf8, min),
                 DataValueAggregateOperator::Max => typed_data_value_min_max_string!(lhs, rhs, Utf8, max),
                 _ => {
-                    Result::Err(ErrorCodes::BadDataValueType(
+                    Result::Err(ErrorCode::BadDataValueType(
                         format!(
                             "DataValue Error: Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                             op,
@@ -195,7 +195,7 @@ impl DataValueAggregate {
                 }
             },
             _ => {
-                Result::Err(ErrorCodes::BadDataValueType(
+                Result::Err(ErrorCode::BadDataValueType(
                     format!(
                         "DataValue Error: Unsupported data_value_{} for data type: left:{:?}, right:{:?}",
                         op,

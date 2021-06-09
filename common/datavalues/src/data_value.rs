@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::datatypes::*;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
@@ -261,7 +261,7 @@ impl DataValue {
                     Ok(Arc::new(build_list!(Float64Builder, Float64, values, size)))
                 }
                 DataType::Utf8 => Ok(Arc::new(build_list!(StringBuilder, Utf8, values, size))),
-                other => Result::Err(ErrorCodes::BadDataValueType(format!(
+                other => Result::Err(ErrorCode::BadDataValueType(format!(
                     "Unexpected type:{} for DataValue List",
                     other
                 ))),
@@ -281,7 +281,7 @@ impl DataValue {
                 }
                 Ok(Arc::new(StructArray::from(array)))
             }
-            other => Result::Err(ErrorCodes::BadDataValueType(format!(
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error: DataValue to array cannot be {:?}",
                 other
             ))),
@@ -302,7 +302,7 @@ typed_cast_from_data_value_to_std!(Float64, f64);
 typed_cast_from_data_value_to_std!(Boolean, bool);
 
 impl TryFrom<&DataType> for DataValue {
-    type Error = ErrorCodes;
+    type Error = ErrorCode;
 
     fn try_from(data_type: &DataType) -> Result<Self> {
         match data_type {
@@ -330,7 +330,7 @@ impl TryFrom<&DataType> for DataValue {
             DataType::Timestamp(TimeUnit::Nanosecond, _) => {
                 Ok(DataValue::TimestampNanosecond(None))
             }
-            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+            _ => Result::Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Unsupported try_from() for data type: {:?}",
                 data_type
             ))),

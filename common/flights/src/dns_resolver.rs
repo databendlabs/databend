@@ -11,7 +11,7 @@ use std::task;
 use std::task::Poll;
 use std::time::Duration;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use hyper::client::connect::dns::Name;
 use hyper::client::HttpConnector;
@@ -29,7 +29,7 @@ pub struct DNSResolver {
 lazy_static! {
     static ref INSTANCE: Result<Arc<DNSResolver>> = {
         match TokioAsyncResolver::tokio_from_system_conf() {
-            Err(error) => Result::Err(ErrorCodes::DnsParseError(format!(
+            Err(error) => Result::Err(ErrorCode::DnsParseError(format!(
                 "DNS resolver create error: {}",
                 error
             ))),
@@ -42,7 +42,7 @@ impl DNSResolver {
     pub fn instance() -> Result<Arc<DNSResolver>> {
         match INSTANCE.as_ref() {
             Ok(resolver) => Ok(resolver.clone()),
-            Err(error) => Err(ErrorCodes::create(
+            Err(error) => Err(ErrorCode::create(
                 error.code(),
                 error.message(),
                 error.backtrace(),
@@ -54,7 +54,7 @@ impl DNSResolver {
         let hostname = hostname.into();
         match self.inner.lookup_ip(hostname.clone()).await {
             Ok(lookup_ip) => Ok(lookup_ip.iter().collect::<Vec<_>>()),
-            Err(error) => Err(ErrorCodes::DnsParseError(format!(
+            Err(error) => Err(ErrorCode::DnsParseError(format!(
                 "Cannot lookup ip {} : {}",
                 hostname, error
             ))),
@@ -67,7 +67,7 @@ struct DNSService;
 
 impl Service<Name> for DNSService {
     type Response = DNSServiceAddrs;
-    type Error = ErrorCodes;
+    type Error = ErrorCode;
     type Future = DNSServiceFuture;
 
     fn poll_ready(&mut self, _cx: &mut task::Context<'_>) -> Poll<Result<()>> {
@@ -112,7 +112,7 @@ impl Future for DNSServiceFuture {
         Pin::new(&mut self.inner).poll(cx).map(|res| match res {
             Ok(Err(err)) => Err(err),
             Ok(Ok(addrs)) => Ok(addrs),
-            Err(join_err) => Err(ErrorCodes::TokioError(format!(
+            Err(join_err) => Err(ErrorCode::TokioError(format!(
                 "Interrupted future: {}",
                 join_err
             ))),
@@ -128,7 +128,7 @@ impl ConnectionFactory {
         timeout: Option<Duration>,
     ) -> Result<Channel> {
         match format!("http://{}", addr.to_string()).parse::<Uri>() {
-            Err(error) => Result::Err(ErrorCodes::BadAddressFormat(format!(
+            Err(error) => Result::Err(ErrorCode::BadAddressFormat(format!(
                 "Node address format is not parse: {}",
                 error
             ))),
@@ -146,7 +146,7 @@ impl ConnectionFactory {
 
                 match endpoint.connect_with_connector(inner_connector).await {
                     Ok(channel) => Result::Ok(channel),
-                    Err(error) => Result::Err(ErrorCodes::CannotConnectNode(format!(
+                    Err(error) => Result::Err(ErrorCode::CannotConnectNode(format!(
                         "Cannot to RPC server: {}",
                         error
                     ))),

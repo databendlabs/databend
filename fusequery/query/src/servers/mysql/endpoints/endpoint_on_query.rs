@@ -9,7 +9,7 @@ use common_arrow::arrow::util::display::array_value_to_string;
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use log::debug;
 use log::error;
@@ -45,7 +45,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
                 DataType::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
                 DataType::Date32 => Ok(ColumnType::MYSQL_TYPE_TIMESTAMP),
                 DataType::Date64 => Ok(ColumnType::MYSQL_TYPE_TIMESTAMP),
-                _ => Err(ErrorCodes::UnImplement(format!(
+                _ => Err(ErrorCode::UnImplement(format!(
                     "Unsupported column type:{:?}",
                     field.data_type()
                 ))),
@@ -91,7 +91,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
         }
     }
 
-    fn err(error: ErrorCodes, writer: QueryResultWriter<'a, T>) -> Result<()> {
+    fn err(error: ErrorCode, writer: QueryResultWriter<'a, T>) -> Result<()> {
         error!("OnQuery Error: {:?}", error);
         writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())?;
 

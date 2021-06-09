@@ -10,7 +10,7 @@ use std::fmt;
 use common_arrow::arrow::array::Array;
 use common_datavalues::downcast_array;
 use common_datavalues::*;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_binary_arguments;

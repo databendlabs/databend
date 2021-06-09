@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 
@@ -34,7 +34,7 @@ impl InterpreterFactory {
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx, v),
             PlanNode::InsertInto(v) => InsertIntoInterpreter::try_create(ctx, v),
-            _ => Result::Err(ErrorCodes::UnknownTypeOfQuery(format!(
+            _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan:{}",
                 plan.name()
             ))),

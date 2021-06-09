@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
@@ -124,9 +124,9 @@ impl Config {
     /// Load configs from toml file.
     pub fn load_from_toml(file: &str) -> Result<Self> {
         let context = std::fs::read_to_string(file)
-            .map_err(|e| ErrorCodes::CannotReadFile(format!("File: {}, err: {:?}", file, e)))?;
+            .map_err(|e| ErrorCode::CannotReadFile(format!("File: {}, err: {:?}", file, e)))?;
         let mut cfg = Config::from_args_with_toml(context.as_str())
-            .map_err(|e| ErrorCodes::BadArguments(format!("{:?}", e)))?;
+            .map_err(|e| ErrorCode::BadArguments(format!("{:?}", e)))?;
         if cfg.num_cpus == 0 {
             cfg.num_cpus = num_cpus::get() as u64;
         }

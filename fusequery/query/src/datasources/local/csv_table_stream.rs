@@ -10,7 +10,7 @@ use anyhow::Context;
 use common_arrow::arrow::csv;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::Stream;
 
@@ -46,7 +46,7 @@ impl CsvTableStream {
 
         let file = File::open(self.file.clone())
             .with_context(|| format!("Failed to read csv file:{}", self.file.clone()))
-            .map_err(ErrorCodes::from)?;
+            .map_err(ErrorCode::from)?;
         let mut reader: csv::Reader<File> = csv::Reader::new(
             file,
             self.schema.clone(),
@@ -61,7 +61,7 @@ impl CsvTableStream {
             .next()
             .map(|record| {
                 record
-                    .map_err(ErrorCodes::from)
+                    .map_err(ErrorCode::from)
                     .and_then(|record| record.try_into())
             })
             .map(|data_block| data_block.map(Some))

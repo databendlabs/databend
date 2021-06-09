@@ -5,7 +5,7 @@
 use std::any::Any;
 
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::InsertIntoPlan;
 use common_planners::ReadDataSourcePlan;
@@ -38,7 +38,7 @@ pub trait ITable: Sync + Send {
         _ctx: FuseQueryContextRef,
         _insert_plan: InsertIntoPlan,
     ) -> Result<()> {
-        Err(ErrorCodes::UnImplement(format!(
+        Err(ErrorCode::UnImplement(format!(
             "append data for local table {} is not implemented",
             self.name()
         )))

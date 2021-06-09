@@ -9,7 +9,7 @@ use std::convert::TryFrom;
 use std::fmt;
 
 use common_datavalues::*;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::aggregate_function_factory::FactoryFunc;
@@ -133,7 +133,7 @@ impl IAggregateFunction for AggregateDistinctCombinator {
             .iter()
             .map(|value| match value {
                 DataValue::List(Some(values), _) => Ok(values),
-                _ => Err(ErrorCodes::BadDataValueType(format!(
+                _ => Err(ErrorCode::BadDataValueType(format!(
                     "Unexpceted accumulate state type: {}",
                     value.data_type()
                 ))),

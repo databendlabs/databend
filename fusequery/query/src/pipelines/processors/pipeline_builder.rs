@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
@@ -89,7 +89,7 @@ impl PipelineBuilder {
                     PipelineBuilder::visit_limit_by_plan(&mut pipeline, plan)
                 }
                 PlanNode::ReadSource(plan) => self.visit_read_data_source_plan(&mut pipeline, plan),
-                other => Result::Err(ErrorCodes::UnknownPlan(format!(
+                other => Result::Err(ErrorCode::UnknownPlan(format!(
                     "Build pipeline from the plan node unsupported:{:?}",
                     other.name()
                 ))),
@@ -101,7 +101,7 @@ impl PipelineBuilder {
     }
 
     fn visit_stage_plan(&self, _: &mut Pipeline, _: &&StagePlan) -> Result<bool> {
-        Result::Err(ErrorCodes::LogicalError(
+        Result::Err(ErrorCode::LogicalError(
             "Logical Error: visit_stage_plan in pipeline_builder",
         ))
     }

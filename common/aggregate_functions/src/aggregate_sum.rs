@@ -7,7 +7,7 @@ use std::convert::TryFrom;
 use std::fmt;
 
 use common_datavalues::*;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_unary_arguments;
@@ -112,7 +112,7 @@ impl AggregateSumFunction {
             DataType::Float32 => Ok(DataType::Float32),
             DataType::Float64 => Ok(DataType::Float64),
 
-            other => Err(ErrorCodes::BadDataValueType(format!(
+            other => Err(ErrorCode::BadDataValueType(format!(
                 "SUM does not support type '{:?}'",
                 other
             ))),

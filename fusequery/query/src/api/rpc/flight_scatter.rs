@@ -10,7 +10,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 
@@ -61,7 +61,7 @@ impl FlightScatterByHash {
             .execute(data_block)?
             .column_by_name(&self.scatter_expression_name)
         {
-            None => Result::Err(ErrorCodes::LogicalError(
+            None => Result::Err(ErrorCode::LogicalError(
                 "Logical error: expression executor error.",
             )),
             Some(indices) => DataBlock::scatter_block(data_block, indices, self.scattered_size),

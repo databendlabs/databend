@@ -7,7 +7,7 @@ use std::net;
 use std::time::Instant;
 
 use common_datablocks::DataBlock;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_ext::ResultExt;
 use common_ext::ResultTupleExt;
@@ -37,7 +37,7 @@ impl Session {
 }
 
 impl<W: io::Write> MysqlShim<W> for Session {
-    type Error = ErrorCodes;
+    type Error = ErrorCode;
 
     fn on_prepare(&mut self, _: &str, writer: StatementMetaWriter<W>) -> Result<()> {
         writer.error(
@@ -70,7 +70,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
-                .map_err(|tokio_error| ErrorCodes::TokioError(format!("{}", tokio_error)))
+                .map_err(|tokio_error| ErrorCode::TokioError(format!("{}", tokio_error)))
         }
 
         type ResultSet = Result<Vec<DataBlock>>;
