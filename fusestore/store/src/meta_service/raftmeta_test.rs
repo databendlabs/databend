@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use async_raft::ClientWriteError;
 use async_raft::RaftMetrics;
 use async_raft::State;
 use common_tracing::tracing;
@@ -191,7 +192,7 @@ async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_node_sync_to_non_voter() -> anyhow::Result<()> {
+async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
     // - Start a leader and a non-voter;
     // - Write to leader, check on non-voter.
 
@@ -201,6 +202,61 @@ async fn test_meta_node_sync_to_non_voter() -> anyhow::Result<()> {
     let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?;
 
     assert_set_file_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
+    // - Start a leader and a non-voter;
+    // - Write to the raft node on the leader, expect Ok.
+    // - Write to the raft node on the non-leader, expect ForwardToLeader error.
+
+    common_tracing::init_default_tracing();
+
+    let (_nid0, mn0) = setup_leader().await?;
+    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?; // follower
+    let (_nid2, mn2) = setup_non_voter(mn0.clone(), 2).await?; // follower
+    let (_nid3, mn3) = setup_non_voter(mn0.clone(), 3).await?; // non-voter
+
+    mn0.raft.change_membership(hashset![0, 1, 2]).await?;
+
+    let all = vec![mn0.clone(), mn1.clone(), mn2.clone(), mn3.clone()];
+
+    // ensure cluster works
+    assert_set_file_synced(all.clone(), "foo").await?;
+
+    let leader_id = mn0.raft.metrics().borrow().current_leader.unwrap();
+
+    // test writing to leader and non-leader
+    let key = "t-non-leader-write";
+    for id in 0u64..4 {
+        let mn = &all[id as usize];
+        let rst = mn
+            .write_to_local_leader(ClientRequest {
+                txid: None,
+                cmd: Cmd::SetFile {
+                    key: key.to_string(),
+                    value: key.to_string(),
+                },
+            })
+            .await;
+
+        if id == leader_id {
+            assert!(rst.is_ok());
+        } else {
+            assert!(rst.is_err());
+            let e = rst.unwrap_err();
+            match e {
+                ClientWriteError::RaftError(raft_err) => {
+                    panic!("unexpected: {:?}", raft_err);
+                }
+                ClientWriteError::ForwardToLeader(_req, leader) => {
+                    assert_eq!(Some(leader_id), leader);
+                }
+            }
+        }
+    }
 
     Ok(())
 }
