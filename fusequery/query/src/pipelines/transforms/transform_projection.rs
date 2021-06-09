@@ -29,7 +29,13 @@ impl ProjectionTransform {
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
     ) -> Result<Self> {
-        let executor = ExpressionExecutor::try_create(input_schema, output_schema, exprs, true)?;
+        let executor = ExpressionExecutor::try_create(
+            "projection executor",
+            input_schema,
+            output_schema,
+            exprs,
+            true,
+        )?;
 
         Ok(ProjectionTransform {
             executor: Arc::new(executor),

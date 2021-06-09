@@ -32,16 +32,16 @@ impl fmt::Debug for ExpressionAction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ExpressionAction::Input(v) => {
-                write!(f, "{:?}", v.name)
+                write!(f, "INPUT {:?}", v.name)
             }
             ExpressionAction::Constant(v) => {
-                write!(f, "{:?}", v.name)
+                write!(f, "CONSTANT {:?}", v.name)
             }
             ExpressionAction::Alias(v) => {
-                write!(f, "{:?}", v.name)
+                write!(f, "ALIAS {:?}", v.name)
             }
             ExpressionAction::Function(v) => {
-                write!(f, "{:?}", v.name)
+                write!(f, "FUNCTION {:?}", v.name)
             }
         }
     }

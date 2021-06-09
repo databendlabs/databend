@@ -37,6 +37,7 @@ impl FilterTransform {
         fields.push(predicate.to_data_field(&schema)?);
 
         let executor = ExpressionExecutor::try_create(
+            "filter executor",
             schema,
             DataSchemaRefExt::create(fields),
             vec![predicate.clone()],

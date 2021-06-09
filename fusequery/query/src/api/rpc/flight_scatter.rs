@@ -41,6 +41,7 @@ impl FlightScatterByHash {
 
         let output_name = indices_expression_action.column_name();
         let expression_executor = ExpressionExecutor::try_create(
+            "indices expression in FlightScatterByHash",
             schema,
             DataSchemaRefExt::create(vec![DataField::new(&output_name, DataType::UInt64, false)]),
             vec![indices_expression_action],
