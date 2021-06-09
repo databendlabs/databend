@@ -17,6 +17,7 @@ use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::data_array_cast;
 use crate::BinaryArray;
 use crate::BooleanArray;
 use crate::DataArrayRef;
@@ -286,6 +287,12 @@ impl DataValue {
                 other
             ))),
         }
+    }
+
+    pub fn cast(&self, to_type: &DataType) -> Result<Self> {
+        let array = self.to_array_with_size(1)?;
+        let cast_array = data_array_cast(&array, to_type)?;
+        Self::try_from_array(&cast_array, 0)
     }
 }
 
