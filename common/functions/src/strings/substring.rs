@@ -10,7 +10,7 @@ use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::UInt64Array;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::IFunction;
@@ -60,7 +60,7 @@ impl IFunction for SubstringFunction {
                 .unwrap()
                 .value(0)),
 
-            other => Err(ErrorCodes::BadArguments(format!(
+            other => Err(ErrorCode::BadArguments(format!(
                 "Unsupport datatype {:?} as argument",
                 other
             ))),
@@ -98,7 +98,7 @@ impl IFunction for SubstringFunction {
                 }
 
                 other => {
-                    return Err(ErrorCodes::BadArguments(format!(
+                    return Err(ErrorCode::BadArguments(format!(
                         "Unsupport datatype {:?} as argument",
                         other
                     )))

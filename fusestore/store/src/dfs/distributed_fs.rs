@@ -2,11 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::ops::Bound::Included;
+use std::ops::Bound::Unbounded;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_exception::exception;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 
 use crate::fs::IFileSystem;
 use crate::fs::ListResult;
@@ -42,17 +44,17 @@ impl Dfs {}
 #[async_trait]
 impl IFileSystem for Dfs {
     #[tracing::instrument(level = "debug", skip(self, data))]
-    async fn add(&self, path: String, data: &[u8]) -> anyhow::Result<()> {
+    async fn add(&self, path: &str, data: &[u8]) -> anyhow::Result<()> {
         // add the file to local fs
 
-        self.local_fs.add(path.clone(), data).await?;
+        self.local_fs.add(path, data).await?;
 
         // update meta, other store nodes will be informed about this change and then pull the data to complete replication.
 
         let req = ClientRequest {
             txid: None,
             cmd: Cmd::AddFile {
-                key: path,
+                key: path.to_string(),
                 value: "".into(),
             },
         };
@@ -61,38 +63,34 @@ impl IFileSystem for Dfs {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn read_all(&self, key: String) -> exception::Result<Vec<u8>> {
-        // TODO read from remove if file is not in local fs
+    async fn read_all(&self, key: &str) -> exception::Result<Vec<u8>> {
+        // TODO read from remote if file is not in local fs
         // TODO(xp): week consistency, meta may not have been replicated to this node.
 
         // meanwhile, file meta is empty string
-        let _file_meta = self.meta_node.get_file(&key).await.ok_or_else(|| {
-            ErrorCodes::FileMetaNotFound(format!("dfs/meta: key not found: {:?}", key))
+        let _file_meta = self.meta_node.get_file(key).await.ok_or_else(|| {
+            ErrorCode::FileMetaNotFound(format!("dfs/meta: key not found: {:?}", key))
         })?;
 
         self.local_fs.read_all(key).await
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn list(&self, path: String) -> anyhow::Result<ListResult> {
-        let _key = path;
+    async fn list(&self, prefix: &str) -> anyhow::Result<ListResult> {
+        let sm = self.meta_node.sto.get_state_machine().await;
+        let meta = &sm.meta;
 
-        // TODO read local meta cache to list
+        let mut files: Vec<String> = Vec::new();
+        for (k, _v) in meta.keys.range((Included(prefix.to_string()), Unbounded)) {
+            if !k.starts_with(prefix) {
+                break;
+            }
+            files.push(k.clone());
+        }
 
-        // let meta = self.meta.lock().await;
-        // let mut files = vec![];
-        // for (k, _v) in meta.keys.range(key.clone()..) {
-        //     if !k.starts_with(key.as_str()) {
-        //         break;
-        //     }
-        //     files.push(k.to_string());
-        // }
-
-        // Ok(ListResult {
-        //     dirs: vec![],
-        //     files,
-        // })
-
-        todo!("dirs and files")
+        Ok(ListResult {
+            dirs: vec![],
+            files,
+        })
     }
 }

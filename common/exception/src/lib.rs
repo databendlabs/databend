@@ -7,6 +7,6 @@ mod exception_test;
 
 pub mod exception;
 
-pub use exception::ErrorCodes;
+pub use exception::ErrorCode;
 pub use exception::Result;
-pub use exception::ToErrorCodes;
+pub use exception::ToErrorCode;

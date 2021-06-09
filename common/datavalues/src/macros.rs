@@ -8,7 +8,7 @@ macro_rules! downcast_array {
         if let Some(v) = $ARRAY.as_any().downcast_ref::<$TYPE>() {
             Result::Ok(v)
         } else {
-            Result::Err(ErrorCodes::BadDataValueType(format!(
+            Result::Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
                 ($ARRAY).data_type(),
                 stringify!($TYPE)
@@ -23,7 +23,7 @@ macro_rules! compute_op {
         let ll = downcast_array!($LEFT, $DT)?;
         let rr = downcast_array!($RIGHT, $DT)?;
         Ok(Arc::new(
-            common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCodes::from)?,
+            common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCode::from)?,
         ))
     }};
 }
@@ -35,18 +35,7 @@ macro_rules! compute_utf8_op {
         let rr = downcast_array!($RIGHT, $DT)?;
         Ok(Arc::new(
             (paste::expr! {common_arrow::arrow::compute::[<$OP _utf8>]}(&ll, &rr))
-                .map_err(ErrorCodes::from)?,
-        ))
-    }};
-}
-
-/// Invoke a self defined compute kernel on a pair of arrays
-macro_rules! compute_self_defined_op {
-    ($LEFT:expr, $RIGHT:expr, $OP:tt, $DT:ident) => {{
-        let ll = downcast_array!($LEFT, $DT)?;
-        let rr = downcast_array!($RIGHT, $DT)?;
-        Ok(Arc::new(
-            common_arrow::arrow::compute::math_op(&ll, &rr, $OP).map_err(ErrorCodes::from)?,
+                .map_err(ErrorCode::from)?,
         ))
     }};
 }
@@ -56,7 +45,7 @@ macro_rules! compute_negate {
     ($VALUE:expr, $DT:ident) => {{
         let vv = downcast_array!($VALUE, $DT)?;
         Ok(Arc::new(
-            common_arrow::arrow::compute::negate(&vv).map_err(ErrorCodes::from)?,
+            common_arrow::arrow::compute::negate(&vv).map_err(ErrorCode::from)?,
         ))
     }};
 }
@@ -77,33 +66,9 @@ macro_rules! arrow_primitive_array_op {
             DataType::UInt64 => compute_op!($LEFT, $RIGHT, $OP, UInt64Array),
             DataType::Float32 => compute_op!($LEFT, $RIGHT, $OP, Float32Array),
             DataType::Float64 => compute_op!($LEFT, $RIGHT, $OP, Float64Array),
-            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+            _ => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unsupported arithmetic_compute::{} for data type: {:?}",
                 stringify!($OP),
-                ($LEFT).data_type(),
-            ))),
-        }
-    };
-}
-
-/// Invoke a compute kernel on a pair of arrays
-/// The arrow_primitive_array_self_defined_op macro only evaluates for primitive types
-/// like integers and floats.
-macro_rules! arrow_primitive_array_self_defined_op {
-    ($LEFT:expr, $RIGHT:expr, $RESULT:expr, $OP:tt) => {
-        match $RESULT {
-            DataType::Int8 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Int8Array),
-            DataType::Int16 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Int16Array),
-            DataType::Int32 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Int32Array),
-            DataType::Int64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Int64Array),
-            DataType::UInt8 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt8Array),
-            DataType::UInt16 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt16Array),
-            DataType::UInt32 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt32Array),
-            DataType::UInt64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, UInt64Array),
-            DataType::Float32 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Float32Array),
-            DataType::Float64 => compute_self_defined_op!($LEFT, $RIGHT, $OP, Float64Array),
-            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
-                "Unsupported arithmetic_compute::math_op for data type: {:?}",
                 ($LEFT).data_type(),
             ))),
         }
@@ -126,7 +91,7 @@ macro_rules! arrow_array_op {
             DataType::Float32 => compute_op!($LEFT, $RIGHT, $OP, Float32Array),
             DataType::Float64 => compute_op!($LEFT, $RIGHT, $OP, Float64Array),
             DataType::Utf8 => compute_utf8_op!($LEFT, $RIGHT, $OP, StringArray),
-            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+            _ => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unsupported arithmetic_compute::{} for data type: {:?}",
                 stringify!($OP),
                 ($LEFT).data_type(),
@@ -147,7 +112,7 @@ macro_rules! arrow_primitive_array_negate {
             DataType::Int64 => compute_negate!($VALUE, Int64Array),
             DataType::Float32 => compute_negate!($VALUE, Float32Array),
             DataType::Float64 => compute_negate!($VALUE, Float64Array),
-            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+            _ => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unsupported arithmetic_compute::negate for data type: {:?}",
                 ($VALUE).data_type(),
             ))),
@@ -164,9 +129,9 @@ macro_rules! compute_op_scalar {
         Ok(Arc::new(
             (paste::expr! {common_arrow::arrow::compute::[<$OP _scalar>]}(
                 &ll,
-                $RIGHT.try_into().map_err(ErrorCodes::from)?,
+                $RIGHT.try_into().map_err(ErrorCode::from)?,
             ))
-            .map_err(ErrorCodes::from)?,
+            .map_err(ErrorCode::from)?,
         ))
     }};
 }
@@ -181,10 +146,10 @@ macro_rules! compute_utf8_op_scalar {
                     &ll,
                     &string_value,
                 ))
-                .map_err(ErrorCodes::from)?,
+                .map_err(ErrorCode::from)?,
             ))
         } else {
-            Result::Err(ErrorCodes::BadDataValueType(format!(
+            Result::Err(ErrorCode::BadDataValueType(format!(
                 "compute_utf8_op_scalar failed to cast literal value {}",
                 $RIGHT
             )))
@@ -208,7 +173,7 @@ macro_rules! arrow_array_op_scalar {
             DataType::Float32 => compute_op_scalar!($LEFT, $RIGHT, $OP, Float32Array),
             DataType::Float64 => compute_op_scalar!($LEFT, $RIGHT, $OP, Float64Array),
             DataType::Utf8 => compute_utf8_op_scalar!($LEFT, $RIGHT, $OP, StringArray),
-            other => Result::Err(ErrorCodes::BadDataValueType(format!(
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Unsupported data type {:?}",
                 other
             ))),
@@ -315,7 +280,7 @@ macro_rules! array_boolean_op {
         let ll = downcast_array!($LEFT, $DT)?;
         let rr = downcast_array!($RIGHT, $DT)?;
         Ok(Arc::new(
-            common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCodes::from)?,
+            common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCode::from)?,
         ))
     }};
 }
@@ -373,7 +338,7 @@ macro_rules! build_list {
                                 builder.values().append_null().unwrap();
                             }
                             _ => {
-                                return Result::Err(ErrorCodes::BadDataValueType(
+                                return Result::Err(ErrorCode::BadDataValueType(
                                     "Incompatible DataValue for list",
                                 ))
                             }
@@ -394,13 +359,13 @@ macro_rules! try_build_array {
         for scalar_value in $VALUES {
             match scalar_value {
                 DataValue::$SCALAR_TY(Some(v)) => {
-                    builder.append_value(v.clone()).map_err(ErrorCodes::from)?
+                    builder.append_value(v.clone()).map_err(ErrorCode::from)?
                 }
                 DataValue::$SCALAR_TY(None) => {
-                    builder.append_null().map_err(ErrorCodes::from)?;
+                    builder.append_null().map_err(ErrorCode::from)?;
                 }
                 _ => {
-                    return Result::Err(ErrorCodes::BadDataValueType(
+                    return Result::Err(ErrorCode::BadDataValueType(
                         "Incompatible DataValue for list",
                     ))
                 }

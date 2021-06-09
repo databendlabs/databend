@@ -6,7 +6,7 @@ use std::future::Future;
 use std::sync::mpsc;
 use std::thread;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
@@ -25,7 +25,7 @@ impl Runtime {
     fn create(builder: &mut tokio::runtime::Builder) -> Result<Self> {
         let runtime = builder
             .build()
-            .map_err(|tokio_error| ErrorCodes::TokioError(format!("{}", tokio_error)))?;
+            .map_err(|tokio_error| ErrorCode::TokioError(format!("{}", tokio_error)))?;
 
         let (send_stop, recv_stop) = oneshot::channel();
         let (tx, rx) = mpsc::channel();
@@ -43,7 +43,7 @@ impl Runtime {
 
         let handle = rx
             .recv()
-            .map_err(|e| ErrorCodes::UnknownException(format!("{}", e)))?;
+            .map_err(|e| ErrorCode::UnknownException(format!("{}", e)))?;
 
         Ok(Runtime {
             handle,

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datavalues::DataSchema;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::EmptyPlan;
 use common_planners::Partitions;
@@ -77,7 +77,7 @@ impl PlanScheduler {
 
         if let Some(stage_plan) = last_stage {
             if stage_plan.kind != StageKind::Convergent {
-                return Result::Err(ErrorCodes::PlanScheduleError(
+                return Result::Err(ErrorCode::PlanScheduleError(
                     "The final stage plan must be convergent",
                 ));
             }
@@ -86,7 +86,7 @@ impl PlanScheduler {
         let local_node = (&cluster_nodes).iter().find(|node| node.local);
 
         if local_node.is_none() {
-            return Result::Err(ErrorCodes::NotFoundLocalNode(
+            return Result::Err(ErrorCode::NotFoundLocalNode(
                 "The PlanScheduler must be in the query cluster",
             ));
         }
@@ -172,7 +172,7 @@ impl GetNodePlan for RemoteGetNodePlan {
                     }
                 }
 
-                Err(ErrorCodes::NotFoundLocalNode(
+                Err(ErrorCode::NotFoundLocalNode(
                     "The PlanScheduler must be in the query cluster",
                 ))
             }
@@ -198,7 +198,7 @@ impl GetNodePlan for LocalReadSourceGetNodePlan {
             .filter(|node| node.name == node_name && node.local)
             .count()
         {
-            0 => Result::Err(ErrorCodes::NotFoundLocalNode(
+            0 => Result::Err(ErrorCode::NotFoundLocalNode(
                 "The PlanScheduler must be in the query cluster",
             )),
             _ => Ok(PlanNode::ReadSource(self.0.clone())),
@@ -347,7 +347,7 @@ impl ExecutionPlanBuilder {
                     }
                 }
 
-                Result::Err(ErrorCodes::NotFoundLocalNode(
+                Result::Err(ErrorCode::NotFoundLocalNode(
                     "The PlanScheduler must be in the query cluster",
                 ))
             }

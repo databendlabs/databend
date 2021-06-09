@@ -8,7 +8,7 @@ use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
 use common_arrow::arrow_flight::FlightData;
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use tokio::sync::mpsc::Receiver;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::Stream;
@@ -23,10 +23,10 @@ impl FlightDataStream {
     pub fn from_remote(
         schema: SchemaRef,
         inner: Streaming<FlightData>,
-    ) -> impl Stream<Item = Result<DataBlock, ErrorCodes>> {
-        inner.map(move |flight_data| -> Result<DataBlock, ErrorCodes> {
+    ) -> impl Stream<Item = Result<DataBlock, ErrorCode>> {
+        inner.map(move |flight_data| -> Result<DataBlock, ErrorCode> {
             match flight_data {
-                Err(status) => Err(ErrorCodes::UnknownException(status.message())),
+                Err(status) => Err(ErrorCode::UnknownException(status.message())),
                 Ok(flight_data) => {
                     fn create_data_block(record_batch: RecordBatch) -> DataBlock {
                         let columns = record_batch
@@ -52,8 +52,8 @@ impl FlightDataStream {
     #[allow(dead_code)]
     pub fn from_receiver(
         schema: SchemaRef,
-        inner: Receiver<Result<FlightData, ErrorCodes>>,
-    ) -> impl Stream<Item = Result<DataBlock, ErrorCodes>> {
+        inner: Receiver<Result<FlightData, ErrorCode>>,
+    ) -> impl Stream<Item = Result<DataBlock, ErrorCode>> {
         ReceiverStream::new(inner).map(move |flight_data| match flight_data {
             Err(error_code) => Err(error_code),
             Ok(flight_data) => {

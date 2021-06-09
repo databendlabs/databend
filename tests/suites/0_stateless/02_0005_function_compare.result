@@ -16,3 +16,29 @@ SELECT number ,number-1 , number*100 , 1> 100 ,1 < 10 FROM numbers_mt (10) order
 |      8 |            7 |            800 |     false |     true |
 |      9 |            8 |            900 |     false |     true |
 +--------+--------------+----------------+-----------+----------+
+--------------
+select number from numbers_mt(10) where number  not between 4 + 0.1  and 8 - 0.1  order by number
+--------------
+
++--------+
+| number |
++--------+
+|      0 |
+|      1 |
+|      2 |
+|      3 |
+|      4 |
+|      8 |
+|      9 |
++--------+
+--------------
+select number from numbers_mt(10) where number   between 4 + 0.1  and 8 - 0.1  order by number
+--------------
+
++--------+
+| number |
++--------+
+|      5 |
+|      6 |
+|      7 |
++--------+

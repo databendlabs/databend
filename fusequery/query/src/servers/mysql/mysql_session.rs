@@ -7,7 +7,7 @@ use msql_srv::{ErrorKind, InitWriter, MysqlShim, ParamParser, QueryResultWriter,
 use tokio_stream::StreamExt;
 
 use common_datablocks::DataBlock;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
 
@@ -36,7 +36,7 @@ impl Session {
 }
 
 impl<W: io::Write> MysqlShim<W> for Session {
-    type Error = ErrorCodes;
+    type Error = ErrorCode;
 
     fn on_prepare(&mut self, _: &str, writer: StatementMetaWriter<W>) -> Result<()> {
         writer.error(
@@ -109,7 +109,7 @@ impl<W: io::Write> MysqlShim<W> for Session {
 pub struct RejectedSession;
 
 impl<W: io::Write> MysqlShim<W> for RejectedSession {
-    type Error = ErrorCodes;
+    type Error = ErrorCode;
 
     fn on_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {
         writer.error(ErrorKind::ER_TOO_MANY_USER_CONNECTIONS, "".as_bytes())?;

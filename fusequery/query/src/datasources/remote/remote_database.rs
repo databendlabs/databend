@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::CreateTablePlan;
@@ -53,7 +53,7 @@ impl IDatabase for RemoteDatabase {
             None =>
             // Depends on the degree of staleness we can tolerate ...
             {
-                Err(ErrorCodes::UnknownTable(_table_name))
+                Err(ErrorCode::UnknownTable(_table_name))
             }
         }
     }
@@ -73,7 +73,7 @@ impl IDatabase for RemoteDatabase {
             return if plan.if_not_exists {
                 Ok(())
             } else {
-                return Err(ErrorCodes::UnImplement(format!(
+                return Err(ErrorCode::UnImplement(format!(
                     "Table: '{}.{}' already exists.",
                     db_name, table_name
                 )));
@@ -104,7 +104,7 @@ impl IDatabase for RemoteDatabase {
             return if plan.if_exists {
                 Ok(())
             } else {
-                Err(ErrorCodes::UnknownTable(format!(
+                Err(ErrorCode::UnknownTable(format!(
                     "Unknown table: '{}.{}'",
                     plan.db, plan.table
                 )))

@@ -4,7 +4,7 @@
 
 use tokio::sync::mpsc::Sender;
 use common_exception::Result;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use tokio::task::JoinHandle;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -43,7 +43,7 @@ impl RunningServer {
         }
 
         if let Err(error) = join_handler.unwrap().await {
-            return Err(ErrorCodes::TokioError(format!(
+            return Err(ErrorCode::TokioError(format!(
                 "Cannot shutdown, because cannot to join runnable server: {}", error
             )));
         }

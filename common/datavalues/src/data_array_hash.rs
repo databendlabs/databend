@@ -42,7 +42,7 @@ use common_arrow::arrow::datatypes::UInt16Type;
 use common_arrow::arrow::datatypes::UInt32Type;
 use common_arrow::arrow::datatypes::UInt64Type;
 use common_arrow::arrow::datatypes::UInt8Type;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataArrayRef;
@@ -140,7 +140,7 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
             DataValue::IntervalYearMonth(Some(v)) => {
                 Ok(DataValue::UInt64(Some(Hasher::hash_i32(v))))
             }
-            _ => Result::Err(ErrorCodes::BadDataValueType(
+            _ => Result::Err(ErrorCode::BadDataValueType(
                 "DataArray Error: data_array_hash_with_array must be string or binary type.",
             )),
         }
@@ -226,7 +226,7 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
             DataType::LargeUtf8 => Self::dispatch_string_array::<i64>(input),
             DataType::Binary => Self::dispatch_binary_array(input),
             DataType::LargeBinary => Self::dispatch_large_binary_array(input),
-            _ => Result::Err(ErrorCodes::BadDataValueType(
+            _ => Result::Err(ErrorCode::BadDataValueType(
                 " DataArray Error: data_array_hash_with_array must be string or binary type.",
             )),
         }
@@ -241,7 +241,7 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
             .as_any()
             .downcast_ref::<PrimitiveArray<T>>()
             .ok_or_else(|| {
-                ErrorCodes::BadDataValueType(format!(
+                ErrorCode::BadDataValueType(format!(
                     "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
                     input.data_type(),
                     stringify!(PrimitiveArray<T>)
@@ -271,7 +271,7 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
             .as_any()
             .downcast_ref::<GenericStringArray<T>>()
             .ok_or_else(|| {
-                ErrorCodes::BadDataValueType(format!(
+                ErrorCode::BadDataValueType(format!(
                     "DataArray Error: Cannot downcast_array from datatype:{:?} item to:{}",
                     data.data_type(),
                     stringify!(GenericStringArray<T>)
@@ -298,7 +298,7 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
 
     fn dispatch_binary_array(data: &DataArrayRef) -> Result<DataArrayRef> {
         let binary_data = data.as_any().downcast_ref::<BinaryArray>().ok_or_else(|| {
-            ErrorCodes::BadDataValueType(format!(
+            ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
                 data.data_type(),
                 stringify!(BinaryArray)
@@ -328,7 +328,7 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
             .as_any()
             .downcast_ref::<LargeBinaryArray>()
             .ok_or_else(|| {
-                ErrorCodes::BadDataValueType(format!(
+                ErrorCode::BadDataValueType(format!(
                     "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
                     data.data_type(),
                     stringify!(LargeBinaryArray)

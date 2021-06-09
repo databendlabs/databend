@@ -5,7 +5,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
@@ -43,7 +43,7 @@ impl IProcessor for SourceTransform {
     }
 
     fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> Result<()> {
-        Result::Err(ErrorCodes::LogicalError(
+        Result::Err(ErrorCode::LogicalError(
             "Cannot call SourceTransform connect_to",
         ))
     }

@@ -47,7 +47,7 @@ use common_arrow::arrow::datatypes::UInt16Type;
 use common_arrow::arrow::datatypes::UInt32Type;
 use common_arrow::arrow::datatypes::UInt64Type;
 use common_arrow::arrow::datatypes::UInt8Type;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataArrayRef;
@@ -64,7 +64,7 @@ impl DataArrayScatter {
         nums: usize,
     ) -> Result<Vec<DataColumnarValue>> {
         if data.len() != indices.len() {
-            return Result::Err(ErrorCodes::BadDataArrayLength(format!(
+            return Result::Err(ErrorCode::BadDataArrayLength(format!(
                 "Selector requires data and indices to have the same number of arrays. data has {}, indices has {}.",
                 data.len(),
                 indices.len()
@@ -96,7 +96,7 @@ impl DataArrayScatter {
     ) -> Result<Vec<DataColumnarValue>> {
         let scatter_data = |index: usize| -> Result<Vec<DataColumnarValue>> {
             if index >= nums {
-                return Err(ErrorCodes::LogicalError(format!(
+                return Err(ErrorCode::LogicalError(format!(
                     "Logical error: the indices [{}] value greater than scatters size",
                     index
                 )));
@@ -124,7 +124,7 @@ impl DataArrayScatter {
             DataValue::UInt16(Some(v)) => *v as usize,
             DataValue::UInt32(Some(v)) => *v as usize,
             DataValue::UInt64(Some(v)) => *v as usize,
-            _ => return Err(ErrorCodes::BadDataValueType("")),
+            _ => return Err(ErrorCode::BadDataValueType("")),
         };
 
         scatter_data(v)
@@ -194,7 +194,7 @@ impl DataArrayScatter {
             DataType::LargeBinary => Self::scatter_large_binary_data(data, indices, nums),
             DataType::Utf8 => Self::scatter_string_data::<i32>(data, indices, nums),
             DataType::LargeUtf8 => Self::scatter_string_data::<i64>(data, indices, nums),
-            _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+            _ => Result::Err(ErrorCode::BadDataValueType(format!(
                 "DataType:{:?} does not implement scatter",
                 stringify!(PrimitiveArray<T>)
             ))),
@@ -211,7 +211,7 @@ impl DataArrayScatter {
             .as_any()
             .downcast_ref::<PrimitiveArray<T>>()
             .ok_or_else(|| {
-                ErrorCodes::BadDataValueType(format!(
+                ErrorCode::BadDataValueType(format!(
                     "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
                     data.data_type(),
                     stringify!(PrimitiveArray<T>)
@@ -272,7 +272,7 @@ impl DataArrayScatter {
         scattered_size: usize,
     ) -> Result<Vec<DataColumnarValue>> {
         let binary_data = data.as_any().downcast_ref::<BinaryArray>().ok_or_else(|| {
-            ErrorCodes::BadDataValueType(format!(
+            ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
                 data.data_type(),
                 stringify!(BinaryArray)
@@ -308,7 +308,7 @@ impl DataArrayScatter {
             .as_any()
             .downcast_ref::<LargeBinaryArray>()
             .ok_or_else(|| {
-                ErrorCodes::BadDataValueType(format!(
+                ErrorCode::BadDataValueType(format!(
                     "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
                     data.data_type(),
                     stringify!(LargeBinaryArray)
@@ -345,7 +345,7 @@ impl DataArrayScatter {
             .as_any()
             .downcast_ref::<GenericStringArray<T>>()
             .ok_or_else(|| {
-                ErrorCodes::BadDataValueType(format!(
+                ErrorCode::BadDataValueType(format!(
                     "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
                     data.data_type(),
                     stringify!(GenericStringArray<T>)

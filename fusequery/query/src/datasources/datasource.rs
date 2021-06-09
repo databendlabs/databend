@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::CreateDatabasePlan;
@@ -117,7 +117,7 @@ impl IDataSource for DataSource {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn IDatabase>> {
         let db_lock = self.databases.read();
         let database = db_lock.get(db_name).ok_or_else(|| {
-            ErrorCodes::UnknownDatabase(format!("Unknown database: '{}'", db_name))
+            ErrorCode::UnknownDatabase(format!("Unknown database: '{}'", db_name))
         })?;
         Ok(database.clone())
     }
@@ -133,7 +133,7 @@ impl IDataSource for DataSource {
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
         let db_lock = self.databases.read();
         let database = db_lock.get(db_name).ok_or_else(|| {
-            ErrorCodes::UnknownDatabase(format!("Unknown database: '{}'", db_name))
+            ErrorCode::UnknownDatabase(format!("Unknown database: '{}'", db_name))
         })?;
 
         let table = database.get_table(table_name)?;
@@ -142,7 +142,7 @@ impl IDataSource for DataSource {
 
     async fn get_remote_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn ITable>> {
         match self.get_table(db_name, table_name) {
-            Ok(t) if t.is_local() => Err(ErrorCodes::LogicalError(format!(
+            Ok(t) if t.is_local() => Err(ErrorCode::LogicalError(format!(
                 "local table {}.{} exists, which is used as remote",
                 db_name, table_name
             ))),
@@ -184,7 +184,7 @@ impl IDataSource for DataSource {
     fn get_table_function(&self, name: &str) -> Result<Arc<dyn ITableFunction>> {
         let table_func_lock = self.table_functions.read();
         let table = table_func_lock.get(name).ok_or_else(|| {
-            ErrorCodes::UnknownTableFunction(format!("Unknown table function: '{}'", name))
+            ErrorCode::UnknownTableFunction(format!("Unknown table function: '{}'", name))
         })?;
 
         Ok(table.clone())
@@ -196,7 +196,7 @@ impl IDataSource for DataSource {
             return if plan.if_not_exists {
                 Ok(())
             } else {
-                Err(ErrorCodes::UnknownDatabase(format!(
+                Err(ErrorCode::UnknownDatabase(format!(
                     "Database: '{}' already exists.",
                     plan.db
                 )))
@@ -234,7 +234,7 @@ impl IDataSource for DataSource {
             return if plan.if_exists {
                 Ok(())
             } else {
-                Err(ErrorCodes::UnknownDatabase(format!(
+                Err(ErrorCode::UnknownDatabase(format!(
                     "Unknown database: '{}'",
                     plan.db
                 )))

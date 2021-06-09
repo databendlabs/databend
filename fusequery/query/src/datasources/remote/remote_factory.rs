@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_flights::StoreClient;
 
@@ -57,7 +57,7 @@ impl IStoreClientProvider for ClientProvider {
             &self.conf.store_api_password,
         )
         .await
-        .map_err(ErrorCodes::from)?;
+        .map_err(ErrorCode::from)?;
         Ok(client)
     }
 }

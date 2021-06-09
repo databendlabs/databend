@@ -6,7 +6,7 @@ use std::cmp;
 
 use common_arrow::arrow::datatypes;
 use common_arrow::arrow::datatypes::DataType::*;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataValueArithmeticOperator;
@@ -60,7 +60,7 @@ pub fn numeric_byte_size(dt: &DataType) -> Result<usize> {
         DataType::Int16 | DataType::UInt16 | DataType::Float16 => Ok(2),
         DataType::Int32 | DataType::UInt32 | DataType::Float32 => Ok(4),
         DataType::Int64 | DataType::UInt64 | DataType::Float64 => Ok(8),
-        _ => Result::Err(ErrorCodes::BadArguments(
+        _ => Result::Err(ErrorCode::BadArguments(
             "Function number_byte_size argument must be numeric types",
         )),
     }
@@ -94,7 +94,7 @@ pub fn construct_numeric_type(
         (true, false, d) if d > 8 => Ok(DataType::UInt64),
         (_, true, d) if d > 8 => Ok(DataType::Float64),
 
-        _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+        _ => Result::Err(ErrorCode::BadDataValueType(format!(
             "Can't construct type from is_signed: {}, is_floating: {}, byte_size: {}",
             is_signed, is_floating, byte_size
         ))),
@@ -126,7 +126,7 @@ pub fn dictionary_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<D
         (_, DataType::Dictionary(_index_type, value_type)) => {
             dictionary_value_coercion(lhs_type, value_type)
         }
-        _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+        _ => Result::Err(ErrorCode::BadDataValueType(format!(
             "Can't construct type from {} and {}",
             lhs_type, rhs_type
         ))),
@@ -141,7 +141,7 @@ pub fn string_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataT
         (LargeUtf8, Utf8) => Ok(LargeUtf8),
         (Utf8, LargeUtf8) => Ok(LargeUtf8),
         (LargeUtf8, LargeUtf8) => Ok(LargeUtf8),
-        _ => Result::Err(ErrorCodes::BadDataValueType(format!(
+        _ => Result::Err(ErrorCode::BadDataValueType(format!(
             "Can't construct type from {} and {}",
             lhs_type, rhs_type
         ))),
@@ -236,7 +236,7 @@ pub fn numerical_arithmetic_coercion(
 ) -> Result<DataType> {
     // error on any non-numeric type
     if !is_numeric(lhs_type) || !is_numeric(rhs_type) {
-        return Result::Err(ErrorCodes::BadDataValueType(format!(
+        return Result::Err(ErrorCode::BadDataValueType(format!(
             "DataValue Error: Unsupported ({:?}) {} ({:?})",
             lhs_type, op, rhs_type
         )));
@@ -263,7 +263,7 @@ pub fn numerical_arithmetic_coercion(
 pub fn numerical_signed_coercion(val_type: &DataType) -> Result<DataType> {
     // error on any non-numeric type
     if !is_numeric(val_type) {
-        return Result::Err(ErrorCodes::BadDataValueType(format!(
+        return Result::Err(ErrorCode::BadDataValueType(format!(
             "DataValue Error: Unsupported ({:?})",
             val_type
         )));

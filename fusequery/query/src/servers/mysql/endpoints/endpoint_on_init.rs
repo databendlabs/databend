@@ -6,7 +6,7 @@ use msql_srv::*;
 
 use crate::servers::mysql::endpoints::IMySQLEndpoint;
 use common_exception::Result;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 
 pub struct MySQLOnInitEndpoint;
 
@@ -18,7 +18,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<InitWriter<'a, T>> for MySQLOnInitEnd
         Ok(())
     }
 
-    fn err(error: ErrorCodes, writer: InitWriter<'a, T>) -> Result<()> {
+    fn err(error: ErrorCode, writer: InitWriter<'a, T>) -> Result<()> {
         log::error!("OnInit Error: {:?}", error);
         writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())?;
         Ok(())

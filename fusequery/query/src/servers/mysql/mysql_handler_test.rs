@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::{Result, ErrorCodes, ToErrorCodes};
+use common_exception::{Result, ErrorCode, ToErrorCode};
 use crate::servers::{MySQLHandler, RunningServer};
 use crate::configs::Config;
 use crate::clusters::Cluster;
@@ -133,13 +133,13 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
 }
 
 fn query<T: FromRow>(connection: &mut Conn, query: &str) -> Result<Vec<T>> {
-    connection.query::<T, &str>(query).map_err_to_code(ErrorCodes::UnknownException, || "")
+    connection.query::<T, &str>(query).map_err_to_code(ErrorCode::UnknownException, || "")
 }
 
 fn create_connection(port: u16) -> Result<mysql::Conn> {
     let uri = &format!("mysql://127.0.0.1:{}", port);
     mysql::Conn::new(uri)
-        .map_err_to_code(ErrorCodes::UnknownException, || "Reject connection")
+        .map_err_to_code(ErrorCode::UnknownException, || "Reject connection")
 }
 
 struct EmptyRow;

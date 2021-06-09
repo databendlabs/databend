@@ -13,6 +13,9 @@ use futures::future::{Either, AbortHandle, Abortable};
 use futures::future::select;
 use futures::future::TryFutureExt;
 use futures::FutureExt;
+use common_datablocks::DataBlock;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use log::debug;
 use msql_srv::*;
 use threadpool::ThreadPool;
@@ -23,9 +26,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio_stream::StreamExt as OtherStreamExt;
 
 use common_arrow::parquet::data_type::AsBytes;
-use common_datablocks::DataBlock;
-use common_exception::{ErrorCodes, ToErrorCodes};
-use common_exception::Result;
+use common_exception::ToErrorCode;
 use common_ext::ResultExt;
 use common_ext::ResultTupleExt;
 use common_infallible::Mutex;
@@ -156,7 +157,7 @@ impl MySQLHandler {
     }
 
     fn accept_session(session: Session, stream: TcpStream, max_session: &Arc<Mutex<u64>>) -> Result<ActiveSession> {
-        let stream = stream.into_std().map_err_to_code(ErrorCodes::TokioError, || "")?;
+        let stream = stream.into_std().map_err_to_code(ErrorCode::TokioError, || "")?;
         stream.set_nonblocking(false)?;
         let max_session = max_session.clone();
         let join_handler = std::thread::spawn(move || {

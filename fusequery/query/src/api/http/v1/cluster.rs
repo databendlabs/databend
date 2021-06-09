@@ -5,7 +5,7 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use warp::reject::Reject;
 use warp::Filter;
 
@@ -75,7 +75,7 @@ mod handlers {
     use log::info;
 
     use crate::api::http::v1::cluster::ClusterNodeRequest;
-    use crate::api::http::v1::cluster::NoBacktraceErrorCodes;
+    use crate::api::http::v1::cluster::NoBacktraceErrorCode;
     use crate::clusters::ClusterRef;
 
     pub async fn list_node(
@@ -99,7 +99,7 @@ mod handlers {
                 "".to_string(),
                 warp::http::StatusCode::OK,
             )),
-            Err(error_codes) => Err(warp::reject::custom(NoBacktraceErrorCodes(error_codes))),
+            Err(error_codes) => Err(warp::reject::custom(NoBacktraceErrorCode(error_codes))),
         }
     }
 
@@ -114,12 +114,12 @@ mod handlers {
     }
 }
 
-struct NoBacktraceErrorCodes(ErrorCodes);
+struct NoBacktraceErrorCode(ErrorCode);
 
-impl Debug for NoBacktraceErrorCodes {
+impl Debug for NoBacktraceErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl Reject for NoBacktraceErrorCodes {}
+impl Reject for NoBacktraceErrorCode {}

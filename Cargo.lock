@@ -102,10 +102,9 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
 name = "arrow"
-version = "4.2.0"
-source = "git+https://github.com/apache/arrow-rs?tag=4.2.0#cd95d7ce13c349da8e76a781a28ec7161ed4165a"
+version = "5.0.0-SNAPSHOT"
+source = "git+https://github.com/apache/arrow-rs?rev=0a165748c924b3752cc00ff86e56917427985872#0a165748c924b3752cc00ff86e56917427985872"
 dependencies = [
- "cfg_aliases",
  "chrono",
  "csv",
  "flatbuffers",
@@ -115,6 +114,7 @@ dependencies = [
  "lexical-core",
  "multiversion",
  "num",
+ "packed_simd_2",
  "rand 0.7.3",
  "regex",
  "serde",
@@ -124,8 +124,8 @@ dependencies = [
 
 [[package]]
 name = "arrow-flight"
-version = "4.2.0"
-source = "git+https://github.com/apache/arrow-rs?tag=4.2.0#cd95d7ce13c349da8e76a781a28ec7161ed4165a"
+version = "5.0.0-SNAPSHOT"
+source = "git+https://github.com/apache/arrow-rs?rev=0a165748c924b3752cc00ff86e56917427985872#0a165748c924b3752cc00ff86e56917427985872"
 dependencies = [
  "arrow",
  "bytes 1.0.1",
@@ -223,9 +223,9 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
 name = "backtrace"
-version = "0.3.59"
+version = "0.3.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4717cfcbfaa661a0fd48f8453951837ae7e8f81e481fbb136e3202d72805a744"
+checksum = "b7815ea54e4d821e791162e078acbebfd6d8c8939cd559c9335dceb1c8ca7282"
 dependencies = [
  "addr2line",
  "cc",
@@ -487,12 +487,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
-name = "cfg_aliases"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
-
-[[package]]
 name = "chrono"
 version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -623,7 +617,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-arrow",
- "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-infallible",
@@ -669,6 +662,7 @@ dependencies = [
  "anyhow",
  "common-arrow",
  "common-exception",
+ "ordered-float 2.5.1",
  "paste",
  "pretty_assertions",
  "serde",
@@ -757,7 +751,6 @@ name = "common-progress"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "common-infallible",
  "pretty_assertions",
 ]
 
@@ -767,7 +760,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-exception",
- "futures",
  "tokio",
 ]
 
@@ -780,7 +772,6 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-functions",
  "common-progress",
  "crossbeam 0.8.1",
  "futures",
@@ -1888,9 +1879,9 @@ checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
-version = "0.14.8"
+version = "0.14.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3f71a7eea53a3f8257a7b4795373ff886397178cd634430ea94e12d7fe4fe34"
+checksum = "07d6baa1b441335f3ce5098ac421fb6547c46dda735ca1bc6d0153c838f9dd83"
 dependencies = [
  "bytes 1.0.1",
  "futures-channel",
@@ -1902,7 +1893,7 @@ dependencies = [
  "httparse",
  "httpdate",
  "itoa",
- "pin-project",
+ "pin-project-lite",
  "socket2 0.4.0",
  "tokio",
  "tower-service",
@@ -2129,6 +2120,12 @@ dependencies = [
  "libz-sys",
  "pkg-config",
 ]
+
+[[package]]
+name = "libm"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fc7aa29613bd6a620df431842069224d8bc9011086b1db4c0e0cd47fa03ec9a"
 
 [[package]]
 name = "libm"
@@ -2410,8 +2407,8 @@ dependencies = [
 
 [[package]]
 name = "msql-srv"
-version = "0.9.3"
-source = "git+https://github.com/datafuse-extras/msql-srv?rev=76b8ae3#76b8ae360080942127805ea469f322552ed53177"
+version = "0.9.5"
+source = "git+https://github.com/datafuse-extras/msql-srv?rev=5a7ae3d#5a7ae3d6ce9da91427a7ddd2ac029108f5eca990"
 dependencies = [
  "byteorder",
  "chrono",
@@ -2671,7 +2668,7 @@ dependencies = [
  "autocfg 0.1.7",
  "byteorder",
  "lazy_static",
- "libm",
+ "libm 0.2.1",
  "num-integer",
  "num-iter",
  "num-traits",
@@ -2729,7 +2726,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a64b1ec5cda2586e284722486d802acf1f7dbdc623e2bfc57e65ca1cd099290"
 dependencies = [
  "autocfg 1.0.1",
- "libm",
+ "libm 0.2.1",
 ]
 
 [[package]]
@@ -2744,9 +2741,12 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.24.0"
+version = "0.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a5b3dd1c072ee7963717671d1ca129f1048fda25edea6b752bfc71ac8854170"
+checksum = "f8bc1d42047cf336f0f939c99e97183cf31551bf0f2865a2ec9c8d91fd4ffb5e"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "once_cell"
@@ -2844,6 +2844,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "packed_simd_2"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e64858a2d3733fdd61adfdd6da89aa202f7ff0e741d2fc7ed1e452ba9dc99d7"
+dependencies = [
+ "cfg-if 0.1.10",
+ "libm 0.1.4",
+]
+
+[[package]]
 name = "parking_lot"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2870,8 +2880,8 @@ dependencies = [
 
 [[package]]
 name = "parquet"
-version = "4.2.0"
-source = "git+https://github.com/apache/arrow-rs?tag=4.2.0#cd95d7ce13c349da8e76a781a28ec7161ed4165a"
+version = "5.0.0-SNAPSHOT"
+source = "git+https://github.com/apache/arrow-rs?rev=0a165748c924b3752cc00ff86e56917427985872#0a165748c924b3752cc00ff86e56917427985872"
 dependencies = [
  "arrow",
  "base64 0.13.0",
@@ -3885,9 +3895,8 @@ dependencies = [
 
 [[package]]
 name = "sqlparser"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fa863a2dfc4879a35647c51dadf495a2ad53745eaf3723fda27006e745fb0ba"
+version = "0.9.1-alpha.0"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=35ef0ee#35ef0eee3857c59827b2587bc813218a00dce264"
 dependencies = [
  "log 0.4.14",
 ]

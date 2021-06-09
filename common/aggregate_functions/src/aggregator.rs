@@ -4,11 +4,14 @@
 
 use common_exception::Result;
 
+use crate::aggregate_function_factory::FactoryCombinatorFuncRef;
 use crate::aggregate_function_factory::FactoryFuncRef;
 use crate::AggregateArgMaxFunction;
 use crate::AggregateArgMinFunction;
 use crate::AggregateAvgFunction;
 use crate::AggregateCountFunction;
+use crate::AggregateDistinctCombinator;
+use crate::AggregateIfCombinator;
 use crate::AggregateMaxFunction;
 use crate::AggregateMinFunction;
 use crate::AggregateSumFunction;
@@ -26,6 +29,17 @@ impl AggregatorFunction {
         map.insert("avg", AggregateAvgFunction::try_create);
         map.insert("argmin", AggregateArgMinFunction::try_create);
         map.insert("argmax", AggregateArgMaxFunction::try_create);
+
+        map.insert("uniq", AggregateDistinctCombinator::try_create_uniq);
+
+        Ok(())
+    }
+
+    pub fn register_combinator(map: FactoryCombinatorFuncRef) -> Result<()> {
+        let mut map = map.write();
+        map.insert("distinct", AggregateDistinctCombinator::try_create);
+        map.insert("if", AggregateIfCombinator::try_create);
+
         Ok(())
     }
 }

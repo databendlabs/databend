@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::AggregatorFinalPlan;
@@ -141,7 +141,7 @@ impl PlanNode {
 
     pub fn set_inputs(&mut self, inputs: Vec<&PlanNode>) -> Result<()> {
         if inputs.is_empty() {
-            return Result::Err(ErrorCodes::BadPlanInputs("Inputs must not be empty"));
+            return Result::Err(ErrorCode::BadPlanInputs("Inputs must not be empty"));
         }
 
         match self {
@@ -157,7 +157,7 @@ impl PlanNode {
             PlanNode::Select(v) => v.set_input(inputs[0]),
             PlanNode::Sort(v) => v.set_input(inputs[0]),
             _ => {
-                return Err(ErrorCodes::UnImplement(format!(
+                return Err(ErrorCode::UnImplement(format!(
                     "UnImplement set_inputs for {:?}",
                     self
                 )));

@@ -8,7 +8,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::CastFunction;
 use common_functions::FunctionFactory;
@@ -181,20 +181,13 @@ impl ExpressionChain {
                 self.actions.push(ExpressionAction::Function(function));
             }
 
-            Expression::AggregateFunction { op, args } => {
-                let mut fields = Vec::with_capacity(args.len());
-
-                for expr in args.iter() {
-                    self.add_expr(expr)?;
-                    fields.push(expr.to_data_field(&self.schema)?)
+            Expression::AggregateFunction { op, args, .. } => {
+                let mut arg_fields = Vec::with_capacity(args.len());
+                for arg in args.iter() {
+                    arg_fields.push(arg.to_data_field(&self.schema)?);
                 }
 
-                let func = AggregateFunctionFactory::get(op, fields)?;
-                let arg_fields = args
-                    .iter()
-                    .map(|action| action.to_data_field(&self.schema))
-                    .collect::<Result<Vec<_>>>()?;
-
+                let func = expr.to_aggregate_function(&self.schema)?;
                 let function = ActionFunction {
                     name: expr.column_name(),
                     func_name: op.clone(),
@@ -248,7 +241,7 @@ impl ExpressionAction {
 impl ActionFunction {
     pub fn to_function(&self) -> Result<Box<dyn IFunction>> {
         if self.is_aggregated {
-            return Err(ErrorCodes::LogicalError(
+            return Err(ErrorCode::LogicalError(
                 "Action must be non-aggregated function",
             ));
         }
@@ -261,7 +254,7 @@ impl ActionFunction {
 
     pub fn to_aggregate_function(&self) -> Result<Box<dyn IAggregateFunction>> {
         if !self.is_aggregated {
-            return Err(ErrorCodes::LogicalError(
+            return Err(ErrorCode::LogicalError(
                 "Action must be aggregated function",
             ));
         }

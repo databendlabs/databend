@@ -12,7 +12,7 @@ use common_datavalues::DataArrayRef;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::pretty_format_blocks;
@@ -120,7 +120,7 @@ impl DataBlock {
 }
 
 impl TryFrom<DataBlock> for RecordBatch {
-    type Error = ErrorCodes;
+    type Error = ErrorCode;
 
     fn try_from(v: DataBlock) -> Result<RecordBatch> {
         let columns = v
@@ -133,7 +133,7 @@ impl TryFrom<DataBlock> for RecordBatch {
 }
 
 impl TryFrom<arrow::record_batch::RecordBatch> for DataBlock {
-    type Error = ErrorCodes;
+    type Error = ErrorCode;
 
     fn try_from(v: arrow::record_batch::RecordBatch) -> Result<DataBlock> {
         Ok(DataBlock::create_by_array(

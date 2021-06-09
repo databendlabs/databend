@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
@@ -39,7 +39,7 @@ impl CsvTable {
         let has_header = options.get("has_header").is_some();
         let file = match options.get("location") {
             None => {
-                return Result::Err(ErrorCodes::BadOption(
+                return Result::Err(ErrorCode::BadOption(
                     "CSV Engine must contains file location options",
                 ));
             }
@@ -89,9 +89,9 @@ impl ITable for CsvTable {
         let lines_count = Common::count_lines(
             File::open(file.clone())
                 .with_context(|| format!("Cannot find file:{}", file))
-                .map_err(ErrorCodes::from)?,
+                .map_err(ErrorCode::from)?,
         )
-        .map_err(|e| ErrorCodes::CannotReadFile(e.to_string()))?;
+        .map_err(|e| ErrorCode::CannotReadFile(e.to_string()))?;
 
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),

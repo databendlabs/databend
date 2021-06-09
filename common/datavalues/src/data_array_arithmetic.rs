@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::data_array_cast;
@@ -64,12 +64,7 @@ impl DataArrayArithmetic {
                 arrow_primitive_array_op!(&left_array, &right_array, &coercion_type, divide)
             }
             DataValueArithmeticOperator::Modulo => {
-                arrow_primitive_array_self_defined_op!(
-                    &left_array,
-                    &right_array,
-                    &coercion_type,
-                    (|a, b| a % b)
-                )
+                arrow_primitive_array_op!(&left_array, &right_array, &coercion_type, modulus)
             }
         }
     }
@@ -94,7 +89,7 @@ impl DataArrayArithmetic {
                 arrow_primitive_array_negate!(&value_array, &coercion_type)
             }
             // @todo support other unary operation
-            _ => Result::Err(ErrorCodes::BadArguments(format!(
+            _ => Result::Err(ErrorCode::BadArguments(format!(
                 "Unsupported unary operation: {:?} as argument",
                 op
             ))),

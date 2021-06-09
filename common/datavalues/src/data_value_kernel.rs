@@ -4,7 +4,7 @@
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::datatypes::*;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataArrayRef;
@@ -137,7 +137,7 @@ impl DataValue {
                     Self::dictionary_create_key_for_col::<UInt64Type>(&col, row, vec)?;
                 }
                 _ => {
-                    return Result::Err(ErrorCodes::BadDataValueType(
+                    return Result::Err(ErrorCode::BadDataValueType(
                         format!(
                             "Unsupported key type (dictionary index type not supported creating key) {}",
                             col.data_type(),
@@ -147,7 +147,7 @@ impl DataValue {
             },
             _ => {
                 // This is internal because we should have caught this before.
-                return Result::Err(ErrorCodes::BadDataValueType(format!(
+                return Result::Err(ErrorCode::BadDataValueType(format!(
                     "Unsupported the col type creating key {}",
                     col.data_type()
                 )));
@@ -167,13 +167,13 @@ impl DataValue {
         // look up the index in the values dictionary
         let keys_col = dict_col.keys_array();
         let values_index = keys_col.value(row).to_usize().ok_or_else(|| {
-            ErrorCodes::BadDataValueType(format!(
+            ErrorCode::BadDataValueType(format!(
                 "Can not convert index to usize in dictionary of type creating group by value {:?}",
                 keys_col.data_type()
             ))
         })?;
 
-        let col = DataColumnarValue::Array(dict_col.values());
+        let col = DataColumnarValue::Array(dict_col.values().clone());
         Self::concat_row_to_one_key(&col, values_index, vec)
     }
 
@@ -191,7 +191,7 @@ impl DataValue {
             DataType::Float32 => try_build_array!(Float32Builder, Float32, values),
             DataType::Float64 => try_build_array!(Float64Builder, Float64, values),
             DataType::Utf8 => try_build_array!(StringBuilder, Utf8, values),
-            other => Result::Err(ErrorCodes::BadDataValueType(format!(
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unexpected type:{} for DataValue List",
                 other
             ))),
@@ -289,7 +289,7 @@ impl DataValue {
                 let list_array = array
                     .as_any()
                     .downcast_ref::<ListArray>()
-                    .ok_or_else(|| ErrorCodes::LogicalError("Failed to downcast ListArray"))?;
+                    .ok_or_else(|| ErrorCode::LogicalError("Failed to downcast ListArray"))?;
                 let value = match list_array.is_null(index) {
                     true => None,
                     false => {
@@ -306,14 +306,14 @@ impl DataValue {
                 let strut_array = array
                     .as_any()
                     .downcast_ref::<StructArray>()
-                    .ok_or_else(|| ErrorCodes::LogicalError("Failed to downcast StructArray"))?;
+                    .ok_or_else(|| ErrorCode::LogicalError("Failed to downcast StructArray"))?;
                 let nested_array = strut_array.column(index);
                 let scalar_vec = (0..nested_array.len())
                     .map(|i| Self::try_from_array(&nested_array, i))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(DataValue::Struct(scalar_vec))
             }
-            other => Result::Err(ErrorCodes::BadDataValueType(format!(
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Can't create a functions of array of type \"{:?}\"",
                 other
             ))),

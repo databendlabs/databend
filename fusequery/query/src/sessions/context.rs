@@ -7,7 +7,7 @@ use std::future::Future;
 use std::sync::Arc;
 
 use common_datavalues::DataValue;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::Partition;
@@ -202,7 +202,7 @@ impl FuseQueryContext {
                 *self.current_database.write() = new_database_name.to_string();
             })
             .map_err(|_| {
-                ErrorCodes::UnknownDatabase(format!(
+                ErrorCode::UnknownDatabase(format!(
                     "Database {}  doesn't exist.",
                     new_database_name
                 ))
