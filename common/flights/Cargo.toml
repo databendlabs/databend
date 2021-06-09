@@ -20,7 +20,7 @@ common-streams = {path = "../streams"}
 # Crates.io dependencies
 anyhow = "1.0.40"
 futures = "0.3"
-jwt-simple = "0.10.0"
+jwt-simple = "0.10.1"
 log = "0.4"
 prost = "0.7"
 serde = { version = "1.0", features = ["derive"] }
