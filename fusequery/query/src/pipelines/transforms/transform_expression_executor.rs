@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
+use common_datavalues::DataValue;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
@@ -46,7 +47,7 @@ impl ExpressionExecutor {
         Ok(())
     }
 
-    pub fn execute(&self, block: &DataBlock) -> Result<DataBlock> {
+    pub fn execute(&self, block: &DataBlock, exists_res: Option<&HashMap<String, bool>>) -> Result<DataBlock> {
         let mut column_map: HashMap<String, DataColumnarValue> = HashMap::new();
 
         // a + 1 as b, a + 1 as c
@@ -60,6 +61,12 @@ impl ExpressionExecutor {
         }
 
         let rows = block.num_rows();
+        if let Some(map) = exists_res {
+            for (name, b) in map {
+                column_map.insert(name.to_string(), DataColumnarValue::Constant(DataValue::Boolean(Some(*b)), rows));
+            }
+        }
+
         for action in self.chain.actions.iter() {
             if let ExpressionAction::Alias(alias) = action {
                 if let Some(v) = alias_map.get_mut(&alias.arg_name) {
@@ -79,7 +86,6 @@ impl ExpressionExecutor {
                     column_map.insert(input.name.clone(), column);
                 }
                 ExpressionAction::Function(f) => {
-                    println!("f: {:?}", f);
                     // check if it's cached
                     let arg_columns = f
                         .arg_names
@@ -95,7 +101,6 @@ impl ExpressionExecutor {
 
                     let func = f.to_function()?;
                     let column = func.eval(&arg_columns, rows)?;
-
                     column_map.insert(f.name.clone(), column);
                 }
                 ExpressionAction::Constant(constant) => {

@@ -62,7 +62,7 @@ impl IProcessor for ProjectionTransform {
         let executor_fn =
             |executor: Arc<ExpressionExecutor>, block: Result<DataBlock>| -> Result<DataBlock> {
                 let block = block?;
-                executor.execute(&block)
+                executor.execute(&block, None)
             };
 
         let stream = input_stream

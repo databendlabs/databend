@@ -58,7 +58,7 @@ impl FlightScatterByHash {
     pub fn execute(&self, data_block: &DataBlock) -> Result<Vec<DataBlock>> {
         let expression_executor = self.scatter_expression_executor.clone();
         match expression_executor
-            .execute(data_block)?
+            .execute(data_block, None)?
             .column_by_name(&self.scatter_expression_name)
         {
             None => Result::Err(ErrorCodes::LogicalError(

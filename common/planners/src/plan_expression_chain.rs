@@ -121,7 +121,7 @@ impl ExpressionChain {
             Expression::Exists(p) => {
                 println!("plan: {:?}", p);
                 let value = ActionExists {
-                    name: "exists".to_string(),
+                    name: format!("{:?}", expr),
                     value: DataValue::Boolean(Some(true)),
                 };
                 self.actions.push(ExpressionAction::Exists(value));

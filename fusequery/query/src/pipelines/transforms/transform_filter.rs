@@ -5,6 +5,8 @@
 use std::any::Any;
 use std::convert::TryInto;
 use std::sync::Arc;
+use std::collections::HashMap;
+use futures::TryStreamExt;
 
 use common_arrow::arrow;
 use common_datablocks::DataBlock;
@@ -15,14 +17,18 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::Expression;
+use common_planners::find_exists_exprs;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::pipelines::processors::PipelineBuilder;
+use crate::sessions::FuseQueryContextRef;
 
 pub struct FilterTransform {
+    ctx: FuseQueryContextRef,
     input: Arc<dyn IProcessor>,
     executor: Arc<ExpressionExecutor>,
     predicate: Expression,
@@ -30,7 +36,7 @@ pub struct FilterTransform {
 }
 
 impl FilterTransform {
-    pub fn try_create(schema: DataSchemaRef, predicate: Expression, having: bool) -> Result<Self> {
+    pub fn try_create(ctx: FuseQueryContextRef, schema: DataSchemaRef, predicate: Expression, having: bool) -> Result<Self> {
         let mut fields = schema.fields().clone();
         fields.push(predicate.to_data_field(&schema)?);
 
@@ -43,6 +49,7 @@ impl FilterTransform {
         executor.validate()?;
 
         Ok(FilterTransform {
+            ctx: ctx,
             input: Arc::new(EmptyProcessor::create()),
             executor: Arc::new(executor),
             predicate,
@@ -74,16 +81,36 @@ impl IProcessor for FilterTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        let exists_vec = find_exists_exprs(&[self.predicate.clone()]);
+        let mut exists_res = HashMap::new();
+
+        for exst in exists_vec {
+            let name = format!("{:?}", exst);
+            if let  Expression::Exists(p) = exst {
+                let mut exst_pipeline = PipelineBuilder::create(self.ctx.clone(), (*p).clone()).build()?;
+                let stream = exst_pipeline.execute().await?;
+                let result = stream.try_collect::<Vec<_>>().await?;
+                let b;
+                if result.len() > 0 {
+                    b = true;
+                } else {
+                    b = false;
+                }
+                exists_res.insert(name, b);
+            }
+        }
         let input_stream = self.input.execute().await?;
         let executor = self.executor.clone();
         let column_name = self.predicate.column_name();
+        let exists_map = exists_res.clone();
 
         let execute_fn = |executor: Arc<ExpressionExecutor>,
+                          exists_map: &HashMap::<String, bool>,
                           column_name: &str,
                           block: Result<DataBlock>|
          -> Result<DataBlock> {
             let block = block?;
-            let filter_block = executor.execute(&block)?;
+            let filter_block = executor.execute(&block, Some(exists_map))?;
             let filter_array = filter_block.try_column_by_name(column_name)?.to_array()?;
             // Downcast to boolean array
             let filter_array = datavalues::downcast_array!(filter_array, BooleanArray)?;
@@ -93,9 +120,8 @@ impl IProcessor for FilterTransform {
             let batch = arrow::compute::filter_record_batch(&batch, filter_array)?;
             batch.try_into()
         };
-
         let stream = input_stream.filter_map(move |v| {
-            execute_fn(executor.clone(), &column_name, v)
+            execute_fn(executor.clone(), &exists_map, &column_name, v)
                 .map(Some)
                 .transpose()
         });
