@@ -5,11 +5,20 @@ TAG ?= latest
 setup:
 	bash ./scripts/setup/dev_setup.sh
 
-run:
+run: build
+	bash ./scripts/deploy/fusequery-standalone.sh release
+
+run-debug: build-debug
 	bash ./scripts/deploy/fusequery-standalone.sh
+
+run-release:
+	bash ./scripts/deploy/fusequery-standalone-from-release.sh
 
 build:
 	bash ./scripts/build/build-native.sh
+
+build-debug:
+	bash ./scripts/build/build-debug.sh
 
 profile:
 	bash ./scripts/ci/ci-run-profile.sh
