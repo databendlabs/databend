@@ -303,7 +303,7 @@ fn test_array_arithmetic() {
             );
             match result {
                 Ok(v) => assert_eq!(
-                    v.as_ref(),
+                    v.to_array().unwrap().as_ref(),
                     t.expect[i].as_ref(),
                     "failed in the test: {}, case: {}",
                     t.name,
@@ -380,7 +380,7 @@ fn test_array_scalar_arithmetic() {
         );
         match result {
             Ok(v) => assert_eq!(
-                v.as_ref(),
+                v.to_array().unwrap().as_ref(),
                 t.expect.as_ref(),
                 "failed in the test: {}",
                 t.name
@@ -449,7 +449,7 @@ fn test_scalar_array_arithmetic() {
         );
         match result {
             Ok(v) => assert_eq!(
-                v.as_ref(),
+                v.to_array().unwrap().as_ref(),
                 t.expect.as_ref(),
                 "failed in the test: {}",
                 t.name

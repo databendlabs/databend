@@ -16,6 +16,7 @@ name = "fuse-benchmark"
 path = "src/bin/fuse-benchmark.rs"
 
 [features]
+default = ["simd"]
 simd = ["common-arrow/simd"]
 
 [dependencies]
