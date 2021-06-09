@@ -109,14 +109,24 @@ impl DataArrayArithmetic {
         )?;
 
         let left_array = data_array_cast(left, &coercion_type)?;
-        let right_value = right_value.cast(&coercion_type)?;
+        let casted_right_value = right_value.cast(&coercion_type)?;
 
         match op {
             DataValueArithmeticOperator::Div => {
-                arrow_primitive_array_scalar_op!(left_array, right_value, &coercion_type, divide)
+                arrow_primitive_array_scalar_op!(
+                    left_array,
+                    casted_right_value,
+                    &coercion_type,
+                    divide
+                )
             }
             DataValueArithmeticOperator::Modulo => {
-                arrow_primitive_array_scalar_op!(left_array, right_value, &coercion_type, modulus)
+                arrow_primitive_array_scalar_op!(
+                    left_array,
+                    casted_right_value,
+                    &coercion_type,
+                    modulus
+                )
             }
             _ => {
                 let right_array = right_value.to_array_with_size(left.len())?;
