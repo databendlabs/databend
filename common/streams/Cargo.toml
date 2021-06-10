@@ -17,7 +17,7 @@ common-exception = {path = "../exception"}
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.40"
+anyhow = "1.0.41"
 crossbeam = "0.8"
 futures = "0.3"
 pin-project-lite = "^0.2"

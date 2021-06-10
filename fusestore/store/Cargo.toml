@@ -31,7 +31,7 @@ common-tracing = {path = "../../common/tracing"}
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.40"
+anyhow = "1.0.41"
 # track self maintained branch with hot fixes
 async-raft = { git = "https://github.com/datafuse-extras/async-raft", branch = "master" }
 async-trait = "0.1"
