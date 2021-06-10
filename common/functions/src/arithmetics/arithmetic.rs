@@ -74,19 +74,7 @@ impl IFunction for ArithmeticFunction {
                 _ => Ok(DataColumnarValue::Array(result)),
             }
         } else {
-            let result = DataArrayArithmetic::data_array_arithmetic_op(
-                self.op.clone(),
-                &columns[0],
-                &columns[1],
-            )?;
-
-            match (&columns[0], &columns[1]) {
-                (DataColumnarValue::Constant(_, _), DataColumnarValue::Constant(_, _)) => {
-                    let data_value = DataValue::try_from_array(&result, 0)?;
-                    Ok(DataColumnarValue::Constant(data_value, input_rows))
-                }
-                _ => Ok(DataColumnarValue::Array(result)),
-            }
+            DataArrayArithmetic::data_array_arithmetic_op(self.op.clone(), &columns[0], &columns[1])
         }
     }
 

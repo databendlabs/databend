@@ -21,8 +21,8 @@ use common_infallible::RwLock;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 use futures::stream::StreamExt;
-use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
@@ -115,6 +115,7 @@ impl IProcessor for GroupByPartialTransform {
     /// <1, 1+4>
     /// <2, 2+5>
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        tracing::info!("execute...");
         let aggr_len = self.aggr_exprs.len();
         let start = Instant::now();
         let schema_before_groupby = self.schema_before_groupby.clone();
@@ -186,7 +187,7 @@ impl IProcessor for GroupByPartialTransform {
         }
 
         let delta = start.elapsed();
-        info!("Group by partial cost: {:?}", delta);
+        tracing::info!("Group by partial cost: {:?}", delta);
 
         let groups = self.groups.read();
 

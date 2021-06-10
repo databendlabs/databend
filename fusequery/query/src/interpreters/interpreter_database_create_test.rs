@@ -11,6 +11,8 @@ async fn test_create_database_interpreter() -> anyhow::Result<()> {
     use crate::interpreters::*;
     use crate::sql::*;
 
+    common_tracing::init_default_tracing();
+
     let ctx = crate::tests::try_create_context()?;
 
     if let PlanNode::CreateDatabase(plan) =

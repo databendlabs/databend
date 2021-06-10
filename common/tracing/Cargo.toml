@@ -1,0 +1,12 @@
+[package]
+name = "common-tracing"
+version = "0.1.0"
+authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies] # In alphabetical order
+tracing = "0.1.26"
+tracing-futures = { version = "0.2.5", default-features = false }
+tracing-subscriber = "0.2.18"

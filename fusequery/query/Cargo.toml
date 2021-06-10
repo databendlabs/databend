@@ -15,6 +15,10 @@ path = "src/bin/fuse-query.rs"
 name = "fuse-benchmark"
 path = "src/bin/fuse-benchmark.rs"
 
+[features]
+default = ["simd"]
+simd = ["common-arrow/simd"]
+
 [dependencies]
 # Workspace dependencies
 common-arrow = {path = "../../common/arrow"}
@@ -29,6 +33,7 @@ common-planners = {path = "../../common/planners"}
 common-progress = {path = "../../common/progress"}
 common-runtime = {path = "../../common/runtime"}
 common-streams = {path = "../../common/streams"}
+common-tracing = {path = "../../common/tracing"}
 
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "5a7ae3d" }

@@ -13,11 +13,14 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_planners::ExpressionAction;
 use common_planners::ExpressionChain;
+use common_tracing::tracing;
 
 /// ExpressionExecutor is a helper struct for expressions and projections
 /// Aggregate functions is not covered, because all expressions in aggregate functions functions are executed.
 #[derive(Debug, Clone)]
 pub struct ExpressionExecutor {
+    // description of this executor
+    description: String,
     input_schema: DataSchemaRef,
     output_schema: DataSchemaRef,
     chain: Arc<ExpressionChain>,
@@ -27,6 +30,7 @@ pub struct ExpressionExecutor {
 
 impl ExpressionExecutor {
     pub fn try_create(
+        description: &str,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
@@ -35,6 +39,7 @@ impl ExpressionExecutor {
         let chain = ExpressionChain::try_create(input_schema.clone(), &exprs)?;
 
         Ok(Self {
+            description: description.to_string(),
             input_schema,
             output_schema,
             chain: Arc::new(chain),
@@ -47,6 +52,12 @@ impl ExpressionExecutor {
     }
 
     pub fn execute(&self, block: &DataBlock) -> Result<DataBlock> {
+        tracing::info!(
+            "({:#}) execute, actions: {:?}",
+            self.description,
+            self.chain.actions
+        );
+
         let mut column_map: HashMap<String, DataColumnarValue> = HashMap::new();
 
         // a + 1 as b, a + 1 as c
