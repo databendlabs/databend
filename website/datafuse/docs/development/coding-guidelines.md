@@ -55,12 +55,11 @@ struct Point {
 *Unit tests*
 
 ```
-$ make test
+$ make unit-test
 ```
 
 *Stateless tests*
 
 ```
-$ cd tests
-$ ./fuse-test
+$ make stateless-test
 ```

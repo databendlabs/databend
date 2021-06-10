@@ -157,11 +157,14 @@ nav:
           - ToTypeName: sqlstatement/other-functions/totypename.md
       - String Functions:
           - SUBSTRING: sqlstatement/string-functions/substring.md
-  - RFCs:
-      - FuseQuery Join: rfcs/query/2021-05-01-join-framework-design.md
-      - FuseQuery Expression: rfcs/query/2021-05-22-plan-expression.md
-      - FuseStore Design: rfcs/store/2021-04-22-store-design.md
-  - Contributing: development/contributing.md
+  - Development:
+      - Contributing: development/contributing.md
+      - Coding Guideline: development/coding-guidelines.md
+      - Tracing: development/tracing.md
+      - RFCs:
+        - FuseQuery Join: rfcs/query/2021-05-01-join-framework-design.md
+        - FuseQuery Expression: rfcs/query/2021-05-22-plan-expression.md
+        - FuseStore Design: rfcs/store/2021-04-22-store-design.md
   - Performance: overview/performance.md
 
 # Google Analytics

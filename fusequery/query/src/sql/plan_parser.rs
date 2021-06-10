@@ -74,7 +74,7 @@ impl PlanParser {
     }
 
     pub fn build_from_sql(&self, query: &str) -> Result<PlanNode> {
-        tracing::info!(query);
+        tracing::debug!(query);
         DfParser::parse_sql(query).and_then(|statement| {
             statement
                 .first()

@@ -75,7 +75,7 @@ impl IProcessor for AggregatorPartialTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        tracing::info!("execute...");
+        tracing::debug!("execute...");
         let start = Instant::now();
 
         let mut funcs = self.funcs.clone();
@@ -95,7 +95,7 @@ impl IProcessor for AggregatorPartialTransform {
             }
         }
         let delta = start.elapsed();
-        tracing::info!("Aggregator partial cost: {:?}", delta);
+        tracing::debug!("Aggregator partial cost: {:?}", delta);
 
         let mut columns: Vec<DataArrayRef> = vec![];
         for func in funcs.iter() {

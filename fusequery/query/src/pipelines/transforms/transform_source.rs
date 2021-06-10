@@ -58,7 +58,7 @@ impl IProcessor for SourceTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        tracing::info!(
+        tracing::debug!(
             "execute, table:{:#}.{:#}, is_remote:{:#}...",
             self.db,
             self.table,

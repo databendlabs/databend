@@ -60,7 +60,7 @@ impl IProcessor for SortPartialTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        tracing::info!("execute...");
+        tracing::debug!("execute...");
 
         Ok(Box::pin(SortStream::try_create(
             self.input.execute().await?,

@@ -64,7 +64,7 @@ impl IProcessor for AggregatorFinalTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        tracing::info!("execute...");
+        tracing::debug!("execute...");
 
         let mut funcs = self.funcs.clone();
         let mut stream = self.input.execute().await?;
@@ -83,7 +83,7 @@ impl IProcessor for AggregatorFinalTransform {
             }
         }
         let delta = start.elapsed();
-        tracing::info!("Aggregator final cost: {:?}", delta);
+        tracing::debug!("Aggregator final cost: {:?}", delta);
 
         let mut final_result = Vec::with_capacity(funcs.len());
         for func in &funcs {

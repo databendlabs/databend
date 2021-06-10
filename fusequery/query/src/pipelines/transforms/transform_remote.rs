@@ -59,7 +59,7 @@ impl IProcessor for RemoteTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        tracing::info!(
+        tracing::debug!(
             "execute, fetch name:{:#}, node name:{:#}...",
             self.fetch_name,
             self.fetch_node_name

@@ -47,7 +47,7 @@ impl IProcessor for LimitTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        tracing::info!("execute...");
+        tracing::debug!("execute...");
         Ok(Box::pin(LimitStream::try_create(
             self.input.execute().await?,
             self.limit,

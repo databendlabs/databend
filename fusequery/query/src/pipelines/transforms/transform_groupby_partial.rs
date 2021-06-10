@@ -115,7 +115,7 @@ impl IProcessor for GroupByPartialTransform {
     /// <1, 1+4>
     /// <2, 2+5>
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        tracing::info!("execute...");
+        tracing::debug!("execute...");
         let aggr_len = self.aggr_exprs.len();
         let start = Instant::now();
         let schema_before_groupby = self.schema_before_groupby.clone();
@@ -187,7 +187,7 @@ impl IProcessor for GroupByPartialTransform {
         }
 
         let delta = start.elapsed();
-        tracing::info!("Group by partial cost: {:?}", delta);
+        tracing::debug!("Group by partial cost: {:?}", delta);
 
         let groups = self.groups.read();
 

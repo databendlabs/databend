@@ -79,7 +79,7 @@ impl IProcessor for GroupByFinalTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        tracing::info!("execute...");
+        tracing::debug!("execute...");
         let aggr_funcs = self
             .aggr_exprs
             .iter()
@@ -140,7 +140,7 @@ impl IProcessor for GroupByFinalTransform {
             }
         }
         let delta = start.elapsed();
-        tracing::info!("Group by final cost: {:?}", delta);
+        tracing::debug!("Group by final cost: {:?}", delta);
 
         // Collect the merge states.
         let groups = self.groups.read();

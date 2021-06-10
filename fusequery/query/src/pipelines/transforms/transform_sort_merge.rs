@@ -61,7 +61,7 @@ impl IProcessor for SortMergeTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        tracing::info!("execute...");
+        tracing::debug!("execute...");
 
         let sort_columns_descriptions = get_sort_descriptions(&self.schema, &self.exprs)?;
         let mut blocks = vec![];
