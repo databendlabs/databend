@@ -4,7 +4,6 @@
 
 use std::sync::Arc;
 
-use async_raft::ClientWriteError;
 use async_raft::RaftMetrics;
 use async_raft::State;
 use common_tracing::tracing;
@@ -13,6 +12,7 @@ use pretty_assertions::assert_eq;
 use tokio::sync::watch::Receiver;
 use tokio::time::Duration;
 
+use crate::meta_service::raftmeta::RetryableError;
 use crate::meta_service::ClientRequest;
 use crate::meta_service::ClientResponse;
 use crate::meta_service::Cmd;
@@ -208,7 +208,7 @@ async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
-    // - Start a leader and a non-voter;
+    // - Start a leader, 2 followers and a non-voter;
     // - Write to the raft node on the leader, expect Ok.
     // - Write to the raft node on the non-leader, expect ForwardToLeader error.
 
@@ -242,20 +242,66 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
             })
             .await;
 
+        let rst = rst?;
+
         if id == leader_id {
             assert!(rst.is_ok());
         } else {
             assert!(rst.is_err());
             let e = rst.unwrap_err();
             match e {
-                ClientWriteError::RaftError(raft_err) => {
-                    panic!("unexpected: {:?}", raft_err);
-                }
-                ClientWriteError::ForwardToLeader(_req, leader) => {
-                    assert_eq!(Some(leader_id), leader);
+                RetryableError::ForwardToLeader { leader } => {
+                    assert_eq!(leader_id, leader);
                 }
             }
         }
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_node_write() -> anyhow::Result<()> {
+    // - Start a leader, 2 followers and a non-voter;
+    // - Write to the raft node on every node, expect Ok.
+
+    // TODO: test MetaNode.write duiring leader changes.
+
+    common_tracing::init_default_tracing();
+
+    let (_nid0, mn0) = setup_leader().await?;
+    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?; // follower
+    let (_nid2, mn2) = setup_non_voter(mn0.clone(), 2).await?; // follower
+    let (_nid3, mn3) = setup_non_voter(mn0.clone(), 3).await?; // non-voter
+
+    mn0.raft.change_membership(hashset![0, 1, 2]).await?;
+
+    let all = vec![mn0.clone(), mn1.clone(), mn2.clone(), mn3.clone()];
+
+    // ensure cluster works
+    assert_set_file_synced(all.clone(), "foo").await?;
+
+    // test writing
+    for id in 0u64..4 {
+        let key = format!("t-write-{}", id);
+        let mn = &all[id as usize];
+
+        let last_applied = mn.raft.metrics().borrow().last_applied;
+
+        let rst = mn
+            .write(ClientRequest {
+                txid: None,
+                cmd: Cmd::SetFile {
+                    key: key.to_string(),
+                    value: key.to_string(),
+                },
+            })
+            .await;
+
+        assert!(rst.is_ok());
+
+        assert_applied_index(all.clone(), last_applied + 1).await?;
+        assert_get_file(all.clone(), &key, &key).await?;
     }
 
     Ok(())
@@ -415,7 +461,7 @@ async fn assert_set_file_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> an
                     value: key.to_string(),
                 },
             })
-            .await?;
+            .await??;
     }
 
     assert_applied_index(meta_nodes.clone(), last_applied + 1).await?;
@@ -447,7 +493,7 @@ async fn assert_get_file(
 
 /// Wait for the known leader of a raft to become the expected `leader_id` until a default 2000 ms time out.
 #[tracing::instrument(level = "info", skip(msg,rx), fields(msg=msg.to_string().as_str()))]
-async fn wait_for_current_leader(
+pub async fn wait_for_current_leader(
     msg: impl ToString,
     rx: &mut Receiver<RaftMetrics>,
     leader_id: NodeId,
@@ -483,7 +529,7 @@ async fn wait_for_log(
 
 /// Wait for raft state to become the expected `state` until a default 2000 ms time out.
 #[tracing::instrument(level = "info", skip(msg,rx), fields(msg=msg.to_string().as_str()))]
-async fn wait_for_state(
+pub async fn wait_for_state(
     msg: impl ToString,
     rx: &mut Receiver<RaftMetrics>,
     state: async_raft::State,
@@ -522,6 +568,8 @@ async fn wait_for_with_timeout<T>(
 where
     T: Fn(&RaftMetrics) -> bool,
 {
+    // TODO make wait_for_xxx util a extension of async-raft.
+
     loop {
         let latest = rx.borrow().clone();
 
