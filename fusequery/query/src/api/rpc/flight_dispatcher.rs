@@ -252,7 +252,7 @@ impl FlightDispatcher {
             .and_then(|ctx| ctx.with_cluster(state.cluster.clone()))
             .and_then(|ctx| {
                 ctx.set_max_threads(state.conf.num_cpus)?;
-                PipelineBuilder::create(ctx.clone(), plan.clone())
+                PipelineBuilder::create(ctx.clone(), HashMap::<String, bool>::new(), plan.clone())
                     .build()
                     .map(move |pipeline| (ctx, pipeline))
             })

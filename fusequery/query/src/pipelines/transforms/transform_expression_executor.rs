@@ -63,7 +63,8 @@ impl ExpressionExecutor {
         let rows = block.num_rows();
         if let Some(map) = exists_res {
             for (name, b) in map {
-                column_map.insert(name.to_string(), DataColumnarValue::Constant(DataValue::Boolean(Some(*b)), rows));
+                let b = DataColumnarValue::Constant(DataValue::Boolean(Some(*b)), rows).to_array()?;
+                column_map.insert(name.to_string(), DataColumnarValue::Array(b));
             }
         }
 
@@ -91,6 +92,8 @@ impl ExpressionExecutor {
                         .arg_names
                         .iter()
                         .map(|arg| {
+                            println!("arg: {:?}", arg);
+                            println!("val: {:?}", column_map.get(arg));
                             column_map.get(arg).cloned().ok_or_else(|| {
                                 ErrorCodes::LogicalError(
                                     "Arguments must be prepared before function transform",
@@ -109,8 +112,6 @@ impl ExpressionExecutor {
                 }
                 ExpressionAction::Exists(exists) => {
                     println!("exists.name={}, val={:?}", exists.name, column_map.get(&exists.name));
-                    //let column = DataColumnarValue::Constant(exists.value.clone(), rows);
-                    //column_map.insert(exists.name.clone(), column);
                 }
                 _ => {}
             }

@@ -119,15 +119,10 @@ impl ExpressionChain {
                 self.actions.push(ExpressionAction::Constant(value));
             }
             Expression::Exists(p) => {
-                println!("plan: {:?}", p);
                 let value = ActionExists {
                     name: format!("{:?}", expr),
-                    //value: DataValue::Boolean(Some(true)),
                 };
                 self.actions.push(ExpressionAction::Exists(value));
-                //return Err(ErrorCodes::UnImplement(
-                //    "Action for Exists not implemented yet",
-                //));
             }
             Expression::UnaryExpression {
                 op,

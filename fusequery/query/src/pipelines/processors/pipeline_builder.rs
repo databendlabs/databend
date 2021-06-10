@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::sync::Arc;
+use std::collections::HashMap;
 
 use common_exception::ErrorCodes;
 use common_exception::Result;
@@ -39,12 +40,13 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct PipelineBuilder {
     ctx: FuseQueryContextRef,
+    exists_res_map: HashMap::<String, bool>,
     plan: PlanNode,
 }
 
 impl PipelineBuilder {
-    pub fn create(ctx: FuseQueryContextRef, plan: PlanNode) -> Self {
-        PipelineBuilder { ctx, plan }
+    pub fn create(ctx: FuseQueryContextRef, exists_res_map: HashMap::<String,bool>, plan: PlanNode) -> Self {
+        PipelineBuilder { ctx, exists_res_map, plan }
     }
 
     pub fn build(&self) -> Result<Pipeline> {
@@ -52,7 +54,6 @@ impl PipelineBuilder {
 
         let mut limit = None;
         self.plan.walk_preorder(|node| -> Result<bool> {
-            println!("node: {:?}", node);
             match node {
                 PlanNode::Limit(ref limit_plan) => {
                     limit = Some(limit_plan.n);
@@ -197,6 +198,7 @@ impl PipelineBuilder {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
                 self.ctx.clone(),
+                self.exists_res_map.clone(),
                 plan.input.schema(),
                 plan.predicate.clone(),
                 false,
@@ -209,6 +211,7 @@ impl PipelineBuilder {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
                 self.ctx.clone(),
+                HashMap::<String, bool>::new(),
                 plan.input.schema(),
                 plan.predicate.clone(),
                 true,
