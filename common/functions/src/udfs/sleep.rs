@@ -71,7 +71,12 @@ impl IFunction for SleepFunction {
                     DataValue::Int64(Some(v)) if *v > 0 => Duration::from_secs(*v as u64),
                     DataValue::Float32(Some(v)) => Duration::from_secs_f32(*v),
                     DataValue::Float64(Some(v)) => Duration::from_secs_f64(*v),
-                    v => return Err(ErrorCode::BadArguments(format!("{}", v))),
+                    v => {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "Sleep must be between 0 and 3 seconds. Requested: {}",
+                            v
+                        )))
+                    }
                 };
 
                 if seconds.ge(&Duration::from_secs(3)) {
