@@ -17,7 +17,7 @@ common-datablocks = {path = "../datablocks"}
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.40"
+anyhow = "1.0.41"
 serde = { version = "1.0", features = ["derive"] }
 futures = "0.3"
 
