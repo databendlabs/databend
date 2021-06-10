@@ -12,8 +12,7 @@ Datafuse default log level is `INFO`.
 ## Enable Tracing
 
 ```
-export FUSE_QUERY_LOG_LEVEL = "DEBUG"
-./fuse-query
+FUSE_QUERY_LOG_LEVEL="DEBUG" ./fuse-query
 ```
 
 If we want to track the execution of a query:
