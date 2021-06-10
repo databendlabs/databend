@@ -64,7 +64,7 @@ impl IProcessor for ProjectionTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        tracing::info!("execute...");
+        tracing::debug!("execute...");
 
         let executor = self.executor.clone();
         let input_stream = self.input.execute().await?;
@@ -75,7 +75,7 @@ impl IProcessor for ProjectionTransform {
                 let start = Instant::now();
                 let r = executor.execute(&block);
                 let delta = start.elapsed();
-                tracing::info!("Projection cost: {:?}", delta);
+                tracing::debug!("Projection cost: {:?}", delta);
                 r
             };
 
