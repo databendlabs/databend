@@ -57,7 +57,10 @@ message GetReply {
   string value = 3;
 }
 
-message RaftMes { string data = 1; }
+message RaftMes {
+  string data = 1;
+  string error = 2;
+}
 
 service MetaService {
 
