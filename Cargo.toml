@@ -17,6 +17,7 @@ members = [
     "common/exception",
     "common/ext",
     "common/tracing",
+    "common/profiling",
 
     # FuseQuery
     "fusequery/query",
