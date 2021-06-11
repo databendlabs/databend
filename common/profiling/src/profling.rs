@@ -6,21 +6,22 @@ use std::time::Duration;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use pprof::protos::Message;
+//use pprof::protos::Message;
 
 pub struct Profiling {
-    freq: i32,
+    duration: Duration,
 }
 
 impl Profiling {
-    pub fn create(freq: i32) -> Self {
-        Self { freq }
+    pub fn create(duration: Duration) -> Self {
+        Self { duration }
     }
 
     pub async fn report(&self) -> Result<pprof::Report> {
-        let guard = pprof::ProfilerGuard::new(self.freq)
+        // 99 HZ
+        let guard = pprof::ProfilerGuard::new(99)
             .map_err(|e| ErrorCode::UnknownException(e.to_string()))?;
-        tokio::time::sleep(Duration::from_secs(self.freq as u64)).await;
+        tokio::time::sleep(self.duration).await;
         guard
             .report()
             .build()
@@ -31,12 +32,18 @@ impl Profiling {
         let mut body: Vec<u8> = Vec::new();
 
         let report = self.report().await?;
+        report
+            .flamegraph(&mut body)
+            .map_err(|e| ErrorCode::UnknownException(e.to_string()))?;
+        /*
         let profile = report
             .pprof()
             .map_err(|e| ErrorCode::UnknownException(e.to_string()))?;
         profile
             .encode(&mut body)
             .map_err(|e| ErrorCode::UnknownException(e.to_string()))?;
+
+         */
 
         Ok(body)
     }
