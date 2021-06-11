@@ -3,7 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[cfg(test)]
-mod aggregator_test;
+mod aggregate_batch_test;
+#[cfg(test)]
+mod aggregate_combinator_test;
+#[cfg(test)]
+mod aggregate_function_test;
 
 #[macro_use]
 mod macros;
