@@ -128,6 +128,11 @@ build_exceptions! {
     DnsParseError(37),
     CannotConnectNode(38),
     DuplicateGetStream(39),
+    Timeout(40),
+    TooManyUserConnections(41),
+    AbortedSession(42),
+    AbortedQuery(43),
+    NotFoundSession(44),
 
     UnknownException(1000),
     TokioError(1001)

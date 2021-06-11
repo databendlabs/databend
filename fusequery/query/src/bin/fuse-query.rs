@@ -11,7 +11,7 @@ use fuse_query::metrics::MetricService;
 use fuse_query::servers::ClickHouseHandler;
 use fuse_query::servers::MySQLHandler;
 use fuse_query::sessions::SessionManager;
-use fuse_query::servers::Abortable;
+use fuse_query::servers::RunnableService;
 use log::info;
 
 #[tokio::main]
@@ -39,21 +39,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let mut tasks = vec![];
-    let mut runnable_servers = vec![];
+    let mut services = vec![];
     let cluster = Cluster::create_global(conf.clone())?;
-    let session_manager = SessionManager::create(conf.mysql_handler_thread_num);
+    let session_manager = SessionManager::from_conf(conf.clone());
 
     // MySQL handler.
     {
-        let handler = MySQLHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
-        runnable_servers.push(handler.start(&conf.mysql_handler_host, conf.mysql_handler_port).await?);
+        let handler = MySQLHandler::create(session_manager.clone());
+        let listening = handler.start((conf.mysql_handler_host.clone(), conf.mysql_handler_port.clone())).await?;
+        services.push(handler);
 
         info!(
-            "MySQL handler listening on {}:{}, Usage: mysql -h{} -P{}",
-            conf.mysql_handler_host,
-            conf.mysql_handler_port,
-            conf.mysql_handler_host,
-            conf.mysql_handler_port
+            "MySQL handler listening on {}, Usage: mysql -h{} -P{}",
+            listening,
+            listening.ip(),
+            listening.port(),
         );
     }
 
@@ -107,8 +107,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     }
 
-    for mut runnable_server in runnable_servers {
-        runnable_server.wait_server_terminal().await;
+    for service in services {
+        service.wait_terminal(None).await;
     }
 
     Ok(())

@@ -3,9 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_exception::Result;
+use common_exception::ErrorCode;
+use std::time::Duration;
+
+pub type Elapsed = Duration;
 
 #[async_trait::async_trait]
-pub trait Abortable {
-    fn abort(&self);
-    async fn wait_server_terminal(&self) -> Result<()>;
+pub trait RunnableService<Args, R> {
+    fn abort(&self, force: bool);
+
+    async fn start(&self, args: Args) -> Result<R>;
+
+    async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed>;
 }

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_exception::{Result, ErrorCode, ToErrorCode};
-use crate::servers::{MySQLHandler, RunningServer};
+use crate::servers::{MySQLHandler, RunningMySQLHandler};
 use crate::configs::Config;
 use crate::clusters::Cluster;
 use crate::sessions::SessionManager;
@@ -17,11 +17,7 @@ use std::thread::JoinHandle;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_use_database_with_on_query() -> Result<()> {
-    let handler = MySQLHandler::create(
-        Config::default(),
-        Cluster::empty(),
-        SessionManager::create(1),
-    );
+    let handler = MySQLHandler::create(SessionManager::create(1));
 
     let runnable_server = handler.start("0.0.0.0", 0).await?;
     let mut connection = create_connection(runnable_server.listener_address().port())?;
@@ -36,11 +32,7 @@ async fn test_use_database_with_on_query() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rejected_session_with_sequence() -> Result<()> {
-    let handler = MySQLHandler::create(
-        Config::default(),
-        Cluster::empty(),
-        SessionManager::create(1),
-    );
+    let handler = MySQLHandler::create(SessionManager::create(1));
 
     let runnable_server = handler.start("0.0.0.0", 0).await?;
     let server_port = runnable_server.listener_address().port();
@@ -96,11 +88,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         })
     }
 
-    let handler = MySQLHandler::create(
-        Config::default(),
-        Cluster::empty(),
-        SessionManager::create(1),
-    );
+    let handler = MySQLHandler::create(SessionManager::create(1));
 
     let runnable_server = handler.start("0.0.0.0", 0).await?;
     let server_port = runnable_server.listener_address().port();

@@ -2,104 +2,66 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::io;
-use std::net;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
 
-use futures::future::{Either, AbortHandle, Abortable};
-use futures::future::select;
-use futures::future::TryFutureExt;
-use futures::FutureExt;
-use common_datablocks::DataBlock;
+use futures::future::{AbortHandle, Abortable};
 use common_exception::ErrorCode;
 use common_exception::Result;
-use log::debug;
 use msql_srv::*;
-use threadpool::ThreadPool;
-use tokio::io::{AsyncWriteExt, Interest, AsyncReadExt};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::mpsc::Receiver;
+use tokio::net::TcpStream;
 use tokio_stream::StreamExt as OtherStreamExt;
 
-use common_arrow::parquet::data_type::AsBytes;
 use common_exception::ToErrorCode;
 use common_infallible::Mutex;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::interpreters::InterpreterFactory;
-use crate::interpreters::InterpreterPtr;
-use crate::servers::mysql::endpoints::{IMySQLEndpoint, MySQLOnInitEndpoint, MySQLOnQueryEndpoint};
 use crate::servers::mysql::mysql_session::Session;
-use crate::servers::RunningServer;
-use crate::sessions::FuseQueryContextRef;
+use crate::servers::{RunnableService, Elapsed};
 use crate::sessions::SessionManagerRef;
-use crate::sql::PlanParser;
 use tokio_stream::wrappers::TcpListenerStream;
 use crate::servers::mysql::reject_connection::RejectConnection;
 use common_runtime::Runtime;
+use std::time::{Duration, Instant};
+use tokio::task::JoinHandle;
+use tokio::sync::broadcast::Sender;
+use std::ops::Sub;
 
 pub struct MySQLHandler {
-    conf: Config,
-    cluster: ClusterRef,
     session_manager: SessionManagerRef,
+
+    abort_handler: Mutex<Option<AbortHandle>>,
+    terminal_sender: Arc<Mutex<Option<Sender<()>>>>,
 }
 
 impl MySQLHandler {
-    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionManagerRef) -> Self {
+    pub fn create(session_manager: SessionManagerRef) -> Self {
         MySQLHandler {
-            conf,
-            cluster,
             session_manager,
+            abort_handler: Mutex::new(None),
+            terminal_sender: Arc::new(Mutex::new(None)),
         }
     }
 
-    pub async fn start(&self, hostname: &str, port: u16) -> Result<RunningServer> {
-        let cluster = self.cluster.clone();
-        let sessions = self.session_manager.clone();
-        let rejected_executor = Runtime::with_worker_threads(1)?;
+    pub fn started(&self, handler: JoinHandle<()>, abort_handler: AbortHandle) {
+        {
+            *self.abort_handler.lock() = Some(abort_handler);
+            let (terminal_sender, _) = tokio::sync::broadcast::channel(1);
+            *self.terminal_sender.lock() = Some(terminal_sender);
+        }
 
-        let (abort_handle, mut reg) = AbortHandle::new_pair();
-        let (stream, listener_addr) = Self::listener_tcp(hostname, port).await?;
+        let terminal_sender = self.terminal_sender.clone();
 
-        let listener_loop = tokio::spawn(async move {
-            let max_sessions = Arc::new(Mutex::new(sessions.max_mysql_sessions()));
-            let mut abortable_listener_stream = Abortable::new(stream, reg);
-
-            loop {
-                match abortable_listener_stream.next().await {
-                    None => break,
-                    Some(Err(error)) => log::error!("Unexpected error during process accept[skip]: {}", error),
-                    Some(Ok(tcp_stream)) => {
-                        let mut locked_max_sessions = max_sessions.lock();
-
-                        if *locked_max_sessions != 0 {
-                            *locked_max_sessions -= 1;
-
-                            if let Ok(addr) = tcp_stream.peer_addr() {
-                                log::debug!("Received connect from {}", addr);
-                            }
-                            // let session = Session::create(cluster.clone(), sessions.clone());
-                            /*if let Err(error) = */Self::accept_session(tcp_stream, &max_sessions, sessions.clone(), cluster.clone()); /*{
-                                log::error!("Unexpected error during process accept[skip]: {}", error);
-                            }*/
-                        } else {
-                            if let Ok(addr) = tcp_stream.peer_addr() {
-                                log::debug!("Rejected connect from {}", addr);
-                            }
-
-                            Self::reject_session(tcp_stream, &rejected_executor, sessions.clone());
-                        }
-                    }
-                }
+        tokio::spawn(async move {
+            if let Err(error) = handler.await {
+                log::error!("Cannot join: {}", error);
             }
-            // TODO: join all session.
-        });
 
-        Ok(RunningServer::create(listener_addr, abort_handle, listener_loop))
+            if let Some(terminal_watchers) = terminal_sender.lock().take() {
+                let _ = terminal_watchers.send(());
+            }
+        });
     }
 
     async fn listener_tcp(hostname: &str, port: u16) -> Result<(TcpListenerStream, SocketAddr)> {
@@ -109,42 +71,97 @@ impl MySQLHandler {
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
 
-    fn reject_session(mut stream: TcpStream, executor: &Runtime, sessions: SessionManagerRef) {
-        let join_handler = executor.spawn(async move {
-            if let Err(error) = RejectConnection::reject_mysql_connection(
-                stream,
-                ErrorKind::ER_TOO_MANY_USER_CONNECTIONS,
-                "Rejected MySQL connection. The current accept connection has exceeded mysql_handler_thread_num config",
-            ).await {
-                log::error!("Unexpected error occurred during reject connection: {:?}", error);
-            }
-
-            // TODO: remove actives session count
-        });
-
-        sessions.add_reject_mysql_session();
-    }
-
-    fn accept_session(
-        stream: TcpStream,
-        max_session: &Arc<Mutex<u64>>,
-        sessions: SessionManagerRef,
-        cluster: ClusterRef,
-    ) {
-        let session = Session::create(cluster.clone(), sessions.clone());
-        let max_session = max_session.clone();
-        let join_handler = std::thread::spawn(move || {
-            let stream = stream.into_std().map_err_to_code(ErrorCode::TokioError, || "").unwrap();
-            stream.set_nonblocking(false).unwrap();
-
-            if let Err(error) = MysqlIntermediary::run_on_tcp(session, stream) {
-                log::error!("Unexpected error occurred during query execution: {:?}", error);
+    fn reject_session(mut stream: TcpStream, executor: &Runtime, error: ErrorCode) {
+        executor.spawn(async move {
+            let (kind, message) = match error.code() {
+                41 => (ErrorKind::ER_TOO_MANY_USER_CONNECTIONS, error.message()),
+                _ => (ErrorKind::ER_INTERNAL_ERROR, error.message())
             };
 
-            *max_session.lock() += 1;
-            // TODO: remove actives session count
+            if let Err(error) = RejectConnection::reject_mysql_connection(stream, kind, message).await {
+                log::error!("Unexpected error occurred during reject connection: {:?}", error);
+            }
         });
-
-        sessions.add_accepted_mysql_session();
     }
 }
+
+#[async_trait::async_trait]
+impl RunnableService<(String, u16), SocketAddr> for MySQLHandler {
+    fn abort(&self, force: bool) {
+        if let Some(abort_handler) = &*self.abort_handler.lock() {
+            abort_handler.abort();
+        }
+
+        self.session_manager.abort(force);
+    }
+
+    async fn start(&self, args: (String, u16)) -> Result<SocketAddr> {
+        let sessions = self.session_manager.clone();
+        let rejected_executor = Runtime::with_worker_threads(1)?;
+
+        let (abort_handle, mut reg) = AbortHandle::new_pair();
+        let (stream, listener_addr) = Self::listener_tcp(&args.0, args.1).await?;
+
+        let listener_loop = tokio::spawn(async move {
+            let mut abortable_listener_stream = Abortable::new(stream, reg);
+
+            loop {
+                match abortable_listener_stream.next().await {
+                    None => break,
+                    Some(Err(error)) => log::error!("Unexpected error during process accept: {}", error),
+                    Some(Ok(tcp_stream)) => {
+                        if let Ok(addr) = tcp_stream.peer_addr() {
+                            log::debug!("Received connect from {}", addr);
+                        }
+
+                        match sessions.create_session::<Session>() {
+                            Err(error) => Self::reject_session(tcp_stream, &rejected_executor, error),
+                            Ok(runnable_session) => {
+                                if let Err(error) = runnable_session.start(tcp_stream).await {
+                                    log::error!("Unexpected error occurred during start session: {:?}", error);
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        self.started(listener_loop, abort_handle);
+
+        Ok(listener_addr)
+    }
+
+    async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed> {
+        let instant = Instant::now();
+
+        let subscribe = || {
+            let terminal_sender = self.terminal_sender.lock();
+            match &*terminal_sender {
+                None => Err(ErrorCode::LogicalError("Logical error, call wait_terminal before start.")),
+                Some(terminal_watchers) => Ok(Some(terminal_watchers.clone().subscribe()))
+            }
+        };
+
+        match duration {
+            None => {
+                self.session_manager.wait_terminal(None).await?;
+                if let Some(mut rx) = subscribe()? {
+                    rx.recv().await;
+                }
+            }
+            Some(duration) => {
+                let elapsed = self.session_manager.wait_terminal(Some(duration)).await?;
+                if let Some(mut rx) = subscribe()? {
+                    let duration = duration.sub(elapsed);
+                    tokio::time::timeout(duration, rx.recv())
+                        .await
+                        .map_err_to_code(ErrorCode::Timeout, || "")?;
+                }
+            }
+        };
+
+        Ok(instant.elapsed())
+    }
+}
+

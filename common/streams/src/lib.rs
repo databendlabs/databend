@@ -15,6 +15,7 @@ mod stream_limit_by;
 mod stream_parquet;
 mod stream_progress;
 mod stream_sort;
+mod stream_abort;
 
 pub use stream::SendableDataBlockStream;
 pub use stream_datablock::DataBlockStream;
@@ -23,3 +24,4 @@ pub use stream_limit_by::LimitByStream;
 pub use stream_parquet::ParquetStream;
 pub use stream_progress::ProgressStream;
 pub use stream_sort::SortStream;
+pub use stream_abort::AbortStream;

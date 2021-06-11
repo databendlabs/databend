@@ -64,7 +64,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
 
         let block = blocks[0].clone();
         match convert_schema(block.schema()) {
-            Err(error) => MySQLOnQueryEndpoint::err(error, dataset_writer),
+            Err(error) => MySQLOnQueryEndpoint::err(&error, dataset_writer),
             Ok(columns) => {
                 let columns_size = block.num_columns();
                 let mut row_writer = dataset_writer.start(&columns)?;
@@ -88,7 +88,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
         }
     }
 
-    fn err(error: ErrorCode, writer: QueryResultWriter<'a, T>) -> Result<()> {
+    fn err(error: &ErrorCode, writer: QueryResultWriter<'a, T>) -> Result<()> {
         error!("OnQuery Error: {:?}", error);
         writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())?;
 

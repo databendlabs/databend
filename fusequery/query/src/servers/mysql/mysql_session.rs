@@ -1,107 +1,143 @@
 use std::io;
-use std::sync::Arc;
-use std::time::Instant;
+use std::ops::Sub;
+use std::sync::{Arc, Weak};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
+use futures::future::{Abortable, Aborted, AbortHandle};
 use futures::TryFutureExt;
 use msql_srv::{ErrorKind, InitWriter, MysqlShim, ParamParser, QueryResultWriter, StatementMetaWriter};
+use msql_srv::MysqlIntermediary;
+use tokio::net::TcpStream;
+use tokio::sync::broadcast::Sender;
 use tokio_stream::StreamExt;
 
 use common_datablocks::DataBlock;
-use common_exception::ErrorCode;
+use common_exception::{ErrorCode, ToErrorCode};
 use common_exception::Result;
 use common_infallible::Mutex;
 
-use crate::clusters::ClusterRef;
+use crate::clusters::{Cluster, ClusterRef};
 use crate::interpreters::{IInterpreter, InterpreterFactory};
-use crate::servers::mysql::endpoints::{MySQLOnInitEndpoint, MySQLOnQueryEndpoint, IMySQLEndpoint};
-use crate::sessions::SessionManagerRef;
+use crate::servers::{Elapsed, RunnableService};
+use crate::servers::mysql::endpoints::{IMySQLEndpoint, MySQLOnInitEndpoint, MySQLOnQueryEndpoint};
+use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
+use crate::sessions::{FuseQueryContext, FuseQueryContextRef, ISession, SessionCreator, SessionManagerRef, SessionStatus};
 use crate::sql::PlanParser;
-use std::io::Error;
-use metrics::histogram;
 
 pub struct Session {
-    cluster: ClusterRef,
+    session_id: String,
     session_manager: SessionManagerRef,
-    current_database: Arc<Mutex<String>>,
+    session_status: Arc<Mutex<SessionStatus>>,
+
+    terminal_sender: Arc<Mutex<Option<Sender<()>>>>,
+}
+
+impl ISession for Session {
+    fn get_id(&self) -> String {
+        self.session_id.clone()
+    }
+
+    fn try_create_context(&self) -> Result<FuseQueryContextRef> {
+        let context = self.session_manager
+            .try_create_context()?
+            .with_cluster(self.session_manager.get_cluster())?;
+
+        return Ok(context)
+        // context.set_current_database(database.clone());
+    }
+
+    fn get_status(&self) -> Arc<Mutex<SessionStatus>> {
+        self.session_status.clone()
+    }
+}
+
+#[async_trait::async_trait]
+impl RunnableService<TcpStream, ()> for Session {
+    fn abort(&self, force: bool) {
+        let mut session_status = self.session_status.lock();
+        session_status.enter_abort(force);
+    }
+
+    async fn start(&self, stream: TcpStream) -> Result<()> {
+        let stream = stream.into_std().map_err_to_code(ErrorCode::TokioError, || "")?;
+        stream.set_nonblocking(false).map_err_to_code(ErrorCode::TokioError, || "")?;
+
+        let session = self.session_manager.get_session(&self.session_id)?;
+
+        let handler = std::thread::spawn(move || {
+            if let Err(error) = MysqlIntermediary::run_on_tcp(InteractiveWorker::create(session), stream) {
+                log::error!("Unexpected error occurred during query execution: {:?}", error);
+            };
+        });
+
+        self.started(handler)
+    }
+
+    async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed> {
+        let instant = Instant::now();
+
+        let subscribe = || {
+            let terminal_sender = self.terminal_sender.lock();
+            match &*terminal_sender {
+                None => Err(ErrorCode::LogicalError("Logical error, call wait_terminal before start.")),
+                Some(terminal_watchers) => Ok(Some(terminal_watchers.clone().subscribe()))
+            }
+        };
+
+        match duration {
+            None => {
+                if let Some(mut rx) = subscribe()? {
+                    rx.recv().await;
+                }
+            }
+            Some(duration) => {
+                if let Some(mut rx) = subscribe()? {
+                    tokio::time::timeout(duration, rx.recv())
+                        .await
+                        .map_err_to_code(ErrorCode::Timeout, || "")?;
+                }
+            }
+        };
+
+        Ok(instant.elapsed())
+    }
+}
+
+impl SessionCreator for Session {
+    type Session = Self;
+
+    fn create(session_id: String, sessions: SessionManagerRef) -> Arc<Box<dyn ISession>> {
+        Arc::new(Box::new(
+            Session {
+                session_id,
+                session_manager: sessions,
+                session_status: Arc::new(Mutex::new(SessionStatus::create())),
+                terminal_sender: Arc::new(Mutex::new(None)),
+            }
+        ))
+    }
 }
 
 impl Session {
-    pub fn create(cluster: ClusterRef, session_manager: SessionManagerRef) -> Self {
-        Session {
-            cluster,
-            session_manager,
-            current_database: Arc::new(Mutex::new(String::from("default"))),
+    fn started(&self, handler: JoinHandle<()>) -> Result<()> {
+        {
+            let (terminal_sender, _) = tokio::sync::broadcast::channel(1);
+            *self.terminal_sender.lock() = Some(terminal_sender);
         }
-    }
-}
 
-impl<W: io::Write> MysqlShim<W> for Session {
-    type Error = ErrorCode;
+        // let session_manager = self.session_manager.clone();
+        let terminal_sender = self.terminal_sender.clone();
 
-    fn on_prepare(&mut self, _: &str, writer: StatementMetaWriter<W>) -> Result<()> {
-        writer.error(
-            ErrorKind::ER_UNKNOWN_ERROR,
-            "Prepare is not support in DataFuse.".as_bytes(),
-        )?;
+        tokio::spawn(async move {
+            handler.join().expect("Cannot join.");
+            // session_manager.destroy_session::<Self>(self);
 
-        Ok(())
-    }
-
-    fn on_execute(&mut self, _: u32, _: ParamParser, writer: QueryResultWriter<W>) -> Result<()> {
-        writer.error(
-            ErrorKind::ER_UNKNOWN_ERROR,
-            "Execute is not support in DataFuse.".as_bytes(),
-        )?;
+            if let Some(terminal_watchers) = terminal_sender.lock().take() {
+                let _ = terminal_watchers.send(());
+            }
+        });
 
         Ok(())
-    }
-
-    fn on_close(&mut self, _: u32) {
-        // unimplemented!()
-    }
-
-    fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> Result<()> {
-        log::debug!("{}", query);
-        let cluster = self.cluster.clone();
-        let database = self.current_database.lock().clone();
-        let session_manager = self.session_manager.clone();
-
-        MySQLOnQueryEndpoint::on_action(writer, move || {
-            let start = Instant::now();
-
-            let context = session_manager
-                .try_create_context()?
-                .with_cluster(cluster.clone())?;
-
-            context.set_current_database(database.clone());
-
-            let query_plan = PlanParser::create(context.clone()).build_from_sql(query)?;
-            let query_interpreter = InterpreterFactory::get(context.clone(), query_plan)?;
-
-            let received_data = futures::executor::block_on(query_interpreter
-                .execute()
-                .and_then(|stream| stream.collect::<Result<Vec<DataBlock>>>()));
-
-            histogram!(
-                super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
-                start.elapsed()
-            );
-
-            session_manager.try_remove_context(context);
-            received_data
-        })
-    }
-
-    fn on_init(&mut self, database_name: &str, writer: InitWriter<W>) -> Result<()> {
-        log::debug!("Use `{}` for MySQLHandler", database_name);
-        let current_database = self.current_database.clone();
-
-        MySQLOnInitEndpoint::on_action(writer, move || -> Result<()> {
-            // TODO: test database is exists.
-
-            *current_database.lock() = database_name.to_string();
-
-            Ok(())
-        })
     }
 }
