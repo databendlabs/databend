@@ -2,285 +2,117 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::cmp;
+use core::fmt;
+use std::convert::TryFrom;
 
-use common_arrow::arrow::datatypes;
-use common_arrow::arrow::datatypes::DataType::*;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use common_arrow::arrow::datatypes::Field;
+use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::DataValueArithmeticOperator;
-
-pub type DataType = datatypes::DataType;
-
-/// Determine if a DataType is signed numeric or not
-pub fn is_signed_numeric(dt: &DataType) -> bool {
-    matches!(
-        dt,
-        DataType::Int8
-            | DataType::Int16
-            | DataType::Int32
-            | DataType::Int64
-            | DataType::Float16
-            | DataType::Float32
-            | DataType::Float64
-    )
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
+)]
+pub enum DataType {
+    Null,
+    Boolean,
+    UInt8,
+    UInt16,
+    UInt32,
+    UInt64,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    Float32,
+    Float64,
+    Utf8,
+    /// A 32-bit date representing the elapsed time since UNIX epoch (1970-01-01)
+    /// in days (32 bits).
+    Date32,
+    /// A 64-bit date representing the elapsed time since UNIX epoch (1970-01-01)
+    /// in milliseconds (64 bits).
+    Date64,
+    Time64(TimeUnit),
+    List(ArrowDataType),
+    Duration(TimeUnit),
 }
 
-/// Determine if a DataType is numeric or not
-pub fn is_numeric(dt: &DataType) -> bool {
-    is_signed_numeric(dt)
-        || matches!(
-            dt,
-            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64
-        )
-}
-
-fn next_size(size: usize) -> usize {
-    if size < 8_usize {
-        return size * 2;
-    }
-    size
-}
-
-pub fn is_floating(dt: &DataType) -> bool {
-    matches!(
-        dt,
-        DataType::Float16 | DataType::Float32 | DataType::Float64
-    )
-}
-
-pub fn is_integer(dt: &DataType) -> bool {
-    is_numeric(dt) && !is_floating(dt)
-}
-
-pub fn numeric_byte_size(dt: &DataType) -> Result<usize> {
-    match dt {
-        DataType::Int8 | DataType::UInt8 => Ok(1),
-        DataType::Int16 | DataType::UInt16 | DataType::Float16 => Ok(2),
-        DataType::Int32 | DataType::UInt32 | DataType::Float32 => Ok(4),
-        DataType::Int64 | DataType::UInt64 | DataType::Float64 => Ok(8),
-        _ => Result::Err(ErrorCode::BadArguments(
-            "Function number_byte_size argument must be numeric types",
-        )),
-    }
-}
-
-pub fn construct_numeric_type(
-    is_signed: bool,
-    is_floating: bool,
-    byte_size: usize,
-) -> Result<DataType> {
-    match (is_signed, is_floating, byte_size) {
-        (false, false, 1) => Ok(DataType::UInt8),
-        (false, false, 2) => Ok(DataType::UInt16),
-        (false, false, 4) => Ok(DataType::UInt32),
-        (false, false, 8) => Ok(DataType::UInt64),
-        (false, true, 1) => Ok(DataType::Float16),
-        (false, true, 2) => Ok(DataType::Float16),
-        (false, true, 4) => Ok(DataType::Float32),
-        (false, true, 8) => Ok(DataType::Float64),
-        (true, false, 1) => Ok(DataType::Int8),
-        (true, false, 2) => Ok(DataType::Int16),
-        (true, false, 4) => Ok(DataType::Int32),
-        (true, false, 8) => Ok(DataType::Int64),
-        (true, true, 1) => Ok(DataType::Float32),
-        (true, true, 2) => Ok(DataType::Float32),
-        (true, true, 4) => Ok(DataType::Float32),
-        (true, true, 8) => Ok(DataType::Float64),
-
-        // TODO support bigint and decimal types, now we just let's overflow
-        (false, false, d) if d > 8 => Ok(DataType::Int64),
-        (true, false, d) if d > 8 => Ok(DataType::UInt64),
-        (_, true, d) if d > 8 => Ok(DataType::Float64),
-
-        _ => Result::Err(ErrorCode::BadDataValueType(format!(
-            "Can't construct type from is_signed: {}, is_floating: {}, byte_size: {}",
-            is_signed, is_floating, byte_size
-        ))),
-    }
-}
-
-/// Coercion rules for dictionary values (aka the type of the  dictionary itself)
-fn dictionary_value_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
-    numerical_coercion(lhs_type, rhs_type).or_else(|_| string_coercion(lhs_type, rhs_type))
-}
-
-/// Coercion rules for Dictionaries: the type that both lhs and rhs
-/// can be casted to for the purpose of a computation.
-///
-/// It would likely be preferable to cast primitive values to
-/// dictionaries, and thus avoid unpacking dictionary as well as doing
-/// faster comparisons. However, the arrow compute kernels (e.g. eq)
-/// don't have DictionaryArray support yet, so fall back to unpacking
-/// the dictionaries
-pub fn dictionary_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
-    match (lhs_type, rhs_type) {
-        (
-            DataType::Dictionary(_lhs_index_type, lhs_value_type),
-            DataType::Dictionary(_rhs_index_type, rhs_value_type),
-        ) => dictionary_value_coercion(lhs_value_type, rhs_value_type),
-        (DataType::Dictionary(_index_type, value_type), _) => {
-            dictionary_value_coercion(value_type, rhs_type)
+impl DataType {
+    pub fn to_arrow(&self) -> ArrowDataType {
+        use DataType::*;
+        match self {
+            Null => ArrowDataType::Null,
+            Boolean => ArrowDataType::Boolean,
+            UInt8 => ArrowDataType::UInt8,
+            UInt16 => ArrowDataType::UInt16,
+            UInt32 => ArrowDataType::UInt32,
+            UInt64 => ArrowDataType::UInt64,
+            Int8 => ArrowDataType::Int8,
+            Int16 => ArrowDataType::Int16,
+            Int32 => ArrowDataType::Int32,
+            Int64 => ArrowDataType::Int64,
+            Float32 => ArrowDataType::Float32,
+            Float64 => ArrowDataType::Float64,
+            Utf8 => ArrowDataType::LargeUtf8,
+            Date32 => ArrowDataType::Date32,
+            Date64 => ArrowDataType::Date64,
+            Time64(tu) => ArrowDataType::Time64(tu.clone()),
+            List(dt) => ArrowDataType::List(Box::new(Field::new("", dt.clone(), true))),
+            Duration(tu) => ArrowDataType::Duration(tu.clone()),
         }
-        (_, DataType::Dictionary(_index_type, value_type)) => {
-            dictionary_value_coercion(lhs_type, value_type)
+    }
+}
+
+impl PartialEq<ArrowDataType> for DataType {
+    fn eq(&self, other: &ArrowDataType) -> bool {
+        let arrow_type = self.to_arrow();
+        &arrow_type == other
+    }
+}
+
+impl TryFrom<&ArrowDataType> for DataType {
+    type Error = ErrorCode;
+
+    fn try_from(dt: &ArrowDataType) -> Result<Self> {
+        match dt {
+            ArrowDataType::Null => Ok(DataType::Null),
+            ArrowDataType::UInt8 => Ok(DataType::UInt8),
+            ArrowDataType::UInt16 => Ok(DataType::UInt16),
+            ArrowDataType::UInt32 => Ok(DataType::UInt32),
+            ArrowDataType::UInt64 => Ok(DataType::UInt64),
+            ArrowDataType::Int8 => Ok(DataType::Int8),
+            ArrowDataType::Int16 => Ok(DataType::Int16),
+            ArrowDataType::Int32 => Ok(DataType::Int32),
+            ArrowDataType::Int64 => Ok(DataType::Int64),
+            ArrowDataType::LargeUtf8 => Ok(DataType::Utf8),
+            ArrowDataType::Boolean => Ok(DataType::Boolean),
+            ArrowDataType::Float32 => Ok(DataType::Float32),
+            ArrowDataType::Float64 => Ok(DataType::Float64),
+            ArrowDataType::LargeList(f) => Ok(DataType::List(f.data_type().clone())),
+            ArrowDataType::Date32 => Ok(DataType::Date32),
+            ArrowDataType::Date64 => Ok(DataType::Date64),
+            ArrowDataType::Time64(TimeUnit::Nanosecond) => {
+                Ok(DataType::Time64(TimeUnit::Nanosecond))
+            }
+            ArrowDataType::Duration(TimeUnit::Nanosecond) => {
+                Ok(DataType::Duration(TimeUnit::Nanosecond))
+            }
+            ArrowDataType::Duration(TimeUnit::Millisecond) => {
+                Ok(DataType::Duration(TimeUnit::Millisecond))
+            }
+            ArrowDataType::Utf8 => Ok(DataType::Utf8),
+            dt => Err(ErrorCode::IllegalDataType(format!(
+                "Arrow datatype {:?} not supported by Datafuse",
+                dt
+            ))),
         }
-        _ => Result::Err(ErrorCode::BadDataValueType(format!(
-            "Can't construct type from {} and {}",
-            lhs_type, rhs_type
-        ))),
     }
 }
 
-/// Coercion rules for Strings: the type that both lhs and rhs can be
-/// casted to for the purpose of a string computation
-pub fn string_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
-    match (lhs_type, rhs_type) {
-        (Utf8, Utf8) => Ok(Utf8),
-        (LargeUtf8, Utf8) => Ok(LargeUtf8),
-        (Utf8, LargeUtf8) => Ok(LargeUtf8),
-        (LargeUtf8, LargeUtf8) => Ok(LargeUtf8),
-        _ => Result::Err(ErrorCode::BadDataValueType(format!(
-            "Can't construct type from {} and {}",
-            lhs_type, rhs_type
-        ))),
+impl fmt::Display for DataType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
-}
-
-/// Coercion rule for numerical types: The type that both lhs and rhs
-/// can be casted to for numerical calculation, while maintaining
-/// maximum precision
-pub fn numerical_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
-    let has_float = is_floating(lhs_type) || is_floating(rhs_type);
-    let has_integer = is_integer(lhs_type) || is_integer(rhs_type);
-    let has_signed = is_signed_numeric(lhs_type) || is_signed_numeric(rhs_type);
-    let has_unsigned = !is_signed_numeric(lhs_type) || !is_signed_numeric(rhs_type);
-
-    let size_of_lhs = numeric_byte_size(lhs_type)?;
-    let size_of_rhs = numeric_byte_size(rhs_type)?;
-
-    let max_size_of_unsigned_integer = cmp::max(
-        if is_signed_numeric(lhs_type) {
-            0
-        } else {
-            size_of_lhs
-        },
-        if is_signed_numeric(rhs_type) {
-            0
-        } else {
-            size_of_rhs
-        },
-    );
-
-    let max_size_of_signed_integer = cmp::max(
-        if !is_signed_numeric(lhs_type) {
-            0
-        } else {
-            size_of_lhs
-        },
-        if !is_signed_numeric(rhs_type) {
-            0
-        } else {
-            size_of_rhs
-        },
-    );
-
-    let max_size_of_integer = cmp::max(
-        if !is_integer(lhs_type) {
-            0
-        } else {
-            size_of_lhs
-        },
-        if !is_integer(rhs_type) {
-            0
-        } else {
-            size_of_rhs
-        },
-    );
-
-    let max_size_of_float = cmp::max(
-        if !is_floating(lhs_type) {
-            0
-        } else {
-            size_of_lhs
-        },
-        if !is_floating(rhs_type) {
-            0
-        } else {
-            size_of_rhs
-        },
-    );
-
-    let should_double = (has_float && has_integer && max_size_of_integer >= max_size_of_float)
-        || (has_signed
-            && has_unsigned
-            && max_size_of_unsigned_integer >= max_size_of_signed_integer);
-
-    construct_numeric_type(
-        has_signed,
-        has_float,
-        if should_double {
-            cmp::max(size_of_rhs, size_of_lhs) * 2
-        } else {
-            cmp::max(size_of_rhs, size_of_lhs)
-        },
-    )
-}
-
-#[inline]
-pub fn numerical_arithmetic_coercion(
-    op: &DataValueArithmeticOperator,
-    lhs_type: &DataType,
-    rhs_type: &DataType,
-) -> Result<DataType> {
-    // error on any non-numeric type
-    if !is_numeric(lhs_type) || !is_numeric(rhs_type) {
-        return Result::Err(ErrorCode::BadDataValueType(format!(
-            "DataValue Error: Unsupported ({:?}) {} ({:?})",
-            lhs_type, op, rhs_type
-        )));
-    };
-
-    let has_signed = is_signed_numeric(lhs_type) || is_signed_numeric(rhs_type);
-    let has_float = is_floating(lhs_type) || is_floating(rhs_type);
-    let max_size = cmp::max(numeric_byte_size(lhs_type)?, numeric_byte_size(rhs_type)?);
-
-    match op {
-        DataValueArithmeticOperator::Plus
-        | DataValueArithmeticOperator::Mul
-        | DataValueArithmeticOperator::Modulo => {
-            construct_numeric_type(has_signed, has_float, next_size(max_size))
-        }
-        DataValueArithmeticOperator::Minus => {
-            construct_numeric_type(true, has_float, next_size(max_size))
-        }
-        DataValueArithmeticOperator::Div => Ok(Float64),
-    }
-}
-
-#[inline]
-pub fn numerical_signed_coercion(val_type: &DataType) -> Result<DataType> {
-    // error on any non-numeric type
-    if !is_numeric(val_type) {
-        return Result::Err(ErrorCode::BadDataValueType(format!(
-            "DataValue Error: Unsupported ({:?})",
-            val_type
-        )));
-    };
-
-    let has_float = is_floating(val_type);
-    let max_size = numeric_byte_size(val_type)?;
-
-    construct_numeric_type(true, has_float, max_size)
-}
-
-// coercion rules for equality operations. This is a superset of all numerical coercion rules.
-pub fn equal_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
-    if lhs_type == rhs_type {
-        // same type => equality is possible
-        return Ok(lhs_type.clone());
-    }
-
-    numerical_coercion(lhs_type, rhs_type).or_else(|_| dictionary_coercion(lhs_type, rhs_type))
 }
