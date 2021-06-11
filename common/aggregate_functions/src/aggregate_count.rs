@@ -32,7 +32,7 @@ impl AggregateCountFunction {
         assert_variadic_arguments(display_name, arguments.len(), (0, 1))?;
         Ok(Box::new(AggregateCountFunction {
             display_name: display_name.to_string(),
-            state: DataValue::Null,
+            state: DataValue::UInt64(Some(0)),
             arguments,
         }))
     }
