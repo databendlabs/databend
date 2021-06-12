@@ -16,8 +16,8 @@ use common_planners::FilterPlan;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
-use futures::TryStreamExt;
 use common_tracing::tracing;
+use futures::TryStreamExt;
 
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::interpreters::IInterpreter;
@@ -139,7 +139,7 @@ impl IInterpreter for SelectInterpreter {
             queue1 = VecDeque::from(queue2);
             queue2 = VecDeque::<PlanNode>::new();
         }
-        println!("levels:{:?}", levels);
+
         let mut exists_res_map = HashMap::<String, bool>::new();
         let size = levels.len();
         for i in (0..size).rev() {
@@ -154,7 +154,6 @@ impl IInterpreter for SelectInterpreter {
                 exists_res_map.insert(name.unwrap().to_string(), b);
             }
         }
-        println!("exists_res_map:{:?}", exists_res_map);
         execute_one_select(self.ctx.clone(), plan, exists_res_map).await
     }
 }

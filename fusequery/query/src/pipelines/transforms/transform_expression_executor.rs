@@ -108,8 +108,6 @@ impl ExpressionExecutor {
                         .arg_names
                         .iter()
                         .map(|arg| {
-                            println!("arg: {:?}", arg);
-                            println!("val: {:?}", column_map.get(arg));
                             column_map.get(arg).cloned().ok_or_else(|| {
                                 ErrorCode::LogicalError(
                                     "Arguments must be prepared before function transform",
@@ -127,11 +125,13 @@ impl ExpressionExecutor {
                     column_map.insert(constant.name.clone(), column);
                 }
                 ExpressionAction::Exists(exists) => {
-                    println!(
-                        "exists.name={}, val={:?}",
-                        exists.name,
-                        column_map.get(&exists.name)
-                    );
+                    let res = column_map.get(&exists.name);
+                    match res {
+                        None => return Err(ErrorCode::LogicalError(
+                            "Exisit subquery must be prepared before the main query's execution",
+                        )),
+                        _ => (),
+                    }
                 }
                 _ => {}
             }
