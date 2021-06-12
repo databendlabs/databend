@@ -15,16 +15,14 @@ use crate::SendableDataBlockStream;
 
 pub struct SkipStream {
     input: SendableDataBlockStream,
-    n: usize,
-    current: usize,
+    remaining: usize,
 }
 
 impl SkipStream {
     pub fn new(input: SendableDataBlockStream, n: usize) -> Self {
         SkipStream {
             input,
-            n,
-            current: 0,
+            remaining: n,
         }
     }
 }
@@ -33,21 +31,22 @@ impl Stream for SkipStream {
     type Item = Result<DataBlock>;
 
     fn poll_next(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.input.poll_next_unpin(ctx).map(|x| match x {
-            Some(Ok(ref block)) => Some(Ok({
-                let rows = block.num_rows();
-                if self.current + rows <= self.n {
-                    self.current += rows;
-                    DataBlock::empty_with_schema(block.schema().clone())
-                } else if self.current == self.n {
-                    block.clone()
-                } else {
-                    let keep = self.current + rows - self.n;
-                    self.current = self.n;
-                    block.slice(keep, rows - keep)
+        while self.remaining > 0 {
+            match self.input.poll_next_unpin(ctx) {
+                Poll::Ready(Some(Ok(ref block))) => {
+                    let rows = block.num_rows();
+                    if self.remaining >= rows {
+                        self.remaining -= rows;
+                        continue;
+                    } else if self.remaining < rows {
+                        let remaining = self.remaining;
+                        self.remaining = 0;
+                        return Poll::Ready(Some(Ok(block.slice(remaining, rows - remaining))));
+                    }
                 }
-            })),
-            other => other,
-        })
+                other => return other,
+            }
+        }
+        self.input.poll_next_unpin(ctx)
     }
 }

@@ -16,16 +16,14 @@ use crate::SendableDataBlockStream;
 
 pub struct TakeStream {
     input: SendableDataBlockStream,
-    n: usize,
-    current: usize,
+    remaining: usize,
 }
 
 impl TakeStream {
     pub fn new(input: SendableDataBlockStream, n: usize) -> Self {
         TakeStream {
             input,
-            n,
-            current: 0,
+            remaining: n,
         }
     }
 }
@@ -37,15 +35,15 @@ impl Stream for TakeStream {
         self.input.poll_next_unpin(ctx).map(|x| match x {
             Some(Ok(ref block)) => {
                 let rows = block.num_rows();
-                if self.current == self.n {
+                if self.remaining == 0 {
                     None
-                } else if self.current + rows < self.n {
-                    self.current += rows;
+                } else if self.remaining >= rows {
+                    self.remaining -= rows;
                     Some(block.clone())
                 } else {
-                    let keep = self.n - self.current;
-                    self.current = self.n;
-                    Some(block.slice(0, keep))
+                    let remaining = self.remaining;
+                    self.remaining = 0;
+                    Some(block.slice(0, remaining))
                 }
             }
             .map(Ok),
