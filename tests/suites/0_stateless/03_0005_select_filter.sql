@@ -5,3 +5,6 @@ SELECT * FROM numbers_mt (3) where 1=2;
 SELECT number as c1, (number+1) as c2 FROM numbers_mt (3) where number+1>1;
 EXPLAIN SELECT number as c1, (number+1) as c2 FROM numbers_mt (3) where number >1;
 SELECT number as c1, (number+1) as c2 FROM numbers_mt (3) where number >1;
+select number from numbers_mt(10) where number > 5  and exists (select name from system.settings);
+select number from numbers_mt(10) where number > 5  and exists (select name from system.settings) and exists (select number from numbers_mt(10));
+select number from numbers_mt(10) where number > 5  and exists (select name from system.settings where exists (select number from numbers_mt(10)));
