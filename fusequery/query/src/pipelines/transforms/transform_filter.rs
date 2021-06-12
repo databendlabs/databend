@@ -19,7 +19,6 @@ use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
-
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
 use crate::pipelines::transforms::ExpressionExecutor;

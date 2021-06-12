@@ -12,9 +12,9 @@ use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::find_exists_exprs;
 use common_planners::Expression;
+use common_planners::FilterPlan;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
-use common_planners::FilterPlan;
 use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 
@@ -143,7 +143,9 @@ impl IInterpreter for SelectInterpreter {
         for i in (0..size).rev() {
             let ex_plans = &levels[i];
             for exp in ex_plans {
-                let stream = execute_one_select(self.ctx.clone(), exp.clone(), exists_res_map.clone()).await?;
+                let stream =
+                    execute_one_select(self.ctx.clone(), exp.clone(), exists_res_map.clone())
+                        .await?;
                 let result = stream.try_collect::<Vec<_>>().await?;
                 let b = if result.len() > 0 { true } else { false };
                 let name = names.get(&format!("{:?}", exp));
@@ -153,5 +155,4 @@ impl IInterpreter for SelectInterpreter {
         println!("exists_res_map:{:?}", exists_res_map);
         execute_one_select(self.ctx.clone(), plan, exists_res_map).await
     }
-
 }
