@@ -117,6 +117,18 @@ impl DataBlock {
             self.columns[idx].to_array()
         }
     }
+
+    pub fn slice(&self, offset: usize, length: usize) -> Self {
+        let rows = self.num_rows();
+        if offset == 0 && length >= rows {
+            return self.clone();
+        }
+        let mut limited_columns = Vec::with_capacity(self.num_columns());
+        for i in 0..self.num_columns() {
+            limited_columns.push(self.column(i).slice(offset, length));
+        }
+        DataBlock::create(self.schema().clone(), limited_columns)
+    }
 }
 
 impl TryFrom<DataBlock> for RecordBatch {
