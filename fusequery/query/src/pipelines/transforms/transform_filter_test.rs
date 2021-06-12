@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::sync::Arc;
+use std::collections::HashMap;
 
 use common_planners::*;
 use futures::TryStreamExt;
@@ -27,6 +28,7 @@ async fn test_transform_filter() -> anyhow::Result<()> {
     {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
+                HashMap::<String, bool>::new(),
                 plan.input.schema(),
                 plan.predicate.clone(),
                 false,
@@ -67,7 +69,7 @@ async fn test_transform_filter_error() -> anyhow::Result<()> {
         .and_then(|x| x.build())?;
 
     if let PlanNode::Filter(plan) = plan {
-        let result = FilterTransform::try_create(plan.schema(), plan.predicate.clone(), false);
+        let result = FilterTransform::try_create(HashMap::<String, bool>::new(), plan.schema(), plan.predicate.clone(), false);
         let actual = format!("{}", result.err().unwrap());
         let expect = "Code: 1002, displayText = Invalid argument error: Unable to get field named \"not_found_filed\". Valid fields: [\"number\"].";
         assert_eq!(expect, actual);

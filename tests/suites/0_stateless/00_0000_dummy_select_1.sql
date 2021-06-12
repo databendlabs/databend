@@ -13,3 +13,6 @@ SELECT b.number FROM numbers(3) AS a ORDER BY a.number;
 SELECT a.number FROM numbers(3) AS a ORDER BY b.number;
 SELECT b.number FROM (SELECT * FROM numbers(3) AS b ORDER BY a.number) AS a;
 SELECT b.number FROM (SELECT * FROM numbers(3) AS b) AS a ORDER BY b.number;
+select number from numbers_mt(10) where number > 5  and exists (select name from system.settings);
+select number from numbers_mt(10) where number > 5  and exists (select name from system.settings) and exists (select number from numbers_mt(10));
+select number from numbers_mt(10) where number > 5  and exists (select name from system.settings where exists (select number from numbers_mt(10)));
