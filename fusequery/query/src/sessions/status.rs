@@ -3,7 +3,7 @@ use futures::future::{AbortHandle, Aborted};
 use common_exception::Result;
 use common_planners::PlanNode;
 
-enum State {
+pub enum State {
     Idle,
     Progress,
     Aborting,
@@ -32,8 +32,19 @@ impl SessionStatus {
         }
     }
 
-    pub fn enter_parser(&mut self, query: &str) {
+    pub fn is_aborted(&self) -> bool {
+        match self.state {
+            State::Aborting | State::Aborted => true,
+            _ => false
+        }
+    }
+
+    pub fn init_context(&mut self, context: FuseQueryContextRef) {
         self.state = State::Progress;
+
+    }
+
+    pub fn enter_parser(&mut self, query: &str) {
         self.executing_query = Some(query.to_string())
     }
 

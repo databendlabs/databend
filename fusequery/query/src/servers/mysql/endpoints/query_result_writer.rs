@@ -1,25 +1,32 @@
-// Copyright 2020-2021 The Datafuse Authors.
-//
-// SPDX-License-Identifier: Apache-2.0.
-
+use msql_srv::*;
+use common_datablocks::DataBlock;
+use common_exception::{Result, ErrorCode};
+use common_datavalues::{DataField, DataSchemaRef};
 use common_arrow::arrow::datatypes::DataType;
 use common_arrow::arrow::util::display::array_value_to_string;
-use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use log::error;
-use msql_srv::*;
 
-use crate::servers::mysql::endpoints::IMySQLEndpoint;
+pub struct DFQueryResultWriter<'a, W: std::io::Write> {
+    inner: Option<QueryResultWriter<'a, W>>,
+}
 
-pub struct MySQLOnQueryEndpoint;
+impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
+    pub fn create(inner: QueryResultWriter<'a, W>) -> DFQueryResultWriter<'a, W> {
+        DFQueryResultWriter::<'a, W> {
+            inner: Some(inner)
+        }
+    }
 
-impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOnQueryEndpoint {
-    type Input = Vec<DataBlock>;
+    pub fn write(&mut self, query_result: Result<Vec<DataBlock>>) -> Result<()> {
+        if let Some(mut writer) = self.inner.take() {
+            match query_result {
+                Ok(received_data) => Self::ok(received_data, writer)?,
+                Err(error) => Self::err(&error, writer)?
+            }
+        }
+        Ok(())
+    }
 
-    fn ok(blocks: Self::Input, dataset_writer: QueryResultWriter<'a, T>) -> Result<()> {
+    fn ok(blocks: Vec<DataBlock>, dataset_writer: QueryResultWriter<'a, W>) -> Result<()> {
         // XXX: num_columns == 0 may is error?
         if blocks.is_empty() || (blocks[0].num_columns() == 0) {
             dataset_writer.completed(0, 0)?;
@@ -64,7 +71,7 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
 
         let block = blocks[0].clone();
         match convert_schema(block.schema()) {
-            Err(error) => MySQLOnQueryEndpoint::err(&error, dataset_writer),
+            Err(error) => Self::err(&error, dataset_writer),
             Ok(columns) => {
                 let columns_size = block.num_columns();
                 let mut row_writer = dataset_writer.start(&columns)?;
@@ -88,10 +95,17 @@ impl<'a, T: std::io::Write> IMySQLEndpoint<QueryResultWriter<'a, T>> for MySQLOn
         }
     }
 
-    fn err(error: &ErrorCode, writer: QueryResultWriter<'a, T>) -> Result<()> {
-        error!("OnQuery Error: {:?}", error);
-        writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())?;
+    fn err(error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
+        log::error!("OnQuery Error: {:?}", error);
+        let aborted_code = ErrorCode::AbortedSession("").code();
 
-        Ok(())
+        if error.code() == aborted_code {
+            writer.error(ErrorKind::ER_ABORTING_CONNECTION, format!("{}", error).as_bytes())?;
+            Err(ErrorCode::AbortedSession("Aborting this connection. because we are try aborting server."))
+        } else {
+            writer.error(ErrorKind::ER_ABORTING_CONNECTION, format!("{}", error).as_bytes())?;
+            Ok(())
+        }
     }
 }
+

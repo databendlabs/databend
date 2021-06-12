@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tasks = vec![];
     let mut services = vec![];
     let cluster = Cluster::create_global(conf.clone())?;
-    let session_manager = SessionManager::from_conf(conf.clone());
+    let session_manager = SessionManager::from_conf(conf.clone(), cluster.clone());
 
     // MySQL handler.
     {

@@ -20,7 +20,7 @@ use common_infallible::Mutex;
 use crate::clusters::{Cluster, ClusterRef};
 use crate::interpreters::{IInterpreter, InterpreterFactory};
 use crate::servers::{Elapsed, RunnableService};
-use crate::servers::mysql::endpoints::{IMySQLEndpoint, MySQLOnInitEndpoint, MySQLOnQueryEndpoint};
+use crate::servers::mysql::endpoints::{IMySQLEndpoint, MySQLOnInitEndpoint};
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
 use crate::sessions::{FuseQueryContext, FuseQueryContextRef, ISession, SessionCreator, SessionManagerRef, SessionStatus};
 use crate::sql::PlanParser;
@@ -30,7 +30,7 @@ pub struct Session {
     session_manager: SessionManagerRef,
     session_status: Arc<Mutex<SessionStatus>>,
 
-    terminal_sender: Arc<Mutex<Option<Sender<()>>>>,
+    aborted_notify: Arc<tokio::sync::Notify>
 }
 
 impl ISession for Session {
@@ -39,11 +39,11 @@ impl ISession for Session {
     }
 
     fn try_create_context(&self) -> Result<FuseQueryContextRef> {
-        let context = self.session_manager
-            .try_create_context()?
-            .with_cluster(self.session_manager.get_cluster())?;
+        let mut context = FuseQueryContext::try_create()?;
+        context = context.with_cluster(self.session_manager.get_cluster())?;
+        // TODO: init context with session status
 
-        return Ok(context)
+        return Ok(context);
         // context.set_current_database(database.clone());
     }
 
@@ -60,43 +60,37 @@ impl RunnableService<TcpStream, ()> for Session {
     }
 
     async fn start(&self, stream: TcpStream) -> Result<()> {
+        let abort_notify = self.aborted_notify.clone();
         let stream = stream.into_std().map_err_to_code(ErrorCode::TokioError, || "")?;
         stream.set_nonblocking(false).map_err_to_code(ErrorCode::TokioError, || "")?;
 
         let session = self.session_manager.get_session(&self.session_id)?;
 
-        let handler = std::thread::spawn(move || {
+        std::thread::spawn(move || {
             if let Err(error) = MysqlIntermediary::run_on_tcp(InteractiveWorker::create(session), stream) {
                 log::error!("Unexpected error occurred during query execution: {:?}", error);
             };
+
+            abort_notify.notify_waiters();
         });
 
-        self.started(handler)
+        Ok(())
     }
 
     async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed> {
         let instant = Instant::now();
 
-        let subscribe = || {
-            let terminal_sender = self.terminal_sender.lock();
-            match &*terminal_sender {
-                None => Err(ErrorCode::LogicalError("Logical error, call wait_terminal before start.")),
-                Some(terminal_watchers) => Ok(Some(terminal_watchers.clone().subscribe()))
-            }
-        };
-
         match duration {
             None => {
-                if let Some(mut rx) = subscribe()? {
-                    rx.recv().await;
-                }
+                self.aborted_notify.notified().await;
+                self.session_manager.destroy_session(self);
             }
             Some(duration) => {
-                if let Some(mut rx) = subscribe()? {
-                    tokio::time::timeout(duration, rx.recv())
-                        .await
-                        .map_err_to_code(ErrorCode::Timeout, || "")?;
-                }
+                tokio::time::timeout(duration, self.aborted_notify.notified())
+                    .await
+                    .map_err_to_code(ErrorCode::Timeout, || "")?;
+
+                self.session_manager.destroy_session(self);
             }
         };
 
@@ -113,31 +107,8 @@ impl SessionCreator for Session {
                 session_id,
                 session_manager: sessions,
                 session_status: Arc::new(Mutex::new(SessionStatus::create())),
-                terminal_sender: Arc::new(Mutex::new(None)),
+                aborted_notify: Arc::new(tokio::sync::Notify::new())
             }
         ))
-    }
-}
-
-impl Session {
-    fn started(&self, handler: JoinHandle<()>) -> Result<()> {
-        {
-            let (terminal_sender, _) = tokio::sync::broadcast::channel(1);
-            *self.terminal_sender.lock() = Some(terminal_sender);
-        }
-
-        // let session_manager = self.session_manager.clone();
-        let terminal_sender = self.terminal_sender.clone();
-
-        tokio::spawn(async move {
-            handler.join().expect("Cannot join.");
-            // session_manager.destroy_session::<Self>(self);
-
-            if let Some(terminal_watchers) = terminal_sender.lock().take() {
-                let _ = terminal_watchers.send(());
-            }
-        });
-
-        Ok(())
     }
 }

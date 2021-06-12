@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
+use common_exception::{ErrorCode, ToErrorCode};
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::Partitions;
@@ -14,15 +14,19 @@ use metrics::counter;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 use crate::servers::{RunnableService, Elapsed};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use crate::configs::Config;
 use crate::clusters::{ClusterRef, Cluster};
 use crate::sessions::session::{ISession, SessionCreator};
+use std::ops::Sub;
 
 pub struct SessionManager {
     sessions: RwLock<HashMap<String, Arc<Box<dyn ISession>>>>,
+    // TODO: remove queries_context.
     queries_context: RwLock<HashMap<String, FuseQueryContextRef>>,
-    max_mysql_sessions: u64,
+    max_mysql_sessions: usize,
+    cluster: ClusterRef,
+    aborted_notify: Arc<tokio::sync::Notify>,
 }
 
 pub type SessionManagerRef = Arc<SessionManager>;
@@ -32,23 +36,32 @@ impl SessionManager {
         Arc::new(SessionManager {
             sessions: RwLock::new(HashMap::with_capacity(max_mysql_sessions as usize)),
             queries_context: RwLock::new(HashMap::with_capacity(max_mysql_sessions as usize)),
-            max_mysql_sessions,
+            max_mysql_sessions: max_mysql_sessions as usize,
+            cluster: Cluster::empty(),
+            aborted_notify: Arc::new(tokio::sync::Notify::new()),
         })
     }
 
-    pub fn from_conf(conf: Config/*, cluster: ClusterRef*/) -> SessionManagerRef {
-        Self::create(conf.mysql_handler_thread_num)
+    pub fn from_conf(conf: Config, cluster: ClusterRef) -> SessionManagerRef {
+        let max_mysql_sessions = conf.mysql_handler_thread_num as usize;
+        Arc::new(SessionManager {
+            sessions: RwLock::new(HashMap::with_capacity(max_mysql_sessions)),
+            queries_context: RwLock::new(HashMap::with_capacity(max_mysql_sessions)),
+            max_mysql_sessions,
+            cluster,
+            aborted_notify: Arc::new(tokio::sync::Notify::new()),
+        })
     }
 
     pub fn get_cluster(self: &Arc<Self>) -> ClusterRef {
-        Cluster::empty()
+        self.cluster.clone()
     }
 
     pub fn create_session<S: SessionCreator>(self: &Arc<Self>) -> Result<Arc<Box<dyn ISession>>> {
         counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
 
         let mut sessions = self.sessions.write();
-        match sessions.len() == (self.max_mysql_sessions as usize) {
+        match sessions.len() == self.max_mysql_sessions {
             true => Err(ErrorCode::TooManyUserConnections("The current accept connection has exceeded mysql_handler_thread_num config")),
             false => {
                 let id = uuid::Uuid::new_v4().to_string();
@@ -62,8 +75,8 @@ impl SessionManager {
     pub fn get_session(self: &Arc<Self>, id: &str) -> Result<Arc<Box<dyn ISession>>> {
         let mut sessions = self.sessions.read();
         match sessions.get(id) {
-            None => Err(ErrorCode::NotFoundSession("")),
-            Some(sessions) => Ok(sessions.clone())
+            Some(sessions) => Ok(sessions.clone()),
+            None => Err(ErrorCode::NotFoundSession(format!("Not found session: {}", id))),
         }
     }
 
@@ -97,8 +110,9 @@ impl SessionManager {
 #[async_trait::async_trait]
 impl RunnableService<(), ()> for SessionManager {
     fn abort(&self, force: bool) {
-        let sessions = self.sessions.read();
+        let sessions = self.sessions.write();
         sessions.iter().for_each(|(_, session)| session.abort(force));
+        self.aborted_notify.notify_waiters();
     }
 
     async fn start(&self, _: ()) -> Result<()> {
@@ -106,7 +120,39 @@ impl RunnableService<(), ()> for SessionManager {
     }
 
     async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed> {
-        Err(ErrorCode::UnImplement(""))
+        let instant = Instant::now();
+
+        let active_sessions_snapshot = || {
+            let locked_active_sessions = self.sessions.write();
+            (&*locked_active_sessions).iter().map(|(_, session)| session.clone())
+                .collect::<Vec<_>>()
+        };
+
+        match duration {
+            None => {
+                self.aborted_notify.notified().await;
+                for active_session in active_sessions_snapshot() {
+                    active_session.wait_terminal(None).await?;
+                }
+            }
+            Some(duration) => {
+                tokio::time::timeout(duration, self.aborted_notify.notified())
+                    .await
+                    .map_err_to_code(ErrorCode::Timeout, || "")?;
+
+                let mut duration = duration.sub(instant.elapsed());
+                for active_session in active_sessions_snapshot() {
+                    if duration.is_zero() {
+                        return Err(ErrorCode::Timeout(""));
+                    }
+
+                    let elapsed = active_session.wait_terminal(Some(duration.clone())).await?;
+                    duration = duration.sub(elapsed);
+                }
+            }
+        };
+
+        Ok(instant.elapsed())
     }
 }
 

@@ -7,7 +7,7 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 
 use crate::interpreters::{IInterpreter, InterpreterFactory};
-use crate::servers::mysql::endpoints::{MySQLOnInitEndpoint, MySQLOnQueryEndpoint, IMySQLEndpoint};
+use crate::servers::mysql::endpoints::{MySQLOnInitEndpoint, IMySQLEndpoint, DFQueryResultWriter};
 use crate::sessions::{ISession, SessionStatus};
 use crate::sql::PlanParser;
 use std::sync::Arc;
@@ -15,74 +15,131 @@ use std::time::Instant;
 use common_streams::AbortStream;
 use tokio_stream::StreamExt;
 use metrics::histogram;
+use std::marker::PhantomData;
 
+struct InteractiveWorkerBase<W: std::io::Write> {
+    session: Arc<Box<dyn ISession>>,
+    phantom_data: PhantomData<W>,
+}
 
-pub struct InteractiveWorker {
+pub struct InteractiveWorker<W: std::io::Write> {
+    base: InteractiveWorkerBase<W>,
     session: Arc<Box<dyn ISession>>,
 }
 
-impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker {
+impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
     type Error = ErrorCode;
 
-    fn on_prepare(&mut self, _: &str, writer: StatementMetaWriter<W>) -> Result<()> {
-        writer.error(ErrorKind::ER_UNKNOWN_ERROR, "Prepare is not support in DataFuse.".as_bytes())?;
+    fn on_prepare(&mut self, query: &str, writer: StatementMetaWriter<W>) -> Result<()> {
+        if self.session.get_status().lock().is_aborted() {
+            writer.error(
+                ErrorKind::ER_ABORTING_CONNECTION,
+                "Aborting this connection. because we are try aborting server.".as_bytes(),
+            )?;
 
-        Ok(())
+            return Err(ErrorCode::AbortedSession("Aborting this connection. because we are try aborting server."))
+        }
+
+        self.base.do_prepare(query, writer)
     }
 
-    fn on_execute(&mut self, _: u32, _: ParamParser, writer: QueryResultWriter<W>) -> Result<()> {
-        writer.error(ErrorKind::ER_UNKNOWN_ERROR, "Execute is not support in DataFuse.".as_bytes())?;
+    fn on_execute(&mut self, id: u32, param: ParamParser, writer: QueryResultWriter<W>) -> Result<()> {
+        if self.session.get_status().lock().is_aborted() {
+            writer.error(
+                ErrorKind::ER_ABORTING_CONNECTION,
+                "Aborting this connection. because we are try aborting server.".as_bytes(),
+            )?;
 
-        Ok(())
+            return Err(ErrorCode::AbortedSession("Aborting this connection. because we are try aborting server."))
+        }
+
+        self.base.do_execute(id, param, writer)
     }
 
-    fn on_close(&mut self, _: u32) {
-        // unimplemented!()
+    fn on_close(&mut self, id: u32) {
+        self.base.do_close(id)
     }
 
     fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> Result<()> {
-        log::debug!("{}", query);
+        if self.session.get_status().lock().is_aborted() {
+            writer.error(
+                ErrorKind::ER_ABORTING_CONNECTION,
+                "Aborting this connection. because we are try aborting server.".as_bytes(),
+            )?;
 
-        MySQLOnQueryEndpoint::on_action(writer, move || {
-            let start = Instant::now();
-            let context = self.session.try_create_context()?;
+            return Err(ErrorCode::AbortedSession("Aborting this connection. because we are try aborting server."))
+        }
 
-            self.session.get_status().lock().enter_parser(query);
-            let query_plan = PlanParser::create(context.clone()).build_from_sql(query)?;
+        let start = Instant::now();
+        DFQueryResultWriter::create(writer).write(self.base.do_query(query))?;
 
-            self.session.get_status().lock().enter_interpreter(&query_plan);
-            let query_interpreter = InterpreterFactory::get(context.clone(), query_plan)?;
-            let stream = futures::executor::block_on(query_interpreter.execute())?;
+        histogram!(
+            super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
+            start.elapsed()
+        );
 
-            let (abort_handle, stream) = AbortStream::try_create(stream)?;
-            self.session.get_status().lock().enter_fetch_data(abort_handle);
-            let received_data = futures::executor::block_on(stream.collect::<Result<Vec<DataBlock>>>());
-
-            histogram!(
-                super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
-                start.elapsed()
-            );
-
-            received_data
-        })
+        Ok(())
     }
 
     fn on_init(&mut self, database_name: &str, writer: InitWriter<W>) -> Result<()> {
-        log::debug!("Use `{}` for MySQLHandler", database_name);
-        // let current_database = self.current_database.clone();
+        if self.session.get_status().lock().is_aborted() {
+            writer.error(
+                ErrorKind::ER_ABORTING_CONNECTION,
+                "Aborting this connection. because we are try aborting server.".as_bytes(),
+            )?;
 
-        MySQLOnInitEndpoint::on_action(writer, move || -> Result<()> {
-            // TODO: test database is exists.
+            return Err(ErrorCode::AbortedSession("Aborting this connection. because we are try aborting server."))
+        }
 
-            // *current_database.lock() = database_name.to_string();
-
-            Ok(())
-        })
+        self.base.do_init(database_name, writer)
     }
 }
 
-impl InteractiveWorker {
-    pub fn create(session: Arc<Box<dyn ISession>>) -> InteractiveWorker {
-        InteractiveWorker { session }
+impl<W: std::io::Write> InteractiveWorkerBase<W> {
+    fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {
+        writer.error(ErrorKind::ER_UNKNOWN_ERROR, "Prepare is not support in DataFuse.".as_bytes())?;
+        Ok(())
+    }
+
+    fn do_execute(&mut self, _: u32, _: ParamParser<'_>, writer: QueryResultWriter<'_, W>) -> Result<()> {
+        writer.error(ErrorKind::ER_UNKNOWN_ERROR, "Execute is not support in DataFuse.".as_bytes())?;
+        Ok(())
+    }
+
+    fn do_close(&mut self, _: u32) {}
+
+    fn do_query(&mut self, query: &str) -> Result<Vec<DataBlock>> {
+        log::debug!("{}", query);
+
+        let context = self.session.try_create_context()?;
+
+        self.session.get_status().lock().enter_parser(query);
+        let query_plan = PlanParser::create(context.clone()).build_from_sql(query)?;
+
+        self.session.get_status().lock().enter_interpreter(&query_plan);
+        let interpreter = InterpreterFactory::get(context.clone(), query_plan)?;
+        let data_stream = futures::executor::block_on(interpreter.execute())?;
+
+        let (abort_handle, abort_stream) = AbortStream::try_create(data_stream)?;
+        self.session.get_status().lock().enter_fetch_data(abort_handle);
+
+        futures::executor::block_on(abort_stream.collect::<Result<Vec<DataBlock>>>())
+    }
+
+    fn do_init(&mut self, database_name: &str, writer: InitWriter<'_, W>) -> Result<()> {
+        log::debug!("Use `{}` for MySQLHandler", database_name);
+        MySQLOnInitEndpoint::do_action(writer, self.session.clone())
+    }
+}
+
+impl<W: std::io::Write> InteractiveWorker<W> {
+    pub fn create(session: Arc<Box<dyn ISession>>) -> InteractiveWorker<W> {
+        InteractiveWorker::<W> {
+            session: session.clone(),
+            base: InteractiveWorkerBase::<W> {
+                session,
+                phantom_data: PhantomData::<W>,
+            },
+        }
     }
 }

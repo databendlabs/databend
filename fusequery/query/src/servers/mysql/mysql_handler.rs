@@ -5,7 +5,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use futures::future::{AbortHandle, Abortable};
+use futures::future::{AbortHandle, Abortable, AbortRegistration};
 use common_exception::ErrorCode;
 use common_exception::Result;
 use msql_srv::*;
@@ -31,37 +31,19 @@ use std::ops::Sub;
 pub struct MySQLHandler {
     session_manager: SessionManagerRef,
 
-    abort_handler: Mutex<Option<AbortHandle>>,
-    terminal_sender: Arc<Mutex<Option<Sender<()>>>>,
+    aborted_notify: Arc<tokio::sync::Notify>,
+    abort_parts: Mutex<(AbortHandle, Option<AbortRegistration>)>,
 }
 
 impl MySQLHandler {
     pub fn create(session_manager: SessionManagerRef) -> Self {
+        let (abort_handle, mut reg) = AbortHandle::new_pair();
+
         MySQLHandler {
             session_manager,
-            abort_handler: Mutex::new(None),
-            terminal_sender: Arc::new(Mutex::new(None)),
+            abort_parts: Mutex::new((abort_handle, Some(reg))),
+            aborted_notify: Arc::new(tokio::sync::Notify::new()),
         }
-    }
-
-    pub fn started(&self, handler: JoinHandle<()>, abort_handler: AbortHandle) {
-        {
-            *self.abort_handler.lock() = Some(abort_handler);
-            let (terminal_sender, _) = tokio::sync::broadcast::channel(1);
-            *self.terminal_sender.lock() = Some(terminal_sender);
-        }
-
-        let terminal_sender = self.terminal_sender.clone();
-
-        tokio::spawn(async move {
-            if let Err(error) = handler.await {
-                log::error!("Cannot join: {}", error);
-            }
-
-            if let Some(terminal_watchers) = terminal_sender.lock().take() {
-                let _ = terminal_watchers.send(());
-            }
-        });
     }
 
     async fn listener_tcp(hostname: &str, port: u16) -> Result<(TcpListenerStream, SocketAddr)> {
@@ -88,76 +70,65 @@ impl MySQLHandler {
 #[async_trait::async_trait]
 impl RunnableService<(String, u16), SocketAddr> for MySQLHandler {
     fn abort(&self, force: bool) {
-        if let Some(abort_handler) = &*self.abort_handler.lock() {
-            abort_handler.abort();
-        }
-
+        self.abort_parts.lock().0.abort();
         self.session_manager.abort(force);
     }
 
     async fn start(&self, args: (String, u16)) -> Result<SocketAddr> {
-        let sessions = self.session_manager.clone();
-        let rejected_executor = Runtime::with_worker_threads(1)?;
+        let abort_registration = self.abort_parts.lock().1.take();
+        if let Some(mut abort_registration) = abort_registration {
+            let sessions = self.session_manager.clone();
+            let aborted_notify = self.aborted_notify.clone();
+            let rejected_executor = Runtime::with_worker_threads(1)?;
 
-        let (abort_handle, mut reg) = AbortHandle::new_pair();
-        let (stream, listener_addr) = Self::listener_tcp(&args.0, args.1).await?;
+            let (stream, addr) = Self::listener_tcp(&args.0, args.1).await?;
 
-        let listener_loop = tokio::spawn(async move {
-            let mut abortable_listener_stream = Abortable::new(stream, reg);
+            tokio::spawn(async move {
+                let mut listener_stream = Abortable::new(stream, abort_registration);
 
-            loop {
-                match abortable_listener_stream.next().await {
-                    None => break,
-                    Some(Err(error)) => log::error!("Unexpected error during process accept: {}", error),
-                    Some(Ok(tcp_stream)) => {
-                        if let Ok(addr) = tcp_stream.peer_addr() {
-                            log::debug!("Received connect from {}", addr);
-                        }
+                loop {
+                    match listener_stream.next().await {
+                        None => break,
+                        Some(Err(error)) => log::error!("Unexpected error during process accept: {}", error),
+                        Some(Ok(tcp_stream)) => {
+                            if let Ok(addr) = tcp_stream.peer_addr() {
+                                log::debug!("Received connect from {}", addr);
+                            }
 
-                        match sessions.create_session::<Session>() {
-                            Err(error) => Self::reject_session(tcp_stream, &rejected_executor, error),
-                            Ok(runnable_session) => {
-                                if let Err(error) = runnable_session.start(tcp_stream).await {
-                                    log::error!("Unexpected error occurred during start session: {:?}", error);
-                                };
+                            match sessions.create_session::<Session>() {
+                                Err(error) => Self::reject_session(tcp_stream, &rejected_executor, error),
+                                Ok(runnable_session) => {
+                                    if let Err(error) = runnable_session.start(tcp_stream).await {
+                                        log::error!("Unexpected error occurred during start session: {:?}", error);
+                                    };
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
 
-        self.started(listener_loop, abort_handle);
+                aborted_notify.notify_waiters();
+            });
 
-        Ok(listener_addr)
+            return Ok(addr)
+        }
+
+        Err(ErrorCode::LogicalError("MySQLHandler already running."))
     }
 
     async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed> {
         let instant = Instant::now();
 
-        let subscribe = || {
-            let terminal_sender = self.terminal_sender.lock();
-            match &*terminal_sender {
-                None => Err(ErrorCode::LogicalError("Logical error, call wait_terminal before start.")),
-                Some(terminal_watchers) => Ok(Some(terminal_watchers.clone().subscribe()))
-            }
-        };
-
         match duration {
             None => {
                 self.session_manager.wait_terminal(None).await?;
-                if let Some(mut rx) = subscribe()? {
-                    rx.recv().await;
-                }
+                self.aborted_notify.notified().await;
             }
             Some(duration) => {
                 let elapsed = self.session_manager.wait_terminal(Some(duration)).await?;
-                if let Some(mut rx) = subscribe()? {
-                    let duration = duration.sub(elapsed);
-                    tokio::time::timeout(duration, rx.recv())
-                        .await
-                        .map_err_to_code(ErrorCode::Timeout, || "")?;
-                }
+                let duration = duration.sub(elapsed);
+                tokio::time::timeout(duration, self.aborted_notify.notified()).await
+                    .map_err_to_code(ErrorCode::Timeout, || "")?;
             }
         };
 
