@@ -71,7 +71,7 @@ impl DataColumnarValue {
     pub fn slice(&self, offset: usize, length: usize) -> DataColumnarValue {
         match self {
             DataColumnarValue::Array(array) => {
-                DataColumnarValue::Array(array.slice(length, offset))
+                DataColumnarValue::Array(array.slice(offset, length))
             }
             DataColumnarValue::Constant(scalar, _) => {
                 DataColumnarValue::Constant(scalar.clone(), length)
