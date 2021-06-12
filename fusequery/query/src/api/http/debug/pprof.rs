@@ -30,7 +30,7 @@ pub fn pprof_handler(
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::path!("debug" / "pprof" / "profile")
         .and(warp::get())
-        .and(warp::header::<String>("Accept"))
+        .and(warp::header::optional::<String>("Accept"))
         .and(warp::query::<PProfRequest>())
         .and_then(handlers::pprof)
 }
@@ -43,15 +43,20 @@ mod handlers {
     use crate::api::http::debug::pprof::PProfRequest;
 
     pub async fn pprof(
-        header: String,
+        header: Option<String>,
         req: PProfRequest,
     ) -> Result<impl warp::Reply, std::convert::Infallible> {
         let body;
         let duration = Duration::from_secs(req.seconds);
         let profile = Profiling::create(duration, req.frequency.get());
-        // header:"text/html,..."
-        if header.contains("text/html") {
-            body = profile.dump_flamegraph().await.unwrap();
+
+        if let Some(accept) = header {
+            // Browser.
+            if accept.contains("text/html") {
+                body = profile.dump_flamegraph().await.unwrap();
+            } else {
+                body = profile.dump_proto().await.unwrap();
+            }
         } else {
             body = profile.dump_proto().await.unwrap();
         }
