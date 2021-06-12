@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_tracing::init_tracing_with_level;
 use fuse_query::api::HttpService;
 use fuse_query::api::RpcService;
 use fuse_query::clusters::Cluster;
@@ -28,11 +29,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         env_logger::Env::default().default_filter_or(conf.log_level.to_lowercase().as_str()),
     )
     .init();
+    init_tracing_with_level(conf.log_level.as_str());
 
     info!("{:?}", conf);
     info!(
         "FuseQuery v-{}",
-        fuse_query::configs::config::FUSE_COMMIT_VERSION
+        *fuse_query::configs::config::FUSE_COMMIT_VERSION
     );
 
     let mut tasks = vec![];

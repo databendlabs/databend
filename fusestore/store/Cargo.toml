@@ -11,6 +11,10 @@ edition = "2018"
 name = "fuse-store"
 path = "src/bin/fuse-store.rs"
 
+[features]
+default = ["simd"]
+simd = ["common-arrow/simd"]
+
 [dependencies]
 # Workspace dependencies
 common-arrow = {path = "../../common/arrow"}
@@ -21,12 +25,13 @@ common-flights = {path = "../../common/flights"}
 common-functions = {path = "../../common/functions"}
 common-infallible = {path = "../../common/infallible"}
 common-planners = {path = "../../common/planners"}
+common-tracing = {path = "../../common/tracing"}
 
 
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.40"
+anyhow = "1.0.41"
 # track self maintained branch with hot fixes
 async-raft = { git = "https://github.com/datafuse-extras/async-raft", branch = "master" }
 async-trait = "0.1"
@@ -52,16 +57,12 @@ threadpool = "1.8.1"
 tokio = { version = "1.6", features = ["macros", "rt","rt-multi-thread", "sync"] }
 tokio-stream = "0.1"
 tonic = "0.4"
-tracing = "0.1.26"
-tracing-futures = { version = "0.2.5", default-features = false }
 uuid = { version = "0.8", features = ["serde", "v4"] }
 
 [dev-dependencies]
 env_logger = "*"
 pretty_assertions = "0.7"
 test-env-log = "0.2.7"
-tracing = {version = "0.1", default-features = false}
-tracing-subscriber = "0.2.18"
 maplit = "1.0.2"
 
 [build-dependencies]

@@ -11,7 +11,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::FunctionFactory;
 
@@ -141,7 +141,7 @@ impl Expression {
                 let func = self.to_aggregate_function(input_schema)?;
                 func.return_type()
             }
-            Expression::Wildcard => Result::Err(ErrorCodes::IllegalDataType(
+            Expression::Wildcard => Result::Err(ErrorCode::IllegalDataType(
                 "Wildcard expressions are not valid to get return type",
             )),
             Expression::Cast { data_type, .. } => Ok(data_type.clone()),
@@ -166,7 +166,7 @@ impl Expression {
                 }
                 AggregateFunctionFactory::get(&func_name, fields)
             }
-            _ => Err(ErrorCodes::LogicalError(
+            _ => Err(ErrorCode::LogicalError(
                 "Expression must be aggregated function",
             )),
         }
@@ -181,7 +181,7 @@ impl Expression {
                 }
                 Ok(names)
             }
-            _ => Err(ErrorCodes::LogicalError(
+            _ => Err(ErrorCode::LogicalError(
                 "Expression must be aggregated function",
             )),
         }

@@ -14,8 +14,8 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 use futures::stream::StreamExt;
-use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
@@ -64,6 +64,8 @@ impl IProcessor for AggregatorFinalTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        tracing::debug!("execute...");
+
         let mut funcs = self.funcs.clone();
         let mut stream = self.input.execute().await?;
 
@@ -81,7 +83,7 @@ impl IProcessor for AggregatorFinalTransform {
             }
         }
         let delta = start.elapsed();
-        info!("Aggregator final cost: {:?}", delta);
+        tracing::debug!("Aggregator final cost: {:?}", delta);
 
         let mut final_result = Vec::with_capacity(funcs.len());
         for func in &funcs {

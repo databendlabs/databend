@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::Partitions;
@@ -31,14 +31,14 @@ impl SessionManager {
         counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
 
         let ctx = FuseQueryContext::try_create()?;
-        self.sessions.write().insert(ctx.get_id()?, ctx.clone());
+        self.sessions.write().insert(ctx.get_id(), ctx.clone());
         Ok(ctx)
     }
 
     pub fn try_remove_context(&self, ctx: FuseQueryContextRef) -> Result<()> {
         counter!(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
 
-        self.sessions.write().remove(&*ctx.get_id()?);
+        self.sessions.write().remove(&*ctx.get_id());
         Ok(())
     }
 
@@ -46,7 +46,7 @@ impl SessionManager {
     pub fn try_fetch_partitions(&self, ctx_id: String, nums: usize) -> Result<Partitions> {
         let session_map = self.sessions.read();
         let ctx = session_map.get(&*ctx_id).ok_or_else(|| {
-            ErrorCodes::UnknownContextID(format!("Unsupported context id: {}", ctx_id))
+            ErrorCode::UnknownContextID(format!("Unsupported context id: {}", ctx_id))
         })?;
         ctx.try_get_partitions(nums)
     }

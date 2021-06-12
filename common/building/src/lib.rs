@@ -11,7 +11,7 @@ use vergen::ShaKind;
 /// Setup building environment:
 /// - Watch git HEAD to trigger a rebuild;
 /// - Generate vergen instruction to setup environment variables for building Fuse components. See: https://docs.rs/vergen/5.1.8/vergen/ ;
-/// - Generate Fuse environment variables, e.g., version and authors.
+/// - Generate Fuse environment variables, e.g., authors.
 pub fn setup() {
     if Path::new(".git/HEAD").exists() {
         println!("cargo:rerun-if-changed=.git/HEAD");
@@ -22,7 +22,6 @@ pub fn setup() {
 pub fn add_building_env_vars() {
     add_env_vergen();
     add_env_commit_authors();
-    add_env_commit_version();
 }
 
 pub fn add_env_vergen() {
@@ -43,19 +42,4 @@ pub fn add_env_commit_authors() {
         Err(e) => e.to_string(),
     };
     println!("cargo:rustc-env=FUSE_COMMIT_AUTHORS={}", authors);
-}
-
-/// Generate Fuse style commit-version and keep it in environment variable FUSE_COMMIT_VERSION.
-pub fn add_env_commit_version() {
-    let build_semver = option_env!("VERGEN_BUILD_SEMVER");
-    let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
-    let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
-    let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
-
-    let ver = match (build_semver, git_sha, rustc_semver, timestamp) {
-        (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
-        _ => String::new(),
-    };
-
-    println!("cargo:rustc-env=FUSE_COMMIT_VERSION={}", ver);
 }

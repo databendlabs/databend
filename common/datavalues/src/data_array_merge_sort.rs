@@ -10,7 +10,7 @@ use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::DynComparator;
 use common_arrow::arrow::array::MutableArrayData;
 use common_arrow::arrow::compute::SortOptions;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 pub struct DataArrayMerge;
@@ -18,13 +18,13 @@ pub struct DataArrayMerge;
 impl DataArrayMerge {
     pub fn merge_array(lhs: &ArrayRef, rhs: &ArrayRef, indices: &[bool]) -> Result<ArrayRef> {
         if lhs.data_type() != rhs.data_type() {
-            return Result::Err(ErrorCodes::BadDataValueType(
+            return Result::Err(ErrorCode::BadDataValueType(
                 "It is impossible to merge arrays of different data types.",
             ));
         }
 
         if lhs.len() + rhs.len() < indices.len() || indices.is_empty() {
-            return Result::Err(ErrorCodes::BadDataArrayLength(format!(
+            return Result::Err(ErrorCode::BadDataArrayLength(format!(
                 "It is impossible to merge arrays with overflow indices, {}",
                 indices.len()
             )));
@@ -72,7 +72,7 @@ impl DataArrayMerge {
         limit: Option<usize>,
     ) -> Result<Vec<bool>> {
         if lhs.len() != rhs.len() {
-            return Result::Err(ErrorCodes::BadDataArrayLength(
+            return Result::Err(ErrorCode::BadDataArrayLength(
                 format!(
                     "Merge requires lhs and rhs to have the same number of arrays. lhs has {}, rhs has {}.",
                     lhs.len(),
@@ -81,12 +81,12 @@ impl DataArrayMerge {
             ));
         };
         if lhs.is_empty() {
-            return Result::Err(ErrorCodes::BadDataArrayLength(
+            return Result::Err(ErrorCode::BadDataArrayLength(
                 "Merge requires lhs to have at least 1 entry.",
             ));
         };
         if lhs.len() != options.len() {
-            return Result::Err(ErrorCodes::BadDataArrayLength(
+            return Result::Err(ErrorCode::BadDataArrayLength(
                 format!(
                     "Merge requires the number of sort options to equal number of columns. lhs has {} entries, options has {} entries",
                     lhs.len(),

@@ -17,8 +17,8 @@ use common_infallible::RwLock;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 use futures::stream::StreamExt;
-use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
@@ -79,6 +79,7 @@ impl IProcessor for GroupByFinalTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        tracing::debug!("execute...");
         let aggr_funcs = self
             .aggr_exprs
             .iter()
@@ -139,7 +140,7 @@ impl IProcessor for GroupByFinalTransform {
             }
         }
         let delta = start.elapsed();
-        info!("Group by final cost: {:?}", delta);
+        tracing::debug!("Group by final cost: {:?}", delta);
 
         // Collect the merge states.
         let groups = self.groups.read();

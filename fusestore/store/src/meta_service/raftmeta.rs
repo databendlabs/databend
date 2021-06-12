@@ -3,14 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::fmt;
 use std::io::Cursor;
 use std::sync::Arc;
 
-use anyhow::Result;
 use async_raft::async_trait::async_trait;
 use async_raft::config::Config;
 use async_raft::raft::AppendEntriesRequest;
@@ -28,11 +26,13 @@ use async_raft::storage::HardState;
 use async_raft::storage::InitialState;
 use async_raft::AppData;
 use async_raft::AppDataResponse;
+use async_raft::ClientWriteError;
 use async_raft::NodeId;
 use async_raft::Raft;
 use async_raft::RaftMetrics;
 use async_raft::RaftNetwork;
 use async_raft::RaftStorage;
+use common_tracing::tracing;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
@@ -44,7 +44,7 @@ use tokio::sync::RwLockWriteGuard;
 use tokio::task::JoinHandle;
 use tonic::transport::channel::Channel;
 
-use crate::meta_service::Meta;
+use crate::meta_service::MemStoreStateMachine;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::MetaServiceServer;
@@ -131,6 +131,7 @@ impl tonic::IntoRequest<RaftMes> for ClientRequest {
     fn into_request(self) -> tonic::Request<RaftMes> {
         let mes = RaftMes {
             data: serde_json::to_string(&self).expect("fail to serialize"),
+            error: "".to_string(),
         };
         tonic::Request::new(mes)
     }
@@ -139,6 +140,7 @@ impl tonic::IntoRequest<RaftMes> for AppendEntriesRequest<ClientRequest> {
     fn into_request(self) -> tonic::Request<RaftMes> {
         let mes = RaftMes {
             data: serde_json::to_string(&self).expect("fail to serialize"),
+            error: "".to_string(),
         };
         tonic::Request::new(mes)
     }
@@ -147,6 +149,7 @@ impl tonic::IntoRequest<RaftMes> for InstallSnapshotRequest {
     fn into_request(self) -> tonic::Request<RaftMes> {
         let mes = RaftMes {
             data: serde_json::to_string(&self).expect("fail to serialize"),
+            error: "".to_string(),
         };
         tonic::Request::new(mes)
     }
@@ -155,6 +158,7 @@ impl tonic::IntoRequest<RaftMes> for VoteRequest {
     fn into_request(self) -> tonic::Request<RaftMes> {
         let mes = RaftMes {
             data: serde_json::to_string(&self).expect("fail to serialize"),
+            error: "".to_string(),
         };
         tonic::Request::new(mes)
     }
@@ -168,6 +172,14 @@ impl TryFrom<RaftMes> for ClientRequest {
             serde_json::from_str(&mes.data).map_err(|e| tonic::Status::internal(e.to_string()))?;
         Ok(req)
     }
+}
+
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum RetryableError {
+    /// Trying to write to a non-leader returns the latest leader the raft node knows,
+    /// to indicate the client to retry.
+    #[error("request must be forwarded to leader: {leader}")]
+    ForwardToLeader { leader: NodeId },
 }
 
 /// The application data response type which the `MemStore` works with.
@@ -193,22 +205,42 @@ impl AppDataResponse for ClientResponse {}
 impl From<ClientResponse> for RaftMes {
     fn from(msg: ClientResponse) -> Self {
         let data = serde_json::to_string(&msg).expect("fail to serialize");
-        RaftMes { data }
+        RaftMes {
+            data,
+            error: "".to_string(),
+        }
+    }
+}
+impl From<RetryableError> for RaftMes {
+    fn from(err: RetryableError) -> Self {
+        let error = serde_json::to_string(&err).expect("fail to serialize");
+        RaftMes {
+            data: "".to_string(),
+            error,
+        }
     }
 }
 
-impl From<RaftMes> for ClientResponse {
+impl From<Result<ClientResponse, RetryableError>> for RaftMes {
+    fn from(rst: Result<ClientResponse, RetryableError>) -> Self {
+        match rst {
+            Ok(resp) => resp.into(),
+            Err(err) => err.into(),
+        }
+    }
+}
+
+impl From<RaftMes> for Result<ClientResponse, RetryableError> {
     fn from(msg: RaftMes) -> Self {
-        let resp: ClientResponse = serde_json::from_str(&msg.data).expect("fail to deserialize");
-        resp
-    }
-}
-
-impl From<tonic::Response<RaftMes>> for ClientResponse {
-    fn from(v: tonic::Response<RaftMes>) -> Self {
-        let mes = v.into_inner();
-        let resp: ClientResponse = serde_json::from_str(&mes.data).expect("fail to deserialize");
-        resp
+        if !msg.data.is_empty() {
+            let resp: ClientResponse =
+                serde_json::from_str(&msg.data).expect("fail to deserialize");
+            Ok(resp)
+        } else {
+            let err: RetryableError =
+                serde_json::from_str(&msg.error).expect("fail to deserialize");
+            Err(err)
+        }
     }
 }
 
@@ -254,44 +286,6 @@ pub struct MemStoreSnapshot {
     pub membership: MembershipConfig,
     /// The data of the state machine at the time of this snapshot.
     pub data: Vec<u8>,
-}
-
-/// The state machine of the `MemStore`.
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
-pub struct MemStoreStateMachine {
-    pub last_applied_log: u64,
-    /// A mapping of client IDs to their state info:
-    /// (serial, ClientResponse)
-    pub client_serial_responses: HashMap<String, (u64, ClientResponse)>,
-
-    pub meta: Meta,
-}
-
-impl MemStoreStateMachine {
-    /// Apply an log entry to state machine.
-    ///
-    /// If a duplicated log entry is detected by checking data.txid, no update
-    /// will be made and the previous resp is returned. In this way a client is able to re-send a
-    /// command safely in case of network failure etc.
-    #[tracing::instrument(level = "info", skip(self))]
-    pub fn apply(&mut self, index: u64, data: &ClientRequest) -> Result<ClientResponse> {
-        self.last_applied_log = index;
-        if let Some(ref txid) = data.txid {
-            if let Some((serial, resp)) = self.client_serial_responses.get(&txid.client) {
-                if serial == &txid.serial {
-                    return Ok(resp.clone());
-                }
-            }
-        }
-
-        let resp = self.meta.apply(data)?;
-
-        if let Some(ref txid) = data.txid {
-            self.client_serial_responses
-                .insert(txid.client.clone(), (txid.serial, resp.clone()));
-        }
-        Ok(resp)
-    }
 }
 
 /// An in-memory storage system implementing the `async_raft::RaftStorage` trait.
@@ -369,7 +363,7 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
     type ShutdownError = ShutdownError;
 
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
-    async fn get_membership_config(&self) -> Result<MembershipConfig> {
+    async fn get_membership_config(&self) -> anyhow::Result<MembershipConfig> {
         let log = self.log.read().await;
         let cfg_opt = log.values().rev().find_map(|entry| match &entry.payload {
             EntryPayload::ConfigChange(cfg) => Some(cfg.membership.clone()),
@@ -383,7 +377,7 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
-    async fn get_initial_state(&self) -> Result<InitialState> {
+    async fn get_initial_state(&self) -> anyhow::Result<InitialState> {
         let membership = self.get_membership_config().await?;
         let mut hs = self.hs.write().await;
         let log = self.log.read().await;
@@ -415,13 +409,17 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
     }
 
     #[tracing::instrument(level = "info", skip(self, hs), fields(myid=self.id))]
-    async fn save_hard_state(&self, hs: &HardState) -> Result<()> {
+    async fn save_hard_state(&self, hs: &HardState) -> anyhow::Result<()> {
         *self.hs.write().await = Some(hs.clone());
         Ok(())
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
-    async fn get_log_entries(&self, start: u64, stop: u64) -> Result<Vec<Entry<ClientRequest>>> {
+    async fn get_log_entries(
+        &self,
+        start: u64,
+        stop: u64,
+    ) -> anyhow::Result<Vec<Entry<ClientRequest>>> {
         // Invalid request, return empty vec.
         if start > stop {
             tracing::error!("invalid request, start > stop");
@@ -432,7 +430,7 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
-    async fn delete_logs_from(&self, start: u64, stop: Option<u64>) -> Result<()> {
+    async fn delete_logs_from(&self, start: u64, stop: Option<u64>) -> anyhow::Result<()> {
         if stop.as_ref().map(|stop| &start > stop).unwrap_or(false) {
             tracing::error!("invalid request, start > stop");
             return Ok(());
@@ -452,14 +450,14 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
     }
 
     #[tracing::instrument(level = "info", skip(self, entry), fields(myid=self.id))]
-    async fn append_entry_to_log(&self, entry: &Entry<ClientRequest>) -> Result<()> {
+    async fn append_entry_to_log(&self, entry: &Entry<ClientRequest>) -> anyhow::Result<()> {
         let mut log = self.log.write().await;
         log.insert(entry.index, entry.clone());
         Ok(())
     }
 
     #[tracing::instrument(level = "info", skip(self, entries), fields(myid=self.id))]
-    async fn replicate_to_log(&self, entries: &[Entry<ClientRequest>]) -> Result<()> {
+    async fn replicate_to_log(&self, entries: &[Entry<ClientRequest>]) -> anyhow::Result<()> {
         let mut log = self.log.write().await;
         for entry in entries {
             log.insert(entry.index, entry.clone());
@@ -472,14 +470,17 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
         &self,
         index: &u64,
         data: &ClientRequest,
-    ) -> Result<ClientResponse> {
+    ) -> anyhow::Result<ClientResponse> {
         let mut sm = self.sm.write().await;
         let resp = sm.apply(*index, data)?;
         Ok(resp)
     }
 
     #[tracing::instrument(level = "info", skip(self, entries), fields(myid=self.id))]
-    async fn replicate_to_state_machine(&self, entries: &[(&u64, &ClientRequest)]) -> Result<()> {
+    async fn replicate_to_state_machine(
+        &self,
+        entries: &[(&u64, &ClientRequest)],
+    ) -> anyhow::Result<()> {
         let mut sm = self.sm.write().await;
         for (index, data) in entries {
             sm.apply(**index, data)?;
@@ -488,7 +489,7 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
-    async fn do_log_compaction(&self) -> Result<CurrentSnapshotData<Self::Snapshot>> {
+    async fn do_log_compaction(&self) -> anyhow::Result<CurrentSnapshotData<Self::Snapshot>> {
         let (data, last_applied_log);
         {
             // Serialize the data of the state machine.
@@ -555,7 +556,7 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
-    async fn create_snapshot(&self) -> Result<(String, Box<Self::Snapshot>)> {
+    async fn create_snapshot(&self) -> anyhow::Result<(String, Box<Self::Snapshot>)> {
         Ok((String::from(""), Box::new(Cursor::new(Vec::new())))) // Snapshot IDs are insignificant to this storage engine.
     }
 
@@ -567,7 +568,7 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
         delete_through: Option<u64>,
         id: String,
         snapshot: Box<Self::Snapshot>,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         tracing::info!(
             { snapshot_size = snapshot.get_ref().len() },
             "decoding snapshot for installation"
@@ -615,7 +616,9 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
-    async fn get_current_snapshot(&self) -> Result<Option<CurrentSnapshotData<Self::Snapshot>>> {
+    async fn get_current_snapshot(
+        &self,
+    ) -> anyhow::Result<Option<CurrentSnapshotData<Self::Snapshot>>> {
         match &*self.current_snapshot.read().await {
             Some(snapshot) => {
                 let reader = serde_json::to_vec(&snapshot)?;
@@ -660,7 +663,7 @@ impl RaftNetwork<ClientRequest> for Network {
         &self,
         target: NodeId,
         rpc: AppendEntriesRequest<ClientRequest>,
-    ) -> Result<AppendEntriesResponse> {
+    ) -> anyhow::Result<AppendEntriesResponse> {
         tracing::debug!("append_entries req to: id={}: {:?}", target, rpc);
 
         let mut client = self.make_client(&target).await?;
@@ -679,7 +682,7 @@ impl RaftNetwork<ClientRequest> for Network {
         &self,
         target: NodeId,
         rpc: InstallSnapshotRequest,
-    ) -> Result<InstallSnapshotResponse> {
+    ) -> anyhow::Result<InstallSnapshotResponse> {
         tracing::debug!("install_snapshot req to: id={}", target);
 
         let mut client = self.make_client(&target).await?;
@@ -694,7 +697,7 @@ impl RaftNetwork<ClientRequest> for Network {
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.sto.id))]
-    async fn vote(&self, target: NodeId, rpc: VoteRequest) -> Result<VoteResponse> {
+    async fn vote(&self, target: NodeId, rpc: VoteRequest) -> anyhow::Result<VoteResponse> {
         tracing::debug!("vote req to: id={} {:?}", target, rpc);
 
         let mut client = self.make_client(&target).await?;
@@ -1082,26 +1085,34 @@ impl MetaNode {
     /// Submit a write request to the known leader. Returns the response after applying the request.
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn write(&self, req: ClientRequest) -> anyhow::Result<ClientResponse> {
-        // TODO handle ForwardToLeader error if leader changed.
-        let leader = self.get_leader().await;
+        let mut curr_leader = self.get_leader().await;
+        loop {
+            let rst = if curr_leader == self.sto.id {
+                self.write_to_local_leader(req.clone()).await?
+            } else {
+                // forward to leader
 
-        if leader == self.sto.id {
-            return self.write_to_local_leader(req).await;
+                let addr = self.sto.get_node_addr(&curr_leader).await?;
+                let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
+                let resp = client.write(req.clone()).await?;
+                let rst: Result<ClientResponse, RetryableError> = resp.into_inner().into();
+                rst
+            };
+
+            match rst {
+                Ok(resp) => return Ok(resp),
+                Err(write_err) => match write_err {
+                    RetryableError::ForwardToLeader { leader } => curr_leader = leader,
+                },
+            }
         }
-
-        // forward to leader
-
-        let addr = self.sto.get_node_addr(&leader).await?;
-        let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
-        let resp = client.write(req).await?;
-        let resp = resp.into();
-        Ok(resp)
     }
 
+    /// Try to get the leader from the latest metrics of the local raft node.
+    /// If leader is absent, wait for an metrics update in which a leader is set.
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn get_leader(&self) -> NodeId {
-        // try to get the leader from the latest metrics.
-        // If leader is absent, wait for an update in which a leader is set.
+        // fast path: there is a known leader
 
         if let Some(l) = self.metrics_rx.borrow().current_leader {
             return l;
@@ -1109,11 +1120,13 @@ impl MetaNode {
 
         // slow path: wait loop
 
+        // Need to clone before calling changed() on it.
+        // Otherwise other thread waiting on changed() may not receive the change event.
         let mut rx = self.metrics_rx.clone();
 
         loop {
-            // If changed() is called before clone(),
-            // we may miss the changed message.
+            // NOTE:
+            // The metrics may have already changed before we cloning it.
             // Thus we need to re-check the cloned rx.
             if let Some(l) = rx.borrow().current_leader {
                 return l;
@@ -1127,25 +1140,29 @@ impl MetaNode {
         }
     }
 
-    /// Write a meta record through local raft node.
-    /// It works only when this node is the leader.
+    /// Write a meta log through local raft node.
+    /// It works only when this node is the leader,
+    /// otherwise it returns ClientWriteError::ForwardToLeader error indicating the latest leader.
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn write_to_local_leader(
         &self,
         req: ClientRequest,
-    ) -> anyhow::Result<ClientResponse> {
-        // TODO: respond ForwardToLeader error
+    ) -> anyhow::Result<Result<ClientResponse, RetryableError>> {
         let write_rst = self.raft.client_write(ClientWriteRequest::new(req)).await;
 
-        tracing::info!("raft.client_write rst: {:?}", write_rst);
+        tracing::debug!("raft.client_write rst: {:?}", write_rst);
 
-        let resp = match write_rst {
-            Ok(v) => v,
-            // ClientWriteError::RaftError(re)
-            // ClientWriteError::ForwardToLeader(_req, _node_id)
-            Err(e) => return Err(anyhow::anyhow!("{:}", e)),
-        };
-
-        Ok(resp.data)
+        match write_rst {
+            Ok(resp) => Ok(Ok(resp.data)),
+            Err(cli_write_err) => match cli_write_err {
+                // fatal error
+                ClientWriteError::RaftError(raft_err) => Err(anyhow::anyhow!(raft_err.to_string())),
+                // retryable error
+                ClientWriteError::ForwardToLeader(_, leader) => match leader {
+                    Some(id) => Ok(Err(RetryableError::ForwardToLeader { leader: id })),
+                    None => Err(anyhow::anyhow!("no leader to write")),
+                },
+            },
+        }
     }
 }

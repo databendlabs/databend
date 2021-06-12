@@ -19,7 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", conf.clone());
     info!(
         "FuseStore v-{}",
-        fuse_store::configs::config::FUSE_COMMIT_VERSION
+        *fuse_store::configs::config::FUSE_COMMIT_VERSION
     );
 
     // Metric API service.

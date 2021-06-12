@@ -9,6 +9,7 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_streams::LimitByStream;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
@@ -49,6 +50,8 @@ impl IProcessor for LimitByTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        tracing::debug!("execute...");
+
         Ok(Box::pin(LimitByStream::try_create(
             self.input.execute().await?,
             self.limit,

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataValue;
@@ -363,7 +363,7 @@ impl DataValueArithmetic {
                     typed_data_value_operator!(op, lhs, rhs, Int8, i8)
                 }
 
-                (lhs, rhs) => Result::Err(ErrorCodes::BadDataValueType(format!(
+                (lhs, rhs) => Result::Err(ErrorCode::BadDataValueType(format!(
                     "DataValue Error: Unsupported data value operator: {:?} {} {:?}",
                     lhs.data_type(),
                     op,

@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::AggregatorFinalPlan;
@@ -164,6 +164,7 @@ pub trait PlanRewriter<'plan> {
     fn rewrite_limit(&mut self, plan: &'plan LimitPlan) -> Result<PlanNode> {
         Ok(PlanNode::Limit(LimitPlan {
             n: plan.n,
+            offset: plan.offset,
             input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
         }))
     }
@@ -268,7 +269,7 @@ impl RewriteHelper {
                     let hash_expr = format!("{:?}", expr);
 
                     if hash_result != hash_expr {
-                        return Result::Err(ErrorCodes::SyntaxException(format!(
+                        return Result::Err(ErrorCode::SyntaxException(format!(
                             "Planner Error: Different expressions with the same alias {}",
                             alias
                         )));
@@ -290,7 +291,7 @@ impl RewriteHelper {
 
                 // x + 1 --> y, y + 1 --> x
                 if data.inside_aliases.contains(field) {
-                    return Result::Err(ErrorCodes::SyntaxException(format!(
+                    return Result::Err(ErrorCode::SyntaxException(format!(
                         "Planner Error: Cyclic aliases: {}",
                         field
                     )));
@@ -364,7 +365,7 @@ impl RewriteHelper {
 
             Expression::Alias(alias, plan) => {
                 if data.inside_aliases.contains(alias) {
-                    return Result::Err(ErrorCodes::SyntaxException(format!(
+                    return Result::Err(ErrorCode::SyntaxException(format!(
                         "Planner Error: Cyclic aliases: {}",
                         alias
                     )));

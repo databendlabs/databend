@@ -242,7 +242,17 @@ impl PlanBuilder {
     /// Apply a limit
     pub fn limit(&self, n: usize) -> Result<Self> {
         Ok(Self::from(&PlanNode::Limit(LimitPlan {
+            n: Some(n),
+            offset: 0,
+            input: Arc::new(self.plan.clone()),
+        })))
+    }
+
+    /// Apply a limit offset
+    pub fn limit_offset(&self, n: Option<usize>, offset: usize) -> Result<Self> {
+        Ok(Self::from(&PlanNode::Limit(LimitPlan {
             n,
+            offset,
             input: Arc::new(self.plan.clone()),
         })))
     }

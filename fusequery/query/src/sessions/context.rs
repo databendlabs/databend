@@ -7,7 +7,7 @@ use std::future::Future;
 use std::sync::Arc;
 
 use common_datavalues::DataValue;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::Partition;
@@ -39,6 +39,7 @@ pub struct FuseQueryContext {
     current_database: Arc<RwLock<String>>,
     progress: Arc<Progress>,
     runtime: Arc<RwLock<Runtime>>,
+    version: String,
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
@@ -57,6 +58,10 @@ impl FuseQueryContext {
             current_database: Arc::new(RwLock::new(String::from("default"))),
             progress: Arc::new(Progress::create()),
             runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(cpus)?)),
+            version: format!(
+                "FuseQuery v-{}",
+                *crate::configs::config::FUSE_COMMIT_VERSION
+            ),
         };
         // Default settings.
         ctx.initial_settings()?;
@@ -187,8 +192,8 @@ impl FuseQueryContext {
         self.settings.get_settings()
     }
 
-    pub fn get_id(&self) -> Result<String> {
-        Ok(self.uuid.as_ref().read().clone())
+    pub fn get_id(&self) -> String {
+        self.uuid.as_ref().read().clone()
     }
 
     pub fn get_current_database(&self) -> String {
@@ -202,7 +207,7 @@ impl FuseQueryContext {
                 *self.current_database.write() = new_database_name.to_string();
             })
             .map_err(|_| {
-                ErrorCodes::UnknownDatabase(format!(
+                ErrorCode::UnknownDatabase(format!(
                     "Database {}  doesn't exist.",
                     new_database_name
                 ))
@@ -216,6 +221,10 @@ impl FuseQueryContext {
     pub fn set_max_threads(&self, threads: u64) -> Result<()> {
         *self.runtime.write() = Runtime::with_worker_threads(threads as usize)?;
         self.settings.try_update_u64("max_threads", threads)
+    }
+
+    pub fn get_fuse_version(&self) -> String {
+        self.version.clone()
     }
 
     apply_macros! { apply_getter_setter_settings, apply_initial_settings, apply_update_settings,

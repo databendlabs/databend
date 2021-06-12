@@ -8,16 +8,16 @@ Returns the name of the currently selected database. If no database is selected,
 ## Syntax
 
 ```
-SELECT DATABASE() 
+SELECT DATABASE()
 ```
 
 ## Examples
 
 ```
 mysql> SELECT DATABASE();
-+------------+
-| database() |
-+------------+
-| default    |
-+------------+
++-------------------+
+| DATABASE(default) |
++-------------------+
+| default           |
++-------------------+
 ```

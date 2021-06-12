@@ -4,7 +4,7 @@
 
 use common_aggregate_functions::AggregateFunctionFactory;
 use common_datavalues::DataValue;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::FunctionFactory;
 use common_planners::Expression;
@@ -19,7 +19,7 @@ impl ContextFunction {
     pub fn build_args_from_ctx(name: &str, ctx: FuseQueryContextRef) -> Result<Vec<Expression>> {
         // Check the function is supported in common functions.
         if !FunctionFactory::check(name) && !AggregateFunctionFactory::check(name) {
-            return Result::Err(ErrorCodes::UnknownFunction(format!(
+            return Result::Err(ErrorCode::UnknownFunction(format!(
                 "Unsupported function: {:?}",
                 name
             )));
@@ -28,6 +28,9 @@ impl ContextFunction {
         Ok(match name.to_lowercase().as_str() {
             "database" => vec![Expression::Literal(DataValue::Utf8(Some(
                 ctx.get_current_database(),
+            )))],
+            "version" => vec![Expression::Literal(DataValue::Utf8(Some(
+                ctx.get_fuse_version(),
             )))],
             _ => vec![],
         })

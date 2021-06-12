@@ -15,7 +15,7 @@ use common_arrow::arrow_flight::FlightDescriptor;
 use common_arrow::arrow_flight::Ticket;
 use common_datavalues::DataField;
 use common_datavalues::DataType;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use tokio_stream::StreamExt;
 use tonic::Request;
@@ -105,7 +105,7 @@ async fn test_do_get_stream() -> Result<()> {
                 assert_eq!(stream_id, "stream_id");
                 // Push some data
                 let send_result = data_sender
-                    .send(Err(ErrorCodes::Ok("test_error_code".to_string())))
+                    .send(Err(ErrorCode::Ok("test_error_code".to_string())))
                     .await;
 
                 if let Err(error) = send_result {

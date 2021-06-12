@@ -114,22 +114,9 @@ Note:
 * [Architecture](https://datafuse.rs/overview/architecture/)
 * [Performance](https://datafuse.rs/overview/performance/)
 
-## Current roadmap
-
-Datafuse is currently in **Alpha** and is not ready to be used in production.
-
-| Feature                                         | Status    | Release Target | Progress        |  Comments     |
-| ----------------------------------------------- | --------- | -------------- | --------------- | ------------- |
-| Compute&Storage integration | PROGRESS  |  v0.5 | [Track](https://github.com/datafuselabs/datafuse/issues/745) |  |
-
 ## Roadmap
 
-- [x] 0.1 Support aggregation select (2021.02)
-- [x] 0.2 Support distributed query (2021.03)
-- [x] 0.3 Support group by (2021.04)
-- [x] 0.4 Support order by (2021.04)
-- [ ] 0.5 Support join
-- [ ] 1.0 Support TPC-H benchmark
+Datafuse is currently in **Alpha** and is not ready to be used in production, [Roadmap 2021](https://github.com/datafuselabs/datafuse/issues/746)
 
 ## Contributing
 

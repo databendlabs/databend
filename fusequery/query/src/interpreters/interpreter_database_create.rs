@@ -8,11 +8,13 @@ use common_exception::Result;
 use common_planners::CreateDatabasePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 
 use crate::interpreters::IInterpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::FuseQueryContextRef;
 
+#[derive(Debug)]
 pub struct CreateDatabaseInterpreter {
     ctx: FuseQueryContextRef,
     plan: CreateDatabasePlan,
@@ -33,6 +35,7 @@ impl IInterpreter for CreateDatabaseInterpreter {
         "CreateDatabaseInterpreter"
     }
 
+    #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let datasource = self.ctx.get_datasource();
         datasource.create_database(self.plan.clone()).await?;
