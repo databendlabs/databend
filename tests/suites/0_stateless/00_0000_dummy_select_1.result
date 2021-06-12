@@ -119,8 +119,6 @@ SELECT b.number FROM (SELECT * FROM numbers(3) AS b) AS a ORDER BY b.number
 --------------
 
 ERROR 1105 (HY000) at line 15: Code: 25, displayText = Unknown Table '"b"'.
-
-
 --------------
 select number from numbers_mt(10) where number > 5  and exists (select name from system.settings)
 --------------
