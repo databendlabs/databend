@@ -386,9 +386,10 @@ impl RewriteHelper {
                     data_type: data_type.clone(),
                 })
             }
-            Expression::Wildcard | Expression::Literal(_) | Expression::Exists(_)| Expression::Sort { .. } => {
-                Ok(expr.clone())
-            }
+            Expression::Wildcard
+            | Expression::Literal(_)
+            | Expression::Exists(_)
+            | Expression::Sort { .. } => Ok(expr.clone()),
         }
     }
 

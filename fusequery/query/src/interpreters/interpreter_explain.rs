@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
@@ -51,7 +51,9 @@ impl IInterpreter for ExplainInterpreter {
                 format!("{}", plan.display_graphviz())
             }
             ExplainType::Pipeline => {
-                let pipeline = PipelineBuilder::create(self.ctx.clone(), HashMap::<String, bool>::new(), plan).build()?;
+                let pipeline =
+                    PipelineBuilder::create(self.ctx.clone(), HashMap::<String, bool>::new(), plan)
+                        .build()?;
                 format!("{:?}", pipeline)
             }
             _ => format!("{:?}", plan),

@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCodes;
 use common_exception::Result;
+
 use crate::Expression;
 use crate::ExpressionVisitor;
 use crate::Recursion;
@@ -300,7 +301,9 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                 data_type: data_type.clone(),
             }),
 
-            Expression::Column(_) | Expression::Literal(_) | Expression::Exists(_) => Ok(expr.clone())
+            Expression::Column(_) | Expression::Literal(_) | Expression::Exists(_) => {
+                Ok(expr.clone())
+            }
         },
     }
 }

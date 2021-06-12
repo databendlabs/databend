@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
-use common_datavalues::DataValue;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataValue;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::Expression;
@@ -47,7 +47,11 @@ impl ExpressionExecutor {
         Ok(())
     }
 
-    pub fn execute(&self, block: &DataBlock, exists_res: Option<&HashMap<String, bool>>) -> Result<DataBlock> {
+    pub fn execute(
+        &self,
+        block: &DataBlock,
+        exists_res: Option<&HashMap<String, bool>>,
+    ) -> Result<DataBlock> {
         let mut column_map: HashMap<String, DataColumnarValue> = HashMap::new();
 
         // a + 1 as b, a + 1 as c
@@ -63,7 +67,8 @@ impl ExpressionExecutor {
         let rows = block.num_rows();
         if let Some(map) = exists_res {
             for (name, b) in map {
-                let b = DataColumnarValue::Constant(DataValue::Boolean(Some(*b)), rows).to_array()?;
+                let b =
+                    DataColumnarValue::Constant(DataValue::Boolean(Some(*b)), rows).to_array()?;
                 column_map.insert(name.to_string(), DataColumnarValue::Array(b));
             }
         }
@@ -111,7 +116,11 @@ impl ExpressionExecutor {
                     column_map.insert(constant.name.clone(), column);
                 }
                 ExpressionAction::Exists(exists) => {
-                    println!("exists.name={}, val={:?}", exists.name, column_map.get(&exists.name));
+                    println!(
+                        "exists.name={}, val={:?}",
+                        exists.name,
+                        column_map.get(&exists.name)
+                    );
                 }
                 _ => {}
             }

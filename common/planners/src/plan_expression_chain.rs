@@ -118,7 +118,7 @@ impl ExpressionChain {
 
                 self.actions.push(ExpressionAction::Constant(value));
             }
-            Expression::Exists(p) => {
+            Expression::Exists(_p) => {
                 let value = ActionExists {
                     name: format!("{:?}", expr),
                 };

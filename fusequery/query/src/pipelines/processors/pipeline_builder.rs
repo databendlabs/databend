@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_exception::ErrorCodes;
 use common_exception::Result;
@@ -40,13 +40,21 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct PipelineBuilder {
     ctx: FuseQueryContextRef,
-    exists_res_map: HashMap::<String, bool>,
+    exists_res_map: HashMap<String, bool>,
     plan: PlanNode,
 }
 
 impl PipelineBuilder {
-    pub fn create(ctx: FuseQueryContextRef, exists_res_map: HashMap::<String,bool>, plan: PlanNode) -> Self {
-        PipelineBuilder { ctx, exists_res_map, plan }
+    pub fn create(
+        ctx: FuseQueryContextRef,
+        exists_res_map: HashMap<String, bool>,
+        plan: PlanNode,
+    ) -> Self {
+        PipelineBuilder {
+            ctx,
+            exists_res_map,
+            plan,
+        }
     }
 
     pub fn build(&self) -> Result<Pipeline> {
@@ -194,7 +202,7 @@ impl PipelineBuilder {
         Ok(true)
     }
 
-    fn visit_filter_plan(&self, pipeline: &mut Pipeline,  plan: &FilterPlan) -> Result<bool> {
+    fn visit_filter_plan(&self, pipeline: &mut Pipeline, plan: &FilterPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
                 self.ctx.clone(),

@@ -3,10 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::sync::Arc;
-use std::collections::HashMap;
-use futures::TryStreamExt;
 
 use common_arrow::arrow;
 use common_datablocks::DataBlock;
@@ -17,19 +16,18 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCodes;
 use common_exception::Result;
 use common_planners::Expression;
-use common_planners::find_exists_exprs;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
+
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::IProcessor;
 use crate::pipelines::transforms::ExpressionExecutor;
-use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct FilterTransform {
     ctx: FuseQueryContextRef,
-    exists_map: HashMap::<String, bool>,
+    exists_map: HashMap<String, bool>,
     input: Arc<dyn IProcessor>,
     executor: Arc<ExpressionExecutor>,
     predicate: Expression,
@@ -37,7 +35,13 @@ pub struct FilterTransform {
 }
 
 impl FilterTransform {
-    pub fn try_create(ctx: FuseQueryContextRef, exists_map: HashMap::<String, bool>, schema: DataSchemaRef, predicate: Expression, having: bool) -> Result<Self> {
+    pub fn try_create(
+        ctx: FuseQueryContextRef,
+        exists_map: HashMap<String, bool>,
+        schema: DataSchemaRef,
+        predicate: Expression,
+        having: bool,
+    ) -> Result<Self> {
         let mut fields = schema.fields().clone();
         fields.push(predicate.to_data_field(&schema)?);
 
@@ -89,7 +93,7 @@ impl IProcessor for FilterTransform {
         let map = self.exists_map.clone();
 
         let execute_fn = |executor: Arc<ExpressionExecutor>,
-                          exists_map: HashMap::<String, bool>,
+                          exists_map: HashMap<String, bool>,
                           column_name: &str,
                           block: Result<DataBlock>|
          -> Result<DataBlock> {
