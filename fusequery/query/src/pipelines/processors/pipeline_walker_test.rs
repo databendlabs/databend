@@ -4,11 +4,12 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_pipeline_walker() -> anyhow::Result<()> {
+    use std::collections::HashMap;
+
     use pretty_assertions::assert_eq;
 
     use crate::pipelines::processors::*;
     use crate::sql::*;
-    use std::collections::HashMap;
 
     let ctx = crate::tests::try_create_context()?;
 

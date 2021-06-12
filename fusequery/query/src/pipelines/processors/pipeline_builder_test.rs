@@ -4,10 +4,10 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_local_pipeline_builds() -> anyhow::Result<()> {
-    use futures::TryStreamExt;
-    use pretty_assertions::assert_eq;
     use std::collections::HashMap;
 
+    use futures::TryStreamExt;
+    use pretty_assertions::assert_eq;
 
     use crate::pipelines::processors::*;
     use crate::sql::*;
@@ -138,7 +138,8 @@ async fn test_local_pipeline_builds() -> anyhow::Result<()> {
         assert_eq!(test.plan, actual_plan, "{:#?}", test.name);
 
         // Pipeline build check.
-        let mut pipeline = PipelineBuilder::create(ctx.clone(), HashMap::<String, bool>::new(), plan).build()?;
+        let mut pipeline =
+            PipelineBuilder::create(ctx.clone(), HashMap::<String, bool>::new(), plan).build()?;
         let actual_pipeline = format!("{:?}", pipeline);
         assert_eq!(test.pipeline, actual_pipeline, "{:#?}", test.name);
 
