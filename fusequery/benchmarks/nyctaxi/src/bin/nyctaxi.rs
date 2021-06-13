@@ -48,8 +48,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "Running benchmarks with the following options: {:?}, max_threads [{:?}], block_size[{:?}]",
         opt,
-        ctx.get_max_threads()?,
-        ctx.get_max_block_size()?
+        ctx.get_settings().get_max_threads()?,
+        ctx.get_settings().get_max_block_size()?
     );
 
     // Create csv table.

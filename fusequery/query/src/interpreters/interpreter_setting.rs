@@ -44,7 +44,9 @@ impl IInterpreter for SettingInterpreter {
                     self.ctx.set_max_threads(threads)?;
                 }
                 _ => {
-                    self.ctx.update_settings(&var.variable, var.value)?;
+                    self.ctx
+                        .get_settings()
+                        .update_settings(&var.variable, var.value)?;
                 }
             }
         }

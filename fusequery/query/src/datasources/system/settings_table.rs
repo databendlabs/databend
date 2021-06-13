@@ -84,7 +84,7 @@ impl ITable for SettingsTable {
     }
 
     async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
-        let settings = ctx.get_settings()?;
+        let settings = ctx.get_settings();
 
         let mut names: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];

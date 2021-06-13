@@ -77,7 +77,7 @@ impl ITable for NumbersTable {
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
-        let mut total = ctx.get_max_block_size()? as u64;
+        let mut total = ctx.get_settings().get_max_block_size()? as u64;
 
         let ScanPlan { table_args, .. } = scan.clone();
         if let Some(args) = table_args {
