@@ -52,7 +52,7 @@ impl ExpressionExecutor {
     }
 
     pub fn execute(&self, block: &DataBlock) -> Result<DataBlock> {
-        tracing::info!(
+        tracing::debug!(
             "({:#}) execute, actions: {:?}",
             self.description,
             self.chain.actions

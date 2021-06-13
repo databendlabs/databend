@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies] # In alphabetical order
 common-arrow = {path = "../arrow"}
 thiserror = "1.0.25"
-anyhow = "1.0.40"
+anyhow = "1.0.41"
 serde_json = "1.0"
 backtrace = "0.3.60"
 

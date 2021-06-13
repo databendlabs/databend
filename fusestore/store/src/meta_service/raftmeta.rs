@@ -131,6 +131,7 @@ impl tonic::IntoRequest<RaftMes> for ClientRequest {
     fn into_request(self) -> tonic::Request<RaftMes> {
         let mes = RaftMes {
             data: serde_json::to_string(&self).expect("fail to serialize"),
+            error: "".to_string(),
         };
         tonic::Request::new(mes)
     }
@@ -139,6 +140,7 @@ impl tonic::IntoRequest<RaftMes> for AppendEntriesRequest<ClientRequest> {
     fn into_request(self) -> tonic::Request<RaftMes> {
         let mes = RaftMes {
             data: serde_json::to_string(&self).expect("fail to serialize"),
+            error: "".to_string(),
         };
         tonic::Request::new(mes)
     }
@@ -147,6 +149,7 @@ impl tonic::IntoRequest<RaftMes> for InstallSnapshotRequest {
     fn into_request(self) -> tonic::Request<RaftMes> {
         let mes = RaftMes {
             data: serde_json::to_string(&self).expect("fail to serialize"),
+            error: "".to_string(),
         };
         tonic::Request::new(mes)
     }
@@ -155,6 +158,7 @@ impl tonic::IntoRequest<RaftMes> for VoteRequest {
     fn into_request(self) -> tonic::Request<RaftMes> {
         let mes = RaftMes {
             data: serde_json::to_string(&self).expect("fail to serialize"),
+            error: "".to_string(),
         };
         tonic::Request::new(mes)
     }
@@ -168,6 +172,14 @@ impl TryFrom<RaftMes> for ClientRequest {
             serde_json::from_str(&mes.data).map_err(|e| tonic::Status::internal(e.to_string()))?;
         Ok(req)
     }
+}
+
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum RetryableError {
+    /// Trying to write to a non-leader returns the latest leader the raft node knows,
+    /// to indicate the client to retry.
+    #[error("request must be forwarded to leader: {leader}")]
+    ForwardToLeader { leader: NodeId },
 }
 
 /// The application data response type which the `MemStore` works with.
@@ -193,22 +205,42 @@ impl AppDataResponse for ClientResponse {}
 impl From<ClientResponse> for RaftMes {
     fn from(msg: ClientResponse) -> Self {
         let data = serde_json::to_string(&msg).expect("fail to serialize");
-        RaftMes { data }
+        RaftMes {
+            data,
+            error: "".to_string(),
+        }
+    }
+}
+impl From<RetryableError> for RaftMes {
+    fn from(err: RetryableError) -> Self {
+        let error = serde_json::to_string(&err).expect("fail to serialize");
+        RaftMes {
+            data: "".to_string(),
+            error,
+        }
     }
 }
 
-impl From<RaftMes> for ClientResponse {
+impl From<Result<ClientResponse, RetryableError>> for RaftMes {
+    fn from(rst: Result<ClientResponse, RetryableError>) -> Self {
+        match rst {
+            Ok(resp) => resp.into(),
+            Err(err) => err.into(),
+        }
+    }
+}
+
+impl From<RaftMes> for Result<ClientResponse, RetryableError> {
     fn from(msg: RaftMes) -> Self {
-        let resp: ClientResponse = serde_json::from_str(&msg.data).expect("fail to deserialize");
-        resp
-    }
-}
-
-impl From<tonic::Response<RaftMes>> for ClientResponse {
-    fn from(v: tonic::Response<RaftMes>) -> Self {
-        let mes = v.into_inner();
-        let resp: ClientResponse = serde_json::from_str(&mes.data).expect("fail to deserialize");
-        resp
+        if !msg.data.is_empty() {
+            let resp: ClientResponse =
+                serde_json::from_str(&msg.data).expect("fail to deserialize");
+            Ok(resp)
+        } else {
+            let err: RetryableError =
+                serde_json::from_str(&msg.error).expect("fail to deserialize");
+            Err(err)
+        }
     }
 }
 
@@ -1053,21 +1085,27 @@ impl MetaNode {
     /// Submit a write request to the known leader. Returns the response after applying the request.
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn write(&self, req: ClientRequest) -> anyhow::Result<ClientResponse> {
-        // TODO handle ForwardToLeader error if leader changed.
-        let leader = self.get_leader().await;
+        let mut curr_leader = self.get_leader().await;
+        loop {
+            let rst = if curr_leader == self.sto.id {
+                self.write_to_local_leader(req.clone()).await?
+            } else {
+                // forward to leader
 
-        if leader == self.sto.id {
-            let x = self.write_to_local_leader(req).await?;
-            return Ok(x);
+                let addr = self.sto.get_node_addr(&curr_leader).await?;
+                let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
+                let resp = client.write(req.clone()).await?;
+                let rst: Result<ClientResponse, RetryableError> = resp.into_inner().into();
+                rst
+            };
+
+            match rst {
+                Ok(resp) => return Ok(resp),
+                Err(write_err) => match write_err {
+                    RetryableError::ForwardToLeader { leader } => curr_leader = leader,
+                },
+            }
         }
-
-        // forward to leader
-
-        let addr = self.sto.get_node_addr(&leader).await?;
-        let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
-        let resp = client.write(req).await?;
-        let resp = resp.into();
-        Ok(resp)
     }
 
     /// Try to get the leader from the latest metrics of the local raft node.
@@ -1109,14 +1147,22 @@ impl MetaNode {
     pub async fn write_to_local_leader(
         &self,
         req: ClientRequest,
-    ) -> Result<ClientResponse, ClientWriteError<ClientRequest>> {
+    ) -> anyhow::Result<Result<ClientResponse, RetryableError>> {
         let write_rst = self.raft.client_write(ClientWriteRequest::new(req)).await;
 
         tracing::debug!("raft.client_write rst: {:?}", write_rst);
 
         match write_rst {
-            Ok(resp) => Ok(resp.data),
-            Err(e) => Err(e),
+            Ok(resp) => Ok(Ok(resp.data)),
+            Err(cli_write_err) => match cli_write_err {
+                // fatal error
+                ClientWriteError::RaftError(raft_err) => Err(anyhow::anyhow!(raft_err.to_string())),
+                // retryable error
+                ClientWriteError::ForwardToLeader(_, leader) => match leader {
+                    Some(id) => Ok(Err(RetryableError::ForwardToLeader { leader: id })),
+                    None => Err(anyhow::anyhow!("no leader to write")),
+                },
+            },
         }
     }
 }

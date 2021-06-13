@@ -33,12 +33,12 @@ pub struct AggregatorPartialTransform {
 impl AggregatorPartialTransform {
     pub fn try_create(
         schema: DataSchemaRef,
-        schema_before_groupby: DataSchemaRef,
+        schema_before_group_by: DataSchemaRef,
         exprs: Vec<Expression>,
     ) -> Result<Self> {
         let funcs = exprs
             .iter()
-            .map(|expr| expr.to_aggregate_function(&schema_before_groupby))
+            .map(|expr| expr.to_aggregate_function(&schema_before_group_by))
             .collect::<Result<Vec<_>>>()?;
 
         let arg_names = exprs
@@ -75,7 +75,7 @@ impl IProcessor for AggregatorPartialTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        tracing::info!("execute...");
+        tracing::debug!("execute...");
         let start = Instant::now();
 
         let mut funcs = self.funcs.clone();
@@ -95,7 +95,7 @@ impl IProcessor for AggregatorPartialTransform {
             }
         }
         let delta = start.elapsed();
-        tracing::info!("Aggregator partial cost: {:?}", delta);
+        tracing::debug!("Aggregator partial cost: {:?}", delta);
 
         let mut columns: Vec<DataArrayRef> = vec![];
         for func in funcs.iter() {

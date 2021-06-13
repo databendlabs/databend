@@ -74,7 +74,7 @@ impl PlanParser {
     }
 
     pub fn build_from_sql(&self, query: &str) -> Result<PlanNode> {
-        tracing::info!(query);
+        tracing::debug!(query);
         DfParser::parse_sql(query).and_then(|statement| {
             statement
                 .first()
@@ -336,7 +336,7 @@ impl PlanParser {
 
         match &query.body {
             sqlparser::ast::SetExpr::Select(s) => {
-                self.select_to_plan(s.as_ref(), &query.limit, &query.order_by)
+                self.select_to_plan(s.as_ref(), &query.limit, &query.offset, &query.order_by)
             }
             _ => Result::Err(ErrorCode::UnImplement(format!(
                 "Query {} is not yet implemented",
@@ -353,6 +353,7 @@ impl PlanParser {
         &self,
         select: &sqlparser::ast::Select,
         limit: &Option<sqlparser::ast::Expr>,
+        offset: &Option<sqlparser::ast::Offset>,
         order_by: &[OrderByExpr],
     ) -> Result<PlanNode> {
         // Filter expression
@@ -508,7 +509,7 @@ impl PlanParser {
         // Projection
         let plan = self.project(&plan, &projection_exprs)?;
         // Limit.
-        let plan = self.limit(&plan, limit, Some(select))?;
+        let plan = self.limit(&plan, limit, offset, Some(select))?;
 
         Ok(PlanNode::Select(SelectPlan {
             input: Arc::new(plan),
@@ -990,24 +991,44 @@ impl PlanParser {
         &self,
         input: &PlanNode,
         limit: &Option<sqlparser::ast::Expr>,
+        offset: &Option<sqlparser::ast::Offset>,
         select: Option<&sqlparser::ast::Select>,
     ) -> Result<PlanNode> {
-        match *limit {
-            Some(ref limit_expr) => {
-                let n = self
-                    .sql_to_rex(&limit_expr, &input.schema(), select)
-                    .and_then(|limit_expr| match limit_expr {
-                        Expression::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
-                        _ => Err(ErrorCode::SyntaxException(
-                            "Unexpected expression for LIMIT clause",
-                        )),
-                    })?;
+        match (limit, offset) {
+            (None, None) => Ok(input.clone()),
+            (limit, offset) => {
+                let n = limit
+                    .as_ref()
+                    .map(|limit_expr| {
+                        self.sql_to_rex(&limit_expr, &input.schema(), select)
+                            .and_then(|limit_expr| match limit_expr {
+                                Expression::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
+                                _ => Err(ErrorCode::SyntaxException(
+                                    "Unexpected expression for LIMIT clause",
+                                )),
+                            })
+                    })
+                    .transpose()?;
+
+                let offset = offset
+                    .as_ref()
+                    .map(|offset| {
+                        let offset_expr = &offset.value;
+                        self.sql_to_rex(&offset_expr, &input.schema(), select)
+                            .and_then(|offset_expr| match offset_expr {
+                                Expression::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
+                                _ => Err(ErrorCode::SyntaxException(
+                                    "Unexpected expression for OFFSET clause",
+                                )),
+                            })
+                    })
+                    .transpose()?
+                    .unwrap_or(0);
 
                 PlanBuilder::from(&input)
-                    .limit(n)
+                    .limit_offset(n, offset)
                     .and_then(|builder| builder.build())
             }
-            _ => Ok(input.clone()),
         }
     }
 

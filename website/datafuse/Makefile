@@ -11,7 +11,7 @@ show:
 		@ echo npm_version: $(npm_version)
 
 install:
-		@ npm install
+		@ npm install --force
 		@ pip install .
 		@ pip install -r requirements.txt
 		@ pip install \

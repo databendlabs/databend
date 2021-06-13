@@ -49,13 +49,13 @@ impl PipelineBuilder {
 
     #[tracing::instrument(level = "info", skip(self))]
     pub fn build(&self) -> Result<Pipeline> {
-        tracing::info!("Received plan:\n{:?}", self.plan);
+        tracing::debug!("Received plan:\n{:?}", self.plan);
 
         let mut limit = None;
         self.plan.walk_preorder(|node| -> Result<bool> {
             match node {
                 PlanNode::Limit(ref limit_plan) => {
-                    limit = Some(limit_plan.n);
+                    limit = limit_plan.n;
                     Ok(true)
                 }
                 _ => Ok(true),
@@ -96,7 +96,7 @@ impl PipelineBuilder {
                 ))),
             }
         })?;
-        tracing::info!("Pipeline:\n{:?}", pipeline);
+        tracing::debug!("Pipeline:\n{:?}", pipeline);
 
         Ok(pipeline)
     }
@@ -176,7 +176,7 @@ impl PipelineBuilder {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(AggregatorFinalTransform::try_create(
                     plan.schema(),
-                    plan.schema_before_groupby.clone(),
+                    plan.schema_before_group_by.clone(),
                     plan.aggr_expr.clone(),
                 )?))
             })?;
@@ -184,7 +184,7 @@ impl PipelineBuilder {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(GroupByFinalTransform::create(
                     plan.schema(),
-                    plan.schema_before_groupby.clone(),
+                    plan.schema_before_group_by.clone(),
                     plan.aggr_expr.clone(),
                     plan.group_expr.clone(),
                 )))
@@ -262,7 +262,9 @@ impl PipelineBuilder {
 
     fn visit_limit_plan(pipeline: &mut Pipeline, plan: &LimitPlan) -> Result<bool> {
         pipeline.merge_processor()?;
-        pipeline.add_simple_transform(|| Ok(Box::new(LimitTransform::try_create(plan.n)?)))?;
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(LimitTransform::try_create(plan.n, plan.offset)?))
+        })?;
         Ok(false)
     }
 

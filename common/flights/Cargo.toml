@@ -18,7 +18,7 @@ common-streams = {path = "../streams"}
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.40"
+anyhow = "1.0.41"
 futures = "0.3"
 jwt-simple = "0.10.1"
 log = "0.4"

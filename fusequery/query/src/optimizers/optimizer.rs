@@ -31,9 +31,9 @@ impl Optimizer {
     pub fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         let mut plan = plan.clone();
         for optimizer in self.optimizers.iter_mut() {
-            tracing::info!("Before {} \n{:?}", optimizer.name(), plan);
+            tracing::debug!("Before {} \n{:?}", optimizer.name(), plan);
             plan = optimizer.optimize(&plan)?;
-            tracing::info!("After {} \n{:?}", optimizer.name(), plan);
+            tracing::debug!("After {} \n{:?}", optimizer.name(), plan);
         }
         Ok(plan)
     }

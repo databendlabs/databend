@@ -36,15 +36,14 @@ impl MetaService for MetaServiceImpl {
         let mes = request.into_inner();
         let req: ClientRequest = mes.try_into()?;
 
-        // TODO: handle ForwardToLeader error
-        let resp = self
+        let rst = self
             .meta_node
             .write_to_local_leader(req)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        let mes: RaftMes = resp.into();
-        Ok(tonic::Response::new(mes))
+        let raft_mes = rst.into();
+        Ok(tonic::Response::new(raft_mes))
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -87,7 +86,10 @@ impl MetaService for MetaServiceImpl {
             .await
             .map_err(|x| tonic::Status::internal(x.to_string()))?;
         let data = serde_json::to_string(&resp).expect("fail to serialize resp");
-        let mes = RaftMes { data };
+        let mes = RaftMes {
+            data,
+            error: "".to_string(),
+        };
 
         Ok(tonic::Response::new(mes))
     }
@@ -109,7 +111,10 @@ impl MetaService for MetaServiceImpl {
             .await
             .map_err(|x| tonic::Status::internal(x.to_string()))?;
         let data = serde_json::to_string(&resp).expect("fail to serialize resp");
-        let mes = RaftMes { data };
+        let mes = RaftMes {
+            data,
+            error: "".to_string(),
+        };
 
         Ok(tonic::Response::new(mes))
     }
@@ -131,7 +136,10 @@ impl MetaService for MetaServiceImpl {
             .await
             .map_err(|x| tonic::Status::internal(x.to_string()))?;
         let data = serde_json::to_string(&resp).expect("fail to serialize resp");
-        let mes = RaftMes { data };
+        let mes = RaftMes {
+            data,
+            error: "".to_string(),
+        };
 
         Ok(tonic::Response::new(mes))
     }

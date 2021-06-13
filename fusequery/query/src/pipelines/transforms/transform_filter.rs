@@ -85,7 +85,7 @@ impl IProcessor for FilterTransform {
                           column_name: &str,
                           block: Result<DataBlock>|
          -> Result<DataBlock> {
-            tracing::info!("execute...");
+            tracing::debug!("execute...");
             let start = Instant::now();
 
             let block = block?;
@@ -99,7 +99,7 @@ impl IProcessor for FilterTransform {
             let batch = arrow::compute::filter_record_batch(&batch, filter_array)?;
 
             let delta = start.elapsed();
-            tracing::info!("Filter cost: {:?}", delta);
+            tracing::debug!("Filter cost: {:?}", delta);
             batch.try_into()
         };
 

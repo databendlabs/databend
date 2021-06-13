@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_transform_final_groupby() -> anyhow::Result<()> {
+async fn test_transform_final_group_by() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_planners::*;
