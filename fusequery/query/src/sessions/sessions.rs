@@ -68,6 +68,10 @@ impl SessionManager {
         self.cluster.clone()
     }
 
+    pub fn get_datasource(self: &Arc<Self>) -> Arc<dyn IDataSource> {
+        self.datasource.clone()
+    }
+
     pub fn create_session<S: SessionCreator>(self: &Arc<Self>) -> Result<Arc<Box<dyn ISession>>> {
         counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
 
@@ -76,7 +80,7 @@ impl SessionManager {
             true => Err(ErrorCode::TooManyUserConnections("The current accept connection has exceeded mysql_handler_thread_num config")),
             false => {
                 let id = uuid::Uuid::new_v4().to_string();
-                let session = S::create(id.clone(), self.clone());
+                let session = S::create(id.clone(), self.clone())?;
                 sessions.insert(id, session.clone());
                 Ok(session)
             }

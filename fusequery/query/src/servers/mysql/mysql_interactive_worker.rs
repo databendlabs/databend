@@ -31,7 +31,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
     type Error = ErrorCode;
 
     fn on_prepare(&mut self, query: &str, writer: StatementMetaWriter<W>) -> Result<()> {
-        if self.session.get_status().lock().is_aborted() {
+        if self.session.get_status().lock().is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -44,7 +44,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
     }
 
     fn on_execute(&mut self, id: u32, param: ParamParser, writer: QueryResultWriter<W>) -> Result<()> {
-        if self.session.get_status().lock().is_aborted() {
+        if self.session.get_status().lock().is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -61,7 +61,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
     }
 
     fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> Result<()> {
-        if self.session.get_status().lock().is_aborted() {
+        if self.session.get_status().lock().is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -84,7 +84,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
     }
 
     fn on_init(&mut self, database_name: &str, writer: InitWriter<W>) -> Result<()> {
-        if self.session.get_status().lock().is_aborted() {
+        if self.session.get_status().lock().is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -129,6 +129,8 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     fn do_init(&mut self, database_name: &str) -> Result<()> {
         self.do_query(&format!("USE {}", database_name)).map(|_| ())
+
+        // self.session.get_status().lock()
     }
 }
 

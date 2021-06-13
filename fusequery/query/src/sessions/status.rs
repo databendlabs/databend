@@ -5,7 +5,10 @@ use common_planners::PlanNode;
 use crate::clusters::ClusterRef;
 use std::time::Instant;
 use std::net::{TcpStream, Shutdown};
+use std::sync::Arc;
+use crate::datasources::IDataSource;
 
+#[derive(PartialEq, Clone)]
 pub enum State {
     Init,
     Idle,
@@ -27,24 +30,32 @@ pub struct SessionStatus {
 }
 
 impl SessionStatus {
-    pub fn create() -> SessionStatus {
-        SessionStatus {
+    pub fn try_create() -> Result<SessionStatus> {
+        let cpus = num_cpus::get();
+        let session_settings = Settings::create();
+        session_settings.try_set_u64("max_threads", cpus as u64, "The maximum number of threads to execute the request. By default, it is determined automatically.".to_string())?;
+
+        Ok(SessionStatus {
             state: State::Init,
             current_database: String::from("default"),
-            session_settings: Settings::create(),
+            session_settings: session_settings,
             stream: None,
             execute_instant: None,
             executing_query: None,
             executing_query_plan: None,
             abort_handler: None,
-        }
+        })
     }
 
-    pub fn is_aborted(&self) -> bool {
+    pub fn is_aborting(&self) -> bool {
         match self.state {
             State::Aborting | State::Aborted => true,
             _ => false
         }
+    }
+
+    pub fn is_aborted(&self) -> bool {
+        self.state == State::Aborted
     }
 
     pub fn enter_init(&mut self, stream: std::net::TcpStream) {
@@ -52,10 +63,14 @@ impl SessionStatus {
         self.stream = Some(stream);
     }
 
-    pub fn try_create_context(&mut self, cluster: ClusterRef) -> Result<FuseQueryContextRef> {
+    pub fn try_create_context(
+        &mut self,
+        cluster: ClusterRef,
+        datasource: Arc<dyn IDataSource>,
+    ) -> Result<FuseQueryContextRef> {
         Ok(FuseQueryContext::from_settings(
             self.session_settings.clone(),
-            self.current_database.clone())?
+            self.current_database.clone(), datasource)?
             .with_cluster(cluster)?
         )
     }

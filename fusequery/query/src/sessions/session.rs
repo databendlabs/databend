@@ -11,7 +11,7 @@ use crate::sessions::{FuseQueryContextRef, SessionManagerRef, SessionStatus};
 pub trait SessionCreator {
     type Session: ISession;
 
-    fn create(id: String, sessions: SessionManagerRef) -> Arc<Box<dyn ISession>>;
+    fn create(id: String, sessions: SessionManagerRef) -> Result<Arc<Box<dyn ISession>>>;
 }
 
 pub trait ISession: AbortableService<TcpStream, ()> + Send + Sync {

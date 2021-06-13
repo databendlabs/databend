@@ -71,14 +71,18 @@ impl FuseQueryContext {
         Ok(Arc::new(ctx))
     }
 
-    pub fn from_settings(settings: Settings, default_database: String) -> Result<FuseQueryContextRef> {
+    pub fn from_settings(
+        settings: Settings,
+        default_database: String,
+        datasource: Arc<dyn IDataSource>,
+    ) -> Result<FuseQueryContextRef> {
         let max_threads = settings.try_get_u64("max_threads")? as usize;
 
         Ok(Arc::new(FuseQueryContext {
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings,
             cluster: Arc::new(RwLock::new(Cluster::empty())),
-            datasource: Arc::new(DataSource::try_create()?),
+            datasource: datasource,
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             current_database: Arc::new(RwLock::new(default_database)),

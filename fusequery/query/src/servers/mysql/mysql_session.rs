@@ -39,7 +39,10 @@ impl ISession for Session {
     }
 
     fn try_create_context(&self) -> Result<FuseQueryContextRef> {
-        self.session_status.lock().try_create_context(self.session_manager.get_cluster())
+        self.session_status.lock().try_create_context(
+            self.session_manager.get_cluster(),
+            self.session_manager.get_datasource(),
+        )
     }
 
     fn get_status(&self) -> Arc<Mutex<SessionStatus>> {
@@ -81,6 +84,10 @@ impl AbortableService<TcpStream, ()> for Session {
     async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed> {
         let instant = Instant::now();
 
+        if self.session_status.lock().is_aborted() {
+            return Ok(instant.elapsed());
+        }
+
         match duration {
             None => {
                 self.aborted_notify.notified().await;
@@ -100,14 +107,14 @@ impl AbortableService<TcpStream, ()> for Session {
 impl SessionCreator for Session {
     type Session = Self;
 
-    fn create(session_id: String, sessions: SessionManagerRef) -> Arc<Box<dyn ISession>> {
-        Arc::new(Box::new(
+    fn create(session_id: String, sessions: SessionManagerRef) -> Result<Arc<Box<dyn ISession>>> {
+        Ok(Arc::new(Box::new(
             Session {
                 session_id,
                 session_manager: sessions,
-                session_status: Arc::new(Mutex::new(SessionStatus::create())),
-                aborted_notify: Arc::new(tokio::sync::Notify::new())
+                session_status: Arc::new(Mutex::new(SessionStatus::try_create()?)),
+                aborted_notify: Arc::new(tokio::sync::Notify::new()),
             }
-        ))
+        )))
     }
 }
