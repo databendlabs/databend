@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datavalues::DataValue;
@@ -19,13 +20,14 @@ use crate::configs::Config;
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::sessions::FuseQueryContextRef;
 
-use std::collections::HashMap;
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scheduler_plan_without_stage() -> Result<()> {
     let (context, _cluster) = create_env().await?;
-    let scheduled_actions =
-        PlanScheduler::reschedule(context.clone(), HashMap::<String, bool>::new(), &PlanNode::Empty(EmptyPlan::create()))?;
+    let scheduled_actions = PlanScheduler::reschedule(
+        context.clone(),
+        HashMap::<String, bool>::new(),
+        &PlanNode::Empty(EmptyPlan::create()),
+    )?;
 
     assert!(scheduled_actions.remote_actions.is_empty());
     assert_eq!(

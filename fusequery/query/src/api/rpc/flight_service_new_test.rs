@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema;
@@ -19,7 +20,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use tokio_stream::StreamExt;
 use tonic::Request;
-use std::collections::HashMap;
 
 use crate::api::rpc::flight_dispatcher::Request as DispatcherRequest;
 use crate::api::rpc::flight_service_new::FuseQueryService;

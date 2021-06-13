@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashMap;
+
 use common_datablocks::assert_blocks_eq;
 use common_datavalues::DataValue;
 use common_exception::Result;
@@ -19,8 +21,6 @@ use crate::api::rpc::FlightDispatcher;
 use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::sessions::SessionManager;
-
-use std::collections::HashMap;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_stream_with_non_exists_stream() -> Result<()> {
