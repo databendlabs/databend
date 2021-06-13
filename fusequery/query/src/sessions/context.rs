@@ -45,7 +45,6 @@ pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
     pub fn try_create() -> Result<FuseQueryContextRef> {
-        // let cpus = num_cpus::get();
         let settings = Settings::try_create()?;
         let ctx = FuseQueryContext {
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
@@ -184,10 +183,6 @@ impl FuseQueryContext {
     pub fn get_table_function(&self, function_name: &str) -> Result<Arc<dyn ITableFunction>> {
         self.datasource.get_table_function(function_name)
     }
-
-    // pub fn get_settings(&self) -> Result<Vec<DataValue>> {
-    //     self.settings.get_settings()
-    // }
 
     pub fn get_id(&self) -> String {
         self.uuid.as_ref().read().clone()
