@@ -20,6 +20,8 @@ use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::sessions::SessionManager;
 
+use std::collections::HashMap;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_stream_with_non_exists_stream() -> Result<()> {
     let stream_id = "query_id/stage_id/stream_id".to_string();
@@ -73,6 +75,7 @@ async fn test_prepare_stage_with_no_scatter() -> Result<()> {
                         plan.clone(),
                         vec![stream_id.clone()],
                         Expression::Literal(DataValue::UInt64(Some(1))),
+                        HashMap::<String, bool>::new(),
                     ),
                     sender,
                 ),
@@ -156,6 +159,7 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
                         plan.clone(),
                         vec!["stream_1".to_string(), "stream_2".to_string()],
                         Expression::Column("number".to_string()),
+                        HashMap::<String, bool>::new(),
                     ),
                     sender,
                 ),

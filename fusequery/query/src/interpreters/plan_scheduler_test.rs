@@ -19,11 +19,13 @@ use crate::configs::Config;
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::sessions::FuseQueryContextRef;
 
+use std::collections::HashMap;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scheduler_plan_without_stage() -> Result<()> {
     let (context, _cluster) = create_env().await?;
     let scheduled_actions =
-        PlanScheduler::reschedule(context.clone(), &PlanNode::Empty(EmptyPlan::create()))?;
+        PlanScheduler::reschedule(context.clone(), HashMap::<String, bool>::new(), &PlanNode::Empty(EmptyPlan::create()))?;
 
     assert!(scheduled_actions.remote_actions.is_empty());
     assert_eq!(
@@ -39,6 +41,7 @@ async fn test_scheduler_plan_with_one_normal_stage() -> Result<()> {
     let (context, _cluster) = create_env().await?;
     let reschedule_res = PlanScheduler::reschedule(
         context.clone(),
+        HashMap::<String, bool>::new(),
         &PlanNode::Stage(StagePlan {
             kind: StageKind::Normal,
             scatters_expr: Expression::Literal(DataValue::UInt64(Some(1))),
@@ -68,6 +71,7 @@ async fn test_scheduler_plan_with_one_expansive_stage() -> Result<()> {
     let (context, _cluster) = create_env().await?;
     let reschedule_res = PlanScheduler::reschedule(
         context.clone(),
+        HashMap::<String, bool>::new(),
         &PlanNode::Stage(StagePlan {
             kind: StageKind::Expansive,
             scatters_expr: Expression::Literal(DataValue::UInt64(Some(1))),
@@ -113,6 +117,7 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
     let (context, _cluster) = create_env().await?;
     let scheduled_actions = PlanScheduler::reschedule(
         context.clone(),
+        HashMap::<String, bool>::new(),
         &PlanNode::Stage(StagePlan {
             kind: StageKind::Convergent,
             scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
@@ -186,6 +191,7 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
     let (context, _cluster) = create_env().await?;
     let scheduled_actions = PlanScheduler::reschedule(
         context.clone(),
+        HashMap::<String, bool>::new(),
         &PlanNode::Select(SelectPlan {
             input: Arc::new(PlanNode::Stage(StagePlan {
                 kind: StageKind::Convergent,
@@ -297,6 +303,7 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     let (context, _cluster) = create_env().await?;
     let scheduled_actions = PlanScheduler::reschedule(
         context.clone(),
+        HashMap::<String, bool>::new(),
         &PlanNode::Select(SelectPlan {
             input: Arc::new(PlanNode::Stage(StagePlan {
                 kind: StageKind::Convergent,

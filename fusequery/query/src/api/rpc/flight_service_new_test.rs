@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use tokio_stream::StreamExt;
 use tonic::Request;
+use std::collections::HashMap;
 
 use crate::api::rpc::flight_dispatcher::Request as DispatcherRequest;
 use crate::api::rpc::flight_service_new::FuseQueryService;
@@ -69,10 +70,11 @@ async fn test_prepare_query_stage() -> Result<()> {
         }
     });
 
+    println!("map: {:?}", HashMap::<String, bool>::new());
     let response = service.do_action(Request::new(
         Action {
             r#type: "PrepareQueryStage".to_string(),
-            body: "{\"query_id\":\"query_id\",\"stage_id\":\"stage_id\",\"plan\":{\"Empty\":{\"schema\":{\"fields\":[]}}},\"scatters\":[\"stream_1\",\"stream_2\"], \"scatters_action\":{\"Literal\":{\"UInt64\":1}}}".as_bytes().to_vec(),
+            body: "{\"query_id\":\"query_id\",\"stage_id\":\"stage_id\",\"plan\":{\"Empty\":{\"schema\":{\"fields\":[]}}},\"scatters\":[\"stream_1\",\"stream_2\"], \"scatters_action\":{\"Literal\":{\"UInt64\":1}},\"exists_res_map\":{}}".as_bytes().to_vec(),
         }
     )).await;
 
