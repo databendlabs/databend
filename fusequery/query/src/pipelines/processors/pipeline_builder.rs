@@ -176,7 +176,7 @@ impl PipelineBuilder {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(AggregatorFinalTransform::try_create(
                     plan.schema(),
-                    plan.schema_before_groupby.clone(),
+                    plan.schema_before_group_by.clone(),
                     plan.aggr_expr.clone(),
                 )?))
             })?;
@@ -184,7 +184,7 @@ impl PipelineBuilder {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(GroupByFinalTransform::create(
                     plan.schema(),
-                    plan.schema_before_groupby.clone(),
+                    plan.schema_before_group_by.clone(),
                     plan.aggr_expr.clone(),
                     plan.group_expr.clone(),
                 )))

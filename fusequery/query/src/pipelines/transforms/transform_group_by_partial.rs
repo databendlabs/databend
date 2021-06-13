@@ -43,7 +43,7 @@ pub struct GroupByPartialTransform {
     aggr_exprs: Vec<Expression>,
     group_exprs: Vec<Expression>,
     schema: DataSchemaRef,
-    schema_before_groupby: DataSchemaRef,
+    schema_before_group_by: DataSchemaRef,
     input: Arc<dyn IProcessor>,
     groups: GroupFuncTable,
 }
@@ -51,7 +51,7 @@ pub struct GroupByPartialTransform {
 impl GroupByPartialTransform {
     pub fn create(
         schema: DataSchemaRef,
-        schema_before_groupby: DataSchemaRef,
+        schema_before_group_by: DataSchemaRef,
         aggr_exprs: Vec<Expression>,
         group_exprs: Vec<Expression>,
     ) -> Self {
@@ -59,7 +59,7 @@ impl GroupByPartialTransform {
             aggr_exprs,
             group_exprs,
             schema,
-            schema_before_groupby,
+            schema_before_group_by,
             input: Arc::new(EmptyProcessor::create()),
             groups: RwLock::new(HashMap::default()),
         }
@@ -118,7 +118,7 @@ impl IProcessor for GroupByPartialTransform {
         tracing::debug!("execute...");
         let aggr_len = self.aggr_exprs.len();
         let start = Instant::now();
-        let schema_before_groupby = self.schema_before_groupby.clone();
+        let schema_before_group_by = self.schema_before_group_by.clone();
 
         let mut stream = self.input.execute().await?;
 
@@ -144,7 +144,7 @@ impl IProcessor for GroupByPartialTransform {
                             let mut aggr_funcs = vec![];
                             for expr in &self.aggr_exprs {
                                 let mut func =
-                                    expr.to_aggregate_function(&schema_before_groupby)?;
+                                    expr.to_aggregate_function(&schema_before_group_by)?;
                                 let name = expr.column_name();
                                 let args = expr.to_aggregate_function_names()?;
                                 let arg_columns = args

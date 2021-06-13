@@ -33,12 +33,12 @@ pub struct AggregatorPartialTransform {
 impl AggregatorPartialTransform {
     pub fn try_create(
         schema: DataSchemaRef,
-        schema_before_groupby: DataSchemaRef,
+        schema_before_group_by: DataSchemaRef,
         exprs: Vec<Expression>,
     ) -> Result<Self> {
         let funcs = exprs
             .iter()
-            .map(|expr| expr.to_aggregate_function(&schema_before_groupby))
+            .map(|expr| expr.to_aggregate_function(&schema_before_group_by))
             .collect::<Result<Vec<_>>>()?;
 
         let arg_names = exprs
