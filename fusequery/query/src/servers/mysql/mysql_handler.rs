@@ -18,7 +18,7 @@ use common_infallible::Mutex;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::servers::mysql::mysql_session::Session;
-use crate::servers::{RunnableService, Elapsed};
+use crate::servers::{AbortableService, Elapsed};
 use crate::sessions::SessionManagerRef;
 use tokio_stream::wrappers::TcpListenerStream;
 use crate::servers::mysql::reject_connection::RejectConnection;
@@ -68,10 +68,10 @@ impl MySQLHandler {
 }
 
 #[async_trait::async_trait]
-impl RunnableService<(String, u16), SocketAddr> for MySQLHandler {
-    fn abort(&self, force: bool) {
+impl AbortableService<(String, u16), SocketAddr> for MySQLHandler {
+    fn abort(&self, force: bool) -> Result<()> {
         self.abort_parts.lock().0.abort();
-        self.session_manager.abort(force);
+        self.session_manager.abort(force)
     }
 
     async fn start(&self, args: (String, u16)) -> Result<SocketAddr> {

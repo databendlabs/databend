@@ -5,7 +5,7 @@ use tokio::net::TcpStream;
 use common_exception::Result;
 use common_infallible::Mutex;
 
-use crate::servers::RunnableService;
+use crate::servers::AbortableService;
 use crate::sessions::{FuseQueryContextRef, SessionManagerRef, SessionStatus};
 
 pub trait SessionCreator {
@@ -14,7 +14,7 @@ pub trait SessionCreator {
     fn create(id: String, sessions: SessionManagerRef) -> Arc<Box<dyn ISession>>;
 }
 
-pub trait ISession: RunnableService<TcpStream, ()> + Send + Sync {
+pub trait ISession: AbortableService<TcpStream, ()> + Send + Sync {
     fn get_id(&self) -> String;
 
     fn try_create_context(&self) -> Result<FuseQueryContextRef>;

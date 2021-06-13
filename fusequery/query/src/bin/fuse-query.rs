@@ -11,7 +11,7 @@ use fuse_query::metrics::MetricService;
 use fuse_query::servers::ClickHouseHandler;
 use fuse_query::servers::MySQLHandler;
 use fuse_query::sessions::SessionManager;
-use fuse_query::servers::RunnableService;
+use fuse_query::servers::AbortableService;
 use log::info;
 
 #[tokio::main]
@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tasks = vec![];
     let mut services = vec![];
     let cluster = Cluster::create_global(conf.clone())?;
-    let session_manager = SessionManager::from_conf(conf.clone(), cluster.clone());
+    let session_manager = SessionManager::from_conf(conf.clone(), cluster.clone())?;
 
     // MySQL handler.
     {

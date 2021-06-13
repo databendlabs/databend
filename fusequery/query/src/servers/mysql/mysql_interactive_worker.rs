@@ -7,7 +7,7 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 
 use crate::interpreters::{IInterpreter, InterpreterFactory};
-use crate::servers::mysql::endpoints::{MySQLOnInitEndpoint, IMySQLEndpoint, DFQueryResultWriter};
+use crate::servers::mysql::writers::{DFInitResultWriter, DFQueryResultWriter};
 use crate::sessions::{ISession, SessionStatus};
 use crate::sql::PlanParser;
 use std::sync::Arc;
@@ -71,7 +71,9 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         }
 
         let start = Instant::now();
+        self.session.get_status().lock().enter_query(query);
         DFQueryResultWriter::create(writer).write(self.base.do_query(query))?;
+        self.session.get_status().lock().exit_query()?;
 
         histogram!(
             super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
@@ -91,7 +93,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             return Err(ErrorCode::AbortedSession("Aborting this connection. because we are try aborting server."))
         }
 
-        self.base.do_init(database_name, writer)
+        DFInitResultWriter::create(writer).write(self.base.do_init(database_name))
     }
 }
 
@@ -113,7 +115,6 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
         let context = self.session.try_create_context()?;
 
-        self.session.get_status().lock().enter_parser(query);
         let query_plan = PlanParser::create(context.clone()).build_from_sql(query)?;
 
         self.session.get_status().lock().enter_interpreter(&query_plan);
@@ -126,9 +127,8 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         futures::executor::block_on(abort_stream.collect::<Result<Vec<DataBlock>>>())
     }
 
-    fn do_init(&mut self, database_name: &str, writer: InitWriter<'_, W>) -> Result<()> {
-        log::debug!("Use `{}` for MySQLHandler", database_name);
-        MySQLOnInitEndpoint::do_action(writer, self.session.clone())
+    fn do_init(&mut self, database_name: &str) -> Result<()> {
+        self.do_query(&format!("USE {}", database_name)).map(|_| ())
     }
 }
 

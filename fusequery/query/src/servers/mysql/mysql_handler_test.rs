@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_exception::{Result, ErrorCode, ToErrorCode};
-use crate::servers::{MySQLHandler, RunningMySQLHandler};
+use crate::servers::{MySQLHandler, AbortableService};
 use crate::configs::Config;
 use crate::clusters::Cluster;
 use crate::sessions::SessionManager;
@@ -17,10 +17,10 @@ use std::thread::JoinHandle;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_use_database_with_on_query() -> Result<()> {
-    let handler = MySQLHandler::create(SessionManager::create(1));
+    let handler = MySQLHandler::create(SessionManager::try_create(1)?);
 
-    let runnable_server = handler.start("0.0.0.0", 0).await?;
-    let mut connection = create_connection(runnable_server.listener_address().port())?;
+    let runnable_server = handler.start(("0.0.0.0".to_string(), 0_u16)).await?;
+    let mut connection = create_connection(runnable_server.port())?;
     let received_data: Vec<(String)> = query(&mut connection, "SELECT database()")?;
     assert_eq!(received_data, vec!["default"]);
     query::<EmptyRow>(&mut connection, "USE system")?;
@@ -32,21 +32,20 @@ async fn test_use_database_with_on_query() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rejected_session_with_sequence() -> Result<()> {
-    let handler = MySQLHandler::create(SessionManager::create(1));
+    let handler = MySQLHandler::create(SessionManager::try_create(1)?);
 
-    let runnable_server = handler.start("0.0.0.0", 0).await?;
-    let server_port = runnable_server.listener_address().port();
+    let listener_addr = handler.start(("0.0.0.0".to_string(), 0_u16)).await?;
 
     {
         // Accepted connection
-        let mut conn = create_connection(server_port)?;
+        let mut conn = create_connection(listener_addr.port())?;
 
         // Rejected connection
-        match create_connection(server_port) {
+        match create_connection(listener_addr.port()) {
             Ok(_) => assert!(false, "Expected rejected connection"),
             Err(error) => {
                 assert_eq!(error.code(), 1000);
-                assert_eq!(error.message(), "Reject connection, cause: MySqlError { ERROR 1203 (42000): Rejected MySQL connection. The current accept connection has exceeded mysql_handler_thread_num config }");
+                assert_eq!(error.message(), "Reject connection, cause: MySqlError { ERROR 1203 (42000): The current accept connection has exceeded mysql_handler_thread_num config }");
             }
         };
 
@@ -54,7 +53,7 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
     }
 
     // Accepted connection
-    create_connection(server_port)?;
+    create_connection(listener_addr.port())?;
 
     Ok(())
 }
@@ -81,17 +80,16 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
                 Err(error) => {
                     destroy_barrier.wait();
                     assert_eq!(error.code(), 1000);
-                    assert_eq!(error.message(), "Reject connection, cause: MySqlError { ERROR 1203 (42000): Rejected MySQL connection. The current accept connection has exceeded mysql_handler_thread_num config }");
+                    assert_eq!(error.message(), "Reject connection, cause: MySqlError { ERROR 1203 (42000): The current accept connection has exceeded mysql_handler_thread_num config }");
                     CreateServerResult::Rejected
                 }
             }
         })
     }
 
-    let handler = MySQLHandler::create(SessionManager::create(1));
+    let handler = MySQLHandler::create(SessionManager::try_create(1)?);
 
-    let runnable_server = handler.start("0.0.0.0", 0).await?;
-    let server_port = runnable_server.listener_address().port();
+    let listener_addr = handler.start(("0.0.0.0".to_string(), 0_u16)).await?;
 
     let start_barriers = Arc::new(Barrier::new(3));
     let destroy_barriers = Arc::new(Barrier::new(3));
@@ -101,7 +99,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         let start_barrier = start_barriers.clone();
         let destroy_barrier = destroy_barriers.clone();
 
-        join_handlers.push(connect_server(server_port, start_barrier, destroy_barrier));
+        join_handlers.push(connect_server(listener_addr.port(), start_barrier, destroy_barrier));
     }
 
     let mut accept = 0;

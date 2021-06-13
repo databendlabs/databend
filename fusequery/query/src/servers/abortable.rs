@@ -9,8 +9,8 @@ use std::time::Duration;
 pub type Elapsed = Duration;
 
 #[async_trait::async_trait]
-pub trait RunnableService<Args, R> {
-    fn abort(&self, force: bool);
+pub trait AbortableService<Args, R> {
+    fn abort(&self, force: bool) -> Result<()>;
 
     async fn start(&self, args: Args) -> Result<R>;
 

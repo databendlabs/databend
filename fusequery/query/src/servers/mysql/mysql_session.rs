@@ -19,8 +19,8 @@ use common_infallible::Mutex;
 
 use crate::clusters::{Cluster, ClusterRef};
 use crate::interpreters::{IInterpreter, InterpreterFactory};
-use crate::servers::{Elapsed, RunnableService};
-use crate::servers::mysql::endpoints::{IMySQLEndpoint, MySQLOnInitEndpoint};
+use crate::servers::{Elapsed, AbortableService};
+use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
 use crate::sessions::{FuseQueryContext, FuseQueryContextRef, ISession, SessionCreator, SessionManagerRef, SessionStatus};
 use crate::sql::PlanParser;
@@ -39,12 +39,7 @@ impl ISession for Session {
     }
 
     fn try_create_context(&self) -> Result<FuseQueryContextRef> {
-        let mut context = FuseQueryContext::try_create()?;
-        context = context.with_cluster(self.session_manager.get_cluster())?;
-        // TODO: init context with session status
-
-        return Ok(context);
-        // context.set_current_database(database.clone());
+        self.session_status.lock().try_create_context(self.session_manager.get_cluster())
     }
 
     fn get_status(&self) -> Arc<Mutex<SessionStatus>> {
@@ -53,24 +48,30 @@ impl ISession for Session {
 }
 
 #[async_trait::async_trait]
-impl RunnableService<TcpStream, ()> for Session {
-    fn abort(&self, force: bool) {
+impl AbortableService<TcpStream, ()> for Session {
+    fn abort(&self, force: bool) -> Result<()> {
         let mut session_status = self.session_status.lock();
-        session_status.enter_abort(force);
+        session_status.abort_session(force)
     }
 
     async fn start(&self, stream: TcpStream) -> Result<()> {
         let abort_notify = self.aborted_notify.clone();
+        let session_manager = self.session_manager.clone();
         let stream = stream.into_std().map_err_to_code(ErrorCode::TokioError, || "")?;
         stream.set_nonblocking(false).map_err_to_code(ErrorCode::TokioError, || "")?;
 
-        let session = self.session_manager.get_session(&self.session_id)?;
+        let session_id = self.get_id();
+        let cloned_stream = stream.try_clone()?;
+        let session = session_manager.get_session(&self.session_id)?;
 
         std::thread::spawn(move || {
+            session.get_status().lock().enter_init(cloned_stream);
+
             if let Err(error) = MysqlIntermediary::run_on_tcp(InteractiveWorker::create(session), stream) {
                 log::error!("Unexpected error occurred during query execution: {:?}", error);
             };
 
+            session_manager.destroy_session(session_id);
             abort_notify.notify_waiters();
         });
 
@@ -83,14 +84,12 @@ impl RunnableService<TcpStream, ()> for Session {
         match duration {
             None => {
                 self.aborted_notify.notified().await;
-                self.session_manager.destroy_session(self);
             }
             Some(duration) => {
-                tokio::time::timeout(duration, self.aborted_notify.notified())
-                    .await
-                    .map_err_to_code(ErrorCode::Timeout, || "")?;
-
-                self.session_manager.destroy_session(self);
+                match tokio::time::timeout(duration.clone(), self.aborted_notify.notified()).await {
+                    Ok(_) => { /* do nothing */ }
+                    Err(_) => return Err(ErrorCode::Timeout(format!("Session did not close in {:?}", duration))),
+                };
             }
         };
 

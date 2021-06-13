@@ -71,6 +71,26 @@ impl FuseQueryContext {
         Ok(Arc::new(ctx))
     }
 
+    pub fn from_settings(settings: Settings, default_database: String) -> Result<FuseQueryContextRef> {
+        let max_threads = settings.try_get_u64("max_threads")? as usize;
+
+        Ok(Arc::new(FuseQueryContext {
+            uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
+            settings,
+            cluster: Arc::new(RwLock::new(Cluster::empty())),
+            datasource: Arc::new(DataSource::try_create()?),
+            statistics: Arc::new(RwLock::new(Statistics::default())),
+            partition_queue: Arc::new(RwLock::new(VecDeque::new())),
+            current_database: Arc::new(RwLock::new(default_database)),
+            progress: Arc::new(Progress::create()),
+            runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(max_threads)?)),
+            version: format!(
+                "FuseQuery v-{}",
+                *crate::configs::config::FUSE_COMMIT_VERSION
+            ),
+        }))
+    }
+
     pub fn with_cluster(&self, cluster: ClusterRef) -> Result<FuseQueryContextRef> {
         *self.cluster.write() = cluster;
         Ok(Arc::new(self.clone()))

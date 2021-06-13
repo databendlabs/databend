@@ -13,44 +13,55 @@ use metrics::counter;
 
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
-use crate::servers::{RunnableService, Elapsed};
+use crate::servers::{AbortableService, Elapsed};
 use std::time::{Duration, Instant};
 use crate::configs::Config;
 use crate::clusters::{ClusterRef, Cluster};
 use crate::sessions::session::{ISession, SessionCreator};
 use std::ops::Sub;
+use crate::datasources::{IDataSource, DataSource};
 
 pub struct SessionManager {
+    cluster: ClusterRef,
+    datasource: Arc<dyn IDataSource>,
+
+    max_mysql_sessions: usize,
     sessions: RwLock<HashMap<String, Arc<Box<dyn ISession>>>>,
     // TODO: remove queries_context.
     queries_context: RwLock<HashMap<String, FuseQueryContextRef>>,
-    max_mysql_sessions: usize,
-    cluster: ClusterRef,
+
     aborted_notify: Arc<tokio::sync::Notify>,
+
 }
 
 pub type SessionManagerRef = Arc<SessionManager>;
 
 impl SessionManager {
-    pub fn create(max_mysql_sessions: u64) -> SessionManagerRef {
-        Arc::new(SessionManager {
+    pub fn try_create(max_mysql_sessions: u64) -> Result<SessionManagerRef> {
+        Ok(Arc::new(SessionManager {
+            cluster: Cluster::empty(),
+            datasource: Arc::new(DataSource::try_create()?),
+
+            max_mysql_sessions: max_mysql_sessions as usize,
             sessions: RwLock::new(HashMap::with_capacity(max_mysql_sessions as usize)),
             queries_context: RwLock::new(HashMap::with_capacity(max_mysql_sessions as usize)),
-            max_mysql_sessions: max_mysql_sessions as usize,
-            cluster: Cluster::empty(),
+
             aborted_notify: Arc::new(tokio::sync::Notify::new()),
-        })
+        }))
     }
 
-    pub fn from_conf(conf: Config, cluster: ClusterRef) -> SessionManagerRef {
+    pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
         let max_mysql_sessions = conf.mysql_handler_thread_num as usize;
-        Arc::new(SessionManager {
+        Ok(Arc::new(SessionManager {
+            cluster,
+            datasource: Arc::new(DataSource::try_create()?),
+
+            max_mysql_sessions,
             sessions: RwLock::new(HashMap::with_capacity(max_mysql_sessions)),
             queries_context: RwLock::new(HashMap::with_capacity(max_mysql_sessions)),
-            max_mysql_sessions,
-            cluster,
+
             aborted_notify: Arc::new(tokio::sync::Notify::new()),
-        })
+        }))
     }
 
     pub fn get_cluster(self: &Arc<Self>) -> ClusterRef {
@@ -80,10 +91,10 @@ impl SessionManager {
         }
     }
 
-    pub fn destroy_session<S: ISession>(self: &Arc<Self>, session: &S) {
+    pub fn destroy_session(self: &Arc<Self>, session_id: String) {
         counter!(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
 
-        self.sessions.write().remove(&session.get_id());
+        self.sessions.write().remove(&session_id);
     }
 
     pub fn try_create_context(&self) -> Result<FuseQueryContextRef> {
@@ -108,11 +119,12 @@ impl SessionManager {
 }
 
 #[async_trait::async_trait]
-impl RunnableService<(), ()> for SessionManager {
-    fn abort(&self, force: bool) {
+impl AbortableService<(), ()> for SessionManager {
+    fn abort(&self, force: bool) -> Result<()> {
         let sessions = self.sessions.write();
-        sessions.iter().for_each(|(_, session)| session.abort(force));
+        sessions.iter().map(|(_, session)| session.abort(force)).collect::<Result<Vec<_>>>()?;
         self.aborted_notify.notify_waiters();
+        Ok(())
     }
 
     async fn start(&self, _: ()) -> Result<()> {
