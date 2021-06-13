@@ -59,7 +59,7 @@ impl IInterpreter for SelectInterpreter {
             Result::Err(error)
         };
 
-        let timeout = self.ctx.get_flight_client_timeout()?;
+        let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
         for (index, (node, action)) in scheduled_actions.remote_actions.iter().enumerate() {
             let mut flight_client = node.get_flight_client().await?;
             if let Err(error) = flight_client

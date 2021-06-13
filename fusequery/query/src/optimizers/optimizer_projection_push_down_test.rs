@@ -73,7 +73,7 @@ fn test_projection_push_down_optimizer_group_by() -> anyhow::Result<()> {
 fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
-    let total = ctx.get_max_block_size()? as u64;
+    let total = ctx.get_settings().get_max_block_size()? as u64;
     let statistics = Statistics {
         read_rows: total as usize,
         read_bytes: ((total) * size_of::<u64>() as u64) as usize,
@@ -126,7 +126,7 @@ fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
 fn test_projection_push_down_optimizer_3() -> anyhow::Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
-    let total = ctx.get_max_block_size()? as u64;
+    let total = ctx.get_settings().get_max_block_size()? as u64;
     let statistics = Statistics {
         read_rows: total as usize,
         read_bytes: ((total) * size_of::<u64>() as u64) as usize,
