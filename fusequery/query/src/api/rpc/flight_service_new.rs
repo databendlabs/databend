@@ -269,6 +269,7 @@ impl FlightService for FuseQueryService {
                                 action.plan,
                                 action.scatters,
                                 action.scatters_action,
+                                action.exists_res_map,
                             ),
                             response_sender,
                         ))

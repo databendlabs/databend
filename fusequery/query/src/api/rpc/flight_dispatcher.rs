@@ -35,6 +35,7 @@ pub struct PrepareStageInfo {
     pub plan: PlanNode,
     pub scatters: Vec<String>,
     pub scatters_expression: Expression,
+    pub exists_res_map: HashMap<String, bool>,
 }
 
 #[derive(Debug)]
@@ -105,7 +106,11 @@ impl FlightDispatcher {
                     }
                 }
                 Request::PrepareQueryStage(info, response_sender) => {
-                    let pipeline = Self::create_plan_pipeline(&*state, &info.plan);
+                    let pipeline = Self::create_plan_pipeline(
+                        &*state,
+                        &info.plan,
+                        info.exists_res_map.clone(),
+                    );
                     let prepared_query = Self::prepare_stage(
                         &mut dispatcher_state,
                         &info,
@@ -244,6 +249,7 @@ impl FlightDispatcher {
     fn create_plan_pipeline(
         state: &ServerState,
         plan: &PlanNode,
+        exists_res_map: HashMap<String, bool>,
     ) -> Result<(FuseQueryContextRef, Pipeline)> {
         state
             .session_manager
@@ -252,7 +258,7 @@ impl FlightDispatcher {
             .and_then(|ctx| ctx.with_cluster(state.cluster.clone()))
             .and_then(|ctx| {
                 ctx.set_max_threads(state.conf.num_cpus)?;
-                PipelineBuilder::create(ctx.clone(), HashMap::<String, bool>::new(), plan.clone())
+                PipelineBuilder::create(ctx.clone(), exists_res_map, plan.clone())
                     .build()
                     .map(move |pipeline| (ctx, pipeline))
             })
@@ -367,6 +373,7 @@ impl PrepareStageInfo {
         plan: PlanNode,
         scatters: Vec<String>,
         scatters_expression: Expression,
+        exists_res_map: HashMap<String, bool>,
     ) -> Box<PrepareStageInfo> {
         Box::new(PrepareStageInfo {
             query_id,
@@ -374,6 +381,7 @@ impl PrepareStageInfo {
             plan,
             scatters,
             scatters_expression,
+            exists_res_map,
         })
     }
 }
