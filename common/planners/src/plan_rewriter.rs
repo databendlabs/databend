@@ -100,7 +100,7 @@ pub trait PlanRewriter<'plan> {
     fn rewrite_aggregate_final(&mut self, plan: &'plan AggregatorFinalPlan) -> Result<PlanNode> {
         Ok(PlanNode::AggregatorFinal(AggregatorFinalPlan {
             schema: plan.schema.clone(),
-            schema_before_groupby: plan.schema_before_groupby.clone(),
+            schema_before_group_by: plan.schema_before_group_by.clone(),
             aggr_expr: plan.aggr_expr.clone(),
             group_expr: plan.group_expr.clone(),
             input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),

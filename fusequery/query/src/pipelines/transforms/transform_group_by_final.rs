@@ -34,7 +34,7 @@ pub struct GroupByFinalTransform {
     aggr_exprs: Vec<Expression>,
     group_exprs: Vec<Expression>,
     schema: DataSchemaRef,
-    schema_before_groupby: DataSchemaRef,
+    schema_before_group_by: DataSchemaRef,
     input: Arc<dyn IProcessor>,
     groups: GroupFuncTable,
     keys: GroupKeyTable,
@@ -43,7 +43,7 @@ pub struct GroupByFinalTransform {
 impl GroupByFinalTransform {
     pub fn create(
         schema: DataSchemaRef,
-        schema_before_groupby: DataSchemaRef,
+        schema_before_group_by: DataSchemaRef,
         aggr_exprs: Vec<Expression>,
         group_exprs: Vec<Expression>,
     ) -> Self {
@@ -51,7 +51,7 @@ impl GroupByFinalTransform {
             aggr_exprs,
             group_exprs,
             schema,
-            schema_before_groupby,
+            schema_before_group_by,
             input: Arc::new(EmptyProcessor::create()),
             groups: RwLock::new(HashMap::default()),
             keys: RwLock::new(HashMap::default()),
@@ -83,7 +83,7 @@ impl IProcessor for GroupByFinalTransform {
         let aggr_funcs = self
             .aggr_exprs
             .iter()
-            .map(|x| x.to_aggregate_function(&self.schema_before_groupby))
+            .map(|x| x.to_aggregate_function(&self.schema_before_group_by))
             .collect::<Result<Vec<_>>>()?;
 
         let aggr_funcs_len = aggr_funcs.len();
