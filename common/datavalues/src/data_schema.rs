@@ -39,7 +39,7 @@ impl TryFrom<&ArrowSchema> for DataSchema {
         let fields = a_schema
             .fields()
             .iter()
-            .map(|arrow_f| arrow_f.try_into()?)
+            .map(|arrow_f| arrow_f.try_into())
             .collect::<Result<Vec<_>>>()?;
 
         Ok(DataSchema::new(fields))

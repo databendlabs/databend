@@ -122,7 +122,6 @@ impl DataValue {
             DataValue::Float32(_) => DataType::Float32,
             DataValue::Float64(_) => DataType::Float64,
             DataValue::Utf8(_) => DataType::Utf8,
-            DataValue::Binary(_) => DataType::Binary,
             DataValue::Date32(_) => DataType::Date32,
             DataValue::Date64(_) => DataType::Date64,
             DataValue::TimestampSecond(_) => DataType::Timestamp(TimeUnit::Second, None),
@@ -145,11 +144,18 @@ impl DataValue {
                     .collect::<Vec<_>>();
                 DataType::Struct(fields)
             }
+            DataValue::Binary(_) => DataType::Binary,
         }
     }
 
     pub fn to_array(&self) -> Result<DataArrayRef> {
         self.to_array_with_size(1)
+    }
+
+    #[inline]
+    fn make_null_array(data_type: &DataType, size: usize) -> DataArrayRef {
+        let arrow_type = data_type.to_arrow();
+        new_null_array(&arrow_type, size)
     }
 
     pub fn to_array_with_size(&self, size: usize) -> Result<DataArrayRef> {
@@ -192,17 +198,17 @@ impl DataValue {
             DataValue::Binary(v) => Ok(Arc::new(BinaryArray::from(vec![v.as_deref(); size]))),
             DataValue::Date32(e) => match e {
                 Some(value) => Ok(Arc::new(Date32Array::from_value(*value, size))),
-                None => Ok(new_null_array(&DataType::Date32, size)),
+                None => Ok(Self::make_null_array(&DataType::Date32, size)),
             },
             DataValue::Date64(e) => match e {
                 Some(value) => Ok(Arc::new(Date64Array::from_value(*value, size))),
-                None => Ok(new_null_array(&DataType::Date64, size)),
+                None => Ok(Self::make_null_array(&DataType::Date64, size)),
             },
             DataValue::TimestampSecond(e) => match e {
                 Some(value) => Ok(Arc::new(TimestampSecondArray::from_iter_values(
                     repeat(*value).take(size),
                 ))),
-                None => Ok(new_null_array(
+                None => Ok(Self::make_null_array(
                     &DataType::Timestamp(TimeUnit::Second, None),
                     size,
                 )),
@@ -211,7 +217,7 @@ impl DataValue {
                 Some(value) => Ok(Arc::new(TimestampMillisecondArray::from_iter_values(
                     repeat(*value).take(size),
                 ))),
-                None => Ok(new_null_array(
+                None => Ok(Self::make_null_array(
                     &DataType::Timestamp(TimeUnit::Millisecond, None),
                     size,
                 )),
@@ -220,28 +226,28 @@ impl DataValue {
                 Some(value) => Ok(Arc::new(TimestampMicrosecondArray::from_value(
                     *value, size,
                 ))),
-                None => Ok(new_null_array(
+                None => Ok(Self::make_null_array(
                     &DataType::Timestamp(TimeUnit::Microsecond, None),
                     size,
                 )),
             },
             DataValue::TimestampNanosecond(e) => match e {
                 Some(value) => Ok(Arc::new(TimestampNanosecondArray::from_value(*value, size))),
-                None => Ok(new_null_array(
+                None => Ok(Self::make_null_array(
                     &DataType::Timestamp(TimeUnit::Nanosecond, None),
                     size,
                 )),
             },
             DataValue::IntervalDayTime(e) => match e {
                 Some(value) => Ok(Arc::new(IntervalDayTimeArray::from_value(*value, size))),
-                None => Ok(new_null_array(
+                None => Ok(Self::make_null_array(
                     &DataType::Interval(IntervalUnit::DayTime),
                     size,
                 )),
             },
             DataValue::IntervalYearMonth(e) => match e {
                 Some(value) => Ok(Arc::new(IntervalYearMonthArray::from_value(*value, size))),
-                None => Ok(new_null_array(
+                None => Ok(Self::make_null_array(
                     &DataType::Interval(IntervalUnit::YearMonth),
                     size,
                 )),
@@ -272,9 +278,9 @@ impl DataValue {
                 for (i, x) in v.iter().enumerate() {
                     let val_array = x.to_array_with_size(1)?;
                     array.push((
-                        DataField::new(
+                        Field::new(
                             format!("item_{}", i).as_str(),
-                            val_array.data_type().clone(),
+                            x.data_type().to_arrow(),
                             false,
                         ),
                         val_array as DataArrayRef,
@@ -326,21 +332,14 @@ impl TryFrom<&DataType> for DataValue {
             DataType::Float32 => Ok(DataValue::Float32(None)),
             DataType::Float64 => Ok(DataValue::Float64(None)),
             DataType::Utf8 => Ok(DataValue::Utf8(None)),
-
-            DataType::Timestamp(TimeUnit::Second, _) => Ok(DataValue::TimestampSecond(None)),
-            DataType::Timestamp(TimeUnit::Millisecond, _) => {
-                Ok(DataValue::TimestampMillisecond(None))
-            }
-            DataType::Timestamp(TimeUnit::Microsecond, _) => {
-                Ok(DataValue::TimestampMicrosecond(None))
-            }
-            DataType::Timestamp(TimeUnit::Nanosecond, _) => {
-                Ok(DataValue::TimestampNanosecond(None))
-            }
-            _ => Result::Err(ErrorCode::BadDataValueType(format!(
-                "DataValue Error: Unsupported try_from() for data type: {:?}",
-                data_type
-            ))),
+            DataType::Date32 => Ok(DataValue::UInt32(None)),
+            DataType::Date64 => Ok(DataValue::UInt64(None)),
+            DataType::Timestamp(_, _) => Ok(DataValue::UInt64(None)),
+            DataType::Interval(IntervalUnit::YearMonth) => Ok(DataValue::UInt32(None)),
+            DataType::Interval(IntervalUnit::DayTime) => Ok(DataValue::UInt64(None)),
+            DataType::List(f) => Ok(DataValue::List(None, f.data_type().clone())),
+            DataType::Struct(_) => Ok(DataValue::Struct(vec![])),
+            DataType::Binary => Ok(DataValue::Binary(None)),
         }
     }
 }

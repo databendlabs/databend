@@ -6,8 +6,9 @@ use std::sync::Arc;
 
 use common_arrow::arrow;
 use common_arrow::arrow::array::ArrayRef;
-use common_arrow::arrow::datatypes::DataType;
 use common_exception::Result;
+
+use crate::DataType;
 
 pub type DataArrayRef = arrow::array::ArrayRef;
 
@@ -36,5 +37,7 @@ pub type Date64Array = arrow::array::Date64Array;
 pub type StructArray = arrow::array::StructArray;
 
 pub fn data_array_cast(array: &ArrayRef, to_type: &DataType) -> Result<ArrayRef> {
-    Ok(arrow::compute::cast(&array, &to_type)?)
+    Ok(arrow::compute::cast(&array, &to_type.to_arrow())?)
 }
+
+pub trait ArrayTrait {}

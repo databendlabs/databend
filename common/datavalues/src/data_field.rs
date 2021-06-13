@@ -10,7 +10,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataType;
-#[derive(Clone, Debug, PartialEq, Hash, Eq)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Hash, Eq, PartialOrd, Ord,
+)]
 pub struct DataField {
     name: String,
     data_type: DataType,

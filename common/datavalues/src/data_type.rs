@@ -4,12 +4,16 @@
 
 use core::fmt;
 use std::convert::TryFrom;
+use std::convert::TryInto;
 
+use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::datatypes::Field;
+use common_arrow::arrow::datatypes::IntervalUnit;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
+
+use crate::DataField;
 
 #[derive(
     serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
@@ -34,9 +38,11 @@ pub enum DataType {
     /// A 64-bit date representing the elapsed time since UNIX epoch (1970-01-01)
     /// in milliseconds (64 bits).
     Date64,
-    Time64(TimeUnit),
-    List(ArrowDataType),
-    Duration(TimeUnit),
+    Timestamp(TimeUnit, Option<String>),
+    Interval(IntervalUnit),
+    List(Box<DataField>),
+    Struct(Vec<DataField>),
+    Binary,
 }
 
 impl DataType {
@@ -58,9 +64,14 @@ impl DataType {
             Utf8 => ArrowDataType::LargeUtf8,
             Date32 => ArrowDataType::Date32,
             Date64 => ArrowDataType::Date64,
-            Time64(tu) => ArrowDataType::Time64(tu.clone()),
-            List(dt) => ArrowDataType::List(Box::new(Field::new("", dt.clone(), true))),
-            Duration(tu) => ArrowDataType::Duration(tu.clone()),
+            Timestamp(tu, f) => ArrowDataType::Timestamp(tu.clone(), f.clone()),
+            Interval(tu) => ArrowDataType::Interval(tu.clone()),
+            List(dt) => ArrowDataType::List(Box::new(dt.to_arrow())),
+            Struct(fs) => {
+                let arrows_fields = fs.iter().map(|f| f.to_arrow()).collect();
+                ArrowDataType::Struct(arrows_fields)
+            }
+            Binary => ArrowDataType::Binary,
         }
     }
 }
@@ -90,19 +101,35 @@ impl TryFrom<&ArrowDataType> for DataType {
             ArrowDataType::Boolean => Ok(DataType::Boolean),
             ArrowDataType::Float32 => Ok(DataType::Float32),
             ArrowDataType::Float64 => Ok(DataType::Float64),
-            ArrowDataType::LargeList(f) => Ok(DataType::List(f.data_type().clone())),
+            ArrowDataType::List(f) => {
+                let f: DataField = (f.as_ref()).try_into()?;
+                Ok(DataType::List(Box::new(f)))
+            }
             ArrowDataType::Date32 => Ok(DataType::Date32),
             ArrowDataType::Date64 => Ok(DataType::Date64),
-            ArrowDataType::Time64(TimeUnit::Nanosecond) => {
-                Ok(DataType::Time64(TimeUnit::Nanosecond))
+
+            ArrowDataType::Timestamp(TimeUnit::Second, f) => {
+                Ok(DataType::Timestamp(TimeUnit::Second, f.clone()))
             }
-            ArrowDataType::Duration(TimeUnit::Nanosecond) => {
-                Ok(DataType::Duration(TimeUnit::Nanosecond))
+            ArrowDataType::Timestamp(TimeUnit::Millisecond, f) => {
+                Ok(DataType::Timestamp(TimeUnit::Millisecond, f.clone()))
             }
-            ArrowDataType::Duration(TimeUnit::Millisecond) => {
-                Ok(DataType::Duration(TimeUnit::Millisecond))
+
+            ArrowDataType::Timestamp(TimeUnit::Microsecond, f) => {
+                Ok(DataType::Timestamp(TimeUnit::Microsecond, f.clone()))
             }
+            ArrowDataType::Timestamp(TimeUnit::Nanosecond, f) => {
+                Ok(DataType::Timestamp(TimeUnit::Nanosecond, f.clone()))
+            }
+            ArrowDataType::Interval(IntervalUnit::YearMonth) => {
+                Ok(DataType::Interval(IntervalUnit::YearMonth))
+            }
+            ArrowDataType::Interval(IntervalUnit::DayTime) => {
+                Ok(DataType::Interval(IntervalUnit::DayTime))
+            }
+
             ArrowDataType::Utf8 => Ok(DataType::Utf8),
+            ArrowDataType::Binary => Ok(DataType::Binary),
             dt => Err(ErrorCode::IllegalDataType(format!(
                 "Arrow datatype {:?} not supported by Datafuse",
                 dt
@@ -114,5 +141,16 @@ impl TryFrom<&ArrowDataType> for DataType {
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+pub trait IGetDataType {
+    fn get_data_type(&self) -> DataType;
+}
+
+// we are not using ArrayRef.data_type()
+impl IGetDataType for ArrayRef {
+    fn get_data_type(&self) -> DataType {
+        self.data_type().try_into().unwrap()
     }
 }

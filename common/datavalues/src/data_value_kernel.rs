@@ -3,13 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::datatypes::*;
+use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataArrayRef;
 use crate::DataColumnarValue;
+use crate::DataType;
 use crate::DataValue;
+use crate::IGetDataType;
 
 impl DataValue {
     /// Appends a sequence of [u8] bytes for the value in `col[row]` to
@@ -33,7 +35,7 @@ impl DataValue {
         };
         let col = col?;
 
-        match col.data_type() {
+        match col.get_data_type() {
             DataType::Boolean => {
                 let array = col.as_any().downcast_ref::<BooleanArray>().unwrap();
                 vec.extend_from_slice(&[array.value(row) as u8]);
@@ -111,40 +113,7 @@ impl DataValue {
                 let array = col.as_any().downcast_ref::<Date32Array>().unwrap();
                 vec.extend_from_slice(&array.value(row).to_le_bytes());
             }
-            DataType::Dictionary(index_type, _) => match **index_type {
-                DataType::Int8 => {
-                    Self::dictionary_create_key_for_col::<Int8Type>(&col, row, vec)?;
-                }
-                DataType::Int16 => {
-                    Self::dictionary_create_key_for_col::<Int16Type>(&col, row, vec)?;
-                }
-                DataType::Int32 => {
-                    Self::dictionary_create_key_for_col::<Int32Type>(&col, row, vec)?;
-                }
-                DataType::Int64 => {
-                    Self::dictionary_create_key_for_col::<Int64Type>(&col, row, vec)?;
-                }
-                DataType::UInt8 => {
-                    Self::dictionary_create_key_for_col::<UInt8Type>(&col, row, vec)?;
-                }
-                DataType::UInt16 => {
-                    Self::dictionary_create_key_for_col::<UInt16Type>(&col, row, vec)?;
-                }
-                DataType::UInt32 => {
-                    Self::dictionary_create_key_for_col::<UInt32Type>(&col, row, vec)?;
-                }
-                DataType::UInt64 => {
-                    Self::dictionary_create_key_for_col::<UInt64Type>(&col, row, vec)?;
-                }
-                _ => {
-                    return Result::Err(ErrorCode::BadDataValueType(
-                        format!(
-                            "Unsupported key type (dictionary index type not supported creating key) {}",
-                            col.data_type(),
-                        )
-                    ));
-                }
-            },
+
             _ => {
                 // This is internal because we should have caught this before.
                 return Result::Err(ErrorCode::BadDataValueType(format!(
@@ -154,27 +123,6 @@ impl DataValue {
             }
         }
         Ok(())
-    }
-
-    #[inline]
-    fn dictionary_create_key_for_col<K: ArrowDictionaryKeyType>(
-        col: &ArrayRef,
-        row: usize,
-        vec: &mut Vec<u8>,
-    ) -> Result<()> {
-        let dict_col = col.as_any().downcast_ref::<DictionaryArray<K>>().unwrap();
-
-        // look up the index in the values dictionary
-        let keys_col = dict_col.keys_array();
-        let values_index = keys_col.value(row).to_usize().ok_or_else(|| {
-            ErrorCode::BadDataValueType(format!(
-                "Can not convert index to usize in dictionary of type creating group by value {:?}",
-                keys_col.data_type()
-            ))
-        })?;
-
-        let col = DataColumnarValue::Array(dict_col.values().clone());
-        Self::concat_row_to_one_key(&col, values_index, vec)
     }
 
     /// Convert data value vectors to data array.
@@ -209,7 +157,7 @@ impl DataValue {
     #[inline]
     /// Converts a value in `array` at `index` into a ScalarValue
     pub fn try_from_array(array: &DataArrayRef, index: usize) -> Result<DataValue> {
-        match array.data_type() {
+        match array.get_data_type() {
             DataType::Boolean => {
                 typed_cast_from_array_to_data_value!(array, index, BooleanArray, Boolean)
             }

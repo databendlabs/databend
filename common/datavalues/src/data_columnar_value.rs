@@ -12,6 +12,7 @@ use crate::BooleanArray;
 use crate::DataArrayRef;
 use crate::DataType;
 use crate::DataValue;
+use crate::IGetDataType;
 use crate::PrimitiveArrayRef;
 use crate::StringArray;
 
@@ -27,7 +28,7 @@ impl DataColumnarValue {
     #[inline]
     pub fn data_type(&self) -> DataType {
         let x = match self {
-            DataColumnarValue::Array(v) => v.data_type().clone(),
+            DataColumnarValue::Array(v) => v.get_data_type(),
             DataColumnarValue::Constant(v, _) => v.data_type(),
         };
         x

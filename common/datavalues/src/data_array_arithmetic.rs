@@ -15,6 +15,7 @@ use crate::DataValue;
 use crate::DataValueArithmeticOperator;
 use crate::Float32Array;
 use crate::Float64Array;
+use crate::IGetDataType;
 use crate::Int16Array;
 use crate::Int32Array;
 use crate::Int64Array;
@@ -68,10 +69,10 @@ impl DataArrayArithmetic {
         left_array: &DataArrayRef,
         right_array: &DataArrayRef,
     ) -> Result<DataArrayRef> {
-        let coercion_type = super::data_type::numerical_arithmetic_coercion(
+        let coercion_type = super::data_type_coercion::numerical_arithmetic_coercion(
             &op,
-            &left_array.data_type(),
-            &right_array.data_type(),
+            &left_array.get_data_type(),
+            &right_array.get_data_type(),
         )?;
 
         let left_array = data_array_cast(left_array, &coercion_type)?;
@@ -102,9 +103,9 @@ impl DataArrayArithmetic {
         left: &DataArrayRef,
         right_value: &DataValue,
     ) -> Result<DataArrayRef> {
-        let coercion_type = super::data_type::numerical_arithmetic_coercion(
+        let coercion_type = super::data_type_coercion::numerical_arithmetic_coercion(
             &op,
-            &left.data_type(),
+            &left.get_data_type(),
             &right_value.data_type(),
         )?;
 
@@ -149,8 +150,9 @@ impl DataArrayArithmetic {
                     _ => value.to_array()?,
                 };
 
-                let coercion_type =
-                    super::data_type::numerical_signed_coercion(&value_array.data_type())?;
+                let coercion_type = super::data_type_coercion::numerical_signed_coercion(
+                    &value_array.get_data_type(),
+                )?;
                 let value_array = data_array_cast(&value_array, &coercion_type)?;
                 arrow_primitive_array_negate!(&value_array, &coercion_type)
             }

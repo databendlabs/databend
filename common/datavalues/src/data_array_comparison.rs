@@ -15,6 +15,7 @@ use crate::DataValue;
 use crate::DataValueComparisonOperator;
 use crate::Float32Array;
 use crate::Float64Array;
+use crate::IGetDataType;
 use crate::Int16Array;
 use crate::Int32Array;
 use crate::Int64Array;
@@ -36,9 +37,9 @@ impl DataArrayComparison {
     ) -> Result<DataArrayRef> {
         match (left, right) {
             (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
-                let coercion_type = super::data_type::equal_coercion(
-                    &left_array.data_type(),
-                    &right_array.data_type(),
+                let coercion_type = super::data_type_coercion::equal_coercion(
+                    &left_array.get_data_type(),
+                    &right_array.get_data_type(),
                 )?;
                 let left_array = data_array_cast(&left_array, &coercion_type)?;
                 let right_array = data_array_cast(&right_array, &coercion_type)?;
@@ -66,8 +67,10 @@ impl DataArrayComparison {
             }
 
             (DataColumnarValue::Array(array), DataColumnarValue::Constant(scalar, _)) => {
-                let coercion_type =
-                    super::data_type::equal_coercion(&array.data_type(), &scalar.data_type())?;
+                let coercion_type = super::data_type_coercion::equal_coercion(
+                    &array.get_data_type(),
+                    &scalar.data_type(),
+                )?;
                 let left_array = data_array_cast(&array, &coercion_type)?;
                 let right_array = data_array_cast(&scalar.to_array_with_size(1)?, &coercion_type)?;
                 let scalar = DataValue::try_from_array(&right_array, 0)?;
@@ -95,8 +98,10 @@ impl DataArrayComparison {
             }
 
             (DataColumnarValue::Constant(scalar, _), DataColumnarValue::Array(array)) => {
-                let coercion_type =
-                    super::data_type::equal_coercion(&array.data_type(), &scalar.data_type())?;
+                let coercion_type = super::data_type_coercion::equal_coercion(
+                    &array.get_data_type(),
+                    &scalar.data_type(),
+                )?;
                 let left_array = data_array_cast(&scalar.to_array_with_size(1)?, &coercion_type)?;
                 let right_array = data_array_cast(&array, &coercion_type)?;
                 let scalar = DataValue::try_from_array(&left_array, 0)?;
@@ -126,7 +131,7 @@ impl DataArrayComparison {
                 DataColumnarValue::Constant(left_scala, rows),
                 DataColumnarValue::Constant(right_scalar, _),
             ) => {
-                let coercion_type = super::data_type::equal_coercion(
+                let coercion_type = super::data_type_coercion::equal_coercion(
                     &left_scala.data_type(),
                     &right_scalar.data_type(),
                 )?;

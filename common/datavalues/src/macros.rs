@@ -103,7 +103,7 @@ macro_rules! arrow_primitive_array_scalar_op {
 /// such as Utf8 strings.
 macro_rules! arrow_array_op {
     ($LEFT:expr, $RIGHT:expr, $OP:ident) => {
-        match ($LEFT).data_type() {
+        match ($LEFT).get_data_type() {
             DataType::Int8 => compute_op!($LEFT, $RIGHT, $OP, Int8Array),
             DataType::Int16 => compute_op!($LEFT, $RIGHT, $OP, Int16Array),
             DataType::Int32 => compute_op!($LEFT, $RIGHT, $OP, Int32Array),
@@ -185,7 +185,7 @@ macro_rules! compute_utf8_op_scalar {
 /// such as Utf8 strings.
 macro_rules! arrow_array_op_scalar {
     ($LEFT:expr, $RIGHT:expr, $OP:ident) => {{
-        let result = match $LEFT.data_type() {
+        let result = match $LEFT.get_data_type() {
             DataType::Int8 => compute_op_scalar!($LEFT, $RIGHT, $OP, Int8Array),
             DataType::Int16 => compute_op_scalar!($LEFT, $RIGHT, $OP, Int16Array),
             DataType::Int32 => compute_op_scalar!($LEFT, $RIGHT, $OP, Int32Array),
@@ -341,11 +341,17 @@ macro_rules! typed_cast_from_data_value_to_std {
 
 macro_rules! build_list {
     ($VALUE_BUILDER_TY:ident, $SCALAR_TY:ident, $VALUES:expr, $SIZE:expr) => {{
+        use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+        use common_arrow::arrow::datatypes::Field as ArrowField;
         match $VALUES {
             // the return on the macro is necessary, to short-circuit and return ArrayRef
             None => {
                 return Ok(common_arrow::arrow::array::new_null_array(
-                    &DataType::List(Box::new(DataField::new("item", DataType::$SCALAR_TY, true))),
+                    &ArrowDataType::List(Box::new(ArrowField::new(
+                        "item",
+                        ArrowDataType::$SCALAR_TY,
+                        true,
+                    ))),
                     $SIZE,
                 ))
             }
