@@ -18,7 +18,7 @@ mod tests {
     fn test_constant_folding_optimizer() -> anyhow::Result<()> {
         let ctx = crate::tests::try_create_context()?;
 
-        let total = ctx.get_max_block_size()? as u64;
+        let total = ctx.get_settings().get_max_block_size()? as u64;
         let statistics = Statistics {
             read_rows: total as usize,
             read_bytes: ((total) * size_of::<u64>() as u64) as usize,

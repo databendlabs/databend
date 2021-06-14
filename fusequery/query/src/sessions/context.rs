@@ -6,7 +6,6 @@ use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::Arc;
 
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -31,7 +30,7 @@ use crate::sessions::Settings;
 #[derive(Clone)]
 pub struct FuseQueryContext {
     uuid: Arc<RwLock<String>>,
-    settings: Settings,
+    settings: Arc<Settings>,
     cluster: Arc<RwLock<ClusterRef>>,
     datasource: Arc<dyn IDataSource>,
     statistics: Arc<RwLock<Statistics>>,
@@ -46,27 +45,24 @@ pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
     pub fn try_create() -> Result<FuseQueryContextRef> {
-        let cpus = num_cpus::get();
-        let settings = Settings::create();
+        let settings = Settings::try_create()?;
         let ctx = FuseQueryContext {
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
-            settings,
+            settings: settings.clone(),
             cluster: Arc::new(RwLock::new(Cluster::empty())),
             datasource: Arc::new(DataSource::try_create()?),
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             current_database: Arc::new(RwLock::new(String::from("default"))),
             progress: Arc::new(Progress::create()),
-            runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(cpus)?)),
+            runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(
+                settings.get_max_threads()? as usize,
+            )?)),
             version: format!(
                 "FuseQuery v-{}",
                 *crate::configs::config::FUSE_COMMIT_VERSION
             ),
         };
-        // Default settings.
-        ctx.initial_settings()?;
-        // Customize settings.
-        ctx.settings.try_set_u64("max_threads", cpus as u64, "The maximum number of threads to execute the request. By default, it is determined automatically.".to_string())?;
 
         Ok(Arc::new(ctx))
     }
@@ -212,10 +208,6 @@ impl FuseQueryContext {
         self.datasource.get_table_function(function_name)
     }
 
-    pub fn get_settings(&self) -> Result<Vec<DataValue>> {
-        self.settings.get_settings()
-    }
-
     pub fn get_id(&self) -> String {
         self.uuid.as_ref().read().clone()
     }
@@ -239,23 +231,20 @@ impl FuseQueryContext {
     }
 
     pub fn get_max_threads(&self) -> Result<u64> {
-        self.settings.try_get_u64("max_threads")
+        self.settings.get_max_threads()
     }
 
     pub fn set_max_threads(&self, threads: u64) -> Result<()> {
         *self.runtime.write() = Runtime::with_worker_threads(threads as usize)?;
-        self.settings.try_update_u64("max_threads", threads)
+        self.settings.set_max_threads(threads)
     }
 
     pub fn get_fuse_version(&self) -> String {
         self.version.clone()
     }
 
-    apply_macros! { apply_getter_setter_settings, apply_initial_settings, apply_update_settings,
-        ("max_block_size", u64, 10000, "Maximum block size for reading".to_string()),
-        ("flight_client_timeout", u64, 60, "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds".to_string()),
-        ("min_distributed_rows", u64, 100000000, "Minimum distributed read rows. In cluster mode, when read rows exceeds this value, the local table converted to distributed query.".to_string()),
-        ("min_distributed_bytes", u64, 500 * 1024 * 1024, "Minimum distributed read bytes. In cluster mode, when read bytes exceeds this value, the local table converted to distributed query.".to_string())
+    pub fn get_settings(&self) -> Arc<Settings> {
+        self.settings.clone()
     }
 }
 
