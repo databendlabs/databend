@@ -32,6 +32,8 @@ pub enum DataValueComparisonOperator {
     Gt,
     GtEq,
     NotEq,
+    Like,
+    NotLike,
 }
 
 impl std::fmt::Display for DataValueComparisonOperator {
@@ -42,9 +44,9 @@ impl std::fmt::Display for DataValueComparisonOperator {
             DataValueComparisonOperator::LtEq => "<=",
             DataValueComparisonOperator::Gt => ">",
             DataValueComparisonOperator::GtEq => ">=",
-            DataValueComparisonOperator::NotEq => "!="
-            // DataValueComparisonOperator::Like => "LIKE",
-            // DataValueComparisonOperator::NotLike => "NOT LIKE",
+            DataValueComparisonOperator::NotEq => "!=",
+            DataValueComparisonOperator::Like => "LIKE",
+            DataValueComparisonOperator::NotLike => "NOT LIKE",
         };
         write!(f, "{}", display)
     }
