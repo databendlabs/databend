@@ -1,4 +1,8 @@
 --------------
+DROP DATABASE IF EXISTS db
+--------------
+
+--------------
 CREATE DATABASE db ENGINE = Local
 --------------
 
@@ -14,4 +18,4 @@ DROP DATABASE IF EXISTS db
 DROP DATABASE db
 --------------
 
-ERROR 1105 (HY000) at line 6: Code: 3, displayText = Unknown database: 'db'.
+ERROR 1105 (HY000) at line 8: Code: 3, displayText = Unknown database: 'db'.

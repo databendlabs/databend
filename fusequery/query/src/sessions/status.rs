@@ -61,8 +61,10 @@ impl SessionStatus {
 
     pub fn enter_aborted(&mut self) {
         self.state = State::Aborted;
-        self.stream = None;
         self.abort_handler = None;
+        if let Some(stream) = self.stream.take() {
+            let _ = stream.shutdown(Shutdown::Both);
+        }
     }
 
     pub fn try_create_context(

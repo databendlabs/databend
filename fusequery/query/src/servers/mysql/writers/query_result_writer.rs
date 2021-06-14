@@ -98,7 +98,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
     fn err(error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
         log::error!("OnQuery Error: {:?}", error);
 
-        writer.error(ErrorKind::ER_ABORTING_CONNECTION, format!("{}", error).as_bytes())?;
+        writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())?;
         Ok(())
     }
 }

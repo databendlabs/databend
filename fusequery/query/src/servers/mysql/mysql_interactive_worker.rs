@@ -113,25 +113,35 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     fn do_query(&mut self, query: &str) -> Result<Vec<DataBlock>> {
         log::debug!("{}", query);
 
+        let runtime = Self::build_runtime()?;
         let context = self.session.try_create_context()?;
 
         let query_plan = PlanParser::create(context.clone()).build_from_sql(query)?;
 
         self.session.get_status().lock().enter_interpreter(&query_plan);
         let interpreter = InterpreterFactory::get(context.clone(), query_plan)?;
-        let data_stream = futures::executor::block_on(interpreter.execute())?;
+        let data_stream = runtime.block_on(interpreter.execute())?;
 
         let (abort_handle, abort_stream) = AbortStream::try_create(data_stream)?;
         self.session.get_status().lock().enter_pipeline_executor(abort_handle);
 
-        futures::executor::block_on(abort_stream.collect::<Result<Vec<DataBlock>>>())
+        runtime.block_on(abort_stream.collect::<Result<Vec<DataBlock>>>())
     }
 
     fn do_init(&mut self, database_name: &str) -> Result<()> {
         // self.do_query(&format!("USE {}", database_name)).map(|_| ())
 
-        self.session.get_status().lock().update_database(database_name.to_string());
-        Ok(())
+        let context = self.session.try_create_context()?;
+        context.get_datasource().get_database(database_name).map(|_| {
+            self.session.get_status().lock().update_database(database_name.to_string());
+        })
+    }
+
+    fn build_runtime() -> Result<tokio::runtime::Runtime> {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .map_err(|tokio_error| ErrorCode::TokioError(format!("{}", tokio_error)))
     }
 }
 
