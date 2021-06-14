@@ -2,6 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-pub mod debug;
-pub mod router;
-pub mod v1;
+mod profling;
+
+pub use profling::Profiling;

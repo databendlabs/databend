@@ -162,6 +162,7 @@ nav:
       - Contributing: development/contributing.md
       - Coding Guideline: development/coding-guidelines.md
       - Tracing: development/tracing.md
+      - Profling: development/profiling.md
       - Roadmap: development/roadmap.md
       - RFCs:
         - FuseQuery Join: rfcs/query/2021-05-01-join-framework-design.md
