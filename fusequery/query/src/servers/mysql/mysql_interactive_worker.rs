@@ -122,15 +122,16 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let data_stream = futures::executor::block_on(interpreter.execute())?;
 
         let (abort_handle, abort_stream) = AbortStream::try_create(data_stream)?;
-        self.session.get_status().lock().enter_fetch_data(abort_handle);
+        self.session.get_status().lock().enter_pipeline_executor(abort_handle);
 
         futures::executor::block_on(abort_stream.collect::<Result<Vec<DataBlock>>>())
     }
 
     fn do_init(&mut self, database_name: &str) -> Result<()> {
-        self.do_query(&format!("USE {}", database_name)).map(|_| ())
+        // self.do_query(&format!("USE {}", database_name)).map(|_| ())
 
-        // self.session.get_status().lock()
+        self.session.get_status().lock().update_database(database_name.to_string());
+        Ok(())
     }
 }
 

@@ -70,10 +70,11 @@ impl AbortableService<TcpStream, ()> for Session {
         std::thread::spawn(move || {
             session.get_status().lock().enter_init(cloned_stream);
 
-            if let Err(error) = MysqlIntermediary::run_on_tcp(InteractiveWorker::create(session), stream) {
+            if let Err(error) = MysqlIntermediary::run_on_tcp(InteractiveWorker::create(session.clone()), stream) {
                 log::error!("Unexpected error occurred during query execution: {:?}", error);
             };
 
+            session.get_status().lock().enter_aborted();
             session_manager.destroy_session(session_id);
             abort_notify.notify_waiters();
         });

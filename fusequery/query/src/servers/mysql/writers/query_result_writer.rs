@@ -97,15 +97,9 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
 
     fn err(error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
         log::error!("OnQuery Error: {:?}", error);
-        let aborted_code = ErrorCode::AbortedSession("").code();
 
-        if error.code() == aborted_code {
-            writer.error(ErrorKind::ER_ABORTING_CONNECTION, format!("{}", error).as_bytes())?;
-            Err(ErrorCode::AbortedSession("Aborting this connection. because we are try aborting server."))
-        } else {
-            writer.error(ErrorKind::ER_ABORTING_CONNECTION, format!("{}", error).as_bytes())?;
-            Ok(())
-        }
+        writer.error(ErrorKind::ER_ABORTING_CONNECTION, format!("{}", error).as_bytes())?;
+        Ok(())
     }
 }
 

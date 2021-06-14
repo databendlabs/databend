@@ -12,6 +12,7 @@ use pin_project_lite::pin_project;
 
 use crate::SendableDataBlockStream;
 use futures::stream::{Abortable, AbortHandle};
+use std::time::Instant;
 
 pin_project! {
     pub struct AbortStream {
@@ -35,14 +36,15 @@ impl Stream for AbortStream {
         let is_aborted = this.input.is_aborted();
 
         match this.input.poll_next(ctx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(Some(block)) => Poll::Ready(Some(block)),
             Poll::Ready(None) => {
                 match is_aborted {
-                    true => Poll::Ready(Some(Err(ErrorCode::AbortedQuery("")))),
-                    false => Poll::Ready(None)
+                    false => Poll::Ready(None),
+                    true => {
+                        Poll::Ready(Some(Err(ErrorCode::AbortedQuery("Aborted query, because the server is shutting down or the query was killed"))))
+                    },
                 }
             }
+            other => other
         }
     }
 }

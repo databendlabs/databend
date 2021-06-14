@@ -3,7 +3,7 @@ use crate::servers::mysql::mysql_session::Session;
 use crate::sessions::{SessionCreator, SessionManager, ISession};
 use crate::configs::Config;
 use crate::clusters::Cluster;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::sync::Arc;
 use mysql::prelude::Queryable;
 
@@ -24,16 +24,15 @@ async fn test_idle_state_wait_terminal_with_not_abort() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_idle_wait_terminal_after_not_force_abort() -> Result<()> {
+    let instant = Instant::now();
     let (conn, session) = prepare_session_and_connect().await?;
 
     session.abort(false)?;
     match session.wait_terminal(Some(Duration::from_secs(5))).await {
-        Ok(_) => assert!(false, "wait_terminal must be return timeout."),
-        Err(error) => {
-            assert_eq!(error.code(), 40);
-            assert_eq!(error.message(), "Session did not close in 5s");
-        }
+        Ok(_) => assert!(true),
+        Err(error) => assert!(false, "{:?}", error),
     };
+    assert!(instant.elapsed().lt(&Duration::from_secs(5)));
 
     Ok(())
 }
@@ -80,12 +79,16 @@ async fn test_idle_wait_terminal_after_force_abort() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_progress_state_wait_terminal_with_not_abort() -> Result<()> {
+    let instant = Instant::now();
     let (mut conn, session) = prepare_session_and_connect().await?;
 
-    tokio::spawn(async move {
-        match conn.query::<Vec<u8>, &str>("SELECT sleep(15)") {
+    let query_join_handler = tokio::spawn(async move {
+        conn.query::<Vec<u8>, &str>("SET max_threads = 1").unwrap();
+        conn.query::<Vec<u8>, &str>("SET max_block_size = 1").unwrap();
+
+        match conn.query::<Vec<u8>, &str>("SELECT sleep(1) FROM numbers(15)") {
             Ok(_) => assert!(true),
-            Err(error) => assert!(false, ""),
+            Err(error) => assert!(false, "{:?}", error)
         };
     });
 
@@ -100,17 +103,26 @@ async fn test_progress_state_wait_terminal_with_not_abort() -> Result<()> {
         }
     };
 
+    assert!(instant.elapsed().gt(&Duration::from_secs(6)));
+    assert!(instant.elapsed().lt(&Duration::from_secs(10)));
+    query_join_handler.await;
+    assert!(instant.elapsed().gt(&Duration::from_secs(15)));
+
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_progress_wait_terminal_after_not_force_abort() -> Result<()> {
+    let instant = Instant::now();
     let (mut conn, session) = prepare_session_and_connect().await?;
 
-    tokio::spawn(async move {
-        match conn.query::<Vec<u8>, &str>("SELECT sleep(15)") {
+    let query_join_handler = tokio::spawn(async move {
+        conn.query::<Vec<u8>, &str>("SET max_threads = 1").unwrap();
+        conn.query::<Vec<u8>, &str>("SET max_block_size = 1").unwrap();
+
+        match conn.query::<Vec<u8>, &str>("SELECT sleep(1) FROM numbers(15)") {
             Ok(_) => assert!(true),
-            Err(error) => assert!(false, ""),
+            Err(error) => assert!(false, "{:?}", error)
         };
     });
 
@@ -126,17 +138,28 @@ async fn test_progress_wait_terminal_after_not_force_abort() -> Result<()> {
         }
     };
 
+    assert!(instant.elapsed().gt(&Duration::from_secs(10)));
+    assert!(instant.elapsed().lt(&Duration::from_secs(15)));
+    query_join_handler.await;
+    assert!(instant.elapsed().gt(&Duration::from_secs(15)));
+
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_progress_wait_terminal_before_force_abort() -> Result<()> {
+    let instant = Instant::now();
     let (mut conn, session) = prepare_session_and_connect().await?;
 
-    tokio::spawn(async move {
-        match conn.query::<Vec<u8>, &str>("SELECT sleep(15)") {
-            Ok(_) => assert!(true),
-            Err(error) => assert!(false, "{:?}", error),
+    let query_join_handler = tokio::spawn(async move {
+        conn.query::<Vec<u8>, &str>("SET max_threads = 1").unwrap();
+        conn.query::<Vec<u8>, &str>("SET max_block_size = 1").unwrap();
+
+        match conn.query::<Vec<u8>, &str>("SELECT sleep(1) FROM numbers(15)") {
+            Ok(_) => assert!(false, "SELECT sleep(1) FROM numbers(15) must be timeout."),
+            Err(error) => {
+                assert_eq!(error.to_string(), "MySqlError { ERROR 1152 (08S01): Code: 43, displayText = Aborted query, because the server is shutting down or the query was killed. }");
+            },
         };
     });
 
@@ -157,17 +180,26 @@ async fn test_progress_wait_terminal_before_force_abort() -> Result<()> {
         Err(err) => assert!(false, "wait_terminal error {}", err),
     }
 
+    query_join_handler.await;
+    assert!(instant.elapsed().le(&Duration::from_secs(15)));
+
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_progress_wait_terminal_after_force_abort() -> Result<()> {
+    let instant = Instant::now();
     let (mut conn, session) = prepare_session_and_connect().await?;
 
-    tokio::spawn(async move {
-        match conn.query::<Vec<u8>, &str>("SELECT sleep(15)") {
-            Ok(_) => assert!(true),
-            Err(error) => assert!(false, ""),
+    let query_join_handler = tokio::spawn(async move {
+        conn.query::<Vec<u8>, &str>("SET max_threads = 1").unwrap();
+        conn.query::<Vec<u8>, &str>("SET max_block_size = 1").unwrap();
+
+        match conn.query::<Vec<u8>, &str>("SELECT sleep(1) FROM numbers(15)") {
+            Ok(_) => assert!(false, "SELECT sleep(1) FROM numbers(15) must be timeout."),
+            Err(error) => {
+                assert_eq!(error.to_string(), "MySqlError { ERROR 1152 (08S01): Code: 43, displayText = Aborted query, because the server is shutting down or the query was killed. }");
+            },
         };
     });
 
@@ -185,6 +217,9 @@ async fn test_progress_wait_terminal_after_force_abort() -> Result<()> {
         Ok(_) => assert!(true),
         Err(error) => assert!(false, "wait_terminal must be return Ok."),
     };
+
+    query_join_handler.await;
+    assert!(instant.elapsed().le(&Duration::from_secs(15)));
 
     Ok(())
 }

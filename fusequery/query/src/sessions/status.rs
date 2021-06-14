@@ -20,7 +20,7 @@ pub enum State {
 pub struct SessionStatus {
     state: State,
     current_database: String,
-    session_settings: Settings,
+    session_settings: Arc<Settings>,
 
     stream: Option<TcpStream>,
     execute_instant: Option<Instant>,
@@ -31,14 +31,10 @@ pub struct SessionStatus {
 
 impl SessionStatus {
     pub fn try_create() -> Result<SessionStatus> {
-        let cpus = num_cpus::get();
-        let session_settings = Settings::create();
-        session_settings.try_set_u64("max_threads", cpus as u64, "The maximum number of threads to execute the request. By default, it is determined automatically.".to_string())?;
-
         Ok(SessionStatus {
             state: State::Init,
             current_database: String::from("default"),
-            session_settings: session_settings,
+            session_settings: Settings::try_create()?,
             stream: None,
             execute_instant: None,
             executing_query: None,
@@ -61,6 +57,12 @@ impl SessionStatus {
     pub fn enter_init(&mut self, stream: std::net::TcpStream) {
         self.state = State::Idle;
         self.stream = Some(stream);
+    }
+
+    pub fn enter_aborted(&mut self) {
+        self.state = State::Aborted;
+        self.stream = None;
+        self.abort_handler = None;
     }
 
     pub fn try_create_context(
@@ -86,8 +88,9 @@ impl SessionStatus {
             State::Init => return Err(ErrorCode::LogicalError("Logical error: exit_query with Init state")),
             State::Idle => return Err(ErrorCode::LogicalError("Logical error: exit_query with Idle state")),
             State::Progress => self.state = State::Idle,
-            State::Aborting => self.state = State::Aborted,
-            State::Aborted => self.state = State::Aborted,
+            State::Aborting | State::Aborted => {
+                return Err(ErrorCode::AbortedSession("Aborting this connection. because we are try aborting server."))
+            }
         };
 
         Ok(())
@@ -97,22 +100,26 @@ impl SessionStatus {
         self.executing_query_plan = Some(query_plan.clone());
     }
 
-    pub fn enter_fetch_data(&mut self, abort_handle: AbortHandle) {
+    pub fn enter_pipeline_executor(&mut self, abort_handle: AbortHandle) {
         self.abort_handler = Some(abort_handle);
+    }
+
+    pub fn update_database(&mut self, database_name: String) {
+        self.current_database = database_name;
     }
 
     pub fn abort_session(&mut self, force: bool) -> Result<()> {
         match self.state {
             State::Aborted => {},
-            _ if !force => self.state = State::Aborting,
             State::Init | State::Idle => {
-                self.state = State::Aborted;
+                self.state = State::Aborting;
                 if let Some(stream) = self.stream.take() {
                     stream.shutdown(Shutdown::Both)?;
                 }
             },
+            _ if !force => self.state = State::Aborting,
             State::Progress | State::Aborting => {
-                self.state = State::Aborted;
+                self.state = State::Aborting;
                 if let Some(abort_handle) = self.abort_handler.take() {
                     abort_handle.abort();
                 }
