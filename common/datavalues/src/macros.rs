@@ -124,6 +124,20 @@ macro_rules! arrow_array_op {
     };
 }
 
+/// The arrow_array_utf8_op macro only includes Utf8 strings.
+macro_rules! arrow_array_utf8_op {
+    ($LEFT:expr, $RIGHT:expr, $OP:ident) => {
+        match ($LEFT).data_type() {
+            DataType::Utf8 => compute_op!($LEFT, $RIGHT, $OP, StringArray),
+            _ => Result::Err(ErrorCode::BadDataValueType(format!(
+                "Unsupported arithmetic_compute::{} for data type: {:?}",
+                stringify!($OP),
+                ($LEFT).data_type(),
+            ))),
+        }
+    };
+}
+
 /// Invoke a negate compute kernel on an array
 /// The arrow_primitive_array_negate macro only evaluates for signed primitive types
 /// like signed integers and floats.
@@ -197,6 +211,36 @@ macro_rules! arrow_array_op_scalar {
             DataType::Float32 => compute_op_scalar!($LEFT, $RIGHT, $OP, Float32Array),
             DataType::Float64 => compute_op_scalar!($LEFT, $RIGHT, $OP, Float64Array),
             DataType::Utf8 => compute_utf8_op_scalar!($LEFT, $RIGHT, $OP, StringArray),
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
+                "DataValue Error: Unsupported data type {:?}",
+                other
+            ))),
+        };
+        Ok(result?)
+    }};
+}
+
+/// The arrow_array_utf8_op_scalar macro only includes Utf8 strings.
+macro_rules! arrow_array_utf8_op_scalar {
+    ($LEFT:expr, $RIGHT:expr, $OP:ident) => {{
+        let result = match $LEFT.data_type() {
+            DataType::Utf8 => {
+                let ll = downcast_array!($LEFT, StringArray)?;
+                if let crate::DataValue::Utf8(Some(string_value)) = $RIGHT {
+                    Ok(Arc::new(
+                        (paste::expr! {common_arrow::arrow::compute::[<$OP _scalar>]}(
+                            &ll,
+                            &string_value,
+                        ))
+                        .map_err(ErrorCode::from)?,
+                    ))
+                } else {
+                    Result::Err(ErrorCode::BadDataValueType(format!(
+                        "arrow_array_utf8_op_scalar failed to cast literal value {}",
+                        $RIGHT
+                    )))
+                }
+            }
             other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Unsupported data type {:?}",
                 other

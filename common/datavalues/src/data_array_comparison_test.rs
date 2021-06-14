@@ -103,6 +103,28 @@ fn test_array_comparison() {
             expect: vec![Arc::new(BooleanArray::from(vec![false, false, true, true]))],
             error: vec![""],
         },
+        ArrayTest {
+            name: "like-passed",
+            args: vec![vec![
+                Arc::new(StringArray::from(vec!["abc", "abd", "abe", "abf"])),
+                Arc::new(StringArray::from(vec!["abc", "a%", "_b_", "f"])),
+            ]],
+            op: DataValueComparisonOperator::Like,
+            expect: vec![Arc::new(BooleanArray::from(vec![true, true, true, false]))],
+            error: vec![""],
+        },
+        ArrayTest {
+            name: "not-like-passed",
+            args: vec![vec![
+                Arc::new(StringArray::from(vec!["abc", "abd", "abe", "abf"])),
+                Arc::new(StringArray::from(vec!["abc", "a%", "_b_", "f"])),
+            ]],
+            op: DataValueComparisonOperator::NotLike,
+            expect: vec![Arc::new(BooleanArray::from(vec![
+                false, false, false, true,
+            ]))],
+            error: vec![""],
+        },
     ];
 
     for t in tests {
@@ -185,6 +207,22 @@ fn test_array_scalar_comparison() {
             expect: Arc::new(BooleanArray::from(vec![true, true, false, false])),
             error: "",
         },
+        ArrayTest {
+            name: "like-passed",
+            array: Arc::new(StringArray::from(vec!["abc", "abd", "bae", "baf"])),
+            scalar: DataValue::Utf8(Some("a%".to_string())),
+            op: DataValueComparisonOperator::Like,
+            expect: Arc::new(BooleanArray::from(vec![true, true, false, false])),
+            error: "",
+        },
+        ArrayTest {
+            name: "not-like-passed",
+            array: Arc::new(StringArray::from(vec!["abc", "abd", "bae", "baf"])),
+            scalar: DataValue::Utf8(Some("a%".to_string())),
+            op: DataValueComparisonOperator::NotLike,
+            expect: Arc::new(BooleanArray::from(vec![false, false, true, true])),
+            error: "",
+        },
     ];
 
     for t in tests {
@@ -263,6 +301,22 @@ fn test_scalar_array_comparison() {
             scalar: DataValue::Int8(Some(3)),
             op: DataValueComparisonOperator::GtEq,
             expect: Arc::new(BooleanArray::from(vec![false, true, true, true])),
+            error: "",
+        },
+        ArrayTest {
+            name: "like-passed",
+            array: Arc::new(StringArray::from(vec!["abc", "abd", "bae", "baf"])),
+            scalar: DataValue::Utf8(Some("a%".to_string())),
+            op: DataValueComparisonOperator::Like,
+            expect: Arc::new(BooleanArray::from(vec![true, true, false, false])),
+            error: "",
+        },
+        ArrayTest {
+            name: "not-like-passed",
+            array: Arc::new(StringArray::from(vec!["abc", "abd", "bae", "baf"])),
+            scalar: DataValue::Utf8(Some("a%".to_string())),
+            op: DataValueComparisonOperator::NotLike,
+            expect: Arc::new(BooleanArray::from(vec![false, false, true, true])),
             error: "",
         },
     ];
