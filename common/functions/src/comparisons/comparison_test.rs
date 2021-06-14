@@ -109,6 +109,32 @@ fn test_comparison_function() -> Result<()> {
             expect: Arc::new(BooleanArray::from(vec![true, true, true, false])),
             error: "",
         },
+        Test {
+            name: "like-passed",
+            display: "LIKE",
+            nullable: false,
+            func: ComparisonLikeFunction::try_create_func("")?,
+            arg_names: vec!["a", "b"],
+            columns: vec![
+                Arc::new(StringArray::from(vec!["abc", "abd", "abe", "abf"])).into(),
+                Arc::new(StringArray::from(vec!["a%", "_b_", "abe", "a"])).into(),
+            ],
+            expect: Arc::new(BooleanArray::from(vec![true, true, true, false])),
+            error: "",
+        },
+        Test {
+            name: "not-like-passed",
+            display: "NOT LIKE",
+            nullable: false,
+            func: ComparisonNotLikeFunction::try_create_func("")?,
+            arg_names: vec!["a", "b"],
+            columns: vec![
+                Arc::new(StringArray::from(vec!["abc", "abd", "abe", "abf"])).into(),
+                Arc::new(StringArray::from(vec!["a%", "_b_", "abe", "a"])).into(),
+            ],
+            expect: Arc::new(BooleanArray::from(vec![false, false, false, true])),
+            error: "",
+        },
     ];
 
     for t in tests {
