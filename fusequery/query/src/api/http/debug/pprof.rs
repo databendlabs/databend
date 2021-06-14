@@ -2,28 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::num::NonZeroI32;
-
 use warp::Filter;
 
+use crate::api::http::debug::PProfRequest;
 use crate::configs::Config;
-
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
-pub struct PProfRequest {
-    #[serde(default = "PProfRequest::default_seconds")]
-    seconds: u64,
-    #[serde(default = "PProfRequest::default_frequency")]
-    frequency: NonZeroI32,
-}
-
-impl PProfRequest {
-    fn default_seconds() -> u64 {
-        30
-    }
-    fn default_frequency() -> NonZeroI32 {
-        NonZeroI32::new(99).unwrap()
-    }
-}
 
 pub fn pprof_handler(
     _cfg: Config,
@@ -39,6 +21,7 @@ mod handlers {
     use std::time::Duration;
 
     use common_profling::Profiling;
+    use common_tracing::tracing;
 
     use crate::api::http::debug::pprof::PProfRequest;
 
@@ -50,6 +33,7 @@ mod handlers {
         let duration = Duration::from_secs(req.seconds);
         let profile = Profiling::create(duration, req.frequency.get());
 
+        tracing::info!("start pprof request:{:?}", req);
         if let Some(accept) = header {
             // Browser.
             if accept.contains("text/html") {
@@ -60,6 +44,7 @@ mod handlers {
         } else {
             body = profile.dump_proto().await.unwrap();
         }
+        tracing::info!("finished pprof request:{:?}", req);
         Ok(warp::reply::html(body))
     }
 }
