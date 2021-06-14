@@ -7,11 +7,10 @@
 pub use abortable::AbortableService;
 pub use abortable::Elapsed;
 pub use clickhouse::ClickHouseHandler;
-// pub use mysql::running_mysql_handler::RunningMySQLHandler;
 
+// pub use mysql::running_mysql_handler::RunningMySQLHandler;
 pub use self::mysql::MySQLHandler;
 
+mod abortable;
 mod clickhouse;
 mod mysql;
-mod abortable;
-

@@ -8,10 +8,10 @@ use fuse_query::api::RpcService;
 use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
 use fuse_query::metrics::MetricService;
+use fuse_query::servers::AbortableService;
 use fuse_query::servers::ClickHouseHandler;
 use fuse_query::servers::MySQLHandler;
 use fuse_query::sessions::SessionManager;
-use fuse_query::servers::AbortableService;
 use log::info;
 
 #[tokio::main]
@@ -46,7 +46,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // MySQL handler.
     {
         let handler = MySQLHandler::create(session_manager.clone());
-        let listening = handler.start((conf.mysql_handler_host.clone(), conf.mysql_handler_port.clone())).await?;
+        let listening = handler
+            .start((conf.mysql_handler_host.clone(), conf.mysql_handler_port))
+            .await?;
         services.push(handler);
 
         info!(
@@ -108,7 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     for service in services {
-        service.wait_terminal(None).await;
+        let _ = service.wait_terminal(None).await;
     }
 
     Ok(())

@@ -1,11 +1,22 @@
-use common_exception::{Result, ToErrorCode, ErrorCode};
-use crate::servers::mysql::mysql_session::Session;
-use crate::sessions::{SessionCreator, SessionManager, ISession};
-use crate::configs::Config;
-use crate::clusters::Cluster;
-use std::time::{Duration, Instant};
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
+
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_exception::ToErrorCode;
 use mysql::prelude::Queryable;
+
+use crate::clusters::Cluster;
+use crate::configs::Config;
+use crate::servers::mysql::mysql_session::Session;
+use crate::sessions::ISession;
+use crate::sessions::SessionCreator;
+use crate::sessions::SessionManager;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_idle_state_wait_terminal_with_not_abort() -> Result<()> {
@@ -84,11 +95,12 @@ async fn test_progress_state_wait_terminal_with_not_abort() -> Result<()> {
 
     let query_join_handler = tokio::spawn(async move {
         conn.query::<Vec<u8>, &str>("SET max_threads = 1").unwrap();
-        conn.query::<Vec<u8>, &str>("SET max_block_size = 1").unwrap();
+        conn.query::<Vec<u8>, &str>("SET max_block_size = 1")
+            .unwrap();
 
         match conn.query::<Vec<u8>, &str>("SELECT sleep(1) FROM numbers(15)") {
             Ok(_) => assert!(true),
-            Err(error) => assert!(false, "{:?}", error)
+            Err(error) => assert!(false, "{:?}", error),
         };
     });
 
@@ -118,11 +130,12 @@ async fn test_progress_wait_terminal_after_not_force_abort() -> Result<()> {
 
     let query_join_handler = tokio::spawn(async move {
         conn.query::<Vec<u8>, &str>("SET max_threads = 1").unwrap();
-        conn.query::<Vec<u8>, &str>("SET max_block_size = 1").unwrap();
+        conn.query::<Vec<u8>, &str>("SET max_block_size = 1")
+            .unwrap();
 
         match conn.query::<Vec<u8>, &str>("SELECT sleep(1) FROM numbers(15)") {
             Ok(_) => assert!(true),
-            Err(error) => assert!(false, "{:?}", error)
+            Err(error) => assert!(false, "{:?}", error),
         };
     });
 
@@ -153,13 +166,14 @@ async fn test_progress_wait_terminal_before_force_abort() -> Result<()> {
 
     let query_join_handler = tokio::spawn(async move {
         conn.query::<Vec<u8>, &str>("SET max_threads = 1").unwrap();
-        conn.query::<Vec<u8>, &str>("SET max_block_size = 1").unwrap();
+        conn.query::<Vec<u8>, &str>("SET max_block_size = 1")
+            .unwrap();
 
         match conn.query::<Vec<u8>, &str>("SELECT sleep(1) FROM numbers(15)") {
             Ok(_) => assert!(false, "SELECT sleep(1) FROM numbers(15) must be timeout."),
             Err(error) => {
                 assert_eq!(error.to_string(), "MySqlError { ERROR 1152 (08S01): Code: 43, displayText = Aborted query, because the server is shutting down or the query was killed. }");
-            },
+            }
         };
     });
 
@@ -193,13 +207,14 @@ async fn test_progress_wait_terminal_after_force_abort() -> Result<()> {
 
     let query_join_handler = tokio::spawn(async move {
         conn.query::<Vec<u8>, &str>("SET max_threads = 1").unwrap();
-        conn.query::<Vec<u8>, &str>("SET max_block_size = 1").unwrap();
+        conn.query::<Vec<u8>, &str>("SET max_block_size = 1")
+            .unwrap();
 
         match conn.query::<Vec<u8>, &str>("SELECT sleep(1) FROM numbers(15)") {
             Ok(_) => assert!(false, "SELECT sleep(1) FROM numbers(15) must be timeout."),
             Err(error) => {
                 assert_eq!(error.to_string(), "MySqlError { ERROR 1152 (08S01): Code: 43, displayText = Aborted query, because the server is shutting down or the query was killed. }");
-            },
+            }
         };
     });
 
@@ -224,11 +239,12 @@ async fn test_progress_wait_terminal_after_force_abort() -> Result<()> {
     Ok(())
 }
 
-
 async fn prepare_session_and_connect() -> Result<(mysql::Conn, Arc<Box<dyn ISession>>)> {
     let session_manager = SessionManager::from_conf(Config::default(), Cluster::empty())?;
     let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await?;
-    let local_addr = listener.local_addr().map_err_to_code(ErrorCode::TokioError, || "");
+    let local_addr = listener
+        .local_addr()
+        .map_err_to_code(ErrorCode::TokioError, || "");
 
     let session = tokio::spawn(async move {
         let (stream, _) = listener.accept().await?;
@@ -242,12 +258,13 @@ async fn prepare_session_and_connect() -> Result<(mysql::Conn, Arc<Box<dyn ISess
     // connect success
     let conn = conn.await.map_err_to_code(ErrorCode::TokioError, || "")??;
 
-    let session = session.await.map_err_to_code(ErrorCode::TokioError, || "")??;
+    let session = session
+        .await
+        .map_err_to_code(ErrorCode::TokioError, || "")??;
     Ok((conn, session))
 }
 
 fn create_connection(port: u16) -> Result<mysql::Conn> {
     let uri = &format!("mysql://127.0.0.1:{}", port);
-    mysql::Conn::new(uri)
-        .map_err_to_code(ErrorCode::UnknownException, || "Reject connection")
+    mysql::Conn::new(uri).map_err_to_code(ErrorCode::UnknownException, || "Reject connection")
 }

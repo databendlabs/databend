@@ -6,7 +6,8 @@ use anyhow::Result;
 use common_planners::PlanNode;
 use criterion::Criterion;
 use fuse_query::interpreters::SelectInterpreter;
-use fuse_query::sessions::{FuseQueryContext, SessionManager};
+use fuse_query::sessions::FuseQueryContext;
+use fuse_query::sessions::SessionManager;
 use fuse_query::sql::PlanParser;
 use futures::StreamExt;
 

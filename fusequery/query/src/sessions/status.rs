@@ -1,12 +1,22 @@
-use crate::sessions::{FuseQueryContextRef, FuseQueryContext, Settings};
-use futures::future::{AbortHandle, Aborted};
-use common_exception::{Result, ErrorCode};
-use common_planners::PlanNode;
-use crate::clusters::ClusterRef;
-use std::time::Instant;
-use std::net::{TcpStream, Shutdown};
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
+use std::net::Shutdown;
+use std::net::TcpStream;
 use std::sync::Arc;
+use std::time::Instant;
+
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::PlanNode;
+use futures::future::AbortHandle;
+
+use crate::clusters::ClusterRef;
 use crate::datasources::IDataSource;
+use crate::sessions::FuseQueryContext;
+use crate::sessions::FuseQueryContextRef;
+use crate::sessions::Settings;
 
 #[derive(PartialEq, Clone)]
 pub enum State {
@@ -23,8 +33,11 @@ pub struct SessionStatus {
     session_settings: Arc<Settings>,
 
     stream: Option<TcpStream>,
+    #[allow(unused)]
     execute_instant: Option<Instant>,
+    #[allow(unused)]
     executing_query: Option<String>,
+    #[allow(unused)]
     executing_query_plan: Option<PlanNode>,
     abort_handler: Option<AbortHandle>,
 }
@@ -44,10 +57,7 @@ impl SessionStatus {
     }
 
     pub fn is_aborting(&self) -> bool {
-        match self.state {
-            State::Aborting | State::Aborted => true,
-            _ => false
-        }
+        matches!(self.state, State::Aborting | State::Aborted)
     }
 
     pub fn is_aborted(&self) -> bool {
@@ -72,11 +82,12 @@ impl SessionStatus {
         cluster: ClusterRef,
         datasource: Arc<dyn IDataSource>,
     ) -> Result<FuseQueryContextRef> {
-        Ok(FuseQueryContext::from_settings(
+        FuseQueryContext::from_settings(
             self.session_settings.clone(),
-            self.current_database.clone(), datasource)?
-            .with_cluster(cluster)?
+            self.current_database.clone(),
+            datasource,
         )
+        .and_then(|context| context.with_cluster(cluster))
     }
 
     pub fn enter_query(&mut self, query: &str) {
@@ -87,11 +98,21 @@ impl SessionStatus {
 
     pub fn exit_query(&mut self) -> Result<()> {
         match self.state {
-            State::Init => return Err(ErrorCode::LogicalError("Logical error: exit_query with Init state")),
-            State::Idle => return Err(ErrorCode::LogicalError("Logical error: exit_query with Idle state")),
+            State::Init => {
+                return Err(ErrorCode::LogicalError(
+                    "Logical error: exit_query with Init state",
+                ))
+            }
+            State::Idle => {
+                return Err(ErrorCode::LogicalError(
+                    "Logical error: exit_query with Idle state",
+                ))
+            }
             State::Progress => self.state = State::Idle,
             State::Aborting | State::Aborted => {
-                return Err(ErrorCode::AbortedSession("Aborting this connection. because we are try aborting server."))
+                return Err(ErrorCode::AbortedSession(
+                    "Aborting this connection. because we are try aborting server.",
+                ))
             }
         };
 
@@ -112,25 +133,22 @@ impl SessionStatus {
 
     pub fn abort_session(&mut self, force: bool) -> Result<()> {
         match self.state {
-            State::Aborted => {},
+            State::Aborted => {}
             State::Init | State::Idle => {
                 self.state = State::Aborting;
                 if let Some(stream) = self.stream.take() {
                     stream.shutdown(Shutdown::Both)?;
                 }
-            },
+            }
             _ if !force => self.state = State::Aborting,
             State::Progress | State::Aborting => {
                 self.state = State::Aborting;
                 if let Some(abort_handle) = self.abort_handler.take() {
                     abort_handle.abort();
                 }
-            },
+            }
         };
 
         Ok(())
     }
 }
-
-
-

@@ -1,8 +1,12 @@
-use tokio::net::TcpStream;
-use common_exception::Result;
-use tokio::io::{AsyncWriteExt, AsyncReadExt};
-use msql_srv::ErrorKind;
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+use msql_srv::ErrorKind;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpStream;
 
 pub struct RejectConnection;
 
@@ -32,13 +36,14 @@ impl RejectConnection {
 
     async fn send_handshake(stream: &mut TcpStream) -> Result<()> {
         // Send handshake, packet from msql-srv. Packet[seq = 0]
-        stream.write(&vec![
-            69, 00, 00, 00, 10, 53, 46, 49, 46, 49, 48, 45, 97, 108,
-            112, 104, 97, 45, 109, 115, 113, 108, 45, 112, 114, 111,
-            120, 121, 0, 8, 0, 0, 0, 59, 88, 44, 112, 111, 95, 107,
-            125, 0, 0, 66, 33, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 62, 111, 54, 94, 87, 122, 33, 47, 107, 77, 125, 78, 0
-        ]).await?;
+        stream
+            .write(&[
+                69, 00, 00, 00, 10, 53, 46, 49, 46, 49, 48, 45, 97, 108, 112, 104, 97, 45, 109,
+                115, 113, 108, 45, 112, 114, 111, 120, 121, 0, 8, 0, 0, 0, 59, 88, 44, 112, 111,
+                95, 107, 125, 0, 0, 66, 33, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 62, 111,
+                54, 94, 87, 122, 33, 47, 107, 77, 125, 78, 0,
+            ])
+            .await?;
 
         stream.flush().await?;
 

@@ -2,18 +2,27 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::{Result, ErrorCode, ToErrorCode};
-use crate::servers::{MySQLHandler, AbortableService};
-use crate::configs::Config;
-use crate::clusters::Cluster;
-use crate::sessions::SessionManager;
-use mysql::{Error, Conn, FromRowError, Row};
-use mysql::prelude::Queryable;
-use mysql::prelude::FromRow;
-use msql_srv::ErrorKind;
 use std::io::stderr;
-use std::sync::{Arc, Barrier};
+use std::sync::Arc;
+use std::sync::Barrier;
 use std::thread::JoinHandle;
+
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_exception::ToErrorCode;
+use msql_srv::ErrorKind;
+use mysql::prelude::FromRow;
+use mysql::prelude::Queryable;
+use mysql::Conn;
+use mysql::Error;
+use mysql::FromRowError;
+use mysql::Row;
+
+use crate::clusters::Cluster;
+use crate::configs::Config;
+use crate::servers::AbortableService;
+use crate::servers::MySQLHandler;
+use crate::sessions::SessionManager;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_use_database_with_on_query() -> Result<()> {
@@ -99,7 +108,11 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         let start_barrier = start_barriers.clone();
         let destroy_barrier = destroy_barriers.clone();
 
-        join_handlers.push(connect_server(listener_addr.port(), start_barrier, destroy_barrier));
+        join_handlers.push(connect_server(
+            listener_addr.port(),
+            start_barrier,
+            destroy_barrier,
+        ));
     }
 
     let mut accept = 0;
@@ -119,20 +132,21 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
 }
 
 fn query<T: FromRow>(connection: &mut Conn, query: &str) -> Result<Vec<T>> {
-    connection.query::<T, &str>(query).map_err_to_code(ErrorCode::UnknownException, || "")
+    connection
+        .query::<T, &str>(query)
+        .map_err_to_code(ErrorCode::UnknownException, || "")
 }
 
 fn create_connection(port: u16) -> Result<mysql::Conn> {
     let uri = &format!("mysql://127.0.0.1:{}", port);
-    mysql::Conn::new(uri)
-        .map_err_to_code(ErrorCode::UnknownException, || "Reject connection")
+    mysql::Conn::new(uri).map_err_to_code(ErrorCode::UnknownException, || "Reject connection")
 }
 
 struct EmptyRow;
 
 impl FromRow for EmptyRow {
     fn from_row_opt(_: Row) -> std::result::Result<Self, FromRowError>
-        where Self: Sized {
+    where Self: Sized {
         Ok(EmptyRow)
     }
 }

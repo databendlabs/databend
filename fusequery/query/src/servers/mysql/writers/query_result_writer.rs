@@ -1,9 +1,15 @@
-use msql_srv::*;
-use common_datablocks::DataBlock;
-use common_exception::{Result, ErrorCode};
-use common_datavalues::{DataField, DataSchemaRef};
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use common_arrow::arrow::datatypes::DataType;
 use common_arrow::arrow::util::display::array_value_to_string;
+use common_datablocks::DataBlock;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use msql_srv::*;
 
 pub struct DFQueryResultWriter<'a, W: std::io::Write> {
     inner: Option<QueryResultWriter<'a, W>>,
@@ -11,16 +17,14 @@ pub struct DFQueryResultWriter<'a, W: std::io::Write> {
 
 impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
     pub fn create(inner: QueryResultWriter<'a, W>) -> DFQueryResultWriter<'a, W> {
-        DFQueryResultWriter::<'a, W> {
-            inner: Some(inner)
-        }
+        DFQueryResultWriter::<'a, W> { inner: Some(inner) }
     }
 
     pub fn write(&mut self, query_result: Result<Vec<DataBlock>>) -> Result<()> {
-        if let Some(mut writer) = self.inner.take() {
+        if let Some(writer) = self.inner.take() {
             match query_result {
                 Ok(received_data) => Self::ok(received_data, writer)?,
-                Err(error) => Self::err(&error, writer)?
+                Err(error) => Self::err(&error, writer)?,
             }
         }
         Ok(())
@@ -102,4 +106,3 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         Ok(())
     }
 }
-

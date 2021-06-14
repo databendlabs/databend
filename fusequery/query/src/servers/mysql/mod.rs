@@ -9,9 +9,9 @@ mod mysql_handler_test;
 #[cfg(test)]
 mod mysql_session_test;
 
-mod writers;
 mod mysql_handler;
+mod mysql_interactive_worker;
 mod mysql_metrics;
 mod mysql_session;
 mod reject_connection;
-mod mysql_interactive_worker;
+mod writers;

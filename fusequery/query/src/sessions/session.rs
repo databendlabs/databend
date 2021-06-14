@@ -1,12 +1,17 @@
-use std::sync::Arc;
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
 
-use tokio::net::TcpStream;
+use std::sync::Arc;
 
 use common_exception::Result;
 use common_infallible::Mutex;
+use tokio::net::TcpStream;
 
 use crate::servers::AbortableService;
-use crate::sessions::{FuseQueryContextRef, SessionManagerRef, SessionStatus};
+use crate::sessions::FuseQueryContextRef;
+use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionStatus;
 
 pub trait SessionCreator {
     type Session: ISession;

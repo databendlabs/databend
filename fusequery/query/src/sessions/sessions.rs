@@ -3,23 +3,29 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashMap;
+use std::ops::Sub;
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
 
-use common_exception::{ErrorCode, ToErrorCode};
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::ToErrorCode;
 use common_infallible::RwLock;
 use common_planners::Partitions;
 use metrics::counter;
 
+use crate::clusters::Cluster;
+use crate::clusters::ClusterRef;
+use crate::configs::Config;
+use crate::datasources::DataSource;
+use crate::datasources::IDataSource;
+use crate::servers::AbortableService;
+use crate::servers::Elapsed;
+use crate::sessions::session::ISession;
+use crate::sessions::session::SessionCreator;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
-use crate::servers::{AbortableService, Elapsed};
-use std::time::{Duration, Instant};
-use crate::configs::Config;
-use crate::clusters::{ClusterRef, Cluster};
-use crate::sessions::session::{ISession, SessionCreator};
-use std::ops::Sub;
-use crate::datasources::{IDataSource, DataSource};
 
 pub struct SessionManager {
     cluster: ClusterRef,
@@ -31,7 +37,6 @@ pub struct SessionManager {
     queries_context: RwLock<HashMap<String, FuseQueryContextRef>>,
 
     aborted_notify: Arc<tokio::sync::Notify>,
-
 }
 
 pub type SessionManagerRef = Arc<SessionManager>;
@@ -77,7 +82,9 @@ impl SessionManager {
 
         let mut sessions = self.sessions.write();
         match sessions.len() == self.max_mysql_sessions {
-            true => Err(ErrorCode::TooManyUserConnections("The current accept connection has exceeded mysql_handler_thread_num config")),
+            true => Err(ErrorCode::TooManyUserConnections(
+                "The current accept connection has exceeded mysql_handler_thread_num config",
+            )),
             false => {
                 let id = uuid::Uuid::new_v4().to_string();
                 let session = S::create(id.clone(), self.clone())?;
@@ -88,10 +95,13 @@ impl SessionManager {
     }
 
     pub fn get_session(self: &Arc<Self>, id: &str) -> Result<Arc<Box<dyn ISession>>> {
-        let mut sessions = self.sessions.read();
+        let sessions = self.sessions.read();
         match sessions.get(id) {
             Some(sessions) => Ok(sessions.clone()),
-            None => Err(ErrorCode::NotFoundSession(format!("Not found session: {}", id))),
+            None => Err(ErrorCode::NotFoundSession(format!(
+                "Not found session: {}",
+                id
+            ))),
         }
     }
 
@@ -103,7 +113,9 @@ impl SessionManager {
 
     pub fn try_create_context(&self) -> Result<FuseQueryContextRef> {
         let ctx = FuseQueryContext::try_create()?;
-        self.queries_context.write().insert(ctx.get_id(), ctx.clone());
+        self.queries_context
+            .write()
+            .insert(ctx.get_id(), ctx.clone());
         Ok(ctx)
     }
 
@@ -126,13 +138,18 @@ impl SessionManager {
 impl AbortableService<(), ()> for SessionManager {
     fn abort(&self, force: bool) -> Result<()> {
         let sessions = self.sessions.write();
-        sessions.iter().map(|(_, session)| session.abort(force)).collect::<Result<Vec<_>>>()?;
+        sessions
+            .iter()
+            .map(|(_, session)| session.abort(force))
+            .collect::<Result<Vec<_>>>()?;
         self.aborted_notify.notify_waiters();
         Ok(())
     }
 
     async fn start(&self, _: ()) -> Result<()> {
-        Err(ErrorCode::LogicalError("Logical error: start session manager."))
+        Err(ErrorCode::LogicalError(
+            "Logical error: start session manager.",
+        ))
     }
 
     async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed> {
@@ -140,7 +157,9 @@ impl AbortableService<(), ()> for SessionManager {
 
         let active_sessions_snapshot = || {
             let locked_active_sessions = self.sessions.write();
-            (&*locked_active_sessions).iter().map(|(_, session)| session.clone())
+            (&*locked_active_sessions)
+                .iter()
+                .map(|(_, session)| session.clone())
                 .collect::<Vec<_>>()
         };
 
@@ -162,7 +181,7 @@ impl AbortableService<(), ()> for SessionManager {
                         return Err(ErrorCode::Timeout(""));
                     }
 
-                    let elapsed = active_session.wait_terminal(Some(duration.clone())).await?;
+                    let elapsed = active_session.wait_terminal(Some(duration)).await?;
                     duration = duration.sub(elapsed);
                 }
             }
@@ -171,4 +190,3 @@ impl AbortableService<(), ()> for SessionManager {
         Ok(instant.elapsed())
     }
 }
-

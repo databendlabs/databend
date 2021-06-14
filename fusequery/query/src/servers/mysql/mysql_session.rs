@@ -1,36 +1,33 @@
-use std::io;
-use std::ops::Sub;
-use std::sync::{Arc, Weak};
-use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
 
-use futures::future::{Abortable, Aborted, AbortHandle};
-use futures::TryFutureExt;
-use msql_srv::{ErrorKind, InitWriter, MysqlShim, ParamParser, QueryResultWriter, StatementMetaWriter};
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
+
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_exception::ToErrorCode;
+use common_infallible::Mutex;
 use msql_srv::MysqlIntermediary;
 use tokio::net::TcpStream;
-use tokio::sync::broadcast::Sender;
-use tokio_stream::StreamExt;
 
-use common_datablocks::DataBlock;
-use common_exception::{ErrorCode, ToErrorCode};
-use common_exception::Result;
-use common_infallible::Mutex;
-
-use crate::clusters::{Cluster, ClusterRef};
-use crate::interpreters::{IInterpreter, InterpreterFactory};
-use crate::servers::{Elapsed, AbortableService};
-use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
-use crate::sessions::{FuseQueryContext, FuseQueryContextRef, ISession, SessionCreator, SessionManagerRef, SessionStatus};
-use crate::sql::PlanParser;
+use crate::servers::AbortableService;
+use crate::servers::Elapsed;
+use crate::sessions::FuseQueryContextRef;
+use crate::sessions::ISession;
+use crate::sessions::SessionCreator;
+use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionStatus;
 
 pub struct Session {
     session_id: String,
     session_manager: SessionManagerRef,
     session_status: Arc<Mutex<SessionStatus>>,
 
-    aborted_notify: Arc<tokio::sync::Notify>
+    aborted_notify: Arc<tokio::sync::Notify>,
 }
 
 impl ISession for Session {
@@ -60,8 +57,12 @@ impl AbortableService<TcpStream, ()> for Session {
     async fn start(&self, stream: TcpStream) -> Result<()> {
         let abort_notify = self.aborted_notify.clone();
         let session_manager = self.session_manager.clone();
-        let stream = stream.into_std().map_err_to_code(ErrorCode::TokioError, || "")?;
-        stream.set_nonblocking(false).map_err_to_code(ErrorCode::TokioError, || "")?;
+        let stream = stream
+            .into_std()
+            .map_err_to_code(ErrorCode::TokioError, || "")?;
+        stream
+            .set_nonblocking(false)
+            .map_err_to_code(ErrorCode::TokioError, || "")?;
 
         let session_id = self.get_id();
         let cloned_stream = stream.try_clone()?;
@@ -70,8 +71,13 @@ impl AbortableService<TcpStream, ()> for Session {
         std::thread::spawn(move || {
             session.get_status().lock().enter_init(cloned_stream);
 
-            if let Err(error) = MysqlIntermediary::run_on_tcp(InteractiveWorker::create(session.clone()), stream) {
-                log::error!("Unexpected error occurred during query execution: {:?}", error);
+            if let Err(error) =
+                MysqlIntermediary::run_on_tcp(InteractiveWorker::create(session.clone()), stream)
+            {
+                log::error!(
+                    "Unexpected error occurred during query execution: {:?}",
+                    error
+                );
             };
 
             session.get_status().lock().enter_aborted();
@@ -94,9 +100,14 @@ impl AbortableService<TcpStream, ()> for Session {
                 self.aborted_notify.notified().await;
             }
             Some(duration) => {
-                match tokio::time::timeout(duration.clone(), self.aborted_notify.notified()).await {
+                match tokio::time::timeout(duration, self.aborted_notify.notified()).await {
                     Ok(_) => { /* do nothing */ }
-                    Err(_) => return Err(ErrorCode::Timeout(format!("Session did not close in {:?}", duration))),
+                    Err(_) => {
+                        return Err(ErrorCode::Timeout(format!(
+                            "Session did not close in {:?}",
+                            duration
+                        )))
+                    }
                 };
             }
         };
@@ -109,13 +120,11 @@ impl SessionCreator for Session {
     type Session = Self;
 
     fn create(session_id: String, sessions: SessionManagerRef) -> Result<Arc<Box<dyn ISession>>> {
-        Ok(Arc::new(Box::new(
-            Session {
-                session_id,
-                session_manager: sessions,
-                session_status: Arc::new(Mutex::new(SessionStatus::try_create()?)),
-                aborted_notify: Arc::new(tokio::sync::Notify::new()),
-            }
-        )))
+        Ok(Arc::new(Box::new(Session {
+            session_id,
+            session_manager: sessions,
+            session_status: Arc::new(Mutex::new(SessionStatus::try_create()?)),
+            aborted_notify: Arc::new(tokio::sync::Notify::new()),
+        })))
     }
 }

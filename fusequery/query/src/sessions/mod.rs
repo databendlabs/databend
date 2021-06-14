@@ -15,9 +15,9 @@ mod status;
 
 pub use context::FuseQueryContext;
 pub use context::FuseQueryContextRef;
+pub use session::ISession;
+pub use session::SessionCreator;
 pub use sessions::SessionManager;
 pub use sessions::SessionManagerRef;
 pub use settings::Settings;
-pub use session::ISession;
-pub use session::SessionCreator;
 pub use status::SessionStatus;
