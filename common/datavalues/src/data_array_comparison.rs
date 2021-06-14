@@ -62,6 +62,12 @@ impl DataArrayComparison {
                     DataValueComparisonOperator::NotEq => {
                         arrow_array_op!(&left_array, &right_array, neq)
                     }
+                    DataValueComparisonOperator::Like => {
+                        arrow_array_utf8_op!(&left_array, &right_array, like_utf8)
+                    }
+                    DataValueComparisonOperator::NotLike => {
+                        arrow_array_utf8_op!(&left_array, &right_array, nlike_utf8)
+                    }
                 }
             }
 
@@ -91,6 +97,12 @@ impl DataArrayComparison {
                     DataValueComparisonOperator::NotEq => {
                         arrow_array_op_scalar!(left_array, scalar, neq)
                     }
+                    DataValueComparisonOperator::Like => {
+                        arrow_array_utf8_op_scalar!(left_array, scalar, like_utf8)
+                    }
+                    DataValueComparisonOperator::NotLike => {
+                        arrow_array_utf8_op_scalar!(left_array, scalar, nlike_utf8)
+                    }
                 }
             }
 
@@ -119,6 +131,12 @@ impl DataArrayComparison {
                     }
                     DataValueComparisonOperator::NotEq => {
                         arrow_array_op_scalar!(right_array, scalar, neq)
+                    }
+                    DataValueComparisonOperator::Like => {
+                        arrow_array_utf8_op_scalar!(right_array, scalar, like_utf8)
+                    }
+                    DataValueComparisonOperator::NotLike => {
+                        arrow_array_utf8_op_scalar!(right_array, scalar, nlike_utf8)
                     }
                 }
             }
@@ -153,6 +171,12 @@ impl DataArrayComparison {
                     }
                     DataValueComparisonOperator::NotEq => {
                         arrow_array_op!(&left_array, &right_array, neq)
+                    }
+                    DataValueComparisonOperator::Like => {
+                        arrow_array_utf8_op!(&left_array, &right_array, like_utf8)
+                    }
+                    DataValueComparisonOperator::NotLike => {
+                        arrow_array_utf8_op!(&left_array, &right_array, nlike_utf8)
                     }
                 }
             }
