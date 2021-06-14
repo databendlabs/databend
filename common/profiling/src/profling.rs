@@ -38,15 +38,6 @@ impl Profiling {
         report
             .flamegraph(&mut body)
             .map_err(|e| ErrorCode::UnknownException(e.to_string()))?;
-        /*
-        let profile = report
-            .pprof()
-            .map_err(|e| ErrorCode::UnknownException(e.to_string()))?;
-        profile
-            .encode(&mut body)
-            .map_err(|e| ErrorCode::UnknownException(e.to_string()))?;
-
-         */
 
         Ok(body)
     }
