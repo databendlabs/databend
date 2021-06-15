@@ -127,7 +127,7 @@ macro_rules! arrow_array_op {
 /// The arrow_array_utf8_op macro only includes Utf8 strings.
 macro_rules! arrow_array_utf8_op {
     ($LEFT:expr, $RIGHT:expr, $OP:ident) => {
-        match ($LEFT).data_type() {
+        match ($LEFT).get_data_type() {
             DataType::Utf8 => compute_op!($LEFT, $RIGHT, $OP, StringArray),
             _ => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unsupported arithmetic_compute::{} for data type: {:?}",
@@ -223,7 +223,7 @@ macro_rules! arrow_array_op_scalar {
 /// The arrow_array_utf8_op_scalar macro only includes Utf8 strings.
 macro_rules! arrow_array_utf8_op_scalar {
     ($LEFT:expr, $RIGHT:expr, $OP:ident) => {{
-        let result = match $LEFT.data_type() {
+        let result = match $LEFT.get_data_type() {
             DataType::Utf8 => {
                 let ll = downcast_array!($LEFT, StringArray)?;
                 if let crate::DataValue::Utf8(Some(string_value)) = $RIGHT {
