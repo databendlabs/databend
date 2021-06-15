@@ -30,7 +30,7 @@ impl Optimizers {
 
     pub fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         let mut plan = plan.clone();
-        for optimizer in self.optimizers.iter_mut() {
+        for optimizer in self.inner.iter_mut() {
             tracing::debug!("Before {} \n{:?}", optimizer.name(), plan);
             plan = optimizer.optimize(&plan)?;
             tracing::debug!("After {} \n{:?}", optimizer.name(), plan);

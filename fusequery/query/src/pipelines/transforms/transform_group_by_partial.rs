@@ -44,7 +44,7 @@ pub struct GroupByPartialTransform {
     group_exprs: Vec<Expression>,
     schema: DataSchemaRef,
     schema_before_group_by: DataSchemaRef,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn Processor>,
     groups: GroupFuncTable,
 }
 

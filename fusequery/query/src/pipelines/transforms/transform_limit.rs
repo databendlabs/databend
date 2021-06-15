@@ -17,7 +17,7 @@ use crate::pipelines::processors::Processor;
 pub struct LimitTransform {
     limit: Option<usize>,
     offset: usize,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn Processor>,
 }
 
 impl LimitTransform {

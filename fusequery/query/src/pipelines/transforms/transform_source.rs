@@ -43,7 +43,7 @@ impl Processor for SourceTransform {
         "SourceTransform"
     }
 
-    fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, _: Arc<dyn Processor>) -> Result<()> {
         Result::Err(ErrorCode::LogicalError(
             "Cannot call SourceTransform connect_to",
         ))

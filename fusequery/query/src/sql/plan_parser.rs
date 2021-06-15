@@ -635,9 +635,11 @@ impl PlanParser {
                     _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan"),
                 })
             }
-            Derived { subquery, .. } => self.query_to_plan(subquery),
-            NestedJoin(table_with_joins) => self.plan_table_with_joins(table_with_joins),
-            TableFunction { .. } => {
+            TableFactor::Derived { subquery, .. } => self.query_to_plan(subquery),
+            TableFactor::NestedJoin(table_with_joins) => {
+                self.plan_table_with_joins(table_with_joins)
+            }
+            TableFactor::TableFunction { .. } => {
                 Result::Err(ErrorCode::UnImplement("Unsupported table function"))
             }
         }
