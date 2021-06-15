@@ -4,6 +4,8 @@
 
 use std::net::SocketAddr;
 use std::ops::Sub;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -23,6 +25,7 @@ use tokio_stream::StreamExt as OtherStreamExt;
 
 use crate::servers::mysql::mysql_session::Session;
 use crate::servers::mysql::reject_connection::RejectConnection;
+use crate::servers::AbortableServer;
 use crate::servers::AbortableService;
 use crate::servers::Elapsed;
 use crate::sessions::SessionManagerRef;
@@ -30,19 +33,21 @@ use crate::sessions::SessionManagerRef;
 pub struct MySQLHandler {
     session_manager: SessionManagerRef,
 
+    aborted: Arc<AtomicBool>,
     aborted_notify: Arc<tokio::sync::Notify>,
     abort_parts: Mutex<(AbortHandle, Option<AbortRegistration>)>,
 }
 
 impl MySQLHandler {
-    pub fn create(session_manager: SessionManagerRef) -> Self {
+    pub fn create(session_manager: SessionManagerRef) -> AbortableServer {
         let (abort_handle, reg) = AbortHandle::new_pair();
 
-        MySQLHandler {
+        Arc::new(MySQLHandler {
             session_manager,
+            aborted: Arc::new(AtomicBool::new(false)),
             abort_parts: Mutex::new((abort_handle, Some(reg))),
             aborted_notify: Arc::new(tokio::sync::Notify::new()),
-        }
+        })
     }
 
     async fn listener_tcp(hostname: &str, port: u16) -> Result<(TcpListenerStream, SocketAddr)> {
@@ -82,6 +87,7 @@ impl AbortableService<(String, u16), SocketAddr> for MySQLHandler {
         let abort_registration = self.abort_parts.lock().1.take();
         if let Some(abort_registration) = abort_registration {
             let sessions = self.session_manager.clone();
+            let aborted = self.aborted.clone();
             let aborted_notify = self.aborted_notify.clone();
             let rejected_executor = Runtime::with_worker_threads(1)?;
 
@@ -118,6 +124,7 @@ impl AbortableService<(String, u16), SocketAddr> for MySQLHandler {
                     }
                 }
 
+                aborted.store(true, Ordering::Relaxed);
                 aborted_notify.notify_waiters();
             });
 
@@ -132,15 +139,19 @@ impl AbortableService<(String, u16), SocketAddr> for MySQLHandler {
 
         match duration {
             None => {
+                if !self.aborted.load(Ordering::Relaxed) {
+                    self.aborted_notify.notified().await;
+                }
                 self.session_manager.wait_terminal(None).await?;
-                self.aborted_notify.notified().await;
             }
             Some(duration) => {
-                let elapsed = self.session_manager.wait_terminal(Some(duration)).await?;
-                let duration = duration.sub(elapsed);
-                tokio::time::timeout(duration, self.aborted_notify.notified())
-                    .await
-                    .map_err_to_code(ErrorCode::Timeout, || "")?;
+                if !self.aborted.load(Ordering::Relaxed) {
+                    tokio::time::timeout(duration, self.aborted_notify.notified())
+                        .await
+                        .map_err_to_code(ErrorCode::Timeout, || "")?;
+                }
+                let duration = duration.sub(instant.elapsed());
+                self.session_manager.wait_terminal(Some(duration)).await?;
             }
         };
 

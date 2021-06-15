@@ -48,7 +48,7 @@ anyhow = "1.0.41"
 async-trait = "0.1"
 crossbeam = "0.8"
 quantiles = "0.7.1"
-ctrlc = "3.1.9"
+ctrlc = { version = "3.1.9", features = ["termination"] }
 clickhouse-srv = "0.2.1"
 crossbeam-queue = "0.3.2"
 env_logger = "0.8"

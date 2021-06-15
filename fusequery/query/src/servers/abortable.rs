@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use common_exception::Result;
@@ -16,3 +18,5 @@ pub trait AbortableService<Args, R> {
 
     async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed>;
 }
+
+pub type AbortableServer = Arc<dyn AbortableService<(String, u16), SocketAddr> + Send + Sync>;

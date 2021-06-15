@@ -4,6 +4,8 @@
 
 use std::collections::HashMap;
 use std::ops::Sub;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -36,6 +38,7 @@ pub struct SessionManager {
     // TODO: remove queries_context.
     queries_context: RwLock<HashMap<String, FuseQueryContextRef>>,
 
+    notifyed: Arc<AtomicBool>,
     aborted_notify: Arc<tokio::sync::Notify>,
 }
 
@@ -51,6 +54,7 @@ impl SessionManager {
             sessions: RwLock::new(HashMap::with_capacity(max_mysql_sessions as usize)),
             queries_context: RwLock::new(HashMap::with_capacity(max_mysql_sessions as usize)),
 
+            notifyed: Arc::new(AtomicBool::new(false)),
             aborted_notify: Arc::new(tokio::sync::Notify::new()),
         }))
     }
@@ -65,6 +69,7 @@ impl SessionManager {
             sessions: RwLock::new(HashMap::with_capacity(max_mysql_sessions)),
             queries_context: RwLock::new(HashMap::with_capacity(max_mysql_sessions)),
 
+            notifyed: Arc::new(AtomicBool::new(false)),
             aborted_notify: Arc::new(tokio::sync::Notify::new()),
         }))
     }
@@ -112,6 +117,8 @@ impl SessionManager {
     }
 
     pub fn try_create_context(&self) -> Result<FuseQueryContextRef> {
+        counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
+
         let ctx = FuseQueryContext::try_create()?;
         self.queries_context
             .write()
@@ -120,6 +127,8 @@ impl SessionManager {
     }
 
     pub fn try_remove_context(&self, ctx: FuseQueryContextRef) -> Result<()> {
+        counter!(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
+
         self.queries_context.write().remove(&*ctx.get_id());
         Ok(())
     }
@@ -137,12 +146,17 @@ impl SessionManager {
 #[async_trait::async_trait]
 impl AbortableService<(), ()> for SessionManager {
     fn abort(&self, force: bool) -> Result<()> {
-        let sessions = self.sessions.write();
-        sessions
+        self.sessions
+            .write()
             .iter()
             .map(|(_, session)| session.abort(force))
             .collect::<Result<Vec<_>>>()?;
-        self.aborted_notify.notify_waiters();
+
+        if !self.notifyed.load(Ordering::Relaxed) {
+            self.aborted_notify.notify_waiters();
+            self.notifyed.store(true, Ordering::Relaxed);
+        }
+
         Ok(())
     }
 
@@ -165,24 +179,32 @@ impl AbortableService<(), ()> for SessionManager {
 
         match duration {
             None => {
-                self.aborted_notify.notified().await;
+                if !self.notifyed.load(Ordering::Relaxed) {
+                    self.aborted_notify.notified().await;
+                }
+
                 for active_session in active_sessions_snapshot() {
                     active_session.wait_terminal(None).await?;
                 }
             }
             Some(duration) => {
-                tokio::time::timeout(duration, self.aborted_notify.notified())
-                    .await
-                    .map_err_to_code(ErrorCode::Timeout, || "")?;
+                let mut duration = duration;
 
-                let mut duration = duration.sub(instant.elapsed());
+                if !self.notifyed.load(Ordering::Relaxed) {
+                    tokio::time::timeout(duration, self.aborted_notify.notified())
+                        .await
+                        .map_err_to_code(ErrorCode::Timeout, || "")?;
+
+                    duration = duration.sub(std::cmp::min(instant.elapsed(), duration));
+                }
+
                 for active_session in active_sessions_snapshot() {
                     if duration.is_zero() {
                         return Err(ErrorCode::Timeout(""));
                     }
 
                     let elapsed = active_session.wait_terminal(Some(duration)).await?;
-                    duration = duration.sub(elapsed);
+                    duration = duration.sub(std::cmp::min(elapsed, duration));
                 }
             }
         };

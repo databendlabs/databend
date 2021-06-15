@@ -7,6 +7,8 @@ use common_arrow::arrow::util::display::array_value_to_string;
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_exception::exception::ABORT_QUERY;
+use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use msql_srv::*;
@@ -100,7 +102,9 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
     }
 
     fn err(error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
-        log::error!("OnQuery Error: {:?}", error);
+        if error.code() != ABORT_QUERY && error.code() != ABORT_SESSION {
+            log::error!("OnQuery Error: {:?}", error);
+        }
 
         writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())?;
         Ok(())

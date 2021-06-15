@@ -12,6 +12,9 @@ use std::sync::Arc;
 use backtrace::Backtrace;
 use thiserror::Error;
 
+pub static ABORT_SESSION: u16 = 42;
+pub static ABORT_QUERY: u16 = 43;
+
 #[derive(Clone)]
 pub enum ErrorCodeBacktrace {
     Serialized(Arc<String>),
@@ -130,8 +133,8 @@ build_exceptions! {
     DuplicateGetStream(39),
     Timeout(40),
     TooManyUserConnections(41),
-    AbortedSession(42),
-    AbortedQuery(43),
+    AbortedSession(ABORT_SESSION),
+    AbortedQuery(ABORT_QUERY),
     NotFoundSession(44),
 
     UnknownException(1000),

@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -50,8 +51,7 @@ impl ISession for Session {
 #[async_trait::async_trait]
 impl AbortableService<TcpStream, ()> for Session {
     fn abort(&self, force: bool) -> Result<()> {
-        let mut session_status = self.session_status.lock();
-        session_status.abort_session(force)
+        self.session_status.lock().abort_session(force)
     }
 
     async fn start(&self, stream: TcpStream) -> Result<()> {
@@ -74,10 +74,12 @@ impl AbortableService<TcpStream, ()> for Session {
             if let Err(error) =
                 MysqlIntermediary::run_on_tcp(InteractiveWorker::create(session.clone()), stream)
             {
-                log::error!(
-                    "Unexpected error occurred during query execution: {:?}",
-                    error
-                );
+                if error.code() != ABORT_SESSION {
+                    log::error!(
+                        "Unexpected error occurred during query execution: {:?}",
+                        error
+                    );
+                }
             };
 
             session.get_status().lock().enter_aborted();
