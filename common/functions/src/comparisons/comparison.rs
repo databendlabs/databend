@@ -14,9 +14,11 @@ use common_exception::Result;
 use crate::comparisons::ComparisonEqFunction;
 use crate::comparisons::ComparisonGtEqFunction;
 use crate::comparisons::ComparisonGtFunction;
+use crate::comparisons::ComparisonLikeFunction;
 use crate::comparisons::ComparisonLtEqFunction;
 use crate::comparisons::ComparisonLtFunction;
 use crate::comparisons::ComparisonNotEqFunction;
+use crate::comparisons::ComparisonNotLikeFunction;
 use crate::FactoryFuncRef;
 use crate::IFunction;
 
@@ -36,6 +38,8 @@ impl ComparisonFunction {
         map.insert(">=", ComparisonGtEqFunction::try_create_func);
         map.insert("!=", ComparisonNotEqFunction::try_create_func);
         map.insert("<>", ComparisonNotEqFunction::try_create_func);
+        map.insert("like", ComparisonLikeFunction::try_create_func);
+        map.insert("not like", ComparisonNotLikeFunction::try_create_func);
         Ok(())
     }
 

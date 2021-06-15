@@ -148,19 +148,21 @@ nav:
           - argMin: sqlstatement/aggregate-functions/aggregate-argmin.md
           - argMax: sqlstatement/aggregate-functions/aggregate-argmax.md
           - countDistinct: sqlstatement/aggregate-functions/aggregate-count-distinct.md
+          - combinators: sqlstatement/aggregate-functions/aggregate-combinator.md
       - Hash Functions:
           - SIPHASH: sqlstatement/hash-functions/siphash.md
       - Information Functions:
           - DATABASE: sqlstatement/information-functions/database.md
           - VERSION: sqlstatement/information-functions/version.md
-      - Other Functions:
-          - ToTypeName: sqlstatement/other-functions/totypename.md
       - String Functions:
           - SUBSTRING: sqlstatement/string-functions/substring.md
+      - Other Functions:
+          - ToTypeName: sqlstatement/other-functions/totypename.md
   - Development:
       - Contributing: development/contributing.md
       - Coding Guideline: development/coding-guidelines.md
       - Tracing: development/tracing.md
+      - Profling: development/profiling.md
       - Roadmap: development/roadmap.md
       - RFCs:
         - FuseQuery Join: rfcs/query/2021-05-01-join-framework-design.md

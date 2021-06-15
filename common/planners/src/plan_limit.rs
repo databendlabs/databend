@@ -10,8 +10,10 @@ use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct LimitPlan {
-    /// The limit
-    pub n: usize,
+    /// The limit, None represents ALL.
+    pub n: Option<usize>,
+    /// The offset, default 0.
+    pub offset: usize,
     /// The logical plan
     pub input: Arc<PlanNode>,
 }

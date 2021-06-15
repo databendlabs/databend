@@ -42,3 +42,43 @@ select number from numbers_mt(10) where number   between 4 + 0.1  and 8 - 0.1  o
 |      6 |
 |      7 |
 +--------+
+--------------
+select * from system.databases where name like '%sys%'
+--------------
+
++--------+
+| name   |
++--------+
+| system |
++--------+
+--------------
+select * from system.databases where name like '_ef_ul_'
+--------------
+
++---------+
+| name    |
++---------+
+| default |
++---------+
+--------------
+select * from system.databases where name not like '%sys%' order by name
+--------------
+
++----------+
+| name     |
++----------+
+| default  |
+| for_test |
+| local    |
++----------+
+--------------
+select * from system.databases where name not like '_ef_ul_' order by name
+--------------
+
++----------+
+| name     |
++----------+
+| for_test |
+| local    |
+| system   |
++----------+

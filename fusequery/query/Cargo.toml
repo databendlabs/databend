@@ -35,6 +35,7 @@ common-progress = {path = "../../common/progress"}
 common-runtime = {path = "../../common/runtime"}
 common-streams = {path = "../../common/streams"}
 common-tracing = {path = "../../common/tracing"}
+common-profling = {path = "../../common/profiling"}
 
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "5a7ae3d" }
@@ -49,7 +50,7 @@ async-trait = "0.1"
 crossbeam = "0.8"
 quantiles = "0.7.1"
 ctrlc = "3.1.9"
-clickhouse-srv = "0.2.0"
+clickhouse-srv = "0.2.1"
 crossbeam-queue = "0.3.2"
 env_logger = "0.8"
 futures = "0.3"
