@@ -9,7 +9,7 @@ use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 use crate::strings::SubstringFunction;
-use crate::IFunction;
+use crate::Function;
 
 #[test]
 fn test_substring_function() -> Result<()> {
@@ -22,7 +22,7 @@ fn test_substring_function() -> Result<()> {
         columns: Vec<DataColumnarValue>,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>,
+        func: Box<dyn Function>,
     }
 
     let schema = DataSchemaRefExt::create(vec![

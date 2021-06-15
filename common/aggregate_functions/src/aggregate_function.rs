@@ -12,7 +12,7 @@ use common_datavalues::DataValue;
 use common_exception::Result;
 use dyn_clone::DynClone;
 
-pub trait IAggregateFunction: fmt::Display + Sync + Send + DynClone {
+pub trait AggregateFunction: fmt::Display + Sync + Send + DynClone {
     fn name(&self) -> &str;
     fn return_type(&self) -> Result<DataType>;
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool>;
@@ -43,4 +43,4 @@ pub trait IAggregateFunction: fmt::Display + Sync + Send + DynClone {
     fn merge_result(&self) -> Result<DataValue>;
 }
 
-dyn_clone::clone_trait_object!(IAggregateFunction);
+dyn_clone::clone_trait_object!(AggregateFunction);

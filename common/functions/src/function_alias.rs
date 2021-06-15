@@ -9,7 +9,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
 
-use crate::IFunction;
+use crate::Function;
 
 #[derive(Clone)]
 pub struct AliasFunction {
@@ -17,12 +17,12 @@ pub struct AliasFunction {
 }
 
 impl AliasFunction {
-    pub fn try_create(alias: String) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(alias: String) -> Result<Box<dyn Function>> {
         Ok(Box::new(AliasFunction { alias }))
     }
 }
 
-impl IFunction for AliasFunction {
+impl Function for AliasFunction {
     fn name(&self) -> &str {
         "AliasFunction"
     }

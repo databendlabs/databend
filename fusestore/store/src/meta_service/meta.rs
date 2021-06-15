@@ -16,8 +16,8 @@ use crate::meta_service::placement::rand_n_from_m;
 use crate::meta_service::ClientRequest;
 use crate::meta_service::ClientResponse;
 use crate::meta_service::Cmd;
-use crate::meta_service::IPlacement;
 use crate::meta_service::NodeId;
+use crate::meta_service::Placement;
 
 /// Replication defines the replication strategy.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -211,7 +211,7 @@ impl Display for Node {
     }
 }
 
-impl IPlacement for Meta {
+impl Placement for Meta {
     fn get_slots(&self) -> &[Slot] {
         &self.slots
     }

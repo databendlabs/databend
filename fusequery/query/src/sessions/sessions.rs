@@ -21,7 +21,6 @@ use crate::clusters::Cluster;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::DataSource;
-use crate::datasources::IDataSource;
 use crate::servers::AbortableService;
 use crate::servers::Elapsed;
 use crate::sessions::session::ISession;
@@ -31,7 +30,7 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct SessionManager {
     cluster: ClusterRef,
-    datasource: Arc<dyn IDataSource>,
+    datasource: Arc<DataSource>,
 
     max_mysql_sessions: usize,
     sessions: RwLock<HashMap<String, Arc<Box<dyn ISession>>>>,
@@ -78,7 +77,7 @@ impl SessionManager {
         self.cluster.clone()
     }
 
-    pub fn get_datasource(self: &Arc<Self>) -> Arc<dyn IDataSource> {
+    pub fn get_datasource(self: &Arc<Self>) -> Arc<DataSource> {
         self.datasource.clone()
     }
 

@@ -13,7 +13,7 @@ use common_planners::PlanNode;
 use futures::future::AbortHandle;
 
 use crate::clusters::ClusterRef;
-use crate::datasources::IDataSource;
+use crate::datasources::DataSource;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::Settings;
@@ -80,7 +80,7 @@ impl SessionStatus {
     pub fn try_create_context(
         &mut self,
         cluster: ClusterRef,
-        datasource: Arc<dyn IDataSource>,
+        datasource: Arc<DataSource>,
     ) -> Result<FuseQueryContextRef> {
         FuseQueryContext::from_settings(
             self.session_settings.clone(),

@@ -11,19 +11,19 @@ use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
 use crate::datasources::system;
-use crate::datasources::IDatabase;
-use crate::datasources::ITable;
-use crate::datasources::ITableFunction;
+use crate::datasources::Database;
+use crate::datasources::Table;
+use crate::datasources::TableFunction;
 
 pub struct SystemDatabase {
-    tables: HashMap<String, Arc<dyn ITable>>,
-    table_functions: HashMap<String, Arc<dyn ITableFunction>>,
+    tables: HashMap<String, Arc<dyn Table>>,
+    table_functions: HashMap<String, Arc<dyn TableFunction>>,
 }
 
 impl SystemDatabase {
     pub fn create() -> Self {
         // Table list.
-        let table_list: Vec<Arc<dyn ITable>> = vec![
+        let table_list: Vec<Arc<dyn Table>> = vec![
             Arc::new(system::OneTable::create()),
             Arc::new(system::FunctionsTable::create()),
             Arc::new(system::ContributorsTable::create()),
@@ -35,18 +35,18 @@ impl SystemDatabase {
             Arc::new(system::ClustersTable::create()),
             Arc::new(system::DatabasesTable::create()),
         ];
-        let mut tables: HashMap<String, Arc<dyn ITable>> = HashMap::default();
+        let mut tables: HashMap<String, Arc<dyn Table>> = HashMap::default();
         for tbl in table_list.iter() {
             tables.insert(tbl.name().to_string(), tbl.clone());
         }
 
         // Table function list.
-        let table_function_list: Vec<Arc<dyn ITableFunction>> = vec![
+        let table_function_list: Vec<Arc<dyn TableFunction>> = vec![
             Arc::new(system::NumbersTable::create("numbers")),
             Arc::new(system::NumbersTable::create("numbers_mt")),
             Arc::new(system::NumbersTable::create("numbers_local")),
         ];
-        let mut table_functions: HashMap<String, Arc<dyn ITableFunction>> = HashMap::default();
+        let mut table_functions: HashMap<String, Arc<dyn TableFunction>> = HashMap::default();
         for tbl_func in table_function_list.iter() {
             table_functions.insert(tbl_func.name().to_string(), tbl_func.clone());
         }
@@ -59,7 +59,7 @@ impl SystemDatabase {
 }
 
 #[async_trait::async_trait]
-impl IDatabase for SystemDatabase {
+impl Database for SystemDatabase {
     fn name(&self) -> &str {
         "system"
     }
@@ -72,7 +72,7 @@ impl IDatabase for SystemDatabase {
         true
     }
 
-    fn get_table(&self, table_name: &str) -> Result<Arc<dyn ITable>> {
+    fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let table = self
             .tables
             .get(table_name)
@@ -80,11 +80,11 @@ impl IDatabase for SystemDatabase {
         Ok(table.clone())
     }
 
-    fn get_tables(&self) -> Result<Vec<Arc<dyn ITable>>> {
+    fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         Ok(self.tables.values().cloned().collect())
     }
 
-    fn get_table_functions(&self) -> Result<Vec<Arc<dyn ITableFunction>>> {
+    fn get_table_functions(&self) -> Result<Vec<Arc<dyn TableFunction>>> {
         Ok(self.table_functions.values().cloned().collect())
     }
 

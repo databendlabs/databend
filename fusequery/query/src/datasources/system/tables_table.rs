@@ -19,7 +19,7 @@ use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::datasources::ITable;
+use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct TablesTable {
@@ -39,7 +39,7 @@ impl TablesTable {
 }
 
 #[async_trait::async_trait]
-impl ITable for TablesTable {
+impl Table for TablesTable {
     fn name(&self) -> &str {
         "tables"
     }

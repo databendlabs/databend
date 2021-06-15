@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-pub use ifs::IFileSystem;
+pub use ifs::FileSystem;
 pub use list_result::ListResult;
 
 pub mod ifs;

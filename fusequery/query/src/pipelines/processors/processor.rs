@@ -19,15 +19,15 @@ pub struct FormatterSettings {
 }
 
 #[async_trait::async_trait]
-pub trait IProcessor: Sync + Send {
+pub trait Processor: Sync + Send {
     /// Processor name.
     fn name(&self) -> &str;
 
     /// Connect to the input processor, add an edge on the DAG.
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()>;
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()>;
 
     /// Inputs.
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>>;
+    fn inputs(&self) -> Vec<Arc<dyn Processor>>;
 
     /// Reference used for downcast.
     fn as_any(&self) -> &dyn Any;
