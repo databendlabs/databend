@@ -10,7 +10,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::aggregate_function_factory::FactoryFunc;
-use crate::IAggregateFunction;
+use crate::AggregateFunction;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 struct DataGroupValues(Vec<DataGroupValue>);
@@ -20,7 +20,7 @@ pub struct AggregateIfCombinator {
     name: String,
     argument_len: usize,
     nested_name: String,
-    nested: Box<dyn IAggregateFunction>,
+    nested: Box<dyn AggregateFunction>,
 }
 
 impl AggregateIfCombinator {
@@ -28,7 +28,7 @@ impl AggregateIfCombinator {
         nested_name: &str,
         arguments: Vec<DataField>,
         nested_creator: FactoryFunc,
-    ) -> Result<Box<dyn IAggregateFunction>> {
+    ) -> Result<Box<dyn AggregateFunction>> {
         let name = format!("IfCombinator({})", nested_name);
         let argument_len = arguments.len();
 
@@ -61,7 +61,7 @@ impl AggregateIfCombinator {
     }
 }
 
-impl IAggregateFunction for AggregateIfCombinator {
+impl AggregateFunction for AggregateIfCombinator {
     fn name(&self) -> &str {
         &self.name
     }

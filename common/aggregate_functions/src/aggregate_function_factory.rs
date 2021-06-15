@@ -22,7 +22,7 @@ pub type FactoryCombinatorFunc = fn(
     name: &str,
     arguments: Vec<DataField>,
     nested_func: FactoryFunc,
-) -> Result<Box<dyn IAggregateFunction>>;
+) -> Result<Box<dyn AggregateFunction>>;
 
 pub type FactoryFuncRef = Arc<RwLock<IndexMap<&'static str, FactoryFunc>>>;
 pub type FactoryCombinatorFuncRef = Arc<RwLock<IndexMap<&'static str, FactoryCombinatorFunc>>>;
@@ -42,7 +42,7 @@ lazy_static! {
 }
 
 impl AggregateFunctionFactory {
-    pub fn get(name: &str, arguments: Vec<DataField>) -> Result<Box<dyn IAggregateFunction>> {
+    pub fn get(name: &str, arguments: Vec<DataField>) -> Result<Box<dyn AggregateFunction>> {
         let not_found_error = || -> ErrorCode {
             ErrorCode::UnknownAggregateFunction(format!("Unsupported AggregateFunction: {}", name))
         };

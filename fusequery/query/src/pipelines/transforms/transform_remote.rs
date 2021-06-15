@@ -44,7 +44,7 @@ impl Processor for RemoteTransform {
         "RemoteTransform"
     }
 
-    fn connect_to(&mut self, _input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, _input: Arc<dyn Processor>) -> Result<()> {
         Result::Err(ErrorCode::LogicalError(
             "Cannot call RemoteTransform connect_to",
         ))
