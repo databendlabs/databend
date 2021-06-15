@@ -5,8 +5,8 @@
 use std::fmt;
 use std::sync::Arc;
 
+use common_aggregate_functions::AggregateFunction;
 use common_aggregate_functions::AggregateFunctionFactory;
-use common_aggregate_functions::IAggregateFunction;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
@@ -150,7 +150,7 @@ impl Expression {
     pub fn to_aggregate_function(
         &self,
         schema: &DataSchemaRef,
-    ) -> Result<Box<dyn IAggregateFunction>> {
+    ) -> Result<Box<dyn AggregateFunction>> {
         match self {
             Expression::AggregateFunction { op, distinct, args } => {
                 let mut func_name = op.clone();

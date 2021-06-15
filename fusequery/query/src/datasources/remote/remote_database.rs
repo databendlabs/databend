@@ -13,14 +13,14 @@ use common_planners::DropTablePlan;
 
 use crate::datasources::remote::remote_table::RemoteTable;
 use crate::datasources::remote::store_client_provider::StoreClientProvider;
-use crate::datasources::IDatabase;
-use crate::datasources::ITable;
-use crate::datasources::ITableFunction;
+use crate::datasources::Database;
+use crate::datasources::Table;
+use crate::datasources::TableFunction;
 
 pub struct RemoteDatabase {
     name: String,
     store_client_provider: StoreClientProvider,
-    tables: RwLock<HashMap<String, Arc<dyn ITable>>>,
+    tables: RwLock<HashMap<String, Arc<dyn Table>>>,
 }
 
 impl RemoteDatabase {
@@ -34,7 +34,7 @@ impl RemoteDatabase {
 }
 
 #[async_trait::async_trait]
-impl IDatabase for RemoteDatabase {
+impl Database for RemoteDatabase {
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -47,7 +47,7 @@ impl IDatabase for RemoteDatabase {
         false
     }
 
-    fn get_table(&self, _table_name: &str) -> Result<Arc<dyn ITable>> {
+    fn get_table(&self, _table_name: &str) -> Result<Arc<dyn Table>> {
         match self.tables.read().get(_table_name) {
             Some(tbl) => Ok(tbl.clone()),
             None =>
@@ -58,11 +58,11 @@ impl IDatabase for RemoteDatabase {
         }
     }
 
-    fn get_tables(&self) -> Result<Vec<Arc<dyn ITable>>> {
+    fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         Ok(self.tables.read().values().cloned().collect())
     }
 
-    fn get_table_functions(&self) -> Result<Vec<Arc<dyn ITableFunction>>> {
+    fn get_table_functions(&self) -> Result<Vec<Arc<dyn TableFunction>>> {
         Ok(vec![])
     }
 

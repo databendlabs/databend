@@ -18,7 +18,7 @@ use crate::arithmetics::ArithmeticModuloFunction;
 use crate::arithmetics::ArithmeticMulFunction;
 use crate::arithmetics::ArithmeticPlusFunction;
 use crate::FactoryFuncRef;
-use crate::IFunction;
+use crate::Function;
 
 #[derive(Clone)]
 pub struct ArithmeticFunction {
@@ -41,12 +41,12 @@ impl ArithmeticFunction {
         Ok(())
     }
 
-    pub fn try_create_func(op: DataValueArithmeticOperator) -> Result<Box<dyn IFunction>> {
+    pub fn try_create_func(op: DataValueArithmeticOperator) -> Result<Box<dyn Function>> {
         Ok(Box::new(ArithmeticFunction { op }))
     }
 }
 
-impl IFunction for ArithmeticFunction {
+impl Function for ArithmeticFunction {
     fn name(&self) -> &str {
         "ArithmeticFunction"
     }

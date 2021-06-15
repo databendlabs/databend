@@ -10,7 +10,7 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
-use crate::IFunction;
+use crate::Function;
 
 #[derive(Clone)]
 pub struct UdfExampleFunction {
@@ -18,14 +18,14 @@ pub struct UdfExampleFunction {
 }
 
 impl UdfExampleFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(UdfExampleFunction {
             display_name: display_name.to_string(),
         }))
     }
 }
 
-impl IFunction for UdfExampleFunction {
+impl Function for UdfExampleFunction {
     fn name(&self) -> &str {
         "UdfExampleFunction"
     }

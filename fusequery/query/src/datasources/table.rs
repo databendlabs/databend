@@ -15,7 +15,7 @@ use common_streams::SendableDataBlockStream;
 use crate::sessions::FuseQueryContextRef;
 
 #[async_trait::async_trait]
-pub trait ITable: Sync + Send {
+pub trait Table: Sync + Send {
     fn name(&self) -> &str;
     fn engine(&self) -> &str;
     fn as_any(&self) -> &dyn Any;
