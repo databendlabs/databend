@@ -14,7 +14,7 @@ use common_planners::FilterPlan;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 
-use crate::optimizers::IOptimizer;
+use crate::optimizers::Optimizer;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ConstantFoldingOptimizer {}
@@ -136,7 +136,7 @@ impl ConstantFoldingImpl {
     }
 }
 
-impl IOptimizer for ConstantFoldingOptimizer {
+impl Optimizer for ConstantFoldingOptimizer {
     fn name(&self) -> &str {
         "ConstantFolding"
     }

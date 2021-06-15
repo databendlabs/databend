@@ -15,7 +15,7 @@ use crate::logics::LogicAndFunction;
 use crate::logics::LogicNotFunction;
 use crate::logics::LogicOrFunction;
 use crate::FactoryFuncRef;
-use crate::IFunction;
+use crate::Function;
 
 #[derive(Clone)]
 pub struct LogicFunction {
@@ -31,12 +31,12 @@ impl LogicFunction {
         Ok(())
     }
 
-    pub fn try_create_func(op: DataValueLogicOperator) -> Result<Box<dyn IFunction>> {
+    pub fn try_create_func(op: DataValueLogicOperator) -> Result<Box<dyn Function>> {
         Ok(Box::new(LogicFunction { op }))
     }
 }
 
-impl IFunction for LogicFunction {
+impl Function for LogicFunction {
     fn name(&self) -> &str {
         "LogicFunction"
     }

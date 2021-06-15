@@ -15,7 +15,7 @@ use common_exception::Result;
 use crate::aggregate_function_factory::FactoryFunc;
 use crate::aggregator_common::assert_variadic_arguments;
 use crate::AggregateCountFunction;
-use crate::IAggregateFunction;
+use crate::AggregateFunction;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 struct DataGroupValues(Vec<DataGroupValue>);
@@ -26,7 +26,7 @@ pub struct AggregateDistinctCombinator {
 
     nested_name: String,
     arguments: Vec<DataField>,
-    nested: Box<dyn IAggregateFunction>,
+    nested: Box<dyn AggregateFunction>,
     state: HashSet<DataGroupValues, RandomState>,
 }
 
@@ -34,7 +34,7 @@ impl AggregateDistinctCombinator {
     pub fn try_create_uniq(
         nested_name: &str,
         arguments: Vec<DataField>,
-    ) -> Result<Box<dyn IAggregateFunction>> {
+    ) -> Result<Box<dyn AggregateFunction>> {
         AggregateDistinctCombinator::try_create(
             nested_name,
             arguments,
@@ -46,7 +46,7 @@ impl AggregateDistinctCombinator {
         nested_name: &str,
         arguments: Vec<DataField>,
         nested_creator: FactoryFunc,
-    ) -> Result<Box<dyn IAggregateFunction>> {
+    ) -> Result<Box<dyn AggregateFunction>> {
         let name = format!("DistinctCombinator({})", nested_name);
         assert_variadic_arguments(&name, arguments.len(), (1, 32))?;
 
@@ -66,7 +66,7 @@ impl AggregateDistinctCombinator {
     }
 }
 
-impl IAggregateFunction for AggregateDistinctCombinator {
+impl AggregateFunction for AggregateDistinctCombinator {
     fn name(&self) -> &str {
         &self.name
     }

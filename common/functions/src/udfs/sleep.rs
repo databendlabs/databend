@@ -13,7 +13,7 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::IFunction;
+use crate::Function;
 
 #[derive(Clone)]
 pub struct SleepFunction {
@@ -21,14 +21,14 @@ pub struct SleepFunction {
 }
 
 impl SleepFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(SleepFunction {
             display_name: display_name.to_string(),
         }))
     }
 }
 
-impl IFunction for SleepFunction {
+impl Function for SleepFunction {
     fn name(&self) -> &str {
         "SleepFunction"
     }

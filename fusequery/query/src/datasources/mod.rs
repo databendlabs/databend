@@ -17,8 +17,7 @@ mod table;
 mod table_function;
 
 pub use common::Common;
-pub use database::IDatabase;
+pub use database::Database;
 pub use datasource::DataSource;
-pub use datasource::IDataSource;
-pub use table::ITable;
-pub use table_function::ITableFunction;
+pub use table::Table;
+pub use table_function::TableFunction;

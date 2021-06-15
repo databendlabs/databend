@@ -34,7 +34,7 @@ mod interpreter_table_drop;
 mod interpreter_use_database;
 mod plan_scheduler;
 
-pub use interpreter::IInterpreter;
+pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter_database_create::CreateDatabaseInterpreter;
 pub use interpreter_database_drop::DropDatabaseInterpreter;

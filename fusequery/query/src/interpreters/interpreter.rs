@@ -8,7 +8,7 @@ use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
 #[async_trait::async_trait]
-pub trait IInterpreter: Sync + Send {
+pub trait Interpreter: Sync + Send {
     fn name(&self) -> &str;
     async fn execute(&self) -> Result<SendableDataBlockStream>;
 
@@ -17,4 +17,4 @@ pub trait IInterpreter: Sync + Send {
     }
 }
 
-pub type InterpreterPtr = std::sync::Arc<dyn IInterpreter>;
+pub type InterpreterPtr = std::sync::Arc<dyn Interpreter>;

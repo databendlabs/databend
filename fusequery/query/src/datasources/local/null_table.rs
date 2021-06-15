@@ -16,7 +16,7 @@ use common_planners::TableOptions;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::datasources::ITable;
+use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct NullTable {
@@ -31,14 +31,14 @@ impl NullTable {
         name: String,
         schema: DataSchemaRef,
         _options: TableOptions,
-    ) -> Result<Box<dyn ITable>> {
+    ) -> Result<Box<dyn Table>> {
         let table = Self { db, name, schema };
         Ok(Box::new(table))
     }
 }
 
 #[async_trait::async_trait]
-impl ITable for NullTable {
+impl Table for NullTable {
     fn name(&self) -> &str {
         &self.name
     }

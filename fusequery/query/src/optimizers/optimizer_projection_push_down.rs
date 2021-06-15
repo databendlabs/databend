@@ -23,7 +23,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::RewriteHelper;
 use common_planners::SortPlan;
 
-use crate::optimizers::IOptimizer;
+use crate::optimizers::Optimizer;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ProjectionPushDownOptimizer {}
@@ -159,7 +159,7 @@ impl ProjectionPushDownImpl {
     }
 }
 
-impl IOptimizer for ProjectionPushDownOptimizer {
+impl Optimizer for ProjectionPushDownOptimizer {
     fn name(&self) -> &str {
         "ProjectionPushDown"
     }

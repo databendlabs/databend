@@ -42,7 +42,7 @@ use tonic::Streaming;
 
 use crate::configs::Config;
 use crate::executor::ActionHandler;
-use crate::fs::IFileSystem;
+use crate::fs::FileSystem;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -54,7 +54,7 @@ pub struct StoreFlightImpl {
 }
 
 impl StoreFlightImpl {
-    pub fn create(_conf: Config, fs: Arc<dyn IFileSystem>) -> Self {
+    pub fn create(_conf: Config, fs: Arc<dyn FileSystem>) -> Self {
         Self {
             token: FlightToken::create(),
             // TODO pass in action handler

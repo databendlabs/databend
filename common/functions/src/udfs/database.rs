@@ -9,19 +9,19 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
 
-use crate::IFunction;
+use crate::Function;
 
 #[derive(Clone)]
 pub struct DatabaseFunction {}
 
 // we bind database as first argument in eval
 impl DatabaseFunction {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn IFunction>> {
+    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(DatabaseFunction {}))
     }
 }
 
-impl IFunction for DatabaseFunction {
+impl Function for DatabaseFunction {
     fn name(&self) -> &str {
         "DatabaseFunction"
     }

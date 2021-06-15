@@ -14,7 +14,7 @@ use common_planners::CreateTablePlan;
 use common_planners::TableEngineType;
 use common_planners::TableOptions;
 use fuse_query::interpreters::InterpreterFactory;
-use fuse_query::optimizers::Optimizer;
+use fuse_query::optimizers::Optimizers;
 use fuse_query::sessions::FuseQueryContext;
 use fuse_query::sql::PlanParser;
 use futures::TryStreamExt;
@@ -77,7 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         for i in 0..opt.iterations {
             let start = Instant::now();
             let plan = PlanParser::create(ctx.clone()).build_from_sql(sql)?;
-            let plan = Optimizer::create(ctx.clone()).optimize(&plan)?;
+            let plan = Optimizers::create(ctx.clone()).optimize(&plan)?;
             let executor = InterpreterFactory::get(ctx.clone(), plan)?;
             let stream = executor.execute().await?;
 
