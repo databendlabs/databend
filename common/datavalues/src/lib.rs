@@ -52,6 +52,7 @@ pub use data_array_logic::DataArrayLogic;
 pub use data_array_merge_sort::DataArrayMerge;
 pub use data_array_scatter::DataArrayScatter;
 pub use data_columnar_value::DataColumnarValue;
+pub use data_df_type::*;
 pub use data_field::DataField;
 pub use data_group_value::DataGroupValue;
 pub use data_schema::DataSchema;

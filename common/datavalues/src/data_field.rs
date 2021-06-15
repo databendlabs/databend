@@ -39,6 +39,22 @@ impl DataField {
         self.nullable
     }
 
+    /// Check to see if `self` is a superset of `other` field. Superset is defined as:
+    ///
+    /// * if nullability doesn't match, self needs to be nullable
+    /// * self.metadata is a superset of other.metadata
+    /// * all other fields are equal
+    pub fn contains(&self, other: &DataField) -> bool {
+        if self.name != other.name || self.data_type != other.data_type {
+            return false;
+        }
+
+        if self.nullable != other.nullable && !self.nullable {
+            return false;
+        }
+        true
+    }
+
     pub fn to_arrow(&self) -> ArrowField {
         ArrowField::new(&self.name, self.data_type.to_arrow(), self.nullable)
     }

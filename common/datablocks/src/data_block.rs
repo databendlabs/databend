@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::fmt;
 use std::sync::Arc;
 
@@ -46,7 +47,7 @@ impl DataBlock {
     pub fn empty_with_schema(schema: DataSchemaRef) -> Self {
         let mut columns = vec![];
         for f in schema.fields().iter() {
-            columns.push(arrow::array::new_empty_array(f.data_type()).into())
+            columns.push(arrow::array::new_empty_array(&f.data_type().to_arrow()).into())
         }
         DataBlock { schema, columns }
     }
@@ -128,7 +129,10 @@ impl TryFrom<DataBlock> for RecordBatch {
             .iter()
             .map(|c| c.to_array())
             .collect::<Result<Vec<_>>>()?;
-        Ok(RecordBatch::try_new(v.schema.clone(), columns)?)
+        Ok(RecordBatch::try_new(
+            Arc::new(v.schema.to_arrow()),
+            columns,
+        )?)
     }
 }
 
@@ -136,10 +140,8 @@ impl TryFrom<arrow::record_batch::RecordBatch> for DataBlock {
     type Error = ErrorCode;
 
     fn try_from(v: arrow::record_batch::RecordBatch) -> Result<DataBlock> {
-        Ok(DataBlock::create_by_array(
-            v.schema(),
-            Vec::from(v.columns()),
-        ))
+        let schema = Arc::new(v.schema().as_ref().try_into()?);
+        Ok(DataBlock::create_by_array(schema, Vec::from(v.columns())))
     }
 }
 
