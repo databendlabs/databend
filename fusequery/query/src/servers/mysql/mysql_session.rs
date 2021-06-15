@@ -59,10 +59,14 @@ impl AbortableService<TcpStream, ()> for Session {
         let session_manager = self.session_manager.clone();
         let stream = stream
             .into_std()
-            .map_err_to_code(ErrorCode::TokioError, || "")?;
+            .map_err_to_code(ErrorCode::TokioError, || {
+                "Cannot to convert Tokio TcpStream to Std TcpStream"
+            })?;
         stream
             .set_nonblocking(false)
-            .map_err_to_code(ErrorCode::TokioError, || "")?;
+            .map_err_to_code(ErrorCode::TokioError, || {
+                "Cannot to convert Tokio TcpStream to Std TcpStream"
+            })?;
 
         let session_id = self.get_id();
         let cloned_stream = stream.try_clone()?;

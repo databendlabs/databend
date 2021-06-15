@@ -134,7 +134,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
 fn query<T: FromRow>(connection: &mut Conn, query: &str) -> Result<Vec<T>> {
     connection
         .query::<T, &str>(query)
-        .map_err_to_code(ErrorCode::UnknownException, || "")
+        .map_err_to_code(ErrorCode::UnknownException, || "Query error")
 }
 
 fn create_connection(port: u16) -> Result<mysql::Conn> {

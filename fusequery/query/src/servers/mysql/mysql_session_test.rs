@@ -244,7 +244,7 @@ async fn prepare_session_and_connect() -> Result<(mysql::Conn, Arc<Box<dyn ISess
     let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await?;
     let local_addr = listener
         .local_addr()
-        .map_err_to_code(ErrorCode::TokioError, || "");
+        .map_err_to_code(ErrorCode::TokioError, || "Tokio Error");
 
     let session = tokio::spawn(async move {
         let (stream, _) = listener.accept().await?;
@@ -256,11 +256,13 @@ async fn prepare_session_and_connect() -> Result<(mysql::Conn, Arc<Box<dyn ISess
     let conn = tokio::spawn(async move { create_connection(local_addr?.port()) });
 
     // connect success
-    let conn = conn.await.map_err_to_code(ErrorCode::TokioError, || "")??;
+    let conn = conn
+        .await
+        .map_err_to_code(ErrorCode::TokioError, || "Tokio Error")??;
 
     let session = session
         .await
-        .map_err_to_code(ErrorCode::TokioError, || "")??;
+        .map_err_to_code(ErrorCode::TokioError, || "Tokio Error")??;
     Ok((conn, session))
 }
 

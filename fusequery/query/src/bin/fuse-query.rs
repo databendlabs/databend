@@ -185,7 +185,10 @@ async fn wait_services_terminal(
             let mut duration = duration;
             for service in services {
                 if duration.is_zero() {
-                    return Err(ErrorCode::Timeout(""));
+                    return Err(ErrorCode::Timeout(format!(
+                        "Service did not shutdown in {:?}",
+                        duration
+                    )));
                 }
 
                 let elapsed = service.wait_terminal(Some(duration)).await?;

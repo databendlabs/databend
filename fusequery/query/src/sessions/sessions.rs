@@ -12,7 +12,6 @@ use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::ToErrorCode;
 use common_infallible::RwLock;
 use common_planners::Partitions;
 use metrics::counter;
@@ -192,14 +191,22 @@ impl AbortableService<(), ()> for SessionManager {
                 if !self.notifyed.load(Ordering::Relaxed) {
                     tokio::time::timeout(duration, self.aborted_notify.notified())
                         .await
-                        .map_err_to_code(ErrorCode::Timeout, || "")?;
+                        .map_err(|_| {
+                            ErrorCode::Timeout(format!(
+                                "SessionManager did not shutdown in {:?}",
+                                duration
+                            ))
+                        })?;
 
                     duration = duration.sub(std::cmp::min(instant.elapsed(), duration));
                 }
 
                 for active_session in active_sessions_snapshot() {
                     if duration.is_zero() {
-                        return Err(ErrorCode::Timeout(""));
+                        return Err(ErrorCode::Timeout(format!(
+                            "SessionManager did not shutdown in {:?}",
+                            duration
+                        )));
                     }
 
                     let elapsed = active_session.wait_terminal(Some(duration)).await?;

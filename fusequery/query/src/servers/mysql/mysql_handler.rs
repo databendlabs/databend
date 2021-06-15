@@ -12,7 +12,6 @@ use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::ToErrorCode;
 use common_infallible::Mutex;
 use common_runtime::Runtime;
 use futures::future::AbortHandle;
@@ -148,7 +147,12 @@ impl AbortableService<(String, u16), SocketAddr> for MySQLHandler {
                 if !self.aborted.load(Ordering::Relaxed) {
                     tokio::time::timeout(duration, self.aborted_notify.notified())
                         .await
-                        .map_err_to_code(ErrorCode::Timeout, || "")?;
+                        .map_err(|_| {
+                            ErrorCode::Timeout(format!(
+                                "Service did not shutdown in {:?}",
+                                duration
+                            ))
+                        })?;
                 }
                 let duration = duration.sub(instant.elapsed());
                 self.session_manager.wait_terminal(Some(duration)).await?;
