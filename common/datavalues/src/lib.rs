@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#![feature(const_generics)]
+#![feature(const_evaluatable_checked)]
+
 #[cfg(test)]
 mod data_array_arithmetic_test;
 #[cfg(test)]
@@ -42,6 +45,7 @@ mod data_value_aggregate;
 mod data_value_arithmetic;
 mod data_value_kernel;
 mod data_value_operator;
+mod data_value_ops;
 
 pub use data_array::*;
 pub use data_array_arithmetic::DataArrayArithmetic;
@@ -69,3 +73,5 @@ pub use data_value_operator::DataValueAggregateOperator;
 pub use data_value_operator::DataValueArithmeticOperator;
 pub use data_value_operator::DataValueComparisonOperator;
 pub use data_value_operator::DataValueLogicOperator;
+//
+pub use data_value_ops::ColumnAdd;
