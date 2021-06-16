@@ -1,3 +1,5 @@
+#!/bin/bash
+
 /fuse-store &
 P1=$!
 /fuse-query -c fuse-query.toml &

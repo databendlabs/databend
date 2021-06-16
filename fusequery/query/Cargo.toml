@@ -62,13 +62,13 @@ num = "0.4"
 num_cpus = "1.0"
 paste = "^1.0"
 prost = "0.7"
-rand = "0.8.3"
+rand = "0.8.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3"
 structopt-toml = "0.4.5"
 threadpool = "1.8.1"
-tokio = { version = "1.6", features = ["macros", "rt", "rt-multi-thread", "sync"] }
+tokio = { version = "1.7", features = ["macros", "rt", "rt-multi-thread", "sync"] }
 tokio-stream = { version = "0.1", features = ["net"] }
 toml = "0.5.6"
 tonic = "0.4"
