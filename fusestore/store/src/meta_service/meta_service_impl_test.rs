@@ -230,9 +230,10 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
     let _mn0 = MetaNode::boot(0, addr0.clone()).await?;
     assert_meta_connection(&addr0).await?;
 
+    // add node 1 as non-voter
+    let _mn1 = MetaNode::boot_non_voter(1, &addr1).await?;
+
     {
-        // add node 1 as non-voter
-        let _mn1 = MetaNode::boot_non_voter(1, &addr1).await?;
         assert_meta_connection(&addr0).await?;
 
         let resp = _mn0.add_node(1, addr1.clone()).await?;
@@ -268,6 +269,8 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
             assert_eq!(leader, 0);
         }
     }
+    _mn0.stop().await?;
+    _mn1.stop().await?;
 
     Ok(())
 }
