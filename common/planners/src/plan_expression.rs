@@ -90,6 +90,11 @@ impl Expression {
     pub fn column_name(&self) -> String {
         match self {
             Expression::Alias(name, _expr) => name.clone(),
+            Expression::ScalarFunction { op, args: _ } => match op.as_ref() {
+                "version" => "version()".to_string(),
+                "database" => "database()".to_string(),
+                _ => format!("{:?}", self),
+            },
             _ => format!("{:?}", self),
         }
     }

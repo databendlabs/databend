@@ -3,8 +3,8 @@ ERROR 1105 (HY000) at line 1: Code: 3, displayText = Database not_exists_db  doe
 select database()
 --------------
 
-+------------------+
-| database(system) |
-+------------------+
-| system           |
-+------------------+
++------------+
+| database() |
++------------+
+| system     |
++------------+
