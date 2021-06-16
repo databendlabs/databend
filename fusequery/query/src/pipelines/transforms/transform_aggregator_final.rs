@@ -88,10 +88,6 @@ impl Processor for AggregatorFinalTransform {
         let mut final_result = Vec::with_capacity(funcs.len());
         for func in &funcs {
             let merge_result = func.merge_result()?;
-            // Check merge result null.
-            if merge_result.is_null() {
-                break;
-            }
             final_result.push(merge_result.to_array_with_size(1)?);
         }
 
