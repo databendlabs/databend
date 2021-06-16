@@ -1,4 +1,8 @@
 --------------
+DROP TABLE IF EXISTS t
+--------------
+
+--------------
 CREATE TABLE t(c1 int) ENGINE = Null
 --------------
 
@@ -14,4 +18,4 @@ DROP TABLE IF EXISTS t
 DROP TABLE t
 --------------
 
-ERROR 1105 (HY000) at line 5: Code: 25, displayText = Unknown table: 'default.t'.
+ERROR 1105 (HY000) at line 7: Code: 25, displayText = Unknown table: 'default.t'.

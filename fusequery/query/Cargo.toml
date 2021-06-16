@@ -25,7 +25,6 @@ common-arrow = {path = "../../common/arrow"}
 common-datablocks = {path = "../../common/datablocks"}
 common-datavalues = {path = "../../common/datavalues"}
 common-exception = {path = "../../common/exception"}
-common-ext = {path= "../../common/ext"}
 common-flights = {path = "../../common/flights"}
 common-functions = {path = "../../common/functions"}
 common-aggregate-functions = {path = "../../common/aggregate_functions" }
@@ -49,7 +48,7 @@ anyhow = "1.0.41"
 async-trait = "0.1"
 crossbeam = "0.8"
 quantiles = "0.7.1"
-ctrlc = "3.1.9"
+ctrlc = { version = "3.1.9", features = ["termination"] }
 clickhouse-srv = "0.2.1"
 crossbeam-queue = "0.3.2"
 env_logger = "0.8"
@@ -69,8 +68,8 @@ serde_json = "1.0"
 structopt = "0.3"
 structopt-toml = "0.4.5"
 threadpool = "1.8.1"
-tokio = { version = "1.7", features = ["macros", "rt","rt-multi-thread", "sync"] }
-tokio-stream = "0.1"
+tokio = { version = "1.7", features = ["macros", "rt", "rt-multi-thread", "sync"] }
+tokio-stream = { version = "0.1", features = ["net"] }
 toml = "0.5.6"
 tonic = "0.4"
 warp = "0.3.1"
@@ -80,6 +79,7 @@ pnet = "0.27.2"
 [dev-dependencies]
 pretty_assertions = "0.7"
 criterion = "0.3"
+mysql = "20.1.0"
 
 [build-dependencies]
 common-building = {path = "../../common/building"}
