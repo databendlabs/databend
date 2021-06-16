@@ -9,6 +9,9 @@ use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::SqlOption;
 use sqlparser::ast::Statement as SQLStatement;
+use sqlparser::dialect::GenericDialect;
+use sqlparser::tokenizer::Token;
+use sqlparser::tokenizer::Tokenizer;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfShowTables;
@@ -80,4 +83,64 @@ pub enum DfStatement {
 
     // Settings.
     ShowSettings(DfShowSettings),
+}
+
+/// Comment hints from SQL.
+/// It'll be enabled when using `--comment` in mysql client.
+/// Eg: `SELECT * FROM system.number LIMIT 1; -- { ErrorCode 25 }`
+#[derive(Debug, Clone, PartialEq)]
+pub struct DfHint {
+    pub error_code: Option<u16>,
+    pub comment: String,
+    pub prefix: String,
+}
+
+impl DfHint {
+    pub fn create_from_comment(comment: &str, prefix: &str) -> Self {
+        Self {
+            error_code: Self::parse_code(comment),
+            comment: comment.to_owned(),
+            prefix: prefix.to_owned(),
+        }
+    }
+
+    // todo: use nom parser
+    pub fn parse_code(comment: &str) -> Option<u16> {
+        let dialect = &GenericDialect {};
+        let mut tokenizer = Tokenizer::new(dialect, comment);
+        let tokens = tokenizer.tokenize().unwrap_or(vec![]);
+
+        let mut index = 0;
+        let mut next_token = || -> Token {
+            loop {
+                index += 1;
+                match tokens.get(index - 1) {
+                    Some(Token::Whitespace(_)) => continue,
+                    token => return token.cloned().unwrap_or(Token::EOF),
+                }
+            }
+        };
+
+        loop {
+            let token = next_token();
+            match token {
+                Token::Word(w) if w.value == "ErrorCode" => {
+                    let token = next_token();
+                    match token {
+                        Token::Number(str, _) => {
+                            return match str.parse::<u16>() {
+                                Ok(code) => Some(code),
+                                _ => None,
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Token::EOF => break,
+                _ => {}
+            }
+        }
+
+        None
+    }
 }

@@ -11,7 +11,6 @@ DROP DATABASE IF EXISTS db
 --------------
 
 --------------
-DROP DATABASE db
+DROP DATABASE db -- {ErrorCode 3}
 --------------
 
-ERROR 1105 (HY000) at line 6: Code: 3, displayText = Unknown database: 'db'.

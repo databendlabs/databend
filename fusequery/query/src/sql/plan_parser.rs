@@ -60,6 +60,7 @@ use crate::sql::sql_statement::DfUseDatabase;
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
+use crate::sql::DfHint;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 use crate::sql::SQLCommon;
@@ -75,14 +76,29 @@ impl PlanParser {
 
     pub fn build_from_sql(&self, query: &str) -> Result<PlanNode> {
         tracing::debug!(query);
-        DfParser::parse_sql(query).and_then(|statement| {
-            statement
+        DfParser::parse_sql(query).and_then(|(stmts, _)| {
+            stmts
                 .first()
                 .map(|statement| self.statement_to_plan(&statement))
                 .unwrap_or_else(|| {
                     Result::Err(ErrorCode::SyntaxException("Only support single query"))
                 })
         })
+    }
+
+    pub fn build_with_hint_from_sql(&self, query: &str) -> (Result<PlanNode>, Vec<DfHint>) {
+        tracing::debug!(query);
+        let stmt_hints = DfParser::parse_sql(query);
+        match stmt_hints {
+            Ok((stmts, hints)) => match stmts.first() {
+                Some(stmt) => (self.statement_to_plan(stmt), hints.clone()),
+                None => (
+                    Result::Err(ErrorCode::SyntaxException("Only support single query")),
+                    vec![],
+                ),
+            },
+            Err(e) => (Err(e), vec![]),
+        }
     }
 
     pub fn statement_to_plan(&self, statement: &DfStatement) -> Result<PlanNode> {

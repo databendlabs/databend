@@ -6,10 +6,10 @@ SELECT * FROM system.tables WHERE database='db1';
 
 DROP TABLE t1;
 DROP TABLE IF EXISTS t1;
-DROP TABLE t1;
+DROP TABLE t1; -- {ErrorCode 25}
 
 DROP DATABASE db1;
 
 DROP DATABASE IF EXISTS db1;
 
-DROP DATABASE db1;
+DROP DATABASE db1; -- {ErrorCode 3}

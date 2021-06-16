@@ -14,7 +14,7 @@ mod tests {
     use crate::sql::*;
 
     fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
-        let statements = DfParser::parse_sql(sql)?;
+        let (statements, _) = DfParser::parse_sql(sql)?;
         assert_eq!(
             statements.len(),
             1,
@@ -213,6 +213,35 @@ mod tests {
                 name: ObjectName(vec![Ident::new("db1")]),
             }),
         )?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn hint_test() -> Result<()> {
+        {
+            let comment = " { ErrorCode  1002 }";
+            let expected = DfHint::parse_code(comment);
+            assert_eq!(expected, Some(1002));
+        }
+
+        {
+            let comment = " { ErrorCode 22}";
+            let expected = DfHint::parse_code(comment);
+            assert_eq!(expected, Some(22));
+        }
+
+        {
+            let comment = " { ErrorCode: 22}";
+            let expected = DfHint::parse_code(comment);
+            assert_eq!(expected, None);
+        }
+
+        {
+            let comment = " { Errorcode 22}";
+            let expected = DfHint::parse_code(comment);
+            assert_eq!(expected, None);
+        }
 
         Ok(())
     }

@@ -59,10 +59,7 @@ def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_fi
         'stderr': stderr_file,
     }
 
-    pattern = '{test} > {stdout} 2>&1'
-    if ext == '.sql':
-        pattern = "{client} {options} < " + pattern
-
+    pattern = "cat {test} | sed '/^\s*--/d' | {client} {options} > {stdout} 2>&1"
     command = pattern.format(**params)
     # print(command)
 
@@ -436,7 +433,7 @@ if __name__ == '__main__':
     parser.add_argument('-q', '--suites', help='Path to suites dir')
     parser.add_argument('-b', '--binary', default='fuse-query', help='Path to fuse-query binary or name of binary in PATH')
     parser.add_argument('-c', '--client', default='mysql -uroot -h127.0.0.1 -P3307 -s ', help='Client program')
-    parser.add_argument('-opt', '--options', default=' -v -t --force ', help="Client program options")
+    parser.add_argument('-opt', '--options', default=' -v -t --comments --force ', help="Client program options")
     parser.add_argument('--tmp', help='Path to tmp dir')
     parser.add_argument('-t', '--timeout', type=int, default=600, help='Timeout for each test case in seconds')
     parser.add_argument('test', nargs='*', help='Optional test case name regex')

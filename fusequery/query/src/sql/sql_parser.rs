@@ -22,12 +22,14 @@ use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
+use sqlparser::tokenizer::Whitespace;
 
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateTable;
 use crate::sql::DfDropDatabase;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
+use crate::sql::DfHint;
 use crate::sql::DfShowDatabases;
 use crate::sql::DfShowSettings;
 use crate::sql::DfShowTables;
@@ -64,7 +66,7 @@ impl<'a> DfParser<'a> {
     }
 
     /// Parse a SQL statement and produce a set of statements with dialect
-    pub fn parse_sql(sql: &str) -> Result<Vec<DfStatement>, ErrorCode> {
+    pub fn parse_sql(sql: &str) -> Result<(Vec<DfStatement>, Vec<DfHint>), ErrorCode> {
         let dialect = &GenericDialect {};
         Ok(DfParser::parse_sql_with_dialect(sql, dialect)?)
     }
@@ -73,9 +75,10 @@ impl<'a> DfParser<'a> {
     pub fn parse_sql_with_dialect(
         sql: &str,
         dialect: &dyn Dialect,
-    ) -> Result<Vec<DfStatement>, ParserError> {
+    ) -> Result<(Vec<DfStatement>, Vec<DfHint>), ParserError> {
         let mut parser = DfParser::new_with_dialect(sql, dialect)?;
         let mut stmts = Vec::new();
+
         let mut expecting_statement_delimiter = false;
         loop {
             // ignore empty statements (between successive statement delimiters)
@@ -94,7 +97,21 @@ impl<'a> DfParser<'a> {
             stmts.push(statement);
             expecting_statement_delimiter = true;
         }
-        Ok(stmts)
+
+        let mut hints = Vec::new();
+
+        let mut parser = DfParser::new_with_dialect(sql, dialect)?;
+        loop {
+            let token = parser.parser.next_token_no_skip();
+            match token {
+                Some(Token::Whitespace(Whitespace::SingleLineComment { comment, prefix })) => {
+                    hints.push(DfHint::create_from_comment(comment, prefix));
+                }
+                Some(Token::Whitespace(Whitespace::Newline)) | Some(Token::EOF) | None => break,
+                _ => continue,
+            }
+        }
+        Ok((stmts, hints))
     }
 
     /// Report unexpected token
