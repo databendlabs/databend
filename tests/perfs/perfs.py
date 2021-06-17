@@ -25,12 +25,10 @@ def load_config():
 
 conf = load_config()
 
-def execute(suit, bin_path, host, port, concurrency, iteration, output_dir):
+def execute(suit, bin_path, host, port, concurrency, iterations, output_dir):
     base_cfg = conf['config']
-    if iteration == "" :
+    if iterations == "" :
         iterations = suit.get("iterations", base_cfg['iterations'])
-    else :
-        iterations = iteration
     if concurrency == "":
         concurrency = suit.get("concurrency", base_cfg['concurrency'])
 
