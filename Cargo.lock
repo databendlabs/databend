@@ -3738,6 +3738,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustc_version"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfa0f585226d2e68097d4f95d113b15b83a82e819ab25717ec0590d9584ef366"
+dependencies = [
+ "semver 1.0.3",
+]
+
+[[package]]
 name = "rustversion"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3827,6 +3836,12 @@ dependencies = [
  "semver-parser 0.10.2",
  "serde",
 ]
+
+[[package]]
+name = "semver"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f3aac57ee7f3272d8395c6e4f502f434f0e289fcd62876f70daa008c20dcabe"
 
 [[package]]
 name = "semver-parser"
@@ -4951,9 +4966,9 @@ checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "vergen"
-version = "5.1.8"
+version = "5.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59032138343003a17090952a1eaa7c1b260080b44d3dbb0d68905bd2230260ee"
+checksum = "f989a8a6dca13ecebbd7b892b69069f4321d19999f1a7e15a308f05ef4f5dbcd"
 dependencies = [
  "anyhow",
  "cfg-if 1.0.0",
@@ -4961,7 +4976,7 @@ dependencies = [
  "enum-iterator",
  "getset",
  "git2",
- "rustc_version 0.3.3",
+ "rustc_version 0.4.0",
  "rustversion",
  "sysinfo",
  "thiserror",
