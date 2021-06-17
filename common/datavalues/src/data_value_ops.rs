@@ -74,32 +74,19 @@ where Condition<Left, Right, { Left::TYPE_SIZE >= Right::TYPE_SIZE }>: IDataType
         <Condition<Left, Right, { Left::TYPE_SIZE >= Right::TYPE_SIZE }> as IDataType>::DataType;
 }
 
-impl<Left: IDataType, Right: IDataType> IDataType for MaxSizeType<Left, Right>
-where Condition<Left, Right, { Left::TYPE_SIZE < Right::TYPE_SIZE }>: IDataType
-{
-    const TYPE_SIZE: usize =
-        <Condition<Left, Right, { Left::TYPE_SIZE < Right::TYPE_SIZE }> as IDataType>::TYPE_SIZE;
-
-    const IS_FLOAT: bool =
-        <Condition<Left, Right, { Left::TYPE_SIZE < Right::TYPE_SIZE }> as IDataType>::IS_FLOAT;
-
-    type DataType =
-        <Condition<Left, Right, { Left::TYPE_SIZE < Right::TYPE_SIZE }> as IDataType>::DataType;
+impl IDataType for UInt8Type {
+    const TYPE_SIZE: usize = 1;
+    const IS_FLOAT: bool = false;
+    type DataType = Self;
 }
 
-// impl IDataType for UInt8Type {
-//     const TYPE_SIZE: usize = 1;
-//     const IS_FLOAT: bool = false;
-//     type DataType = Self;
-// }
+struct AddType<const TYPE_SIZE: usize, const IS_FLOAT: bool> {}
 
-// struct AddType<const TYPE_SIZE: usize, const IS_FLOAT: bool> {}
-
-// impl IDataType for AddType<1, false> {
-//     const TYPE_SIZE: usize = 1;
-//     const IS_FLOAT: bool = false;
-//     type DataType = UInt8Type;
-// }
+impl IDataType for AddType<1, false> {
+    const TYPE_SIZE: usize = 1;
+    const IS_FLOAT: bool = false;
+    type DataType = UInt8Type;
+}
 
 // pub trait Arithmetic<L, R> {
 //     fn add<L, R>(left: &DataColumnarValue, right: &DataColumnarValue) -> Result<DataColumnarValue>
