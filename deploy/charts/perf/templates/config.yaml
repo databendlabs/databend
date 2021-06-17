@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: default
+data:
+  FUSE_QUERY_MYSQL_HANDLER_HOST: "0.0.0.0"
+  FUSE_QUERY_CLICKHOUSE_HANDLER_HOST: "0.0.0.0"
+  FUSE_QUERY_HTTP_API_ADDRESS: "0.0.0.0:{{ .Values.configs.httpAPIPort }}"
+  FUSE_QUERY_METRIC_API_ADDRESS: 0.0.0.0:{{ .Values.configs.metricAPIPort }}
+  FUSE_QUERY_RPC_API_ADDRESS: 0.0.0.0:{{ .Values.configs.rpcAPIPort }}
+  FUSE_QUERY_MYSQL_HANDLER_PORT: {{ .Values.configs.mysqlPort | quote }}
+  FUSE_QUERY_CLICKHOUSE_HANDLER_PORT: {{ .Values.configs.clickhousePort | quote }}
+  {{- range $key, $value := .Values.extraEnv}}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

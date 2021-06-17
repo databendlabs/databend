@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ref
+  labels:
+    app: {{ .Values.ref.name }}
+spec:
+  ports:
+    - name: mysql
+      port: {{ .Values.configs.mysqlPort }}
+      targetPort: {{ .Values.configs.mysqlPort }}
+      protocol: TCP
+    - name: clickhouse
+      port: {{ .Values.configs.clickhousePort }}
+      targetPort: {{ .Values.configs.clickhousePort }}
+      protocol: TCP
+    - name: http
+      port: {{ .Values.configs.httpAPIPort }}
+      targetPort: {{ .Values.configs.httpAPIPort }}
+      protocol: TCP
+    - name: metric
+      port: {{ .Values.configs.metricAPIPort }}
+      targetPort: {{ .Values.configs.metricAPIPort }}
+      protocol: TCP
+    - name: rpc
+      port: {{ .Values.configs.rpcAPIPort }}
+      targetPort: {{ .Values.configs.rpcAPIPort }}
+      protocol: TCP
+  selector:
+    app: {{ .Values.ref.name }}

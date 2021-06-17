@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "{{ .Values.ref.name }}"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.ref.name }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        app: {{ .Values.ref.name }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.ref.repository }}:{{ .Values.ref.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.ref.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: default
+          ports:
+            - name: mysql
+              containerPort: {{ .Values.configs.mysqlPort }}
+              protocol: TCP
+            - name: clickhouse
+              containerPort: {{ .Values.configs.clickhousePort }}
+              protocol: TCP
+            - name: http
+              containerPort: {{ .Values.configs.httpAPIPort }}
+              protocol: TCP
+            - name: metric
+              containerPort: {{ .Values.configs.metricAPIPort }}
+              protocol: TCP
+            - name: rpc
+              containerPort: {{ .Values.configs.rpcAPIPort }}
+              protocol: TCP
+          # want to see query log only and close log triggered by kubeproxy
+          # livenessProbe:
+          #   httpGet:
+          #     path: /v1/hello
+          #     port: http
+          # readinessProbe:
+          #   httpGet:
+          #     path: /v1/configs
+          #     port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: test-branch
+                operator: In
+                values:
+                - current
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
