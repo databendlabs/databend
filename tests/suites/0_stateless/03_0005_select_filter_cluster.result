@@ -1,5 +1,5 @@
 2
 1	2
 2	3
-Projection: number as c1:UInt64, (number + 1) as c2:UInt64\n  Expression: number:UInt64, (number + 1):UInt64 (Before Projection)\n    Filter: (number > 1)\n      ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 3, read_bytes: 24]
+RedistributeStage[expr: 0]\n  Projection: number as c1:UInt64, (number + 1) as c2:UInt64\n  Expression: number:UInt64, (number + 1):UInt64 (Before Projection)\n    Filter: (number > 1)\n      ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 3, read_bytes: 24]
 2	3
