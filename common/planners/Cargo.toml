@@ -20,6 +20,7 @@ common-datablocks = {path = "../datablocks"}
 anyhow = "1.0.41"
 serde = { version = "1.0", features = ["derive"] }
 futures = "0.3"
+lazy_static = "1.4.0"
 
 [dev-dependencies]
 pretty_assertions = "0.7"

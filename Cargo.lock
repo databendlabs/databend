@@ -744,6 +744,7 @@ dependencies = [
  "common-exception",
  "common-functions",
  "futures",
+ "lazy_static",
  "pretty_assertions",
  "serde",
 ]

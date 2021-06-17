@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
@@ -14,8 +15,13 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::FunctionFactory;
+use lazy_static::lazy_static;
 
 use crate::PlanNode;
+
+lazy_static! {
+    static ref OP_SET: HashSet<&'static str> = ["database", "version",].iter().copied().collect();
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct ExpressionPlan {
@@ -90,11 +96,12 @@ impl Expression {
     pub fn column_name(&self) -> String {
         match self {
             Expression::Alias(name, _expr) => name.clone(),
-            Expression::ScalarFunction { op, args: _ } => match op.as_ref() {
-                "version" => "version()".to_string(),
-                "database" => "database()".to_string(),
-                _ => format!("{:?}", self),
-            },
+            Expression::ScalarFunction { op, .. } => {
+                match OP_SET.get(&op.to_lowercase().as_ref()) {
+                    Some(_) => format!("{}()", op),
+                    None => format!("{:?}", self),
+                }
+            }
             _ => format!("{:?}", self),
         }
     }
