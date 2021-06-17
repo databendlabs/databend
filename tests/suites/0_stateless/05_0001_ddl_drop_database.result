@@ -17,3 +17,4 @@ DROP DATABASE IF EXISTS db
 --------------
 DROP DATABASE db -- {ErrorCode 3}
 --------------
+

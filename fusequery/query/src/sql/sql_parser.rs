@@ -103,6 +103,7 @@ impl<'a> DfParser<'a> {
         let mut parser = DfParser::new_with_dialect(sql, dialect)?;
         loop {
             let token = parser.parser.next_token_no_skip();
+            println!("debug_p {:?}", token);
             match token {
                 Some(Token::Whitespace(Whitespace::SingleLineComment { comment, prefix })) => {
                     hints.push(DfHint::create_from_comment(comment, prefix));

@@ -91,7 +91,7 @@ impl PlanParser {
         let stmt_hints = DfParser::parse_sql(query);
         match stmt_hints {
             Ok((stmts, hints)) => match stmts.first() {
-                Some(stmt) => (self.statement_to_plan(stmt), hints.clone()),
+                Some(stmt) => (self.statement_to_plan(stmt), hints),
                 None => (
                     Result::Err(ErrorCode::SyntaxException("Only support single query")),
                     vec![],

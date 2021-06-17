@@ -26,6 +26,8 @@ CREATE DATABASE IF NOT EXISTS db ENGINE = Local
 --------------
 CREATE DATABASE db ENGINE = Local -- {ErrorCode 3}
 --------------
+
+--------------
 DROP DATABASE IF EXISTS db
 --------------
 

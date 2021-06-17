@@ -108,7 +108,7 @@ impl DfHint {
     pub fn parse_code(comment: &str) -> Option<u16> {
         let dialect = &GenericDialect {};
         let mut tokenizer = Tokenizer::new(dialect, comment);
-        let tokens = tokenizer.tokenize().unwrap_or(vec![]);
+        let tokens = tokenizer.tokenize().unwrap_or_default();
 
         let mut index = 0;
         let mut next_token = || -> Token {
@@ -125,15 +125,11 @@ impl DfHint {
             let token = next_token();
             match token {
                 Token::Word(w) if w.value == "ErrorCode" => {
-                    let token = next_token();
-                    match token {
-                        Token::Number(str, _) => {
-                            return match str.parse::<u16>() {
-                                Ok(code) => Some(code),
-                                _ => None,
-                            }
-                        }
-                        _ => {}
+                    if let Token::Number(str, _) = next_token() {
+                        return match str.parse::<u16>() {
+                            Ok(code) => Some(code),
+                            _ => None,
+                        };
                     }
                 }
                 Token::EOF => break,

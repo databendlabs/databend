@@ -151,7 +151,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
         let (plan, hints) = PlanParser::create(context.clone()).build_with_hint_from_sql(query);
 
-        let query_blocks = || -> Result<Vec<DataBlock>> {
+        let fetch_query_blocks = || -> Result<Vec<DataBlock>> {
             let query_plan = plan?;
             self.session
                 .get_status()
@@ -159,6 +159,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 .enter_interpreter(&query_plan);
             let interpreter = InterpreterFactory::get(context, query_plan)?;
             let data_stream = runtime.block_on(interpreter.execute())?;
+
             let (abort_handle, abort_stream) = AbortStream::try_create(data_stream)?;
             self.session
                 .get_status()
@@ -167,9 +168,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
             runtime.block_on(abort_stream.collect::<Result<Vec<DataBlock>>>())
         };
-
-        let blocks = query_blocks();
-
+        let blocks = fetch_query_blocks();
         match blocks {
             Ok(v) => Ok(v),
             Err(e) => {
@@ -196,7 +195,16 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     }
 
     fn do_init(&mut self, database_name: &str) -> Result<()> {
-        self.do_query(&format!("USE {}", database_name)).map(|_| ())
+        let context = self.session.try_create_context()?;
+        context
+            .get_datasource()
+            .get_database(database_name)
+            .map(|_| {
+                self.session
+                    .get_status()
+                    .lock()
+                    .update_database(database_name.to_string());
+            })
     }
 
     fn build_runtime() -> Result<tokio::runtime::Runtime> {
