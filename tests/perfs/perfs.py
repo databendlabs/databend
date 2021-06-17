@@ -25,11 +25,14 @@ def load_config():
 
 conf = load_config()
 
-def execute(suit, bin_path, host, port, output_dir):
+def execute(suit, bin_path, host, port, concurrency, iteration, output_dir):
     base_cfg = conf['config']
-
-    iterations = suit.get("iterations", base_cfg['iterations'])
-    concurrency = suit.get("concurrency", base_cfg['concurrency'])
+    if iteration == "" :
+        iterations = suit.get("iterations", base_cfg['iterations'])
+    else :
+        iterations = iteration
+    if concurrency == "":
+        concurrency = suit.get("concurrency", base_cfg['concurrency'])
 
     suit_name = re.sub(r"\s+", '-', suit['name'])
     json_path = os.path.join(output_dir, "{}-result.json".format(suit_name))
@@ -65,9 +68,12 @@ if __name__ == '__main__':
     parser = ArgumentParser(description='fuse perf tests')
     parser.add_argument('-o', '--output', default = ".",  help='Perf results directory')
     parser.add_argument('-b', '--bin', default = "fuse-benchmark",  help='Fuse benchmark binary')
-    parser.add_argument('--host', default = "127.0.0.1",  help='Server host')
-    parser.add_argument('-p', '--port', default = "9001",  help='Server port')
+    parser.add_argument('--host', default = "127.0.0.1",  help='Clickhouse handler Server host')
+    parser.add_argument('-p', '--port', default = "9001",  help='Clickhouse handler Server port')
+    parser.add_argument('-c', '--concurrency', default = "",  help='Set default concurrency for all perf tests')
+    parser.add_argument('-i', '--iteration', default = "",  help='Set default iteration number for each performance tests to run')
+
     args = parser.parse_args()
 
     for suit in conf['perfs']:
-        execute(suit, args.bin, args.host, args.port, args.output)
+        execute(suit, args.bin, args.host, args.port, args.concurrency, args.iteration, args.output)
