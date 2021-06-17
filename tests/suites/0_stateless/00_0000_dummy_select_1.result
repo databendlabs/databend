@@ -1,121 +1,16 @@
---------------
-SELECT 1
---------------
-
-+------+
-| 1    |
-+------+
-|    1 |
-+------+
---------------
-SELECT x
---------------
-
-ERROR 1105 (HY000) at line 2: Code: 1002, displayText = Invalid argument error: Unable to get field named "x". Valid fields: ["dummy"].
---------------
-SELECT 'a'
---------------
-
-+------+
-| a    |
-+------+
-| a    |
-+------+
---------------
-SELECT NOT(1=1)
---------------
-
-+---------------+
-| (NOT (1 = 1)) |
-+---------------+
-|         false |
-+---------------+
---------------
-SELECT NOT(1)
---------------
-
-+---------+
-| (NOT 1) |
-+---------+
-|   false |
-+---------+
---------------
-SELECT NOT(1=1) from numbers(3)
---------------
-
-+---------------+
-| (NOT (1 = 1)) |
-+---------------+
-|         false |
-|         false |
-|         false |
-+---------------+
---------------
-SELECT TRUE
---------------
-
-+------+
-| true |
-+------+
-| true |
-+------+
---------------
-SELECT FALSE
---------------
-
-+-------+
-| false |
-+-------+
-| false |
-+-------+
---------------
-SELECT NOT(TRUE)
---------------
-
-+------------+
-| (NOT true) |
-+------------+
-|      false |
-+------------+
---------------
-SELECT a.number FROM numbers(3) AS a order by a.number
---------------
-
-+--------+
-| number |
-+--------+
-|      0 |
-|      1 |
-|      2 |
-+--------+
---------------
-SELECT a.number FROM (SELECT * FROM numbers(3) AS b ORDER BY b.number) AS a
---------------
-
-+--------+
-| number |
-+--------+
-|      0 |
-|      1 |
-|      2 |
-+--------+
---------------
-SELECT b.number FROM numbers(3) AS a ORDER BY a.number
---------------
-
-ERROR 1105 (HY000) at line 12: Code: 25, displayText = Unknown Table '"b"'.
---------------
-SELECT a.number FROM numbers(3) AS a ORDER BY b.number
---------------
-
-ERROR 1105 (HY000) at line 13: Code: 25, displayText = Unknown Table '"b"'.
---------------
-SELECT b.number FROM (SELECT * FROM numbers(3) AS b ORDER BY a.number) AS a
---------------
-
-ERROR 1105 (HY000) at line 14: Code: 25, displayText = Unknown Table '"a"'.
---------------
-SELECT b.number FROM (SELECT * FROM numbers(3) AS b) AS a ORDER BY b.number
---------------
-
-ERROR 1105 (HY000) at line 15: Code: 25, displayText = Unknown Table '"b"'.
+1
+a
+false
+false
+false
+false
+false
+true
+false
+false
+0
+1
+2
+0
+1
+2

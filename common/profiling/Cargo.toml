@@ -12,4 +12,4 @@ common-exception = {path = "../exception"}
 
 # Crates.io dependencies
 pprof = { version = "0.4", features = ["flamegraph", "protobuf"] }
-tokio = { version = "1.6"}
+tokio = { version = "1.7"}

@@ -9,6 +9,7 @@ mod stream_datablock_test;
 mod stream_progress_test;
 
 mod stream;
+mod stream_abort;
 mod stream_datablock;
 mod stream_limit_by;
 mod stream_parquet;
@@ -18,6 +19,7 @@ mod stream_sort;
 mod stream_take;
 
 pub use stream::SendableDataBlockStream;
+pub use stream_abort::AbortStream;
 pub use stream_datablock::DataBlockStream;
 pub use stream_limit_by::LimitByStream;
 pub use stream_parquet::ParquetStream;

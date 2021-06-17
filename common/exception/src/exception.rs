@@ -12,6 +12,9 @@ use std::sync::Arc;
 use backtrace::Backtrace;
 use thiserror::Error;
 
+pub static ABORT_SESSION: u16 = 42;
+pub static ABORT_QUERY: u16 = 43;
+
 #[derive(Clone)]
 pub enum ErrorCodeBacktrace {
     Serialized(Arc<String>),
@@ -47,8 +50,17 @@ impl ErrorCode {
     pub fn message(&self) -> String {
         self.cause
             .as_ref()
-            .map(|cause| format!("{:?}", cause))
+            .map(|cause| format!("{}\n{:?}", self.display_text, cause))
             .unwrap_or_else(|| self.display_text.clone())
+    }
+
+    pub fn add_message(self, msg: String) -> Self {
+        Self {
+            code: self.code(),
+            display_text: format!("{}\n{}", msg, self.display_text),
+            cause: self.cause,
+            backtrace: self.backtrace,
+        }
     }
 
     pub fn backtrace(&self) -> Option<ErrorCodeBacktrace> {
@@ -128,6 +140,11 @@ build_exceptions! {
     DnsParseError(37),
     CannotConnectNode(38),
     DuplicateGetStream(39),
+    Timeout(40),
+    TooManyUserConnections(41),
+    AbortedSession(ABORT_SESSION),
+    AbortedQuery(ABORT_QUERY),
+    NotFoundSession(44),
 
     UnknownException(1000),
     TokioError(1001)
