@@ -47,7 +47,7 @@ def remove_control_characters(s):
     return s
 
 
-def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_file):
+def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_file, result_file):
 
     # print(client_options)
 
@@ -57,6 +57,7 @@ def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_fi
         'test': case_file,
         'stdout': stdout_file,
         'stderr': stderr_file,
+        "result": result_file,
     }
 
     pattern = "sed '/^\s*--/d' {test} | {client} {options} > {stdout} 2>&1"
@@ -76,6 +77,10 @@ def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_fi
     stdout = str(stdout, errors='replace', encoding='utf-8')
     stderr = open(stderr_file, 'rb').read() if os.path.exists(stderr_file) else b''
     stderr = str(stderr, errors='replace', encoding='utf-8')
+
+    if proc.returncode == 0 and args.record == 1:
+        os.system("LC_ALL=C cp {stdout} {result}".format(stdout=stdout_file, result=result_file))
+
     return proc, stdout, stderr, total_time
 
 
@@ -198,7 +203,7 @@ def run_tests_array(all_tests_with_params):
                     if args.mode == 'cluster' and os.path.isfile(cluster_result_file):
                         result_file = cluster_result_file
 
-                    proc, stdout, stderr, total_time = run_single_test(args, ext, client_options, case_file, stdout_file, stderr_file)
+                    proc, stdout, stderr, total_time = run_single_test(args, ext, client_options, case_file, stdout_file, stderr_file, result_file)
 
                     if proc.returncode is None:
                         try:
@@ -216,7 +221,7 @@ def run_tests_array(all_tests_with_params):
                     else:
                         counter = 1
                         while proc.returncode != 0 and need_retry(stderr):
-                            proc, stdout, stderr, total_time = run_single_test(args, ext, client_options, case_file, stdout_file, stderr_file)
+                            proc, stdout, stderr, total_time = run_single_test(args, ext, client_options, case_file, stdout_file, stderr_file, result_file)
                             sleep(2**counter)
                             counter += 1
                             if counter > 6:
@@ -433,9 +438,10 @@ if __name__ == '__main__':
     parser.add_argument('-q', '--suites', help='Path to suites dir')
     parser.add_argument('-b', '--binary', default='fuse-query', help='Path to fuse-query binary or name of binary in PATH')
     parser.add_argument('-c', '--client', default='mysql -uroot -h127.0.0.1 -P3307 -s ', help='Client program')
-    parser.add_argument('-opt', '--options', default=' -v -t --comments --force ', help="Client program options")
+    parser.add_argument('-opt', '--options', default=' --comments --force ', help="Client program options")
     parser.add_argument('--tmp', help='Path to tmp dir')
     parser.add_argument('-t', '--timeout', type=int, default=600, help='Timeout for each test case in seconds')
+    parser.add_argument('--record', type=int, default = 0, help="Force override result files from stdout files")
     parser.add_argument('test', nargs='*', help='Optional test case name regex')
     parser.add_argument('--test-runs', default=1, nargs='?', type=int, help='Run each test many times (useful for e.g. flaky check)')
     parser.add_argument('-d', '--disabled', action='store_true', default=False, help='Also run disabled tests')

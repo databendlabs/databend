@@ -1,10 +1,2 @@
 ERROR 1105 (HY000) at line 1: Code: 3, displayText = Unknown database: 'not_exists_db'.
---------------
-select database()
---------------
-
-+------------------+
-| database(system) |
-+------------------+
-| system           |
-+------------------+
+system
