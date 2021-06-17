@@ -1,51 +1,11 @@
---------------
-SELECT max(number) FROM numbers_mt(0) GROUP BY number % 4
---------------
-
---------------
-SELECT max(number) FROM numbers_mt (10) WHERE number > 99999999998 GROUP BY number % 3
---------------
-
---------------
-SELECT avg(number), max(number+1)+1 FROM numbers_mt(10000) where number > 2 GROUP BY 1
---------------
-
-+-------------+-------------------------+
-| avg(number) | (max((number + 1)) + 1) |
-+-------------+-------------------------+
-|        5001 |                   10001 |
-+-------------+-------------------------+
---------------
-SELECT number%3 as c1, number%2 as c2 FROM numbers_mt(10000) where number > 2 group by number%3, number%2 order by c1,c2
---------------
-
-+------+------+
-| c1   | c2   |
-+------+------+
-|    0 |    0 |
-|    0 |    1 |
-|    1 |    0 |
-|    1 |    1 |
-|    2 |    0 |
-|    2 |    1 |
-+------+------+
---------------
-SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number%3 order by c1
---------------
-
-+------+
-| c1   |
-+------+
-|    0 |
-|    1 |
-|    2 |
-+------+
---------------
-SELECT 'NOT in GROUP BY function check'
---------------
-
-+--------------------------------+
-| NOT in GROUP BY function check |
-+--------------------------------+
-| NOT in GROUP BY function check |
-+--------------------------------+
+5001	10001
+0	0
+0	1
+1	0
+1	1
+2	0
+2	1
+0
+1
+2
+NOT in GROUP BY function check

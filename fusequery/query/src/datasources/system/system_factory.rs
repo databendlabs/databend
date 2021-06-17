@@ -7,7 +7,7 @@ use std::sync::Arc;
 use common_exception::Result;
 
 use crate::datasources::system::SystemDatabase;
-use crate::datasources::IDatabase;
+use crate::datasources::Database;
 
 pub struct SystemFactory;
 
@@ -16,8 +16,8 @@ impl SystemFactory {
         Self
     }
 
-    pub fn load_databases(&self) -> Result<Vec<Arc<dyn IDatabase>>> {
-        let databases: Vec<Arc<dyn IDatabase>> = vec![Arc::new(SystemDatabase::create())];
+    pub fn load_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
+        let databases: Vec<Arc<dyn Database>> = vec![Arc::new(SystemDatabase::create())];
         Ok(databases)
     }
 }

@@ -15,9 +15,9 @@ SELECT DATABASE()
 
 ```
 mysql> SELECT DATABASE();
-+-------------------+
-| DATABASE(default) |
-+-------------------+
-| default           |
-+-------------------+
++------------+
+| DATABASE() |
++------------+
+| default    |
++------------+
 ```

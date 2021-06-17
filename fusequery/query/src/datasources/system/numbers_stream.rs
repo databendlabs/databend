@@ -56,7 +56,7 @@ impl NumbersStream {
                 return Ok(None);
             }
 
-            let block_size = self.ctx.get_max_block_size()?;
+            let block_size = self.ctx.get_settings().get_max_block_size()?;
             let mut blocks = Vec::with_capacity(partitions.len());
             println!("partitions={:?}", partitions);
             for part in partitions {

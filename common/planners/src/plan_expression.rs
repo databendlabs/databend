@@ -2,11 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
+use common_aggregate_functions::AggregateFunction;
 use common_aggregate_functions::AggregateFunctionFactory;
-use common_aggregate_functions::IAggregateFunction;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
@@ -14,8 +15,13 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::FunctionFactory;
+use lazy_static::lazy_static;
 
 use crate::PlanNode;
+
+lazy_static! {
+    static ref OP_SET: HashSet<&'static str> = ["database", "version",].iter().copied().collect();
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct ExpressionPlan {
@@ -91,6 +97,12 @@ impl Expression {
     pub fn column_name(&self) -> String {
         match self {
             Expression::Alias(name, _expr) => name.clone(),
+            Expression::ScalarFunction { op, .. } => {
+                match OP_SET.get(&op.to_lowercase().as_ref()) {
+                    Some(_) => format!("{}()", op),
+                    None => format!("{:?}", self),
+                }
+            }
             _ => format!("{:?}", self),
         }
     }
@@ -152,7 +164,7 @@ impl Expression {
     pub fn to_aggregate_function(
         &self,
         schema: &DataSchemaRef,
-    ) -> Result<Box<dyn IAggregateFunction>> {
+    ) -> Result<Box<dyn AggregateFunction>> {
         match self {
             Expression::AggregateFunction { op, distinct, args } => {
                 let mut func_name = op.clone();

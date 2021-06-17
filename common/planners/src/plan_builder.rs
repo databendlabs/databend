@@ -148,7 +148,7 @@ impl PlanBuilder {
                     aggr_expr: aggr_expr.to_vec(),
                     group_expr: group_expr.to_vec(),
                     schema: DataSchemaRefExt::create(final_fields),
-                    schema_before_groupby,
+                    schema_before_group_by: schema_before_groupby,
                 }))
             }
         })
@@ -171,13 +171,13 @@ impl PlanBuilder {
     /// Apply a final aggregator plan.
     pub fn aggregate_final(
         &self,
-        schema_before_groupby: DataSchemaRef,
+        schema_before_group_by: DataSchemaRef,
         aggr_expr: &[Expression],
         group_expr: &[Expression],
     ) -> Result<Self> {
         self.aggregate(
             AggregateMode::Final,
-            schema_before_groupby,
+            schema_before_group_by,
             aggr_expr,
             group_expr,
         )

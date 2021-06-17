@@ -16,10 +16,10 @@ use crate::hashes::HashesFunction;
 use crate::logics::LogicFunction;
 use crate::strings::StringFunction;
 use crate::udfs::UdfFunction;
-use crate::IFunction;
+use crate::Function;
 
 pub struct FunctionFactory;
-pub type FactoryFunc = fn(name: &str) -> Result<Box<dyn IFunction>>;
+pub type FactoryFunc = fn(name: &str) -> Result<Box<dyn Function>>;
 
 pub type FactoryFuncRef = Arc<RwLock<IndexMap<&'static str, FactoryFunc>>>;
 
@@ -37,7 +37,7 @@ lazy_static! {
 }
 
 impl FunctionFactory {
-    pub fn get(name: &str) -> Result<Box<dyn IFunction>> {
+    pub fn get(name: &str) -> Result<Box<dyn Function>> {
         let map = FACTORY.read();
         let creator = map
             .get(&*name.to_lowercase())

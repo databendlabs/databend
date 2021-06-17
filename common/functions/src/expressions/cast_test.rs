@@ -21,7 +21,7 @@ fn test_cast_function() -> Result<()> {
         cast_type: DataType,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>,
+        func: Box<dyn Function>,
     }
 
     let tests = vec![

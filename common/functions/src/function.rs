@@ -10,7 +10,7 @@ use common_datavalues::DataType;
 use common_exception::Result;
 use dyn_clone::DynClone;
 
-pub trait IFunction: fmt::Display + Sync + Send + DynClone {
+pub trait Function: fmt::Display + Sync + Send + DynClone {
     fn name(&self) -> &str;
 
     fn num_arguments(&self) -> usize {

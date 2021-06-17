@@ -20,9 +20,9 @@ use common_tracing::tracing;
 use futures::TryStreamExt;
 
 use crate::interpreters::plan_scheduler::PlanScheduler;
-use crate::interpreters::IInterpreter;
+use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::optimizers::Optimizer;
+use crate::optimizers::Optimizers;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
 
@@ -71,7 +71,7 @@ async fn execute_one_select(
         Result::Err(error)
     };
 
-    let timeout = ctx.get_flight_client_timeout()?;
+    let timeout = ctx.get_settings().get_flight_client_timeout()?;
     for (index, (node, action)) in scheduled_actions.remote_actions.iter().enumerate() {
         let mut flight_client = node.get_flight_client().await?;
         if let Err(error) = flight_client
@@ -93,7 +93,7 @@ async fn execute_one_select(
 }
 
 #[async_trait::async_trait]
-impl IInterpreter for SelectInterpreter {
+impl Interpreter for SelectInterpreter {
     fn name(&self) -> &str {
         "SelectInterpreter"
     }
@@ -104,7 +104,7 @@ impl IInterpreter for SelectInterpreter {
 
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let plan = Optimizer::create(self.ctx.clone()).optimize(&self.select.input)?;
+        let plan = Optimizers::create(self.ctx.clone()).optimize(&self.select.input)?;
         // Subquery Plan Name : Exists Expression Name
         let mut names = HashMap::<String, String>::new();
         // The execution order is from the bottom to the top

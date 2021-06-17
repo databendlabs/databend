@@ -304,6 +304,11 @@ async fn test_meta_node_write() -> anyhow::Result<()> {
         assert_get_file(all.clone(), &key, &key).await?;
     }
 
+    mn0.stop().await?;
+    mn1.stop().await?;
+    mn2.stop().await?;
+    mn3.stop().await?;
+
     Ok(())
 }
 
@@ -337,6 +342,9 @@ async fn test_meta_node_3_members() -> anyhow::Result<()> {
 
     assert_set_file_synced(vec![mn0.clone(), mn1.clone(), mn2.clone()], "foo-2").await?;
 
+    mn0.stop().await?;
+    mn1.stop().await?;
+    mn2.stop().await?;
     Ok(())
 }
 

@@ -22,12 +22,12 @@ use common_tracing::tracing;
 use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::ExpressionExecutor;
 
 pub struct FilterTransform {
     exists_map: HashMap<String, bool>,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn Processor>,
     executor: Arc<ExpressionExecutor>,
     predicate: Expression,
     having: bool,
@@ -63,7 +63,7 @@ impl FilterTransform {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for FilterTransform {
+impl Processor for FilterTransform {
     fn name(&self) -> &str {
         if self.having {
             return "HavingTransform";
@@ -71,12 +71,12 @@ impl IProcessor for FilterTransform {
         "FilterTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![self.input.clone()]
     }
 

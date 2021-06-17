@@ -20,7 +20,7 @@ fn test_version_function() -> anyhow::Result<()> {
         columns: Vec<DataColumnarValue>,
         expect: DataArrayRef,
         error: &'static str,
-        func: Box<dyn IFunction>,
+        func: Box<dyn Function>,
     }
 
     let tests = vec![Test {

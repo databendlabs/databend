@@ -15,12 +15,12 @@ use common_tracing::tracing;
 use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::ExpressionExecutor;
 
 pub struct ProjectionTransform {
     executor: Arc<ExpressionExecutor>,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn Processor>,
 }
 
 impl ProjectionTransform {
@@ -45,17 +45,17 @@ impl ProjectionTransform {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for ProjectionTransform {
+impl Processor for ProjectionTransform {
     fn name(&self) -> &str {
         "ProjectionTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![self.input.clone()]
     }
 

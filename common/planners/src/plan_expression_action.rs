@@ -2,16 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_aggregate_functions::AggregateFunction;
 use common_aggregate_functions::AggregateFunctionFactory;
-use common_aggregate_functions::IAggregateFunction;
 use common_datavalues::DataField;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::CastFunction;
+use common_functions::Function;
 use common_functions::FunctionFactory;
-use common_functions::IFunction;
 
 #[derive(Debug, Clone)]
 pub enum ExpressionAction {
@@ -77,7 +77,7 @@ impl ExpressionAction {
 }
 
 impl ActionFunction {
-    pub fn to_function(&self) -> Result<Box<dyn IFunction>> {
+    pub fn to_function(&self) -> Result<Box<dyn Function>> {
         if self.is_aggregated {
             return Err(ErrorCode::LogicalError(
                 "Action must be non-aggregated function",
@@ -90,7 +90,7 @@ impl ActionFunction {
         }
     }
 
-    pub fn to_aggregate_function(&self) -> Result<Box<dyn IAggregateFunction>> {
+    pub fn to_aggregate_function(&self) -> Result<Box<dyn AggregateFunction>> {
         if !self.is_aggregated {
             return Err(ErrorCode::LogicalError(
                 "Action must be aggregated function",

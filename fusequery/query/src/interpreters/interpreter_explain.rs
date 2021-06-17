@@ -18,9 +18,9 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use log::debug;
 
-use crate::interpreters::IInterpreter;
+use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::optimizers::Optimizer;
+use crate::optimizers::Optimizers;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
 
@@ -36,7 +36,7 @@ impl ExplainInterpreter {
 }
 
 #[async_trait::async_trait]
-impl IInterpreter for ExplainInterpreter {
+impl Interpreter for ExplainInterpreter {
     fn name(&self) -> &str {
         "ExplainInterpreter"
     }
@@ -45,7 +45,7 @@ impl IInterpreter for ExplainInterpreter {
         let schema =
             DataSchemaRefExt::create(vec![DataField::new("explain", DataType::Utf8, false)]);
 
-        let plan = Optimizer::create(self.ctx.clone()).optimize(&self.explain.input)?;
+        let plan = Optimizers::create(self.ctx.clone()).optimize(&self.explain.input)?;
         let result = match self.explain.typ {
             ExplainType::Graph => {
                 format!("{}", plan.display_graphviz())

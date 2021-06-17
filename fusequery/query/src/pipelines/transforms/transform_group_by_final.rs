@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_aggregate_functions::IAggregateFunction;
+use common_aggregate_functions::AggregateFunction;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
 use common_datavalues::DataSchemaRef;
@@ -21,11 +21,10 @@ use common_tracing::tracing;
 use futures::stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 
 // Table for <group_key, indices>
-type GroupFuncTable =
-    RwLock<HashMap<Vec<u8>, Vec<Box<dyn IAggregateFunction>>, ahash::RandomState>>;
+type GroupFuncTable = RwLock<HashMap<Vec<u8>, Vec<Box<dyn AggregateFunction>>, ahash::RandomState>>;
 
 // Group Key ==> Group by values
 type GroupKeyTable = RwLock<HashMap<Vec<u8>, Vec<DataValue>>>;
@@ -34,8 +33,8 @@ pub struct GroupByFinalTransform {
     aggr_exprs: Vec<Expression>,
     group_exprs: Vec<Expression>,
     schema: DataSchemaRef,
-    schema_before_groupby: DataSchemaRef,
-    input: Arc<dyn IProcessor>,
+    schema_before_group_by: DataSchemaRef,
+    input: Arc<dyn Processor>,
     groups: GroupFuncTable,
     keys: GroupKeyTable,
 }
@@ -43,7 +42,7 @@ pub struct GroupByFinalTransform {
 impl GroupByFinalTransform {
     pub fn create(
         schema: DataSchemaRef,
-        schema_before_groupby: DataSchemaRef,
+        schema_before_group_by: DataSchemaRef,
         aggr_exprs: Vec<Expression>,
         group_exprs: Vec<Expression>,
     ) -> Self {
@@ -51,7 +50,7 @@ impl GroupByFinalTransform {
             aggr_exprs,
             group_exprs,
             schema,
-            schema_before_groupby,
+            schema_before_group_by,
             input: Arc::new(EmptyProcessor::create()),
             groups: RwLock::new(HashMap::default()),
             keys: RwLock::new(HashMap::default()),
@@ -60,17 +59,17 @@ impl GroupByFinalTransform {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for GroupByFinalTransform {
+impl Processor for GroupByFinalTransform {
     fn name(&self) -> &str {
         "GroupByFinalTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![self.input.clone()]
     }
 
@@ -83,7 +82,7 @@ impl IProcessor for GroupByFinalTransform {
         let aggr_funcs = self
             .aggr_exprs
             .iter()
-            .map(|x| x.to_aggregate_function(&self.schema_before_groupby))
+            .map(|x| x.to_aggregate_function(&self.schema_before_group_by))
             .collect::<Result<Vec<_>>>()?;
 
         let aggr_funcs_len = aggr_funcs.len();

@@ -51,7 +51,7 @@ use sqlparser::ast::Query;
 use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 
-use crate::datasources::ITable;
+use crate::datasources::Table;
 use crate::functions::ContextFunction;
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
@@ -60,6 +60,7 @@ use crate::sql::sql_statement::DfUseDatabase;
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
+use crate::sql::DfHint;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 use crate::sql::SQLCommon;
@@ -75,14 +76,29 @@ impl PlanParser {
 
     pub fn build_from_sql(&self, query: &str) -> Result<PlanNode> {
         tracing::debug!(query);
-        DfParser::parse_sql(query).and_then(|statement| {
-            statement
+        DfParser::parse_sql(query).and_then(|(stmts, _)| {
+            stmts
                 .first()
                 .map(|statement| self.statement_to_plan(&statement))
                 .unwrap_or_else(|| {
                     Result::Err(ErrorCode::SyntaxException("Only support single query"))
                 })
         })
+    }
+
+    pub fn build_with_hint_from_sql(&self, query: &str) -> (Result<PlanNode>, Vec<DfHint>) {
+        tracing::debug!(query);
+        let stmt_hints = DfParser::parse_sql(query);
+        match stmt_hints {
+            Ok((stmts, hints)) => match stmts.first() {
+                Some(stmt) => (self.statement_to_plan(stmt), hints),
+                None => (
+                    Result::Err(ErrorCode::SyntaxException("Only support single query")),
+                    vec![],
+                ),
+            },
+            Err(e) => (Err(e), vec![]),
+        }
     }
 
     pub fn statement_to_plan(&self, statement: &DfStatement) -> Result<PlanNode> {
@@ -574,10 +590,8 @@ impl PlanParser {
     }
 
     fn create_relation(&self, relation: &sqlparser::ast::TableFactor) -> Result<PlanNode> {
-        use sqlparser::ast::TableFactor::*;
-
         match relation {
-            Table { name, args, .. } => {
+            TableFactor::Table { name, args, .. } => {
                 let mut db_name = self.ctx.get_current_database();
                 let mut table_name = name.to_string();
                 if name.0.len() == 2 {
@@ -585,7 +599,7 @@ impl PlanParser {
                     table_name = name.0[1].to_string();
                 }
                 let mut table_args = None;
-                let table: Arc<dyn ITable>;
+                let table: Arc<dyn Table>;
 
                 // only table functions has table args
                 if !args.is_empty() {
@@ -637,9 +651,11 @@ impl PlanParser {
                     _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan"),
                 })
             }
-            Derived { subquery, .. } => self.query_to_plan(subquery),
-            NestedJoin(table_with_joins) => self.plan_table_with_joins(table_with_joins),
-            TableFunction { .. } => {
+            TableFactor::Derived { subquery, .. } => self.query_to_plan(subquery),
+            TableFactor::NestedJoin(table_with_joins) => {
+                self.plan_table_with_joins(table_with_joins)
+            }
+            TableFactor::TableFunction { .. } => {
                 Result::Err(ErrorCode::UnImplement("Unsupported table function"))
             }
         }

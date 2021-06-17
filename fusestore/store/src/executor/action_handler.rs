@@ -41,7 +41,7 @@ use tonic::Streaming;
 
 use crate::data_part::appender::Appender;
 use crate::engine::MemEngine;
-use crate::fs::IFileSystem;
+use crate::fs::FileSystem;
 use crate::protobuf::CmdCreateDatabase;
 use crate::protobuf::CmdCreateTable;
 use crate::protobuf::Db;
@@ -49,14 +49,14 @@ use crate::protobuf::Table;
 
 pub struct ActionHandler {
     meta: Arc<Mutex<MemEngine>>,
-    fs: Arc<dyn IFileSystem>,
+    fs: Arc<dyn FileSystem>,
 }
 
 type DoGetStream =
     Pin<Box<dyn Stream<Item = Result<FlightData, tonic::Status>> + Send + Sync + 'static>>;
 
 impl ActionHandler {
-    pub fn create(fs: Arc<dyn IFileSystem>) -> Self {
+    pub fn create(fs: Arc<dyn FileSystem>) -> Self {
         ActionHandler {
             meta: MemEngine::create(),
             fs,

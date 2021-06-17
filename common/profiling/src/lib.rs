@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-mod result_ext;
+mod profling;
 
-pub use result_ext::ResultExt;
-pub use result_ext::ResultTupleExt;
+pub use profling::Profiling;

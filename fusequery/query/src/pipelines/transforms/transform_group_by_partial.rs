@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_aggregate_functions::IAggregateFunction;
+use common_aggregate_functions::AggregateFunction;
 use common_arrow::arrow::array::BinaryBuilder;
 use common_arrow::arrow::array::StringBuilder;
 use common_datablocks::DataBlock;
@@ -25,14 +25,14 @@ use common_tracing::tracing;
 use futures::stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 
 // Table for <group_key, ((function, column_name, args), keys) >
 type GroupFuncTable = RwLock<
     HashMap<
         Vec<u8>,
         (
-            Vec<(Box<dyn IAggregateFunction>, String, Vec<String>)>,
+            Vec<(Box<dyn AggregateFunction>, String, Vec<String>)>,
             Vec<DataValue>,
         ),
         ahash::RandomState,
@@ -43,15 +43,15 @@ pub struct GroupByPartialTransform {
     aggr_exprs: Vec<Expression>,
     group_exprs: Vec<Expression>,
     schema: DataSchemaRef,
-    schema_before_groupby: DataSchemaRef,
-    input: Arc<dyn IProcessor>,
+    schema_before_group_by: DataSchemaRef,
+    input: Arc<dyn Processor>,
     groups: GroupFuncTable,
 }
 
 impl GroupByPartialTransform {
     pub fn create(
         schema: DataSchemaRef,
-        schema_before_groupby: DataSchemaRef,
+        schema_before_group_by: DataSchemaRef,
         aggr_exprs: Vec<Expression>,
         group_exprs: Vec<Expression>,
     ) -> Self {
@@ -59,7 +59,7 @@ impl GroupByPartialTransform {
             aggr_exprs,
             group_exprs,
             schema,
-            schema_before_groupby,
+            schema_before_group_by,
             input: Arc::new(EmptyProcessor::create()),
             groups: RwLock::new(HashMap::default()),
         }
@@ -67,17 +67,17 @@ impl GroupByPartialTransform {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for GroupByPartialTransform {
+impl Processor for GroupByPartialTransform {
     fn name(&self) -> &str {
         "GroupByPartialTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![self.input.clone()]
     }
 
@@ -118,7 +118,7 @@ impl IProcessor for GroupByPartialTransform {
         tracing::debug!("execute...");
         let aggr_len = self.aggr_exprs.len();
         let start = Instant::now();
-        let schema_before_groupby = self.schema_before_groupby.clone();
+        let schema_before_group_by = self.schema_before_group_by.clone();
 
         let mut stream = self.input.execute().await?;
 
@@ -144,7 +144,7 @@ impl IProcessor for GroupByPartialTransform {
                             let mut aggr_funcs = vec![];
                             for expr in &self.aggr_exprs {
                                 let mut func =
-                                    expr.to_aggregate_function(&schema_before_groupby)?;
+                                    expr.to_aggregate_function(&schema_before_group_by)?;
                                 let name = expr.column_name();
                                 let args = expr.to_aggregate_function_names()?;
                                 let arg_columns = args
