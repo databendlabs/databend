@@ -59,7 +59,7 @@ def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_fi
         'stderr': stderr_file,
     }
 
-    pattern = "cat {test} | sed '/^\s*--/d' | {client} {options} > {stdout} 2>&1"
+    pattern = "sed '/^\s*--/d' {test} | {client} {options} > {stdout} 2>&1"
     command = pattern.format(**params)
     # print(command)
 

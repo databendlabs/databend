@@ -1,4 +1,8 @@
 --------------
+DROP DATABASE IF EXISTS db
+--------------
+
+--------------
 CREATE DATABASE db ENGINE = Local
 --------------
 
@@ -13,4 +17,3 @@ DROP DATABASE IF EXISTS db
 --------------
 DROP DATABASE db -- {ErrorCode 3}
 --------------
-

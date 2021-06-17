@@ -1,4 +1,8 @@
 --------------
+DROP TABLE IF EXISTS t
+--------------
+
+--------------
 CREATE TABLE t(c1 int) ENGINE = Null
 --------------
 
@@ -18,4 +22,3 @@ CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = Null
 --------------
 CREATE TABLE t(c1 int) ENGINE = Null -- {ErrorCode 2}
 --------------
-
