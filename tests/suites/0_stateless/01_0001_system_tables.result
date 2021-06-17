@@ -1,9 +1,1 @@
---------------
-SELECT * from system.tables where name = 'tables'
---------------
-
-+----------+--------+--------------+
-| database | name   | engine       |
-+----------+--------+--------------+
-| system   | tables | SystemTables |
-+----------+--------+--------------+
+system	tables	SystemTables

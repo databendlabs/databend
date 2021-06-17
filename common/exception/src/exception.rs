@@ -50,8 +50,17 @@ impl ErrorCode {
     pub fn message(&self) -> String {
         self.cause
             .as_ref()
-            .map(|cause| format!("{:?}", cause))
+            .map(|cause| format!("{}\n{:?}", self.display_text, cause))
             .unwrap_or_else(|| self.display_text.clone())
+    }
+
+    pub fn add_message(self, msg: String) -> Self {
+        Self {
+            code: self.code(),
+            display_text: format!("{}\n{}", msg, self.display_text),
+            cause: self.cause,
+            backtrace: self.backtrace,
+        }
     }
 
     pub fn backtrace(&self) -> Option<ErrorCodeBacktrace> {
