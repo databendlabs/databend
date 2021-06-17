@@ -39,6 +39,9 @@ lint:
 docker:
 	docker build --network host -f docker/Dockerfile -t ${HUB}/fuse-query:${TAG} .
 
+perf-tool:
+	docker build --network host -f docker/perf-tool/Dockerfile -t ${HUB}/perf-tool:${TAG} .
+
 run-helm:
 	helm upgrade --install datafuse ./charts/datafuse \
 		--set image.repository=${HUB}/fuse-query --set image.tag=${TAG} --set configs.mysqlPort=3308
