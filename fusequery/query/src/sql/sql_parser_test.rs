@@ -221,26 +221,26 @@ mod tests {
     fn hint_test() -> Result<()> {
         {
             let comment = " { ErrorCode  1002 }";
-            let expected = DfHint::parse_code(comment);
-            assert_eq!(expected, Some(1002));
+            let expected = DfHint::create_from_comment(comment, "--");
+            assert_eq!(expected.error_code, Some(1002));
         }
 
         {
             let comment = " { ErrorCode 22}";
-            let expected = DfHint::parse_code(comment);
-            assert_eq!(expected, Some(22));
+            let expected = DfHint::create_from_comment(comment, "--");
+            assert_eq!(expected.error_code, Some(22));
         }
 
         {
             let comment = " { ErrorCode: 22}";
-            let expected = DfHint::parse_code(comment);
-            assert_eq!(expected, None);
+            let expected = DfHint::create_from_comment(comment, "--");
+            assert_eq!(expected.error_code, None);
         }
 
         {
             let comment = " { Errorcode 22}";
-            let expected = DfHint::parse_code(comment);
-            assert_eq!(expected, None);
+            let expected = DfHint::create_from_comment(comment, "--");
+            assert_eq!(expected.error_code, None);
         }
 
         Ok(())

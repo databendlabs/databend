@@ -30,10 +30,10 @@ async fn test_use_database_with_on_query() -> Result<()> {
 
     let runnable_server = handler.start(("0.0.0.0".to_string(), 0_u16)).await?;
     let mut connection = create_connection(runnable_server.port())?;
-    let received_data: Vec<(String)> = query(&mut connection, "SELECT database()")?;
+    let received_data: Vec<String> = query(&mut connection, "SELECT database()")?;
     assert_eq!(received_data, vec!["default"]);
     query::<EmptyRow>(&mut connection, "USE system")?;
-    let received_data: Vec<(String)> = query(&mut connection, "SELECT database()")?;
+    let received_data: Vec<String> = query(&mut connection, "SELECT database()")?;
     assert_eq!(received_data, vec!["system"]);
 
     Ok(())
@@ -47,7 +47,7 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
 
     {
         // Accepted connection
-        let mut conn = create_connection(listener_addr.port())?;
+        let conn = create_connection(listener_addr.port())?;
 
         // Rejected connection
         match create_connection(listener_addr.port()) {
