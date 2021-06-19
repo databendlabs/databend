@@ -14,6 +14,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_infallible::Mutex;
+use futures::FutureExt;
 use tokio::sync::oneshot::Sender;
 use tokio::sync::Notify;
 
@@ -23,7 +24,6 @@ use crate::configs::Config;
 use crate::servers::AbortableServer;
 use crate::servers::AbortableService;
 use crate::servers::Elapsed;
-use futures::FutureExt;
 
 pub struct HttpService {
     cfg: Config,
