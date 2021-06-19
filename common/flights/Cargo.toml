@@ -13,6 +13,7 @@ common-datablocks= {path = "../datablocks"}
 common-datavalues = {path = "../datavalues"}
 common-exception= {path = "../exception"}
 common-planners = {path = "../planners"}
+common-runtime = {path = "../runtime"}
 common-streams = {path = "../streams"}
 
 # Github dependencies
@@ -29,7 +30,6 @@ tokio-stream = "0.1"
 tonic = "0.4.3"
 hyper = "0.14.9"
 lazy_static = "1.4.0"
-tokio = { version = "1.7", features = ["macros", "rt","rt-multi-thread", "sync"] }
 trust-dns-resolver = { version = "0.20.3", features = ["system-config"] }
 
 [dev-dependencies]

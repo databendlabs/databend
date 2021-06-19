@@ -8,9 +8,9 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_runtime::tokio::sync::mpsc;
 use common_streams::SendableDataBlockStream;
 use log::error;
-use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 

@@ -13,12 +13,13 @@ use std::time::Duration;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_runtime::tokio;
+use common_runtime::tokio::task::JoinHandle;
 use hyper::client::connect::dns::Name;
 use hyper::client::HttpConnector;
 use hyper::service::Service;
 use hyper::Uri;
 use lazy_static::lazy_static;
-use tokio::task::JoinHandle;
 use tonic::transport::Channel;
 use trust_dns_resolver::TokioAsyncResolver;
 

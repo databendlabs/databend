@@ -13,12 +13,13 @@ use std::time::Instant;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
+use common_runtime::tokio;
+use common_runtime::tokio::net::TcpStream;
 use common_runtime::Runtime;
 use futures::future::AbortHandle;
 use futures::future::AbortRegistration;
 use futures::future::Abortable;
 use msql_srv::*;
-use tokio::net::TcpStream;
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_stream::StreamExt as OtherStreamExt;
 

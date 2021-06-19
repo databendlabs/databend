@@ -8,8 +8,9 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
-use tokio::sync::mpsc::channel;
-use tokio::sync::mpsc::Sender;
+use common_runtime::tokio;
+use common_runtime::tokio::sync::mpsc::channel;
+use common_runtime::tokio::sync::mpsc::Sender;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_data_stream::FlightDataStream;

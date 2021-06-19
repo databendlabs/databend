@@ -2,15 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_datavalues::*;
+use common_planners::*;
+use common_runtime::tokio;
+use futures::TryStreamExt;
+
+use crate::datasources::system::*;
+use crate::datasources::*;
+
 #[tokio::test]
 async fn test_number_table() -> anyhow::Result<()> {
-    use common_datavalues::*;
-    use common_planners::*;
-    use futures::TryStreamExt;
-
-    use crate::datasources::system::*;
-    use crate::datasources::*;
-
     let ctx = crate::tests::try_create_context()?;
     let table = NumbersTable::create("numbers_mt");
 

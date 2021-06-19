@@ -15,8 +15,8 @@ use common_planners::Statistics;
 use common_progress::Progress;
 use common_progress::ProgressCallback;
 use common_progress::ProgressValues;
+use common_runtime::tokio::task::JoinHandle;
 use common_runtime::Runtime;
-use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 use crate::clusters::Cluster;

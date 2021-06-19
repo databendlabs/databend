@@ -9,6 +9,7 @@ use std::time::Instant;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_runtime::tokio;
 use mysql::prelude::Queryable;
 
 use crate::clusters::Cluster;

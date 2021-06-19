@@ -4,6 +4,7 @@
 //
 
 use common_exception::Result;
+use common_runtime::tokio;
 
 use crate::DNSResolver;
 

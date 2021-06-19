@@ -6,11 +6,12 @@ use std::sync::Arc;
 
 use async_raft::RaftMetrics;
 use async_raft::State;
+use common_runtime::tokio;
+use common_runtime::tokio::sync::watch::Receiver;
+use common_runtime::tokio::time::Duration;
 use common_tracing::tracing;
 use maplit::hashset;
 use pretty_assertions::assert_eq;
-use tokio::sync::watch::Receiver;
-use tokio::time::Duration;
 
 use crate::meta_service::raftmeta::RetryableError;
 use crate::meta_service::ClientRequest;

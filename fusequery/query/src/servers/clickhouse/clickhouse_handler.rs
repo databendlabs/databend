@@ -14,11 +14,12 @@ use clickhouse_srv::types::Block as ClickHouseBlock;
 use clickhouse_srv::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_runtime::tokio;
+use common_runtime::tokio::net::TcpListener;
+use common_runtime::tokio::sync::mpsc;
+use common_runtime::tokio::time;
 use log::error;
 use metrics::histogram;
-use tokio::net::TcpListener;
-use tokio::sync::mpsc;
-use tokio::time;
 use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::StreamExt;
 

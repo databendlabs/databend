@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 
+use common_runtime::tokio;
 use common_tracing::tracing;
 use maplit::hashmap;
 use pretty_assertions::assert_eq;

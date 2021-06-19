@@ -2,14 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_planners::*;
+use common_runtime::tokio;
+use futures::TryStreamExt;
+
+use crate::datasources::system::*;
+use crate::datasources::*;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tables_table() -> anyhow::Result<()> {
-    use common_planners::*;
-    use futures::TryStreamExt;
-
-    use crate::datasources::system::*;
-    use crate::datasources::*;
-
     let ctx = crate::tests::try_create_context()?;
     let table = DatabasesTable::create();
     table.read_plan(

@@ -13,6 +13,7 @@ use common_datavalues::DataType;
 use common_planners::CreateTablePlan;
 use common_planners::TableEngineType;
 use common_planners::TableOptions;
+use common_runtime::tokio;
 use fuse_query::interpreters::InterpreterFactory;
 use fuse_query::optimizers::Optimizers;
 use fuse_query::sessions::FuseQueryContext;

@@ -14,9 +14,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_infallible::Mutex;
+use common_runtime::tokio;
+use common_runtime::tokio::sync::oneshot::Sender;
+use common_runtime::tokio::sync::Notify;
 use futures::FutureExt;
-use tokio::sync::oneshot::Sender;
-use tokio::sync::Notify;
 
 use crate::api::http::router::Router;
 use crate::clusters::ClusterRef;

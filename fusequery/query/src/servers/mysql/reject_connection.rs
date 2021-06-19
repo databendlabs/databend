@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_exception::Result;
+use common_runtime::tokio::io::AsyncReadExt;
+use common_runtime::tokio::io::AsyncWriteExt;
+use common_runtime::tokio::net::TcpStream;
 use msql_srv::ErrorKind;
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
-use tokio::net::TcpStream;
 
 pub struct RejectConnection;
 

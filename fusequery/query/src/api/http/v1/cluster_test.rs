@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_exception::Result;
+use common_runtime::tokio;
 
 #[tokio::test]
 async fn test_cluster() -> Result<()> {

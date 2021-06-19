@@ -24,6 +24,7 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_planners::ScanPlan;
+use common_runtime::tokio;
 use common_streams::SendableDataBlockStream;
 use futures::stream;
 use futures::SinkExt;
