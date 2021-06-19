@@ -123,7 +123,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "arrow"
 version = "5.0.0-SNAPSHOT"
-source = "git+https://github.com/datafuse-extras/arrow-rs?rev=ed61617#ed6161750a33d8e44469c6bcfb800659c7f61afc"
+source = "git+https://github.com/datafuse-extras/arrow-rs?rev=f7d182df#f7d182dfc1a93562201a8fbae9e9187866e465f0"
 dependencies = [
  "chrono",
  "csv",
@@ -145,7 +145,7 @@ dependencies = [
 [[package]]
 name = "arrow-flight"
 version = "5.0.0-SNAPSHOT"
-source = "git+https://github.com/datafuse-extras/arrow-rs?rev=ed61617#ed6161750a33d8e44469c6bcfb800659c7f61afc"
+source = "git+https://github.com/datafuse-extras/arrow-rs?rev=f7d182df#f7d182dfc1a93562201a8fbae9e9187866e465f0"
 dependencies = [
  "arrow",
  "bytes 1.0.1",
@@ -3058,7 +3058,7 @@ dependencies = [
 [[package]]
 name = "parquet"
 version = "5.0.0-SNAPSHOT"
-source = "git+https://github.com/datafuse-extras/arrow-rs?rev=ed61617#ed6161750a33d8e44469c6bcfb800659c7f61afc"
+source = "git+https://github.com/datafuse-extras/arrow-rs?rev=f7d182df#f7d182dfc1a93562201a8fbae9e9187866e465f0"
 dependencies = [
  "arrow",
  "base64 0.13.0",

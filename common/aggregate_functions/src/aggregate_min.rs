@@ -101,6 +101,9 @@ impl fmt::Display for AggregateMinFunction {
 
 impl AggregateMinFunction {
     pub fn min_batch(column: DataColumnarValue) -> Result<DataValue> {
+        if column.is_empty() {
+            return DataValue::try_from(&column.data_type());
+        }
         match column {
             DataColumnarValue::Constant(value, _) => Ok(value),
             DataColumnarValue::Array(array) => {

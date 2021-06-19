@@ -120,6 +120,9 @@ impl AggregateSumFunction {
     }
 
     pub fn sum_batch(column: DataColumnarValue) -> Result<DataValue> {
+        if column.is_empty() {
+            return DataValue::try_from(&Self::sum_return_type(&column.data_type())?);
+        }
         match column {
             DataColumnarValue::Constant(value, size) => {
                 DataValueArithmetic::data_value_arithmetic_op(

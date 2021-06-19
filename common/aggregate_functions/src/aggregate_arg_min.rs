@@ -59,6 +59,9 @@ impl AggregateFunction for AggregateArgMinFunction {
     }
 
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
+        if columns[0].is_empty() {
+            return Ok(());
+        }
         if let DataValue::Struct(min_arg_val) = Self::arg_min_batch(columns[1].clone())? {
             if min_arg_val[0].is_null() {
                 return Ok(());

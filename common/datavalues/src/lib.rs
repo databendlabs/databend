@@ -7,6 +7,8 @@ mod data_array_arithmetic_test;
 #[cfg(test)]
 mod data_array_comparison_test;
 #[cfg(test)]
+mod data_array_filter_test;
+#[cfg(test)]
 mod data_array_logic_test;
 #[cfg(test)]
 mod data_array_merge_sort_test;
@@ -26,6 +28,7 @@ mod macros;
 mod data_array;
 mod data_array_arithmetic;
 mod data_array_comparison;
+mod data_array_filter;
 mod data_array_hash;
 mod data_array_logic;
 mod data_array_merge_sort;
@@ -44,6 +47,7 @@ mod data_value_operator;
 pub use data_array::*;
 pub use data_array_arithmetic::DataArrayArithmetic;
 pub use data_array_comparison::DataArrayComparison;
+pub use data_array_filter::DataArrayFilter;
 pub use data_array_hash::DataArrayHashDispatcher;
 pub use data_array_hash::FuseDataHasher;
 pub use data_array_logic::DataArrayLogic;
