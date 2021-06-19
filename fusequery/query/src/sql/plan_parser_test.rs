@@ -79,7 +79,7 @@ fn test_plan_parser() -> anyhow::Result<()> {
         Test {
         name: "database-passed",
         sql: "select database()",
-        expect: "Projection: database(default):Utf8\n  Expression: database(default):Utf8 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
+        expect: "Projection: database():Utf8\n  Expression: database(default):Utf8 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
         error: "",
         },
         Test {

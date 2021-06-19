@@ -16,6 +16,7 @@ common-exception = {path = "../exception"}
 # Crates.io dependencies
 anyhow = "1.0.41"
 paste = "^1.0"
+num = "^0.4"
 ordered-float = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 

@@ -31,7 +31,9 @@ pub type Int32Type = arrow_data_types::Int32Type;
 pub type Int64Type = arrow_data_types::Int64Type;
 pub type Float32Type = arrow_data_types::Float32Type;
 pub type Float64Type = arrow_data_types::Float64Type;
+
 pub type BooleanType = arrow_data_types::BooleanType;
+
 pub type Date32Type = arrow_data_types::Date32Type;
 pub type Date64Type = arrow_data_types::Date64Type;
 
@@ -45,6 +47,23 @@ pub type IntervalDayTimeType = arrow_data_types::IntervalDayTimeType;
 
 pub struct Utf8Type {}
 pub struct ListType {}
+
+pub type Int8Array = DataArray<Int8Type>;
+pub type UInt8Array = DataArray<UInt8Type>;
+pub type Int16Array = DataArray<Int16Type>;
+pub type UInt16Array = DataArray<UInt16Type>;
+pub type Int32Array = DataArray<Int32Type>;
+pub type UInt32Array = DataArray<UInt32Type>;
+pub type Int64Array = DataArray<Int64Type>;
+pub type UInt64Array = DataArray<UInt64Type>;
+
+pub type BooleanArray = DataArray<BooleanType>;
+
+pub type Float32Array = DataArray<Float32Type>;
+pub type Float64Array = DataArray<Float64Type>;
+
+pub type StringArray = DataArray<Utf8Type>;
+pub type ListArray = DataArray<ListType>;
 
 impl_df_datatype!(UInt8Type, UInt8);
 impl_df_datatype!(UInt16Type, UInt16);
