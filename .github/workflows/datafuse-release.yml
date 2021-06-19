@@ -39,13 +39,6 @@ jobs:
           args: --release --target=${{ matrix.config.target }}
           use-cross: ${{ matrix.config.cross }}
 
-      - name: Compress binaries
-        uses: svenstaro/upx-action@v2
-        with:
-          file: ${{ matrix.config.artifact_name }}
-          args: --lzma
-          strip: ${{ matrix.config.strip }}
-
       - name: Get tag name
         id: tag_name
         run: |
