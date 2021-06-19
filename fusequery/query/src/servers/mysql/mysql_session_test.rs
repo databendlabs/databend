@@ -15,12 +15,11 @@ use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::servers::mysql::mysql_session::Session;
 use crate::sessions::ISession;
-use crate::sessions::SessionCreator;
 use crate::sessions::SessionManager;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_idle_state_wait_terminal_with_not_abort() -> Result<()> {
-    let (conn, session) = prepare_session_and_connect().await?;
+    let (_conn, session) = prepare_session_and_connect().await?;
 
     match session.wait_terminal(Some(Duration::from_secs(1))).await {
         Ok(_) => assert!(false, "wait_terminal must be return timeout."),
@@ -36,7 +35,7 @@ async fn test_idle_state_wait_terminal_with_not_abort() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_idle_wait_terminal_after_not_force_abort() -> Result<()> {
     let instant = Instant::now();
-    let (conn, session) = prepare_session_and_connect().await?;
+    let (_conn, session) = prepare_session_and_connect().await?;
 
     session.abort(false)?;
     match session.wait_terminal(Some(Duration::from_secs(5))).await {
@@ -50,13 +49,13 @@ async fn test_idle_wait_terminal_after_not_force_abort() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_idle_wait_terminal_before_force_abort() -> Result<()> {
-    let (conn, session) = prepare_session_and_connect().await?;
+    let (_conn, session) = prepare_session_and_connect().await?;
 
     let wait_terminal_session = session.clone();
     let wait_terminal_session_join_handle = tokio::spawn(async move {
         match wait_terminal_session.wait_terminal(None).await {
             Ok(_) => assert!(true),
-            Err(error) => assert!(false, "wait_terminal must be return Ok."),
+            Err(error) => assert!(false, "wait_terminal must be return Ok. {}", error),
         };
     });
 
@@ -71,18 +70,18 @@ async fn test_idle_wait_terminal_before_force_abort() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_idle_wait_terminal_after_force_abort() -> Result<()> {
-    let (conn, session) = prepare_session_and_connect().await?;
+    let (_conn, session) = prepare_session_and_connect().await?;
 
     session.abort(true)?;
     match session.wait_terminal(None).await {
         Ok(_) => assert!(true),
-        Err(error) => assert!(false, "wait_terminal must be return Ok."),
+        Err(error) => assert!(false, "wait_terminal must be return Ok. {}", error),
     };
 
     // test wait_terminal again.
     match session.wait_terminal(None).await {
         Ok(_) => assert!(true),
-        Err(error) => assert!(false, "wait_terminal must be return Ok."),
+        Err(error) => assert!(false, "wait_terminal must be return Ok. {}", error),
     };
 
     Ok(())
@@ -117,7 +116,7 @@ async fn test_progress_state_wait_terminal_with_not_abort() -> Result<()> {
 
     assert!(instant.elapsed().gt(&Duration::from_secs(6)));
     assert!(instant.elapsed().lt(&Duration::from_secs(10)));
-    query_join_handler.await;
+    query_join_handler.await.unwrap();
     assert!(instant.elapsed().gt(&Duration::from_secs(15)));
 
     Ok(())
@@ -153,7 +152,7 @@ async fn test_progress_wait_terminal_after_not_force_abort() -> Result<()> {
 
     assert!(instant.elapsed().gt(&Duration::from_secs(10)));
     assert!(instant.elapsed().lt(&Duration::from_secs(15)));
-    query_join_handler.await;
+    query_join_handler.await.unwrap();
     assert!(instant.elapsed().gt(&Duration::from_secs(15)));
 
     Ok(())
@@ -184,7 +183,7 @@ async fn test_progress_wait_terminal_before_force_abort() -> Result<()> {
     let wait_terminal_session_join_handle = tokio::spawn(async move {
         match wait_terminal_session.wait_terminal(None).await {
             Ok(_) => assert!(true),
-            Err(error) => assert!(false, "wait_terminal must be return Ok."),
+            Err(error) => assert!(false, "wait_terminal must be return Ok. {}", error),
         };
     });
 
@@ -194,7 +193,7 @@ async fn test_progress_wait_terminal_before_force_abort() -> Result<()> {
         Err(err) => assert!(false, "wait_terminal error {}", err),
     }
 
-    query_join_handler.await;
+    query_join_handler.await.unwrap();
     assert!(instant.elapsed().le(&Duration::from_secs(15)));
 
     Ok(())
@@ -224,16 +223,16 @@ async fn test_progress_wait_terminal_after_force_abort() -> Result<()> {
     session.abort(true)?;
     match session.wait_terminal(None).await {
         Ok(_) => assert!(true),
-        Err(error) => assert!(false, "wait_terminal must be return Ok."),
+        Err(error) => assert!(false, "wait_terminal must be return Ok. {}", error),
     };
 
     // test wait_terminal again.
     match session.wait_terminal(None).await {
         Ok(_) => assert!(true),
-        Err(error) => assert!(false, "wait_terminal must be return Ok."),
+        Err(error) => assert!(false, "wait_terminal must be return Ok. {}", error),
     };
 
-    query_join_handler.await;
+    query_join_handler.await.unwrap();
     assert!(instant.elapsed().le(&Duration::from_secs(15)));
 
     Ok(())
