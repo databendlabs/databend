@@ -116,9 +116,9 @@ impl DfHint {
     pub fn parse_code(comment: &str) -> IResult<&str, Option<u16>> {
         let (comment, _) = take_till1(|c| c == '{')(comment)?;
         let (comment, _) = tag("{")(comment)?;
-        let (comment, _) = (multispace0)(comment)?;
+        let (comment, _) = multispace0(comment)?;
         let (comment, _) = tag("ErrorCode")(comment)?;
-        let (comment, _) = (multispace1)(comment)?;
+        let (comment, _) = multispace1(comment)?;
         let (comment, code) = digit1(comment)?;
 
         let code = code.parse::<u16>().ok();
