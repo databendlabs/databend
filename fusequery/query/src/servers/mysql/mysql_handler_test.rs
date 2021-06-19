@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::io::stderr;
 use std::sync::Arc;
 use std::sync::Barrier;
 use std::thread::JoinHandle;
@@ -10,17 +9,12 @@ use std::thread::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use msql_srv::ErrorKind;
 use mysql::prelude::FromRow;
 use mysql::prelude::Queryable;
 use mysql::Conn;
-use mysql::Error;
 use mysql::FromRowError;
 use mysql::Row;
 
-use crate::clusters::Cluster;
-use crate::configs::Config;
-use crate::servers::AbortableService;
 use crate::servers::MySQLHandler;
 use crate::sessions::SessionManager;
 
