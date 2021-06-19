@@ -226,6 +226,12 @@ mod tests {
         }
 
         {
+            let comment = " { ErrorCode1002 }";
+            let expected = DfHint::create_from_comment(comment, "--");
+            assert_eq!(expected.error_code, None);
+        }
+
+        {
             let comment = " { ErrorCode 22}";
             let expected = DfHint::create_from_comment(comment, "--");
             assert_eq!(expected.error_code, Some(22));
