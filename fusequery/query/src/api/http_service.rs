@@ -14,7 +14,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_infallible::Mutex;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::oneshot::Sender;
 use tokio::sync::Notify;
 
 use crate::api::http::router::Router;
@@ -23,6 +23,7 @@ use crate::configs::Config;
 use crate::servers::AbortableServer;
 use crate::servers::AbortableService;
 use crate::servers::Elapsed;
+use futures::FutureExt;
 
 pub struct HttpService {
     cfg: Config,
@@ -48,8 +49,14 @@ impl HttpService {
 impl AbortableService<(String, u16), SocketAddr> for HttpService {
     fn abort(&self, _force: bool) -> Result<()> {
         if let Some(abort_handle) = self.abort_handle.lock().take() {
-            futures::executor::block_on(abort_handle.send(()))
-                .map_err_to_code(ErrorCode::LogicalError, || "Cannot abort HttpService.")?;
+            match abort_handle.send(()) {
+                Ok(_) => { /* do nothing */ }
+                Err(_) => {
+                    return Err(ErrorCode::LogicalError(
+                        "Cannot abort HttpService, cause: cannot send signal to service.",
+                    ))
+                }
+            }
         }
 
         Ok(())
@@ -59,12 +66,11 @@ impl AbortableService<(String, u16), SocketAddr> for HttpService {
         let router = Router::create(self.cfg.clone(), self.cluster.clone());
         let server = warp::serve(router.router()?);
 
-        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+        let addr = args.to_socket_addrs()?.next().unwrap();
+        let (tx, rx) = tokio::sync::oneshot::channel();
         *self.abort_handle.lock() = Some(tx);
         let (addr, server) = server
-            .try_bind_with_graceful_shutdown(args.to_socket_addrs()?.next().unwrap(), async move {
-                rx.recv().await;
-            })
+            .try_bind_with_graceful_shutdown(addr, rx.map(|_| ()))
             .map_err_to_code(ErrorCode::CannotListenerPort, || {
                 "Cannot listener HttpService port."
             })?;
