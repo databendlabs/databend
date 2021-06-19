@@ -92,10 +92,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // HTTP API service.
     {
         let srv = HttpService::create(conf.clone(), cluster.clone());
-        tokio::spawn(async move {
-            srv.make_server().await.expect("HTTP service error");
-        });
-        info!("HTTP API server listening on {}", conf.http_api_address);
+        let addr = conf.http_api_address.parse::<std::net::SocketAddr>()?;
+        let addr = srv.start((addr.ip().to_string(), addr.port())).await?;
+        services.push(srv);
+        info!("HTTP API server listening on {}", addr);
     }
 
     // RPC API service.
