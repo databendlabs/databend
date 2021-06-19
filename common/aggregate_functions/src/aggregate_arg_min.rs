@@ -60,6 +60,9 @@ impl AggregateFunction for AggregateArgMinFunction {
 
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
         if let DataValue::Struct(min_arg_val) = Self::arg_min_batch(columns[1].clone())? {
+            if min_arg_val[0].is_null() {
+                return Ok(());
+            }
             let index: u64 = min_arg_val[0].clone().try_into()?;
             let min_arg = DataValue::try_from_array(&columns[0].to_array()?, index as usize)?;
             let min_val = min_arg_val[1].clone();
@@ -153,6 +156,12 @@ macro_rules! typed_array_min_to_data_value {
         let data = array.data();
         let values = array.values();
         let null_count = array.null_count();
+        if null_count == array.len() {
+            return Result::Ok(DataValue::Struct(vec![
+                DataValue::UInt64(None),
+                DataValue::$SCALAR(None),
+            ]));
+        }
         let mut min_row_val = (0, values[0]);
 
         if null_count == 0 {

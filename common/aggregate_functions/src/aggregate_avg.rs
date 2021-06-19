@@ -113,6 +113,7 @@ impl AggregateFunction for AggregateAvgFunction {
                 new_states[1].clone(),
                 old_states[1].clone(),
             )?;
+
             self.state = DataValue::Struct(vec![sum, count]);
         }
         Ok(())
@@ -120,11 +121,15 @@ impl AggregateFunction for AggregateAvgFunction {
 
     fn merge_result(&self) -> Result<DataValue> {
         Ok(if let DataValue::Struct(states) = self.state.clone() {
-            DataValueArithmetic::data_value_arithmetic_op(
-                DataValueArithmeticOperator::Div,
-                states[0].clone(),
-                states[1].clone(),
-            )?
+            if states[1].eq(&DataValue::UInt64(Some(0))) {
+                DataValue::Float64(None)
+            } else {
+                DataValueArithmetic::data_value_arithmetic_op(
+                    DataValueArithmeticOperator::Div,
+                    states[0].clone(),
+                    states[1].clone(),
+                )?
+            }
         } else {
             self.state.clone()
         })

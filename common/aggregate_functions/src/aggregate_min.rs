@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
+use std::convert::TryFrom;
 use std::fmt;
 
 use common_datavalues::*;
@@ -28,7 +29,7 @@ impl AggregateMinFunction {
 
         Ok(Box::new(AggregateMinFunction {
             display_name: display_name.to_string(),
-            state: DataValue::Null,
+            state: DataValue::try_from(arguments[0].data_type())?,
             arguments,
         }))
     }
