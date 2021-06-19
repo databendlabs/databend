@@ -2,16 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
+use common_datablocks::*;
+use common_datavalues::*;
+use common_runtime::tokio;
+use futures::stream::StreamExt;
+
+use crate::*;
+
 #[tokio::test]
 async fn test_datablock_stream() {
-    use std::sync::Arc;
-
-    use common_datablocks::*;
-    use common_datavalues::*;
-    use futures::stream::StreamExt;
-
-    use crate::*;
-
     let mut s1 = DataBlockStream::create(Arc::new(DataSchema::empty()), None, vec![
         DataBlock::empty(),
         DataBlock::empty(),

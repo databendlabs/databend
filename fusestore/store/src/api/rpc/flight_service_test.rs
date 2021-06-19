@@ -8,6 +8,7 @@ use common_datavalues::DataColumnarValue;
 use common_flights::GetTableActionResult;
 use common_flights::StoreClient;
 use common_planners::ScanPlan;
+use common_runtime::tokio;
 use log::info;
 use pretty_assertions::assert_eq;
 use test_env_log::test;

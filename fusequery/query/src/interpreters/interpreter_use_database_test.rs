@@ -2,15 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_planners::*;
+use common_runtime::tokio;
+use futures::stream::StreamExt;
+use pretty_assertions::assert_eq;
+
+use crate::interpreters::*;
+use crate::sql::*;
+
 #[tokio::test]
 async fn test_use_interpreter() -> anyhow::Result<()> {
-    use common_planners::*;
-    use futures::stream::StreamExt;
-    use pretty_assertions::assert_eq;
-
-    use crate::interpreters::*;
-    use crate::sql::*;
-
     let ctx = crate::tests::try_create_context()?;
 
     if let PlanNode::UseDatabase(plan) =
@@ -30,12 +31,6 @@ async fn test_use_interpreter() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_use_database_interpreter_error() -> anyhow::Result<()> {
-    use common_planners::*;
-    use pretty_assertions::assert_eq;
-
-    use crate::interpreters::*;
-    use crate::sql::*;
-
     let ctx = crate::tests::try_create_context()?;
 
     if let PlanNode::UseDatabase(plan) = PlanParser::create(ctx.clone()).build_from_sql("use xx")? {

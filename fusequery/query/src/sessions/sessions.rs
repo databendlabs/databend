@@ -14,6 +14,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::Partitions;
+use common_runtime::tokio;
 use metrics::counter;
 
 use crate::clusters::Cluster;

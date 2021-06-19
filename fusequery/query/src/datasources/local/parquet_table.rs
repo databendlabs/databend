@@ -19,12 +19,12 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_planners::TableOptions;
+use common_runtime::tokio::task;
 use common_streams::ParquetStream;
 use common_streams::SendableDataBlockStream;
 use crossbeam::channel::bounded;
 use crossbeam::channel::Receiver;
 use crossbeam::channel::Sender;
-use tokio::task;
 
 use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;

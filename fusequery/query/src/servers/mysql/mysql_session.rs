@@ -11,8 +11,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_infallible::Mutex;
+use common_runtime::tokio;
+use common_runtime::tokio::net::TcpStream;
 use msql_srv::MysqlIntermediary;
-use tokio::net::TcpStream;
 
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
 use crate::servers::AbortableService;

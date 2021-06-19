@@ -18,6 +18,7 @@ use clickhouse_rs::Pool;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_runtime::tokio;
 use crossbeam_queue::ArrayQueue;
 use futures::future::try_join_all;
 use futures::StreamExt;

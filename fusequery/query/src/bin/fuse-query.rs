@@ -6,6 +6,7 @@ use std::ops::Sub;
 use std::time::Duration;
 
 use common_exception::ErrorCode;
+use common_runtime::tokio;
 use common_tracing::init_tracing_with_level;
 use fuse_query::api::HttpService;
 use fuse_query::api::RpcService;

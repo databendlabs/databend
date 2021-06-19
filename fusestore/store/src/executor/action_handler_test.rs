@@ -7,12 +7,13 @@ use std::path::Path;
 use std::sync::Arc;
 
 use common_arrow::arrow_flight::FlightData;
+use common_runtime::tokio;
+use common_runtime::tokio::sync::mpsc::Receiver;
+use common_runtime::tokio::sync::mpsc::Sender;
 use common_tracing::tracing;
 use maplit::hashmap;
 use pretty_assertions::assert_eq;
 use tempfile::tempdir;
-use tokio::sync::mpsc::Receiver;
-use tokio::sync::mpsc::Sender;
 
 use crate::dfs::Dfs;
 use crate::executor::ActionHandler;

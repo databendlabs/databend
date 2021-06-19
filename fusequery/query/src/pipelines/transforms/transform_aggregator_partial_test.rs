@@ -2,18 +2,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
+use common_planners::*;
+use common_planners::{self};
+use common_runtime::tokio;
+use futures::TryStreamExt;
+use pretty_assertions::assert_eq;
+
+use crate::pipelines::processors::*;
+use crate::pipelines::transforms::*;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_partial_aggregator() -> anyhow::Result<()> {
-    use std::sync::Arc;
-
-    use common_planners::*;
-    use common_planners::{self};
-    use futures::TryStreamExt;
-    use pretty_assertions::assert_eq;
-
-    use crate::pipelines::processors::*;
-    use crate::pipelines::transforms::*;
-
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 

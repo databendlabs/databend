@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use async_raft::State;
+use common_runtime::tokio;
 #[allow(unused_imports)]
 use log::info;
 use pretty_assertions::assert_eq;

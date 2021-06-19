@@ -25,6 +25,7 @@ common-flights = {path = "../../common/flights"}
 common-functions = {path = "../../common/functions"}
 common-infallible = {path = "../../common/infallible"}
 common-planners = {path = "../../common/planners"}
+common-runtime = {path = "../../common/runtime"}
 common-tracing = {path = "../../common/tracing"}
 
 
@@ -54,7 +55,6 @@ structopt-toml = "0.4.5"
 tempfile = "3.2.0"
 thiserror = "1.0.25"
 threadpool = "1.8.1"
-tokio = { version = "1.7", features = ["macros", "rt","rt-multi-thread", "sync"] }
 tokio-stream = "0.1"
 tonic = "0.4"
 uuid = { version = "0.8", features = ["serde", "v4"] }

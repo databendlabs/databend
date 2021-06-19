@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_infallible::Mutex;
-use tokio::net::TcpStream;
+use common_runtime::tokio::net::TcpStream;
 
 use crate::servers::AbortableService;
 use crate::sessions::FuseQueryContextRef;
