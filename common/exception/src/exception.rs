@@ -7,6 +7,7 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::net::AddrParseError;
 use std::sync::Arc;
 
 use backtrace::Backtrace;
@@ -145,6 +146,7 @@ build_exceptions! {
     AbortedSession(ABORT_SESSION),
     AbortedQuery(ABORT_QUERY),
     NotFoundSession(44),
+    CannotListenerPort(45),
 
     UnknownException(1000),
     TokioError(1001)
@@ -257,6 +259,12 @@ impl From<sqlparser::parser::ParserError> for ErrorCode {
 impl From<std::io::Error> for ErrorCode {
     fn from(error: std::io::Error) -> Self {
         ErrorCode::from_std_error(error)
+    }
+}
+
+impl From<std::net::AddrParseError> for ErrorCode {
+    fn from(error: AddrParseError) -> Self {
+        ErrorCode::BadAddressFormat(format!("Bad address format, cause: {}", error))
     }
 }
 
