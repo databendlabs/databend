@@ -70,10 +70,10 @@ impl AbortableService<(String, u16), SocketAddr> for HttpService {
         let addr = args.to_socket_addrs()?.next().unwrap();
         let (tx, rx) = tokio::sync::oneshot::channel();
         *self.abort_handle.lock() = Some(tx);
-        let (addr, server) = server
+        let (socket_address, server) = server
             .try_bind_with_graceful_shutdown(addr, rx.map(|_| ()))
             .map_err_to_code(ErrorCode::CannotListenerPort, || {
-                "Cannot listener HttpService port."
+                format!("Cannot listener port {}", args.1)
             })?;
 
         let aborted = self.aborted.clone();
@@ -84,7 +84,7 @@ impl AbortableService<(String, u16), SocketAddr> for HttpService {
             aborted_notify.notify_waiters();
         });
 
-        Ok(addr)
+        Ok(socket_address)
     }
 
     async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed> {
