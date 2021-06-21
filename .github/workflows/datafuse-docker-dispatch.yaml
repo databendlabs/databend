@@ -1,7 +1,7 @@
 on:
   repository_dispatch:
     types: [build_docker]
-name: Build Docker Image on official docker hub (primary for benchmarking and CI tests) 
+name: Build Docker Image on official docker hub (primary for benchmarking and CI tests)
 jobs:
   run_funcbench:
     name: Running build_docker
