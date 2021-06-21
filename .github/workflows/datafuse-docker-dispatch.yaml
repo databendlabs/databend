@@ -1,7 +1,7 @@
 on:
   repository_dispatch:
     types: [build_docker]
-name: Build Docker Image on official docker hub (primary for benchmarking and CI tests) 
+name: Build Docker Image on official docker hub (primary for benchmarking and CI tests)
 jobs:
   run_funcbench:
     name: Running build_docker
@@ -53,11 +53,10 @@ jobs:
     - name: Image digest
       run: echo ${{ steps.docker_build.outputs.digest }}
 
-    - name: Delete all resources
-      if: always()
-      run: |
-        cat test.txt
-        rm test.txt
+    # - name: Delete all resources
+    #   if: always()
+    #   run: |
+
     - name: Update status to failure
       if: failure()
       run: >-
