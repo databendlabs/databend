@@ -27,6 +27,36 @@ use crate::UInt8Array;
 
 pub struct DataArrayArithmetic;
 
+pub fn numerical_arithmetic_coercion(
+    op: &DataValueArithmeticOperator,
+    lhs_type: &DataType,
+    rhs_type: &DataType,
+) -> Result<DataType> {
+    // error on any non-numeric type
+    if !is_numeric(lhs_type) || !is_numeric(rhs_type) {
+        return Result::Err(ErrorCode::BadDataValueType(format!(
+            "DataValue Error: Unsupported ({:?}) {} ({:?})",
+            lhs_type, op, rhs_type
+        )));
+    };
+
+    let has_signed = is_signed_numeric(lhs_type) || is_signed_numeric(rhs_type);
+    let has_float = is_floating(lhs_type) || is_floating(rhs_type);
+    let max_size = cmp::max(numeric_byte_size(lhs_type)?, numeric_byte_size(rhs_type)?);
+
+    match op {
+        DataValueArithmeticOperator::Plus
+        | DataValueArithmeticOperator::Mul
+        | DataValueArithmeticOperator::Modulo => {
+            construct_numeric_type(has_signed, has_float, next_size(max_size))
+        }
+        DataValueArithmeticOperator::Minus => {
+            construct_numeric_type(true, has_float, next_size(max_size))
+        }
+        DataValueArithmeticOperator::Div => Ok(DataType::Float64),
+    }
+}
+
 impl DataArrayArithmetic {
     #[inline]
     pub fn data_array_arithmetic_op(

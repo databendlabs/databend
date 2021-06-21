@@ -2,19 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
-use common_arrow::arrow::datatypes::ArrowPrimitiveType;
 use common_exception::Result;
 
-use crate::data_array_trait::DataArrayTrait;
-use crate::BooleanArray;
+use crate::DataArrayRef;
 use crate::DataType;
 use crate::DataValue;
-use crate::IGetDataType;
-use crate::StringArray;
 
-pub type DataArrayRef = Arc<DataArrayTrait>;
 #[derive(Clone, Debug)]
 pub enum DataColumn {
     // Array of values.
@@ -76,34 +69,58 @@ impl DataColumn {
         }
     }
 
+    #[inline]
     pub fn clone_empty(&self) -> DataColumn {
         match self {
             DataColumn::Array(array) => DataColumn::Array(array.slice(0, 0)),
             DataColumn::Constant(scalar, _) => DataColumn::Constant(scalar.clone(), 0),
         }
     }
+
+    #[inline]
+    pub fn cast_with_type(&self, data_type: &DataType) -> Result<DataColumn> {
+        match self {
+            DataColumn::Array(array) => Ok(DataColumn::Array(array.cast_with_type(data_type)?)),
+            DataColumn::Constant(scalar, size) => {
+                let array = scalar.to_array_with_size(1)?;
+                let array = array.cast_with_type(data_type)?;
+
+                let value = array.try_get(0)?;
+                Ok(DataColumn::Constant(value, *size))
+            }
+        }
+    }
+
+    #[inline]
+    pub fn resize_constant(&self, size: usize) -> Self {
+        match self {
+            DataColumn::Array(array) if array.len() == 1 => {
+                let value = array.try_get(0).unwrap();
+                DataColumn::Constant(value, size)
+            }
+            DataColumn::Constant(scalar, _) => DataColumn::Constant(scalar.clone(), size),
+            _ => self.clone(),
+        }
+    }
+
+    #[inline]
+    pub fn try_get(&self, index: usize) -> Result<DataValue> {
+        match self {
+            DataColumn::Array(array) => Ok(array.try_get(index)?),
+            DataColumn::Constant(scalar, _) => Ok(scalar.clone()),
+        }
+    }
+}
+
+// static methods
+impl DataColumn {
+    fn to_array_with_size(value: DataValue, size: usize) -> Result<DataArrayRef> {
+        todo!()
+    }
 }
 
 impl From<DataArrayRef> for DataColumn {
     fn from(array: DataArrayRef) -> Self {
         DataColumn::Array(array)
-    }
-}
-
-impl<T: ArrowPrimitiveType> From<PrimitiveArrayRef<T>> for DataColumn {
-    fn from(array: PrimitiveArrayRef<T>) -> Self {
-        DataColumn::Array(array as DataArrayRef)
-    }
-}
-
-impl From<Arc<BooleanArray>> for DataColumn {
-    fn from(array: Arc<BooleanArray>) -> Self {
-        DataColumn::Array(array as DataArrayRef)
-    }
-}
-
-impl From<Arc<StringArray>> for DataColumn {
-    fn from(array: Arc<StringArray>) -> Self {
-        DataColumn::Array(array as DataArrayRef)
     }
 }

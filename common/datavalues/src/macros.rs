@@ -333,14 +333,14 @@
 //     }};
 // }
 
-// macro_rules! format_data_value_with_option {
-//     ($F:expr, $EXPR:expr) => {{
-//         match $EXPR {
-//             Some(e) => write!($F, "{}", e),
-//             None => write!($F, "NULL"),
-//         }
-//     }};
-// }
+macro_rules! format_data_value_with_option {
+    ($F:expr, $EXPR:expr) => {{
+        match $EXPR {
+            Some(e) => write!($F, "{}", e),
+            None => write!($F, "NULL"),
+        }
+    }};
+}
 
 // /// Invoke a boolean kernel on a pair of arrays
 // macro_rules! array_boolean_op {
@@ -364,24 +364,24 @@
 //     }};
 // }
 
-// macro_rules! typed_cast_from_data_value_to_std {
-//     ($SCALAR:ident, $NATIVE:ident) => {
-//         impl TryFrom<DataValue> for $NATIVE {
-//             type Error = anyhow::Error;
+macro_rules! typed_cast_from_data_value_to_std {
+    ($SCALAR:ident, $NATIVE:ident) => {
+        impl TryFrom<DataValue> for $NATIVE {
+            type Error = anyhow::Error;
 
-//             fn try_from(value: DataValue) -> anyhow::Result<Self> {
-//                 match value {
-//                     DataValue::$SCALAR(Some(inner_value)) => Ok(inner_value),
-//                     _ => anyhow::bail!(format!(
-//                         "DataValue Error:  Cannot convert {:?} to {}",
-//                         value,
-//                         std::any::type_name::<Self>()
-//                     )),
-//                 }
-//             }
-//         }
-//     };
-// }
+            fn try_from(value: DataValue) -> anyhow::Result<Self> {
+                match value {
+                    DataValue::$SCALAR(Some(inner_value)) => Ok(inner_value),
+                    _ => anyhow::bail!(format!(
+                        "DataValue Error:  Cannot convert {:?} to {}",
+                        value,
+                        std::any::type_name::<Self>()
+                    )),
+                }
+            }
+        }
+    };
+}
 
 // macro_rules! build_list {
 //     ($VALUE_BUILDER_TY:ident, $SCALAR_TY:ident, $VALUES:expr, $SIZE:expr) => {{

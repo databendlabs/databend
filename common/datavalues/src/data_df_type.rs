@@ -4,6 +4,7 @@ use common_arrow::arrow::datatypes::ArrowPrimitiveType;
 use common_arrow::arrow::datatypes::IntervalUnit;
 use common_arrow::arrow::datatypes::TimeUnit;
 
+use crate::data_array_base::DataArrayBase;
 use crate::DataField;
 use crate::DataType;
 
@@ -45,25 +46,32 @@ pub type TimestampNanosecondType = arrow_data_types::TimestampNanosecondType;
 pub type IntervalYearMonthType = arrow_data_types::IntervalYearMonthType;
 pub type IntervalDayTimeType = arrow_data_types::IntervalDayTimeType;
 
-pub struct Utf8Type {}
-pub struct ListType {}
+pub struct Utf8Type;
+pub struct ListType;
 
-pub type Int8Array = DataArray<Int8Type>;
-pub type UInt8Array = DataArray<UInt8Type>;
-pub type Int16Array = DataArray<Int16Type>;
-pub type UInt16Array = DataArray<UInt16Type>;
-pub type Int32Array = DataArray<Int32Type>;
-pub type UInt32Array = DataArray<UInt32Type>;
-pub type Int64Array = DataArray<Int64Type>;
-pub type UInt64Array = DataArray<UInt64Type>;
+pub type Int8Array = DataArrayBase<Int8Type>;
+pub type UInt8Array = DataArrayBase<UInt8Type>;
+pub type Int16Array = DataArrayBase<Int16Type>;
+pub type UInt16Array = DataArrayBase<UInt16Type>;
+pub type Int32Array = DataArrayBase<Int32Type>;
+pub type UInt32Array = DataArrayBase<UInt32Type>;
+pub type Int64Array = DataArrayBase<Int64Type>;
+pub type UInt64Array = DataArrayBase<UInt64Type>;
 
-pub type BooleanArray = DataArray<BooleanType>;
+pub type BooleanArray = DataArrayBase<BooleanType>;
 
-pub type Float32Array = DataArray<Float32Type>;
-pub type Float64Array = DataArray<Float64Type>;
+pub type Float32Array = DataArrayBase<Float32Type>;
+pub type Float64Array = DataArrayBase<Float64Type>;
 
-pub type StringArray = DataArray<Utf8Type>;
-pub type ListArray = DataArray<ListType>;
+pub type StringArray = DataArrayBase<Utf8Type>;
+pub type ListArray = DataArrayBase<ListType>;
+
+pub type TimestampSecondArray = DataArrayBase<TimestampSecondType>;
+pub type TimestampMillisecondArray = DataArrayBase<TimestampMillisecondType>;
+pub type TimestampMicrosecondArray = DataArrayBase<TimestampMicrosecondType>;
+pub type TimestampNanosecondArray = DataArrayBase<TimestampNanosecondType>;
+pub type IntervalYearMonthArray = DataArrayBase<IntervalYearMonthType>;
+pub type IntervalDayTimeArray = DataArrayBase<IntervalDayTimeType>;
 
 impl_df_datatype!(UInt8Type, UInt8);
 impl_df_datatype!(UInt16Type, UInt16);
@@ -129,6 +137,7 @@ impl DFDataType for ListType {
 }
 
 pub trait DFPrimitiveType: ArrowPrimitiveType + Send + Sync + DFDataType {}
+
 impl DFPrimitiveType for UInt8Type {}
 impl DFPrimitiveType for UInt16Type {}
 impl DFPrimitiveType for UInt32Type {}
@@ -151,6 +160,7 @@ impl DFPrimitiveType for IntervalYearMonthType {}
 impl DFPrimitiveType for IntervalDayTimeType {}
 
 pub trait DFNumericType: DFPrimitiveType + ArrowNumericType {}
+
 impl DFNumericType for UInt8Type {}
 impl DFNumericType for UInt16Type {}
 impl DFNumericType for UInt32Type {}
