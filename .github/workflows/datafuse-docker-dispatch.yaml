@@ -22,7 +22,7 @@ jobs:
         -H "Authorization: Bearer $GITHUB_TOKEN"
         -H "Content-Type: application/json"
         --data '{"state":"pending","context":"build_docker-status","target_url":"'$GITHUB_STATUS_TARGET_URL'"}'
-        "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA" 
+        "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
     - uses: actions/checkout@v2
       with:
         ref: ${{ env.SHA }}
