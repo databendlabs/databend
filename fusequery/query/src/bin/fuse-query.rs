@@ -83,17 +83,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Metric API service.
     {
-        let srv = MetricService::create(conf.clone());
-        tokio::spawn(async move {
-            srv.make_server().expect("Metrics service error");
-        });
-        info!("Metric API server listening on {}", conf.metric_api_address);
+        let addr = conf.metric_api_address.parse::<std::net::SocketAddr>()?;
+        let srv = MetricService::create();
+        let addr = srv.start((addr.ip().to_string(), addr.port())).await?;
+        services.push(srv);
+        info!("Metric API server listening on {}", addr);
     }
 
     // HTTP API service.
     {
-        let srv = HttpService::create(conf.clone(), cluster.clone());
         let addr = conf.http_api_address.parse::<std::net::SocketAddr>()?;
+        let srv = HttpService::create(conf.clone(), cluster.clone());
         let addr = srv.start((addr.ip().to_string(), addr.port())).await?;
         services.push(srv);
         info!("HTTP API server listening on {}", addr);
