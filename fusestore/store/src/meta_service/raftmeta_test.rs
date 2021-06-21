@@ -7,7 +7,6 @@ use std::sync::Arc;
 use async_raft::RaftMetrics;
 use async_raft::State;
 use common_runtime::tokio;
-use common_runtime::tokio::sync::watch::Receiver;
 use common_runtime::tokio::time::Duration;
 use common_tracing::tracing;
 use maplit::hashset;
@@ -266,7 +265,7 @@ async fn test_meta_node_write() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and a non-voter;
     // - Write to the raft node on every node, expect Ok.
 
-    // TODO: test MetaNode.write duiring leader changes.
+    // TODO: test MetaNode.write during leader changes.
 
     common_tracing::init_default_tracing();
 
@@ -328,13 +327,13 @@ async fn test_meta_node_3_members() -> anyhow::Result<()> {
     mn0.raft.change_membership(hashset![0, 1, 2]).await?;
     nlog += 2; // joint consensus commits 2 logs
 
-    wait_for_state(1, &mut mn1.raft.metrics(), State::Follower).await?;
-    wait_for_state(2, &mut mn2.raft.metrics(), State::Follower).await?;
-    wait_for_state(0, &mut mn0.raft.metrics(), State::Leader).await?;
+    wait_for_state(&mn1, State::Follower).await?;
+    wait_for_state(&mn2, State::Follower).await?;
+    wait_for_state(&mn0, State::Leader).await?;
 
-    wait_for_log(0, &mut mn0.raft.metrics(), nlog).await?;
-    wait_for_log(1, &mut mn1.raft.metrics(), nlog).await?;
-    wait_for_log(2, &mut mn2.raft.metrics(), nlog).await?;
+    wait_for_log(&mn0, nlog).await?;
+    wait_for_log(&mn1, nlog).await?;
+    wait_for_log(&mn2, nlog).await?;
 
     assert_set_file_synced(vec![mn0.clone(), mn1.clone(), mn2.clone()], "foo-2").await?;
 
@@ -371,15 +370,13 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 
     // restart
     let mn0 = MetaNode::builder().node_id(0).sto(sto0).build().await?;
-    let mut rx0 = mn0.raft.metrics();
     let mn1 = MetaNode::builder().node_id(1).sto(sto1).build().await?;
-    let mut rx1 = mn1.raft.metrics();
 
     let meta_nodes = vec![mn0.clone(), mn1.clone()];
 
-    wait_for_state(0, &mut rx0, State::Leader).await?;
-    wait_for_state(1, &mut rx1, State::NonVoter).await?;
-    wait_for_current_leader(1, &mut rx1, 0).await?;
+    wait_for_state(&mn0, State::Leader).await?;
+    wait_for_state(&mn1, State::NonVoter).await?;
+    wait_for_current_leader(&mn1, 0).await?;
 
     assert_set_file_synced(meta_nodes.clone(), "key2").await?;
 
@@ -398,7 +395,6 @@ async fn setup_leader() -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
 
     // boot up a single-node cluster
     let mn = MetaNode::boot(nid, addr.clone()).await?;
-    let mut rx = mn.raft.metrics();
 
     {
         assert_meta_connection(&addr).await?;
@@ -407,8 +403,8 @@ async fn setup_leader() -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
         let got = mn.get_node(&nid).await;
         assert_eq!(addr, got.unwrap().address, "nid0 is added");
 
-        wait_for_state(0, &mut rx, State::Leader).await?;
-        wait_for_current_leader(0, &mut rx, 0).await?;
+        wait_for_state(&mn, State::Leader).await?;
+        wait_for_current_leader(&mn, 0).await?;
     }
     Ok((nid, mn))
 }
@@ -422,7 +418,6 @@ async fn setup_non_voter(
     let addr = new_addr();
 
     let mn = MetaNode::boot_non_voter(id, &addr).await?;
-    let mut rx = mn.raft.metrics();
 
     {
         // add node to cluster as a non-voter
@@ -439,8 +434,8 @@ async fn setup_non_voter(
 
     {
         assert_meta_connection(&addr).await?;
-        wait_for_state(id, &mut rx, State::NonVoter).await?;
-        wait_for_current_leader(id, &mut rx, 0).await?;
+        wait_for_state(&mn, State::NonVoter).await?;
+        wait_for_current_leader(&mn, 0).await?;
     }
 
     Ok((id, mn))
@@ -473,9 +468,8 @@ async fn assert_set_file_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> an
 
 /// Wait nodes for applied index to be upto date: applied >= at_least.
 async fn assert_applied_index(meta_nodes: Vec<Arc<MetaNode>>, at_least: u64) -> anyhow::Result<()> {
-    for (i, mn) in meta_nodes.iter().enumerate() {
-        let mut rx = mn.raft.metrics();
-        wait_for_log(i, &mut rx, at_least).await?;
+    for (_i, mn) in meta_nodes.iter().enumerate() {
+        wait_for_log(&mn, at_least).await?;
     }
     Ok(())
 }
@@ -493,103 +487,47 @@ async fn assert_get_file(
 }
 
 /// Wait for the known leader of a raft to become the expected `leader_id` until a default 2000 ms time out.
-#[tracing::instrument(level = "info", skip(msg,rx), fields(msg=msg.to_string().as_str()))]
+#[tracing::instrument(level = "info", skip(mn))]
 pub async fn wait_for_current_leader(
-    msg: impl ToString,
-    rx: &mut Receiver<RaftMetrics>,
+    mn: &MetaNode,
     leader_id: NodeId,
 ) -> anyhow::Result<RaftMetrics> {
-    wait_for(
-        format!("{}: current_leader -> {}", msg.to_string(), leader_id),
-        rx,
-        |x| x.current_leader == Some(leader_id),
-    )
-    .await
+    let metrics = mn
+        .raft
+        .wait(timeout())
+        .current_leader(leader_id, "")
+        .await?;
+    Ok(metrics)
 }
 
 /// Wait for raft log to become the expected `index` until a default 2000 ms time out.
-#[tracing::instrument(level = "info", skip(msg,rx), fields(msg=msg.to_string().as_str()))]
-async fn wait_for_log(
-    msg: impl ToString,
-    rx: &mut Receiver<RaftMetrics>,
-    index: u64,
-) -> anyhow::Result<RaftMetrics> {
-    wait_for(
-        format!("{}: last_log_index -> {}", msg.to_string(), index),
-        rx,
-        |x| x.last_log_index == index,
-    )
-    .await?;
-    wait_for(
-        format!("{}: last_applied -> {}", msg.to_string(), index),
-        rx,
-        |x| x.last_applied == index,
-    )
-    .await
+#[tracing::instrument(level = "info", skip(mn))]
+async fn wait_for_log(mn: &MetaNode, index: u64) -> anyhow::Result<RaftMetrics> {
+    let metrics = mn.raft.wait(timeout()).log(index, "").await?;
+    Ok(metrics)
 }
 
 /// Wait for raft state to become the expected `state` until a default 2000 ms time out.
-#[tracing::instrument(level = "info", skip(msg,rx), fields(msg=msg.to_string().as_str()))]
+#[tracing::instrument(level = "debug", skip(mn))]
 pub async fn wait_for_state(
-    msg: impl ToString,
-    rx: &mut Receiver<RaftMetrics>,
+    mn: &MetaNode,
     state: async_raft::State,
 ) -> anyhow::Result<RaftMetrics> {
-    wait_for(
-        format!("{}: state -> {:?}", msg.to_string(), state),
-        rx,
-        |x| x.state == state,
-    )
-    .await
+    let metrics = mn.raft.wait(timeout()).state(state, "").await?;
+    Ok(metrics)
 }
 
-/// Same as wait_for_with_timeout except it use a default timeout 2000 ms.
-#[tracing::instrument(level = "info", skip(msg,rx,func), fields(msg=msg.to_string().as_str()))]
-async fn wait_for<T>(
-    msg: impl ToString,
-    rx: &mut Receiver<RaftMetrics>,
-    func: T,
-) -> anyhow::Result<RaftMetrics>
-where
-    T: Fn(&RaftMetrics) -> bool,
-{
-    let timeout = Duration::from_millis(2000);
-    wait_for_with_timeout(msg, rx, func, timeout).await
+/// Wait for raft metrics to become a state that satisfies `func`.
+#[tracing::instrument(level = "debug", skip(mn, func))]
+async fn wait_for<T>(mn: &MetaNode, func: T) -> anyhow::Result<RaftMetrics>
+where T: Fn(&RaftMetrics) -> bool + Send {
+    let metrics = mn.raft.wait(timeout()).metrics(func, "").await?;
+    Ok(metrics)
 }
 
-/// Wait for raft metrics to become a state that satisfies `func`,
-/// until the specified timeout.
-#[tracing::instrument(level = "info", skip(msg,rx,func), fields(msg=msg.to_string().as_str()))]
-async fn wait_for_with_timeout<T>(
-    msg: impl ToString,
-    rx: &mut Receiver<RaftMetrics>,
-    func: T,
-    timeout: Duration,
-) -> anyhow::Result<RaftMetrics>
-where
-    T: Fn(&RaftMetrics) -> bool,
-{
-    // TODO make wait_for_xxx util a extension of async-raft.
-
-    loop {
-        let latest = rx.borrow().clone();
-
-        tracing::info!("start wait for {:} latest: {:?}", msg.to_string(), latest);
-        if func(&latest) {
-            tracing::info!("done wait for {:} latest: {:?}", msg.to_string(), latest);
-            return Ok(latest);
-        }
-
-        let delay = tokio::time::sleep(timeout);
-        tokio::select! {
-            _ = delay => {
-                return Err(anyhow::anyhow!("timeout wait for {} latest: {:?}", msg.to_string(), latest));
-            }
-            changed = rx.changed() => {
-                changed?;
-            }
-        };
-    }
+/// Make a default timeout for wait() for test.
+fn timeout() -> Option<Duration> {
+    Some(Duration::from_millis(2000))
 }
 
 fn new_addr() -> String {

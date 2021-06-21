@@ -9,8 +9,6 @@ use log::info;
 use pretty_assertions::assert_eq;
 
 use crate::meta_service::raftmeta::RetryableError;
-use crate::meta_service::raftmeta_test::wait_for_current_leader;
-use crate::meta_service::raftmeta_test::wait_for_state;
 use crate::meta_service::ClientRequest;
 use crate::meta_service::ClientResponse;
 use crate::meta_service::Cmd;
@@ -239,15 +237,15 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
     let addr0 = rand_local_addr();
     let addr1 = rand_local_addr();
 
-    let _mn0 = MetaNode::boot(0, addr0.clone()).await?;
+    let mn0 = MetaNode::boot(0, addr0.clone()).await?;
     assert_meta_connection(&addr0).await?;
 
     {
         // add node 1 as non-voter
-        let _mn1 = MetaNode::boot_non_voter(1, &addr1).await?;
+        let mn1 = MetaNode::boot_non_voter(1, &addr1).await?;
         assert_meta_connection(&addr0).await?;
 
-        let resp = _mn0.add_node(1, addr1.clone()).await?;
+        let resp = mn0.add_node(1, addr1.clone()).await?;
         match resp {
             ClientResponse::Node { prev: _, result } => {
                 assert_eq!(addr1.clone(), result.unwrap().address);
@@ -256,9 +254,8 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
                 panic!("expect node")
             }
         }
-        let mut rx = _mn1.raft.metrics();
-        wait_for_state(1, &mut rx, State::NonVoter).await?;
-        wait_for_current_leader(1, &mut rx, 0).await?;
+        mn1.raft.wait(None).state(State::NonVoter, "").await?;
+        mn1.raft.wait(None).current_leader(0, "").await?;
     }
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr1)).await?;
