@@ -22,6 +22,8 @@ use crate::tests::rand_local_addr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_server_add_file() -> anyhow::Result<()> {
+    common_tracing::init_default_tracing();
+
     let addr = rand_local_addr();
 
     let _mn = MetaNode::boot(0, addr.clone()).await?;
@@ -59,6 +61,8 @@ async fn test_meta_server_add_file() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_server_set_file() -> anyhow::Result<()> {
+    common_tracing::init_default_tracing();
+
     let addr = rand_local_addr();
 
     let _mn = MetaNode::boot(0, addr.clone()).await?;
@@ -97,6 +101,9 @@ async fn test_meta_server_set_file() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
     // Test Cmd::AddFile, Cmd::SetFile, Cma::GetFile
+
+    common_tracing::init_default_tracing();
+
     let addr = rand_local_addr();
 
     let _mn = MetaNode::boot(0, addr.clone()).await?;
@@ -189,6 +196,8 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_server_incr_seq() -> anyhow::Result<()> {
+    common_tracing::init_default_tracing();
+
     let addr = rand_local_addr();
 
     let _mn = MetaNode::boot(0, addr.clone()).await?;
@@ -225,16 +234,17 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
     // - Bring up a cluster of one leader and one non-voter
     // - Assert that writing on the non-voter returns ForwardToLeader error
 
+    common_tracing::init_default_tracing();
+
     let addr0 = rand_local_addr();
     let addr1 = rand_local_addr();
 
     let _mn0 = MetaNode::boot(0, addr0.clone()).await?;
     assert_meta_connection(&addr0).await?;
 
-    // add node 1 as non-voter
-    let _mn1 = MetaNode::boot_non_voter(1, &addr1).await?;
-
     {
+        // add node 1 as non-voter
+        let _mn1 = MetaNode::boot_non_voter(1, &addr1).await?;
         assert_meta_connection(&addr0).await?;
 
         let resp = _mn0.add_node(1, addr1.clone()).await?;
@@ -270,8 +280,6 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
             assert_eq!(leader, 0);
         }
     }
-    _mn0.stop().await?;
-    _mn1.stop().await?;
 
     Ok(())
 }
