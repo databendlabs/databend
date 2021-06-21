@@ -13,7 +13,8 @@ jobs:
       GITHUB_REPO: fuse-query
       GITHUB_STATUS_TARGET_URL: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
       SHA: ${{ github.event.client_payload.REF }}
-      PR_NUMBER: ${{ github.event.client_payload.PR_NUMBER }}
+      PR_NUMBER: ${{ github.event.client_payload.PR_NUMBER }} 
+      LAST_COMMIT_SHA: ${{ github.event.client_payload.LAST_COMMIT_SHA }}
     steps:
     - name: Update status to pending
       run: >-
