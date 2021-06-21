@@ -2,20 +2,31 @@
 // //
 // // SPDX-License-Identifier: Apache-2.0.
 
-// #[macro_export]
-// macro_rules! downcast_array {
-//     ($ARRAY:expr, $TYPE:ident) => {
-//         if let Some(v) = $ARRAY.as_any().downcast_ref::<$TYPE>() {
-//             Result::Ok(v)
-//         } else {
-//             Result::Err(ErrorCode::BadDataValueType(format!(
-//                 "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
-//                 ($ARRAY).data_type(),
-//                 stringify!($TYPE)
-//             )))
-//         }
-//     };
-// }
+#[macro_export]
+macro_rules! downcast_array {
+    ($ARRAY:expr, $TYPE:ident) => {
+        if let Some(v) = $ARRAY.as_any().downcast_ref::<$TYPE>() {
+            Result::Ok(v)
+        } else {
+            Result::Err(ErrorCode::BadDataValueType(format!(
+                "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
+                ($ARRAY).data_type(),
+                stringify!($TYPE)
+            )))
+        }
+    };
+}
+
+macro_rules! typed_cast_from_array_to_data_value {
+    ($array:expr, $index:expr, $ARRAYTYPE:ident, $SCALAR:ident) => {{
+        use common_arrow::arrow::array::*;
+        let array = downcast_array!($array, $ARRAYTYPE)?;
+        Result::Ok(DataValue::$SCALAR(match array.is_null($index) {
+            true => None,
+            false => Some(array.value($index).into()),
+        }))
+    }};
+}
 
 // /// Invoke a compute kernel on a pair of arrays
 // macro_rules! compute_op {
@@ -350,17 +361,6 @@ macro_rules! format_data_value_with_option {
 //         Ok(Arc::new(
 //             common_arrow::arrow::compute::$OP(&ll, &rr).map_err(ErrorCode::from)?,
 //         ))
-//     }};
-// }
-
-// macro_rules! typed_cast_from_array_to_data_value {
-//     ($array:expr, $index:expr, $ARRAYTYPE:ident, $SCALAR:ident) => {{
-//         use common_arrow::arrow::array::*;
-//         let array = downcast_array!($array, $ARRAYTYPE)?;
-//         Result::Ok(DataValue::$SCALAR(match array.is_null($index) {
-//             true => None,
-//             false => Some(array.value($index).into()),
-//         }))
 //     }};
 // }
 

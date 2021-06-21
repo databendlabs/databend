@@ -143,14 +143,3 @@ impl fmt::Display for DataType {
         write!(f, "{:?}", self)
     }
 }
-
-pub trait IGetDataType {
-    fn get_data_type(&self) -> DataType;
-}
-
-// we are not using ArrayRef.data_type()
-impl IGetDataType for ArrayRef {
-    fn get_data_type(&self) -> DataType {
-        self.data_type().try_into().unwrap()
-    }
-}

@@ -65,7 +65,7 @@ macro_rules! impl_dyn_array {
             }
 
             fn slice(&self, offset: usize, length: usize) -> DataArrayRef {
-                self.0.slice(offset, length)
+                self.0.slice(offset, length).into_array()
             }
 
             fn cast_with_type(&self, data_type: &DataType) -> Result<DataArrayRef> {
@@ -73,22 +73,22 @@ macro_rules! impl_dyn_array {
             }
 
             fn try_get(&self, index: usize) -> Result<DataValue> {
-                self.0.try_get(index)
+                unsafe { self.0.try_get(index) }
             }
         }
     };
 }
 
-impl_dyn_array!(Float32Array);
-impl_dyn_array!(Float64Array);
-impl_dyn_array!(UInt8Array);
-impl_dyn_array!(UInt16Array);
-impl_dyn_array!(UInt32Array);
-impl_dyn_array!(UInt64Array);
-impl_dyn_array!(Int8Array);
-impl_dyn_array!(Int16Array);
-impl_dyn_array!(Int32Array);
-impl_dyn_array!(Int64Array);
-impl_dyn_array!(StringArray);
-impl_dyn_array!(ListArray);
-impl_dyn_array!(BooleanArray);
+impl_dyn_array!(DFFloat32Array);
+impl_dyn_array!(DFFloat64Array);
+impl_dyn_array!(DFUInt8Array);
+impl_dyn_array!(DFUInt16Array);
+impl_dyn_array!(DFUInt32Array);
+impl_dyn_array!(DFUInt64Array);
+impl_dyn_array!(DFInt8Array);
+impl_dyn_array!(DFInt16Array);
+impl_dyn_array!(DFInt32Array);
+impl_dyn_array!(DFInt64Array);
+impl_dyn_array!(DFStringArray);
+impl_dyn_array!(DFListArray);
+impl_dyn_array!(DFBooleanArray);

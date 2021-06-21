@@ -11,6 +11,7 @@ use common_arrow::arrow::datatypes::IntervalUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use data_array_base::DataArrayBase;
+use data_array_wrap::DataArrayWrap;
 
 use crate::*;
 
@@ -30,14 +31,14 @@ impl<T> DataArrayBase<T> {
 /// Dispatch the method call to the physical type and coerce back to logical type
 macro_rules! physical_dispatch {
     ($s: expr, $method: ident, $($args:expr),*) => {{
-        let date_type = $s.date_type();
+        let data_type = $s.data_type();
         let phys_type = $s.physical_type();
-        let s = $s.cast_with_date_type(&phys_type).unwrap();
+        let s = $s.cast_with_data_type(&phys_type).unwrap();
         let s = s.$method($($args),*);
 
         // if the type is unchanged we return the original type
-        if s.date_type() == &phys_type {
-            s.cast_with_date_type(date_type).unwrap()
+        if s.data_type() == &phys_type {
+            s.cast_with_data_type(data_type).unwrap()
         }
         // else the change of type is part of the operation.
         else {
@@ -48,14 +49,14 @@ macro_rules! physical_dispatch {
 
 macro_rules! try_physical_dispatch {
     ($s: expr, $method: ident, $($args:expr),*) => {{
-        let date_type = $s.date_type();
+        let data_type = $s.data_type();
         let phys_type = $s.physical_type();
-        let s = $s.cast_with_date_type(&phys_type).unwrap();
+        let s = $s.cast_with_data_type(&phys_type).unwrap();
         let s = s.$method($($args),*)?;
 
         // if the type is unchanged we return the original type
-        if s.date_type() == &phys_type {
-            s.cast_with_date_type(date_type)
+        if s.data_type() == &phys_type {
+            s.cast_with_data_type(data_type)
         }
         // else the change of type is part of the operation.
         else {
@@ -66,14 +67,14 @@ macro_rules! try_physical_dispatch {
 
 macro_rules! opt_physical_dispatch {
     ($s: expr, $method: ident, $($args:expr),*) => {{
-        let date_type = $s.date_type();
+        let data_type = $s.data_type();
         let phys_type = $s.physical_type();
-        let s = $s.cast_with_date_type(&phys_type).unwrap();
+        let s = $s.cast_with_data_type(&phys_type).unwrap();
         let s = s.$method($($args),*)?;
 
         // if the type is unchanged we return the original type
-        if s.date_type() == &phys_type {
-            Some(s.cast_with_date_type(date_type).unwrap())
+        if s.data_type() == &phys_type {
+            Some(s.cast_with_data_type(data_type).unwrap())
         }
         // else the change of type is part of the operation.
         else {
@@ -86,7 +87,7 @@ macro_rules! opt_physical_dispatch {
 macro_rules! cast_and_apply {
     ($s: expr, $method: ident, $($args:expr),*) => {{
         let phys_type = $s.physical_type();
-        let s = $s.cast_with_date_type(&phys_type).unwrap();
+        let s = $s.cast_with_data_type(&phys_type).unwrap();
         s.$method($($args),*)
     }}
 }
@@ -127,7 +128,7 @@ macro_rules! impl_dyn_arrays {
             }
 
             fn slice(&self, offset: usize, length: usize) -> DataArrayRef {
-                self.0.slice(length, length)
+                self.0.slice(offset, length).into_array()
             }
 
             fn cast_with_type(&self, data_type: &DataType) -> Result<DataArrayRef> {
@@ -135,8 +136,15 @@ macro_rules! impl_dyn_arrays {
             }
 
             fn try_get(&self, index: usize) -> Result<DataValue> {
-                self.0.try_get(index)
+                unsafe { self.0.try_get(index) }
             }
         }
     };
 }
+
+impl_dyn_arrays!(DFTimestampSecondArray);
+impl_dyn_arrays!(DFTimestampMillisecondArray);
+impl_dyn_arrays!(DFTimestampMicrosecondArray);
+impl_dyn_arrays!(DFTimestampNanosecondArray);
+impl_dyn_arrays!(DFIntervalYearMonthArray);
+impl_dyn_arrays!(DFIntervalDayTimeArray);

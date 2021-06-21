@@ -9,13 +9,13 @@ use crate::DataField;
 use crate::DataType;
 
 pub trait DFDataType: Send + Sync {
-    fn get_dtype() -> DataType;
+    fn data_type() -> DataType;
 }
 
 macro_rules! impl_df_datatype {
     ($ca:ident, $variant:ident) => {
         impl DFDataType for $ca {
-            fn get_dtype() -> DataType {
+            fn data_type() -> DataType {
                 DataType::$variant
             }
         }
@@ -49,29 +49,29 @@ pub type IntervalDayTimeType = arrow_data_types::IntervalDayTimeType;
 pub struct Utf8Type;
 pub struct ListType;
 
-pub type Int8Array = DataArrayBase<Int8Type>;
-pub type UInt8Array = DataArrayBase<UInt8Type>;
-pub type Int16Array = DataArrayBase<Int16Type>;
-pub type UInt16Array = DataArrayBase<UInt16Type>;
-pub type Int32Array = DataArrayBase<Int32Type>;
-pub type UInt32Array = DataArrayBase<UInt32Type>;
-pub type Int64Array = DataArrayBase<Int64Type>;
-pub type UInt64Array = DataArrayBase<UInt64Type>;
+pub type DFInt8Array = DataArrayBase<Int8Type>;
+pub type DFUInt8Array = DataArrayBase<UInt8Type>;
+pub type DFInt16Array = DataArrayBase<Int16Type>;
+pub type DFUInt16Array = DataArrayBase<UInt16Type>;
+pub type DFInt32Array = DataArrayBase<Int32Type>;
+pub type DFUInt32Array = DataArrayBase<UInt32Type>;
+pub type DFInt64Array = DataArrayBase<Int64Type>;
+pub type DFUInt64Array = DataArrayBase<UInt64Type>;
 
-pub type BooleanArray = DataArrayBase<BooleanType>;
+pub type DFBooleanArray = DataArrayBase<BooleanType>;
 
-pub type Float32Array = DataArrayBase<Float32Type>;
-pub type Float64Array = DataArrayBase<Float64Type>;
+pub type DFFloat32Array = DataArrayBase<Float32Type>;
+pub type DFFloat64Array = DataArrayBase<Float64Type>;
 
-pub type StringArray = DataArrayBase<Utf8Type>;
-pub type ListArray = DataArrayBase<ListType>;
+pub type DFStringArray = DataArrayBase<Utf8Type>;
+pub type DFListArray = DataArrayBase<ListType>;
 
-pub type TimestampSecondArray = DataArrayBase<TimestampSecondType>;
-pub type TimestampMillisecondArray = DataArrayBase<TimestampMillisecondType>;
-pub type TimestampMicrosecondArray = DataArrayBase<TimestampMicrosecondType>;
-pub type TimestampNanosecondArray = DataArrayBase<TimestampNanosecondType>;
-pub type IntervalYearMonthArray = DataArrayBase<IntervalYearMonthType>;
-pub type IntervalDayTimeArray = DataArrayBase<IntervalDayTimeType>;
+pub type DFTimestampSecondArray = DataArrayBase<TimestampSecondType>;
+pub type DFTimestampMillisecondArray = DataArrayBase<TimestampMillisecondType>;
+pub type DFTimestampMicrosecondArray = DataArrayBase<TimestampMicrosecondType>;
+pub type DFTimestampNanosecondArray = DataArrayBase<TimestampNanosecondType>;
+pub type DFIntervalYearMonthArray = DataArrayBase<IntervalYearMonthType>;
+pub type DFIntervalDayTimeArray = DataArrayBase<IntervalDayTimeType>;
 
 impl_df_datatype!(UInt8Type, UInt8);
 impl_df_datatype!(UInt16Type, UInt16);
@@ -88,49 +88,49 @@ impl_df_datatype!(Date32Type, Date32);
 impl_df_datatype!(Date64Type, Date64);
 
 impl DFDataType for TimestampSecondType {
-    fn get_dtype() -> DataType {
+    fn data_type() -> DataType {
         DataType::Timestamp(TimeUnit::Second, None)
     }
 }
 
 impl DFDataType for TimestampMillisecondType {
-    fn get_dtype() -> DataType {
+    fn data_type() -> DataType {
         DataType::Timestamp(TimeUnit::Millisecond, None)
     }
 }
 
 impl DFDataType for TimestampMicrosecondType {
-    fn get_dtype() -> DataType {
+    fn data_type() -> DataType {
         DataType::Timestamp(TimeUnit::Microsecond, None)
     }
 }
 
 impl DFDataType for TimestampNanosecondType {
-    fn get_dtype() -> DataType {
+    fn data_type() -> DataType {
         DataType::Timestamp(TimeUnit::Nanosecond, None)
     }
 }
 
 impl DFDataType for IntervalYearMonthType {
-    fn get_dtype() -> DataType {
+    fn data_type() -> DataType {
         DataType::Interval(IntervalUnit::YearMonth)
     }
 }
 
 impl DFDataType for IntervalDayTimeType {
-    fn get_dtype() -> DataType {
+    fn data_type() -> DataType {
         DataType::Interval(IntervalUnit::DayTime)
     }
 }
 
 impl DFDataType for Utf8Type {
-    fn get_dtype() -> DataType {
+    fn data_type() -> DataType {
         DataType::Utf8
     }
 }
 
 impl DFDataType for ListType {
-    fn get_dtype() -> DataType {
+    fn data_type() -> DataType {
         // null as we cannot no anything without self.
         DataType::List(Box::new(DataField::new("", DataType::Null, true)))
     }
