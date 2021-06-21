@@ -27,7 +27,6 @@ jobs:
       with:
         ref: ${{ env.SHA }}
     - name: setup docker context for buildx
-        id: buildx-context
         run: |
           docker context create builders
     - name: setup docker buildx
