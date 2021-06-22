@@ -4,6 +4,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -19,6 +20,11 @@ use crate::meta_service::Cmd;
 use crate::meta_service::NodeId;
 use crate::meta_service::Placement;
 
+/// seq number key to generate database id
+const SEQ_DATABASE_ID: &str = "database_id";
+/// seq number key to generate table id
+// const SEQ_TABLE_ID: &str = "table_id";
+
 /// Replication defines the replication strategy.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Replication {
@@ -30,6 +36,22 @@ impl Default for Replication {
     fn default() -> Self {
         Replication::Mirror(1)
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
+pub struct Database {
+    pub database_id: u64,
+    /// tables belong to this database.
+    pub tables: HashMap<String, u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
+pub struct Table {
+    table_id: u64,
+    /// serialized schema
+    schema: Vec<u8>,
+    // name or parts that belong to this table.
+    parts: HashSet<String>,
 }
 
 /// Meta data of a Dfs.
@@ -49,6 +71,12 @@ pub struct Meta {
     pub nodes: HashMap<NodeId, Node>,
 
     pub replication: Replication,
+
+    /// db name to database mapping
+    pub databases: BTreeMap<String, Database>,
+
+    /// table id to table mapping
+    pub tables: BTreeMap<u64, Table>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -82,6 +110,8 @@ impl MetaBuilder {
             slots: Vec::with_capacity(initial_slots as usize),
             nodes: HashMap::new(),
             replication,
+            databases: BTreeMap::new(),
+            tables: BTreeMap::new(),
         };
         for _i in 0..initial_slots {
             m.slots.push(Slot::default());
@@ -97,7 +127,24 @@ impl Meta {
         }
     }
 
-    // Apply an op from client.
+    /// Internal func to get an auto-incr seq number.
+    /// It is just what Cmd::IncrSeq does and is also used by Cmd that requires
+    /// a unique id such as Cmd::AddDatabase which needs make a new database id.
+    fn incr_seq(&mut self, key: &str) -> u64 {
+        let prev = self.sequences.get(key);
+        let curr = match prev {
+            Some(v) => v + 1,
+            None => 1,
+        };
+        self.sequences.insert(key.to_string(), curr);
+        tracing::debug!("applied IncrSeq: {}={}", key, curr);
+
+        curr
+    }
+
+    /// Apply an op sent from client.
+    /// This is the only entry to modify meta data.
+    /// The `data` is always committed by raft before applying.
     #[tracing::instrument(level = "info", skip(self))]
     pub fn apply(&mut self, data: &ClientRequest) -> anyhow::Result<ClientResponse> {
         match data.cmd {
@@ -118,16 +165,7 @@ impl Meta {
                 Ok((prev, Some(value.clone())).into())
             }
 
-            Cmd::IncrSeq { ref key } => {
-                let prev = self.sequences.get(key);
-                let curr = match prev {
-                    Some(v) => v + 1,
-                    None => 1,
-                };
-                self.sequences.insert(key.clone(), curr);
-                tracing::info!("applied IncrSeq: {}={}", key, curr);
-                Ok(curr.into())
-            }
+            Cmd::IncrSeq { ref key } => Ok(self.incr_seq(key).into()),
 
             Cmd::AddNode {
                 ref node_id,
@@ -140,6 +178,25 @@ impl Meta {
                     let prev = self.nodes.insert(*node_id, node.clone());
                     tracing::info!("applied AddNode: {}={:?}", node_id, node);
                     Ok((prev, Some(node.clone())).into())
+                }
+            }
+
+            Cmd::AddDatabase { ref name } => {
+                // - If the db present, return it.
+                // - Otherwise, create a new one with next seq number as database id, and add it in to store.
+                if self.databases.contains_key(name) {
+                    let prev = self.databases.get(name);
+                    Ok((prev.cloned(), None).into())
+                } else {
+                    let db = Database {
+                        database_id: self.incr_seq(SEQ_DATABASE_ID),
+                        tables: Default::default(),
+                    };
+
+                    let prev = self.databases.insert(name.clone(), db.clone());
+                    tracing::debug!("applied AddDatabase: {}={:?}", name, db);
+
+                    Ok((prev, Some(db)).into())
                 }
             }
         }
@@ -187,6 +244,11 @@ impl Meta {
 
     pub fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         let x = self.nodes.get(node_id);
+        x.cloned()
+    }
+
+    pub fn get_database(&self, name: &str) -> Option<Database> {
+        let x = self.databases.get(name);
         x.cloned()
     }
 }

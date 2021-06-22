@@ -45,6 +45,7 @@ use serde::Serialize;
 use thiserror::Error;
 use tonic::transport::channel::Channel;
 
+use crate::meta_service::meta::Database;
 use crate::meta_service::MemStoreStateMachine;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::MetaServiceImpl;
@@ -70,22 +71,28 @@ pub enum Cmd {
 
     /// Add node if absent
     AddNode { node_id: NodeId, node: Node },
+
+    /// Add a database if absent
+    AddDatabase { name: String },
 }
 
 impl fmt::Display for Cmd {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Cmd::AddFile { key, value } => {
-                write!(f, "addfile:{}={}", key, value)
+                write!(f, "add_file:{}={}", key, value)
             }
             Cmd::SetFile { key, value } => {
-                write!(f, "setfile:{}={}", key, value)
+                write!(f, "set_file:{}={}", key, value)
             }
             Cmd::IncrSeq { key } => {
                 write!(f, "incr_seq:{}", key)
             }
             Cmd::AddNode { node_id, node } => {
-                write!(f, "addnode:{}={}", node_id, node)
+                write!(f, "add_node:{}={}", node_id, node)
+            }
+            Cmd::AddDatabase { name } => {
+                write!(f, "add_db:{}", name)
             }
         }
     }
@@ -199,6 +206,10 @@ pub enum ClientResponse {
         prev: Option<Node>,
         result: Option<Node>,
     },
+    DataBase {
+        prev: Option<Database>,
+        result: Option<Database>,
+    },
 }
 
 impl AppDataResponse for ClientResponse {}
@@ -263,6 +274,15 @@ impl From<u64> for ClientResponse {
 impl From<(Option<Node>, Option<Node>)> for ClientResponse {
     fn from(v: (Option<Node>, Option<Node>)) -> Self {
         ClientResponse::Node {
+            prev: v.0,
+            result: v.1,
+        }
+    }
+}
+
+impl From<(Option<Database>, Option<Database>)> for ClientResponse {
+    fn from(v: (Option<Database>, Option<Database>)) -> Self {
+        ClientResponse::DataBase {
             prev: v.0,
             result: v.1,
         }
@@ -1081,6 +1101,16 @@ impl MetaNode {
             })
             .await?;
         Ok(_resp)
+    }
+
+    /// Get a database from local meta state machine.
+    /// The returned value may not be the latest written.
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_database(&self, name: &str) -> Option<Database> {
+        // inconsistent get: from local state machine
+
+        let sm = self.sto.sm.read().await;
+        sm.meta.get_database(name)
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.

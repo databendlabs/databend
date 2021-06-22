@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use crate::meta_service::meta::Database;
 use crate::meta_service::meta::Replication;
 use crate::meta_service::ClientRequest;
 use crate::meta_service::ClientResponse;
@@ -120,6 +121,77 @@ fn test_meta_apply_incr_seq() -> anyhow::Result<()> {
             },
         })?;
         assert_eq!(ClientResponse::Seq { seq: i + 1 }, resp);
+    }
+
+    Ok(())
+}
+#[test]
+fn test_meta_apply_add_database() -> anyhow::Result<()> {
+    let mut m = Meta::builder().build()?;
+
+    struct T {
+        name: &'static str,
+        prev: Option<Database>,
+        result: Option<Database>,
+    }
+
+    fn case(name: &'static str, prev: Option<u64>, result: Option<u64>) -> T {
+        let prev = match prev {
+            None => None,
+            Some(id) => Some(Database {
+                database_id: id,
+                ..Default::default()
+            }),
+        };
+        let result = match result {
+            None => None,
+            Some(id) => Some(Database {
+                database_id: id,
+                ..Default::default()
+            }),
+        };
+        T { name, prev, result }
+    }
+
+    let cases: Vec<T> = vec![
+        case("foo", None, Some(1)),
+        case("foo", Some(1), None),
+        case("bar", None, Some(2)),
+        case("bar", Some(2), None),
+        case("wow", None, Some(3)),
+    ];
+
+    for c in cases.iter() {
+        // add
+
+        let resp = m.apply(&ClientRequest {
+            txid: None,
+            cmd: Cmd::AddDatabase {
+                name: c.name.to_string(),
+            },
+        })?;
+        assert_eq!(
+            ClientResponse::DataBase {
+                prev: c.prev.clone(),
+                result: c.result.clone(),
+            },
+            resp
+        );
+
+        // get
+
+        let want = match (&c.prev, &c.result) {
+            (Some(ref a), _) => a.database_id,
+            (_, Some(ref b)) => b.database_id,
+            _ => {
+                panic!("both none");
+            }
+        };
+
+        let got = m
+            .get_database(c.name)
+            .ok_or_else(|| anyhow::anyhow!("db not found: {}", c.name));
+        assert_eq!(want, got.unwrap().database_id);
     }
 
     Ok(())
