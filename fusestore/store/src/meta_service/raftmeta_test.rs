@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use async_raft::RaftMetrics;
@@ -261,7 +262,7 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_node_write() -> anyhow::Result<()> {
+async fn test_meta_node_set_file() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and a non-voter;
     // - Write to the raft node on every node, expect Ok.
 
@@ -302,6 +303,57 @@ async fn test_meta_node_write() -> anyhow::Result<()> {
 
         assert_applied_index(all.clone(), last_applied + 1).await?;
         assert_get_file(all.clone(), &key, &key).await?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_node_add_database() -> anyhow::Result<()> {
+    // - Start a leader, 2 followers and a non-voter;
+    // - Assert that every node handles AddDatabase request correctly.
+
+    common_tracing::init_default_tracing();
+
+    let all = setup_cluster(hashset![0, 1, 2], hashset![3]).await?;
+
+    // ensure cluster works
+    assert_set_file_synced(all.clone(), "foo").await?;
+
+    // - db name to create
+    // - expected db id
+    let cases: Vec<(&str, u64)> = vec![("foo", 1), ("bar", 2), ("foo", 1), ("bar", 2)];
+
+    // Sending AddDatabase request to any node is ok.
+    for (i, (name, want_id)) in cases.iter().enumerate() {
+        let mn = &all[i as usize];
+
+        let last_applied = mn.raft.metrics().borrow().last_applied;
+
+        let rst = mn
+            .write(ClientRequest {
+                txid: None,
+                cmd: Cmd::AddDatabase {
+                    name: name.to_string(),
+                },
+            })
+            .await;
+
+        assert!(rst.is_ok());
+
+        // No matter if a db is created, the log that tries to create db always applies.
+        assert_applied_index(all.clone(), last_applied + 1).await?;
+
+        for (i, mn) in all.iter().enumerate() {
+            let got = mn.get_database(&name).await;
+
+            assert_eq!(
+                *want_id,
+                got.unwrap().database_id,
+                "n{} applied AddDatabase",
+                i
+            );
+        }
     }
 
     Ok(())
@@ -384,6 +436,41 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     assert_get_file(meta_nodes, "key1", "key1").await?;
 
     Ok(())
+}
+
+/// Setup a cluster with several voter and several non_voter
+/// The node id 0 must be in `voters` and node 0 is elected as leader.
+async fn setup_cluster(
+    voters: HashSet<NodeId>,
+    non_voters: HashSet<NodeId>,
+) -> anyhow::Result<Vec<Arc<MetaNode>>> {
+    // leader is always node-0
+    assert!(voters.contains(&0));
+    assert!(!non_voters.contains(&0));
+
+    let mut rst = vec![];
+
+    let (_id, mn) = setup_leader().await?;
+    rst.push(mn.clone());
+    let leader = mn;
+
+    for id in voters.iter() {
+        // leader is already created.
+        if *id == 0 {
+            continue;
+        }
+        let (_id, mn) = setup_non_voter(leader.clone(), *id).await?;
+        rst.push(mn);
+    }
+
+    for id in non_voters.iter() {
+        let (_id, mn) = setup_non_voter(leader.clone(), *id).await?;
+        rst.push(mn);
+    }
+
+    leader.raft.change_membership(voters).await?;
+
+    Ok(rst)
 }
 
 async fn setup_leader() -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
