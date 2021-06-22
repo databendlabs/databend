@@ -18,6 +18,7 @@ use mysql::Row;
 
 use crate::servers::MySQLHandler;
 use crate::sessions::SessionManager;
+use std::time::Duration;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_use_database_with_on_query() -> Result<()> {
@@ -56,6 +57,8 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
         drop(conn);
     }
 
+    // Wait for the connection to be destroyed
+    std::thread::sleep(Duration::from_secs(5));
     // Accepted connection
     create_connection(listener_addr.port())?;
 
