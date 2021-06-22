@@ -1,0 +1,45 @@
+# Default values for datafuse.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+current:
+  repository: datafuselabs/fuse-query
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "pr1"
+  name: "current"
+
+ref:
+  repository: datafuselabs/fuse-query
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "pr2"
+  name: "reference"
+
+
+resources:
+  requests:
+    memory: 3Gi
+    cpu: "3300m"
+  limits:
+    memory: 3Gi
+    cpu: "3300m"
+
+perf-tool:
+  tag: "latest"
+  repository: datafuselabs/perf-tool
+  name: "datafuse-perftool"
+  output: "/mnt/data"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+configs:
+  httpAPIPort: 8080
+  metricAPIPort: 7070
+  rpcAPIPort: 9090
+  mysqlPort: 3307
+  clickhousePort: 9001
