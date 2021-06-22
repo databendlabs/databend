@@ -5,6 +5,7 @@
 use std::sync::Arc;
 use std::sync::Barrier;
 use std::thread::JoinHandle;
+use std::time::Duration;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -56,6 +57,8 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
         drop(conn);
     }
 
+    // Wait for the connection to be destroyed
+    std::thread::sleep(Duration::from_secs(5));
     // Accepted connection
     create_connection(listener_addr.port())?;
 
