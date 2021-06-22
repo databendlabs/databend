@@ -5,6 +5,7 @@
 use std::sync::Arc;
 use std::sync::Barrier;
 use std::thread::JoinHandle;
+use std::time::Duration;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -18,7 +19,6 @@ use mysql::Row;
 
 use crate::servers::MySQLHandler;
 use crate::sessions::SessionManager;
-use std::time::Duration;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_use_database_with_on_query() -> Result<()> {
