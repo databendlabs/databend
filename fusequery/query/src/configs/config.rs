@@ -2,12 +2,31 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use lazy_static::lazy_static;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
-pub const FUSE_COMMIT_VERSION: &str = env!("FUSE_COMMIT_VERSION");
+lazy_static! {
+    pub static ref FUSE_COMMIT_VERSION: String = {
+        let build_semver = option_env!("VERGEN_BUILD_SEMVER");
+        let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
+        let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
+        let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
+
+        let ver = match (build_semver, git_sha, rustc_semver, timestamp) {
+            #[cfg(not(feature = "simd"))]
+            (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
+            #[cfg(feature = "simd")]
+            (Some(v1), Some(v2), Some(v3), Some(v4)) => {
+                format!("{}-{}-simd({}-{})", v1, v2, v3, v4)
+            }
+            _ => String::new(),
+        };
+        ver
+    };
+}
 
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 #[serde(default)]
@@ -124,9 +143,9 @@ impl Config {
     /// Load configs from toml file.
     pub fn load_from_toml(file: &str) -> Result<Self> {
         let context = std::fs::read_to_string(file)
-            .map_err(|e| ErrorCodes::CannotReadFile(format!("File: {}, err: {:?}", file, e)))?;
+            .map_err(|e| ErrorCode::CannotReadFile(format!("File: {}, err: {:?}", file, e)))?;
         let mut cfg = Config::from_args_with_toml(context.as_str())
-            .map_err(|e| ErrorCodes::BadArguments(format!("{:?}", e)))?;
+            .map_err(|e| ErrorCode::BadArguments(format!("{:?}", e)))?;
         if cfg.num_cpus == 0 {
             cfg.num_cpus = num_cpus::get() as u64;
         }

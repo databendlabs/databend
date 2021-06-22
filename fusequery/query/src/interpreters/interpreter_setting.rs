@@ -12,7 +12,7 @@ use common_planners::SettingPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::IInterpreter;
+use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::FuseQueryContextRef;
 
@@ -28,7 +28,7 @@ impl SettingInterpreter {
 }
 
 #[async_trait::async_trait]
-impl IInterpreter for SettingInterpreter {
+impl Interpreter for SettingInterpreter {
     fn name(&self) -> &str {
         "SettingInterpreter"
     }
@@ -44,7 +44,9 @@ impl IInterpreter for SettingInterpreter {
                     self.ctx.set_max_threads(threads)?;
                 }
                 _ => {
-                    self.ctx.update_settings(&var.variable, var.value)?;
+                    self.ctx
+                        .get_settings()
+                        .update_settings(&var.variable, var.value)?;
                 }
             }
         }

@@ -11,6 +11,10 @@ edition = "2018"
 name = "fuse-store"
 path = "src/bin/fuse-store.rs"
 
+[features]
+default = ["simd"]
+simd = ["common-arrow/simd"]
+
 [dependencies]
 # Workspace dependencies
 common-arrow = {path = "../../common/arrow"}
@@ -21,14 +25,15 @@ common-flights = {path = "../../common/flights"}
 common-functions = {path = "../../common/functions"}
 common-infallible = {path = "../../common/infallible"}
 common-planners = {path = "../../common/planners"}
+common-runtime = {path = "../../common/runtime"}
+common-tracing = {path = "../../common/tracing"}
 
 
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.40"
-# track self maintained branch with hot fixes
-async-raft = { git = "https://github.com/datafuse-extras/async-raft", branch = "master" }
+anyhow = "1.0.41"
+async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.1" }
 async-trait = "0.1"
 env_logger = "0.8"
 futures = "0.3"
@@ -41,7 +46,7 @@ num = "0.4"
 num_cpus = "1.0"
 paste = "^1.0"
 prost = "0.7"
-rand = "0.8.3"
+rand = "0.8.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3"
@@ -49,19 +54,14 @@ structopt-toml = "0.4.5"
 tempfile = "3.2.0"
 thiserror = "1.0.25"
 threadpool = "1.8.1"
-tokio = { version = "1.6", features = ["macros", "rt","rt-multi-thread", "sync"] }
 tokio-stream = "0.1"
-tonic = "0.4"
-tracing = "0.1.26"
-tracing-futures = { version = "0.2.5", default-features = false }
+tonic = "0.4.3"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 
 [dev-dependencies]
 env_logger = "*"
 pretty_assertions = "0.7"
 test-env-log = "0.2.7"
-tracing = {version = "0.1", default-features = false}
-tracing-subscriber = "0.2.18"
 maplit = "1.0.2"
 
 [build-dependencies]

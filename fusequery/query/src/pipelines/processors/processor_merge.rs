@@ -6,20 +6,20 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_runtime::tokio::sync::mpsc;
 use common_streams::SendableDataBlockStream;
 use log::error;
-use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct MergeProcessor {
     ctx: FuseQueryContextRef,
-    inputs: Vec<Arc<dyn IProcessor>>,
+    inputs: Vec<Arc<dyn Processor>>,
 }
 
 impl MergeProcessor {
@@ -32,17 +32,17 @@ impl MergeProcessor {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for MergeProcessor {
+impl Processor for MergeProcessor {
     fn name(&self) -> &str {
         "MergeProcessor"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         self.inputs.push(input);
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         self.inputs.clone()
     }
 
@@ -53,7 +53,7 @@ impl IProcessor for MergeProcessor {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let inputs = self.inputs.len();
         match inputs {
-            0 => Result::Err(ErrorCodes::IllegalTransformConnectionState(
+            0 => Result::Err(ErrorCode::IllegalTransformConnectionState(
                 "Merge processor inputs cannot be zero",
             )),
             1 => self.inputs[0].execute().await,

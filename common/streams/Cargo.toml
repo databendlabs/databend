@@ -11,17 +11,18 @@ edition = "2018"
 common-arrow = {path = "../arrow"}
 common-datablocks = {path = "../datablocks"}
 common-datavalues = {path = "../datavalues"}
-common-progress = {path = "../progress"}
 common-exception = {path = "../exception"}
+common-progress = {path = "../progress"}
 
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.40"
+anyhow = "1.0.41"
 crossbeam = "0.8"
 futures = "0.3"
 pin-project-lite = "^0.2"
-tokio = { version = "1.6", features = ["macros", "rt","rt-multi-thread", "sync"] }
 
 [dev-dependencies]
+common-runtime = {path = "../runtime"}
+
 pretty_assertions = "0.7"

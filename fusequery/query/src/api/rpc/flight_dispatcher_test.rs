@@ -8,8 +8,9 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
-use tokio::sync::mpsc::channel;
-use tokio::sync::mpsc::Sender;
+use common_runtime::tokio;
+use common_runtime::tokio::sync::mpsc::channel;
+use common_runtime::tokio::sync::mpsc::Sender;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_data_stream::FlightDataStream;
@@ -250,8 +251,8 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
 
 fn create_dispatcher() -> Result<(FlightDispatcher, Sender<Request>)> {
     let conf = Config::default();
-    let sessions = SessionManager::create();
     let cluster = Cluster::create_global(conf.clone())?;
+    let sessions = SessionManager::from_conf(conf.clone(), cluster.clone())?;
     let dispatcher = FlightDispatcher::new(conf, cluster, sessions);
     let sender = dispatcher.run();
     Ok((dispatcher, sender))

@@ -32,16 +32,16 @@ use common_flights::ScanPartitionAction;
 use common_flights::StoreDoAction;
 use common_flights::StoreDoActionResult;
 use common_planners::PlanNode;
+use common_runtime::tokio::sync::mpsc::Sender;
 use futures::Stream;
 use log::info;
-use tokio::sync::mpsc::Sender;
 use tokio_stream::StreamExt;
 use tonic::Status;
 use tonic::Streaming;
 
 use crate::data_part::appender::Appender;
 use crate::engine::MemEngine;
-use crate::fs::IFileSystem;
+use crate::fs::FileSystem;
 use crate::protobuf::CmdCreateDatabase;
 use crate::protobuf::CmdCreateTable;
 use crate::protobuf::Db;
@@ -49,22 +49,22 @@ use crate::protobuf::Table;
 
 pub struct ActionHandler {
     meta: Arc<Mutex<MemEngine>>,
-    fs: Arc<dyn IFileSystem>,
+    fs: Arc<dyn FileSystem>,
 }
 
 type DoGetStream =
     Pin<Box<dyn Stream<Item = Result<FlightData, tonic::Status>> + Send + Sync + 'static>>;
 
 impl ActionHandler {
-    pub fn create(fs: Arc<dyn IFileSystem>) -> Self {
+    pub fn create(fs: Arc<dyn FileSystem>) -> Self {
         ActionHandler {
             meta: MemEngine::create(),
             fs,
         }
     }
 
-    /// Handle pull-file reqeust, which is used internally for replicating data copies.
-    /// In FuseStore impl there is no internal file id etc, thus replication use the same `key` in communacation with FuseQuery as in internal replication.
+    /// Handle pull-file request, which is used internally for replicating data copies.
+    /// In FuseStore impl there is no internal file id etc, thus replication use the same `key` in communication with FuseQuery as in internal replication.
     pub async fn do_pull_file(
         &self,
         key: String,
@@ -73,7 +73,7 @@ impl ActionHandler {
         // TODO: stream read if the file is too large.
         let buf = self
             .fs
-            .read_all(key)
+            .read_all(&key)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
@@ -251,7 +251,7 @@ impl ActionHandler {
             anyhow::bail!("invalid PlanNode passed in")
         };
 
-        let content = self.fs.read_all(part_file.to_string()).await?;
+        let content = self.fs.read_all(&part_file).await?;
         let cursor = SliceableCursor::new(content);
 
         let file_reader = SerializedFileReader::new(cursor)?;

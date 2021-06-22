@@ -8,7 +8,7 @@ Returns the name of the currently selected database. If no database is selected,
 ## Syntax
 
 ```
-SELECT DATABASE() 
+SELECT DATABASE()
 ```
 
 ## Examples
@@ -16,7 +16,7 @@ SELECT DATABASE()
 ```
 mysql> SELECT DATABASE();
 +------------+
-| database() |
+| DATABASE() |
 +------------+
 | default    |
 +------------+

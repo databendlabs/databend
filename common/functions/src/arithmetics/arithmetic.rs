@@ -18,7 +18,7 @@ use crate::arithmetics::ArithmeticModuloFunction;
 use crate::arithmetics::ArithmeticMulFunction;
 use crate::arithmetics::ArithmeticPlusFunction;
 use crate::FactoryFuncRef;
-use crate::IFunction;
+use crate::Function;
 
 #[derive(Clone)]
 pub struct ArithmeticFunction {
@@ -41,12 +41,12 @@ impl ArithmeticFunction {
         Ok(())
     }
 
-    pub fn try_create_func(op: DataValueArithmeticOperator) -> Result<Box<dyn IFunction>> {
+    pub fn try_create_func(op: DataValueArithmeticOperator) -> Result<Box<dyn Function>> {
         Ok(Box::new(ArithmeticFunction { op }))
     }
 }
 
-impl IFunction for ArithmeticFunction {
+impl Function for ArithmeticFunction {
     fn name(&self) -> &str {
         "ArithmeticFunction"
     }
@@ -74,19 +74,7 @@ impl IFunction for ArithmeticFunction {
                 _ => Ok(DataColumnarValue::Array(result)),
             }
         } else {
-            let result = DataArrayArithmetic::data_array_arithmetic_op(
-                self.op.clone(),
-                &columns[0],
-                &columns[1],
-            )?;
-
-            match (&columns[0], &columns[1]) {
-                (DataColumnarValue::Constant(_, _), DataColumnarValue::Constant(_, _)) => {
-                    let data_value = DataValue::try_from_array(&result, 0)?;
-                    Ok(DataColumnarValue::Constant(data_value, input_rows))
-                }
-                _ => Ok(DataColumnarValue::Array(result)),
-            }
+            DataArrayArithmetic::data_array_arithmetic_op(self.op.clone(), &columns[0], &columns[1])
         }
     }
 

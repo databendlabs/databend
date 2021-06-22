@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::CreateTablePlan;
@@ -15,12 +15,12 @@ use common_planners::TableEngineType;
 use crate::datasources::local::CsvTable;
 use crate::datasources::local::NullTable;
 use crate::datasources::local::ParquetTable;
-use crate::datasources::IDatabase;
-use crate::datasources::ITable;
-use crate::datasources::ITableFunction;
+use crate::datasources::Database;
+use crate::datasources::Table;
+use crate::datasources::TableFunction;
 
 pub struct LocalDatabase {
-    tables: RwLock<HashMap<String, Arc<dyn ITable>>>,
+    tables: RwLock<HashMap<String, Arc<dyn Table>>>,
 }
 
 impl LocalDatabase {
@@ -32,7 +32,7 @@ impl LocalDatabase {
 }
 
 #[async_trait::async_trait]
-impl IDatabase for LocalDatabase {
+impl Database for LocalDatabase {
     fn name(&self) -> &str {
         "local"
     }
@@ -45,19 +45,19 @@ impl IDatabase for LocalDatabase {
         true
     }
 
-    fn get_table(&self, table_name: &str) -> Result<Arc<dyn ITable>> {
+    fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let table_lock = self.tables.read();
         let table = table_lock
             .get(table_name)
-            .ok_or_else(|| ErrorCodes::UnknownTable(format!("Unknown table: '{}'", table_name)))?;
+            .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name)))?;
         Ok(table.clone())
     }
 
-    fn get_tables(&self) -> Result<Vec<Arc<dyn ITable>>> {
+    fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         Ok(self.tables.read().values().cloned().collect())
     }
 
-    fn get_table_functions(&self) -> Result<Vec<Arc<dyn ITableFunction>>> {
+    fn get_table_functions(&self) -> Result<Vec<Arc<dyn TableFunction>>> {
         Ok(vec![])
     }
 
@@ -69,7 +69,7 @@ impl IDatabase for LocalDatabase {
             return if plan.if_not_exists {
                 Ok(())
             } else {
-                return Err(ErrorCodes::UnImplement(format!(
+                return Err(ErrorCode::UnImplement(format!(
                     "Table: '{}.{}' already exists.",
                     db_name, table_name,
                 )));
@@ -87,7 +87,7 @@ impl IDatabase for LocalDatabase {
                 NullTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
             }
             _ => {
-                return Result::Err(ErrorCodes::UnImplement(format!(
+                return Result::Err(ErrorCode::UnImplement(format!(
                     "Local database does not support '{:?}' table engine",
                     plan.engine
                 )));
@@ -106,7 +106,7 @@ impl IDatabase for LocalDatabase {
             return if plan.if_exists {
                 Ok(())
             } else {
-                Err(ErrorCodes::UnknownTable(format!(
+                Err(ErrorCode::UnknownTable(format!(
                     "Unknown table: '{}.{}'",
                     plan.db, plan.table
                 )))

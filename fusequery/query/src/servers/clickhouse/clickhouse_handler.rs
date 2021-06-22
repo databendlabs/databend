@@ -12,13 +12,14 @@ use clickhouse_srv::connection::Connection;
 use clickhouse_srv::errors::ServerError;
 use clickhouse_srv::types::Block as ClickHouseBlock;
 use clickhouse_srv::*;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_runtime::tokio;
+use common_runtime::tokio::net::TcpListener;
+use common_runtime::tokio::sync::mpsc;
+use common_runtime::tokio::time;
 use log::error;
 use metrics::histogram;
-use tokio::net::TcpListener;
-use tokio::sync::mpsc;
-use tokio::time;
 use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::StreamExt;
 
@@ -40,7 +41,7 @@ impl Session {
     }
 }
 
-pub fn to_clickhouse_err(res: ErrorCodes) -> clickhouse_srv::errors::Error {
+pub fn to_clickhouse_err(res: ErrorCode) -> clickhouse_srv::errors::Error {
     clickhouse_srv::errors::Error::Server(ServerError {
         code: res.code() as u32,
         name: "DB:Exception".to_string(),

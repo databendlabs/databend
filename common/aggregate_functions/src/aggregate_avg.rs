@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::any::Any;
 use std::fmt;
 
 use common_datavalues::DataColumnarValue;
@@ -14,8 +15,8 @@ use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_unary_arguments;
+use crate::AggregateFunction;
 use crate::AggregateSumFunction;
-use crate::IAggregateFunction;
 
 #[derive(Clone)]
 pub struct AggregateAvgFunction {
@@ -28,7 +29,7 @@ impl AggregateAvgFunction {
     pub fn try_create(
         display_name: &str,
         arguments: Vec<DataField>,
-    ) -> Result<Box<dyn IAggregateFunction>> {
+    ) -> Result<Box<dyn AggregateFunction>> {
         assert_unary_arguments(display_name, arguments.len())?;
 
         Ok(Box::new(AggregateAvgFunction {
@@ -39,7 +40,7 @@ impl AggregateAvgFunction {
     }
 }
 
-impl IAggregateFunction for AggregateAvgFunction {
+impl AggregateFunction for AggregateAvgFunction {
     fn name(&self) -> &str {
         "AggregateAvgFunction"
     }
@@ -50,6 +51,10 @@ impl IAggregateFunction for AggregateAvgFunction {
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     fn accumulate(&mut self, columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
@@ -63,6 +68,25 @@ impl IAggregateFunction for AggregateAvgFunction {
                 DataValueArithmeticOperator::Plus,
                 values[1].clone(),
                 DataValue::UInt64(Some(input_rows as u64)),
+            )?;
+
+            self.state = DataValue::Struct(vec![sum, count]);
+        }
+        Ok(())
+    }
+
+    fn accumulate_scalar(&mut self, scalar_values: &[DataValue]) -> Result<()> {
+        if let DataValue::Struct(values) = self.state.clone() {
+            let sum = DataValueArithmetic::data_value_arithmetic_op(
+                DataValueArithmeticOperator::Plus,
+                values[0].clone(),
+                scalar_values[0].clone(),
+            )?;
+
+            let count = DataValueArithmetic::data_value_arithmetic_op(
+                DataValueArithmeticOperator::Plus,
+                values[1].clone(),
+                DataValue::UInt64(Some(1u64)),
             )?;
 
             self.state = DataValue::Struct(vec![sum, count]);
@@ -89,6 +113,7 @@ impl IAggregateFunction for AggregateAvgFunction {
                 new_states[1].clone(),
                 old_states[1].clone(),
             )?;
+
             self.state = DataValue::Struct(vec![sum, count]);
         }
         Ok(())
@@ -96,11 +121,15 @@ impl IAggregateFunction for AggregateAvgFunction {
 
     fn merge_result(&self) -> Result<DataValue> {
         Ok(if let DataValue::Struct(states) = self.state.clone() {
-            DataValueArithmetic::data_value_arithmetic_op(
-                DataValueArithmeticOperator::Div,
-                states[0].clone(),
-                states[1].clone(),
-            )?
+            if states[1].eq(&DataValue::UInt64(Some(0))) {
+                DataValue::Float64(None)
+            } else {
+                DataValueArithmetic::data_value_arithmetic_op(
+                    DataValueArithmeticOperator::Div,
+                    states[0].clone(),
+                    states[1].clone(),
+                )?
+            }
         } else {
             self.state.clone()
         })

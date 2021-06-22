@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_planners::ExpressionVisitor;
@@ -194,7 +194,7 @@ pub fn find_columns_not_satisfy_exprs(
     columns.iter().try_for_each(|c| match c {
         Expression::Column(_) => Ok(()),
 
-        _ => Err(ErrorCodes::SyntaxException(
+        _ => Err(ErrorCode::SyntaxException(
             "Expression::Column are required".to_string(),
         )),
     })?;
@@ -264,13 +264,16 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                     .collect::<Result<Vec<Expression>>>()?,
             }),
 
-            Expression::AggregateFunction { op, args } => Ok(Expression::AggregateFunction {
-                op: op.clone(),
-                args: args
-                    .iter()
-                    .map(|e| clone_with_replacement(e, replacement_fn))
-                    .collect::<Result<Vec<Expression>>>()?,
-            }),
+            Expression::AggregateFunction { op, distinct, args } => {
+                Ok(Expression::AggregateFunction {
+                    op: op.clone(),
+                    distinct: *distinct,
+                    args: args
+                        .iter()
+                        .map(|e| clone_with_replacement(e, replacement_fn))
+                        .collect::<Result<Vec<Expression>>>()?,
+                })
+            }
 
             Expression::Sort {
                 expr: nested_expr,

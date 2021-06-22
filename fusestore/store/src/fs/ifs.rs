@@ -9,18 +9,18 @@ use crate::fs::ListResult;
 
 /// Abstract storage layer API.
 #[async_trait]
-pub trait IFileSystem
+pub trait FileSystem
 where Self: Sync + Send
 {
     /// Add file atomically.
     /// AKA put_if_absent
-    async fn add(&self, path: String, data: &[u8]) -> anyhow::Result<()>;
+    async fn add(&self, path: &str, data: &[u8]) -> anyhow::Result<()>;
 
     /// read all bytes from a file
-    async fn read_all(&self, path: String) -> exception::Result<Vec<u8>>;
+    async fn read_all(&self, path: &str) -> exception::Result<Vec<u8>>;
 
     /// List dir and returns directories and files.
-    async fn list(&self, path: String) -> anyhow::Result<ListResult>;
+    async fn list(&self, prefix: &str) -> anyhow::Result<ListResult>;
 
     // async fn read(
     //     path: &str,

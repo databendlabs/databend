@@ -5,6 +5,7 @@
 use std::any::Any;
 use std::convert::TryInto;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_arrow::arrow;
 use common_datablocks::DataBlock;
@@ -12,18 +13,19 @@ use common_datavalues as datavalues;
 use common_datavalues::BooleanArray;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::ExpressionExecutor;
 
 pub struct FilterTransform {
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn Processor>,
     executor: Arc<ExpressionExecutor>,
     predicate: Expression,
     having: bool,
@@ -35,6 +37,7 @@ impl FilterTransform {
         fields.push(predicate.to_data_field(&schema)?);
 
         let executor = ExpressionExecutor::try_create(
+            "filter executor",
             schema,
             DataSchemaRefExt::create(fields),
             vec![predicate.clone()],
@@ -52,7 +55,7 @@ impl FilterTransform {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for FilterTransform {
+impl Processor for FilterTransform {
     fn name(&self) -> &str {
         if self.having {
             return "HavingTransform";
@@ -60,12 +63,12 @@ impl IProcessor for FilterTransform {
         "FilterTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![self.input.clone()]
     }
 
@@ -82,6 +85,9 @@ impl IProcessor for FilterTransform {
                           column_name: &str,
                           block: Result<DataBlock>|
          -> Result<DataBlock> {
+            tracing::debug!("execute...");
+            let start = Instant::now();
+
             let block = block?;
             let filter_block = executor.execute(&block)?;
             let filter_array = filter_block.try_column_by_name(column_name)?.to_array()?;
@@ -91,6 +97,9 @@ impl IProcessor for FilterTransform {
             // Convert to arrow record_batch
             let batch = block.try_into()?;
             let batch = arrow::compute::filter_record_batch(&batch, filter_array)?;
+
+            let delta = start.elapsed();
+            tracing::debug!("Filter cost: {:?}", delta);
             batch.try_into()
         };
 

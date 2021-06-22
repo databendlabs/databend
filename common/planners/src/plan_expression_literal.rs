@@ -6,17 +6,17 @@ use common_datavalues::DataValue;
 
 use crate::Expression;
 
-pub trait ILiteral {
+pub trait Literal {
     fn to_literal(&self) -> Expression;
 }
 
-impl ILiteral for &str {
+impl Literal for &str {
     fn to_literal(&self) -> Expression {
         Expression::Literal(DataValue::Utf8(Some(self.to_string())))
     }
 }
 
-impl ILiteral for String {
+impl Literal for String {
     fn to_literal(&self) -> Expression {
         Expression::Literal(DataValue::Utf8(Some(self.clone())))
     }
@@ -25,7 +25,7 @@ impl ILiteral for String {
 macro_rules! make_literal {
     ($TYPE:ty, $SCALAR:ident) => {
         #[allow(missing_docs)]
-        impl ILiteral for $TYPE {
+        impl Literal for $TYPE {
             fn to_literal(&self) -> Expression {
                 Expression::Literal(DataValue::$SCALAR(Some(self.clone())))
             }
@@ -45,6 +45,6 @@ make_literal!(u16, UInt16);
 make_literal!(u32, UInt32);
 make_literal!(u64, UInt64);
 
-pub fn lit<T: ILiteral>(n: T) -> Expression {
+pub fn lit<T: Literal>(n: T) -> Expression {
     n.to_literal()
 }

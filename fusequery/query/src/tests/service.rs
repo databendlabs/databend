@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use anyhow::Result;
+use common_runtime::tokio;
 use rand::Rng;
 
 use crate::api::RpcService;
@@ -72,7 +73,7 @@ async fn start_one_service() -> Result<(String, SessionManagerRef)> {
     conf.flight_api_address = addr.clone();
 
     let cluster = Cluster::create_global(conf.clone())?;
-    let session_manager = SessionManager::create();
+    let session_manager = SessionManager::try_create(100)?;
     let srv = RpcService::create(conf, cluster, session_manager.clone());
     tokio::spawn(async move {
         srv.make_server().await?;

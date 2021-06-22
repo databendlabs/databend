@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_runtime::tokio;
 use fuse_store::api::StoreServer;
 use fuse_store::configs::Config;
 use fuse_store::metrics::MetricService;
@@ -19,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", conf.clone());
     info!(
         "FuseStore v-{}",
-        fuse_store::configs::config::FUSE_COMMIT_VERSION
+        *fuse_store::configs::config::FUSE_COMMIT_VERSION
     );
 
     // Metric API service.

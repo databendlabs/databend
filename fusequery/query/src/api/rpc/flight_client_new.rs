@@ -6,10 +6,10 @@ use common_arrow::arrow::datatypes::SchemaRef;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::Ticket;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_runtime::tokio::time::Duration;
 use common_streams::SendableDataBlockStream;
-use tokio::time::Duration;
 use tonic::transport::channel::Channel;
 use tonic::Request;
 
@@ -93,7 +93,7 @@ impl FlightClient {
             .map_err(from_status)?
         {
             Some(response) => Ok(response.body),
-            None => Result::Err(ErrorCodes::EmptyDataFromServer(format!(
+            None => Result::Err(ErrorCode::EmptyDataFromServer(format!(
                 "Can not receive data from flight server, action: {:?}",
                 action_type
             ))),

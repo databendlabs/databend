@@ -11,7 +11,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_planners::ReadDataSourcePlan;
@@ -21,8 +21,8 @@ use common_streams::SendableDataBlockStream;
 
 use crate::datasources::system::NumbersStream;
 use crate::datasources::Common;
-use crate::datasources::ITable;
-use crate::datasources::ITableFunction;
+use crate::datasources::Table;
+use crate::datasources::TableFunction;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct NumbersTable {
@@ -44,7 +44,7 @@ impl NumbersTable {
 }
 
 #[async_trait::async_trait]
-impl ITable for NumbersTable {
+impl Table for NumbersTable {
     fn name(&self) -> &str {
         self.table
     }
@@ -77,7 +77,7 @@ impl ITable for NumbersTable {
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
-        let mut total = ctx.get_max_block_size()? as u64;
+        let mut total = ctx.get_settings().get_max_block_size()? as u64;
 
         let ScanPlan { table_args, .. } = scan.clone();
         if let Some(args) = table_args {
@@ -89,7 +89,7 @@ impl ITable for NumbersTable {
                 total = v as u64;
             }
         } else {
-            return Result::Err(ErrorCodes::BadArguments(format!(
+            return Result::Err(ErrorCode::BadArguments(format!(
                 "Must have one argument for table: system.{}",
                 self.name()
             )));
@@ -125,7 +125,7 @@ impl ITable for NumbersTable {
     }
 }
 
-impl ITableFunction for NumbersTable {
+impl TableFunction for NumbersTable {
     fn function_name(&self) -> &str {
         self.table
     }
@@ -134,7 +134,7 @@ impl ITableFunction for NumbersTable {
         "system"
     }
 
-    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn ITable + 'a>
+    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
     where Self: 'a {
         self
     }

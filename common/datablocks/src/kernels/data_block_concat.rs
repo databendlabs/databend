@@ -4,7 +4,7 @@
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::compute;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataBlock;
@@ -12,13 +12,13 @@ use crate::DataBlock;
 impl DataBlock {
     pub fn concat_blocks(blocks: &[DataBlock]) -> Result<DataBlock> {
         if blocks.is_empty() {
-            return Result::Err(ErrorCodes::EmptyData("Can't concat empty blocks"));
+            return Result::Err(ErrorCode::EmptyData("Can't concat empty blocks"));
         }
 
         let first_block = &blocks[0];
         for block in blocks.iter() {
             if block.schema().ne(first_block.schema()) {
-                return Result::Err(ErrorCodes::DataStructMissMatch("Schema not matched"));
+                return Result::Err(ErrorCode::DataStructMissMatch("Schema not matched"));
             }
         }
 

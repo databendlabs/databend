@@ -21,10 +21,10 @@ use common_arrow::arrow_flight::Result as FlightResult;
 use common_arrow::arrow_flight::SchemaResult;
 use common_arrow::arrow_flight::Ticket;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
-use tokio::sync::mpsc::channel;
-use tokio::sync::mpsc::Receiver;
-use tokio::sync::mpsc::Sender;
+use common_exception::ErrorCode;
+use common_runtime::tokio::sync::mpsc::channel;
+use common_runtime::tokio::sync::mpsc::Receiver;
+use common_runtime::tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::Stream;
 use tokio_stream::StreamExt;
@@ -257,7 +257,7 @@ impl FlightService for FuseQueryService {
                     let action = serde_json::from_str::<ExecutePlanWithShuffleAction>(
                         prepare_stage_info_str,
                     )
-                    .map_err(ErrorCodes::from)
+                    .map_err(ErrorCode::from)
                     .map_err(to_status)?;
 
                     let (response_sender, mut receiver) = channel(1);

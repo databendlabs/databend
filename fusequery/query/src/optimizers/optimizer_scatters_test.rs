@@ -3,11 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_exception::Result;
+use common_runtime::tokio;
 
 use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
-use crate::optimizers::IOptimizer;
+use crate::optimizers::Optimizer;
 use crate::sql::PlanParser;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

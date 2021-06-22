@@ -18,16 +18,16 @@ use common_datavalues::DataSchema;
 use futures::StreamExt;
 use uuid::Uuid;
 
-use crate::fs::IFileSystem;
+use crate::fs::FileSystem;
 
 pub(crate) struct Appender {
-    fs: Arc<dyn IFileSystem>,
+    fs: Arc<dyn FileSystem>,
 }
 
 pub type InputData = std::pin::Pin<Box<dyn futures::Stream<Item = FlightData> + Send>>;
 
 impl Appender {
-    pub fn new(fs: Arc<dyn IFileSystem>) -> Self {
+    pub fn new(fs: Arc<dyn FileSystem>) -> Self {
         Appender { fs }
     }
 
@@ -51,8 +51,10 @@ impl Appender {
                 let part_uuid = Uuid::new_v4().to_simple().to_string() + ".parquet";
                 let location = format!("{}/{}", path, part_uuid);
                 let buffer = write_in_memory(block)?;
+
                 result.append_part(&location, rows, cols, wire_bytes, buffer.len());
-                self.fs.add(location, &buffer).await?;
+
+                self.fs.add(&location, &buffer).await?;
             }
             Ok(result)
         } else {

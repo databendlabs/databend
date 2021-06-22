@@ -7,7 +7,7 @@ use std::sync::mpsc::channel;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_flights::ScanPartitionResult;
 use common_planners::InsertIntoPlan;
@@ -19,7 +19,7 @@ use common_planners::TableOptions;
 use common_streams::SendableDataBlockStream;
 
 use crate::datasources::remote::StoreClientProvider;
-use crate::datasources::ITable;
+use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
 
 #[allow(dead_code)]
@@ -37,7 +37,7 @@ impl RemoteTable {
         schema: DataSchemaRef,
         store_client_provider: StoreClientProvider,
         _options: TableOptions,
-    ) -> Result<Box<dyn ITable>> {
+    ) -> Result<Box<dyn Table>> {
         let table = Self {
             db,
             name,
@@ -49,7 +49,7 @@ impl RemoteTable {
 }
 
 #[async_trait::async_trait]
-impl ITable for RemoteTable {
+impl Table for RemoteTable {
     fn name(&self) -> &str {
         &self.name
     }
@@ -89,7 +89,7 @@ impl ITable for RemoteTable {
                         let parts_info = client
                             .scan_partition(db_name, tbl_name, &scan)
                             .await
-                            .map_err(ErrorCodes::from);
+                            .map_err(ErrorCode::from);
                         let _ = tx.send(parts_info);
                     }
                     Err(e) => {
@@ -100,7 +100,7 @@ impl ITable for RemoteTable {
         }
 
         rx.recv()
-            .map_err(ErrorCodes::from_std_error)?
+            .map_err(ErrorCode::from_std_error)?
             .map(|v| self.partitions_to_plan(v, scan.clone()))
     }
 
@@ -116,7 +116,7 @@ impl ITable for RemoteTable {
 
         {
             let block_stream =
-                opt_stream.ok_or_else(|| ErrorCodes::EmptyData("input stream consumed"))?;
+                opt_stream.ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
             let mut client = self.store_client_provider.try_get_client().await?;
             client
                 .append_data(

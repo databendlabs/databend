@@ -6,12 +6,12 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datavalues::DataSchema;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 
 pub struct EmptyProcessor {}
 
@@ -22,18 +22,18 @@ impl EmptyProcessor {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for EmptyProcessor {
+impl Processor for EmptyProcessor {
     fn name(&self) -> &str {
         "EmptyProcessor"
     }
 
-    fn connect_to(&mut self, _: Arc<dyn IProcessor>) -> Result<()> {
-        Result::Err(ErrorCodes::IllegalTransformConnectionState(
+    fn connect_to(&mut self, _: Arc<dyn Processor>) -> Result<()> {
+        Result::Err(ErrorCode::IllegalTransformConnectionState(
             "Cannot call EmptyProcessor connect_to",
         ))
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![Arc::new(EmptyProcessor::create())]
     }
 

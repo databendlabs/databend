@@ -9,8 +9,8 @@ use common_exception::Result;
 use common_flights::StoreClient;
 
 #[async_trait::async_trait]
-pub trait IStoreClientProvider {
+pub trait TryGetStoreClient {
     async fn try_get_client(&self) -> Result<StoreClient>;
 }
 
-pub type StoreClientProvider = Arc<dyn IStoreClientProvider + Send + Sync>;
+pub type StoreClientProvider = Arc<dyn TryGetStoreClient + Send + Sync>;

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::any::Any;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt;
@@ -9,11 +10,11 @@ use std::fmt;
 use common_arrow::arrow::array::Array;
 use common_datavalues::downcast_array;
 use common_datavalues::*;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_binary_arguments;
-use crate::IAggregateFunction;
+use crate::AggregateFunction;
 
 #[derive(Clone)]
 pub struct AggregateArgMinFunction {
@@ -26,7 +27,7 @@ impl AggregateArgMinFunction {
     pub fn try_create(
         display_name: &str,
         arguments: Vec<DataField>,
-    ) -> Result<Box<dyn IAggregateFunction>> {
+    ) -> Result<Box<dyn AggregateFunction>> {
         assert_binary_arguments(display_name, arguments.len())?;
 
         Ok(Box::new(AggregateArgMinFunction {
@@ -40,7 +41,7 @@ impl AggregateArgMinFunction {
     }
 }
 
-impl IAggregateFunction for AggregateArgMinFunction {
+impl AggregateFunction for AggregateArgMinFunction {
     fn name(&self) -> &str {
         "AggregateArgMinFunction"
     }
@@ -53,8 +54,15 @@ impl IAggregateFunction for AggregateArgMinFunction {
         Ok(false)
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
         if let DataValue::Struct(min_arg_val) = Self::arg_min_batch(columns[1].clone())? {
+            if min_arg_val[0].is_null() {
+                return Ok(());
+            }
             let index: u64 = min_arg_val[0].clone().try_into()?;
             let min_arg = DataValue::try_from_array(&columns[0].to_array()?, index as usize)?;
             let min_val = min_arg_val[1].clone();
@@ -76,6 +84,27 @@ impl IAggregateFunction for AggregateArgMinFunction {
                     new_min_val,
                 ]);
             }
+        }
+        Ok(())
+    }
+
+    fn accumulate_scalar(&mut self, values: &[DataValue]) -> Result<()> {
+        if let DataValue::Struct(old_min_arg_val) = self.state.clone() {
+            let old_min_arg = old_min_arg_val[0].clone();
+            let old_min_val = old_min_arg_val[1].clone();
+            let new_min_val = DataValueAggregate::data_value_aggregate_op(
+                DataValueAggregateOperator::Min,
+                old_min_val.clone(),
+                values[1].clone(),
+            )?;
+            self.state = DataValue::Struct(vec![
+                if new_min_val == old_min_val {
+                    old_min_arg
+                } else {
+                    values[0].clone()
+                },
+                new_min_val,
+            ]);
         }
         Ok(())
     }
@@ -127,6 +156,12 @@ macro_rules! typed_array_min_to_data_value {
         let data = array.data();
         let values = array.values();
         let null_count = array.null_count();
+        if null_count == array.len() {
+            return Result::Ok(DataValue::Struct(vec![
+                DataValue::UInt64(None),
+                DataValue::$SCALAR(None),
+            ]));
+        }
         let mut min_row_val = (0, values[0]);
 
         if null_count == 0 {

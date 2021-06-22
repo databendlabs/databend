@@ -1,10 +1,11 @@
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
+use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 use tempfile::tempdir;
 
-use crate::fs::IFileSystem;
+use crate::fs::FileSystem;
 use crate::fs::ListResult;
 use crate::localfs::LocalFS;
 
@@ -16,7 +17,7 @@ async fn test_localfs_read_all() -> anyhow::Result<()> {
     let f = LocalFS::try_create(root.to_str().unwrap().to_string())?;
     {
         // read absent file
-        let got = f.read_all("foo.txt".into()).await;
+        let got = f.read_all("foo.txt").await;
         assert_eq!(
             "localfs: fail to read: \"foo.txt\", cause: No such file or directory (os error 2)",
             got.err().unwrap().message()
@@ -24,13 +25,13 @@ async fn test_localfs_read_all() -> anyhow::Result<()> {
     }
     {
         // add foo.txt and read
-        f.add("foo.txt".to_string(), "123".as_bytes()).await?;
-        let got = f.read_all("foo.txt".into()).await?;
+        f.add("foo.txt", "123".as_bytes()).await?;
+        let got = f.read_all("foo.txt").await?;
         assert_eq!("123", std::str::from_utf8(&got)?);
     }
     {
         // add foo.txt twice, fail
-        let got = f.add("foo.txt".to_string(), "123".as_bytes()).await;
+        let got = f.add("foo.txt", "123".as_bytes()).await;
         assert_eq!(
             "LocalFS: fail to open foo.txt",
             got.err().unwrap().to_string()
@@ -39,14 +40,14 @@ async fn test_localfs_read_all() -> anyhow::Result<()> {
     {
         // add long/bar.txt and read
         f.add("long/bar.txt".into(), "456".as_bytes()).await?;
-        let got = f.read_all("long/bar.txt".into()).await?;
+        let got = f.read_all("long/bar.txt").await?;
         assert_eq!("456", std::str::from_utf8(&got)?);
     }
 
     {
         // add long/path/file.txt and read
         f.add("long/path/file.txt".into(), "789".as_bytes()).await?;
-        let got = f.read_all("long/path/file.txt".into()).await?;
+        let got = f.read_all("long/path/file.txt").await?;
         assert_eq!("789", std::str::from_utf8(&got)?);
     }
     {

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 
 use crate::meta_service::ClientRequest;
@@ -11,7 +12,7 @@ use crate::meta_service::MemStoreStateMachine;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
-    crate::tests::init_tracing();
+    common_tracing::init_default_tracing();
 
     let mut sm = MemStoreStateMachine::default();
 
@@ -41,7 +42,7 @@ async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
-    crate::tests::init_tracing();
+    common_tracing::init_default_tracing();
 
     let mut sm = MemStoreStateMachine::default();
 
@@ -71,7 +72,7 @@ async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
-    crate::tests::init_tracing();
+    common_tracing::init_default_tracing();
 
     let mut sm = MemStoreStateMachine::default();
 

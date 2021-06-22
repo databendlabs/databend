@@ -21,7 +21,7 @@ use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::datasources::ITable;
+use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ClustersTable {
@@ -42,7 +42,7 @@ impl ClustersTable {
 }
 
 #[async_trait::async_trait]
-impl ITable for ClustersTable {
+impl Table for ClustersTable {
     fn name(&self) -> &str {
         "clusters"
     }

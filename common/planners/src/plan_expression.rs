@@ -2,20 +2,26 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
+use common_aggregate_functions::AggregateFunction;
 use common_aggregate_functions::AggregateFunctionFactory;
-use common_aggregate_functions::IAggregateFunction;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::FunctionFactory;
+use lazy_static::lazy_static;
 
 use crate::PlanNode;
+
+lazy_static! {
+    static ref OP_SET: HashSet<&'static str> = ["database", "version",].iter().copied().collect();
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct ExpressionPlan {
@@ -59,7 +65,11 @@ pub enum Expression {
     ScalarFunction { op: String, args: Vec<Expression> },
 
     /// AggregateFunction with a set of arguments.
-    AggregateFunction { op: String, args: Vec<Expression> },
+    AggregateFunction {
+        op: String,
+        distinct: bool,
+        args: Vec<Expression>,
+    },
 
     /// A sort expression, that can be used to sort values.
     Sort {
@@ -86,6 +96,12 @@ impl Expression {
     pub fn column_name(&self) -> String {
         match self {
             Expression::Alias(name, _expr) => name.clone(),
+            Expression::ScalarFunction { op, .. } => {
+                match OP_SET.get(&op.to_lowercase().as_ref()) {
+                    Some(_) => format!("{}()", op),
+                    None => format!("{:?}", self),
+                }
+            }
             _ => format!("{:?}", self),
         }
     }
@@ -131,15 +147,11 @@ impl Expression {
                 let func = FunctionFactory::get(op)?;
                 func.return_type(&arg_types)
             }
-            Expression::AggregateFunction { op, args } => {
-                let mut fields = Vec::with_capacity(args.len());
-                for arg in args {
-                    fields.push(arg.to_data_field(input_schema)?);
-                }
-                let func = AggregateFunctionFactory::get(op, fields)?;
+            Expression::AggregateFunction { .. } => {
+                let func = self.to_aggregate_function(input_schema)?;
                 func.return_type()
             }
-            Expression::Wildcard => Result::Err(ErrorCodes::IllegalDataType(
+            Expression::Wildcard => Result::Err(ErrorCode::IllegalDataType(
                 "Wildcard expressions are not valid to get return type",
             )),
             Expression::Cast { data_type, .. } => Ok(data_type.clone()),
@@ -150,16 +162,21 @@ impl Expression {
     pub fn to_aggregate_function(
         &self,
         schema: &DataSchemaRef,
-    ) -> Result<Box<dyn IAggregateFunction>> {
+    ) -> Result<Box<dyn AggregateFunction>> {
         match self {
-            Expression::AggregateFunction { op, args } => {
+            Expression::AggregateFunction { op, distinct, args } => {
+                let mut func_name = op.clone();
+                if *distinct {
+                    func_name += "Distinct";
+                }
+
                 let mut fields = Vec::with_capacity(args.len());
                 for arg in args.iter() {
                     fields.push(arg.to_data_field(schema)?);
                 }
-                AggregateFunctionFactory::get(op, fields)
+                AggregateFunctionFactory::get(&func_name, fields)
             }
-            _ => Err(ErrorCodes::LogicalError(
+            _ => Err(ErrorCode::LogicalError(
                 "Expression must be aggregated function",
             )),
         }
@@ -174,7 +191,7 @@ impl Expression {
                 }
                 Ok(names)
             }
-            _ => Err(ErrorCodes::LogicalError(
+            _ => Err(ErrorCode::LogicalError(
                 "Expression must be aggregated function",
             )),
         }
@@ -208,8 +225,11 @@ impl fmt::Debug for Expression {
                 write!(f, ")")
             }
 
-            Expression::AggregateFunction { op, args } => {
+            Expression::AggregateFunction { op, distinct, args } => {
                 write!(f, "{}(", op)?;
+                if *distinct {
+                    write!(f, "distinct ")?;
+                }
                 for (i, _) in args.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;

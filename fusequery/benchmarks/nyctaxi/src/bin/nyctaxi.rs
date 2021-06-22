@@ -13,8 +13,9 @@ use common_datavalues::DataType;
 use common_planners::CreateTablePlan;
 use common_planners::TableEngineType;
 use common_planners::TableOptions;
+use common_runtime::tokio;
 use fuse_query::interpreters::InterpreterFactory;
-use fuse_query::optimizers::Optimizer;
+use fuse_query::optimizers::Optimizers;
 use fuse_query::sessions::FuseQueryContext;
 use fuse_query::sql::PlanParser;
 use futures::TryStreamExt;
@@ -48,8 +49,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "Running benchmarks with the following options: {:?}, max_threads [{:?}], block_size[{:?}]",
         opt,
-        ctx.get_max_threads()?,
-        ctx.get_max_block_size()?
+        ctx.get_settings().get_max_threads()?,
+        ctx.get_settings().get_max_block_size()?
     );
 
     // Create csv table.
@@ -77,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         for i in 0..opt.iterations {
             let start = Instant::now();
             let plan = PlanParser::create(ctx.clone()).build_from_sql(sql)?;
-            let plan = Optimizer::create(ctx.clone()).optimize(&plan)?;
+            let plan = Optimizers::create(ctx.clone()).optimize(&plan)?;
             let executor = InterpreterFactory::get(ctx.clone(), plan)?;
             let stream = executor.execute().await?;
 

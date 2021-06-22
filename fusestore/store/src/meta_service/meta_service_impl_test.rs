@@ -2,25 +2,30 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use async_raft::State;
+use common_runtime::tokio;
 #[allow(unused_imports)]
 use log::info;
 use pretty_assertions::assert_eq;
 
-use crate::meta_service::raftmeta_test::assert_connection;
+use crate::meta_service::raftmeta::RetryableError;
 use crate::meta_service::ClientRequest;
 use crate::meta_service::ClientResponse;
 use crate::meta_service::Cmd;
 use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
+use crate::tests::assert_meta_connection;
 use crate::tests::rand_local_addr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_server_add_file() -> anyhow::Result<()> {
+    common_tracing::init_default_tracing();
+
     let addr = rand_local_addr();
 
     let _mn = MetaNode::boot(0, addr.clone()).await?;
-    assert_connection(&addr).await?;
+    assert_meta_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
@@ -34,8 +39,10 @@ async fn test_meta_server_add_file() -> anyhow::Result<()> {
                 value: v.to_string(),
             },
         };
-        let rst = client.write(req).await?.into_inner();
-        let resp: ClientResponse = rst.into();
+        let raft_mes = client.write(req).await?.into_inner();
+
+        let rst: Result<ClientResponse, RetryableError> = raft_mes.into();
+        let resp: ClientResponse = rst?;
         match resp {
             ClientResponse::String { prev, result } => {
                 assert_eq!(*want_prev, prev, "{}", name);
@@ -51,11 +58,13 @@ async fn test_meta_server_add_file() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_server_sed_file() -> anyhow::Result<()> {
+async fn test_meta_server_set_file() -> anyhow::Result<()> {
+    common_tracing::init_default_tracing();
+
     let addr = rand_local_addr();
 
     let _mn = MetaNode::boot(0, addr.clone()).await?;
-    assert_connection(&addr).await?;
+    assert_meta_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
@@ -69,8 +78,10 @@ async fn test_meta_server_sed_file() -> anyhow::Result<()> {
                 value: v.to_string(),
             },
         };
-        let rst = client.write(req).await?.into_inner();
-        let resp: ClientResponse = rst.into();
+        let raft_mes = client.write(req).await?.into_inner();
+
+        let rst: Result<ClientResponse, RetryableError> = raft_mes.into();
+        let resp: ClientResponse = rst?;
         match resp {
             ClientResponse::String { prev, result } => {
                 assert_eq!(*want_prev, prev, "{}", name);
@@ -88,10 +99,13 @@ async fn test_meta_server_sed_file() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
     // Test Cmd::AddFile, Cmd::SetFile, Cma::GetFile
+
+    common_tracing::init_default_tracing();
+
     let addr = rand_local_addr();
 
     let _mn = MetaNode::boot(0, addr.clone()).await?;
-    assert_connection(&addr).await?;
+    assert_meta_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
@@ -104,8 +118,10 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
                 value: "bar".to_string(),
             },
         };
-        let rst = client.write(req).await?.into_inner();
-        let resp: ClientResponse = rst.into();
+        let raft_mes = client.write(req).await?.into_inner();
+
+        let rst: Result<ClientResponse, RetryableError> = raft_mes.into();
+        let resp: ClientResponse = rst?;
         match resp {
             ClientResponse::String { prev: _, result } => {
                 assert_eq!("bar".to_string(), result.unwrap());
@@ -131,8 +147,10 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
                 value: "bar".to_string(),
             },
         };
-        let rst = client.write(req).await?.into_inner();
-        let resp: ClientResponse = rst.into();
+        let raft_mes = client.write(req).await?.into_inner();
+
+        let rst: Result<ClientResponse, RetryableError> = raft_mes.into();
+        let resp: ClientResponse = rst?;
         match resp {
             ClientResponse::String { prev: _, result } => {
                 assert!(result.is_none());
@@ -151,8 +169,10 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
                 value: "bar2".to_string(),
             },
         };
-        let rst = client.write(req).await?.into_inner();
-        let resp: ClientResponse = rst.into();
+        let raft_mes = client.write(req).await?.into_inner();
+
+        let rst: Result<ClientResponse, RetryableError> = raft_mes.into();
+        let resp: ClientResponse = rst?;
         match resp {
             ClientResponse::String { prev: _, result } => {
                 assert_eq!(Some("bar2".to_string()), result);
@@ -174,10 +194,12 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_server_incr_seq() -> anyhow::Result<()> {
+    common_tracing::init_default_tracing();
+
     let addr = rand_local_addr();
 
     let _mn = MetaNode::boot(0, addr.clone()).await?;
-    assert_connection(&addr).await?;
+    assert_meta_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
@@ -188,8 +210,10 @@ async fn test_meta_server_incr_seq() -> anyhow::Result<()> {
             txid: txid.clone(),
             cmd: Cmd::IncrSeq { key: k.to_string() },
         };
-        let rst = client.write(req).await?.into_inner();
-        let resp: ClientResponse = rst.into();
+        let raft_mes = client.write(req).await?.into_inner();
+
+        let rst: Result<ClientResponse, RetryableError> = raft_mes.into();
+        let resp: ClientResponse = rst?;
         match resp {
             ClientResponse::Seq { seq } => {
                 assert_eq!(*want, seq, "{}", name);
@@ -197,6 +221,60 @@ async fn test_meta_server_incr_seq() -> anyhow::Result<()> {
             _ => {
                 panic!("not Seq")
             }
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
+    // - Bring up a cluster of one leader and one non-voter
+    // - Assert that writing on the non-voter returns ForwardToLeader error
+
+    common_tracing::init_default_tracing();
+
+    let addr0 = rand_local_addr();
+    let addr1 = rand_local_addr();
+
+    let mn0 = MetaNode::boot(0, addr0.clone()).await?;
+    assert_meta_connection(&addr0).await?;
+
+    {
+        // add node 1 as non-voter
+        let mn1 = MetaNode::boot_non_voter(1, &addr1).await?;
+        assert_meta_connection(&addr0).await?;
+
+        let resp = mn0.add_node(1, addr1.clone()).await?;
+        match resp {
+            ClientResponse::Node { prev: _, result } => {
+                assert_eq!(addr1.clone(), result.unwrap().address);
+            }
+            _ => {
+                panic!("expect node")
+            }
+        }
+        mn1.raft.wait(None).state(State::NonVoter, "").await?;
+        mn1.raft.wait(None).current_leader(0, "").await?;
+    }
+
+    let mut client = MetaServiceClient::connect(format!("http://{}", addr1)).await?;
+
+    let req = ClientRequest {
+        txid: None,
+        cmd: Cmd::SetFile {
+            key: "t-write-on-non-voter".to_string(),
+            value: "t-write-on-non-voter".to_string(),
+        },
+    };
+    let raft_mes = client.write(req).await?.into_inner();
+
+    let rst: Result<ClientResponse, RetryableError> = raft_mes.into();
+    assert!(rst.is_err());
+    let err = rst.unwrap_err();
+    match err {
+        RetryableError::ForwardToLeader { leader } => {
+            assert_eq!(leader, 0);
         }
     }
 

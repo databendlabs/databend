@@ -12,21 +12,21 @@ use common_arrow::parquet::arrow::ParquetFileArrowReader;
 use common_arrow::parquet::file::reader::SerializedFileReader;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Partition;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_planners::TableOptions;
+use common_runtime::tokio::task;
 use common_streams::ParquetStream;
 use common_streams::SendableDataBlockStream;
 use crossbeam::channel::bounded;
 use crossbeam::channel::Receiver;
 use crossbeam::channel::Sender;
-use tokio::task;
 
-use crate::datasources::ITable;
+use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ParquetTable {
@@ -42,7 +42,7 @@ impl ParquetTable {
         name: String,
         schema: DataSchemaRef,
         options: TableOptions,
-    ) -> Result<Box<dyn ITable>> {
+    ) -> Result<Box<dyn Table>> {
         let file = options.get("location");
         return match file {
             Some(file) => {
@@ -54,7 +54,7 @@ impl ParquetTable {
                 };
                 Ok(Box::new(table))
             }
-            _ => Result::Err(ErrorCodes::BadOption(
+            _ => Result::Err(ErrorCode::BadOption(
                 "Parquet Engine must contains file location options".to_string(),
             )),
         };
@@ -66,22 +66,22 @@ fn read_file(
     tx: Sender<Option<Result<DataBlock>>>,
     projection: &[usize],
 ) -> Result<()> {
-    let file_reader = File::open(file).map_err(|e| ErrorCodes::CannotReadFile(e.to_string()))?;
+    let file_reader = File::open(file).map_err(|e| ErrorCode::CannotReadFile(e.to_string()))?;
     let file_reader = SerializedFileReader::new(file_reader)
-        .map_err(|e| ErrorCodes::ParquetError(e.to_string()))?;
+        .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
     let mut arrow_reader = ParquetFileArrowReader::new(Arc::new(file_reader));
 
     // TODO projection, row filters, batch size configurable, schema judgement
     let batch_size = 2048;
     let mut batch_reader = arrow_reader
         .get_record_reader_by_columns(projection.to_owned(), batch_size)
-        .map_err(|exception| ErrorCodes::ParquetError(exception.to_string()))?;
+        .map_err(|exception| ErrorCode::ParquetError(exception.to_string()))?;
 
     loop {
         match batch_reader.next() {
             Some(Ok(batch)) => {
                 tx.send(Some(Ok(batch.try_into()?)))
-                    .map_err(|e| ErrorCodes::UnknownException(e.to_string()))?;
+                    .map_err(|e| ErrorCode::UnknownException(e.to_string()))?;
             }
             None => {
                 break;
@@ -89,12 +89,12 @@ fn read_file(
             Some(Err(e)) => {
                 let err_msg = format!("Error reading batch from {:?}: {}", file, e.to_string());
 
-                tx.send(Some(Result::Err(ErrorCodes::CannotReadFile(
+                tx.send(Some(Result::Err(ErrorCode::CannotReadFile(
                     err_msg.clone(),
                 ))))
-                .map_err(|send_error| ErrorCodes::UnknownException(send_error.to_string()))?;
+                .map_err(|send_error| ErrorCode::UnknownException(send_error.to_string()))?;
 
-                return Result::Err(ErrorCodes::CannotReadFile(err_msg));
+                return Result::Err(ErrorCode::CannotReadFile(err_msg));
             }
         }
     }
@@ -102,7 +102,7 @@ fn read_file(
 }
 
 #[async_trait::async_trait]
-impl ITable for ParquetTable {
+impl Table for ParquetTable {
     fn name(&self) -> &str {
         &self.name
     }

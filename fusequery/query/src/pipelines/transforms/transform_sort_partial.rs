@@ -8,20 +8,21 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use common_streams::SortStream;
+use common_tracing::tracing;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 
 pub struct SortPartialTransform {
     schema: DataSchemaRef,
     exprs: Vec<Expression>,
     limit: Option<usize>,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn Processor>,
 }
 
 impl SortPartialTransform {
@@ -40,17 +41,17 @@ impl SortPartialTransform {
 }
 
 #[async_trait]
-impl IProcessor for SortPartialTransform {
+impl Processor for SortPartialTransform {
     fn name(&self) -> &str {
         "SortPartialTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![self.input.clone()]
     }
 
@@ -59,6 +60,8 @@ impl IProcessor for SortPartialTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        tracing::debug!("execute...");
+
         Ok(Box::pin(SortStream::try_create(
             self.input.execute().await?,
             get_sort_descriptions(&self.schema, &self.exprs)?,
@@ -87,7 +90,7 @@ pub fn get_sort_descriptions(
                 });
             }
             _ => {
-                return Result::Err(ErrorCodes::BadTransformType(format!(
+                return Result::Err(ErrorCode::BadTransformType(format!(
                     "Sort expression must be ExpressionPlan::Sort, but got: {:?}",
                     x
                 )));

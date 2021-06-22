@@ -15,9 +15,10 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use clickhouse_rs::Pool;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_runtime::tokio;
 use crossbeam_queue::ArrayQueue;
 use futures::future::try_join_all;
 use futures::StreamExt;
@@ -352,7 +353,7 @@ async fn report_json(bench: BenchmarkRef, json_path: &str) -> std::io::Result<()
     writer.flush()
 }
 
-fn to_error_codes<T>(err: T) -> ErrorCodes
+fn to_error_codes<T>(err: T) -> ErrorCode
 where T: ToString {
     anyhow::anyhow!(err.to_string()).into()
 }

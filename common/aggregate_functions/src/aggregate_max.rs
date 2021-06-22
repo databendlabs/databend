@@ -2,14 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::any::Any;
+use std::convert::TryFrom;
 use std::fmt;
 
 use common_datavalues::*;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_unary_arguments;
-use crate::IAggregateFunction;
+use crate::AggregateFunction;
 
 #[derive(Clone)]
 pub struct AggregateMaxFunction {
@@ -22,18 +24,18 @@ impl AggregateMaxFunction {
     pub fn try_create(
         display_name: &str,
         arguments: Vec<DataField>,
-    ) -> Result<Box<dyn IAggregateFunction>> {
+    ) -> Result<Box<dyn AggregateFunction>> {
         assert_unary_arguments(display_name, arguments.len())?;
 
         Ok(Box::new(AggregateMaxFunction {
             display_name: display_name.to_string(),
-            state: DataValue::Null,
+            state: DataValue::try_from(arguments[0].data_type())?,
             arguments,
         }))
     }
 }
 
-impl IAggregateFunction for AggregateMaxFunction {
+impl AggregateFunction for AggregateMaxFunction {
     fn name(&self) -> &str {
         "AggregateMaxFunction"
     }
@@ -46,12 +48,26 @@ impl IAggregateFunction for AggregateMaxFunction {
         Ok(false)
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
         let value = Self::max_batch(columns[0].clone())?;
         self.state = DataValueAggregate::data_value_aggregate_op(
             DataValueAggregateOperator::Max,
             self.state.clone(),
             value,
+        )?;
+
+        Ok(())
+    }
+
+    fn accumulate_scalar(&mut self, values: &[DataValue]) -> Result<()> {
+        self.state = DataValueAggregate::data_value_aggregate_op(
+            DataValueAggregateOperator::Max,
+            self.state.clone(),
+            values[0].clone(),
         )?;
 
         Ok(())

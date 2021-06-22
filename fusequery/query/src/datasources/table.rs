@@ -5,7 +5,7 @@
 use std::any::Any;
 
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::InsertIntoPlan;
 use common_planners::ReadDataSourcePlan;
@@ -15,7 +15,7 @@ use common_streams::SendableDataBlockStream;
 use crate::sessions::FuseQueryContextRef;
 
 #[async_trait::async_trait]
-pub trait ITable: Sync + Send {
+pub trait Table: Sync + Send {
     fn name(&self) -> &str;
     fn engine(&self) -> &str;
     fn as_any(&self) -> &dyn Any;
@@ -38,7 +38,7 @@ pub trait ITable: Sync + Send {
         _ctx: FuseQueryContextRef,
         _insert_plan: InsertIntoPlan,
     ) -> Result<()> {
-        Err(ErrorCodes::UnImplement(format!(
+        Err(ErrorCode::UnImplement(format!(
             "append data for local table {} is not implemented",
             self.name()
         )))

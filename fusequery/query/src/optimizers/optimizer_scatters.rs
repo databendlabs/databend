@@ -15,7 +15,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
 
-use crate::optimizers::IOptimizer;
+use crate::optimizers::Optimizer;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ScattersOptimizer {
@@ -67,8 +67,9 @@ impl ScattersOptimizer {
             .get_datasource()
             .get_table(plan.db.as_str(), plan.table.as_str())?;
 
-        let rows_threshold = self.ctx.get_min_distributed_rows()? as usize;
-        let bytes_threshold = self.ctx.get_min_distributed_bytes()? as usize;
+        let settings = self.ctx.get_settings();
+        let rows_threshold = settings.get_min_distributed_rows()? as usize;
+        let bytes_threshold = settings.get_min_distributed_bytes()? as usize;
         if read_table.is_local()
             && (plan.statistics.read_rows >= rows_threshold
                 || plan.statistics.read_bytes >= bytes_threshold)
@@ -155,7 +156,7 @@ impl ScattersOptimizer {
     }
 }
 
-impl IOptimizer for ScattersOptimizer {
+impl Optimizer for ScattersOptimizer {
     fn name(&self) -> &str {
         "Scatters"
     }

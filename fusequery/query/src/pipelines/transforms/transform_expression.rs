@@ -13,7 +13,7 @@ use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::ExpressionExecutor;
 /// Executes certain expressions over the block and append the result column to the new block.
 /// Aims to transform a block to another format, such as add one or more columns against the Expressions.
@@ -31,7 +31,7 @@ use crate::pipelines::transforms::ExpressionExecutor;
 /// |number|c1|c2|
 pub struct ExpressionTransform {
     // The final schema(Build by plan_builder.expression).
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn Processor>,
     executor: Arc<ExpressionExecutor>,
 }
 
@@ -41,7 +41,13 @@ impl ExpressionTransform {
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
     ) -> Result<Self> {
-        let executor = ExpressionExecutor::try_create(input_schema, output_schema, exprs, false)?;
+        let executor = ExpressionExecutor::try_create(
+            "expression executor",
+            input_schema,
+            output_schema,
+            exprs,
+            false,
+        )?;
         executor.validate()?;
 
         Ok(ExpressionTransform {
@@ -52,17 +58,17 @@ impl ExpressionTransform {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for ExpressionTransform {
+impl Processor for ExpressionTransform {
     fn name(&self) -> &str {
         "ExpressionTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![self.input.clone()]
     }
 

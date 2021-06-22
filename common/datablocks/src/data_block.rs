@@ -12,7 +12,7 @@ use common_datavalues::DataArrayRef;
 use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::pretty_format_blocks;
@@ -117,10 +117,22 @@ impl DataBlock {
             self.columns[idx].to_array()
         }
     }
+
+    pub fn slice(&self, offset: usize, length: usize) -> Self {
+        let rows = self.num_rows();
+        if offset == 0 && length >= rows {
+            return self.clone();
+        }
+        let mut limited_columns = Vec::with_capacity(self.num_columns());
+        for i in 0..self.num_columns() {
+            limited_columns.push(self.column(i).slice(offset, length));
+        }
+        DataBlock::create(self.schema().clone(), limited_columns)
+    }
 }
 
 impl TryFrom<DataBlock> for RecordBatch {
-    type Error = ErrorCodes;
+    type Error = ErrorCode;
 
     fn try_from(v: DataBlock) -> Result<RecordBatch> {
         let columns = v
@@ -133,7 +145,7 @@ impl TryFrom<DataBlock> for RecordBatch {
 }
 
 impl TryFrom<arrow::record_batch::RecordBatch> for DataBlock {
-    type Error = ErrorCodes;
+    type Error = ErrorCode;
 
     fn try_from(v: arrow::record_batch::RecordBatch) -> Result<DataBlock> {
         Ok(DataBlock::create_by_array(

@@ -147,19 +147,27 @@ nav:
           - SUM: sqlstatement/aggregate-functions/aggregate-sum.md
           - argMin: sqlstatement/aggregate-functions/aggregate-argmin.md
           - argMax: sqlstatement/aggregate-functions/aggregate-argmax.md
+          - countDistinct: sqlstatement/aggregate-functions/aggregate-count-distinct.md
+          - combinators: sqlstatement/aggregate-functions/aggregate-combinator.md
       - Hash Functions:
           - SIPHASH: sqlstatement/hash-functions/siphash.md
       - Information Functions:
           - DATABASE: sqlstatement/information-functions/database.md
-      - Other Functions:
-          - ToTypeName: sqlstatement/other-functions/totypename.md
+          - VERSION: sqlstatement/information-functions/version.md
       - String Functions:
           - SUBSTRING: sqlstatement/string-functions/substring.md
-  - RFCs:
-      - FuseQuery Join: rfcs/query/2021-05-01-join-framework-design.md
-      - FuseQuery Expression: rfcs/query/2021-05-22-plan-expression.md
-      - FuseStore Design: rfcs/store/2021-04-22-store-design.md
-  - Contributing: development/contributing.md
+      - Other Functions:
+          - ToTypeName: sqlstatement/other-functions/totypename.md
+  - Development:
+      - Contributing: development/contributing.md
+      - Coding Guideline: development/coding-guidelines.md
+      - Tracing: development/tracing.md
+      - Profling: development/profiling.md
+      - Roadmap: development/roadmap.md
+      - RFCs:
+        - FuseQuery Join: rfcs/query/2021-05-01-join-framework-design.md
+        - FuseQuery Expression: rfcs/query/2021-05-22-plan-expression.md
+        - FuseStore Design: rfcs/store/2021-04-22-store-design.md
   - Performance: overview/performance.md
 
 # Google Analytics

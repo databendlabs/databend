@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCodes;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::AggregatorFinalPlan;
@@ -100,7 +100,7 @@ pub trait PlanRewriter<'plan> {
     fn rewrite_aggregate_final(&mut self, plan: &'plan AggregatorFinalPlan) -> Result<PlanNode> {
         Ok(PlanNode::AggregatorFinal(AggregatorFinalPlan {
             schema: plan.schema.clone(),
-            schema_before_groupby: plan.schema_before_groupby.clone(),
+            schema_before_group_by: plan.schema_before_group_by.clone(),
             aggr_expr: plan.aggr_expr.clone(),
             group_expr: plan.group_expr.clone(),
             input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
@@ -164,6 +164,7 @@ pub trait PlanRewriter<'plan> {
     fn rewrite_limit(&mut self, plan: &'plan LimitPlan) -> Result<PlanNode> {
         Ok(PlanNode::Limit(LimitPlan {
             n: plan.n,
+            offset: plan.offset,
             input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
         }))
     }
@@ -268,7 +269,7 @@ impl RewriteHelper {
                     let hash_expr = format!("{:?}", expr);
 
                     if hash_result != hash_expr {
-                        return Result::Err(ErrorCodes::SyntaxException(format!(
+                        return Result::Err(ErrorCode::SyntaxException(format!(
                             "Planner Error: Different expressions with the same alias {}",
                             alias
                         )));
@@ -290,7 +291,7 @@ impl RewriteHelper {
 
                 // x + 1 --> y, y + 1 --> x
                 if data.inside_aliases.contains(field) {
-                    return Result::Err(ErrorCodes::SyntaxException(format!(
+                    return Result::Err(ErrorCode::SyntaxException(format!(
                         "Planner Error: Cyclic aliases: {}",
                         field
                     )));
@@ -346,7 +347,7 @@ impl RewriteHelper {
                 }
             }
 
-            Expression::AggregateFunction { op, args } => {
+            Expression::AggregateFunction { op, distinct, args } => {
                 let new_args: Result<Vec<Expression>> = args
                     .iter()
                     .map(|v| RewriteHelper::expr_rewrite_alias(v, data))
@@ -355,6 +356,7 @@ impl RewriteHelper {
                 match new_args {
                     Ok(v) => Ok(Expression::AggregateFunction {
                         op: op.clone(),
+                        distinct: *distinct,
                         args: v,
                     }),
                     Err(v) => Err(v),
@@ -363,7 +365,7 @@ impl RewriteHelper {
 
             Expression::Alias(alias, plan) => {
                 if data.inside_aliases.contains(alias) {
-                    return Result::Err(ErrorCodes::SyntaxException(format!(
+                    return Result::Err(ErrorCode::SyntaxException(format!(
                         "Planner Error: Cyclic aliases: {}",
                         alias
                     )));
@@ -538,8 +540,9 @@ impl RewriteHelper {
                 op: op.clone(),
                 args: expressions.to_vec(),
             },
-            Expression::AggregateFunction { op, .. } => Expression::AggregateFunction {
+            Expression::AggregateFunction { op, distinct, .. } => Expression::AggregateFunction {
                 op: op.clone(),
+                distinct: *distinct,
                 args: expressions.to_vec(),
             },
             other => other.clone(),

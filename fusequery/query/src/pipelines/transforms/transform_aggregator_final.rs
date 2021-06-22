@@ -6,7 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_aggregate_functions::IAggregateFunction;
+use common_aggregate_functions::AggregateFunction;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
@@ -14,27 +14,27 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 use futures::stream::StreamExt;
-use log::info;
 
 use crate::pipelines::processors::EmptyProcessor;
-use crate::pipelines::processors::IProcessor;
+use crate::pipelines::processors::Processor;
 
 pub struct AggregatorFinalTransform {
-    funcs: Vec<Box<dyn IAggregateFunction>>,
+    funcs: Vec<Box<dyn AggregateFunction>>,
     schema: DataSchemaRef,
-    input: Arc<dyn IProcessor>,
+    input: Arc<dyn Processor>,
 }
 
 impl AggregatorFinalTransform {
     pub fn try_create(
         schema: DataSchemaRef,
-        schema_before_groupby: DataSchemaRef,
+        schema_before_group_by: DataSchemaRef,
         exprs: Vec<Expression>,
     ) -> Result<Self> {
         let funcs = exprs
             .iter()
-            .map(|expr| expr.to_aggregate_function(&schema_before_groupby))
+            .map(|expr| expr.to_aggregate_function(&schema_before_group_by))
             .collect::<Result<Vec<_>>>()?;
         Ok(AggregatorFinalTransform {
             funcs,
@@ -45,17 +45,17 @@ impl AggregatorFinalTransform {
 }
 
 #[async_trait::async_trait]
-impl IProcessor for AggregatorFinalTransform {
+impl Processor for AggregatorFinalTransform {
     fn name(&self) -> &str {
         "AggregatorFinalTransform"
     }
 
-    fn connect_to(&mut self, input: Arc<dyn IProcessor>) -> Result<()> {
+    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         self.input = input;
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<dyn IProcessor>> {
+    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         vec![self.input.clone()]
     }
 
@@ -64,6 +64,8 @@ impl IProcessor for AggregatorFinalTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        tracing::debug!("execute...");
+
         let mut funcs = self.funcs.clone();
         let mut stream = self.input.execute().await?;
 
@@ -81,15 +83,11 @@ impl IProcessor for AggregatorFinalTransform {
             }
         }
         let delta = start.elapsed();
-        info!("Aggregator final cost: {:?}", delta);
+        tracing::debug!("Aggregator final cost: {:?}", delta);
 
         let mut final_result = Vec::with_capacity(funcs.len());
         for func in &funcs {
             let merge_result = func.merge_result()?;
-            // Check merge result null.
-            if merge_result.is_null() {
-                break;
-            }
             final_result.push(merge_result.to_array_with_size(1)?);
         }
 
