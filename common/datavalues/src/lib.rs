@@ -16,6 +16,12 @@ mod data_schema;
 mod data_type;
 mod data_type_coercion;
 mod data_value;
+mod ops;
+mod utils;
+
+mod builders;
+pub mod upstream_traits;
+mod vec;
 
 pub use data_array::*;
 pub use data_column::DataColumn;

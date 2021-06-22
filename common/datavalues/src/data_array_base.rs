@@ -15,8 +15,8 @@ use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::data_arrow_array::GetValues;
 use crate::data_df_type::*;
+use crate::vec::AlignedVec;
 use crate::DataArrayRef;
 use crate::DataType;
 use crate::DataValue;
@@ -24,7 +24,7 @@ use crate::*;
 
 /// DataArrayBase is generic struct which implements DataArray
 pub struct DataArrayBase<T> {
-    array: arrow_array::ArrayRef,
+    pub array: arrow_array::ArrayRef,
     t: PhantomData<T>,
 }
 
@@ -138,11 +138,35 @@ where T: DFDataType
             }
 
             DataType::List(_) => {
-                let v = downcast!(LargeListArray);
-                let s = DataArrayRef::from(v);
-                AnyValue::List(s.unwrap())
+                todo!();
             }
             _ => unimplemented!(),
+        }
+    }
+}
+
+impl<T> DataArrayBase<T>
+where T: DFPrimitiveType
+{
+    /// Create a new DataArrayBase by taking ownership of the AlignedVec. This operation is zero copy.
+    pub fn new_from_aligned_vec(name: &str, v: AlignedVec<T::Native>) -> Self {
+        let arr = v.into_primitive_array::<T>(None);
+        Self {
+            array: Arc::new(arr),
+            t: PhantomData,
+        }
+    }
+
+    /// Nullify values in slice with an existing null bitmap
+    pub fn new_from_owned_with_null_bitmap(
+        name: &str,
+        values: AlignedVec<T::Native>,
+        buffer: Option<Buffer>,
+    ) -> Self {
+        let array = Arc::new(values.into_primitive_array::<T>(buffer));
+        Self {
+            array,
+            t: PhantomData,
         }
     }
 }
