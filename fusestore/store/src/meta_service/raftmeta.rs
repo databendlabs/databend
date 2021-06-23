@@ -32,6 +32,7 @@ use async_raft::Raft;
 use async_raft::RaftMetrics;
 use async_raft::RaftNetwork;
 use async_raft::RaftStorage;
+use common_metatypes::Database;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::watch;
 use common_runtime::tokio::sync::Mutex;
@@ -45,7 +46,6 @@ use serde::Serialize;
 use thiserror::Error;
 use tonic::transport::channel::Channel;
 
-use crate::meta_service::meta::Database;
 use crate::meta_service::MemStoreStateMachine;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::MetaServiceImpl;

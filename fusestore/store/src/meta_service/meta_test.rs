@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::meta_service::meta::Database;
+use common_metatypes::Database;
+
 use crate::meta_service::meta::Replication;
 use crate::meta_service::ClientRequest;
 use crate::meta_service::ClientResponse;

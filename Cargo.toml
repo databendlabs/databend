@@ -9,6 +9,7 @@ members = [
     "common/flights",
     "common/functions",
     "common/aggregate_functions",
+    "common/metatypes",
     "common/infallible",
     "common/planners",
     "common/progress",

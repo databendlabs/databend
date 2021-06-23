@@ -24,6 +24,7 @@ common-exception = {path = "../../common/exception"}
 common-flights = {path = "../../common/flights"}
 common-functions = {path = "../../common/functions"}
 common-infallible = {path = "../../common/infallible"}
+common-metatypes = {path = "../../common/metatypes"}
 common-planners = {path = "../../common/planners"}
 common-runtime = {path = "../../common/runtime"}
 common-tracing = {path = "../../common/tracing"}

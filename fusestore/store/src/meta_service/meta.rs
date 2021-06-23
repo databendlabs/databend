@@ -4,11 +4,12 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_metatypes::Database;
+use common_metatypes::Table;
 use common_tracing::tracing;
 use serde::Deserialize;
 use serde::Serialize;
@@ -36,22 +37,6 @@ impl Default for Replication {
     fn default() -> Self {
         Replication::Mirror(1)
     }
-}
-
-#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
-pub struct Database {
-    pub database_id: u64,
-    /// tables belong to this database.
-    pub tables: HashMap<String, u64>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
-pub struct Table {
-    table_id: u64,
-    /// serialized schema
-    schema: Vec<u8>,
-    // name or parts that belong to this table.
-    parts: HashSet<String>,
 }
 
 /// Meta data of a Dfs.
