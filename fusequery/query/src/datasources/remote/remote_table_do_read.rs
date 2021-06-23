@@ -4,9 +4,10 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flights::ReadAction;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
+use common_store_api::ReadAction;
+use common_store_api::StorageApi;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;

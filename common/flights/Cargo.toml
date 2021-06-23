@@ -17,6 +17,7 @@ common-planners = {path = "../planners"}
 common-runtime = {path = "../runtime"}
 common-streams = {path = "../streams"}
 common-tracing = {path = "../tracing"}
+common-store-api= {path = "../store-api"}
 
 # Github dependencies
 
@@ -33,6 +34,7 @@ tonic = "0.4.3"
 hyper = "0.14.9"
 lazy_static = "1.4.0"
 trust-dns-resolver = { version = "0.20.3", features = ["system-config"] }
+async-trait = "0.1"
 
 [dev-dependencies]
 pretty_assertions = "0.7"

@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use backtrace::Backtrace;
 use thiserror::Error;
+use tonic::Code;
 use tonic::Status;
 
 pub static ABORT_SESSION: u16 = 42;
@@ -148,6 +149,27 @@ build_exceptions! {
     AbortedQuery(ABORT_QUERY),
     NotFoundSession(44),
     CannotListenerPort(45),
+
+    // user api error codes
+    UnknownUser(300),
+    UserAlreadyExists(301),
+
+
+    // metastore error codes
+    DatabaseAlreadExists(401),
+    TableAlreadExists(403),
+    IllegalMetaOperationArgument(404),
+    IllegalSchema(405),
+    IllegalMetaState(405),
+    MetaNodeInternalError(406),
+
+    // storage
+    IllegalScanPlan(500),
+    ReadFileError(501),
+    BrokenChannel(502),
+
+    // uncategorized
+    UnexpectedResponseType(600),
 
     UnknownException(1000),
     TokioError(1001),
@@ -369,8 +391,8 @@ struct SerializedError {
 impl From<&Status> for ErrorCode {
     fn from(status: &Status) -> Self {
         match status.code() {
-            tonic::Code::Internal => {
-                match serde_json::from_str::<SerializedError>(&status.message()) {
+            tonic::Code::Unknown => {
+                match serde_json::from_slice::<SerializedError>(status.details()) {
                     Err(error) => ErrorCode::from(error),
                     Ok(serialized_error) => match serialized_error.backtrace.len() {
                         0 => {
@@ -399,7 +421,7 @@ impl From<Status> for ErrorCode {
 
 impl From<ErrorCode> for Status {
     fn from(err: ErrorCode) -> Self {
-        let rst_json = serde_json::to_string::<SerializedError>(&SerializedError {
+        let rst_json = serde_json::to_vec::<SerializedError>(&SerializedError {
             code: err.code(),
             message: err.message(),
             backtrace: {
@@ -410,7 +432,11 @@ impl From<ErrorCode> for Status {
         });
 
         match rst_json {
-            Ok(serialized_error_json) => Status::internal(serialized_error_json),
+            Ok(serialized_error_json) => {
+                // Code::Internal will be used by h2, if something goes wrong internally.
+                // To distinguish from that, we use Code::Unknown here
+                Status::with_details(Code::Unknown, err.message(), serialized_error_json.into())
+            }
             Err(error) => Status::unknown(error.to_string()),
         }
     }
