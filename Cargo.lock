@@ -754,6 +754,14 @@ name = "common-infallible"
 version = "0.1.0"
 
 [[package]]
+name = "common-metatypes"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "serde",
+]
+
+[[package]]
 name = "common-planners"
 version = "0.1.0"
 dependencies = [
@@ -1534,6 +1542,7 @@ dependencies = [
  "common-flights",
  "common-functions",
  "common-infallible",
+ "common-metatypes",
  "common-planners",
  "common-runtime",
  "common-tracing",
