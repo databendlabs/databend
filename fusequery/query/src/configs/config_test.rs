@@ -12,6 +12,7 @@ fn test_config() -> common_exception::Result<()> {
     {
         let expect = Config {
             log_level: "debug".to_string(),
+            log_dir: "./_logs".to_string(),
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
