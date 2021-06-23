@@ -28,6 +28,7 @@ mod settings_table;
 mod system_database;
 mod system_factory;
 mod tables_table;
+mod tracing_table;
 
 pub use clusters_table::ClustersTable;
 pub use contributors_table::ContributorsTable;
