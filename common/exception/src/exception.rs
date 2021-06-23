@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use backtrace::Backtrace;
 use thiserror::Error;
+use tonic::Status;
 
 pub static ABORT_SESSION: u16 = 42;
 pub static ABORT_QUERY: u16 = 43;
@@ -308,8 +309,8 @@ impl ErrorCode {
 /// );
 /// ```
 pub trait ToErrorCode<T, E, CtxFn> {
-    /// Wrap the error value with ErrorCode that is evaluated lazily
-    /// only once an error does occur.
+    /// Wrap the error value with ErrorCode. It is lazily evaluated:
+    /// only when an error does occur.
     ///
     /// `err_code_fn` is one of the ErrorCode builder function such as `ErrorCode::Ok`.
     /// `context_fn` builds display_text for the ErrorCode.
@@ -333,5 +334,54 @@ where E: std::error::Error + Send + Sync + 'static
             let err_text = format!("{}, cause: {}", context_fn(), error);
             make_exception(err_text)
         })
+    }
+}
+
+// ===  ser/de to/from tonic::Status ===
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SerializedError {
+    code: u16,
+    message: String,
+    backtrace: String,
+}
+
+impl From<Status> for ErrorCode {
+    fn from(status: Status) -> Self {
+        match status.code() {
+            tonic::Code::Internal => {
+                match serde_json::from_str::<SerializedError>(&status.message()) {
+                    Err(error) => ErrorCode::from(error),
+                    Ok(serialized_error) => match serialized_error.backtrace.len() {
+                        0 => {
+                            ErrorCode::create(serialized_error.code, serialized_error.message, None)
+                        }
+                        _ => ErrorCode::create(
+                            serialized_error.code,
+                            serialized_error.message,
+                            Some(ErrorCodeBacktrace::Serialized(Arc::new(
+                                serialized_error.backtrace,
+                            ))),
+                        ),
+                    },
+                }
+            }
+            _ => ErrorCode::UnImplement(status.to_string()),
+        }
+    }
+}
+
+impl From<ErrorCode> for Status {
+    fn from(err: ErrorCode) -> Self {
+        let rst_json = serde_json::to_string::<SerializedError>(&SerializedError {
+            code: err.code(),
+            message: err.message(),
+            backtrace: err.backtrace_str(),
+        });
+
+        match rst_json {
+            Ok(serialized_error_json) => Status::internal(serialized_error_json),
+            Err(error) => Status::unknown(error.to_string()),
+        }
     }
 }
