@@ -55,6 +55,8 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
         assert_eq!(1, res.database_id, "second database id is 1");
     }
 
+    // TODO: test get_database
+
     Ok(())
 }
 

@@ -17,6 +17,7 @@ use common_arrow::parquet::arrow::ArrowReader;
 use common_arrow::parquet::arrow::ParquetFileArrowReader;
 use common_arrow::parquet::file::reader::SerializedFileReader;
 use common_arrow::parquet::file::serialized_reader::SliceableCursor;
+use common_exception::ErrorCode;
 use common_flights::CreateDatabaseAction;
 use common_flights::CreateDatabaseActionResult;
 use common_flights::CreateTableAction;
@@ -25,6 +26,8 @@ use common_flights::DropDatabaseAction;
 use common_flights::DropDatabaseActionResult;
 use common_flights::DropTableAction;
 use common_flights::DropTableActionResult;
+use common_flights::GetDatabaseAction;
+use common_flights::GetDatabaseActionResult;
 use common_flights::GetTableAction;
 use common_flights::GetTableActionResult;
 use common_flights::ReadAction;
@@ -97,6 +100,7 @@ impl ActionHandler {
         match action {
             StoreDoAction::ReadPlan(_) => Err(Status::internal("Store read plan unimplemented")),
             StoreDoAction::CreateDatabase(a) => self.create_db(a).await,
+            StoreDoAction::GetDatabase(a) => self.get_db(a).await,
             StoreDoAction::DropDatabase(act) => self.drop_db(act).await,
             StoreDoAction::CreateTable(a) => self.create_table(a).await,
             StoreDoAction::DropTable(act) => self.drop_table(act).await,
@@ -127,6 +131,28 @@ impl ActionHandler {
         Ok(StoreDoActionResult::CreateDatabase(
             CreateDatabaseActionResult { database_id },
         ))
+    }
+
+    async fn get_db(&self, act: GetDatabaseAction) -> Result<StoreDoActionResult, Status> {
+        // TODO(xp): create/drop/get database should base on MetaNode
+        let db_name = &act.db;
+        let meta = self.meta.lock().unwrap();
+
+        let db = meta.dbs.get(db_name);
+
+        match db {
+            Some(db) => {
+                let rst = GetDatabaseActionResult {
+                    database_id: db.db_id,
+                    db: db_name.clone(),
+                };
+                Ok(StoreDoActionResult::GetDatabase(rst))
+            }
+            None => {
+                let e = ErrorCode::UnknownDatabase(db_name.to_string());
+                Err(e.into())
+            }
+        }
     }
 
     async fn create_table(&self, act: CreateTableAction) -> Result<StoreDoActionResult, Status> {

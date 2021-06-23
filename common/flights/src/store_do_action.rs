@@ -28,6 +28,8 @@ pub struct ReadPlanAction {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct ReadPlanActionResult {}
 
+// === database: create ===
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CreateDatabaseAction {
     pub plan: CreateDatabasePlan,
@@ -37,12 +39,28 @@ pub struct CreateDatabaseActionResult {
     pub database_id: i64,
 }
 
+// === database: get ===
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct GetDatabaseAction {
+    pub db: String,
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct GetDatabaseActionResult {
+    pub database_id: i64,
+    pub db: String,
+}
+
+// === database: drop ===
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DropDatabaseAction {
     pub plan: DropDatabasePlan,
 }
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DropDatabaseActionResult {}
+
+// === table: create ===
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CreateTableAction {
@@ -53,12 +71,16 @@ pub struct CreateTableActionResult {
     pub table_id: i64,
 }
 
+// === table: drop ===
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DropTableAction {
     pub plan: DropTablePlan,
 }
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DropTableActionResult {}
+
+// === table: get ===
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetTableAction {
@@ -72,6 +94,8 @@ pub struct GetTableActionResult {
     pub name: String,
     pub schema: DataSchemaRef,
 }
+
+// === partition: scan ===
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ScanPartitionAction {
@@ -91,6 +115,7 @@ pub type ScanPartitionResult = Option<Vec<DataPartInfo>>;
 pub enum StoreDoAction {
     ReadPlan(ReadPlanAction),
     CreateDatabase(CreateDatabaseAction),
+    GetDatabase(GetDatabaseAction),
     DropDatabase(DropDatabaseAction),
     CreateTable(CreateTableAction),
     DropTable(DropTableAction),
@@ -102,6 +127,7 @@ pub enum StoreDoAction {
 pub enum StoreDoActionResult {
     ReadPlan(ReadPlanActionResult),
     CreateDatabase(CreateDatabaseActionResult),
+    GetDatabase(GetDatabaseActionResult),
     DropDatabase(DropDatabaseActionResult),
     CreateTable(CreateTableActionResult),
     DropTable(DropTableActionResult),
