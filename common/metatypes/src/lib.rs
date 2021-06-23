@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 //! This crate defines data types used in meta data storage service.
 
 use std::collections::HashMap;
