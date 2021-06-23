@@ -42,6 +42,7 @@ use tonic::Streaming;
 use crate::data_part::appender::Appender;
 use crate::engine::MemEngine;
 use crate::fs::FileSystem;
+use crate::meta_service::MetaNode;
 use crate::protobuf::CmdCreateDatabase;
 use crate::protobuf::CmdCreateTable;
 use crate::protobuf::Db;
@@ -49,6 +50,12 @@ use crate::protobuf::Table;
 
 pub struct ActionHandler {
     meta: Arc<Mutex<MemEngine>>,
+    /// The raft-based meta data entry.
+    /// In our design meta serves for both the distributed file system and the catalog storage such as db,tabel etc.
+    /// Thus in case the `fs` is a Dfs impl, `meta_node` is just a reference to the `Dfs.meta_node`.
+    /// TODO(xp): turn on dead_code warning when we finished action handler unit test.
+    #[allow(dead_code)]
+    meta_node: Arc<MetaNode>,
     fs: Arc<dyn FileSystem>,
 }
 
@@ -56,9 +63,10 @@ type DoGetStream =
     Pin<Box<dyn Stream<Item = Result<FlightData, tonic::Status>> + Send + Sync + 'static>>;
 
 impl ActionHandler {
-    pub fn create(fs: Arc<dyn FileSystem>) -> Self {
+    pub fn create(fs: Arc<dyn FileSystem>, meta_node: Arc<MetaNode>) -> Self {
         ActionHandler {
             meta: MemEngine::create(),
+            meta_node,
             fs,
         }
     }

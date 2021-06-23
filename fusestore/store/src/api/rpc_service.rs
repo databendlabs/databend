@@ -43,9 +43,9 @@ impl StoreServer {
 
         let mn = MetaNode::boot(0, meta_addr.clone()).await?;
 
-        let dfs = Dfs::create(fs, mn);
+        let dfs = Dfs::create(fs, mn.clone());
 
-        let flight_impl = StoreFlightImpl::create(self.conf.clone(), Arc::new(dfs));
+        let flight_impl = StoreFlightImpl::create(self.conf.clone(), Arc::new(dfs), mn);
         let flight_srv = FlightServiceServer::new(flight_impl);
 
         Server::builder()
