@@ -701,9 +701,11 @@ dependencies = [
  "anyhow",
  "backtrace",
  "common-arrow",
+ "serde",
  "serde_json",
  "sqlparser",
  "thiserror",
+ "tonic",
 ]
 
 [[package]]
