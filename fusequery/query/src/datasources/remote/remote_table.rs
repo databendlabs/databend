@@ -11,7 +11,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_flights::ScanPartitionResult;
 use common_planners::InsertIntoPlan;
-use common_planners::Partition;
+use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
@@ -146,7 +146,7 @@ impl RemoteTable {
 
         if let Some(parts) = res {
             for part in parts {
-                partitions.push(Partition {
+                partitions.push(Part {
                     name: part.partition.name,
                     version: 0,
                 });

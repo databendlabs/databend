@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-pub type Partitions = Vec<Partition>;
+pub type Partitions = Vec<Part>;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct Partition {
+pub struct Part {
     pub name: String,
     pub version: u64,
 }

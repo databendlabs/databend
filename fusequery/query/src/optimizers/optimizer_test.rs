@@ -10,7 +10,7 @@ pub fn generate_partitions(workers: u64, total: u64) -> Partitions {
 
     let mut partitions = Vec::with_capacity(workers as usize);
     if part_size == 0 {
-        partitions.push(Partition {
+        partitions.push(Part {
             name: format!("{}-{}-{}", total, 0, total,),
             version: 0,
         })
@@ -21,7 +21,7 @@ pub fn generate_partitions(workers: u64, total: u64) -> Partitions {
             if part == (workers - 1) && part_remain > 0 {
                 part_end += part_remain;
             }
-            partitions.push(Partition {
+            partitions.push(Part {
                 name: format!("{}-{}-{}", total, part_begin, part_end,),
                 version: 0,
             })

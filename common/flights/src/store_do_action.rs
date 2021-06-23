@@ -13,7 +13,7 @@ use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
-use common_planners::Partition;
+use common_planners::Part;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
 use prost::Message;
@@ -80,7 +80,7 @@ pub struct ScanPartitionAction {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DataPartInfo {
-    pub partition: Partition,
+    pub partition: Part,
     pub stats: Statistics,
 }
 
