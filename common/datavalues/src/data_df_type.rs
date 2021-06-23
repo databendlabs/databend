@@ -4,7 +4,7 @@ use common_arrow::arrow::datatypes::ArrowPrimitiveType;
 use common_arrow::arrow::datatypes::IntervalUnit;
 use common_arrow::arrow::datatypes::TimeUnit;
 
-use crate::data_array_base::DataArrayBase;
+use crate::arrays::DataArrayBase;
 use crate::DataField;
 use crate::DataType;
 
@@ -65,6 +65,9 @@ pub type DFFloat64Array = DataArrayBase<Float64Type>;
 
 pub type DFStringArray = DataArrayBase<Utf8Type>;
 pub type DFListArray = DataArrayBase<ListType>;
+
+pub type DFDate32Array = DataArrayBase<Date32Type>;
+pub type DFDate64Array = DataArrayBase<Date64Type>;
 
 pub type DFTimestampSecondArray = DataArrayBase<TimestampSecondType>;
 pub type DFTimestampMillisecondArray = DataArrayBase<TimestampMillisecondType>;

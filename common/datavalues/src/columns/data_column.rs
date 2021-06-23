@@ -4,7 +4,7 @@
 
 use common_exception::Result;
 
-use crate::DataArrayRef;
+use crate::arrays::DataArrayRef;
 use crate::DataType;
 use crate::DataValue;
 

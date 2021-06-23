@@ -11,7 +11,7 @@ use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeStringArray;
 use common_arrow::arrow::array::PrimitiveArray;
 
-use crate::data_array_base::DataArrayBase;
+use crate::arrays::DataArrayBase;
 use crate::utils::NoNull;
 use crate::vec::AlignedVec;
 use crate::BooleanType;

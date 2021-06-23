@@ -15,10 +15,9 @@ use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::DataArrayRef;
+use crate::arrays::DataArrayRef;
 use crate::DataField;
 use crate::DataType;
-
 
 /// A specific value of a data type.
 #[derive(Serialize, Deserialize, Clone, PartialEq)]

@@ -1,19 +1,19 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::data_array_base::DataArrayBase;
+use crate::arrays::ops::ArrayCast;
+use crate::arrays::*;
 use crate::*;
 
-// Copyright 2020-2021 The Datafuse Authors.
-//
-// SPDX-License-Identifier: Apache-2.0.
-
-pub(crate) struct DataArrayWrap<T>(pub T);
+pub struct DataArrayWrap<T>(pub T);
 
 impl<T> From<DataArrayBase<T>> for DataArrayWrap<DataArrayBase<T>> {
     fn from(da: DataArrayBase<T>) -> Self {
@@ -69,7 +69,7 @@ macro_rules! impl_dyn_array {
             }
 
             fn cast_with_type(&self, data_type: &DataType) -> Result<DataArrayRef> {
-                self.0.cast_with_type(data_type)
+                ArrayCast::cast_with_type(&self.0, data_type)
             }
 
             fn try_get(&self, index: usize) -> Result<DataValue> {

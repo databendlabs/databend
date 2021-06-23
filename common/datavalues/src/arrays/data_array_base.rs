@@ -15,9 +15,11 @@ use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::arrays::ops::ArrayCast;
+use crate::arrays::DataArrayRef;
+use crate::arrays::DataArrayWrap;
 use crate::data_df_type::*;
 use crate::vec::AlignedVec;
-use crate::DataArrayRef;
 use crate::DataType;
 use crate::DataValue;
 use crate::*;
@@ -70,10 +72,6 @@ impl<T> DataArrayBase<T> {
         let array = self.array.slice(offset, length);
         array.into()
     }
-
-    pub fn cast_with_type(&self, data_type: &DataType) -> Result<DataArrayRef> {
-        todo!()
-    }
 }
 
 impl<T> DataArrayBase<T>
@@ -93,12 +91,6 @@ where T: DFDataType
             }};
         }
 
-        macro_rules! downcast {
-            ($CAST_TYPE:ident) => {{
-                let arr = &*(arr as *const dyn Array as *const $CAST_TYPE);
-                arr.value_unchecked(index)
-            }};
-        }
         // TODO: insert types
         match T::data_type() {
             DataType::Utf8 => downcast_and_pack!(LargeStringArray, Utf8),
@@ -146,7 +138,7 @@ where T: DFDataType
 }
 
 impl<T> DataArrayBase<T>
-where T: DFPrimitiveType
+where T: DFNumericType
 {
     /// Create a new DataArrayBase by taking ownership of the AlignedVec. This operation is zero copy.
     pub fn new_from_aligned_vec(name: &str, v: AlignedVec<T::Native>) -> Self {
@@ -169,6 +161,27 @@ where T: DFPrimitiveType
             t: PhantomData,
         }
     }
+
+    /// Get slices of the underlying arrow data.
+    /// NOTE: null values should be taken into account by the user of these slices as they are handled
+    /// separately
+
+    pub fn data_views(
+        &self,
+    ) -> impl Iterator<Item = &T::Native> + '_ + Send + Sync + ExactSizeIterator + DoubleEndedIterator
+    {
+        self.downcast_ref().values().iter()
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    pub fn into_no_null_iter(
+        &self,
+    ) -> impl Iterator<Item = T::Native> + '_ + Send + Sync + ExactSizeIterator + DoubleEndedIterator
+    {
+        // .copied was significantly slower in benchmark, next call did not inline?
+        #[allow(clippy::map_clone)]
+        self.data_views().map(|v| *v)
+    }
 }
 
 impl<T> From<arrow_array::ArrayRef> for DataArrayBase<T> {
@@ -185,6 +198,15 @@ impl<T> From<&arrow_array::ArrayRef> for DataArrayBase<T> {
         Self {
             array: array.clone(),
             t: PhantomData::<T>,
+        }
+    }
+}
+
+impl<T> Clone for DataArrayBase<T> {
+    fn clone(&self) -> Self {
+        Self {
+            array: self.array.clone(),
+            t: PhantomData,
         }
     }
 }

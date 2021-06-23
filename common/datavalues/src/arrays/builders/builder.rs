@@ -1,25 +1,15 @@
-use std::borrow::Cow;
-use std::iter::FromIterator;
-use std::iter::IntoIterator;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
-use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::BooleanBuilder;
-use common_arrow::arrow::array::LargeListBuilder;
 use common_arrow::arrow::array::LargeStringBuilder;
 use common_arrow::arrow::array::PrimitiveBuilder;
 use common_arrow::arrow::buffer::Buffer;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use num::Num;
 
-use crate::data_array_base::DataArrayBase;
+use crate::arrays::DataArrayBase;
 use crate::utils::get_iter_capacity;
 use crate::utils::NoNull;
-use crate::utils::*;
 use crate::BooleanType;
 use crate::DFBooleanArray;
 use crate::DFPrimitiveType;

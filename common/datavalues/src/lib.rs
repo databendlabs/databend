@@ -4,28 +4,18 @@
 #[macro_use]
 mod macros;
 
-mod data_array;
-mod data_array_base;
-mod data_array_date_wrap;
-mod data_array_wrap;
-mod data_arrow_array;
-mod data_column;
 mod data_df_type;
 mod data_field;
 mod data_schema;
 mod data_type;
 mod data_type_coercion;
 mod data_value;
-mod ops;
 mod utils;
-
-mod builders;
-pub mod upstream_traits;
 mod vec;
 
-pub use data_array::*;
-pub use data_column::DataColumn;
-pub use data_column::*;
+mod arrays;
+mod columns;
+
 pub use data_df_type::*;
 pub use data_field::DataField;
 pub use data_schema::DataSchema;

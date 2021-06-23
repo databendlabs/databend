@@ -4,15 +4,13 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::ops::Deref;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::IntervalUnit;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use data_array_base::DataArrayBase;
-use data_array_wrap::DataArrayWrap;
 
+use crate::arrays::ops::*;
+use crate::arrays::*;
 use crate::*;
 
 impl<T> DataArrayBase<T> {
@@ -132,7 +130,7 @@ macro_rules! impl_dyn_arrays {
             }
 
             fn cast_with_type(&self, data_type: &DataType) -> Result<DataArrayRef> {
-                self.0.cast_with_type(data_type)
+                ArrayCast::cast_with_type(&self.0, data_type)
             }
 
             fn try_get(&self, index: usize) -> Result<DataValue> {
@@ -141,6 +139,9 @@ macro_rules! impl_dyn_arrays {
         }
     };
 }
+
+impl_dyn_arrays!(DFDate32Array);
+impl_dyn_arrays!(DFDate64Array);
 
 impl_dyn_arrays!(DFTimestampSecondArray);
 impl_dyn_arrays!(DFTimestampMillisecondArray);
