@@ -123,7 +123,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "arrow"
 version = "5.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow-rs?rev=0a165748c924b3752cc00ff86e56917427985872#0a165748c924b3752cc00ff86e56917427985872"
+source = "git+https://github.com/datafuse-extras/arrow-rs?rev=ed61617#ed6161750a33d8e44469c6bcfb800659c7f61afc"
 dependencies = [
  "chrono",
  "csv",
@@ -145,7 +145,7 @@ dependencies = [
 [[package]]
 name = "arrow-flight"
 version = "5.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow-rs?rev=0a165748c924b3752cc00ff86e56917427985872#0a165748c924b3752cc00ff86e56917427985872"
+source = "git+https://github.com/datafuse-extras/arrow-rs?rev=ed61617#ed6161750a33d8e44469c6bcfb800659c7f61afc"
 dependencies = [
  "arrow",
  "bytes 1.0.1",
@@ -1391,9 +1391,9 @@ checksum = "37ab347416e802de484e4d03c7316c48f1ecb56574dfd4a46a80f173ce1de04d"
 
 [[package]]
 name = "flatbuffers"
-version = "0.8.4"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3c502342b7d6d73beb1b8bab39dc01deba0c8ef66f4e6f1eba7c69ee6b38069"
+checksum = "ef4c5738bcd7fad10315029c50026f83c9da5e4a21f8ed66826f43e0e2bde5f6"
 dependencies = [
  "bitflags 1.2.1",
  "smallvec",
@@ -2995,7 +2995,7 @@ dependencies = [
 [[package]]
 name = "parquet"
 version = "5.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow-rs?rev=0a165748c924b3752cc00ff86e56917427985872#0a165748c924b3752cc00ff86e56917427985872"
+source = "git+https://github.com/datafuse-extras/arrow-rs?rev=ed61617#ed6161750a33d8e44469c6bcfb800659c7f61afc"
 dependencies = [
  "arrow",
  "base64 0.13.0",
@@ -3006,6 +3006,7 @@ dependencies = [
  "lz4",
  "num-bigint 0.4.0",
  "parquet-format",
+ "rand 0.8.4",
  "snap",
  "thrift",
  "zstd",
