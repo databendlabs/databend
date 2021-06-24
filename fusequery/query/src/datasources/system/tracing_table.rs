@@ -5,23 +5,18 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_aggregate_functions::AggregateFunctionFactory;
-use common_datablocks::DataBlock;
-use common_datavalues::BooleanArray;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
-use common_datavalues::StringArray;
 use common_exception::Result;
-use common_functions::FunctionFactory;
 use common_planners::Partition;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
-use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
+use crate::datasources::system::TracingTableStream;
 use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
 
@@ -31,10 +26,16 @@ pub struct TracingTable {
 
 impl TracingTable {
     pub fn create() -> Self {
+        // {"v":0,"name":"fuse-query","msg":"Group by partial cost: 9.071158ms","level":20,"hostname":"datafuse","pid":56776,"time":"2021-06-24T02:17:28.679642889+00:00"}
         TracingTable {
             schema: DataSchemaRefExt::create(vec![
+                DataField::new("v", DataType::Int64, false),
                 DataField::new("name", DataType::Utf8, false),
-                DataField::new("is_aggregate", DataType::Boolean, false),
+                DataField::new("msg", DataType::Utf8, false),
+                DataField::new("level", DataType::Int8, false),
+                DataField::new("hostname", DataType::Utf8, false),
+                DataField::new("pid", DataType::Int64, false),
+                DataField::new("time", DataType::Date64, false),
             ]),
         }
     }
@@ -77,35 +78,15 @@ impl Table for TracingTable {
                 version: 0,
             }],
             statistics: Statistics::default(),
-            description: "(Read from system.functions table)".to_string(),
+            description: "(Read from system.tracing table)".to_string(),
             scan_plan: Arc::new(scan.clone()),
             remote: false,
         })
     }
 
-    async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
-        let func_names = FunctionFactory::registered_names();
-        let aggr_func_names = AggregateFunctionFactory::registered_names();
-
-        let names: Vec<&str> = func_names
-            .iter()
-            .chain(aggr_func_names.iter())
-            .map(|x| x.as_ref())
-            .collect();
-
-        let is_aggregate = (0..names.len())
-            .map(|i| i >= func_names.len())
-            .collect::<Vec<bool>>();
-
-        let block = DataBlock::create_by_array(self.schema.clone(), vec![
-            Arc::new(StringArray::from(names)),
-            Arc::new(BooleanArray::from(is_aggregate)),
-        ]);
-
-        Ok(Box::pin(DataBlockStream::create(
-            self.schema.clone(),
-            None,
-            vec![block],
-        )))
+    async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
+        Ok(Box::pin(TracingTableStream::try_create(
+            ctx.get_config().log_dir,
+        )?))
     }
 }
