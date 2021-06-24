@@ -165,7 +165,7 @@ impl DataValue {
         let dict_col = col.as_any().downcast_ref::<DictionaryArray<K>>().unwrap();
 
         // look up the index in the values dictionary
-        let keys_col = dict_col.keys_array();
+        let keys_col = dict_col.keys();
         let values_index = keys_col.value(row).to_usize().ok_or_else(|| {
             ErrorCode::BadDataValueType(format!(
                 "Can not convert index to usize in dictionary of type creating group by value {:?}",

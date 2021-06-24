@@ -1,7 +1,7 @@
 <div align="center">
 <h1>Datafuse</h1>
 <strong>
-Modern Real-Time Data Processing & Analytics DBMS with Cloud-Native Architecture 
+Modern Real-Time Data Processing & Analytics DBMS with Cloud-Native Architecture
 </strong>
 
 <br>
@@ -18,6 +18,10 @@ Modern Real-Time Data Processing & Analytics DBMS with Cloud-Native Architecture
 
 <a href="https://codecov.io/gh/datafuselabs/datafuse">
 <img src="https://codecov.io/gh/datafuselabs/datafuse/branch/master/graph/badge.svg" alt="codecov" />
+</a>
+
+<a href="https://deps.rs/repo/github/datafuselabs/datafuse">
+<img src="https://deps.rs/repo/github/datafuselabs/datafuse/status.svg" alt="dependency status" />
 </a>
 
 <img src="https://img.shields.io/badge/Platform-Linux,%20ARM,%20OS%20X,%20Windows-green.svg?style=flat" alt="patform" />
@@ -37,12 +41,12 @@ in Rust, inspired by [ClickHouse](https://github.com/ClickHouse/ClickHouse) and 
 * **Fearless**
   - No data races, No unsafe, Minimize unhandled errors
 
-* **High Performance** 
+* **High Performance**
   - Everything is Parallelism
-  
+
 * **High Scalability**
   - Everything is Distributed
-  
+
 * **High Reliability**
   - Datafuse primary design goal is reliability
 
