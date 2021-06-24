@@ -720,6 +720,7 @@ dependencies = [
  "common-planners",
  "common-runtime",
  "common-streams",
+ "common-tracing",
  "futures",
  "hyper",
  "jwt-simple",

@@ -15,6 +15,7 @@ common-exception= {path = "../exception"}
 common-planners = {path = "../planners"}
 common-runtime = {path = "../runtime"}
 common-streams = {path = "../streams"}
+common-tracing = {path = "../tracing"}
 
 # Github dependencies
 

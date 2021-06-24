@@ -9,12 +9,13 @@ use common_flights::GetTableActionResult;
 use common_flights::StoreClient;
 use common_planners::ScanPlan;
 use common_runtime::tokio;
-use log::info;
+use common_tracing::tracing;
 use pretty_assertions::assert_eq;
-use test_env_log::test;
 
-#[test(tokio::test)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_create_database() -> anyhow::Result<()> {
+    common_tracing::init_default_tracing();
+
     use common_planners::CreateDatabasePlan;
     use common_planners::DatabaseEngineType;
 
@@ -25,6 +26,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
 
     // 2. Create database.
 
+    // TODO: test arg if_not_exists: It should respond  an ErrorCode
     {
         // create first db
         let plan = CreateDatabasePlan {
@@ -36,7 +38,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
         };
 
         let res = client.create_database(plan.clone()).await;
-        info!("create database res: {:?}", res);
+        tracing::info!("create database res: {:?}", res);
         let res = res.unwrap();
         assert_eq!(0, res.database_id, "first database id is 0");
     }
@@ -50,18 +52,38 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
         };
 
         let res = client.create_database(plan.clone()).await;
-        info!("create database res: {:?}", res);
+        tracing::info!("create database res: {:?}", res);
         let res = res.unwrap();
         assert_eq!(1, res.database_id, "second database id is 1");
     }
 
-    // TODO: test get_database
+    // 3. Get database.
+
+    {
+        // get present db
+        let res = client.get_database("db1").await;
+        tracing::debug!("get present database res: {:?}", res);
+        let res = res?;
+        assert_eq!(0, res.database_id, "db1 id is 0");
+        assert_eq!("db1".to_string(), res.db, "db1.db is db1");
+    }
+
+    {
+        // get absent db
+        let res = client.get_database("ghost").await;
+        tracing::debug!("=== get absent database res: {:?}", res);
+        assert!(res.is_err());
+        let res = res.unwrap_err();
+        assert_eq!(3, res.code());
+        assert_eq!("ghost".to_string(), res.message());
+    }
 
     Ok(())
 }
 
-#[test(tokio::test)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_create_get_table() -> anyhow::Result<()> {
+    common_tracing::init_default_tracing();
     use std::sync::Arc;
 
     use common_arrow::arrow::datatypes::DataType;
@@ -73,7 +95,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
     use common_planners::DatabaseEngineType;
     use common_planners::TableEngineType;
 
-    info!("init logging");
+    tracing::info!("init logging");
 
     // 1. Service starts.
     let addr = crate::tests::start_store_server().await?;
@@ -91,7 +113,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
 
         let res = client.create_database(plan.clone()).await;
 
-        info!("create database res: {:?}", res);
+        tracing::info!("create database res: {:?}", res);
 
         let res = res.unwrap();
         assert_eq!(0, res.database_id, "first database id is 0");
@@ -154,7 +176,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
             plan.if_not_exists = false;
 
             let res = client.create_table(plan.clone()).await;
-            info!("create table res: {:?}", res);
+            tracing::info!("create table res: {:?}", res);
 
             let status = res.err().unwrap();
             assert_eq!(
@@ -178,8 +200,9 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(tokio::test)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_append() -> anyhow::Result<()> {
+    common_tracing::init_default_tracing();
     use std::sync::Arc;
 
     use common_arrow::arrow::datatypes::DataType;
@@ -240,7 +263,7 @@ async fn test_do_append() -> anyhow::Result<()> {
             Box::pin(stream),
         )
         .await?;
-    log::info!("append res is {:?}", res);
+    tracing::info!("append res is {:?}", res);
     let summary = res.summary;
     assert_eq!(summary.rows, expected_rows);
     assert_eq!(res.parts.len(), num_batch);
@@ -250,8 +273,10 @@ async fn test_do_append() -> anyhow::Result<()> {
     });
     Ok(())
 }
-#[test(tokio::test)]
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scan_partition() -> anyhow::Result<()> {
+    common_tracing::init_default_tracing();
     use std::sync::Arc;
 
     use common_arrow::arrow::datatypes::DataType;
@@ -315,7 +340,7 @@ async fn test_scan_partition() -> anyhow::Result<()> {
             Box::pin(stream),
         )
         .await?;
-    log::info!("append res is {:?}", res);
+    tracing::info!("append res is {:?}", res);
     let summary = res.summary;
     assert_eq!(summary.rows, expected_rows);
     assert_eq!(res.parts.len(), num_batch);

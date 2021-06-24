@@ -376,7 +376,11 @@ impl From<ErrorCode> for Status {
         let rst_json = serde_json::to_string::<SerializedError>(&SerializedError {
             code: err.code(),
             message: err.message(),
-            backtrace: err.backtrace_str(),
+            backtrace: {
+                let mut str = err.backtrace_str();
+                str.truncate(2 * 1024);
+                str
+            },
         });
 
         match rst_json {
