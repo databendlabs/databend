@@ -7,8 +7,11 @@ use std::path::Path;
 use std::sync::Arc;
 
 use common_arrow::arrow_flight::FlightData;
+use common_exception::ErrorCode;
 use common_flights::CreateDatabaseAction;
 use common_flights::CreateDatabaseActionResult;
+use common_flights::GetDatabaseAction;
+use common_flights::GetDatabaseActionResult;
 use common_flights::StoreDoAction;
 use common_flights::StoreDoActionResult;
 use common_planners::CreateDatabasePlan;
@@ -124,6 +127,80 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
                     let e = rst.unwrap_err();
                     assert_eq!(status_err.code(), e.code(), "{}", mes);
                     assert_eq!(status_err.message(), e.message(), "{}", mes);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_action_handler_get_database() -> anyhow::Result<()> {
+    // - Bring up an ActionHandler backed with a Dfs
+    // - Add a database.
+    // - Assert getting present and absent databases.
+
+    common_tracing::init_default_tracing();
+
+    struct T {
+        db_name: &'static str,
+        want: Result<StoreDoActionResult, ErrorCode>,
+    }
+
+    /// helper to build a T
+    fn case(db_name: &'static str, want: Result<i64, &str>) -> T {
+        let want = match want {
+            Ok(want_db_id) => Ok(StoreDoActionResult::GetDatabase(GetDatabaseActionResult {
+                database_id: want_db_id,
+                db: db_name.to_string(),
+            })),
+            Err(err_str) => Err(ErrorCode::UnknownDatabase(err_str)),
+        };
+
+        T { db_name, want }
+    }
+
+    // TODO: id should be started from 1
+    let cases: Vec<T> = vec![case("foo", Ok(0)), case("bar", Err("bar"))];
+
+    {
+        let dir = tempdir()?;
+        let root = dir.path();
+        let hdlr = bring_up_dfs_action_handler(root, hashmap! {}).await?;
+
+        {
+            // create db
+            let plan = CreateDatabasePlan {
+                db: "foo".to_string(),
+                if_not_exists: false,
+                engine: DatabaseEngineType::Local,
+                options: Default::default(),
+            };
+            let cba = CreateDatabaseAction { plan: plan };
+            let a = StoreDoAction::CreateDatabase(cba);
+            hdlr.execute(a).await?;
+        }
+
+        for (i, c) in cases.iter().enumerate() {
+            let mes = format!("{}-th: db: {:?}, want: {:?}", i, c.db_name, c.want);
+
+            // get db
+            let rst = hdlr
+                .execute(StoreDoAction::GetDatabase(GetDatabaseAction {
+                    db: c.db_name.to_string(),
+                }))
+                .await;
+
+            match c.want {
+                Ok(ref act_rst) => {
+                    assert_eq!(act_rst, &rst.unwrap(), "{}", mes);
+                }
+                Err(ref err) => {
+                    let got = rst.unwrap_err();
+                    let got: ErrorCode = got.into();
+                    assert_eq!(err.code(), got.code(), "{}", mes);
+                    assert_eq!(err.message(), got.message(), "{}", mes);
                 }
             }
         }

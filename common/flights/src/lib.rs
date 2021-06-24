@@ -17,6 +17,8 @@ pub use store_do_action::DropDatabaseAction;
 pub use store_do_action::DropDatabaseActionResult;
 pub use store_do_action::DropTableAction;
 pub use store_do_action::DropTableActionResult;
+pub use store_do_action::GetDatabaseAction;
+pub use store_do_action::GetDatabaseActionResult;
 pub use store_do_action::GetTableAction;
 pub use store_do_action::GetTableActionResult;
 pub use store_do_action::ReadPlanAction;
