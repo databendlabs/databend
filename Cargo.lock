@@ -828,6 +828,8 @@ name = "common-tracing"
 version = "0.1.0"
 dependencies = [
  "tracing",
+ "tracing-appender",
+ "tracing-bunyan-formatter",
  "tracing-futures",
  "tracing-subscriber",
 ]
@@ -1527,6 +1529,7 @@ dependencies = [
  "toml",
  "tonic",
  "uuid",
+ "walkdir",
  "warp",
 ]
 
@@ -1696,6 +1699,16 @@ checksum = "501466ecc8a30d1d3b7fc9229b122b2ce8ed6e9d9223f1138d4babb253e51817"
 dependencies = [
  "typenum",
  "version_check",
+]
+
+[[package]]
+name = "gethostname"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e692e296bfac1d2533ef168d0b60ff5897b8b70a4009276834014dd8924cc028"
+dependencies = [
+ "libc",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -4700,6 +4713,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-appender"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9965507e507f12c8901432a33e31131222abac31edd90cabbcf85cf544b7127a"
+dependencies = [
+ "chrono",
+ "crossbeam-channel 0.5.1",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tracing-attributes"
 version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4708,6 +4732,23 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "tracing-bunyan-formatter"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06718867c20ea03700d41a9413610cccf5d772caea792f34cc73cdd43f0e14a6"
+dependencies = [
+ "chrono",
+ "gethostname",
+ "log 0.4.14",
+ "serde",
+ "serde_json",
+ "tracing",
+ "tracing-core",
+ "tracing-log",
+ "tracing-subscriber",
 ]
 
 [[package]]

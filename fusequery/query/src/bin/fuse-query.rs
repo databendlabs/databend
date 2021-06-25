@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use common_exception::ErrorCode;
 use common_runtime::tokio;
-use common_tracing::init_tracing_with_level;
+use common_tracing::init_tracing_with_file;
 use fuse_query::api::HttpService;
 use fuse_query::api::RpcService;
 use fuse_query::clusters::Cluster;
@@ -35,7 +35,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         env_logger::Env::default().default_filter_or(conf.log_level.to_lowercase().as_str()),
     )
     .init();
-    init_tracing_with_level(conf.log_level.as_str());
+    let _guards =
+        init_tracing_with_file("fuse-query", conf.log_dir.as_str(), conf.log_level.as_str());
 
     info!("{:?}", conf);
     info!(

@@ -15,6 +15,7 @@ use common_runtime::tokio;
 use common_runtime::tokio::net::TcpStream;
 use msql_srv::MysqlIntermediary;
 
+use crate::configs::Config;
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
 use crate::servers::AbortableService;
 use crate::servers::Elapsed;
@@ -25,6 +26,7 @@ use crate::sessions::SessionManagerRef;
 use crate::sessions::SessionStatus;
 
 pub struct Session {
+    conf: Config,
     session_id: String,
     session_manager: SessionManagerRef,
     session_status: Arc<Mutex<SessionStatus>>,
@@ -39,6 +41,7 @@ impl ISession for Session {
 
     fn try_create_context(&self) -> Result<FuseQueryContextRef> {
         self.session_status.lock().try_create_context(
+            self.conf.clone(),
             self.session_manager.get_cluster(),
             self.session_manager.get_datasource(),
         )
@@ -126,8 +129,13 @@ impl AbortableService<TcpStream, ()> for Session {
 impl SessionCreator for Session {
     type Session = Self;
 
-    fn create(session_id: String, sessions: SessionManagerRef) -> Result<Arc<Box<dyn ISession>>> {
+    fn create(
+        conf: Config,
+        session_id: String,
+        sessions: SessionManagerRef,
+    ) -> Result<Arc<Box<dyn ISession>>> {
         Ok(Arc::new(Box::new(Session {
+            conf,
             session_id,
             session_manager: sessions,
             session_status: Arc::new(Mutex::new(SessionStatus::try_create()?)),

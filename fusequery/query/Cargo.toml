@@ -62,6 +62,7 @@ num = "0.4"
 nom = "6.1.2"
 num_cpus = "1.0"
 paste = "^1.0"
+pnet = "0.27.2"
 prost = "0.7"
 rand = "0.8.4"
 serde = { version = "1.0", features = ["derive"] }
@@ -72,9 +73,9 @@ threadpool = "1.8.1"
 tokio-stream = { version = "0.1", features = ["net"] }
 toml = "0.5.6"
 tonic = "0.4"
+walkdir = "2.3.2"
 warp = "0.3.1"
 uuid = { version = "0.8", features = ["serde", "v4"] }
-pnet = "0.27.2"
 
 [dev-dependencies]
 pretty_assertions = "0.7"
