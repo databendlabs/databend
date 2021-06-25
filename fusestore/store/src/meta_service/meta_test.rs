@@ -201,7 +201,7 @@ fn test_meta_apply_add_database() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_meta_apply_unclassified() -> anyhow::Result<()> {
+fn test_meta_apply_generic_kv() -> anyhow::Result<()> {
     let mut m = Meta::builder().build()?;
 
     struct T {
@@ -256,14 +256,14 @@ fn test_meta_apply_unclassified() -> anyhow::Result<()> {
 
         let resp = m.apply(&ClientRequest {
             txid: None,
-            cmd: Cmd::UpsertUnclassified {
+            cmd: Cmd::UpsertKV {
                 key: c.key.clone(),
                 seq: c.seq,
                 value: c.value.clone(),
             },
         })?;
         assert_eq!(
-            ClientResponse::Unclassified {
+            ClientResponse::KV {
                 prev: c.prev.clone(),
                 result: c.result.clone(),
             },
@@ -280,7 +280,7 @@ fn test_meta_apply_unclassified() -> anyhow::Result<()> {
             _ => None,
         };
 
-        let got = m.get_unclassified(&c.key);
+        let got = m.get_kv(&c.key);
         assert_eq!(want, got, "get: {}", mes,);
     }
 

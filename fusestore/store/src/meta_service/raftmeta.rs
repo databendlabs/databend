@@ -76,7 +76,8 @@ pub enum Cmd {
     /// Add a database if absent
     AddDatabase { name: String },
 
-    UpsertUnclassified {
+    /// Update or insert a general purpose kv store
+    UpsertKV {
         key: String,
         /// Set to Some() to modify the value only when the seq matches.
         /// Since a sequence number is positive, use Some(0) to perform an add-if-absent operation.
@@ -103,8 +104,8 @@ impl fmt::Display for Cmd {
             Cmd::AddDatabase { name } => {
                 write!(f, "add_db:{}", name)
             }
-            Cmd::UpsertUnclassified { key, seq, value } => {
-                write!(f, "upsert_unclassified: {}({:?}) = {:?}", key, seq, value)
+            Cmd::UpsertKV { key, seq, value } => {
+                write!(f, "upsert_kv: {}({:?}) = {:?}", key, seq, value)
             }
         }
     }
@@ -223,7 +224,7 @@ pub enum ClientResponse {
         result: Option<Database>,
     },
 
-    Unclassified {
+    KV {
         prev: Option<SeqValue>,
         result: Option<SeqValue>,
     },
@@ -308,7 +309,7 @@ impl From<(Option<Database>, Option<Database>)> for ClientResponse {
 
 impl From<(Option<SeqValue>, Option<SeqValue>)> for ClientResponse {
     fn from(v: (Option<SeqValue>, Option<SeqValue>)) -> Self {
-        ClientResponse::Unclassified {
+        ClientResponse::KV {
             prev: v.0,
             result: v.1,
         }
@@ -1144,7 +1145,7 @@ impl MetaNode {
         // inconsistent get: from local state machine
 
         let sm = self.sto.sm.read().await;
-        sm.meta.get_unclassified(key)
+        sm.meta.get_kv(key)
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.
