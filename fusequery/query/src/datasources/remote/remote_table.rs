@@ -147,7 +147,7 @@ impl RemoteTable {
         if let Some(parts) = res {
             for part in parts {
                 partitions.push(Part {
-                    name: part.partition.name,
+                    name: part.part.name,
                     version: 0,
                 });
                 statistics.read_rows += part.stats.read_rows;
@@ -159,7 +159,7 @@ impl RemoteTable {
             db: self.db.clone(),
             table: self.name.clone(),
             schema: self.schema.clone(),
-            partitions,
+            parts: partitions,
             statistics,
             description: "".to_string(),
             scan_plan: Arc::new(scan_plan),

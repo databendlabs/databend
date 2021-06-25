@@ -97,7 +97,7 @@ impl Table for CsvTable {
             db: self.db.clone(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
-            partitions: Common::generate_parts(
+            parts: Common::generate_parts(
                 start_line as u64,
                 ctx.get_max_threads()?,
                 lines_count as u64,

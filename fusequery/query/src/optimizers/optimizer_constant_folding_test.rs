@@ -32,7 +32,7 @@ mod tests {
                 DataField::new("b", DataType::Utf8, false),
                 DataField::new("c", DataType::Utf8, false),
             ]),
-            partitions: generate_partitions(8, total as u64),
+            parts: generate_partitions(8, total as u64),
             statistics: statistics.clone(),
             description: format!(
                 "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",

@@ -12,7 +12,7 @@ use common_planners::ScanPlan;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ReadAction {
-    pub partition: Part,
+    pub part: Part,
     pub push_down: PlanNode,
 }
 

@@ -36,7 +36,7 @@ impl Test {
             db: "system".to_string(),
             table: "numbers_mt".to_string(),
             schema,
-            partitions: Self::generate_partitions(8, total as u64),
+            parts: Self::generate_partitions(8, total as u64),
             statistics: statistics.clone(),
             description: format!(
                 "(Read from system.numbers_mt table, Read Rows:{}, Read Bytes:{})",

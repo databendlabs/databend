@@ -73,7 +73,7 @@ impl Table for ClustersTable {
             db: "system".to_string(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
-            partitions: vec![Part {
+            parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
             }],

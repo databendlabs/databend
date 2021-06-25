@@ -80,7 +80,7 @@ pub struct ScanPartitionAction {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DataPartInfo {
-    pub partition: Part,
+    pub part: Part,
     pub stats: Statistics,
 }
 

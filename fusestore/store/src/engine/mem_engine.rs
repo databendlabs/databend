@@ -184,7 +184,7 @@ impl MemEngine {
                 .map(|p| {
                     let loc = &p.location;
                     DataPartInfo {
-                        partition: Part {
+                        part: Part {
                             name: loc.clone(),
                             version: 0,
                         },

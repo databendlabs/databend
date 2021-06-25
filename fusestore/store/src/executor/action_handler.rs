@@ -251,7 +251,7 @@ impl ActionHandler {
 
     pub async fn read_partition(&self, action: ReadAction) -> anyhow::Result<DoGetStream> {
         log::info!("entering read");
-        let part_file = action.partition.name;
+        let part_file = action.part.name;
 
         let plan = if let PlanNode::ReadSource(read_source_plan) = action.push_down {
             read_source_plan

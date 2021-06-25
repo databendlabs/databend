@@ -69,7 +69,7 @@ impl Table for NullTable {
             db: self.db.clone(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
-            partitions: vec![Part {
+            parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
             }],
