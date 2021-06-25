@@ -22,5 +22,3 @@ macro_rules! exit_scope {
         let _exit_guard = ExitGuard::create(move || $x);
     };
 }
-
-// pub use exit_scope;
