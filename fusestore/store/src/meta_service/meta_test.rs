@@ -126,6 +126,7 @@ fn test_meta_apply_incr_seq() -> anyhow::Result<()> {
 
     Ok(())
 }
+
 #[test]
 fn test_meta_apply_add_database() -> anyhow::Result<()> {
     let mut m = Meta::builder().build()?;
@@ -193,6 +194,93 @@ fn test_meta_apply_add_database() -> anyhow::Result<()> {
             .get_database(c.name)
             .ok_or_else(|| anyhow::anyhow!("db not found: {}", c.name));
         assert_eq!(want, got.unwrap().database_id);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_meta_apply_unclassified() -> anyhow::Result<()> {
+    let mut m = Meta::builder().build()?;
+
+    struct T {
+        // input:
+        key: String,
+        seq: Option<u64>,
+        value: String,
+        // want:
+        prev: Option<(u64, String)>,
+        result: Option<(u64, String)>,
+    }
+
+    fn case(
+        name: &'static str,
+        seq: Option<u64>,
+        value: &'static str,
+        prev: Option<(u64, &'static str)>,
+        result: Option<(u64, &'static str)>,
+    ) -> T {
+        let name = name.to_string();
+        let value = value.to_string();
+        let prev = match prev {
+            None => None,
+            Some((s, v)) => Some((s, v.to_string())),
+        };
+        let result = match result {
+            None => None,
+            Some((s, v)) => Some((s, v.to_string())),
+        };
+        T {
+            key: name,
+            seq,
+            value,
+            prev,
+            result,
+        }
+    }
+
+    let cases: Vec<T> = vec![
+        case("foo", Some(5), "b", None, None),
+        case("foo", None, "a", None, Some((1, "a"))),
+        case("foo", None, "b", Some((1, "a")), Some((2, "b"))),
+        case("foo", Some(5), "b", Some((2, "b")), None),
+        case("bar", Some(0), "x", None, Some((3, "x"))),
+        case("bar", Some(0), "y", Some((3, "x")), None),
+    ];
+
+    for (i, c) in cases.iter().enumerate() {
+        let mes = format!("{}-th: {}({:?})={}", i, c.key, c.seq, c.value);
+
+        // write
+
+        let resp = m.apply(&ClientRequest {
+            txid: None,
+            cmd: Cmd::UpsertUnclassified {
+                key: c.key.clone(),
+                seq: c.seq,
+                value: c.value.clone(),
+            },
+        })?;
+        assert_eq!(
+            ClientResponse::Unclassified {
+                prev: c.prev.clone(),
+                result: c.result.clone(),
+            },
+            resp,
+            "write: {}",
+            mes,
+        );
+
+        // get
+
+        let want = match (&c.prev, &c.result) {
+            (_, Some(ref b)) => Some(b.clone()),
+            (Some(ref a), _) => Some(a.clone()),
+            _ => None,
+        };
+
+        let got = m.get_unclassified(&c.key);
+        assert_eq!(want, got, "get: {}", mes,);
     }
 
     Ok(())

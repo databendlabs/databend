@@ -74,6 +74,14 @@ pub enum Cmd {
 
     /// Add a database if absent
     AddDatabase { name: String },
+
+    UpsertUnclassified {
+        key: String,
+        /// Set to Some() to modify the value only when the seq matches.
+        /// Since a sequence number is positive, use Some(0) to perform an add-if-absent operation.
+        seq: Option<u64>,
+        value: String,
+    },
 }
 
 impl fmt::Display for Cmd {
@@ -93,6 +101,9 @@ impl fmt::Display for Cmd {
             }
             Cmd::AddDatabase { name } => {
                 write!(f, "add_db:{}", name)
+            }
+            Cmd::UpsertUnclassified { key, seq, value } => {
+                write!(f, "upsert_unclassified: {}({:?}) = {}", key, seq, value)
             }
         }
     }
@@ -190,6 +201,9 @@ pub enum RetryableError {
     ForwardToLeader { leader: NodeId },
 }
 
+/// String value with a corresponding sequence number
+pub type SeqStr = (u64, String);
+
 /// The application data response type which the `MemStore` works with.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum ClientResponse {
@@ -209,6 +223,11 @@ pub enum ClientResponse {
     DataBase {
         prev: Option<Database>,
         result: Option<Database>,
+    },
+
+    Unclassified {
+        prev: Option<(u64, String)>,
+        result: Option<(u64, String)>,
     },
 }
 
@@ -283,6 +302,15 @@ impl From<(Option<Node>, Option<Node>)> for ClientResponse {
 impl From<(Option<Database>, Option<Database>)> for ClientResponse {
     fn from(v: (Option<Database>, Option<Database>)) -> Self {
         ClientResponse::DataBase {
+            prev: v.0,
+            result: v.1,
+        }
+    }
+}
+
+impl From<(Option<SeqStr>, Option<SeqStr>)> for ClientResponse {
+    fn from(v: (Option<SeqStr>, Option<SeqStr>)) -> Self {
+        ClientResponse::Unclassified {
             prev: v.0,
             result: v.1,
         }
