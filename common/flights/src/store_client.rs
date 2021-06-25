@@ -54,11 +54,15 @@ use crate::DropTableAction;
 use crate::DropTableActionResult;
 use crate::GetDatabaseAction;
 use crate::GetDatabaseActionResult;
+use crate::GetKVAction;
+use crate::GetKVActionResult;
 use crate::GetTableAction;
 use crate::GetTableActionResult;
 use crate::ScanPartitionAction;
 use crate::ScanPartitionResult;
 use crate::StoreDoGet;
+use crate::UpsertKVAction;
+use crate::UpsertKVActionResult;
 
 pub type BlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;
@@ -222,6 +226,41 @@ impl StoreClient {
                 .and_then(DataBlock::try_from)
         });
         Ok(Box::pin(res_stream))
+    }
+
+    pub async fn upsert_kv(
+        &mut self,
+        key: &str,
+        seq: Option<u64>,
+        value: Vec<u8>,
+    ) -> common_exception::Result<UpsertKVActionResult> {
+        let action = StoreDoAction::UpsertKV(UpsertKVAction {
+            key: key.to_string(),
+            seq,
+            value,
+        });
+        let rst = self.do_action_err_code(&action).await?;
+
+        match rst {
+            StoreDoActionResult::UpsertKV(rst) => Ok(rst),
+            _ => Err(ErrorCode::UnknownException(
+                "result is not StoreDoActionResult::UpsertKV",
+            )),
+        }
+    }
+
+    pub async fn get_kv(&mut self, key: &str) -> common_exception::Result<GetKVActionResult> {
+        let action = StoreDoAction::GetKV(GetKVAction {
+            key: key.to_string(),
+        });
+        let rst = self.do_action_err_code(&action).await?;
+
+        match rst {
+            StoreDoActionResult::GetKV(rst) => Ok(rst),
+            _ => Err(ErrorCode::UnknownException(
+                "result is not StoreDoActionResult::GetKV",
+            )),
+        }
     }
 
     /// Handshake.

@@ -717,6 +717,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-metatypes",
  "common-planners",
  "common-runtime",
  "common-streams",

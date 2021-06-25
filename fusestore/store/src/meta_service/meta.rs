@@ -9,6 +9,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use common_metatypes::Database;
+use common_metatypes::SeqValue;
 use common_metatypes::Table;
 use common_tracing::tracing;
 use serde::Deserialize;
@@ -278,7 +279,7 @@ impl Meta {
         x.cloned()
     }
 
-    pub fn get_unclassified(&self, key: &str) -> Option<(u64, Vec<u8>)> {
+    pub fn get_unclassified(&self, key: &str) -> Option<SeqValue> {
         let x = self.unclassified.get(key);
         x.cloned()
     }
