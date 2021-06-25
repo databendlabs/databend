@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_metatypes::Database;
+use common_metatypes::SeqValue;
 
 use crate::meta_service::meta::Replication;
 use crate::meta_service::ClientRequest;
@@ -207,10 +208,10 @@ fn test_meta_apply_unclassified() -> anyhow::Result<()> {
         // input:
         key: String,
         seq: Option<u64>,
-        value: String,
+        value: Vec<u8>,
         // want:
-        prev: Option<(u64, String)>,
-        result: Option<(u64, String)>,
+        prev: Option<SeqValue>,
+        result: Option<SeqValue>,
     }
 
     fn case(
@@ -221,14 +222,14 @@ fn test_meta_apply_unclassified() -> anyhow::Result<()> {
         result: Option<(u64, &'static str)>,
     ) -> T {
         let name = name.to_string();
-        let value = value.to_string();
+        let value = value.to_string().into_bytes();
         let prev = match prev {
             None => None,
-            Some((s, v)) => Some((s, v.to_string())),
+            Some((s, v)) => Some((s, v.to_string().into_bytes())),
         };
         let result = match result {
             None => None,
-            Some((s, v)) => Some((s, v.to_string())),
+            Some((s, v)) => Some((s, v.to_string().into_bytes())),
         };
         T {
             key: name,
@@ -249,7 +250,7 @@ fn test_meta_apply_unclassified() -> anyhow::Result<()> {
     ];
 
     for (i, c) in cases.iter().enumerate() {
-        let mes = format!("{}-th: {}({:?})={}", i, c.key, c.seq, c.value);
+        let mes = format!("{}-th: {}({:?})={:?}", i, c.key, c.seq, c.value);
 
         // write
 

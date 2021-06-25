@@ -33,6 +33,7 @@ use async_raft::RaftMetrics;
 use async_raft::RaftNetwork;
 use async_raft::RaftStorage;
 use common_metatypes::Database;
+use common_metatypes::SeqValue;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::watch;
 use common_runtime::tokio::sync::Mutex;
@@ -80,7 +81,7 @@ pub enum Cmd {
         /// Set to Some() to modify the value only when the seq matches.
         /// Since a sequence number is positive, use Some(0) to perform an add-if-absent operation.
         seq: Option<u64>,
-        value: String,
+        value: Vec<u8>,
     },
 }
 
@@ -103,7 +104,7 @@ impl fmt::Display for Cmd {
                 write!(f, "add_db:{}", name)
             }
             Cmd::UpsertUnclassified { key, seq, value } => {
-                write!(f, "upsert_unclassified: {}({:?}) = {}", key, seq, value)
+                write!(f, "upsert_unclassified: {}({:?}) = {:?}", key, seq, value)
             }
         }
     }
@@ -201,9 +202,6 @@ pub enum RetryableError {
     ForwardToLeader { leader: NodeId },
 }
 
-/// String value with a corresponding sequence number
-pub type SeqStr = (u64, String);
-
 /// The application data response type which the `MemStore` works with.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum ClientResponse {
@@ -226,8 +224,8 @@ pub enum ClientResponse {
     },
 
     Unclassified {
-        prev: Option<(u64, String)>,
-        result: Option<(u64, String)>,
+        prev: Option<SeqValue>,
+        result: Option<SeqValue>,
     },
 }
 
@@ -308,8 +306,8 @@ impl From<(Option<Database>, Option<Database>)> for ClientResponse {
     }
 }
 
-impl From<(Option<SeqStr>, Option<SeqStr>)> for ClientResponse {
-    fn from(v: (Option<SeqStr>, Option<SeqStr>)) -> Self {
+impl From<(Option<SeqValue>, Option<SeqValue>)> for ClientResponse {
+    fn from(v: (Option<SeqValue>, Option<SeqValue>)) -> Self {
         ClientResponse::Unclassified {
             prev: v.0,
             result: v.1,

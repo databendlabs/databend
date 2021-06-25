@@ -68,7 +68,7 @@ pub struct Meta {
     /// A kv store of all other unclassified information.
     /// The value is tuple of a monotonic sequence number and userdata value in string.
     /// The sequence number is guaranteed to increment(by some value greater than 0) everytime the record changes.
-    pub unclassified: BTreeMap<String, (u64, String)>,
+    pub unclassified: BTreeMap<String, (u64, Vec<u8>)>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -278,8 +278,8 @@ impl Meta {
         x.cloned()
     }
 
-    pub fn get_unclassified(&self, name: &str) -> Option<(u64, String)> {
-        let x = self.unclassified.get(name);
+    pub fn get_unclassified(&self, key: &str) -> Option<(u64, Vec<u8>)> {
+        let x = self.unclassified.get(key);
         x.cloned()
     }
 }
