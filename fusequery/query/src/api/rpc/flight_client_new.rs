@@ -99,4 +99,73 @@ impl FlightClient {
             ))),
         }
     }
+
+    //async fn do_put(&self, request: StreamRequest<FlightData>) -> Response<Self::DoPutStream> {
+    //    Result::Err(Status::unimplemented(
+    //        "FuseQuery does not implement do_put.",
+    //    ))
+    //}
+
+    type DoPutStream = FlightStream<PutResult>;
+    async fn do_put_subquery_res(
+        &self,
+        scheme_ref: SchemaRef,
+        mut block_stream: SendableDataBlockStream,
+    ) -> Result<Vec<u8>> {
+
+       let ipc_write_opt = IpcWriteOptions::default();
+        let flight_schema = flight_data_from_arrow_schema(&scheme_ref, &ipc_write_opt);
+        let (mut tx, flight_stream) = futures::channel::mpsc::channel(100);
+
+        tx.send(flight_schema).await?;
+
+        tokio::spawn(async move {
+            while let Some(block) = block_stream.next().await {
+                info!("next data block");
+                match RecordBatch::try_from(block) {
+                    Ok(batch) => {
+                        if let Err(_e) = tx
+                            .send(flight_data_from_arrow_batch(&batch, &ipc_write_opt).1)
+                            .await
+                        {
+                            log::error!("failed to send flight-data to downstream, breaking out");
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "failed to convert DataBlock to RecordBatch , breaking out, {:?}",
+                            e
+                        );
+                        break;
+                    }
+                }
+            }
+        });
+
+        let mut req = Request::new(flight_stream);
+        //let meta = req.metadata_mut();
+        //store_do_put::set_do_put_meta(meta, &db_name, &tbl_name);
+        //let res = self.inner.do_put(req).await?;
+
+        let response = self.inner.do_put(req).await.map_err(from_status);
+
+        match response?
+            .into_inner()
+            .message()
+            .await
+            .map_err(from_status)?
+        {
+            Some(response) => Ok(response.body),
+            None => Result::Err(ErrorCode::EmptyDataFromServer(format!(
+                "Can not receive data from flight server, action: {:?}",
+                action_type
+            ))),
+        }
+
+        //use anyhow::Context;
+        //let put_result = res.into_inner().next().await.context("empty response")??;
+        //let vec = serde_json::from_slice(&put_result.app_metadata)?;
+        //Ok(put_result)
+    }
 }
