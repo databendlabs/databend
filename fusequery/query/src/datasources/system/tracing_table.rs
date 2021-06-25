@@ -11,7 +11,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Partition;
+use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
@@ -76,7 +76,7 @@ impl Table for TracingTable {
             db: "system".to_string(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
-            partitions: vec![Partition {
+            parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
             }],
