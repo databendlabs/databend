@@ -4737,9 +4737,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-bunyan-formatter"
-version = "0.1.7"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06718867c20ea03700d41a9413610cccf5d772caea792f34cc73cdd43f0e14a6"
+checksum = "dce1eae70720bd6bb3944f7cf501761aeae658bd1f9293aa373c71a195064910"
 dependencies = [
  "chrono",
  "gethostname",
