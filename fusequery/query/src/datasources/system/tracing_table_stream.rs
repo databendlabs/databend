@@ -28,22 +28,30 @@ struct LogEntry {
 }
 
 pub struct TracingTableStream {
-    idx: usize,
-    log_files: Vec<String>,
     schema: SchemaRef,
+    file_idx: usize,
+    log_files: Vec<String>,
+    limit: usize,
+    limit_offset: usize,
 }
 
 impl TracingTableStream {
-    pub fn try_create(schema: SchemaRef, log_files: Vec<String>) -> Result<Self> {
+    pub fn try_create(schema: SchemaRef, log_files: Vec<String>, limit: usize) -> Result<Self> {
         Ok(TracingTableStream {
             schema,
             log_files,
-            idx: 0,
+            file_idx: 0,
+            limit,
+            limit_offset: 0,
         })
     }
 
     pub fn try_get_one_block(&mut self) -> Result<Option<DataBlock>> {
-        if self.idx >= self.log_files.len() {
+        if self.file_idx >= self.log_files.len() {
+            return Ok(None);
+        }
+
+        if self.limit_offset >= self.limit {
             return Ok(None);
         }
 
@@ -55,11 +63,15 @@ impl TracingTableStream {
         let mut pid_col = vec![];
         let mut time_col = vec![];
 
-        let file = File::open(self.log_files[self.idx].clone())?;
-        self.idx += 1;
+        let file = File::open(self.log_files[self.file_idx].clone())?;
+        self.file_idx += 1;
 
         let reader = BufReader::new(file);
         for line in reader.lines() {
+            if self.limit_offset >= self.limit {
+                break;
+            }
+
             let entry: LogEntry = serde_json::from_str(line.unwrap().as_str()).unwrap();
             version_col.push(entry.v);
             name_col.push(entry.name);
@@ -68,6 +80,7 @@ impl TracingTableStream {
             host_col.push(entry.hostname);
             pid_col.push(entry.pid);
             time_col.push(entry.time);
+            self.limit_offset += 1;
         }
 
         let names: Vec<&str> = name_col.iter().map(|x| x.as_str()).collect();
