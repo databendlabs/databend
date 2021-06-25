@@ -17,6 +17,7 @@ use common_arrow::parquet::arrow::ArrowReader;
 use common_arrow::parquet::arrow::ParquetFileArrowReader;
 use common_arrow::parquet::file::reader::SerializedFileReader;
 use common_arrow::parquet::file::serialized_reader::SliceableCursor;
+use common_exception::ErrorCode;
 use common_flights::CreateDatabaseAction;
 use common_flights::CreateDatabaseActionResult;
 use common_flights::CreateTableAction;
@@ -25,12 +26,18 @@ use common_flights::DropDatabaseAction;
 use common_flights::DropDatabaseActionResult;
 use common_flights::DropTableAction;
 use common_flights::DropTableActionResult;
+use common_flights::GetDatabaseAction;
+use common_flights::GetDatabaseActionResult;
+use common_flights::GetKVAction;
+use common_flights::GetKVActionResult;
 use common_flights::GetTableAction;
 use common_flights::GetTableActionResult;
 use common_flights::ReadAction;
 use common_flights::ScanPartitionAction;
 use common_flights::StoreDoAction;
 use common_flights::StoreDoActionResult;
+use common_flights::UpsertKVAction;
+use common_flights::UpsertKVActionResult;
 use common_planners::PlanNode;
 use common_runtime::tokio::sync::mpsc::Sender;
 use futures::Stream;
@@ -42,6 +49,9 @@ use tonic::Streaming;
 use crate::data_part::appender::Appender;
 use crate::engine::MemEngine;
 use crate::fs::FileSystem;
+use crate::meta_service::ClientRequest;
+use crate::meta_service::ClientResponse;
+use crate::meta_service::Cmd;
 use crate::meta_service::MetaNode;
 use crate::protobuf::CmdCreateDatabase;
 use crate::protobuf::CmdCreateTable;
@@ -96,12 +106,23 @@ impl ActionHandler {
     pub async fn execute(&self, action: StoreDoAction) -> Result<StoreDoActionResult, Status> {
         match action {
             StoreDoAction::ReadPlan(_) => Err(Status::internal("Store read plan unimplemented")),
+
+            // database
             StoreDoAction::CreateDatabase(a) => self.create_db(a).await,
+            StoreDoAction::GetDatabase(a) => self.get_db(a).await,
             StoreDoAction::DropDatabase(act) => self.drop_db(act).await,
+
+            // table
             StoreDoAction::CreateTable(a) => self.create_table(a).await,
             StoreDoAction::DropTable(act) => self.drop_table(act).await,
             StoreDoAction::GetTable(a) => self.get_table(a).await,
+
+            // part
             StoreDoAction::ScanPartition(act) => self.scan_partitions(&act),
+
+            // general-purpose kv
+            StoreDoAction::UpsertKV(a) => self.upsert_kv(a).await,
+            StoreDoAction::GetKV(a) => self.get_kv(a).await,
         }
     }
 
@@ -127,6 +148,28 @@ impl ActionHandler {
         Ok(StoreDoActionResult::CreateDatabase(
             CreateDatabaseActionResult { database_id },
         ))
+    }
+
+    async fn get_db(&self, act: GetDatabaseAction) -> Result<StoreDoActionResult, Status> {
+        // TODO(xp): create/drop/get database should base on MetaNode
+        let db_name = &act.db;
+        let meta = self.meta.lock().unwrap();
+
+        let db = meta.dbs.get(db_name);
+
+        match db {
+            Some(db) => {
+                let rst = GetDatabaseActionResult {
+                    database_id: db.db_id,
+                    db: db_name.clone(),
+                };
+                Ok(StoreDoActionResult::GetDatabase(rst))
+            }
+            None => {
+                let e = ErrorCode::UnknownDatabase(db_name.to_string());
+                Err(e.into())
+            }
+        }
     }
 
     async fn create_table(&self, act: CreateTableAction) -> Result<StoreDoActionResult, Status> {
@@ -296,5 +339,37 @@ impl ActionHandler {
         // # let stream = stream.map(|v| Ok(v));
 
         Ok(Box::pin(stream))
+    }
+
+    async fn upsert_kv(&self, act: UpsertKVAction) -> Result<StoreDoActionResult, Status> {
+        let cr = ClientRequest {
+            txid: None,
+            cmd: Cmd::UpsertUnclassified {
+                key: act.key,
+                seq: act.seq,
+                value: act.value,
+            },
+        };
+        // TODO(xp): raftmeta should use ErrorCode instead of anyhow::Error
+        let rst = self
+            .meta_node
+            .write(cr)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        match rst {
+            ClientResponse::Unclassified { prev, result } => {
+                Ok(StoreDoActionResult::UpsertKV(UpsertKVActionResult {
+                    prev,
+                    result,
+                }))
+            }
+            _ => Err(Status::internal("not a KV result")),
+        }
+    }
+
+    async fn get_kv(&self, act: GetKVAction) -> Result<StoreDoActionResult, Status> {
+        let result = self.meta_node.get_kv(&act.key).await;
+        Ok(StoreDoActionResult::GetKV(GetKVActionResult { result }))
     }
 }

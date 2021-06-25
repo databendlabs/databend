@@ -68,3 +68,14 @@ pub struct Config {
     )]
     pub boot: bool,
 }
+
+impl Config {
+    /// StructOptToml provides a default Default impl that loads config from cli args,
+    /// which conflicts with unit test if case-filter arguments passed, e.g.:
+    /// `cargo test my_unit_test_fn`
+    ///
+    /// Thus we need another method to generate an empty default instance.
+    pub fn empty() -> Self {
+        Self::from_iter(&Vec::<&'static str>::new())
+    }
+}

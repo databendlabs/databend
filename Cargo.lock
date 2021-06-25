@@ -123,7 +123,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "arrow"
 version = "5.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow-rs?rev=0a165748c924b3752cc00ff86e56917427985872#0a165748c924b3752cc00ff86e56917427985872"
+source = "git+https://github.com/datafuse-extras/arrow-rs?rev=ed61617#ed6161750a33d8e44469c6bcfb800659c7f61afc"
 dependencies = [
  "chrono",
  "csv",
@@ -145,7 +145,7 @@ dependencies = [
 [[package]]
 name = "arrow-flight"
 version = "5.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow-rs?rev=0a165748c924b3752cc00ff86e56917427985872#0a165748c924b3752cc00ff86e56917427985872"
+source = "git+https://github.com/datafuse-extras/arrow-rs?rev=ed61617#ed6161750a33d8e44469c6bcfb800659c7f61afc"
 dependencies = [
  "arrow",
  "bytes 1.0.1",
@@ -717,9 +717,11 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-metatypes",
  "common-planners",
  "common-runtime",
  "common-streams",
+ "common-tracing",
  "futures",
  "hyper",
  "jwt-simple",
@@ -827,6 +829,8 @@ name = "common-tracing"
 version = "0.1.0"
 dependencies = [
  "tracing",
+ "tracing-appender",
+ "tracing-bunyan-formatter",
  "tracing-futures",
  "tracing-subscriber",
 ]
@@ -1401,9 +1405,9 @@ checksum = "37ab347416e802de484e4d03c7316c48f1ecb56574dfd4a46a80f173ce1de04d"
 
 [[package]]
 name = "flatbuffers"
-version = "0.8.4"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3c502342b7d6d73beb1b8bab39dc01deba0c8ef66f4e6f1eba7c69ee6b38069"
+checksum = "ef4c5738bcd7fad10315029c50026f83c9da5e4a21f8ed66826f43e0e2bde5f6"
 dependencies = [
  "bitflags 1.2.1",
  "smallvec",
@@ -1526,6 +1530,7 @@ dependencies = [
  "toml",
  "tonic",
  "uuid",
+ "walkdir",
  "warp",
 ]
 
@@ -1695,6 +1700,16 @@ checksum = "501466ecc8a30d1d3b7fc9229b122b2ce8ed6e9d9223f1138d4babb253e51817"
 dependencies = [
  "typenum",
  "version_check",
+]
+
+[[package]]
+name = "gethostname"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e692e296bfac1d2533ef168d0b60ff5897b8b70a4009276834014dd8924cc028"
+dependencies = [
+ "libc",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -3006,7 +3021,7 @@ dependencies = [
 [[package]]
 name = "parquet"
 version = "5.0.0-SNAPSHOT"
-source = "git+https://github.com/apache/arrow-rs?rev=0a165748c924b3752cc00ff86e56917427985872#0a165748c924b3752cc00ff86e56917427985872"
+source = "git+https://github.com/datafuse-extras/arrow-rs?rev=ed61617#ed6161750a33d8e44469c6bcfb800659c7f61afc"
 dependencies = [
  "arrow",
  "base64 0.13.0",
@@ -3017,6 +3032,7 @@ dependencies = [
  "lz4",
  "num-bigint 0.4.0",
  "parquet-format",
+ "rand 0.8.4",
  "snap",
  "thrift",
  "zstd",
@@ -4074,7 +4090,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.9.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=35ef0ee#35ef0eee3857c59827b2587bc813218a00dce264"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=56e50dc#56e50dccd48acdd2ac4ae079010c62f9b8d03f3f"
 dependencies = [
  "log 0.4.14",
 ]
@@ -4698,6 +4714,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-appender"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9965507e507f12c8901432a33e31131222abac31edd90cabbcf85cf544b7127a"
+dependencies = [
+ "chrono",
+ "crossbeam-channel 0.5.1",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tracing-attributes"
 version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4706,6 +4733,23 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "tracing-bunyan-formatter"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06718867c20ea03700d41a9413610cccf5d772caea792f34cc73cdd43f0e14a6"
+dependencies = [
+ "chrono",
+ "gethostname",
+ "log 0.4.14",
+ "serde",
+ "serde_json",
+ "tracing",
+ "tracing-core",
+ "tracing-log",
+ "tracing-subscriber",
 ]
 
 [[package]]

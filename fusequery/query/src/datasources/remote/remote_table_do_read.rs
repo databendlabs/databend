@@ -19,6 +19,7 @@ impl RemoteTable {
     pub(super) async fn do_read(
         &self,
         ctx: FuseQueryContextRef,
+        _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let client = self.store_client_provider.try_get_client().await?;
         let schema = self.schema.clone();

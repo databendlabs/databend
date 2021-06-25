@@ -9,6 +9,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
+use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 
@@ -45,18 +46,17 @@ impl NumberTestData {
                 schema_name: self.db.to_string(),
                 table_schema: Arc::new(DataSchema::empty()),
                 table_args: Some(Expression::Literal(DataValue::Int64(Some(numbers)))),
-                projection: None,
                 projected_schema: Arc::new(DataSchema::empty()),
-                filters: vec![],
-                limit: None,
+                push_downs: Extras::default(),
             },
             self.ctx.get_max_threads()? as usize,
         )
     }
 
     pub fn number_source_transform_for_test(&self, numbers: i64) -> Result<SourceTransform> {
-        let plan = self.number_read_source_plan_for_test(numbers)?;
-        self.ctx.try_set_partitions(plan.parts)?;
-        SourceTransform::try_create(self.ctx.clone(), self.db, self.table, false)
+        let source_plan = self.number_read_source_plan_for_test(numbers)?;
+        self.ctx
+            .try_set_partitions(source_plan.parts.clone())?;
+        SourceTransform::try_create(self.ctx.clone(), source_plan.clone())
     }
 }

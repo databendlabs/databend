@@ -84,7 +84,11 @@ impl Table for ClustersTable {
         })
     }
 
-    async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
+    async fn read(
+        &self,
+        ctx: FuseQueryContextRef,
+        _source_plan: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream> {
         let nodes = ctx.try_get_cluster()?.get_nodes()?;
         let names: Vec<&str> = nodes.iter().map(|x| x.name.as_str()).collect();
         let hosts = nodes

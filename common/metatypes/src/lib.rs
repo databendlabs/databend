@@ -10,6 +10,9 @@ use std::collections::HashSet;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Value with a corresponding sequence number
+pub type SeqValue = (u64, Vec<u8>);
+
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Database {
     pub database_id: u64,

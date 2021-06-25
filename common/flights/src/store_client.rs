@@ -26,6 +26,7 @@ use common_planners::DropTablePlan;
 use common_planners::ScanPlan;
 use common_runtime::tokio;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 use futures::stream;
 use futures::SinkExt;
 use futures::StreamExt;
@@ -51,11 +52,17 @@ use crate::CreateDatabaseActionResult;
 use crate::CreateTableActionResult;
 use crate::DropTableAction;
 use crate::DropTableActionResult;
+use crate::GetDatabaseAction;
+use crate::GetDatabaseActionResult;
+use crate::GetKVAction;
+use crate::GetKVActionResult;
 use crate::GetTableAction;
 use crate::GetTableActionResult;
 use crate::ScanPartitionAction;
 use crate::ScanPartitionResult;
 use crate::StoreDoGet;
+use crate::UpsertKVAction;
+use crate::UpsertKVActionResult;
 
 pub type BlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;
@@ -110,6 +117,21 @@ impl StoreClient {
             return Ok(rst);
         }
         anyhow::bail!("invalid response")
+    }
+
+    pub async fn get_database(
+        &mut self,
+        db: &str,
+    ) -> common_exception::Result<GetDatabaseActionResult> {
+        let action = StoreDoAction::GetDatabase(GetDatabaseAction { db: db.to_string() });
+        let rst = self.do_action_err_code(&action).await?;
+
+        match rst {
+            StoreDoActionResult::GetDatabase(rst) => Ok(rst),
+            _ => Err(ErrorCode::UnknownException(
+                "result is not StoreDoActionResult::GetDatabase",
+            )),
+        }
     }
 
     /// Drop database call.
@@ -206,6 +228,41 @@ impl StoreClient {
         Ok(Box::pin(res_stream))
     }
 
+    pub async fn upsert_kv(
+        &mut self,
+        key: &str,
+        seq: Option<u64>,
+        value: Vec<u8>,
+    ) -> common_exception::Result<UpsertKVActionResult> {
+        let action = StoreDoAction::UpsertKV(UpsertKVAction {
+            key: key.to_string(),
+            seq,
+            value,
+        });
+        let rst = self.do_action_err_code(&action).await?;
+
+        match rst {
+            StoreDoActionResult::UpsertKV(rst) => Ok(rst),
+            _ => Err(ErrorCode::UnknownException(
+                "result is not StoreDoActionResult::UpsertKV",
+            )),
+        }
+    }
+
+    pub async fn get_kv(&mut self, key: &str) -> common_exception::Result<GetKVActionResult> {
+        let action = StoreDoAction::GetKV(GetKVAction {
+            key: key.to_string(),
+        });
+        let rst = self.do_action_err_code(&action).await?;
+
+        match rst {
+            StoreDoActionResult::GetKV(rst) => Ok(rst),
+            _ => Err(ErrorCode::UnknownException(
+                "result is not StoreDoActionResult::GetKV",
+            )),
+        }
+    }
+
     /// Handshake.
     async fn handshake(
         client: &mut FlightServiceClient<Channel>,
@@ -256,6 +313,32 @@ impl StoreClient {
             ),
             Some(resp) => {
                 info!("do_action: resp: {:}", flight_result_to_str(&resp));
+
+                let action_rst: StoreDoActionResult = resp.try_into()?;
+                Ok(action_rst)
+            }
+        }
+    }
+
+    /// A transitional method that use ErrorCode instead of anyhow:Error
+    /// TODO replace do_action with this function when all of the error types are replcaed with ErrorCode
+    async fn do_action_err_code(
+        &mut self,
+        action: &StoreDoAction,
+    ) -> common_exception::Result<StoreDoActionResult> {
+        // TODO: an action can always be able to serialize, or it is a bug.
+        let mut req: Request<Action> = action.try_into()?;
+        req.set_timeout(self.timeout);
+
+        let mut stream = self.client.do_action(req).await?.into_inner();
+
+        match stream.message().await? {
+            None => Err(ErrorCode::UnknownException(format!(
+                "Can not receive data from store flight server, action: {:?}",
+                action
+            ))),
+            Some(resp) => {
+                tracing::debug!("do_action: resp: {:}", flight_result_to_str(&resp));
 
                 let action_rst: StoreDoActionResult = resp.try_into()?;
                 Ok(action_rst)

@@ -31,13 +31,14 @@ async fn test_parquet_table() -> anyhow::Result<()> {
         DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)]).clone(),
         options,
     )?;
-    table.read_plan(
+
+    let source_plan = table.read_plan(
         ctx.clone(),
         &ScanPlan::empty(),
         ctx.get_max_threads()? as usize,
     )?;
 
-    let stream = table.read(ctx).await?;
+    let stream = table.read(ctx, &source_plan).await?;
     let blocks = stream.try_collect::<Vec<_>>().await?;
     let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
 

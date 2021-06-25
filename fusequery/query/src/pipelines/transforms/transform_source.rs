@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::ReadDataSourcePlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
@@ -16,24 +17,12 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct SourceTransform {
     ctx: FuseQueryContextRef,
-    db: String,
-    table: String,
-    remote: bool,
+    source_plan: ReadDataSourcePlan,
 }
 
 impl SourceTransform {
-    pub fn try_create(
-        ctx: FuseQueryContextRef,
-        db: &str,
-        table: &str,
-        remote: bool,
-    ) -> Result<Self> {
-        Ok(SourceTransform {
-            ctx,
-            db: db.to_string(),
-            table: table.to_string(),
-            remote,
-        })
+    pub fn try_create(ctx: FuseQueryContextRef, source_plan: ReadDataSourcePlan) -> Result<Self> {
+        Ok(SourceTransform { ctx, source_plan })
     }
 }
 
@@ -58,21 +47,25 @@ impl Processor for SourceTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        let db = self.source_plan.db.clone();
+        let table = self.source_plan.table.clone();
+        let remote = self.source_plan.remote;
+
         tracing::debug!(
             "execute, table:{:#}.{:#}, is_remote:{:#}...",
-            self.db,
-            self.table,
-            self.remote
+            db,
+            table,
+            remote
         );
 
-        let table = if self.remote {
+        let table = if remote {
             self.ctx
-                .get_remote_table(self.db.as_str(), self.table.as_str())
+                .get_remote_table(db.as_str(), table.as_str())
                 .await?
         } else {
-            self.ctx.get_table(self.db.as_str(), self.table.as_str())?
+            self.ctx.get_table(db.as_str(), table.as_str())?
         };
 
-        table.read(self.ctx.clone()).await
+        table.read(self.ctx.clone(), &self.source_plan).await
     }
 }

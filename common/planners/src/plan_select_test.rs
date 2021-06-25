@@ -2,14 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
+use common_datavalues::*;
+
+use crate::*;
+
 #[test]
 fn test_select_wildcard_plan() -> anyhow::Result<()> {
-    use std::sync::Arc;
-
-    use common_datavalues::*;
     use pretty_assertions::assert_eq;
-
-    use crate::*;
 
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]);
     let plan = PlanBuilder::create(schema).project(&[col("a")])?.build()?;

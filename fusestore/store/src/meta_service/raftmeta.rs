@@ -33,6 +33,7 @@ use async_raft::RaftMetrics;
 use async_raft::RaftNetwork;
 use async_raft::RaftStorage;
 use common_metatypes::Database;
+use common_metatypes::SeqValue;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::watch;
 use common_runtime::tokio::sync::Mutex;
@@ -74,6 +75,14 @@ pub enum Cmd {
 
     /// Add a database if absent
     AddDatabase { name: String },
+
+    UpsertUnclassified {
+        key: String,
+        /// Set to Some() to modify the value only when the seq matches.
+        /// Since a sequence number is positive, use Some(0) to perform an add-if-absent operation.
+        seq: Option<u64>,
+        value: Vec<u8>,
+    },
 }
 
 impl fmt::Display for Cmd {
@@ -93,6 +102,9 @@ impl fmt::Display for Cmd {
             }
             Cmd::AddDatabase { name } => {
                 write!(f, "add_db:{}", name)
+            }
+            Cmd::UpsertUnclassified { key, seq, value } => {
+                write!(f, "upsert_unclassified: {}({:?}) = {:?}", key, seq, value)
             }
         }
     }
@@ -210,6 +222,11 @@ pub enum ClientResponse {
         prev: Option<Database>,
         result: Option<Database>,
     },
+
+    Unclassified {
+        prev: Option<SeqValue>,
+        result: Option<SeqValue>,
+    },
 }
 
 impl AppDataResponse for ClientResponse {}
@@ -283,6 +300,15 @@ impl From<(Option<Node>, Option<Node>)> for ClientResponse {
 impl From<(Option<Database>, Option<Database>)> for ClientResponse {
     fn from(v: (Option<Database>, Option<Database>)) -> Self {
         ClientResponse::DataBase {
+            prev: v.0,
+            result: v.1,
+        }
+    }
+}
+
+impl From<(Option<SeqValue>, Option<SeqValue>)> for ClientResponse {
+    fn from(v: (Option<SeqValue>, Option<SeqValue>)) -> Self {
+        ClientResponse::Unclassified {
             prev: v.0,
             result: v.1,
         }
@@ -1111,6 +1137,14 @@ impl MetaNode {
 
         let sm = self.sto.sm.read().await;
         sm.meta.get_database(name)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_kv(&self, key: &str) -> Option<SeqValue> {
+        // inconsistent get: from local state machine
+
+        let sm = self.sto.sm.read().await;
+        sm.meta.get_unclassified(key)
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.
