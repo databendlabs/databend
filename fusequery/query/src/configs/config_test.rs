@@ -48,6 +48,7 @@ fn test_config() -> common_exception::Result<()> {
 
     // From file.
     {
+        std::env::set_var("FUSE_QUERY_LOG_LEVEL", "DEBUG");
         let path = std::env::current_dir()
             .unwrap()
             .join("conf/fusequery_config_spec.toml")
@@ -56,8 +57,46 @@ fn test_config() -> common_exception::Result<()> {
 
         let actual = Config::load_from_toml(path.as_str())?;
         assert_eq!("INFO", actual.log_level);
+        let env = Config::load_from_env(&actual)?;
+        assert_eq!("DEBUG", env.log_level);
+        std::env::remove_var("FUSE_QUERY_LOG_LEVEL");
     }
 
+    // From env, defaulting.
+    {
+        std::env::set_var("FUSE_QUERY_LOG_LEVEL", "DEBUG");
+        std::env::set_var("FUSE_QUERY_MYSQL_HANDLER_HOST", "0.0.0.0");
+        std::env::set_var("FUSE_QUERY_MYSQL_HANDLER_PORT", "3306");
+        std::env::remove_var("FUSE_QUERY_MYSQL_HANDLER_THREAD_NUM");
+        let default = Config::default();
+        let configured = Config::load_from_env(&default)?;
+        assert_eq!("DEBUG", configured.log_level);
+        assert_eq!("0.0.0.0", configured.mysql_handler_host);
+        assert_eq!(3306, configured.mysql_handler_port);
+
+        // not set, so keep it as original value
+        assert_eq!(256, configured.mysql_handler_thread_num);
+
+        // clean up
+        std::env::remove_var("FUSE_QUERY_LOG_LEVEL");
+        std::env::remove_var("FUSE_QUERY_MYSQL_HANDLER_HOST");
+        std::env::remove_var("FUSE_QUERY_MYSQL_HANDLER_PORT");
+    }
+
+    // From env, load config file and ignore the rest settings.
+    {
+        std::env::set_var("FUSE_QUERY_LOG_LEVEL", "DEBUG");
+        let config_path = std::env::current_dir()
+            .unwrap()
+            .join("conf/fusequery_config_spec.toml")
+            .display()
+            .to_string();
+        std::env::set_var("CONFIG_FILE", config_path);
+        let config = Config::load_from_env(&Config::default())?;
+        assert_eq!(config.log_level, "INFO");
+        std::env::remove_var("FUSE_QUERY_LOG_LEVEL");
+        std::env::remove_var("CONFIG_FILE");
+    }
     Ok(())
 }
 

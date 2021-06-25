@@ -31,6 +31,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         conf = Config::load_from_toml(conf.config_file.as_str())?;
     }
 
+    conf = Config::load_from_env(&conf)?;
+
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or(conf.log_level.to_lowercase().as_str()),
     )
