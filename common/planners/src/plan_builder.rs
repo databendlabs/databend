@@ -209,7 +209,7 @@ impl PlanBuilder {
             table_schema,
             projected_schema,
             table_args,
-            extras: Extras {
+            push_downs: Extras {
                 projection,
                 filters: vec![],
                 limit,

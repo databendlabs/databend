@@ -86,7 +86,11 @@ impl Table for TracingTable {
         })
     }
 
-    async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
+    async fn read(
+        &self,
+        ctx: FuseQueryContextRef,
+        _source_plan: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream> {
         let mut log_files = vec![];
 
         for entry in WalkDir::new(ctx.get_config().log_dir.as_str())

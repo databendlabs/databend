@@ -13,15 +13,14 @@ fn test_scan_plan() -> anyhow::Result<()> {
         schema_name: "scan_test".to_string(),
         table_schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
         table_args: None,
-        projection: None,
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "a",
             DataType::Utf8,
             false,
         )]),
-        filters: vec![],
-        limit: None,
+        push_downs: Extras::default(),
     });
+
     let _ = scan.schema();
     let expect = "";
     let actual = format!("{:?}", scan);

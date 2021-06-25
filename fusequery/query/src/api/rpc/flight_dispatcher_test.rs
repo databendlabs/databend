@@ -63,8 +63,8 @@ async fn test_prepare_stage_with_no_scatter() -> Result<()> {
         let create_prepare_query_stage = |sender: Sender<Result<()>>| {
             let ctx = crate::tests::try_create_context()?;
             let test_source = crate::tests::NumberTestData::create(ctx.clone());
-            let read_source_plan = test_source.number_read_source_plan_for_test(5)?;
-            let plan = PlanBuilder::from(&PlanNode::ReadSource(read_source_plan)).build()?;
+            let source_plan = test_source.number_read_source_plan_for_test(5)?;
+            let plan = PlanBuilder::from(&PlanNode::ReadSource(source_plan)).build()?;
             Result::Ok((
                 plan.schema().clone(),
                 Request::PrepareQueryStage(
@@ -145,8 +145,8 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
         let create_prepare_query_stage = |sender: Sender<Result<()>>| {
             let ctx = crate::tests::try_create_context()?;
             let test_source = crate::tests::NumberTestData::create(ctx.clone());
-            let read_source_plan = test_source.number_read_source_plan_for_test(5)?;
-            let plan = PlanBuilder::from(&PlanNode::ReadSource(read_source_plan)).build()?;
+            let source_plan = test_source.number_read_source_plan_for_test(5)?;
+            let plan = PlanBuilder::from(&PlanNode::ReadSource(source_plan)).build()?;
 
             Result::Ok((
                 plan.schema().clone(),

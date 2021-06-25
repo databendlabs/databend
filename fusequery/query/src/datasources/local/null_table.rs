@@ -80,7 +80,11 @@ impl Table for NullTable {
         })
     }
 
-    async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
+    async fn read(
+        &self,
+        _ctx: FuseQueryContextRef,
+        _source_plan: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream> {
         let block = DataBlock::empty_with_schema(self.schema.clone());
 
         Ok(Box::pin(DataBlockStream::create(

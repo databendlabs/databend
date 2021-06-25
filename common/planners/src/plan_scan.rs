@@ -19,7 +19,7 @@ pub struct ScanPlan {
     pub table_args: Option<Expression>,
     pub projected_schema: DataSchemaRef,
     // Extras.
-    pub extras: Extras,
+    pub push_downs: Extras,
 }
 
 impl ScanPlan {
@@ -33,7 +33,7 @@ impl ScanPlan {
             table_schema: Arc::new(DataSchema::empty()),
             projected_schema: Arc::new(DataSchema::empty()),
             table_args: None,
-            extras: Extras::default(),
+            push_downs: Extras::default(),
         }
     }
 }

@@ -117,7 +117,11 @@ impl Table for NumbersTable {
         })
     }
 
-    async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
+    async fn read(
+        &self,
+        ctx: FuseQueryContextRef,
+        _source_plan: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(NumbersStream::try_create(
             ctx,
             self.schema.clone(),

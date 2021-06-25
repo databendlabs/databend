@@ -104,8 +104,12 @@ impl Table for RemoteTable {
             .map(|v| self.partitions_to_plan(v, scan.clone()))
     }
 
-    async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
-        self.do_read(ctx).await
+    async fn read(
+        &self,
+        ctx: FuseQueryContextRef,
+        source_plan: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream> {
+        self.do_read(ctx, source_plan).await
     }
 
     async fn append_data(&self, _ctx: FuseQueryContextRef, plan: InsertIntoPlan) -> Result<()> {

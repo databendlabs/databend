@@ -43,8 +43,8 @@ impl ReadDataSourcePlan {
         self.schema.clone()
     }
 
-    /// Get the extras.
-    pub fn get_extras(&self) -> Extras {
-        self.scan_plan.extras.clone()
+    /// Get the push downs.
+    pub fn get_push_downs(&self) -> Extras {
+        self.scan_plan.push_downs.clone()
     }
 }
