@@ -10,6 +10,7 @@ use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_infallible::exit_scope;
 use common_infallible::Mutex;
 use common_runtime::tokio;
 use common_runtime::tokio::net::TcpStream;
@@ -72,12 +73,18 @@ impl AbortableService<TcpStream, ()> for Session {
                 "Cannot to convert Tokio TcpStream to Std TcpStream"
             })?;
 
-        let session_id = self.get_id();
         let cloned_stream = stream.try_clone()?;
         let session = session_manager.get_session(&self.session_id)?;
 
         std::thread::spawn(move || {
             session.get_status().lock().enter_init(cloned_stream);
+
+            let session_ref = session.clone();
+            exit_scope!({
+                session_ref.get_status().lock().enter_aborted();
+                session_manager.destroy_session(session_ref.get_id());
+                abort_notify.notify_waiters();
+            });
 
             if let Err(error) =
                 MysqlIntermediary::run_on_tcp(InteractiveWorker::create(session.clone()), stream)
@@ -89,10 +96,6 @@ impl AbortableService<TcpStream, ()> for Session {
                     );
                 }
             };
-
-            session.get_status().lock().enter_aborted();
-            session_manager.destroy_session(session_id);
-            abort_notify.notify_waiters();
         });
 
         Ok(())
