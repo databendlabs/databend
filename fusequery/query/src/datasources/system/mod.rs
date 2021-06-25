@@ -16,6 +16,8 @@ mod numbers_table_test;
 mod settings_table_test;
 #[cfg(test)]
 mod tables_table_test;
+#[cfg(test)]
+mod tracing_table_test;
 
 mod clusters_table;
 mod contributors_table;

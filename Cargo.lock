@@ -1518,6 +1518,7 @@ dependencies = [
  "toml",
  "tonic",
  "uuid",
+ "walkdir",
  "warp",
 ]
 

@@ -9,12 +9,14 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Partition;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
+use walkdir::WalkDir;
 
 use crate::datasources::system::TracingTableStream;
 use crate::datasources::Table;
@@ -35,7 +37,7 @@ impl TracingTable {
                 DataField::new("level", DataType::Int8, false),
                 DataField::new("hostname", DataType::Utf8, false),
                 DataField::new("pid", DataType::Int64, false),
-                DataField::new("time", DataType::Date64, false),
+                DataField::new("time", DataType::Utf8, false),
             ]),
         }
     }
@@ -85,8 +87,20 @@ impl Table for TracingTable {
     }
 
     async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
+        let mut log_files = vec![];
+
+        for entry in WalkDir::new(ctx.get_config().log_dir.as_str())
+            .sort_by_key(|file| file.file_name().to_owned())
+        {
+            let entry = entry.map_err(|e| ErrorCode::UnknownException(format!("{}", e)))?;
+            if !entry.path().is_dir() {
+                log_files.push(entry.path().display().to_string());
+            }
+        }
+
         Ok(Box::pin(TracingTableStream::try_create(
-            ctx.get_config().log_dir,
+            self.schema.clone(),
+            log_files,
         )?))
     }
 }
