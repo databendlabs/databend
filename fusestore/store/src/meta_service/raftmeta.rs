@@ -1139,6 +1139,14 @@ impl MetaNode {
         sm.meta.get_database(name)
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_kv(&self, key: &str) -> Option<SeqValue> {
+        // inconsistent get: from local state machine
+
+        let sm = self.sto.sm.read().await;
+        sm.meta.get_unclassified(key)
+    }
+
     /// Submit a write request to the known leader. Returns the response after applying the request.
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn write(&self, req: ClientRequest) -> anyhow::Result<ClientResponse> {

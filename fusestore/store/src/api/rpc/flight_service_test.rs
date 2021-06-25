@@ -7,6 +7,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_flights::GetTableActionResult;
 use common_flights::StoreClient;
+use common_planners::CreateDatabasePlan;
+use common_planners::DatabaseEngineType;
 use common_planners::ScanPlan;
 use common_runtime::tokio;
 use common_tracing::tracing;
@@ -15,9 +17,6 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_create_database() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
-
-    use common_planners::CreateDatabasePlan;
-    use common_planners::DatabaseEngineType;
 
     // 1. Service starts.
     let addr = crate::tests::start_store_server().await?;
@@ -90,7 +89,6 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
     use common_datavalues::DataField;
     use common_datavalues::DataSchema;
     use common_flights::StoreClient;
-    use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
     use common_planners::DatabaseEngineType;
     use common_planners::TableEngineType;
@@ -358,6 +356,63 @@ async fn test_scan_partition() -> anyhow::Result<()> {
         .await;
     // TODO d assertions, de-duplicated codes
     println!("scan res is {:?}", res);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_generic_kv() -> anyhow::Result<()> {
+    common_tracing::init_default_tracing();
+
+    let addr = crate::tests::start_store_server().await?;
+
+    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+
+    {
+        // write
+        let res = client
+            .upsert_kv("foo", None, "bar".to_string().into_bytes())
+            .await?;
+        assert_eq!(None, res.prev);
+        assert_eq!(Some((1, "bar".to_string().into_bytes())), res.result);
+    }
+
+    {
+        // write fails with unmatched seq
+        let res = client
+            .upsert_kv("foo", Some(2), "bar".to_string().into_bytes())
+            .await?;
+        assert_eq!(
+            Some((1, "bar".to_string().into_bytes())),
+            res.prev,
+            "old value"
+        );
+        assert_eq!(None, res.result, "Nothing changed");
+    }
+
+    {
+        // write done with matching seq
+        let res = client
+            .upsert_kv("foo", Some(1), "wow".to_string().into_bytes())
+            .await?;
+        assert_eq!(
+            Some((1, "bar".to_string().into_bytes())),
+            res.prev,
+            "old value"
+        );
+        assert_eq!(
+            Some((2, "wow".to_string().into_bytes())),
+            res.result,
+            "new value"
+        );
+    }
+
+    // get
+
+    {
+        let res = client.get_kv("foo").await?;
+        assert_eq!(Some((2, "wow".to_string().into_bytes())), res.result);
+    }
 
     Ok(())
 }

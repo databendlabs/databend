@@ -9,6 +9,7 @@ use std::io::Cursor;
 use common_arrow::arrow_flight;
 use common_arrow::arrow_flight::Action;
 use common_datavalues::DataSchemaRef;
+use common_metatypes::SeqValue;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -20,6 +21,35 @@ use prost::Message;
 use tonic::Request;
 
 use crate::protobuf::FlightStoreRequest;
+
+// === general-kv: upsert ===
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct UpsertKVAction {
+    pub key: String,
+    pub seq: Option<u64>,
+    pub value: Vec<u8>,
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct UpsertKVActionResult {
+    /// prev is the value before upsert.
+    pub prev: Option<SeqValue>,
+    /// result is the value after upsert.
+    pub result: Option<SeqValue>,
+}
+
+// === general-kv: get ===
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct GetKVAction {
+    pub key: String,
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct GetKVActionResult {
+    pub result: Option<SeqValue>,
+}
+
+// === part: scan ===
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ReadPlanAction {
@@ -121,6 +151,10 @@ pub enum StoreDoAction {
     DropTable(DropTableAction),
     ScanPartition(ScanPartitionAction),
     GetTable(GetTableAction),
+
+    // general purpose kv
+    UpsertKV(UpsertKVAction),
+    GetKV(GetKVAction),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -133,6 +167,10 @@ pub enum StoreDoActionResult {
     DropTable(DropTableActionResult),
     ScanPartition(ScanPartitionResult),
     GetTable(GetTableActionResult),
+
+    // general purpose kv
+    UpsertKV(UpsertKVActionResult),
+    GetKV(GetKVActionResult),
 }
 
 /// Try convert tonic::Request<Action> to DoActionAction.
