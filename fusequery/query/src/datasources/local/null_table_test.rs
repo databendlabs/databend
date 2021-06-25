@@ -18,14 +18,15 @@ async fn test_null_table() -> anyhow::Result<()> {
         DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]).into(),
         TableOptions::default(),
     )?;
-    table.read_plan(
+
+    let source_plan = table.read_plan(
         ctx.clone(),
         &ScanPlan::empty(),
         ctx.get_max_threads()? as usize,
     )?;
     assert_eq!(table.engine(), "Null");
 
-    let stream = table.read(ctx).await?;
+    let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);

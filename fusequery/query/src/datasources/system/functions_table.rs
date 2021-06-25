@@ -83,7 +83,11 @@ impl Table for FunctionsTable {
         })
     }
 
-    async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
+    async fn read(
+        &self,
+        _ctx: FuseQueryContextRef,
+        _source_plan: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream> {
         let func_names = FunctionFactory::registered_names();
         let aggr_func_names = AggregateFunctionFactory::registered_names();
 

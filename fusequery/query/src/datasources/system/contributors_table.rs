@@ -77,7 +77,11 @@ impl Table for ContributorsTable {
         })
     }
 
-    async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
+    async fn read(
+        &self,
+        _ctx: FuseQueryContextRef,
+        _source_plan: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream> {
         let contributors: Vec<&str> = env!("FUSE_COMMIT_AUTHORS")
             .split_terminator(',')
             .map(|x| x.trim())

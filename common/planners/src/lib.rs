@@ -13,6 +13,8 @@ mod plan_explain_test;
 #[cfg(test)]
 mod plan_expression_test;
 #[cfg(test)]
+mod plan_extras_test;
+#[cfg(test)]
 mod plan_filter_test;
 #[cfg(test)]
 mod plan_having_test;
@@ -49,6 +51,7 @@ mod plan_expression_rewriter;
 mod plan_expression_sort;
 mod plan_expression_validator;
 mod plan_expression_visitor;
+mod plan_extras;
 mod plan_filter;
 mod plan_having;
 mod plan_insert_into;
@@ -98,6 +101,7 @@ pub use plan_expression_sort::sort;
 pub use plan_expression_validator::validate_expression;
 pub use plan_expression_visitor::ExpressionVisitor;
 pub use plan_expression_visitor::Recursion;
+pub use plan_extras::Extras;
 pub use plan_filter::FilterPlan;
 pub use plan_having::HavingPlan;
 pub use plan_insert_into::InsertIntoPlan;

@@ -292,12 +292,7 @@ impl PipelineBuilder {
         let workers = std::cmp::max(max_threads, 1);
 
         for _i in 0..workers {
-            let source = SourceTransform::try_create(
-                self.ctx.clone(),
-                plan.db.as_str(),
-                plan.table.as_str(),
-                plan.remote,
-            )?;
+            let source = SourceTransform::try_create(self.ctx.clone(), plan.clone())?;
             pipeline.add_source(Arc::new(source))?;
         }
         Ok(true)

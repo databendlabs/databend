@@ -16,6 +16,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 use walkdir::WalkDir;
 
 use crate::datasources::system::TracingTableStream;
@@ -86,7 +87,11 @@ impl Table for TracingTable {
         })
     }
 
-    async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
+    async fn read(
+        &self,
+        ctx: FuseQueryContextRef,
+        source_plan: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream> {
         let mut log_files = vec![];
 
         for entry in WalkDir::new(ctx.get_config().log_dir.as_str())
@@ -98,9 +103,19 @@ impl Table for TracingTable {
             }
         }
 
+        // Default limit.
+        let mut limit = 100000000_usize;
+        let extras = source_plan.get_push_downs();
+        tracing::debug!("read extras:{:?}", extras);
+
+        if let Some(limit_push_down) = extras.limit {
+            limit = limit_push_down;
+        }
+
         Ok(Box::pin(TracingTableStream::try_create(
             self.schema.clone(),
             log_files,
+            limit,
         )?))
     }
 }

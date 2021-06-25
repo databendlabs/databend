@@ -77,7 +77,11 @@ impl Table for DatabasesTable {
         })
     }
 
-    async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
+    async fn read(
+        &self,
+        ctx: FuseQueryContextRef,
+        _source_plan: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream> {
         ctx.get_datasource()
             .get_databases()
             .map(|databases_name| -> SendableDataBlockStream {

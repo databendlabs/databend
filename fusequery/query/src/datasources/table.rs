@@ -30,7 +30,11 @@ pub trait Table: Sync + Send {
         partitions: usize,
     ) -> Result<ReadDataSourcePlan>;
     // Read block data from the underling.
-    async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream>;
+    async fn read(
+        &self,
+        ctx: FuseQueryContextRef,
+        source_plan: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream>;
 
     // temporary added, pls feel free to rm it
     async fn append_data(

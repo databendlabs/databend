@@ -19,19 +19,17 @@ async fn test_number_table() -> anyhow::Result<()> {
         schema_name: "scan_test".to_string(),
         table_schema: DataSchemaRefExt::create(vec![]),
         table_args: Some(Expression::Literal(DataValue::UInt64(Some(8)))),
-        projection: None,
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "number",
             DataType::UInt64,
             false,
         )]),
-        filters: vec![],
-        limit: None,
+        push_downs: Extras::default(),
     };
     let source_plan = table.read_plan(ctx.clone(), scan, ctx.get_max_threads()? as usize)?;
-    ctx.try_set_partitions(source_plan.partitions)?;
+    ctx.try_set_partitions(source_plan.partitions.clone())?;
 
-    let stream = table.read(ctx).await?;
+    let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);
