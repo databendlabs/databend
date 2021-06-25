@@ -9,6 +9,6 @@ edition = "2018"
 [dependencies] # In alphabetical order
 tracing = "0.1.26"
 tracing-appender = "0.1.2"
-tracing-bunyan-formatter = "0.1"
+tracing-bunyan-formatter = "0.2"
 tracing-futures = { version = "0.2.5", default-features = false }
 tracing-subscriber = "0.2.18"
