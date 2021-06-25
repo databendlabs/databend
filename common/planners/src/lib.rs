@@ -13,6 +13,8 @@ mod plan_explain_test;
 #[cfg(test)]
 mod plan_expression_test;
 #[cfg(test)]
+mod plan_extras_test;
+#[cfg(test)]
 mod plan_filter_test;
 #[cfg(test)]
 mod plan_having_test;
