@@ -20,6 +20,7 @@ use crate::ExplainPlan;
 use crate::ExplainType;
 use crate::Expression;
 use crate::ExpressionPlan;
+use crate::Extras;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::LimitByPlan;
@@ -207,10 +208,12 @@ impl PlanBuilder {
             schema_name: schema_name.to_owned(),
             table_schema,
             projected_schema,
-            projection,
             table_args,
-            filters: vec![],
-            limit,
+            extras: Extras {
+                projection,
+                filters: vec![],
+                limit,
+            },
         })))
     }
 

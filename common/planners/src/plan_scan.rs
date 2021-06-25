@@ -8,22 +8,18 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
 use crate::Expression;
+use crate::Extras;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct ScanPlan {
-    /// The name of the schema
+    // The name of the schema
     pub schema_name: String,
-    /// The schema of the source data
+    // The schema of the source data
     pub table_schema: DataSchemaRef,
     pub table_args: Option<Expression>,
-    /// Optional column indices to use as a projection
-    pub projection: Option<Vec<usize>>,
-    /// The schema description of the output
     pub projected_schema: DataSchemaRef,
-    /// Optional filter expression plan
-    pub filters: Vec<Expression>,
-    /// Optional limit to skip read
-    pub limit: Option<usize>,
+    // Extras.
+    pub extras: Extras,
 }
 
 impl ScanPlan {
@@ -35,11 +31,9 @@ impl ScanPlan {
         Self {
             schema_name: "".to_string(),
             table_schema: Arc::new(DataSchema::empty()),
-            table_args: None,
-            projection: None,
             projected_schema: Arc::new(DataSchema::empty()),
-            filters: vec![],
-            limit: None,
+            table_args: None,
+            extras: Extras::default(),
         }
     }
 }

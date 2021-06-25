@@ -7,6 +7,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
+use crate::Extras;
 use crate::Partitions;
 use crate::ScanPlan;
 use crate::Statistics;
@@ -40,5 +41,10 @@ impl ReadDataSourcePlan {
 
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
+    }
+
+    /// Get the extras.
+    pub fn get_extras(&self) -> Extras {
+        self.scan_plan.extras.clone()
     }
 }
