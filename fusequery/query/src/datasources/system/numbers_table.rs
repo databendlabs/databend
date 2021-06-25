@@ -106,7 +106,7 @@ impl Table for NumbersTable {
             db: "system".to_string(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
-            partitions: Common::generate_parts(0, ctx.get_max_threads()?, total),
+            parts: Common::generate_parts(0, ctx.get_max_threads()?, total),
             statistics: statistics.clone(),
             description: format!(
                 "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",

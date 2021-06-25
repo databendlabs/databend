@@ -108,7 +108,7 @@ pub use plan_insert_into::InsertIntoPlan;
 pub use plan_limit::LimitPlan;
 pub use plan_limit_by::LimitByPlan;
 pub use plan_node::PlanNode;
-pub use plan_partition::Partition;
+pub use plan_partition::Part;
 pub use plan_partition::Partitions;
 pub use plan_projection::ProjectionPlan;
 pub use plan_read_datasource::ReadDataSourcePlan;

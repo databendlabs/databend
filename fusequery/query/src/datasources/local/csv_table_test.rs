@@ -44,7 +44,7 @@ async fn test_csv_table() -> anyhow::Result<()> {
         push_downs: Extras::default(),
     };
     let source_plan = table.read_plan(ctx.clone(), &scan_plan, ctx.get_max_threads()? as usize)?;
-    ctx.try_set_partitions(source_plan.partitions.clone())?;
+    ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -115,7 +115,7 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
         push_downs: Extras::default(),
     };
     let source_plan = table.read_plan(ctx.clone(), &scan_plan, ctx.get_max_threads()? as usize)?;
-    ctx.try_set_partitions(source_plan.partitions.clone())?;
+    ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await;

@@ -87,7 +87,7 @@ fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
             DataField::new("b", DataType::Utf8, false),
             DataField::new("c", DataType::Utf8, false),
         ]),
-        partitions: generate_partitions(8, total as u64),
+        parts: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
         description: format!(
             "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
@@ -144,7 +144,7 @@ fn test_projection_push_down_optimizer_3() -> anyhow::Result<()> {
             DataField::new("f", DataType::Utf8, false),
             DataField::new("g", DataType::Utf8, false),
         ]),
-        partitions: generate_partitions(8, total as u64),
+        parts: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
         description: format!(
             "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",

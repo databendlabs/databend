@@ -6,7 +6,7 @@ use common_exception::Result;
 
 #[test]
 fn test_util_generate_parts() -> Result<()> {
-    use common_planners::Partition;
+    use common_planners::Part;
     use pretty_assertions::assert_eq;
 
     use crate::datasources::Common;
@@ -17,21 +17,21 @@ fn test_util_generate_parts() -> Result<()> {
 
         assert_eq!(3, ps.len());
         assert_eq!(
-            Partition {
+            Part {
                 name: "11-0-3".into(),
                 version: 0
             },
             ps[0]
         );
         assert_eq!(
-            Partition {
+            Part {
                 name: "11-3-6".into(),
                 version: 0
             },
             ps[1]
         );
         assert_eq!(
-            Partition {
+            Part {
                 name: "11-6-11".into(),
                 version: 0
             },
@@ -45,7 +45,7 @@ fn test_util_generate_parts() -> Result<()> {
 
         assert_eq!(1, ps.len());
         assert_eq!(
-            Partition {
+            Part {
                 name: "0-0-0".into(),
                 version: 0
             },
@@ -58,7 +58,7 @@ fn test_util_generate_parts() -> Result<()> {
 
         assert_eq!(1, ps.len());
         assert_eq!(
-            Partition {
+            Part {
                 name: "2-0-2".into(),
                 version: 0
             },

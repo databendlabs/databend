@@ -7,7 +7,7 @@ use std::sync::Mutex;
 
 use common_flights::AppendResult;
 use common_flights::DataPartInfo;
-use common_planners::Partition;
+use common_planners::Part;
 use common_planners::Statistics;
 use tonic::Status;
 
@@ -184,7 +184,7 @@ impl MemEngine {
                 .map(|p| {
                     let loc = &p.location;
                     DataPartInfo {
-                        partition: Partition {
+                        part: Part {
                             name: loc.clone(),
                             version: 0,
                         },

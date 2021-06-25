@@ -215,7 +215,7 @@ impl GetNodePlan for RemoteReadSourceGetNodePlan {
             db: self.0.db.clone(),
             table: self.0.table.clone(),
             schema: self.0.schema.clone(),
-            partitions,
+            parts: partitions,
             statistics: self.0.statistics.clone(),
             description: self.0.description.clone(),
             scan_plan: self.0.scan_plan.clone(),
@@ -239,7 +239,7 @@ impl ReadSourceGetNodePlan {
                 table.read_plan(ctx.clone(), &*plan.scan_plan, new_partitions_size)?;
 
             // We always put adjacent partitions in the same node
-            let new_partitions = &new_source_plan.partitions;
+            let new_partitions = &new_source_plan.parts;
             let mut nodes_partitions = HashMap::new();
             let partitions_pre_node = new_partitions.len() / cluster_nodes.len();
 

@@ -14,7 +14,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Partition;
+use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
@@ -133,7 +133,7 @@ impl Table for ParquetTable {
             db: self.db.clone(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
-            partitions: vec![Partition {
+            parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
             }],

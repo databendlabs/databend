@@ -9,7 +9,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_planners::Partition;
+use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::Statistics;
 use common_progress::Progress;
@@ -35,7 +35,7 @@ pub struct FuseQueryContext {
     cluster: Arc<RwLock<ClusterRef>>,
     datasource: Arc<DataSource>,
     statistics: Arc<RwLock<Statistics>>,
-    partition_queue: Arc<RwLock<VecDeque<Partition>>>,
+    partition_queue: Arc<RwLock<VecDeque<Part>>>,
     current_database: Arc<RwLock<String>>,
     progress: Arc<Progress>,
     runtime: Arc<RwLock<Runtime>>,

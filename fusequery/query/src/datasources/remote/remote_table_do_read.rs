@@ -31,7 +31,7 @@ impl RemoteTable {
             Err(_) => None,
             Ok(parts) if parts.is_empty() => None,
             Ok(parts) => Some(ReadAction {
-                partition: parts[0].clone(),
+                part: parts[0].clone(),
                 push_down: PlanNode::ReadSource(ReadDataSourcePlan {
                     db: db.clone(),
                     table: tbl.clone(),
