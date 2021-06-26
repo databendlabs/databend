@@ -61,10 +61,23 @@ fn test_from_and_to_status() -> anyhow::Result<()> {
     // Only compare the code and message. Discard backtrace.
     assert_eq!(r#"{"code":7,"message":"foo","#, &status.message()[..26]);
 
-    let e2: ErrorCode = status.into();
+    {
+        // test from &Status
 
-    assert_eq!(7, e2.code());
-    assert_eq!("foo", e2.message());
+        let e2: ErrorCode = (&status).into();
+
+        assert_eq!(7, e2.code());
+        assert_eq!("foo", e2.message());
+    }
+
+    {
+        // test from Status
+
+        let e2: ErrorCode = status.into();
+
+        assert_eq!(7, e2.code());
+        assert_eq!("foo", e2.message());
+    }
 
     Ok(())
 }

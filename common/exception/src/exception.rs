@@ -346,8 +346,8 @@ struct SerializedError {
     backtrace: String,
 }
 
-impl From<Status> for ErrorCode {
-    fn from(status: Status) -> Self {
+impl From<&Status> for ErrorCode {
+    fn from(status: &Status) -> Self {
         match status.code() {
             tonic::Code::Internal => {
                 match serde_json::from_str::<SerializedError>(&status.message()) {
@@ -368,6 +368,12 @@ impl From<Status> for ErrorCode {
             }
             _ => ErrorCode::UnImplement(status.to_string()),
         }
+    }
+}
+
+impl From<Status> for ErrorCode {
+    fn from(status: Status) -> Self {
+        (&status).into()
     }
 }
 
