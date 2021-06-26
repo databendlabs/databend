@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use common_arrow::arrow::datatypes::Schema;
 use common_arrow::arrow::ipc::writer::IpcWriteOptions;
@@ -38,6 +37,7 @@ use common_flights::StoreDoAction;
 use common_flights::StoreDoActionResult;
 use common_flights::UpsertKVAction;
 use common_flights::UpsertKVActionResult;
+use common_infallible::Mutex;
 use common_planners::PlanNode;
 use common_runtime::tokio::sync::mpsc::Sender;
 use futures::Stream;
@@ -128,7 +128,7 @@ impl ActionHandler {
 
     async fn create_db(&self, act: CreateDatabaseAction) -> Result<StoreDoActionResult, Status> {
         let plan = act.plan;
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
 
         let cmd = CmdCreateDatabase {
             db_name: plan.db,
@@ -153,7 +153,7 @@ impl ActionHandler {
     async fn get_db(&self, act: GetDatabaseAction) -> Result<StoreDoActionResult, Status> {
         // TODO(xp): create/drop/get database should base on MetaNode
         let db_name = &act.db;
-        let meta = self.meta.lock().unwrap();
+        let meta = self.meta.lock();
 
         let db = meta.dbs.get(db_name);
 
@@ -179,7 +179,7 @@ impl ActionHandler {
 
         info!("create table: {:}: {:?}", db_name, table_name);
 
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
 
         let options = common_arrow::arrow::ipc::writer::IpcWriteOptions::default();
         let flight_data =
@@ -215,7 +215,7 @@ impl ActionHandler {
 
         info!("create table: {:}: {:?}", db_name, table_name);
 
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
 
         let table = meta.get_table(db_name.clone(), table_name.clone())?;
 
@@ -236,7 +236,7 @@ impl ActionHandler {
     }
 
     async fn drop_db(&self, act: DropDatabaseAction) -> Result<StoreDoActionResult, Status> {
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
         let _ = meta.drop_database(&act.plan.db, act.plan.if_exists)?;
         Ok(StoreDoActionResult::DropDatabase(
             DropDatabaseActionResult {},
@@ -244,7 +244,7 @@ impl ActionHandler {
     }
 
     async fn drop_table(&self, act: DropTableAction) -> Result<StoreDoActionResult, Status> {
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
         let _ = meta.drop_table(&act.plan.db, &act.plan.table, act.plan.if_exists)?;
         Ok(StoreDoActionResult::DropTable(DropTableActionResult {}))
     }
@@ -256,7 +256,7 @@ impl ActionHandler {
         parts: Streaming<FlightData>,
     ) -> anyhow::Result<common_flights::AppendResult> {
         {
-            let mut meta = self.meta.lock().unwrap();
+            let mut meta = self.meta.lock();
             let _tbl_meta = meta.get_table(db_name.clone(), table_name.clone())?;
 
             // TODO:  Validates the schema of input stream:
@@ -273,7 +273,7 @@ impl ActionHandler {
             .append_data(format!("{}/{}", &db_name, &table_name), Box::pin(parts))
             .await?;
 
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
         meta.append_data_parts(&db_name, &table_name, &res);
         Ok(res)
     }
@@ -286,7 +286,7 @@ impl ActionHandler {
         let db_name = splits[0];
         let tbl_name = splits[1];
 
-        let meta = self.meta.lock().unwrap();
+        let meta = self.meta.lock();
         Ok(StoreDoActionResult::ScanPartition(
             meta.get_data_parts(db_name, tbl_name),
         ))

@@ -756,6 +756,9 @@ dependencies = [
 [[package]]
 name = "common-infallible"
 version = "0.1.0"
+dependencies = [
+ "parking_lot",
+]
 
 [[package]]
 name = "common-metatypes"
@@ -775,6 +778,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-infallible",
  "futures",
  "lazy_static",
  "pretty_assertions",
