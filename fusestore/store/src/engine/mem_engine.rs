@@ -4,12 +4,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_flights::AppendResult;
-use common_flights::DataPartInfo;
 use common_infallible::Mutex;
-use common_planners::Part;
 use common_exception::ErrorCode;
-use common_planners::Partition;
+use common_planners::Part;
 use common_planners::Statistics;
 use common_store_api::AppendResult;
 use common_store_api::DataPartInfo;

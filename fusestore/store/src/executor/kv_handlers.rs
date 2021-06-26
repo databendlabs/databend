@@ -31,11 +31,11 @@ impl RequestHandler<UpsertKVAction> for ActionHandler {
             .meta_node
             .write(cr)
             .await
-            .map_err(|e| Status::internal(e.to_string()))?;
+            .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
         match rst {
             ClientResponse::KV { prev, result } => Ok(UpsertKVActionResult { prev, result }),
-            _ => Err(Status::internal("not a KV result")),
+            _ => Err(ErrorCode::MetaNodeInternalError("not a KV result")),
         }
     }
 }

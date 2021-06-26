@@ -12,7 +12,6 @@ pub use flight_token::FlightToken;
 pub use impls::storage_api_impl_utils::get_do_put_meta;
 pub use impls::storage_api_impl_utils::set_do_put_meta;
 pub use store_client::StoreClient;
-pub use store_do_action::AddUserAction;
 pub use store_do_action::AddUserActionResult;
 pub use store_do_action::CreateDatabaseAction;
 pub use store_do_action::CreateTableAction;

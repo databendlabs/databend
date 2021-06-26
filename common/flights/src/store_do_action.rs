@@ -13,6 +13,7 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_planners::Part;
 use common_planners::ScanPlan;
+use common_planners::Statistics;
 use common_store_api::CreateDatabaseActionResult;
 use common_store_api::CreateTableActionResult;
 use common_store_api::DropDatabaseActionResult;

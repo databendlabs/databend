@@ -6,16 +6,8 @@
 use std::convert::TryInto;
 
 use common_arrow::arrow_flight::Ticket;
-use common_planners::Part;
-use common_planners::PlanNode;
 use common_planners::ScanPlan;
 use common_store_api::ReadAction;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct ReadAction {
-    pub part: Part,
-    pub push_down: PlanNode,
-}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ScanPartitionsAction {

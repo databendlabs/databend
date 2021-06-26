@@ -5,7 +5,7 @@
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_planners::Partitions;
+use common_planners::Part;
 use common_planners::PlanNode;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
@@ -13,14 +13,14 @@ use common_streams::SendableDataBlockStream;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DataPartInfo {
-    pub partition: Partition,
+    pub part: Part,
     pub stats: Statistics,
 }
 pub type ReadPlanResult = Option<Vec<DataPartInfo>>;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ReadAction {
-    pub partition: Partitions,
+    pub part: Part,
     pub push_down: PlanNode,
 }
 
