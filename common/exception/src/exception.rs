@@ -84,7 +84,7 @@ macro_rules! as_item {
 }
 
 macro_rules! build_exceptions {
-    ($($body:tt($code:expr)),*) => {
+    ($($body:tt($code:expr)),*$(,)*) => {
         as_item! {
             impl ErrorCode {
                 $(
@@ -150,14 +150,14 @@ build_exceptions! {
     CannotListenerPort(45),
 
     UnknownException(1000),
-    TokioError(1001)
+    TokioError(1001),
 }
 
 // Store errors
 build_exceptions! {
 
     FileMetaNotFound(2001),
-    FileDamaged(2002)
+    FileDamaged(2002),
 }
 
 pub type Result<T> = std::result::Result<T, ErrorCode>;
@@ -346,8 +346,8 @@ struct SerializedError {
     backtrace: String,
 }
 
-impl From<Status> for ErrorCode {
-    fn from(status: Status) -> Self {
+impl From<&Status> for ErrorCode {
+    fn from(status: &Status) -> Self {
         match status.code() {
             tonic::Code::Internal => {
                 match serde_json::from_str::<SerializedError>(&status.message()) {
@@ -368,6 +368,12 @@ impl From<Status> for ErrorCode {
             }
             _ => ErrorCode::UnImplement(status.to_string()),
         }
+    }
+}
+
+impl From<Status> for ErrorCode {
+    fn from(status: Status) -> Self {
+        (&status).into()
     }
 }
 
