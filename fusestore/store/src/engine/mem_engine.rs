@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use common_flights::AppendResult;
 use common_flights::DataPartInfo;
+use common_infallible::Mutex;
 use common_planners::Part;
 use common_planners::Statistics;
 use tonic::Status;

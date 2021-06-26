@@ -12,3 +12,4 @@ edition = "2018"
 # Github dependencies
 
 # Crates.io dependencies
+parking_lot = "0.11"

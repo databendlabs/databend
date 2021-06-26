@@ -18,7 +18,7 @@ fn test_mem_engine_create_database() -> anyhow::Result<()> {
     // TODO check generated ver
     let eng = MemEngine::create();
 
-    let mut eng = eng.lock().unwrap();
+    let mut eng = eng.lock();
 
     let cmdfoo = CmdCreateDatabase {
         db_name: "foo".into(),
@@ -107,7 +107,7 @@ fn test_mem_engine_create_get_table() -> anyhow::Result<()> {
     // TODO check generated ver
     let eng = MemEngine::create();
 
-    let mut eng = eng.lock().unwrap();
+    let mut eng = eng.lock();
 
     let cmdfoo = CmdCreateDatabase {
         db_name: "foo".into(),
@@ -185,7 +185,7 @@ fn test_mem_engine_create_get_table() -> anyhow::Result<()> {
 #[test]
 fn test_mem_engine_drop_database() -> anyhow::Result<()> {
     let eng = MemEngine::create();
-    let mut eng = eng.lock().unwrap();
+    let mut eng = eng.lock();
     let test_db_name = "foo";
     let cmd = CmdCreateDatabase {
         db_name: test_db_name.to_string(),
@@ -215,7 +215,7 @@ fn test_mem_engine_drop_table() -> anyhow::Result<()> {
     let eng = MemEngine::create();
     let test_db = "test_db";
     let test_tbl = "test_tbl";
-    let mut eng = eng.lock().unwrap();
+    let mut eng = eng.lock();
 
     let cmd_db = CmdCreateDatabase {
         db_name: test_db.to_string(),
