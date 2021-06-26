@@ -274,8 +274,6 @@ pub enum StoreDoAction {
     // general purpose kv
     UpsertKV(UpsertKVAction),
     GetKV(GetKVAction),
-
-    KVPut(KVPutAction),
 }
 
 /// Try convert tonic::Request<Action> to DoActionAction.

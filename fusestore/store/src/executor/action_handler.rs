@@ -95,11 +95,7 @@ impl ActionHandler {
         .map_err(|e| Status::internal(format!("{:?}", e)))
     }
 
-    pub async fn execute_new<S, R>(
-        &self,
-        action: StoreDoAction,
-        s: S,
-    ) -> common_exception::Result<R>
+    pub async fn execute<S, R>(&self, action: StoreDoAction, s: S) -> common_exception::Result<R>
     where
         S: ReplySerializer<Output = R>,
         <S as ReplySerializer>::Error: Into<ErrorCode>,
@@ -121,7 +117,6 @@ impl ActionHandler {
             // general-purpose kv
             StoreDoAction::UpsertKV(a) => self.invoke(a, s).await,
             StoreDoAction::GetKV(a) => self.invoke(a, s).await,
-            _ => todo!(),
         }
     }
 

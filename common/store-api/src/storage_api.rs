@@ -77,8 +77,6 @@ pub struct AppendResult {
 }
 
 // TODO A better name, we already have a SendableDataBlockStream
-//
-//std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<DataBlock>> + Send>>;
 pub type BlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;
 

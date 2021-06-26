@@ -214,21 +214,6 @@ impl FlightService for StoreFlightImpl {
         unimplemented!()
     }
 
-    //    type DoActionStream = FlightStream<arrow_flight::Result>;
-    //    async fn do_action(
-    //        &self,
-    //        request: Request<Action>,
-    //    ) -> Result<Response<Self::DoActionStream>, Status> {
-    //        // Check token.
-    //        let _claim = self.check_token(&request.metadata())?;
-    //
-    //        let action: StoreDoAction = request.try_into()?;
-    //        info!("Receive do_action: {:?}", action);
-    //        let rst = self.action_handler.execute(action).await?;
-    //
-    //        self.once_stream_resp(rst)
-    //    }
-
     type DoActionStream = FlightStream<arrow_flight::Result>;
     async fn do_action(
         &self,
@@ -241,7 +226,7 @@ impl FlightService for StoreFlightImpl {
         info!("Receive do_action: {:?}", action);
 
         let s = JsonSer;
-        let body = self.action_handler.execute_new(action, s).await?;
+        let body = self.action_handler.execute(action, s).await?;
         let arrow = arrow_flight::Result { body };
         let output = futures::stream::once(async { Ok(arrow) });
         Ok(Response::new(Box::pin(output)))

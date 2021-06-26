@@ -5,9 +5,7 @@
 use common_arrow::arrow::array::ArrayRef;
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
-//use common_exception::ErrorCode;
 use common_flights::StoreClient;
-//use common_flights::UserInfo;
 use common_planners::CreateDatabasePlan;
 use common_planners::DatabaseEngineType;
 use common_planners::ScanPlan;
@@ -18,9 +16,6 @@ use common_store_api::MetaApi;
 use common_store_api::StorageApi;
 use common_tracing::tracing;
 use pretty_assertions::assert_eq;
-//use sha2::Digest;
-//use sha2::Sha256;
-//use test_env_log::test;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_create_database() -> anyhow::Result<()> {
