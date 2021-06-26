@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
 use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 
@@ -9,7 +10,7 @@ use crate::pipelines::processors::*;
 use crate::sql::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_pipeline_display() -> anyhow::Result<()> {
+async fn test_pipeline_display() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let plan = PlanParser::create(ctx.clone()).build_from_sql(

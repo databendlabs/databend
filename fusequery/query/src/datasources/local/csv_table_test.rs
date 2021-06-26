@@ -5,6 +5,7 @@
 use std::env;
 
 use common_datavalues::*;
+use common_exception::Result;
 use common_planners::*;
 use common_runtime::tokio;
 use futures::TryStreamExt;
@@ -12,7 +13,7 @@ use futures::TryStreamExt;
 use crate::datasources::local::*;
 
 #[tokio::test]
-async fn test_csv_table() -> anyhow::Result<()> {
+async fn test_csv_table() -> Result<()> {
     let options: TableOptions = [(
         "location".to_string(),
         env::current_dir()?
@@ -69,7 +70,7 @@ async fn test_csv_table() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn test_csv_table_parse_error() -> anyhow::Result<()> {
+async fn test_csv_table_parse_error() -> Result<()> {
     use std::env;
 
     use common_datavalues::*;

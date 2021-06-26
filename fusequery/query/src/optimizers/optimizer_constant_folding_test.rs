@@ -8,6 +8,7 @@ mod tests {
     use std::sync::Arc;
 
     use common_datavalues::*;
+    use common_exception::Result;
     use common_planners::*;
     use pretty_assertions::assert_eq;
 
@@ -15,7 +16,7 @@ mod tests {
     use crate::optimizers::*;
 
     #[test]
-    fn test_constant_folding_optimizer() -> anyhow::Result<()> {
+    fn test_constant_folding_optimizer() -> Result<()> {
         let ctx = crate::tests::try_create_context()?;
 
         let total = ctx.get_settings().get_max_block_size()? as u64;

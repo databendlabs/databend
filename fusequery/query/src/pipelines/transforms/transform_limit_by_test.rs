@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRefExt;
+use common_exception::Result;
 use common_planners::*;
 use common_runtime::tokio;
 use futures::TryStreamExt;
@@ -14,7 +15,7 @@ use crate::pipelines::processors::*;
 use crate::pipelines::transforms::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_transform_limit_by() -> anyhow::Result<()> {
+async fn test_transform_limit_by() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 

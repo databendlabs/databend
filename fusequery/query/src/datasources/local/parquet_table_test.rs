@@ -5,6 +5,7 @@
 use std::env;
 
 use common_datavalues::*;
+use common_exception::Result;
 use common_planners::*;
 use common_runtime::tokio;
 use futures::TryStreamExt;
@@ -12,7 +13,7 @@ use futures::TryStreamExt;
 use crate::datasources::local::*;
 
 #[tokio::test]
-async fn test_parquet_table() -> anyhow::Result<()> {
+async fn test_parquet_table() -> Result<()> {
     let options: TableOptions = [(
         "location".to_string(),
         env::current_dir()?

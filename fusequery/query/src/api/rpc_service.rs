@@ -2,9 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::anyhow;
-use anyhow::Result;
 use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_exception::ToErrorCode;
 use tonic::transport::Server;
 
 use crate::api::rpc::FlightDispatcher;
@@ -48,6 +49,8 @@ impl RpcService {
             .add_service(FlightServiceServer::new(service))
             .serve(addr)
             .await
-            .map_err(|e| anyhow!("Flight make sever error: {:?}", e))
+            .map_err_to_code(ErrorCode::CannotListenerPort, || {
+                format!("Cannot listener port {}", addr)
+            })
     }
 }

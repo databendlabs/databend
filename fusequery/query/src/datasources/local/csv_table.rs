@@ -6,7 +6,6 @@ use std::any::Any;
 use std::fs::File;
 use std::sync::Arc;
 
-use anyhow::Context;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -86,12 +85,7 @@ impl Table for CsvTable {
     ) -> Result<ReadDataSourcePlan> {
         let start_line: usize = if self.has_header { 1 } else { 0 };
         let file = &self.file;
-        let lines_count = Common::count_lines(
-            File::open(file.clone())
-                .with_context(|| format!("Cannot find file:{}", file))
-                .map_err(ErrorCode::from)?,
-        )
-        .map_err(|e| ErrorCode::CannotReadFile(e.to_string()))?;
+        let lines_count = Common::count_lines(File::open(file.clone())?)?;
 
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),

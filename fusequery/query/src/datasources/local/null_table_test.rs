@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_datavalues::*;
+use common_exception::Result;
 use common_planners::*;
 use common_runtime::tokio;
 use futures::TryStreamExt;
@@ -10,7 +11,7 @@ use futures::TryStreamExt;
 use crate::datasources::local::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_null_table() -> anyhow::Result<()> {
+async fn test_null_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let table = NullTable::try_create(
         "default".into(),

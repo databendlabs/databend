@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+
 #[test]
-fn test_context_function_build_arg_from_ctx() -> anyhow::Result<()> {
+fn test_context_function_build_arg_from_ctx() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     use crate::functions::*;

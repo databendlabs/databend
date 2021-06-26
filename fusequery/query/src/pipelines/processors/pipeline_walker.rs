@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::Result;
+use std::result::Result;
 
 use crate::pipelines::processors::Pipe;
 use crate::pipelines::processors::Pipeline;
@@ -14,11 +14,11 @@ enum WalkOrder {
 }
 
 impl Pipeline {
-    fn walk_base(
+    fn walk_base<E>(
         order: WalkOrder,
         pipeline: &Pipeline,
-        mut visitor: impl FnMut(&Pipe) -> Result<bool>,
-    ) -> Result<()> {
+        mut visitor: impl FnMut(&Pipe) -> Result<bool, E>,
+    ) -> Result<(), E> {
         let mut pipes = vec![];
 
         for pipe in &pipeline.pipes() {
@@ -44,7 +44,7 @@ impl Pipeline {
     /// |
     /// C(ReadSource)
     /// A Preorder walk of this graph is A B C
-    pub fn walk_preorder(&self, visitor: impl FnMut(&Pipe) -> Result<bool>) -> Result<()> {
+    pub fn walk_preorder<E>(&self, visitor: impl FnMut(&Pipe) -> Result<bool, E>) -> Result<(), E> {
         Self::walk_base(WalkOrder::PreOrder, self, visitor)
     }
 
@@ -55,7 +55,10 @@ impl Pipeline {
     /// |
     /// C(ReadSource)
     /// A Postorder walk of this graph is C B A
-    pub fn walk_postorder(&self, visitor: impl FnMut(&Pipe) -> Result<bool>) -> Result<()> {
+    pub fn walk_postorder<E>(
+        &self,
+        visitor: impl FnMut(&Pipe) -> Result<bool, E>,
+    ) -> Result<(), E> {
         Self::walk_base(WalkOrder::PostOrder, self, visitor)
     }
 }
