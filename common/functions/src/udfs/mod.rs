@@ -11,6 +11,7 @@ mod udf_example_test;
 #[cfg(test)]
 mod version_test;
 
+mod crash_me;
 mod database;
 mod sleep;
 mod to_type_name;
@@ -18,6 +19,7 @@ mod udf;
 mod udf_example;
 mod version;
 
+pub use crash_me::CrashMeFunction;
 pub use database::DatabaseFunction;
 pub use sleep::SleepFunction;
 pub use to_type_name::ToTypeNameFunction;
