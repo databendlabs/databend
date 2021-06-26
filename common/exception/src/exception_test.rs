@@ -52,6 +52,22 @@ fn test_derive_from_std_error() {
 }
 
 #[test]
+fn test_derive_from_display() {
+    use crate::exception::ErrorCode;
+    use crate::exception::ToErrorCode;
+
+    let rst: std::result::Result<(), u64> = Err(3);
+
+    let rst1: crate::exception::Result<()> =
+        rst.map_err_to_code(ErrorCode::UnknownException, || 123);
+
+    assert_eq!(
+        "Code: 1000, displayText = 123, cause: 3.",
+        format!("{}", rst1.as_ref().unwrap_err())
+    );
+}
+
+#[test]
 fn test_from_and_to_status() -> anyhow::Result<()> {
     use crate::exception::*;
     let e = ErrorCode::IllegalDataType("foo");
