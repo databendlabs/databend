@@ -17,6 +17,30 @@ macro_rules! downcast_array {
     };
 }
 
+#[macro_export]
+macro_rules! match_data_type_apply_macro_ca {
+    ($self:expr, $macro:ident, $macro_utf8:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
+        use crate::DataType;
+        match $self.data_type() {
+            DataType::Utf8 => $macro_utf8!($self.utf8().unwrap() $(, $opt_args)*),
+            DataType::Boolean => $macro_bool!($self.bool().unwrap() $(, $opt_args)*),
+            DataType::UInt8 => $macro!($self.u8().unwrap() $(, $opt_args)*),
+            DataType::UInt16 => $macro!($self.u16().unwrap() $(, $opt_args)*),
+            DataType::UInt32 => $macro!($self.u32().unwrap() $(, $opt_args)*),
+            DataType::UInt64 => $macro!($self.u64().unwrap() $(, $opt_args)*),
+            DataType::Int8 => $macro!($self.i8().unwrap() $(, $opt_args)*),
+            DataType::Int16 => $macro!($self.i16().unwrap() $(, $opt_args)*),
+            DataType::Int32 => $macro!($self.i32().unwrap() $(, $opt_args)*),
+            DataType::Int64 => $macro!($self.i64().unwrap() $(, $opt_args)*),
+            DataType::Float32 => $macro!($self.f32().unwrap() $(, $opt_args)*),
+            DataType::Float64 => $macro!($self.f64().unwrap() $(, $opt_args)*),
+            DataType::Date32 => $macro!($self.date32().unwrap() $(, $opt_args)*),
+            DataType::Date64 => $macro!($self.date64().unwrap() $(, $opt_args)*),
+            _ => unimplemented!(),
+        }
+    }};
+}
+
 macro_rules! typed_cast_from_array_to_data_value {
     ($array:expr, $index:expr, $ARRAYTYPE:ident, $SCALAR:ident) => {{
         use common_arrow::arrow::array::*;
@@ -383,48 +407,48 @@ macro_rules! typed_cast_from_data_value_to_std {
     };
 }
 
-// macro_rules! build_list {
-//     ($VALUE_BUILDER_TY:ident, $SCALAR_TY:ident, $VALUES:expr, $SIZE:expr) => {{
-//         use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-//         use common_arrow::arrow::datatypes::Field as ArrowField;
-//         match $VALUES {
-//             // the return on the macro is necessary, to short-circuit and return ArrayRef
-//             None => {
-//                 return Ok(common_arrow::arrow::array::new_null_array(
-//                     &ArrowDataType::List(Box::new(ArrowField::new(
-//                         "item",
-//                         ArrowDataType::$SCALAR_TY,
-//                         true,
-//                     ))),
-//                     $SIZE,
-//                 ))
-//             }
-//             Some(values) => {
-//                 let mut builder = ListBuilder::new($VALUE_BUILDER_TY::new(values.len()));
+macro_rules! build_list {
+    ($VALUE_BUILDER_TY:ident, $SCALAR_TY:ident, $VALUES:expr, $SIZE:expr) => {{
+        use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+        use common_arrow::arrow::datatypes::Field as ArrowField;
+        match $VALUES {
+            // the return on the macro is necessary, to short-circuit and return ArrayRef
+            None => {
+                return Ok(common_arrow::arrow::array::new_null_array(
+                    &ArrowDataType::List(Box::new(ArrowField::new(
+                        "item",
+                        ArrowDataType::$SCALAR_TY,
+                        true,
+                    ))),
+                    $SIZE,
+                ))
+            }
+            Some(values) => {
+                let mut builder = ListBuilder::new($VALUE_BUILDER_TY::new(values.len()));
 
-//                 for _ in 0..$SIZE {
-//                     for scalar_value in values {
-//                         match scalar_value {
-//                             DataValue::$SCALAR_TY(Some(v)) => {
-//                                 builder.values().append_value(v.clone()).unwrap()
-//                             }
-//                             DataValue::$SCALAR_TY(None) => {
-//                                 builder.values().append_null().unwrap();
-//                             }
-//                             _ => {
-//                                 return Result::Err(ErrorCode::BadDataValueType(
-//                                     "Incompatible DataValue for list",
-//                                 ))
-//                             }
-//                         };
-//                     }
-//                     builder.append(true).unwrap();
-//                 }
-//                 builder.finish()
-//             }
-//         }
-//     }};
-// }
+                for _ in 0..$SIZE {
+                    for scalar_value in values {
+                        match scalar_value {
+                            DataValue::$SCALAR_TY(Some(v)) => {
+                                builder.values().append_value(v.clone()).unwrap()
+                            }
+                            DataValue::$SCALAR_TY(None) => {
+                                builder.values().append_null().unwrap();
+                            }
+                            _ => {
+                                return Result::Err(ErrorCode::BadDataValueType(
+                                    "Incompatible DataValue for list",
+                                ))
+                            }
+                        };
+                    }
+                    builder.append(true).unwrap();
+                }
+                builder.finish()
+            }
+        }
+    }};
+}
 
 // macro_rules! try_build_array {
 //     ($VALUE_BUILDER_TY:ident, $SCALAR_TY:ident, $VALUES:expr) => {{

@@ -13,8 +13,8 @@ fn test_array_arithmetic() {
     #[allow(dead_code)]
     struct ArrayTest {
         name: &'static str,
-        args: Vec<Vec<DataArrayRef>>,
-        expect: Vec<DataArrayRef>,
+        args: Vec<Vec<Series>>,
+        expect: Vec<Series>,
         error: Vec<&'static str>,
         op: DataValueArithmeticOperator,
     }
@@ -330,10 +330,10 @@ fn test_array_scalar_arithmetic() {
     #[allow(dead_code)]
     struct ArrayTest {
         name: &'static str,
-        array: DataArrayRef,
+        array: Series,
         op: DataValueArithmeticOperator,
         scalar: DataValue,
-        expect: DataArrayRef,
+        expect: Series,
         error: &'static str,
     }
 
@@ -399,10 +399,10 @@ fn test_scalar_array_arithmetic() {
     #[allow(dead_code)]
     struct ArrayTest {
         name: &'static str,
-        array: DataArrayRef,
+        array: Series,
         op: DataValueArithmeticOperator,
         scalar: DataValue,
-        expect: DataArrayRef,
+        expect: Series,
         error: &'static str,
     }
 
@@ -470,8 +470,8 @@ fn test_array_unary_arithmetic() {
     #[allow(dead_code)]
     struct ArrayTest {
         name: &'static str,
-        args: Vec<Vec<DataArrayRef>>,
-        expect: Vec<DataArrayRef>,
+        args: Vec<Vec<Series>>,
+        expect: Vec<Series>,
         error: Vec<&'static str>,
         op: DataValueArithmeticOperator,
     }

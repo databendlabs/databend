@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BooleanArray;
@@ -5,14 +9,15 @@ use common_arrow::arrow::array::LargeListArray;
 use common_arrow::arrow::array::LargeStringArray;
 use common_arrow::arrow::array::PrimitiveArray;
 
-use crate::arrays::DataArrayBase;
+use crate::arrays::DataArray;
 use crate::DFBooleanArray;
 use crate::DFListArray;
 use crate::DFNumericType;
+use crate::DFPrimitiveType;
 use crate::DFStringArray;
 
-impl<T> DataArrayBase<T>
-where T: DFNumericType
+impl<T> DataArray<T>
+where T: DFPrimitiveType
 {
     pub fn downcast_ref(&self) -> &PrimitiveArray<T> {
         let arr = &*self.array;

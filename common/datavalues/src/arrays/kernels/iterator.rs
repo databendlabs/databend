@@ -7,8 +7,8 @@ use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeListArray;
 use common_arrow::arrow::array::LargeStringArray;
 
-use crate::arrays::DataArrayRef;
-use crate::arrays::DataArrayWrap;
+use crate::series::Series;
+use crate::series::SeriesWrap;
 use crate::DFBooleanArray;
 use crate::DFListArray;
 use crate::DFStringArray;

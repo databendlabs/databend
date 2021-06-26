@@ -13,8 +13,8 @@ fn test_array_logic() {
     #[allow(dead_code)]
     struct ArrayTest {
         name: &'static str,
-        args: Vec<Vec<DataArrayRef>>,
-        expect: Vec<DataArrayRef>,
+        args: Vec<Vec<Series>>,
+        expect: Vec<Series>,
         error: Vec<&'static str>,
         op: DataValueLogicOperator,
     }

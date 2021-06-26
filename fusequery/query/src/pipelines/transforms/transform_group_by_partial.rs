@@ -211,7 +211,7 @@ impl Processor for GroupByPartialTransform {
             group_key_builder.append_value(key)?;
         }
 
-        let mut columns: Vec<DataArrayRef> = Vec::with_capacity(self.schema.fields().len());
+        let mut columns: Vec<Series> = Vec::with_capacity(self.schema.fields().len());
         for mut builder in builders {
             columns.push(Arc::new(builder.finish()));
         }

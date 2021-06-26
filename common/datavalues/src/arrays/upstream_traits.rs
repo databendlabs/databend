@@ -1,4 +1,4 @@
-//! Implementations of upstream traits for DataArrayBase<T>
+//! Implementations of upstream traits for DataArray<T>
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::LinkedList;
@@ -11,7 +11,7 @@ use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeStringArray;
 use common_arrow::arrow::array::PrimitiveArray;
 
-use crate::arrays::DataArrayBase;
+use crate::arrays::DataArray;
 use crate::utils::NoNull;
 use crate::vec::AlignedVec;
 use crate::BooleanType;
@@ -24,7 +24,7 @@ use crate::Utf8Type;
 
 /// FromIterator trait
 
-impl<T> FromIterator<Option<T::Native>> for DataArrayBase<T>
+impl<T> FromIterator<Option<T::Native>> for DataArray<T>
 where T: DFPrimitiveType
 {
     fn from_iter<I: IntoIterator<Item = Option<T::Native>>>(iter: I) -> Self {
@@ -55,7 +55,7 @@ where T: DFPrimitiveType
 }
 
 // NoNull is only a wrapper needed for specialization
-impl<T> FromIterator<T::Native> for NoNull<DataArrayBase<T>>
+impl<T> FromIterator<T::Native> for NoNull<DataArray<T>>
 where T: DFPrimitiveType
 {
     // We use AlignedVec because it is way faster than Arrows builder. We can do this because we
@@ -65,7 +65,7 @@ where T: DFPrimitiveType
         let iter = iter.into_iter();
         let mut av = AlignedVec::with_capacity_aligned(0);
         av.extend(iter);
-        NoNull::new(DataArrayBase::new_from_aligned_vec("", av))
+        NoNull::new(DataArray::new_from_aligned_vec(av))
     }
 }
 
@@ -153,10 +153,10 @@ impl From<DFBooleanArray> for Vec<Option<bool>> {
     }
 }
 
-impl<'a, T> From<&'a DataArrayBase<T>> for Vec<Option<T::Native>>
+impl<'a, T> From<&'a DataArray<T>> for Vec<Option<T::Native>>
 where T: DFNumericType
 {
-    fn from(ca: &'a DataArrayBase<T>) -> Self {
+    fn from(ca: &'a DataArray<T>) -> Self {
         ca.downcast_iter().collect()
     }
 }

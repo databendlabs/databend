@@ -8,6 +8,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataType;
+use crate::DataValueArithmeticOperator;
 
 /// Determine if a DataType is signed numeric or not
 pub fn is_signed_numeric(dt: &DataType) -> bool {
@@ -183,6 +184,37 @@ pub fn numerical_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Da
             cmp::max(size_of_rhs, size_of_lhs)
         },
     )
+}
+
+#[inline]
+pub fn numerical_arithmetic_coercion(
+    op: &DataValueArithmeticOperator,
+    lhs_type: &DataType,
+    rhs_type: &DataType,
+) -> Result<DataType> {
+    // error on any non-numeric type
+    if !is_numeric(lhs_type) || !is_numeric(rhs_type) {
+        return Result::Err(ErrorCode::BadDataValueType(format!(
+            "DataValue Error: Unsupported ({:?}) {} ({:?})",
+            lhs_type, op, rhs_type
+        )));
+    };
+
+    let has_signed = is_signed_numeric(lhs_type) || is_signed_numeric(rhs_type);
+    let has_float = is_floating(lhs_type) || is_floating(rhs_type);
+    let max_size = cmp::max(numeric_byte_size(lhs_type)?, numeric_byte_size(rhs_type)?);
+
+    match op {
+        DataValueArithmeticOperator::Plus
+        | DataValueArithmeticOperator::Mul
+        | DataValueArithmeticOperator::Modulo => {
+            construct_numeric_type(has_signed, has_float, next_size(max_size))
+        }
+        DataValueArithmeticOperator::Minus => {
+            construct_numeric_type(true, has_float, next_size(max_size))
+        }
+        DataValueArithmeticOperator::Div => Ok(DataType::Float64),
+    }
 }
 
 #[inline]

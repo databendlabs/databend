@@ -8,7 +8,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::BooleanArray;
-use crate::DataArrayRef;
+use crate::Series;
 use crate::DataColumnarValue;
 use crate::DataValue;
 use crate::DataValueLogicOperator;
@@ -21,7 +21,7 @@ impl DataArrayLogic {
         op: DataValueLogicOperator,
         left: &DataColumnarValue,
         right: &DataColumnarValue,
-    ) -> Result<DataArrayRef> {
+    ) -> Result<Series> {
         match (left, right) {
             (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
                 if let DataValueLogicOperator::And = op {
@@ -40,7 +40,7 @@ impl DataArrayLogic {
     }
 
     #[allow(clippy::nonminimal_bool)]
-    fn data_array_negation(val: &DataColumnarValue) -> Result<DataArrayRef> {
+    fn data_array_negation(val: &DataColumnarValue) -> Result<Series> {
         match val {
             DataColumnarValue::Array(array) => {
                 let arr = downcast_array!(array, BooleanArray)?;
@@ -96,7 +96,7 @@ impl DataArrayLogic {
     pub fn data_array_logic_op(
         op: DataValueLogicOperator,
         args: &[DataColumnarValue],
-    ) -> Result<DataArrayRef> {
+    ) -> Result<Series> {
         match op {
             DataValueLogicOperator::Not => Self::data_array_negation(&args[0]),
             _ => Self::data_array_logic_binary(op, &args[0], &args[1]),

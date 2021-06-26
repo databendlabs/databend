@@ -23,7 +23,7 @@ use common_arrow::arrow::array::TimestampSecondArray;
 use common_exception::Result;
 
 use crate::BinaryArray;
-use crate::DataArrayRef;
+use crate::Series;
 use crate::DataArrayScatter;
 use crate::DataColumnarValue;
 use crate::DataValue;
@@ -46,9 +46,9 @@ fn test_scatter_array_data_column() -> Result<()> {
     #[allow(dead_code)]
     struct ArrayTest {
         name: &'static str,
-        array: DataArrayRef,
-        indices: DataArrayRef,
-        expect: Vec<DataArrayRef>,
+        array: Series,
+        indices: Series,
+        expect: Vec<Series>,
         error: &'static str,
     }
 
@@ -960,7 +960,7 @@ fn test_scatter_array_with_constants_indices() -> Result<()> {
         match &result[1] {
             DataColumnarValue::Constant(_, _) => assert!(false, "result[1] must be a DataArray"),
             DataColumnarValue::Array(data) => {
-                let expect: DataArrayRef = Arc::new(Int8Array::from(vec![1, 2, 3]));
+                let expect: Series = Arc::new(Int8Array::from(vec![1, 2, 3]));
                 assert_eq!(data.len(), 3);
                 assert_eq!(data, &expect);
             }

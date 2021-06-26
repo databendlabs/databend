@@ -1,7 +1,5 @@
 //! Implementations of the ArrayApply Trait.
 use std::borrow::Cow;
-use std::convert::TryFrom;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
@@ -10,8 +8,7 @@ use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeStringArray;
 use common_arrow::arrow::array::PrimitiveArray;
 
-use crate::arrays::kernels::*;
-use crate::arrays::DataArrayBase;
+use crate::arrays::DataArray;
 use crate::utils::NoNull;
 use crate::vec::AlignedVec;
 use crate::*;
@@ -41,29 +38,29 @@ macro_rules! apply_enumerate {
 }
 
 pub trait ArrayApplyKernel<A> {
-    /// Apply kernel and return result as a new DataArrayBase.
+    /// Apply kernel and return result as a new DataArray.
     fn apply_kernel<F>(&self, f: F) -> Self
     where F: Fn(&A) -> ArrayRef;
 
     /// Apply a kernel that outputs an array of different type.
-    fn apply_kernel_cast<F, S>(&self, f: F) -> DataArrayBase<S>
+    fn apply_kernel_cast<F, S>(&self, f: F) -> DataArray<S>
     where
         F: Fn(&A) -> ArrayRef,
         S: DFDataType;
 }
 
 pub trait ArrayApply<'a, A, B> {
-    /// Apply a closure elementwise and cast to a Numeric DataArrayBase. This is fastest when the null check branching is more expensive
+    /// Apply a closure elementwise and cast to a Numeric DataArray. This is fastest when the null check branching is more expensive
     /// than the closure application.
     ///
     /// Null values remain null.
-    fn apply_cast_numeric<F, S>(&'a self, f: F) -> DataArrayBase<S>
+    fn apply_cast_numeric<F, S>(&'a self, f: F) -> DataArray<S>
     where
         F: Fn(A) -> S::Native + Copy,
         S: DFNumericType;
 
-    /// Apply a closure on optional values and cast to Numeric DataArrayBase without null values.
-    fn branch_apply_cast_numeric_no_null<F, S>(&'a self, f: F) -> DataArrayBase<S>
+    /// Apply a closure on optional values and cast to Numeric DataArray without null values.
+    fn branch_apply_cast_numeric_no_null<F, S>(&'a self, f: F) -> DataArray<S>
     where
         F: Fn(Option<A>) -> S::Native + Copy,
         S: DFNumericType;
@@ -73,13 +70,6 @@ pub trait ArrayApply<'a, A, B> {
     ///
     /// Null values remain null.
     ///
-    /// # Example
-    ///
-    /// ```
-    /// use DF_core::prelude::*;
-    /// fn double(ca: &UInt32Chunked) -> UInt32Chunked {
-    ///     ca.apply(|v| v * 2)
-    /// }
     /// ```
     fn apply<F>(&'a self, f: F) -> Self
     where F: Fn(A) -> B + Copy;
@@ -93,10 +83,10 @@ pub trait ArrayApply<'a, A, B> {
     where F: Fn((usize, Option<A>)) -> Option<B> + Copy;
 }
 
-impl<'a, T> ArrayApply<'a, T::Native, T::Native> for DataArrayBase<T>
+impl<'a, T> ArrayApply<'a, T::Native, T::Native> for DataArray<T>
 where T: DFNumericType
 {
-    fn apply_cast_numeric<F, S>(&self, f: F) -> DataArrayBase<S>
+    fn apply_cast_numeric<F, S>(&self, f: F) -> DataArray<S>
     where
         F: Fn(T::Native) -> S::Native + Copy,
         S: DFNumericType,
@@ -108,7 +98,7 @@ where T: DFNumericType
         array.into()
     }
 
-    fn branch_apply_cast_numeric_no_null<F, S>(&self, f: F) -> DataArrayBase<S>
+    fn branch_apply_cast_numeric_no_null<F, S>(&self, f: F) -> DataArray<S>
     where
         F: Fn(Option<T::Native>) -> S::Native + Copy,
         S: DFNumericType,
@@ -155,7 +145,7 @@ where T: DFNumericType
 }
 
 impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
-    fn apply_cast_numeric<F, S>(&self, f: F) -> DataArrayBase<S>
+    fn apply_cast_numeric<F, S>(&self, f: F) -> DataArray<S>
     where
         F: Fn(bool) -> S::Native + Copy,
         S: DFNumericType,
@@ -169,7 +159,7 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
         })
     }
 
-    fn branch_apply_cast_numeric_no_null<F, S>(&self, f: F) -> DataArrayBase<S>
+    fn branch_apply_cast_numeric_no_null<F, S>(&self, f: F) -> DataArray<S>
     where
         F: Fn(Option<bool>) -> S::Native + Copy,
         S: DFNumericType,
@@ -196,7 +186,7 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
 }
 
 impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFStringArray {
-    fn apply_cast_numeric<F, S>(&'a self, f: F) -> DataArrayBase<S>
+    fn apply_cast_numeric<F, S>(&'a self, f: F) -> DataArray<S>
     where
         F: Fn(&'a str) -> S::Native + Copy,
         S: DFNumericType,
@@ -212,7 +202,7 @@ impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFStringArray {
         array.into()
     }
 
-    fn branch_apply_cast_numeric_no_null<F, S>(&'a self, f: F) -> DataArrayBase<S>
+    fn branch_apply_cast_numeric_no_null<F, S>(&'a self, f: F) -> DataArray<S>
     where
         F: Fn(Option<&'a str>) -> S::Native + Copy,
         S: DFNumericType,
@@ -248,34 +238,32 @@ impl ArrayApplyKernel<BooleanArray> for DFBooleanArray {
         DFBooleanArray::from(array_ref)
     }
 
-    fn apply_kernel_cast<F, S>(&self, f: F) -> DataArrayBase<S>
+    fn apply_kernel_cast<F, S>(&self, f: F) -> DataArray<S>
     where
         F: Fn(&BooleanArray) -> ArrayRef,
         S: DFDataType,
     {
-        let chunks = self
-            .downcast_iter()
-            .into_iter()
-            .map(|array| f(array))
-            .collect();
-        DataArrayBase::<S>::new_from_chunks(self.name(), chunks)
+        let array = self.downcast_ref();
+        let array_ref = f(array);
+        DataArray::<S>::from(array_ref)
     }
 }
 
-impl<T> ArrayApplyKernel<PrimitiveArray<T>> for DataArrayBase<T>
+impl<T> ArrayApplyKernel<PrimitiveArray<T>> for DataArray<T>
 where T: DFNumericType
 {
     fn apply_kernel<F>(&self, f: F) -> Self
     where F: Fn(&PrimitiveArray<T>) -> ArrayRef {
         self.apply_kernel_cast(f)
     }
-    fn apply_kernel_cast<F, S>(&self, f: F) -> DataArrayBase<S>
+    fn apply_kernel_cast<F, S>(&self, f: F) -> DataArray<S>
     where
         F: Fn(&PrimitiveArray<T>) -> ArrayRef,
         S: DFDataType,
     {
-        let chunks = self.downcast_iter().into_iter().map(f).collect();
-        DataArrayBase::new_from_chunks(self.name(), chunks)
+        let array = self.downcast_ref();
+        let array_ref = f(array);
+        DataArray::<S>::from(array_ref)
     }
 }
 
@@ -285,84 +273,13 @@ impl ArrayApplyKernel<LargeStringArray> for DFStringArray {
         self.apply_kernel_cast(f)
     }
 
-    fn apply_kernel_cast<F, S>(&self, f: F) -> DataArrayBase<S>
+    fn apply_kernel_cast<F, S>(&self, f: F) -> DataArray<S>
     where
         F: Fn(&LargeStringArray) -> ArrayRef,
         S: DFDataType,
     {
-        let chunks = self.downcast_iter().into_iter().map(f).collect();
-        DataArrayBase::new_from_chunks(self.name(), chunks)
-    }
-}
-
-impl<'a> ArrayApply<'a, Series, Series> for ListChunked {
-    fn apply_cast_numeric<F, S>(&self, f: F) -> DataArrayBase<S>
-    where
-        F: Fn(Series) -> S::Native + Copy,
-        S: DFNumericType,
-    {
-        let chunks = self
-            .downcast_iter()
-            .into_iter()
-            .map(|array| {
-                let av: AlignedVec<_> = (0..array.len())
-                    .map(|idx| {
-                        let arrayref = unsafe { array.value_unchecked(idx) };
-                        let series = Series::try_from(("", arrayref)).unwrap();
-                        f(series)
-                    })
-                    .collect();
-                let null_bit_buffer = array.data_ref().null_buffer().cloned();
-                Arc::new(av.into_primitive_array::<S>(null_bit_buffer)) as ArrayRef
-            })
-            .collect();
-        DataArrayBase::new_from_chunks(self.name(), chunks)
-    }
-
-    fn branch_apply_cast_numeric_no_null<F, S>(&self, f: F) -> DataArrayBase<S>
-    where
-        F: Fn(Option<Series>) -> S::Native + Copy,
-        S: DFNumericType,
-    {
-        let chunks = self
-            .downcast_iter()
-            .into_iter()
-            .map(|array| {
-                let av: AlignedVec<_> = (0..array.len())
-                    .map(|idx| {
-                        let v = if array.is_valid(idx) {
-                            let arrayref = unsafe { array.value_unchecked(idx) };
-                            let series = Series::try_from(("", arrayref)).unwrap();
-                            Some(series)
-                        } else {
-                            None
-                        };
-
-                        f(v)
-                    })
-                    .collect();
-                let null_bit_buffer = array.data_ref().null_buffer().cloned();
-                Arc::new(av.into_primitive_array::<S>(null_bit_buffer)) as ArrayRef
-            })
-            .collect();
-        DataArrayBase::new_from_chunks(self.name(), chunks)
-    }
-
-    /// Apply a closure `F` elementwise.
-    fn apply<F>(&'a self, f: F) -> Self
-    where F: Fn(Series) -> Series + Copy {
-        apply!(self, f)
-    }
-
-    /// Apply a closure elementwise. The closure gets the index of the element as first argument.
-    fn apply_with_idx<F>(&'a self, f: F) -> Self
-    where F: Fn((usize, Series)) -> Series + Copy {
-        apply_enumerate!(self, f)
-    }
-
-    /// Apply a closure elementwise. The closure gets the index of the element as first argument.
-    fn apply_with_idx_on_opt<F>(&'a self, f: F) -> Self
-    where F: Fn((usize, Option<Series>)) -> Option<Series> + Copy {
-        self.into_iter().enumerate().map(f).collect()
+        let array = self.downcast_ref();
+        let array_ref = f(array);
+        DataArray::<S>::from(array_ref)
     }
 }

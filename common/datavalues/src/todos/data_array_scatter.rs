@@ -50,9 +50,9 @@ use common_arrow::arrow::datatypes::UInt8Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::DataArrayRef;
 use crate::DataColumnarValue;
 use crate::DataValue;
+use crate::Series;
 
 pub struct DataArrayScatter;
 
@@ -130,11 +130,7 @@ impl DataArrayScatter {
         scatter_data(v)
     }
 
-    fn scatter_data(
-        data: &DataArrayRef,
-        indices: &[u64],
-        nums: usize,
-    ) -> Result<Vec<DataColumnarValue>> {
+    fn scatter_data(data: &Series, indices: &[u64], nums: usize) -> Result<Vec<DataColumnarValue>> {
         match data.data_type() {
             DataType::Int8 => Self::scatter_primitive_data::<Int8Type>(data, indices, nums),
             DataType::Int16 => Self::scatter_primitive_data::<Int16Type>(data, indices, nums),
@@ -203,7 +199,7 @@ impl DataArrayScatter {
 
     #[inline]
     fn scatter_primitive_data<T: ArrowPrimitiveType>(
-        data: &DataArrayRef,
+        data: &Series,
         indices: &[u64],
         scattered_size: usize,
     ) -> Result<Vec<DataColumnarValue>> {
@@ -267,7 +263,7 @@ impl DataArrayScatter {
     }
 
     fn scatter_binary_data(
-        data: &DataArrayRef,
+        data: &Series,
         indices: &[u64],
         scattered_size: usize,
     ) -> Result<Vec<DataColumnarValue>> {
@@ -300,7 +296,7 @@ impl DataArrayScatter {
     }
 
     fn scatter_large_binary_data(
-        data: &DataArrayRef,
+        data: &Series,
         indices: &[u64],
         scattered_size: usize,
     ) -> Result<Vec<DataColumnarValue>> {
@@ -337,7 +333,7 @@ impl DataArrayScatter {
     }
 
     fn scatter_string_data<T: StringOffsetSizeTrait>(
-        data: &DataArrayRef,
+        data: &Series,
         indices: &[u64],
         scattered_size: usize,
     ) -> Result<Vec<DataColumnarValue>> {
@@ -422,7 +418,7 @@ impl DataArrayScatter {
     }
 
     #[inline]
-    fn indices_values(indices: &DataArrayRef) -> Result<&[u64]> {
+    fn indices_values(indices: &Series) -> Result<&[u64]> {
         Ok(downcast_array!(indices, UInt64Array)?.values())
     }
 }

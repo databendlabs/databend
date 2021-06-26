@@ -12,8 +12,8 @@ use unsafe_unwrap::UnsafeUnwrap;
 
 use super::take_random::TakeRandom;
 use super::take_random::TakeRandomUtf8;
-use crate::arrays::DataArrayBase;
-use crate::arrays::DataArrayRef;
+use crate::arrays::DataArray;
+use crate::series::Series;
 use crate::DFBooleanArray;
 use crate::DFListArray;
 use crate::DFNumericType;
@@ -21,12 +21,9 @@ use crate::DFStringArray;
 
 macro_rules! impl_take_random_get {
     ($self:ident, $index:ident, $array_type:ty) => {{
-        let array = $self.array;
-        // Safety:
-        // caller should give right array type
-        let arr = &*(array as *const ArrayRef as *const Arc<$array_type>);
         // Safety:
         // index should be in bounds
+        let arr = $self.downcast_ref();
         if arr.is_valid($index) {
             Some(arr.value_unchecked($index))
         } else {
@@ -37,13 +34,12 @@ macro_rules! impl_take_random_get {
 
 macro_rules! impl_take_random_get_unchecked {
     ($self:ident, $index:ident, $array_type:ty) => {{
-        let array = $self.array;
-        let arr = &*(array as *const ArrayRef as *const Arc<$array_type>);
+        let arr = $self.downcast_ref();
         arr.value_unchecked($index)
     }};
 }
 
-impl<T> TakeRandom for DataArrayBase<T>
+impl<T> TakeRandom for DataArray<T>
 where T: DFNumericType
 {
     type Item = T::Native;
@@ -59,7 +55,7 @@ where T: DFNumericType
     }
 }
 
-impl<'a, T> TakeRandom for &'a DataArrayBase<T>
+impl<'a, T> TakeRandom for &'a DataArray<T>
 where T: DFNumericType
 {
     type Item = T::Native;
@@ -103,12 +99,7 @@ impl<'a> TakeRandom for &'a DFStringArray {
 
     #[inline]
     unsafe fn get_unchecked(&self, index: usize) -> Self::Item {
-        let (chunk_idx, idx) = self.index_to_chunked_index(index);
-        let arr = {
-            let arr = self.chunks.get_unchecked(chunk_idx);
-            &*(arr as *const ArrayRef as *const Arc<LargeStringArray>)
-        };
-        arr.value_unchecked(idx)
+        impl_take_random_get_unchecked!(self, index, LargeStringArray)
     }
 }
 
@@ -126,38 +117,22 @@ impl<'a> TakeRandomUtf8 for &'a DFStringArray {
 
     #[inline]
     unsafe fn get_unchecked(self, index: usize) -> Self::Item {
-        let (chunk_idx, idx) = self.index_to_chunked_index(index);
-        let arr = {
-            let arr = self.chunks.get_unchecked(chunk_idx);
-            &*(arr as *const ArrayRef as *const Arc<LargeStringArray>)
-        };
-        arr.value_unchecked(idx)
+        impl_take_random_get_unchecked!(self, index, LargeStringArray)
     }
 }
 
 impl TakeRandom for DFListArray {
-    type Item = DataArrayRef;
+    type Item = ArrayRef;
 
     #[inline]
     fn get(&self, index: usize) -> Option<Self::Item> {
         // Safety:
         // Out of bounds is checked and downcast is of correct type
-        let opt_arr = unsafe { impl_take_random_get!(self, index, LargeListArray) };
-        opt_arr.map(|arr| {
-            let s = DataArrayRef::try_from(arr);
-            s.unwrap()
-        })
+        unsafe { impl_take_random_get!(self, index, LargeListArray) }
     }
 
     #[inline]
     unsafe fn get_unchecked(&self, index: usize) -> Self::Item {
-        let (chunk_idx, idx) = self.index_to_chunked_index(index);
-        let arr = {
-            let arr = self.chunks.get_unchecked(chunk_idx);
-            &*(arr as *const ArrayRef as *const Arc<LargeListArray>)
-        };
-        let arr = arr.value_unchecked(idx);
-        let s = DataArrayRef::try_from(arr);
-        s.unwrap()
+        impl_take_random_get_unchecked!(self, index, LargeListArray)
     }
 }

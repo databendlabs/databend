@@ -2,6 +2,5 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-mod data_column;
-
-pub use data_column::*;
+use super::Series;
+use crate::DataType;

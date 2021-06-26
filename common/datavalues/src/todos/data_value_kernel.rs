@@ -7,11 +7,11 @@ use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::DataArrayRef;
 use crate::DataColumnarValue;
 use crate::DataType;
 use crate::DataValue;
 use crate::IGetDataType;
+use crate::Series;
 
 impl DataValue {
     /// Appends a sequence of [u8] bytes for the value in `col[row]` to
@@ -31,7 +31,7 @@ impl DataValue {
     ) -> Result<()> {
         let (col, row) = match col {
             DataColumnarValue::Array(array) => (Ok(array.clone()), row),
-            DataColumnarValue::Constant(v, _) => (v.to_array_with_size(1), 0),
+            DataColumnarValue::Constant(v, _) => (v.to_series_with_size(1), 0),
         };
         let col = col?;
 
@@ -126,7 +126,7 @@ impl DataValue {
     }
 
     /// Convert data value vectors to data array.
-    pub fn try_into_data_array(values: &[DataValue]) -> Result<DataArrayRef> {
+    pub fn try_into_data_array(values: &[DataValue]) -> Result<Series> {
         match values[0].data_type() {
             DataType::Int8 => try_build_array!(Int8Builder, Int8, values),
             DataType::Int16 => try_build_array!(Int16Builder, Int16, values),
@@ -156,7 +156,7 @@ impl DataValue {
 
     #[inline]
     /// Converts a value in `array` at `index` into a ScalarValue
-    pub fn try_from_array(array: &DataArrayRef, index: usize) -> Result<DataValue> {
+    pub fn try_from_array(array: &Series, index: usize) -> Result<DataValue> {
         match array.get_data_type() {
             DataType::Boolean => {
                 typed_cast_from_array_to_data_value!(array, index, BooleanArray, Boolean)

@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
+use common_datavalues::series::Series;
+use common_datavalues::series::SeriesFrom;
 use common_datavalues::*;
 
 use crate::*;
@@ -17,16 +17,16 @@ fn test_data_block_concat() -> anyhow::Result<()> {
 
     let blocks = vec![
         DataBlock::create_by_array(schema.clone(), vec![
-            Arc::new(Int64Array::from(vec![1, 2, 3])),
-            Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
+            Series::new(vec![1i64, 2, 3]),
+            Series::new(vec!["b1", "b2", "b3"]),
         ]),
         DataBlock::create_by_array(schema.clone(), vec![
-            Arc::new(Int64Array::from(vec![4, 5, 6])),
-            Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
+            Series::new(vec![4, 5, 6]),
+            Series::new(vec!["b1", "b2", "b3"]),
         ]),
         DataBlock::create_by_array(schema.clone(), vec![
-            Arc::new(Int64Array::from(vec![7, 8, 9])),
-            Arc::new(StringArray::from(vec!["b1", "b2", "b3"])),
+            Series::new(vec![7, 8, 9]),
+            Series::new(vec!["b1", "b2", "b3"]),
         ]),
     ];
 

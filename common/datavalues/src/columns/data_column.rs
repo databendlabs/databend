@@ -4,14 +4,14 @@
 
 use common_exception::Result;
 
-use crate::arrays::DataArrayRef;
+use crate::series::Series;
 use crate::DataType;
 use crate::DataValue;
 
 #[derive(Clone, Debug)]
 pub enum DataColumn {
     // Array of values.
-    Array(DataArrayRef),
+    Array(Series),
     // A Single value.
     Constant(DataValue, usize),
 }
@@ -19,18 +19,25 @@ pub enum DataColumn {
 impl DataColumn {
     #[inline]
     pub fn data_type(&self) -> DataType {
-        let x = match self {
-            DataColumn::Array(v) => v.data_type(),
+        match self {
+            DataColumn::Array(array) => array.data_type(),
             DataColumn::Constant(v, _) => v.data_type(),
-        };
-        x
+        }
     }
 
     #[inline]
-    pub fn to_array(&self) -> Result<DataArrayRef> {
+    pub fn to_array(&self) -> Result<Series> {
         match self {
             DataColumn::Array(array) => Ok(array.clone()),
-            DataColumn::Constant(scalar, size) => scalar.to_array_with_size(*size),
+            DataColumn::Constant(scalar, size) => scalar.to_series_with_size(*size),
+        }
+    }
+
+    #[inline]
+    pub fn to_minal_array(&self) -> Result<Series> {
+        match self {
+            DataColumn::Array(array) => Ok(array.clone()),
+            DataColumn::Constant(scalar, _) => scalar.to_series_with_size(1),
         }
     }
 
@@ -55,7 +62,7 @@ impl DataColumn {
         match self {
             DataColumn::Array(array) => array.get_array_memory_size(),
             DataColumn::Constant(scalar, size) => scalar
-                .to_array_with_size(*size)
+                .to_series_with_size(*size)
                 .map(|arr| arr.get_array_memory_size())
                 .unwrap_or(0),
         }
@@ -82,7 +89,7 @@ impl DataColumn {
         match self {
             DataColumn::Array(array) => Ok(DataColumn::Array(array.cast_with_type(data_type)?)),
             DataColumn::Constant(scalar, size) => {
-                let array = scalar.to_array_with_size(1)?;
+                let array = scalar.to_series_with_size(1)?;
                 let array = array.cast_with_type(data_type)?;
 
                 let value = array.try_get(0)?;
@@ -104,7 +111,7 @@ impl DataColumn {
     }
 
     #[inline]
-    pub fn try_get(&self, index: usize) -> Result<DataValue> {
+    pub fn get(&self, index: usize) -> Result<DataValue> {
         match self {
             DataColumn::Array(array) => Ok(array.try_get(index)?),
             DataColumn::Constant(scalar, _) => Ok(scalar.clone()),
@@ -112,15 +119,8 @@ impl DataColumn {
     }
 }
 
-// static methods
-impl DataColumn {
-    fn to_array_with_size(value: DataValue, size: usize) -> Result<DataArrayRef> {
-        todo!()
-    }
-}
-
-impl From<DataArrayRef> for DataColumn {
-    fn from(array: DataArrayRef) -> Self {
+impl From<Series> for DataColumn {
+    fn from(array: Series) -> Self {
         DataColumn::Array(array)
     }
 }

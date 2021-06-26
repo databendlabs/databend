@@ -13,7 +13,7 @@ fn test_data_value_kernel_concat_row_key() -> anyhow::Result<()> {
     #[allow(dead_code)]
     struct ArrayTest {
         name: &'static str,
-        args: Vec<DataArrayRef>,
+        args: Vec<Series>,
         expect: Vec<&'static str>,
         error: Vec<&'static str>,
     }

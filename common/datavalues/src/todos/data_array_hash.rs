@@ -45,9 +45,9 @@ use common_arrow::arrow::datatypes::UInt8Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::DataArrayRef;
 use crate::DataColumnarValue;
 use crate::DataValue;
+use crate::Series;
 
 pub trait FuseDataHasher {
     fn hash_bool(v: &bool) -> u64;
@@ -146,7 +146,7 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
         }
     }
 
-    fn dispatch_array(input: &DataArrayRef) -> Result<DataArrayRef> {
+    fn dispatch_array(input: &Series) -> Result<Series> {
         match input.data_type() {
             DataType::Int8 => Self::dispatch_primitive_array(input, Int8Type {}, Hasher::hash_i8),
             DataType::Int16 => {
@@ -233,10 +233,10 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
     }
 
     fn dispatch_primitive_array<T: ArrowPrimitiveType, F: Fn(&T::Native) -> u64>(
-        input: &DataArrayRef,
+        input: &Series,
         _: T,
         fun: F,
-    ) -> Result<DataArrayRef> {
+    ) -> Result<Series> {
         let primitive_data = input
             .as_any()
             .downcast_ref::<PrimitiveArray<T>>()
@@ -264,9 +264,7 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
         Ok(Arc::new(hash_builder.finish()))
     }
 
-    fn dispatch_string_array<T: StringOffsetSizeTrait>(
-        data: &DataArrayRef,
-    ) -> Result<DataArrayRef> {
+    fn dispatch_string_array<T: StringOffsetSizeTrait>(data: &Series) -> Result<Series> {
         let binary_data = data
             .as_any()
             .downcast_ref::<GenericStringArray<T>>()
@@ -296,7 +294,7 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
         Ok(Arc::new(hash_builder.finish()))
     }
 
-    fn dispatch_binary_array(data: &DataArrayRef) -> Result<DataArrayRef> {
+    fn dispatch_binary_array(data: &Series) -> Result<Series> {
         let binary_data = data.as_any().downcast_ref::<BinaryArray>().ok_or_else(|| {
             ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Cannot downcast_array from datatype:{:?} item to:{}",
@@ -323,7 +321,7 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
         Ok(Arc::new(hash_builder.finish()))
     }
 
-    fn dispatch_large_binary_array(data: &DataArrayRef) -> Result<DataArrayRef> {
+    fn dispatch_large_binary_array(data: &Series) -> Result<Series> {
         let binary_data = data
             .as_any()
             .downcast_ref::<LargeBinaryArray>()

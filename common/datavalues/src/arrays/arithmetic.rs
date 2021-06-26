@@ -1,4 +1,4 @@
-//! Implementations of arithmetic operations on DataArrayBase's.
+//! Implementations of arithmetic operations on DataArray's.
 use std::ops::Add;
 use std::ops::Div;
 use std::ops::Mul;
@@ -10,7 +10,7 @@ use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::compute;
 use common_arrow::arrow::compute::divide_scalar;
-use common_exception::ErrorCode;
+use common_arrow::arrow::error::ArrowError;
 use common_exception::Result;
 use num::Num;
 use num::NumCast;
@@ -19,7 +19,7 @@ use num::ToPrimitive;
 use num::Zero;
 
 use crate::arrays::ops::*;
-use crate::arrays::DataArrayBase;
+use crate::arrays::DataArray;
 use crate::DFBooleanArray;
 use crate::DFFloat32Array;
 use crate::DFFloat64Array;
@@ -35,7 +35,7 @@ macro_rules! apply_operand_on_array_by_iter {
             {
                 match ($self.null_count(), $rhs.null_count()) {
                     (0, 0) => {
-                        let a: NoNull<DataArrayBase<_>> = $self
+                        let a: NoNull<DataArray<_>> = $self
                         .into_no_null_iter()
                         .zip($rhs.into_no_null_iter())
                         .map(|(left, right)| left $operand right)
@@ -74,11 +74,11 @@ macro_rules! apply_operand_on_array_by_iter {
 }
 
 fn arithmetic_helper<T, Kernel, F>(
-    lhs: &DataArrayBase<T>,
-    rhs: &DataArrayBase<T>,
+    lhs: &DataArray<T>,
+    rhs: &DataArray<T>,
     kernel: Kernel,
     operation: F,
-) -> DataArrayBase<T>
+) -> DataArray<T>
 where
     T: DFNumericType,
     T::Native: Add<Output = T::Native>
@@ -86,34 +86,42 @@ where
         + Mul<Output = T::Native>
         + Div<Output = T::Native>
         + num::Zero,
-    Kernel: Fn(&PrimitiveArray<T>, &PrimitiveArray<T>) -> Result<PrimitiveArray<T>>,
+    Kernel: Fn(
+        &PrimitiveArray<T>,
+        &PrimitiveArray<T>,
+    ) -> std::result::Result<PrimitiveArray<T>, ArrowError>,
     F: Fn(T::Native, T::Native) -> T::Native,
 {
-    let mut ca = match (lhs.len(), rhs.len()) {
-        (a, b) if a == b => Arc::new(kernel(lhs.downcast_ref(), rhs.downcast_ref())).into(),
+    let ca = match (lhs.len(), rhs.len()) {
+        (a, b) if a == b => {
+            let array = Arc::new(kernel(lhs.downcast_ref(), rhs.downcast_ref()).expect("output"))
+                as ArrayRef;
+
+            array.into()
+        }
         // broadcast right path
         (_, 1) => {
-            let opt_rhs = rhs.get(0)?;
+            let opt_rhs = rhs.get(0);
             match opt_rhs {
-                None => DataArrayBase::full_null(lhs.name(), lhs.len()),
+                None => DataArray::full_null(lhs.len()),
                 Some(rhs) => lhs.apply(|lhs| operation(lhs, rhs)),
             }
         }
         (1, _) => {
             let opt_lhs = lhs.get(0);
             match opt_lhs {
-                None => DataArrayBase::full_null(lhs.name(), rhs.len()),
+                None => DataArray::full_null(rhs.len()),
                 Some(lhs) => rhs.apply(|rhs| operation(lhs, rhs)),
             }
         }
-        _ => panic!("Cannot apply operation on arrays of different lengths"),
+        _ => unreachable!(),
     };
     ca
 }
 
-// Operands on DataArrayBase & DataArrayBase
+// Operands on DataArray & DataArray
 
-impl<T> Add for &DataArrayBase<T>
+impl<T> Add for &DataArray<T>
 where
     T: DFNumericType,
     T::Native: Add<Output = T::Native>
@@ -122,14 +130,14 @@ where
         + Div<Output = T::Native>
         + num::Zero,
 {
-    type Output = DataArrayBase<T>;
+    type Output = DataArray<T>;
 
     fn add(self, rhs: Self) -> Self::Output {
         arithmetic_helper(self, rhs, compute::add, |lhs, rhs| lhs + rhs)
     }
 }
 
-impl<T> Div for &DataArrayBase<T>
+impl<T> Div for &DataArray<T>
 where
     T: DFNumericType,
     T::Native: Add<Output = T::Native>
@@ -140,14 +148,14 @@ where
         + num::Zero
         + num::One,
 {
-    type Output = DataArrayBase<T>;
+    type Output = DataArray<T>;
 
     fn div(self, rhs: Self) -> Self::Output {
         arithmetic_helper(self, rhs, compute::divide, |lhs, rhs| lhs / rhs)
     }
 }
 
-impl<T> Mul for &DataArrayBase<T>
+impl<T> Mul for &DataArray<T>
 where
     T: DFNumericType,
     T::Native: Add<Output = T::Native>
@@ -157,14 +165,14 @@ where
         + Rem<Output = T::Native>
         + num::Zero,
 {
-    type Output = DataArrayBase<T>;
+    type Output = DataArray<T>;
 
     fn mul(self, rhs: Self) -> Self::Output {
         arithmetic_helper(self, rhs, compute::multiply, |lhs, rhs| lhs * rhs)
     }
 }
 
-impl<T> Rem for &DataArrayBase<T>
+impl<T> Rem for &DataArray<T>
 where
     T: DFNumericType,
     T::Native: Add<Output = T::Native>
@@ -175,14 +183,14 @@ where
         + num::Zero
         + num::One,
 {
-    type Output = DataArrayBase<T>;
+    type Output = DataArray<T>;
 
     fn rem(self, rhs: Self) -> Self::Output {
         arithmetic_helper(self, rhs, compute::modulus, |lhs, rhs| lhs % rhs)
     }
 }
 
-impl<T> Sub for &DataArrayBase<T>
+impl<T> Sub for &DataArray<T>
 where
     T: DFNumericType,
     T::Native: Add<Output = T::Native>
@@ -192,14 +200,14 @@ where
         + Rem<Output = T::Native>
         + num::Zero,
 {
-    type Output = DataArrayBase<T>;
+    type Output = DataArray<T>;
 
     fn sub(self, rhs: Self) -> Self::Output {
         arithmetic_helper(self, rhs, compute::subtract, |lhs, rhs| lhs - rhs)
     }
 }
 
-impl<T> Add for DataArrayBase<T>
+impl<T> Add for DataArray<T>
 where
     T: DFNumericType,
     T::Native: Add<Output = T::Native>
@@ -216,7 +224,7 @@ where
     }
 }
 
-impl<T> Div for DataArrayBase<T>
+impl<T> Div for DataArray<T>
 where
     T: DFNumericType,
     T::Native: Add<Output = T::Native>
@@ -234,7 +242,7 @@ where
     }
 }
 
-impl<T> Mul for DataArrayBase<T>
+impl<T> Mul for DataArray<T>
 where
     T: DFNumericType,
     T::Native: Add<Output = T::Native>
@@ -251,7 +259,7 @@ where
     }
 }
 
-impl<T> Sub for DataArrayBase<T>
+impl<T> Sub for DataArray<T>
 where
     T: DFNumericType,
     T::Native: Add<Output = T::Native>
@@ -268,7 +276,7 @@ where
     }
 }
 
-impl<T> Rem for DataArrayBase<T>
+impl<T> Rem for DataArray<T>
 where
     T: DFNumericType,
     T::Native: Add<Output = T::Native>
@@ -279,23 +287,23 @@ where
         + num::Zero
         + num::One,
 {
-    type Output = DataArrayBase<T>;
+    type Output = DataArray<T>;
 
     fn rem(self, rhs: Self) -> Self::Output {
         (&self).rem(&rhs)
     }
 }
 
-// Operands on DataArrayBase & Num
+// Operands on DataArray & Num
 
-impl<T, N> Add<N> for &DataArrayBase<T>
+impl<T, N> Add<N> for &DataArray<T>
 where
     T: DFNumericType,
     T::Native: NumCast,
     N: Num + ToPrimitive,
     T::Native: Add<Output = T::Native>,
 {
-    type Output = DataArrayBase<T>;
+    type Output = DataArray<T>;
 
     fn add(self, rhs: N) -> Self::Output {
         let adder: T::Native = NumCast::from(rhs).unwrap();
@@ -303,14 +311,14 @@ where
     }
 }
 
-impl<T, N> Sub<N> for &DataArrayBase<T>
+impl<T, N> Sub<N> for &DataArray<T>
 where
     T: DFNumericType,
     T::Native: NumCast,
     N: Num + ToPrimitive,
     T::Native: Sub<Output = T::Native>,
 {
-    type Output = DataArrayBase<T>;
+    type Output = DataArray<T>;
 
     fn sub(self, rhs: N) -> Self::Output {
         let subber: T::Native = NumCast::from(rhs).unwrap();
@@ -318,7 +326,7 @@ where
     }
 }
 
-impl<T, N> Div<N> for &DataArrayBase<T>
+impl<T, N> Div<N> for &DataArray<T>
 where
     T: DFNumericType,
     T::Native: NumCast
@@ -329,7 +337,7 @@ where
         + Sub<Output = T::Native>,
     N: Num + ToPrimitive,
 {
-    type Output = DataArrayBase<T>;
+    type Output = DataArray<T>;
 
     fn div(self, rhs: N) -> Self::Output {
         let rhs: T::Native = NumCast::from(rhs).expect("could not cast");
@@ -337,14 +345,14 @@ where
     }
 }
 
-impl<T, N> Mul<N> for &DataArrayBase<T>
+impl<T, N> Mul<N> for &DataArray<T>
 where
     T: DFNumericType,
     T::Native: NumCast,
     N: Num + ToPrimitive,
     T::Native: Mul<Output = T::Native>,
 {
-    type Output = DataArrayBase<T>;
+    type Output = DataArray<T>;
 
     fn mul(self, rhs: N) -> Self::Output {
         let multiplier: T::Native = NumCast::from(rhs).unwrap();
@@ -352,7 +360,7 @@ where
     }
 }
 
-impl<T, N> Rem<N> for &DataArrayBase<T>
+impl<T, N> Rem<N> for &DataArray<T>
 where
     T: DFNumericType,
     T::Native: NumCast,
@@ -360,7 +368,7 @@ where
     T::Native:
         Div<Output = T::Native> + One + Zero + Rem<Output = T::Native> + Sub<Output = T::Native>,
 {
-    type Output = DataArrayBase<T>;
+    type Output = DataArray<T>;
 
     fn rem(self, rhs: N) -> Self::Output {
         let rhs: T::Native = NumCast::from(rhs).expect("could not cast");
@@ -368,35 +376,35 @@ where
     }
 }
 
-impl<T, N> Add<N> for DataArrayBase<T>
+impl<T, N> Add<N> for DataArray<T>
 where
     T: DFNumericType,
     T::Native: NumCast,
     N: Num + ToPrimitive,
     T::Native: Add<Output = T::Native>,
 {
-    type Output = DataArrayBase<T>;
+    type Output = DataArray<T>;
 
     fn add(self, rhs: N) -> Self::Output {
         (&self).add(rhs)
     }
 }
 
-impl<T, N> Sub<N> for DataArrayBase<T>
+impl<T, N> Sub<N> for DataArray<T>
 where
     T: DFNumericType,
     T::Native: NumCast,
     N: Num + ToPrimitive,
     T::Native: Sub<Output = T::Native>,
 {
-    type Output = DataArrayBase<T>;
+    type Output = DataArray<T>;
 
     fn sub(self, rhs: N) -> Self::Output {
         (&self).sub(rhs)
     }
 }
 
-impl<T, N> Div<N> for DataArrayBase<T>
+impl<T, N> Div<N> for DataArray<T>
 where
     T: DFNumericType,
     T::Native: NumCast
@@ -407,28 +415,28 @@ where
         + Rem<Output = T::Native>,
     N: Num + ToPrimitive,
 {
-    type Output = DataArrayBase<T>;
+    type Output = DataArray<T>;
 
     fn div(self, rhs: N) -> Self::Output {
         (&self).div(rhs)
     }
 }
 
-impl<T, N> Mul<N> for DataArrayBase<T>
+impl<T, N> Mul<N> for DataArray<T>
 where
     T: DFNumericType,
     T::Native: NumCast,
     N: Num + ToPrimitive,
     T::Native: Mul<Output = T::Native>,
 {
-    type Output = DataArrayBase<T>;
+    type Output = DataArray<T>;
 
     fn mul(self, rhs: N) -> Self::Output {
         (&self).mul(rhs)
     }
 }
 
-impl<T, N> Rem<N> for DataArrayBase<T>
+impl<T, N> Rem<N> for DataArray<T>
 where
     T: DFNumericType,
     T::Native: NumCast,
@@ -436,7 +444,7 @@ where
     T::Native:
         Div<Output = T::Native> + One + Zero + Rem<Output = T::Native> + Sub<Output = T::Native>,
 {
-    type Output = DataArrayBase<T>;
+    type Output = DataArray<T>;
 
     fn rem(self, rhs: N) -> Self::Output {
         (&self).rem(rhs)
@@ -460,7 +468,7 @@ impl Add for &DFStringArray {
             let rhs = rhs.get(0);
             return match rhs {
                 Some(rhs) => self.add(rhs),
-                None => DFStringArray::full_null(self.name(), self.len()),
+                None => DFStringArray::full_null(self.len()),
             };
         }
 
@@ -509,10 +517,10 @@ pub trait Pow {
     }
 }
 
-impl<T> Pow for DataArrayBase<T>
+impl<T> Pow for DataArray<T>
 where
     T: DFNumericType,
-    DataArrayBase<T>: ArrayCast,
+    DataArray<T>: ArrayCast,
 {
     fn pow_f32(&self, exp: f32) -> DFFloat32Array {
         self.cast::<Float32Type>()

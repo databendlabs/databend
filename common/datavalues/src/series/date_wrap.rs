@@ -6,14 +6,16 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::datatypes::IntervalUnit;
 use common_exception::Result;
 
-use crate::arrays::ops::*;
 use crate::arrays::*;
+use crate::series::wrap::SeriesWrap;
+use crate::series::*;
 use crate::*;
 
-impl<T> DataArrayBase<T> {
+impl<T> DataArray<T> {
     /// get the physical memory type of a date type
     fn physical_type(&self) -> DataType {
         match self.data_type() {
@@ -31,12 +33,12 @@ macro_rules! physical_dispatch {
     ($s: expr, $method: ident, $($args:expr),*) => {{
         let data_type = $s.data_type();
         let phys_type = $s.physical_type();
-        let s = $s.cast_with_data_type(&phys_type).unwrap();
+        let s = $s.cast_with_type(&phys_type).unwrap();
         let s = s.$method($($args),*);
 
         // if the type is unchanged we return the original type
         if s.data_type() == &phys_type {
-            s.cast_with_data_type(data_type).unwrap()
+            s.cast_with_type(data_type).unwrap()
         }
         // else the change of type is part of the operation.
         else {
@@ -49,12 +51,12 @@ macro_rules! try_physical_dispatch {
     ($s: expr, $method: ident, $($args:expr),*) => {{
         let data_type = $s.data_type();
         let phys_type = $s.physical_type();
-        let s = $s.cast_with_data_type(&phys_type).unwrap();
+        let s = $s.cast_with_type(&phys_type).unwrap();
         let s = s.$method($($args),*)?;
 
         // if the type is unchanged we return the original type
-        if s.data_type() == &phys_type {
-            s.cast_with_data_type(data_type)
+        if s.data_type() == phys_type {
+            s.cast_with_type(&data_type)
         }
         // else the change of type is part of the operation.
         else {
@@ -67,12 +69,12 @@ macro_rules! opt_physical_dispatch {
     ($s: expr, $method: ident, $($args:expr),*) => {{
         let data_type = $s.data_type();
         let phys_type = $s.physical_type();
-        let s = $s.cast_with_data_type(&phys_type).unwrap();
+        let s = $s.cast_with_type(&phys_type).unwrap();
         let s = s.$method($($args),*)?;
 
         // if the type is unchanged we return the original type
         if s.data_type() == &phys_type {
-            Some(s.cast_with_data_type(data_type).unwrap())
+            Some(s.cast_with_type(data_type).unwrap())
         }
         // else the change of type is part of the operation.
         else {
@@ -85,20 +87,20 @@ macro_rules! opt_physical_dispatch {
 macro_rules! cast_and_apply {
     ($s: expr, $method: ident, $($args:expr),*) => {{
         let phys_type = $s.physical_type();
-        let s = $s.cast_with_data_type(&phys_type).unwrap();
+        let s = $s.cast_with_type(&phys_type).unwrap();
         s.$method($($args),*)
     }}
 }
 
 macro_rules! impl_dyn_arrays {
     ($da: ident) => {
-        impl IntoDataArray for $da {
-            fn into_array(self) -> DataArrayRef {
-                Arc::new(DataArrayWrap(self))
+        impl IntoSeries for $da {
+            fn into_series(self) -> Series {
+                Series(Arc::new(SeriesWrap(self)))
             }
         }
 
-        impl Debug for DataArrayWrap<$da> {
+        impl Debug for SeriesWrap<$da> {
             fn fmt(&self, f: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
                 write!(
                     f,
@@ -109,7 +111,7 @@ macro_rules! impl_dyn_arrays {
             }
         }
 
-        impl DataArray for DataArrayWrap<$da> {
+        impl SeriesTrait for SeriesWrap<$da> {
             fn data_type(&self) -> DataType {
                 self.0.data_type()
             }
@@ -121,20 +123,44 @@ macro_rules! impl_dyn_arrays {
                 self.0.is_empty()
             }
 
+            fn is_null(&self, row: usize) -> bool {
+                self.0.is_null(row)
+            }
+
             fn get_array_memory_size(&self) -> usize {
                 self.0.get_array_memory_size()
             }
 
-            fn slice(&self, offset: usize, length: usize) -> DataArrayRef {
-                self.0.slice(offset, length).into_array()
+            fn get_array_ref(&self) -> ArrayRef {
+                self.0.get_array_ref()
             }
 
-            fn cast_with_type(&self, data_type: &DataType) -> Result<DataArrayRef> {
+            fn slice(&self, offset: usize, length: usize) -> Series {
+                self.0.slice(offset, length).into_series()
+            }
+
+            fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
                 ArrayCast::cast_with_type(&self.0, data_type)
             }
 
             fn try_get(&self, index: usize) -> Result<DataValue> {
                 unsafe { self.0.try_get(index) }
+            }
+
+            fn subtract(&self, rhs: &Series) -> Result<Series> {
+                try_physical_dispatch!(self, subtract, rhs)
+            }
+            fn add_to(&self, rhs: &Series) -> Result<Series> {
+                try_physical_dispatch!(self, add_to, rhs)
+            }
+            fn multiply(&self, rhs: &Series) -> Result<Series> {
+                try_physical_dispatch!(self, multiply, rhs)
+            }
+            fn divide(&self, rhs: &Series) -> Result<Series> {
+                try_physical_dispatch!(self, divide, rhs)
+            }
+            fn remainder(&self, rhs: &Series) -> Result<Series> {
+                try_physical_dispatch!(self, remainder, rhs)
             }
         }
     };

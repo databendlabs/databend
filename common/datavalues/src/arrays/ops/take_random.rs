@@ -7,8 +7,8 @@ use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::array::UInt32Array;
 use unsafe_unwrap::UnsafeUnwrap;
 
-use crate::arrays::DataArrayBase;
-use crate::arrays::DataArrayWrap;
+use crate::arrays::DataArray;
+use crate::series::SeriesWrap;
 use crate::DFNumericType;
 use crate::DFStringArray;
 
@@ -64,12 +64,6 @@ pub type Dummy<T> = std::iter::Once<T>;
 pub type TakeIdxIter<'a, I> = TakeIdx<'a, I, Dummy<Option<usize>>>;
 pub type TakeIdxIterNull<'a, INull> = TakeIdx<'a, Dummy<usize>, INull>;
 
-impl<'a> From<&'a DFStringArray> for TakeIdx<'a, Dummy<usize>, Dummy<Option<usize>>> {
-    fn from(ca: &'a DFStringArray) -> Self {
-        TakeIdx::Array(ca.downcast_iter().next().unwrap())
-    }
-}
-
 impl<'a, I> From<I> for TakeIdx<'a, I, Dummy<Option<usize>>>
 where I: Iterator<Item = usize>
 {
@@ -78,17 +72,17 @@ where I: Iterator<Item = usize>
     }
 }
 
-impl<'a, INulls> From<DataArrayWrap<INulls>> for TakeIdx<'a, Dummy<usize>, INulls>
+impl<'a, INulls> From<SeriesWrap<INulls>> for TakeIdx<'a, Dummy<usize>, INulls>
 where INulls: Iterator<Item = Option<usize>>
 {
-    fn from(iter: DataArrayWrap<INulls>) -> Self {
+    fn from(iter: SeriesWrap<INulls>) -> Self {
         TakeIdx::IterNulls(iter.0)
     }
 }
 
 /// Fast access by index.
 pub trait ArrayTake {
-    /// Take values from DataArrayBase by index.
+    /// Take values from DataArray by index.
     ///
     /// # Safety
     ///
@@ -99,7 +93,7 @@ pub trait ArrayTake {
         I: Iterator<Item = usize>,
         INulls: Iterator<Item = Option<usize>>;
 
-    /// Take values from DataArrayBase by index.
+    /// Take values from DataArray by index.
     fn take<I, INulls>(&self, indices: TakeIdx<I, INulls>) -> Self
     where
         Self: std::marker::Sized,

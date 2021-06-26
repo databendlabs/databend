@@ -1,0 +1,256 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
+use core::fmt;
+use std::convert::From;
+use std::convert::TryFrom;
+use std::ops::Deref;
+use std::sync::Arc;
+
+use common_arrow::arrow::array::ArrayRef;
+use common_exception::ErrorCode;
+use common_exception::Result;
+
+use crate::arrays::*;
+use crate::data_df_type::*;
+use crate::DataType;
+use crate::DataValue;
+
+#[derive(Debug, Clone)]
+pub struct Series(pub Arc<dyn SeriesTrait>);
+
+impl<'a> AsRef<(dyn SeriesTrait + 'a)> for Series {
+    fn as_ref(&self) -> &(dyn SeriesTrait + 'a) {
+        &*self.0
+    }
+}
+
+impl Deref for Series {
+    type Target = dyn SeriesTrait;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.0
+    }
+}
+
+pub trait IntoSeries {
+    fn into_series(self) -> Series
+    where Self: Sized;
+}
+
+pub trait SeriesTrait: Send + Sync + fmt::Debug {
+    fn data_type(&self) -> DataType;
+    fn len(&self) -> usize;
+    fn is_empty(&self) -> bool;
+    fn is_null(&self, row: usize) -> bool;
+    fn get_array_memory_size(&self) -> usize;
+    fn get_array_ref(&self) -> ArrayRef;
+    fn slice(&self, offset: usize, length: usize) -> Series;
+
+    fn cast_with_type(&self, data_type: &DataType) -> Result<Series>;
+
+    fn try_get(&self, index: usize) -> Result<DataValue>;
+
+    fn subtract(&self, rhs: &Series) -> Result<Series>;
+    fn add_to(&self, rhs: &Series) -> Result<Series>;
+    fn multiply(&self, rhs: &Series) -> Result<Series>;
+    fn divide(&self, rhs: &Series) -> Result<Series>;
+    fn remainder(&self, rhs: &Series) -> Result<Series>;
+
+    /// Unpack to DFArray of data_type i8
+    fn i8(&self) -> Result<&DFInt8Array> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != i8",
+            self.data_type()
+        )))
+    }
+
+    /// Unpack to DFArray i16
+    fn i16(&self) -> Result<&DFInt16Array> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != i16",
+            self.data_type()
+        )))
+    }
+
+    fn i32(&self) -> Result<&DFInt32Array> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != i32",
+            self.data_type()
+        )))
+    }
+
+    /// Unpack to DFArray of data_type i64
+    fn i64(&self) -> Result<&DFInt64Array> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != i64",
+            self.data_type()
+        )))
+    }
+
+    /// Unpack to DFArray of data_type f32
+    fn f32(&self) -> Result<&DFFloat32Array> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != f32",
+            self.data_type()
+        )))
+    }
+
+    /// Unpack to DFArray of data_type f64
+    fn f64(&self) -> Result<&DFFloat64Array> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != f64",
+            self.data_type()
+        )))
+    }
+
+    /// Unpack to DFArray of data_type u8
+    fn u8(&self) -> Result<&DFUInt8Array> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != u8",
+            self.data_type()
+        )))
+    }
+
+    /// Unpack to DFArray of data_type u16
+    fn u16(&self) -> Result<&DFUInt16Array> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != u16",
+            self.data_type()
+        )))
+    }
+
+    /// Unpack to DFArray of data_type u32
+    fn u32(&self) -> Result<&DFUInt32Array> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != u32",
+            self.data_type()
+        )))
+    }
+
+    /// Unpack to DFArray of data_type u64
+    fn u64(&self) -> Result<&DFUInt64Array> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != u32",
+            self.data_type()
+        )))
+    }
+
+    /// Unpack to DFArray of data_type bool
+    fn bool(&self) -> Result<&DFBooleanArray> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != bool",
+            self.data_type()
+        )))
+    }
+
+    /// Unpack to DFArray of data_type utf8
+    fn utf8(&self) -> Result<&DFStringArray> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != utf8",
+            self.data_type()
+        )))
+    }
+
+    /// Unpack to DFArray of data_type date32
+    fn date32(&self) -> Result<&DFDate32Array> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != date32",
+            self.data_type()
+        )))
+    }
+
+    /// Unpack to DFArray of data_type date64
+    fn date64(&self) -> Result<&DFDate64Array> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != date64",
+            self.data_type()
+        )))
+    }
+}
+
+pub trait SeriesFrom<T, Phantom: ?Sized> {
+    /// Initialize by name and values.
+    fn new(_: T) -> Self;
+}
+
+//
+macro_rules! impl_from {
+    ($type:ty, $series_var:ident, $method:ident) => {
+        impl<T: AsRef<$type>> SeriesFrom<T, $type> for Series {
+            fn new(v: T) -> Self {
+                DataArray::<$series_var>::$method(v.as_ref()).into_series()
+            }
+        }
+    };
+}
+
+impl<'a, T: AsRef<[&'a str]>> SeriesFrom<T, [&'a str]> for Series {
+    fn new(v: T) -> Self {
+        DFStringArray::new_from_slice(v.as_ref()).into_series()
+    }
+}
+
+impl<'a, T: AsRef<[Option<&'a str>]>> SeriesFrom<T, [Option<&'a str>]> for Series {
+    fn new(v: T) -> Self {
+        DFStringArray::new_from_opt_slice(v.as_ref()).into_series()
+    }
+}
+
+impl_from!([String], Utf8Type, new_from_slice);
+impl_from!([bool], BooleanType, new_from_slice);
+impl_from!([u8], UInt8Type, new_from_slice);
+impl_from!([u16], UInt16Type, new_from_slice);
+impl_from!([u32], UInt32Type, new_from_slice);
+impl_from!([u64], UInt64Type, new_from_slice);
+impl_from!([i8], Int8Type, new_from_slice);
+impl_from!([i16], Int16Type, new_from_slice);
+impl_from!([i32], Int32Type, new_from_slice);
+impl_from!([i64], Int64Type, new_from_slice);
+impl_from!([f32], Float32Type, new_from_slice);
+impl_from!([f64], Float64Type, new_from_slice);
+impl_from!([Option<String>], Utf8Type, new_from_opt_slice);
+impl_from!([Option<bool>], BooleanType, new_from_opt_slice);
+impl_from!([Option<u8>], UInt8Type, new_from_opt_slice);
+impl_from!([Option<u16>], UInt16Type, new_from_opt_slice);
+impl_from!([Option<u32>], UInt32Type, new_from_opt_slice);
+impl_from!([Option<u64>], UInt64Type, new_from_opt_slice);
+impl_from!([Option<i8>], Int8Type, new_from_opt_slice);
+impl_from!([Option<i16>], Int16Type, new_from_opt_slice);
+impl_from!([Option<i32>], Int32Type, new_from_opt_slice);
+impl_from!([Option<i64>], Int64Type, new_from_opt_slice);
+impl_from!([Option<f32>], Float32Type, new_from_opt_slice);
+impl_from!([Option<f64>], Float64Type, new_from_opt_slice);
+
+impl IntoSeries for ArrayRef {
+    fn into_series(self) -> Series
+    where Self: Sized {
+        let dtype = DataType::try_from(self.data_type()).unwrap();
+        match dtype {
+            DataType::Null => DFNullArray::new(self).into_series(),
+            DataType::Boolean => DFBooleanArray::new(self).into_series(),
+            DataType::UInt8 => DFUInt8Array::new(self).into_series(),
+            DataType::UInt16 => DFUInt16Array::new(self).into_series(),
+            DataType::UInt32 => DFUInt32Array::new(self).into_series(),
+            DataType::UInt64 => DFUInt64Array::new(self).into_series(),
+
+            DataType::Int8 => DFInt8Array::new(self).into_series(),
+            DataType::Int16 => DFInt16Array::new(self).into_series(),
+            DataType::Int32 => DFInt32Array::new(self).into_series(),
+            DataType::Int64 => DFInt64Array::new(self).into_series(),
+
+            DataType::Float32 => DFFloat32Array::new(self).into_series(),
+            DataType::Float64 => DFFloat64Array::new(self).into_series(),
+            DataType::Utf8 => DFStringArray::new(self).into_series(),
+            DataType::Date32 => DFDate32Array::new(self).into_series(),
+            DataType::Date64 => DFDate64Array::new(self).into_series(),
+
+            DataType::List(_) => DFListArray::new(self).into_series(),
+            DataType::Struct(_) => DFStructArray::new(self).into_series(),
+            DataType::Binary => DFBinaryArray::new(self).into_series(),
+
+            _ => unreachable!(),
+        }
+    }
+}

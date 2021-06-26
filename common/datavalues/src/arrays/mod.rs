@@ -1,16 +1,16 @@
 mod arrow_array;
-mod builders;
 mod data_array;
-mod data_array_date_wrap;
-mod data_array_wrap;
 
 mod arithmetic;
-mod data_array_base;
+mod builders;
 mod kernels;
 mod ops;
 mod upstream_traits;
 
+pub use arithmetic::*;
+pub use arrow_array::*;
+pub use builders::*;
 pub use data_array::*;
-pub use data_array_base::*;
-pub use data_array_date_wrap::*;
-pub use data_array_wrap::*;
+pub use kernels::*;
+pub use ops::*;
+pub use upstream_traits::*;

@@ -174,7 +174,7 @@ impl Processor for GroupByFinalTransform {
         }
 
         // Build final state block.
-        let mut columns: Vec<DataArrayRef> = Vec::with_capacity(aggr_funcs_len + group_expr_len);
+        let mut columns: Vec<Series> = Vec::with_capacity(aggr_funcs_len + group_expr_len);
 
         for value in &aggr_values {
             if !value.is_empty() {

@@ -67,16 +67,16 @@ fn test_merge_array() -> anyhow::Result<()> {
 
     use crate::*;
 
-    let a1: DataArrayRef = Arc::new(UInt32Array::from(vec![Some(1), Some(3), Some(5)]));
-    let b1: DataArrayRef = Arc::new(UInt32Array::from(vec![Some(2), Some(4), Some(6)]));
+    let a1: Series = Arc::new(UInt32Array::from(vec![Some(1), Some(3), Some(5)]));
+    let b1: Series = Arc::new(UInt32Array::from(vec![Some(2), Some(4), Some(6)]));
 
     let option1 = SortOptions {
         descending: false,
         nulls_first: true,
     };
 
-    let a2: DataArrayRef = Arc::new(UInt32Array::from(vec![Some(1), Some(3), Some(5)]));
-    let b2: DataArrayRef = Arc::new(UInt32Array::from(vec![Some(2), Some(4), Some(6)]));
+    let a2: Series = Arc::new(UInt32Array::from(vec![Some(1), Some(3), Some(5)]));
+    let b2: Series = Arc::new(UInt32Array::from(vec![Some(2), Some(4), Some(6)]));
     let option2 = SortOptions {
         descending: false,
         nulls_first: true,
@@ -92,7 +92,7 @@ fn test_merge_array() -> anyhow::Result<()> {
     assert_eq!(c, vec![true, false, true, false, true, false]);
 
     let d = DataArrayMerge::merge_array(&a1, &b1, &c)?;
-    let expect: DataArrayRef = Arc::new(UInt32Array::from(vec![
+    let expect: Series = Arc::new(UInt32Array::from(vec![
         Some(1),
         Some(2),
         Some(3),
@@ -113,12 +113,12 @@ fn test_merge_array2() -> anyhow::Result<()> {
 
     use crate::*;
 
-    let a1: DataArrayRef = Arc::new(UInt32Array::from(
+    let a1: Series = Arc::new(UInt32Array::from(
         (1..500)
             .map(|s| Some(s as u32))
             .collect::<Vec<Option<u32>>>(),
     ));
-    let b1: DataArrayRef = Arc::new(UInt32Array::from(
+    let b1: Series = Arc::new(UInt32Array::from(
         (500..1000)
             .map(|s| Some(s as u32))
             .collect::<Vec<Option<u32>>>(),
@@ -135,7 +135,7 @@ fn test_merge_array2() -> anyhow::Result<()> {
     assert_eq!(c, c_expected);
 
     let d = DataArrayMerge::merge_array(&a1, &b1, &c)?;
-    let expect: DataArrayRef = Arc::new(UInt32Array::from(
+    let expect: Series = Arc::new(UInt32Array::from(
         (1..1000)
             .map(|s| Some(s as u32))
             .collect::<Vec<Option<u32>>>(),

@@ -13,8 +13,8 @@ fn test_array_comparison() {
     #[allow(dead_code)]
     struct ArrayTest {
         name: &'static str,
-        args: Vec<Vec<DataArrayRef>>,
-        expect: Vec<DataArrayRef>,
+        args: Vec<Vec<Series>>,
+        expect: Vec<Series>,
         error: Vec<&'static str>,
         op: DataValueComparisonOperator,
     }
@@ -151,9 +151,9 @@ fn test_array_scalar_comparison() {
     #[allow(dead_code)]
     struct ArrayTest {
         name: &'static str,
-        array: DataArrayRef,
+        array: Series,
         scalar: DataValue,
-        expect: DataArrayRef,
+        expect: Series,
         error: &'static str,
         op: DataValueComparisonOperator,
     }
@@ -247,9 +247,9 @@ fn test_scalar_array_comparison() {
     #[allow(dead_code)]
     struct ArrayTest {
         name: &'static str,
-        array: DataArrayRef,
+        array: Series,
         scalar: DataValue,
-        expect: DataArrayRef,
+        expect: Series,
         error: &'static str,
         op: DataValueComparisonOperator,
     }

@@ -3,16 +3,18 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BooleanBuilder;
+use common_arrow::arrow::array::LargeListBuilder;
 use common_arrow::arrow::array::LargeStringBuilder;
 use common_arrow::arrow::array::PrimitiveBuilder;
 use common_arrow::arrow::buffer::Buffer;
 
-use crate::arrays::DataArrayBase;
+use crate::arrays::DataArray;
+use crate::series::Series;
 use crate::utils::get_iter_capacity;
 use crate::utils::NoNull;
 use crate::BooleanType;
 use crate::DFBooleanArray;
-use crate::DFPrimitiveType;
+use crate::DFNumericType;
 use crate::DFStringArray;
 use crate::Utf8Type;
 
@@ -25,7 +27,7 @@ pub trait ArrayBuilder<N, T> {
             None => self.append_null(),
         }
     }
-    fn finish(self) -> DataArrayBase<T>;
+    fn finish(self) -> DataArray<T>;
 }
 
 pub struct BooleanArrayBuilder {
@@ -36,13 +38,13 @@ impl ArrayBuilder<bool, BooleanType> for BooleanArrayBuilder {
     /// Appends a value of type `T` into the builder
     #[inline]
     fn append_value(&mut self, v: bool) {
-        self.builder.append_value(v);
+        self.builder.append_value(v).unwrap();
     }
 
     /// Appends a null slot into the builder
     #[inline]
     fn append_null(&mut self) {
-        self.builder.append_null();
+        self.builder.append_null().unwrap();
     }
 
     fn finish(mut self) -> DFBooleanArray {
@@ -61,7 +63,7 @@ impl BooleanArrayBuilder {
 
 pub struct PrimitiveArrayBuilder<T>
 where
-    T: DFPrimitiveType,
+    T: DFNumericType,
     T::Native: Default,
 {
     builder: PrimitiveBuilder<T>,
@@ -69,22 +71,22 @@ where
 
 impl<T> ArrayBuilder<T::Native, T> for PrimitiveArrayBuilder<T>
 where
-    T: DFPrimitiveType,
+    T: DFNumericType,
     T::Native: Default,
 {
     /// Appends a value of type `T` into the builder
     #[inline]
     fn append_value(&mut self, v: T::Native) {
-        self.builder.append_value(v);
+        self.builder.append_value(v).unwrap();
     }
 
     /// Appends a null slot into the builder
     #[inline]
     fn append_null(&mut self) {
-        self.builder.append_null();
+        self.builder.append_null().unwrap();
     }
 
-    fn finish(mut self) -> DataArrayBase<T> {
+    fn finish(mut self) -> DataArray<T> {
         let array = Arc::new(self.builder.finish()) as ArrayRef;
 
         array.into()
@@ -92,7 +94,7 @@ where
 }
 
 impl<T> PrimitiveArrayBuilder<T>
-where T: DFPrimitiveType
+where T: DFNumericType
 {
     pub fn new(capacity: usize) -> Self {
         PrimitiveArrayBuilder {
@@ -158,19 +160,19 @@ pub fn get_bitmap<T: Array + ?Sized>(arr: &T) -> (usize, Option<Buffer>) {
     )
 }
 
-pub trait NewDataArrayBase<T, N> {
+pub trait NewDataArray<T, N> {
     fn new_from_slice(v: &[N]) -> Self;
     fn new_from_opt_slice(opt_v: &[Option<N>]) -> Self;
 
-    /// Create a new DataArrayBase from an iterator.
+    /// Create a new DataArray from an iterator.
     fn new_from_opt_iter(it: impl Iterator<Item = Option<N>>) -> Self;
 
-    /// Create a new DataArrayBase from an iterator.
+    /// Create a new DataArray from an iterator.
     fn new_from_iter(it: impl Iterator<Item = N>) -> Self;
 }
 
-impl<T> NewDataArrayBase<T, T::Native> for DataArrayBase<T>
-where T: DFPrimitiveType
+impl<T> NewDataArray<T, T::Native> for DataArray<T>
+where T: DFNumericType
 {
     fn new_from_slice(v: &[T::Native]) -> Self {
         Self::new_from_iter(v.iter().copied())
@@ -180,21 +182,20 @@ where T: DFPrimitiveType
         Self::new_from_opt_iter(opt_v.iter().copied())
     }
 
-    fn new_from_opt_iter(it: impl Iterator<Item = Option<T::Native>>) -> DataArrayBase<T> {
+    fn new_from_opt_iter(it: impl Iterator<Item = Option<T::Native>>) -> DataArray<T> {
         let mut builder = PrimitiveArrayBuilder::new(get_iter_capacity(&it));
         it.for_each(|opt| builder.append_option(opt));
         builder.finish()
     }
 
-    /// Create a new DataArrayBase from an iterator.
-    fn new_from_iter(it: impl Iterator<Item = T::Native>) -> DataArrayBase<T> {
-        // FromIterator<T::Native> for NoNull<DataArrayBase<T>>
-        let ca: NoNull<DataArrayBase<_>> = it.collect();
+    /// Create a new DataArray from an iterator.
+    fn new_from_iter(it: impl Iterator<Item = T::Native>) -> DataArray<T> {
+        let ca: NoNull<DataArray<_>> = it.collect();
         ca.into_inner()
     }
 }
 
-impl NewDataArrayBase<BooleanType, bool> for DFBooleanArray {
+impl NewDataArray<BooleanType, bool> for DFBooleanArray {
     fn new_from_slice(v: &[bool]) -> Self {
         Self::new_from_iter(v.iter().copied())
     }
@@ -209,13 +210,13 @@ impl NewDataArrayBase<BooleanType, bool> for DFBooleanArray {
         builder.finish()
     }
 
-    /// Create a new DataArrayBase from an iterator.
+    /// Create a new DataArray from an iterator.
     fn new_from_iter(it: impl Iterator<Item = bool>) -> DFBooleanArray {
         it.collect()
     }
 }
 
-impl<S> NewDataArrayBase<Utf8Type, S> for DFStringArray
+impl<S> NewDataArray<Utf8Type, S> for DFStringArray
 where S: AsRef<str>
 {
     fn new_from_slice(v: &[S]) -> Self {
@@ -251,7 +252,7 @@ where S: AsRef<str>
         builder.finish()
     }
 
-    /// Create a new DataArrayBase from an iterator.
+    /// Create a new DataArray from an iterator.
     fn new_from_iter(it: impl Iterator<Item = S>) -> Self {
         let cap = get_iter_capacity(&it);
         let mut builder = Utf8ArrayBuilder::new(cap, cap * 5);

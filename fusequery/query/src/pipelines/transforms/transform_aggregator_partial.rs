@@ -97,7 +97,7 @@ impl Processor for AggregatorPartialTransform {
         let delta = start.elapsed();
         tracing::debug!("Aggregator partial cost: {:?}", delta);
 
-        let mut columns: Vec<DataArrayRef> = vec![];
+        let mut columns: Vec<Series> = vec![];
         for func in funcs.iter() {
             // Column.
             let states = DataValue::Struct(func.accumulate_result()?);
