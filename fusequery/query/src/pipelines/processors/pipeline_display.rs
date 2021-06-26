@@ -82,7 +82,7 @@ impl Pipeline {
                     }
 
                     index += 1;
-                    Ok(true)
+                    Result::<bool, fmt::Error>::Ok(true)
                 })?;
                 Ok(())
             }
