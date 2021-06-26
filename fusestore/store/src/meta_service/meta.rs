@@ -8,6 +8,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_exception::prelude::ErrorCode;
 use common_metatypes::Database;
 use common_metatypes::SeqValue;
 use common_metatypes::Table;
@@ -93,7 +94,7 @@ impl MetaBuilder {
         self
     }
 
-    pub fn build(self) -> anyhow::Result<Meta> {
+    pub fn build(self) -> common_exception::Result<Meta> {
         let initial_slots = self.initial_slots.unwrap_or(3);
         let replication = self.replication.unwrap_or(Replication::Mirror(1));
 
@@ -140,7 +141,7 @@ impl Meta {
     /// This is the only entry to modify meta data.
     /// The `data` is always committed by raft before applying.
     #[tracing::instrument(level = "info", skip(self))]
-    pub fn apply(&mut self, data: &ClientRequest) -> anyhow::Result<ClientResponse> {
+    pub fn apply(&mut self, data: &ClientRequest) -> common_exception::Result<ClientResponse> {
         match data.cmd {
             Cmd::AddFile { ref key, ref value } => {
                 if self.keys.contains_key(key) {
@@ -230,7 +231,7 @@ impl Meta {
     }
 
     /// Initialize slots by assign nodes to everyone of them randomly, according to replicationn config.
-    pub fn init_slots(&mut self) -> anyhow::Result<()> {
+    pub fn init_slots(&mut self) -> common_exception::Result<()> {
         for i in 0..self.slots.len() {
             self.assign_rand_nodes_to_slot(i)?;
         }
@@ -241,7 +242,7 @@ impl Meta {
     /// Assign `n` random nodes to a slot thus the files associated to this slot are replicated to the corresponding nodes.
     /// This func does not cnosider nodes load and should only be used when a Dfs cluster is initiated.
     /// TODO(xp): add another func for load based assignment
-    pub fn assign_rand_nodes_to_slot(&mut self, slot_index: usize) -> anyhow::Result<()> {
+    pub fn assign_rand_nodes_to_slot(&mut self, slot_index: usize) -> common_exception::Result<()> {
         let n = match self.replication {
             Replication::Mirror(x) => x,
         } as usize;
@@ -254,7 +255,7 @@ impl Meta {
         let mut slot = self
             .slots
             .get_mut(slot_index)
-            .ok_or_else(|| anyhow::anyhow!("slot not found: {}", slot_index))?;
+            .ok_or_else(|| ErrorCode::InvalidConfig(format!("slot not found: {}", slot_index)))?;
 
         slot.node_ids = node_indexes.iter().map(|i| *node_ids[*i]).collect();
 

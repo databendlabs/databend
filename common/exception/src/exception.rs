@@ -158,6 +158,24 @@ build_exceptions! {
 
     FileMetaNotFound(2001),
     FileDamaged(2002),
+
+    // store node errors
+
+    UnknownNode(2101),
+
+    // meta service errors
+
+    // meta service does not work.
+    MetaServiceError(2201),
+    // meta service is shut down.
+    MetaServiceShutdown(2202),
+    // meta service is unavailable for now.
+    MetaServiceUnavailable(2203),
+
+    // config errors
+
+    InvalidConfig(2301),
+
 }
 
 pub type Result<T> = std::result::Result<T, ErrorCode>;
