@@ -18,6 +18,7 @@ use crate::datasources::DataSource;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::Settings;
+use common_infallible::Mutex;
 
 #[derive(PartialEq, Clone)]
 pub enum State {
@@ -28,7 +29,7 @@ pub enum State {
     Aborted,
 }
 
-pub struct SessionStatus {
+struct SessionStatusInner {
     state: State,
     current_database: String,
     session_settings: Arc<Settings>,
@@ -43,64 +44,81 @@ pub struct SessionStatus {
     abort_handler: Option<AbortHandle>,
 }
 
+#[derive(Clone)]
+pub struct SessionStatus {
+    inner: Arc<Mutex<SessionStatusInner>>,
+}
+
 impl SessionStatus {
     pub fn try_create() -> Result<SessionStatus> {
         Ok(SessionStatus {
-            state: State::Init,
-            current_database: String::from("default"),
-            session_settings: Settings::try_create()?,
-            stream: None,
-            execute_instant: None,
-            executing_query: None,
-            executing_query_plan: None,
-            abort_handler: None,
+            inner: Arc::new(Mutex::new(SessionStatusInner {
+                state: State::Init,
+                current_database: String::from("default"),
+                session_settings: Settings::try_create()?,
+                stream: None,
+                execute_instant: None,
+                executing_query: None,
+                executing_query_plan: None,
+                abort_handler: None,
+            }))
         })
     }
 
     pub fn is_aborting(&self) -> bool {
-        matches!(self.state, State::Aborting | State::Aborted)
+        match self.inner.lock().state {
+            State::Aborting | State::Aborted => true,
+            _ => false
+        }
     }
 
     pub fn is_aborted(&self) -> bool {
-        self.state == State::Aborted
+        self.inner.lock().state == State::Aborted
     }
 
-    pub fn enter_init(&mut self, stream: std::net::TcpStream) {
-        self.state = State::Idle;
-        self.stream = Some(stream);
+    pub fn enter_init(&self, stream: std::net::TcpStream) {
+        let mut inner = self.inner.lock();
+        inner.state = State::Idle;
+        inner.stream = Some(stream);
     }
 
-    pub fn enter_aborted(&mut self) {
-        self.state = State::Aborted;
-        self.abort_handler = None;
-        if let Some(stream) = self.stream.take() {
+    pub fn enter_aborted(&self) {
+        let mut inner = self.inner.lock();
+        inner.state = State::Aborted;
+        inner.abort_handler = None;
+        if let Some(stream) = inner.stream.take() {
             let _ = stream.shutdown(Shutdown::Both);
         }
     }
 
     pub fn try_create_context(
-        &mut self,
+        &self,
         conf: Config,
         cluster: ClusterRef,
         datasource: Arc<DataSource>,
     ) -> Result<FuseQueryContextRef> {
+        let mut inner = self.inner.lock();
+
         FuseQueryContext::from_settings(
             conf,
-            self.session_settings.clone(),
-            self.current_database.clone(),
+            inner.session_settings.clone(),
+            inner.current_database.clone(),
             datasource,
         )
         .and_then(|context| context.with_cluster(cluster))
     }
 
-    pub fn enter_query(&mut self, query: &str) {
-        self.state = State::Progress;
-        self.execute_instant = Some(Instant::now());
-        self.executing_query = Some(query.to_string());
+    pub fn enter_query(&self, query: &str) {
+        let mut inner = self.inner.lock();
+        inner.state = State::Progress;
+        inner.execute_instant = Some(Instant::now());
+        inner.executing_query = Some(query.to_string());
     }
 
-    pub fn exit_query(&mut self) -> Result<()> {
-        match self.state {
+    pub fn exit_query(&self) -> Result<()> {
+        let mut inner = self.inner.lock();
+
+        match inner.state {
             State::Init => {
                 return Err(ErrorCode::LogicalError(
                     "Logical error: exit_query with Init state",
@@ -111,7 +129,7 @@ impl SessionStatus {
                     "Logical error: exit_query with Idle state",
                 ))
             }
-            State::Progress => self.state = State::Idle,
+            State::Progress => inner.state = State::Idle,
             State::Aborting | State::Aborted => {
                 return Err(ErrorCode::AbortedSession(
                     "Aborting this connection. because we are try aborting server.",
@@ -122,31 +140,35 @@ impl SessionStatus {
         Ok(())
     }
 
-    pub fn enter_interpreter(&mut self, query_plan: &PlanNode) {
-        self.executing_query_plan = Some(query_plan.clone());
+    pub fn enter_interpreter(&self, query_plan: &PlanNode) {
+        let mut inner = self.inner.lock();
+        inner.executing_query_plan = Some(query_plan.clone());
     }
 
     pub fn enter_pipeline_executor(&mut self, abort_handle: AbortHandle) {
-        self.abort_handler = Some(abort_handle);
+        let mut inner = self.inner.lock();
+        inner.abort_handler = Some(abort_handle);
     }
 
-    pub fn update_database(&mut self, database_name: String) {
-        self.current_database = database_name;
+    pub fn update_database(&self, database_name: String) {
+        let mut inner = self.inner.lock();
+        inner.current_database = database_name;
     }
 
-    pub fn abort_session(&mut self, force: bool) -> Result<()> {
-        match self.state {
+    pub fn abort_session(&self, force: bool) -> Result<()> {
+        let mut inner = self.inner.lock();
+        match inner.state {
             State::Aborted => {}
             State::Init | State::Idle => {
-                self.state = State::Aborting;
-                if let Some(stream) = self.stream.take() {
+                inner.state = State::Aborting;
+                if let Some(stream) = inner.stream.take() {
                     stream.shutdown(Shutdown::Both)?;
                 }
             }
-            _ if !force => self.state = State::Aborting,
+            _ if !force => inner.state = State::Aborting,
             State::Progress | State::Aborting => {
-                self.state = State::Aborting;
-                if let Some(abort_handle) = self.abort_handler.take() {
+                inner.state = State::Aborting;
+                if let Some(abort_handle) = inner.abort_handler.take() {
                     abort_handle.abort();
                 }
             }

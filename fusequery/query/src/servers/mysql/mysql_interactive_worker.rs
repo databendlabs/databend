@@ -41,7 +41,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
     type Error = ErrorCode;
 
     fn on_prepare(&mut self, query: &str, writer: StatementMetaWriter<W>) -> Result<()> {
-        if self.session.get_status().lock().is_aborting() {
+        if self.session.get_status().is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -61,7 +61,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         param: ParamParser,
         writer: QueryResultWriter<W>,
     ) -> Result<()> {
-        if self.session.get_status().lock().is_aborting() {
+        if self.session.get_status().is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -80,7 +80,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
     }
 
     fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> Result<()> {
-        if self.session.get_status().lock().is_aborting() {
+        if self.session.get_status().is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -92,9 +92,9 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         }
 
         let start = Instant::now();
-        self.session.get_status().lock().enter_query(query);
+        self.session.get_status().enter_query(query);
         DFQueryResultWriter::create(writer).write(self.base.do_query(query))?;
-        self.session.get_status().lock().exit_query()?;
+        self.session.get_status().exit_query()?;
 
         histogram!(
             super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
@@ -105,7 +105,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
     }
 
     fn on_init(&mut self, database_name: &str, writer: InitWriter<W>) -> Result<()> {
-        if self.session.get_status().lock().is_aborting() {
+        if self.session.get_status().is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -156,7 +156,6 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             let query_plan = plan?;
             self.session
                 .get_status()
-                .lock()
                 .enter_interpreter(&query_plan);
             let interpreter = InterpreterFactory::get(context, query_plan)?;
             let data_stream = runtime.block_on(interpreter.execute())?;
@@ -164,7 +163,6 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             let (abort_handle, abort_stream) = AbortStream::try_create(data_stream)?;
             self.session
                 .get_status()
-                .lock()
                 .enter_pipeline_executor(abort_handle);
 
             runtime.block_on(abort_stream.collect::<Result<Vec<DataBlock>>>())
@@ -203,7 +201,6 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             .map(|_| {
                 self.session
                     .get_status()
-                    .lock()
                     .update_database(database_name.to_string());
             })
     }

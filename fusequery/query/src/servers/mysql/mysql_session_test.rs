@@ -14,7 +14,7 @@ use mysql::prelude::Queryable;
 
 use crate::clusters::Cluster;
 use crate::configs::Config;
-use crate::servers::mysql::mysql_session::Session;
+use crate::servers::mysql::mysql_session::MySQLSession;
 use crate::sessions::ISession;
 use crate::sessions::SessionManager;
 
@@ -248,7 +248,7 @@ async fn prepare_session_and_connect() -> Result<(mysql::Conn, Arc<Box<dyn ISess
 
     let session = tokio::spawn(async move {
         let (stream, _) = listener.accept().await?;
-        let session = session_manager.create_session::<Session>()?;
+        let session = session_manager.create_session::<MySQLSession>()?;
         session.start(stream).await?;
         Result::Ok(session)
     });

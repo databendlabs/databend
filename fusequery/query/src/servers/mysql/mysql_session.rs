@@ -26,37 +26,37 @@ use crate::sessions::SessionCreator;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::SessionStatus;
 
-pub struct Session {
+pub struct MySQLSession {
     conf: Config,
     session_id: String,
     session_manager: SessionManagerRef,
-    session_status: Arc<Mutex<SessionStatus>>,
+    session_status: SessionStatus,
 
     aborted_notify: Arc<tokio::sync::Notify>,
 }
 
-impl ISession for Session {
+impl ISession for MySQLSession {
     fn get_id(&self) -> String {
         self.session_id.clone()
     }
 
     fn try_create_context(&self) -> Result<FuseQueryContextRef> {
-        self.session_status.lock().try_create_context(
+        self.session_status.try_create_context(
             self.conf.clone(),
             self.session_manager.get_cluster(),
             self.session_manager.get_datasource(),
         )
     }
 
-    fn get_status(&self) -> Arc<Mutex<SessionStatus>> {
+    fn get_status(&self) -> SessionStatus {
         self.session_status.clone()
     }
 }
 
 #[async_trait::async_trait]
-impl AbortableService<TcpStream, ()> for Session {
+impl AbortableService<TcpStream, ()> for MySQLSession {
     fn abort(&self, force: bool) -> Result<()> {
-        self.session_status.lock().abort_session(force)
+        self.session_status.abort_session(force)
     }
 
     async fn start(&self, stream: TcpStream) -> Result<()> {
@@ -77,11 +77,11 @@ impl AbortableService<TcpStream, ()> for Session {
         let session = session_manager.get_session(&self.session_id)?;
 
         std::thread::spawn(move || {
-            session.get_status().lock().enter_init(cloned_stream);
+            session.get_status().enter_init(cloned_stream);
 
             let session_ref = session.clone();
             exit_scope!({
-                session_ref.get_status().lock().enter_aborted();
+                session_ref.get_status().enter_aborted();
                 session_manager.destroy_session(session_ref.get_id());
                 abort_notify.notify_waiters();
             });
@@ -104,7 +104,7 @@ impl AbortableService<TcpStream, ()> for Session {
     async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed> {
         let instant = Instant::now();
 
-        if self.session_status.lock().is_aborted() {
+        if self.session_status.is_aborted() {
             return Ok(instant.elapsed());
         }
 
@@ -129,7 +129,7 @@ impl AbortableService<TcpStream, ()> for Session {
     }
 }
 
-impl SessionCreator for Session {
+impl SessionCreator for MySQLSession {
     type Session = Self;
 
     fn create(
@@ -137,11 +137,11 @@ impl SessionCreator for Session {
         session_id: String,
         sessions: SessionManagerRef,
     ) -> Result<Arc<Box<dyn ISession>>> {
-        Ok(Arc::new(Box::new(Session {
+        Ok(Arc::new(Box::new(MySQLSession {
             conf,
             session_id,
             session_manager: sessions,
-            session_status: Arc::new(Mutex::new(SessionStatus::try_create()?)),
+            session_status: SessionStatus::try_create()?,
             aborted_notify: Arc::new(tokio::sync::Notify::new()),
         })))
     }

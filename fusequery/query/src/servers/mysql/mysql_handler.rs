@@ -23,7 +23,7 @@ use msql_srv::*;
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_stream::StreamExt as OtherStreamExt;
 
-use crate::servers::mysql::mysql_session::Session;
+use crate::servers::mysql::mysql_session::MySQLSession;
 use crate::servers::mysql::reject_connection::RejectConnection;
 use crate::servers::AbortableServer;
 use crate::servers::AbortableService;
@@ -107,7 +107,7 @@ impl AbortableService<(String, u16), SocketAddr> for MySQLHandler {
                                 log::debug!("Received connect from {}", addr);
                             }
 
-                            match sessions.create_session::<Session>() {
+                            match sessions.create_session::<MySQLSession>() {
                                 Err(error) => {
                                     Self::reject_session(tcp_stream, &rejected_executor, error)
                                 }

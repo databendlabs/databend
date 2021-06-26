@@ -29,5 +29,5 @@ pub trait ISession: AbortableService<TcpStream, ()> + Send + Sync {
 
     fn try_create_context(&self) -> Result<FuseQueryContextRef>;
 
-    fn get_status(&self) -> Arc<Mutex<SessionStatus>>;
+    fn get_status(&self) -> SessionStatus;
 }
