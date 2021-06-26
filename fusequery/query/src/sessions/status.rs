@@ -82,7 +82,7 @@ impl SessionStatus {
         inner.stream = Some(stream);
     }
 
-    pub fn enter_aborted(&self) {
+    pub fn aborted(&self) {
         let mut inner = self.inner.lock();
         inner.state = State::Aborted;
         inner.abort_handler = None;

@@ -23,7 +23,7 @@ use tokio_stream::StreamExt;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
-use crate::sessions::ISession;
+use crate::sessions::{ISession, FuseQueryContextRef};
 use crate::sql::DfHint;
 use crate::sql::PlanParser;
 
@@ -52,7 +52,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             ));
         }
 
-        self.base.do_prepare(query, writer)
+        self.base.do_prepare(query, writer, self.session.try_create_context()?)
     }
 
     fn on_execute(
@@ -72,11 +72,13 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             ));
         }
 
-        self.base.do_execute(id, param, writer)
+        self.base.do_execute(id, param, writer, self.session.try_create_context()?)
     }
 
     fn on_close(&mut self, id: u32) {
-        self.base.do_close(id)
+        if let Ok(context) = self.session.try_create_context() {
+            self.base.do_close(id, context);
+        }
     }
 
     fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> Result<()> {
@@ -93,7 +95,8 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
 
         let start = Instant::now();
         self.session.get_status().enter_query(query);
-        DFQueryResultWriter::create(writer).write(self.base.do_query(query))?;
+        let context = self.session.try_create_context()?;
+        DFQueryResultWriter::create(writer).write(self.base.do_query(query, context))?;
         self.session.get_status().exit_query()?;
 
         histogram!(
@@ -116,12 +119,13 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             ));
         }
 
-        DFInitResultWriter::create(writer).write(self.base.do_init(database_name))
+        let context = self.session.try_create_context()?;
+        DFInitResultWriter::create(writer).write(self.base.do_init(database_name, context))
     }
 }
 
 impl<W: std::io::Write> InteractiveWorkerBase<W> {
-    fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {
+    fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>, _: FuseQueryContextRef) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
             "Prepare is not support in DataFuse.".as_bytes(),
@@ -134,6 +138,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         _: u32,
         _: ParamParser<'_>,
         writer: QueryResultWriter<'_, W>,
+        _: FuseQueryContextRef
     ) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
@@ -142,28 +147,22 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         Ok(())
     }
 
-    fn do_close(&mut self, _: u32) {}
+    fn do_close(&mut self, _: u32, _: FuseQueryContextRef) {}
 
-    fn do_query(&mut self, query: &str) -> Result<Vec<DataBlock>> {
+    fn do_query(&mut self, query: &str, context: FuseQueryContextRef) -> Result<Vec<DataBlock>> {
         log::debug!("{}", query);
 
         let runtime = Self::build_runtime()?;
-        let context = self.session.try_create_context()?;
-
         let (plan, hints) = PlanParser::create(context.clone()).build_with_hint_from_sql(query);
 
         let fetch_query_blocks = || -> Result<Vec<DataBlock>> {
             let query_plan = plan?;
-            self.session
-                .get_status()
-                .enter_interpreter(&query_plan);
+            // self.session.get_status().enter_interpreter(&query_plan);
             let interpreter = InterpreterFactory::get(context, query_plan)?;
             let data_stream = runtime.block_on(interpreter.execute())?;
 
             let (abort_handle, abort_stream) = AbortStream::try_create(data_stream)?;
-            self.session
-                .get_status()
-                .enter_pipeline_executor(abort_handle);
+            self.session.get_status().enter_pipeline_executor(abort_handle);
 
             runtime.block_on(abort_stream.collect::<Result<Vec<DataBlock>>>())
         };
@@ -193,16 +192,9 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         }
     }
 
-    fn do_init(&mut self, database_name: &str) -> Result<()> {
-        let context = self.session.try_create_context()?;
-        context
-            .get_datasource()
-            .get_database(database_name)
-            .map(|_| {
-                self.session
-                    .get_status()
-                    .update_database(database_name.to_string());
-            })
+    fn do_init(&mut self, database_name: &str, context: FuseQueryContextRef) -> Result<()> {
+        self.do_query(&format!("USE {};", database_name), context)?;
+        Ok(())
     }
 
     fn build_runtime() -> Result<tokio::runtime::Runtime> {

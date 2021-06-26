@@ -73,15 +73,15 @@ impl AbortableService<TcpStream, ()> for MySQLSession {
                 "Cannot to convert Tokio TcpStream to Std TcpStream"
             })?;
 
-        let cloned_stream = stream.try_clone()?;
+        // let cloned_stream = stream.try_clone()?;
         let session = session_manager.get_session(&self.session_id)?;
 
         std::thread::spawn(move || {
-            session.get_status().enter_init(cloned_stream);
+            // session.get_status().enter_init(cloned_stream);
 
             let session_ref = session.clone();
             exit_scope!({
-                session_ref.get_status().enter_aborted();
+                session_ref.get_status().aborted();
                 session_manager.destroy_session(session_ref.get_id());
                 abort_notify.notify_waiters();
             });
