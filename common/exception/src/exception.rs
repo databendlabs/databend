@@ -308,7 +308,9 @@ impl ErrorCode {
 ///     format!("{}", y.unwrap_err())
 /// );
 /// ```
-pub trait ToErrorCode<T, E, CtxFn> {
+pub trait ToErrorCode<T, E, CtxFn>
+where E: Display + Send + Sync + 'static
+{
     /// Wrap the error value with ErrorCode. It is lazily evaluated:
     /// only when an error does occur.
     ///
@@ -322,7 +324,7 @@ pub trait ToErrorCode<T, E, CtxFn> {
 }
 
 impl<T, E, CtxFn> ToErrorCode<T, E, CtxFn> for std::result::Result<T, E>
-where E: std::error::Error + Send + Sync + 'static
+where E: Display + Send + Sync + 'static
 {
     fn map_err_to_code<ErrFn, D>(self, make_exception: ErrFn, context_fn: CtxFn) -> Result<T>
     where
