@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
 use common_planners::*;
 use common_runtime::tokio;
 use futures::TryStreamExt;
@@ -11,7 +12,7 @@ use crate::interpreters::*;
 use crate::sql::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_explain_interpreter() -> anyhow::Result<()> {
+async fn test_explain_interpreter() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     if let PlanNode::Explain(plan) = PlanParser::create(ctx.clone()).build_from_sql(

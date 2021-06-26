@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
 use common_planners::*;
 use common_runtime::tokio;
 use pretty_assertions::assert_eq;
@@ -9,7 +10,7 @@ use pretty_assertions::assert_eq;
 use crate::datasources::DataSource;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_datasource() -> anyhow::Result<()> {
+async fn test_datasource() -> Result<()> {
     let datasource = DataSource::try_create()?;
 
     // Table check.

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
 use common_planners::*;
 use common_runtime::tokio;
 use futures::stream::StreamExt;
@@ -11,7 +12,7 @@ use crate::interpreters::*;
 use crate::sql::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_create_database_interpreter() -> anyhow::Result<()> {
+async fn test_create_database_interpreter() -> Result<()> {
     common_tracing::init_default_tracing();
 
     let ctx = crate::tests::try_create_context()?;

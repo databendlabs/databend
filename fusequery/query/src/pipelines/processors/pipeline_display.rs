@@ -26,72 +26,64 @@ impl Pipeline {
 
                 let mut index = 0;
 
-                self.0
-                    .walk_preorder(|pipe| {
-                        write_indent(f)?;
+                self.0.walk_preorder(|pipe| {
+                    write_indent(f)?;
 
-                        let ways = pipe.nums();
-                        let processor = pipe.processor_by_index(0);
+                    let ways = pipe.nums();
+                    let processor = pipe.processor_by_index(0);
 
-                        match processor.name() {
-                            "EmptyProcessor" => write!(f, "")?,
-                            "MergeProcessor" => {
-                                let mut pipes = self.0.pipes();
-                                pipes.reverse();
+                    match processor.name() {
+                        "EmptyProcessor" => write!(f, "")?,
+                        "MergeProcessor" => {
+                            let mut pipes = self.0.pipes();
+                            pipes.reverse();
 
-                                let prev_pipe = pipes[index - 1].clone();
-                                let prev_name = prev_pipe.name().to_string();
-                                let prev_ways = prev_pipe.nums();
+                            let prev_pipe = pipes[index - 1].clone();
+                            let prev_name = prev_pipe.name().to_string();
+                            let prev_ways = prev_pipe.nums();
 
-                                let post_pipe = pipes[index + 1].clone();
-                                let post_name = post_pipe.name().to_string();
-                                let post_ways = post_pipe.nums();
+                            let post_pipe = pipes[index + 1].clone();
+                            let post_name = post_pipe.name().to_string();
+                            let post_ways = post_pipe.nums();
 
-                                write!(
-                                    f,
-                                    "Merge ({} × {} {}) to ({} × {})",
-                                    post_name,
-                                    post_ways,
-                                    if post_ways == 1 {
-                                        "processor"
-                                    } else {
-                                        "processors"
-                                    },
-                                    prev_name,
-                                    prev_ways,
-                                )?;
-                            }
-                            "RemoteTransform" => {
-                                let name = processor.name();
-                                // let remote = processor
-                                //     .as_any()
-                                //     .downcast_ref::<RemoteTransform>()
-                                //     .ok_or_else(|| {
-                                //     anyhow!("Display pipeline downcast {} error", name)
-                                // })?;
-
-                                // TODO: We should output for every remote
-                                write!(
-                                    f,
-                                    "{} × {} processor(s)",
-                                    name, ways /*, pipeline_display*/
-                                )?
-                            }
-                            _ => {
-                                write!(
-                                    f,
-                                    "{} × {} {}",
-                                    processor.name(),
-                                    ways,
-                                    if ways == 1 { "processor" } else { "processors" },
-                                )?;
-                            }
+                            write!(
+                                f,
+                                "Merge ({} × {} {}) to ({} × {})",
+                                post_name,
+                                post_ways,
+                                if post_ways == 1 {
+                                    "processor"
+                                } else {
+                                    "processors"
+                                },
+                                prev_name,
+                                prev_ways,
+                            )?;
                         }
+                        "RemoteTransform" => {
+                            let name = processor.name();
 
-                        index += 1;
-                        Ok(true)
-                    })
-                    .map_err(|_| fmt::Error)?;
+                            // TODO: We should output for every remote
+                            write!(
+                                f,
+                                "{} × {} processor(s)",
+                                name, ways /*, pipeline_display*/
+                            )?
+                        }
+                        _ => {
+                            write!(
+                                f,
+                                "{} × {} {}",
+                                processor.name(),
+                                ways,
+                                if ways == 1 { "processor" } else { "processors" },
+                            )?;
+                        }
+                    }
+
+                    index += 1;
+                    Ok(true)
+                })?;
                 Ok(())
             }
         }

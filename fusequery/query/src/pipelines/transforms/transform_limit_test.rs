@@ -4,13 +4,14 @@
 
 use std::sync::Arc;
 
+use common_exception::Result;
 use common_planners::*;
 use common_runtime::tokio;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_transform_limit() -> anyhow::Result<()> {
+async fn test_transform_limit() -> Result<()> {
     use crate::pipelines::processors::*;
     use crate::pipelines::transforms::*;
 
