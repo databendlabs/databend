@@ -344,7 +344,7 @@ impl ActionHandler {
     async fn upsert_kv(&self, act: UpsertKVAction) -> Result<StoreDoActionResult, Status> {
         let cr = ClientRequest {
             txid: None,
-            cmd: Cmd::UpsertUnclassified {
+            cmd: Cmd::UpsertKV {
                 key: act.key,
                 seq: act.seq,
                 value: act.value,
@@ -358,7 +358,7 @@ impl ActionHandler {
             .map_err(|e| Status::internal(e.to_string()))?;
 
         match rst {
-            ClientResponse::Unclassified { prev, result } => {
+            ClientResponse::KV { prev, result } => {
                 Ok(StoreDoActionResult::UpsertKV(UpsertKVActionResult {
                     prev,
                     result,

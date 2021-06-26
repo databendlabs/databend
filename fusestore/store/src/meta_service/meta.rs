@@ -22,8 +22,8 @@ use crate::meta_service::Cmd;
 use crate::meta_service::NodeId;
 use crate::meta_service::Placement;
 
-/// seq number key to generate seq for the value of a `unclassified` record.
-const SEQ_UNCLASSIFIED: &str = "unclassified";
+/// seq number key to generate seq for the value of a `generic_kv` record.
+const SEQ_GENERIC_KV: &str = "generic_kv";
 /// seq number key to generate database id
 const SEQ_DATABASE_ID: &str = "database_id";
 /// seq number key to generate table id
@@ -66,10 +66,10 @@ pub struct Meta {
     /// table id to table mapping
     pub tables: BTreeMap<u64, Table>,
 
-    /// A kv store of all other unclassified information.
+    /// A kv store of all other general purpose information.
     /// The value is tuple of a monotonic sequence number and userdata value in string.
     /// The sequence number is guaranteed to increment(by some value greater than 0) everytime the record changes.
-    pub unclassified: BTreeMap<String, (u64, Vec<u8>)>,
+    pub kv: BTreeMap<String, (u64, Vec<u8>)>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -105,7 +105,7 @@ impl MetaBuilder {
             replication,
             databases: BTreeMap::new(),
             tables: BTreeMap::new(),
-            unclassified: BTreeMap::new(),
+            kv: BTreeMap::new(),
         };
         for _i in 0..initial_slots {
             m.slots.push(Slot::default());
@@ -194,12 +194,12 @@ impl Meta {
                 }
             }
 
-            Cmd::UpsertUnclassified {
+            Cmd::UpsertKV {
                 ref key,
                 ref seq,
                 ref value,
             } => {
-                let prev = self.unclassified.get(key).cloned();
+                let prev = self.kv.get(key).cloned();
 
                 let seq_matched = if let Some(seq) = seq {
                     if *seq == 0 {
@@ -219,10 +219,10 @@ impl Meta {
                     return Ok((prev, None).into());
                 }
 
-                let new_seq = self.incr_seq(SEQ_UNCLASSIFIED);
+                let new_seq = self.incr_seq(SEQ_GENERIC_KV);
                 let record_value = (new_seq, value.clone());
-                self.unclassified.insert(key.clone(), record_value.clone());
-                tracing::debug!("applied UpsertUnclassified: {}={:?}", key, record_value);
+                self.kv.insert(key.clone(), record_value.clone());
+                tracing::debug!("applied UpsertKV: {}={:?}", key, record_value);
 
                 Ok((prev, Some(record_value)).into())
             }
@@ -279,8 +279,8 @@ impl Meta {
         x.cloned()
     }
 
-    pub fn get_unclassified(&self, key: &str) -> Option<SeqValue> {
-        let x = self.unclassified.get(key);
+    pub fn get_kv(&self, key: &str) -> Option<SeqValue> {
+        let x = self.kv.get(key);
         x.cloned()
     }
 }
