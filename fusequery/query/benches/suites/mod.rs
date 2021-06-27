@@ -2,15 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use criterion::Criterion;
+use futures::StreamExt;
+
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_runtime::tokio;
-use criterion::Criterion;
 use fuse_query::interpreters::SelectInterpreter;
-use fuse_query::servers::MySQLSession;
+use fuse_query::servers::MySQLConnection;
+use fuse_query::sessions::session_ref::SessionRef;
 use fuse_query::sessions::SessionManager;
 use fuse_query::sql::PlanParser;
-use futures::StreamExt;
 
 pub mod bench_aggregate_query_sql;
 pub mod bench_filter_query_sql;
@@ -19,7 +21,7 @@ pub mod bench_sort_query_sql;
 
 pub async fn select_executor(sql: &str) -> Result<()> {
     let session_manager = SessionManager::try_create(1)?;
-    let executor_session = session_manager.create_session::<MySQLSession>()?;
+    let executor_session = session_manager.get_or_create_session("Benches")?;
     let ctx = executor_session.try_create_context()?;
 
     if let PlanNode::Select(plan) = PlanParser::create(ctx.clone()).build_from_sql(sql)? {

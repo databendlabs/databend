@@ -23,7 +23,7 @@ use msql_srv::*;
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_stream::StreamExt as OtherStreamExt;
 
-use crate::servers::mysql::mysql_session::MySQLSession;
+use crate::servers::mysql::mysql_session::MySQLConnection;
 use crate::servers::mysql::reject_connection::RejectConnection;
 use crate::servers::AbortableServer;
 use crate::servers::AbortableService;
@@ -103,16 +103,12 @@ impl AbortableService<(String, u16), SocketAddr> for MySQLHandler {
                             log::error!("Unexpected error during process accept: {}", error)
                         }
                         Some(Ok(tcp_stream)) => {
-                            if let Ok(addr) = tcp_stream.peer_addr() {
-                                log::debug!("Received connect from {}", addr);
-                            }
-
-                            match sessions.create_session::<MySQLSession>() {
+                            match sessions.get_or_create_session("MySQL", None) {
                                 Err(error) => {
                                     Self::reject_session(tcp_stream, &rejected_executor, error)
                                 }
-                                Ok(runnable_session) => {
-                                    if let Err(error) = runnable_session.start(tcp_stream).await {
+                                Ok(mysql_session) => {
+                                    if let Err(error) = MySQLConnection::run_on_stream(mysql_session, tcp_stream) {
                                         log::error!(
                                             "Unexpected error occurred during start session: {:?}",
                                             error

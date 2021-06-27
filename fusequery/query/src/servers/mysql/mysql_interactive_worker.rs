@@ -19,29 +19,27 @@ use msql_srv::ParamParser;
 use msql_srv::QueryResultWriter;
 use msql_srv::StatementMetaWriter;
 use tokio_stream::StreamExt;
+use common_infallible::exit_scope;
 
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
-use crate::sessions::{ISession, FuseQueryContextRef};
+use crate::sessions::{FuseQueryContextRef, SessionRef};
 use crate::sql::DfHint;
 use crate::sql::PlanParser;
 
-struct InteractiveWorkerBase<W: std::io::Write> {
-    session: Arc<Box<dyn ISession>>,
-    phantom_data: PhantomData<W>,
-}
+struct InteractiveWorkerBase<W: std::io::Write>(PhantomData<W>);
 
 pub struct InteractiveWorker<W: std::io::Write> {
     base: InteractiveWorkerBase<W>,
-    session: Arc<Box<dyn ISession>>,
+    session: SessionRef,
 }
 
 impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
     type Error = ErrorCode;
 
     fn on_prepare(&mut self, query: &str, writer: StatementMetaWriter<W>) -> Result<()> {
-        if self.session.get_status().is_aborting() {
+        if self.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -61,7 +59,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         param: ParamParser,
         writer: QueryResultWriter<W>,
     ) -> Result<()> {
-        if self.session.get_status().is_aborting() {
+        if self.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -82,7 +80,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
     }
 
     fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> Result<()> {
-        if self.session.get_status().is_aborting() {
+        if self.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -94,10 +92,9 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         }
 
         let start = Instant::now();
-        self.session.get_status().enter_query(query);
         let context = self.session.try_create_context()?;
+
         DFQueryResultWriter::create(writer).write(self.base.do_query(query, context))?;
-        self.session.get_status().exit_query()?;
 
         histogram!(
             super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
@@ -108,7 +105,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
     }
 
     fn on_init(&mut self, database_name: &str, writer: InitWriter<W>) -> Result<()> {
-        if self.session.get_status().is_aborting() {
+        if self.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -156,13 +153,9 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let (plan, hints) = PlanParser::create(context.clone()).build_with_hint_from_sql(query);
 
         let fetch_query_blocks = || -> Result<Vec<DataBlock>> {
-            let query_plan = plan?;
-            // self.session.get_status().enter_interpreter(&query_plan);
-            let interpreter = InterpreterFactory::get(context, query_plan)?;
+            let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
             let data_stream = runtime.block_on(interpreter.execute())?;
-
-            let (abort_handle, abort_stream) = AbortStream::try_create(data_stream)?;
-            self.session.get_status().enter_pipeline_executor(abort_handle);
+            let abort_stream = context.try_create_abortable(data_stream)?;
 
             runtime.block_on(abort_stream.collect::<Result<Vec<DataBlock>>>())
         };
@@ -206,13 +199,10 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 }
 
 impl<W: std::io::Write> InteractiveWorker<W> {
-    pub fn create(session: Arc<Box<dyn ISession>>) -> InteractiveWorker<W> {
+    pub fn create(session: SessionRef) -> InteractiveWorker<W> {
         InteractiveWorker::<W> {
-            session: session.clone(),
-            base: InteractiveWorkerBase::<W> {
-                session,
-                phantom_data: PhantomData::<W>,
-            },
+            session,
+            base: InteractiveWorkerBase::<W>(PhantomData::<W>),
         }
     }
 }

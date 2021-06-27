@@ -14,13 +14,13 @@ mod session;
 #[allow(clippy::module_inception)]
 mod sessions;
 mod settings;
-mod status;
+mod session_ref;
+mod context_shared;
 
 pub use context::FuseQueryContext;
 pub use context::FuseQueryContextRef;
-pub use session::ISession;
-pub use session::SessionCreator;
+pub use session_ref::SessionRef;
 pub use sessions::SessionManager;
 pub use sessions::SessionManagerRef;
 pub use settings::Settings;
-pub use status::SessionStatus;
+pub use session::Session;

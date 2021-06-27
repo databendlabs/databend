@@ -10,7 +10,7 @@ pub use abortable::Elapsed;
 pub use clickhouse::ClickHouseHandler;
 
 pub use self::mysql::MySQLHandler;
-pub use self::mysql::MySQLSession;
+pub use self::mysql::MySQLConnection;
 
 mod abortable;
 mod clickhouse;

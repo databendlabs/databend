@@ -14,8 +14,8 @@ use mysql::prelude::Queryable;
 
 use crate::clusters::Cluster;
 use crate::configs::Config;
-use crate::servers::mysql::mysql_session::MySQLSession;
-use crate::sessions::ISession;
+use crate::servers::mysql::mysql_session::MySQLConnection;
+use crate::sessions::session_ref::SessionRef;
 use crate::sessions::SessionManager;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -239,7 +239,7 @@ async fn test_progress_wait_terminal_after_force_abort() -> Result<()> {
     Ok(())
 }
 
-async fn prepare_session_and_connect() -> Result<(mysql::Conn, Arc<Box<dyn ISession>>)> {
+async fn prepare_session_and_connect() -> Result<(mysql::Conn, Arc<Box<dyn SessionRef>>)> {
     let session_manager = SessionManager::from_conf(Config::default(), Cluster::empty())?;
     let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await?;
     let local_addr = listener
@@ -248,7 +248,7 @@ async fn prepare_session_and_connect() -> Result<(mysql::Conn, Arc<Box<dyn ISess
 
     let session = tokio::spawn(async move {
         let (stream, _) = listener.accept().await?;
-        let session = session_manager.create_session::<MySQLSession>()?;
+        let session = session_manager.get_or_create_session::<MySQLConnection>()?;
         session.start(stream).await?;
         Result::Ok(session)
     });

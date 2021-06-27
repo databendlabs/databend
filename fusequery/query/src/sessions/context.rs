@@ -26,91 +26,81 @@ use crate::datasources::DataSource;
 use crate::datasources::Table;
 use crate::datasources::TableFunction;
 use crate::sessions::Settings;
+use common_streams::{AbortStream, SendableDataBlockStream};
+use crate::sessions::context_shared::FuseQueryContextShared;
+
 
 #[derive(Clone)]
 pub struct FuseQueryContext {
-    conf: Config,
-    uuid: Arc<RwLock<String>>,
-    settings: Arc<Settings>,
-    cluster: Arc<RwLock<ClusterRef>>,
-    datasource: Arc<DataSource>,
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Part>>>,
-    current_database: Arc<RwLock<String>>,
-    progress: Arc<Progress>,
-    runtime: Arc<RwLock<Runtime>>,
     version: String,
+    shared: Arc<FuseQueryContextShared>,
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
     pub fn try_create(conf: Config) -> Result<FuseQueryContextRef> {
-        let settings = Settings::try_create()?;
-        let ctx = FuseQueryContext {
-            conf,
-            uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
-            settings: settings.clone(),
-            cluster: Arc::new(RwLock::new(Cluster::empty())),
-            datasource: Arc::new(DataSource::try_create()?),
-            statistics: Arc::new(RwLock::new(Statistics::default())),
-            partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            current_database: Arc::new(RwLock::new(String::from("default"))),
-            progress: Arc::new(Progress::create()),
-            runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(
-                settings.get_max_threads()? as usize,
-            )?)),
-            version: format!(
-                "FuseQuery v-{}",
-                *crate::configs::config::FUSE_COMMIT_VERSION
-            ),
-        };
+        // let settings = Settings::try_create()?;
+        // let ctx = FuseQueryContext {
+        //     conf,
+        //     uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
+        //     settings: settings.clone(),
+        //     cluster: Arc::new(RwLock::new(Cluster::empty())),
+        //     datasource: Arc::new(DataSource::try_create()?),
+        //     statistics: Arc::new(RwLock::new(Statistics::default())),
+        //     partition_queue: Arc::new(RwLock::new(VecDeque::new())),
+        //     current_database: Arc::new(RwLock::new(String::from("default"))),
+        //     progress: Arc::new(Progress::create()),
+        //     runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(
+        //         settings.get_max_threads()? as usize,
+        //     )?)),
+        //     version: format!(
+        //         "FuseQuery v-{}",
+        //         *crate::configs::config::FUSE_COMMIT_VERSION
+        //     ),
+        // };
 
-        Ok(Arc::new(ctx))
+        // Ok(Arc::new(ctx))
+        unimplemented!();
     }
 
-    pub fn from_settings(
-        conf: Config,
-        settings: Arc<Settings>,
-        default_database: String,
-        datasource: Arc<DataSource>,
-    ) -> Result<FuseQueryContextRef> {
-        Ok(Arc::new(FuseQueryContext {
-            conf,
-            uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
-            settings: settings.clone(),
-            cluster: Arc::new(RwLock::new(Cluster::empty())),
-            datasource,
+    pub fn new(other: FuseQueryContextRef) -> FuseQueryContextRef {
+        Arc::new(FuseQueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            current_database: Arc::new(RwLock::new(default_database)),
-            progress: Arc::new(Progress::create()),
-            runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(
-                settings.get_max_threads()? as usize,
-            )?)),
             version: format!(
                 "FuseQuery v-{}",
                 *crate::configs::config::FUSE_COMMIT_VERSION
             ),
+            shared: other.shared.clone(),
+        })
+    }
+
+    pub fn from_shared(shared: Arc<FuseQueryContextShared>) -> Result<FuseQueryContextRef> {
+        Ok(Arc::new(FuseQueryContext {
+            statistics: Arc::new(RwLock::new(Statistics::default())),
+            partition_queue: Arc::new(RwLock::new(VecDeque::new())),
+            version: format!(
+                "FuseQuery v-{}",
+                *crate::configs::config::FUSE_COMMIT_VERSION
+            ),
+            shared,
         }))
     }
 
-    pub fn with_cluster(&self, cluster: ClusterRef) -> Result<FuseQueryContextRef> {
-        *self.cluster.write() = cluster;
-        Ok(Arc::new(self.clone()))
+    pub fn with_cluster(&self, _cluster: ClusterRef) -> Result<FuseQueryContextRef> {
+        unimplemented!();
     }
 
     pub fn with_id(&self, uuid: &str) -> Result<FuseQueryContextRef> {
-        *self.uuid.write() = uuid.to_string();
-        Ok(Arc::new(self.clone()))
+        unimplemented!();
     }
 
     /// ctx.reset will reset the necessary variables in the session
     pub fn reset(&self) -> Result<()> {
-        self.progress.reset();
-        self.statistics.write().clear();
-        self.partition_queue.write().clear();
-        Ok(())
+        unimplemented!()
     }
 
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
@@ -120,30 +110,30 @@ impl FuseQueryContext {
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        self.runtime.read().spawn(task)
+        self.shared.runtime.read().spawn(task)
     }
 
     /// Set progress callback to context.
     /// By default, it is called for leaf sources, after each block
     /// Note that the callback can be called from different threads.
     pub fn progress_callback(&self) -> Result<ProgressCallback> {
-        let current_progress = self.progress.clone();
+        let current_progress = self.shared.progress.clone();
         Ok(Box::new(move |value: &ProgressValues| {
             current_progress.incr(value);
         }))
     }
 
     pub fn get_progress_value(&self) -> ProgressValues {
-        self.progress.as_ref().get_values()
+        self.shared.progress.as_ref().get_values()
     }
 
     pub fn get_and_reset_progress_value(&self) -> ProgressValues {
-        self.progress.as_ref().get_and_reset()
+        self.shared.progress.as_ref().get_and_reset()
     }
 
     // Some table can estimate the approx total rows, such as NumbersTable
     pub fn add_total_rows_approx(&self, total_rows: usize) {
-        self.progress.as_ref().add_total_rows_approx(total_rows);
+        self.shared.progress.as_ref().add_total_rows_approx(total_rows);
     }
 
     // Steal n partitions from the partition pool by the pipeline worker.
@@ -183,6 +173,7 @@ impl FuseQueryContext {
     }
 
     pub fn try_get_cluster(&self) -> Result<ClusterRef> {
+        // TODO: get cluster from session.
         let cluster = self.cluster.read();
         Ok(cluster.clone())
     }
@@ -213,7 +204,12 @@ impl FuseQueryContext {
     }
 
     pub fn get_id(&self) -> String {
-        self.uuid.as_ref().read().clone()
+        self.shared.init_query_id.as_ref().read().clone()
+    }
+
+    pub fn try_create_abortable(&self, input: SendableDataBlockStream) -> Result<AbortStream> {
+        let (abort_handle, abort_stream) = AbortStream::try_create(input)?;
+        Ok(abort_stream)
     }
 
     pub fn get_current_database(&self) -> String {
@@ -258,6 +254,6 @@ impl FuseQueryContext {
 
 impl std::fmt::Debug for FuseQueryContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.settings)
+        write!(f, "{:?}", self.get_settings())
     }
 }
