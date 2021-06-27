@@ -79,10 +79,9 @@ impl FileSystem for Dfs {
     #[tracing::instrument(level = "debug", skip(self))]
     async fn list(&self, prefix: &str) -> anyhow::Result<ListResult> {
         let sm = self.meta_node.sto.get_state_machine().await;
-        let meta = &sm.meta;
 
         let mut files: Vec<String> = Vec::new();
-        for (k, _v) in meta.keys.range((Included(prefix.to_string()), Unbounded)) {
+        for (k, _v) in sm.keys.range((Included(prefix.to_string()), Unbounded)) {
             if !k.starts_with(prefix) {
                 break;
             }
