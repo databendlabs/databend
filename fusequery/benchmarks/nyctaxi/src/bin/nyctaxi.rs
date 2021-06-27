@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = Opt::from_args();
     let ctx = FuseQueryContext::try_create(Config::default())?;
     if opt.threads > 0 {
-        ctx.set_max_threads(opt.threads as u64)?;
+        ctx.get_settings().set_max_threads(opt.threads as u64)?;
     }
 
     println!(

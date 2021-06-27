@@ -104,7 +104,7 @@ impl ClickHouseSession for Session {
                 }
             }
             cancel_clone.store(true, Ordering::Relaxed);
-        });
+        })?;
 
         while let Some(item) = rx.recv().await {
             match item {
@@ -199,7 +199,7 @@ impl ClickHouseHandler {
                 .session_manager
                 .try_create_context()?
                 .with_cluster(self.cluster.clone())?;
-            ctx.set_max_threads(self.conf.num_cpus)?;
+            ctx.get_settings().set_max_threads(self.conf.num_cpus)?;
 
             // Spawn our handler to be run asynchronously.
             tokio::spawn(async move {

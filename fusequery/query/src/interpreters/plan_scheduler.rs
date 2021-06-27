@@ -234,7 +234,8 @@ impl ReadSourceGetNodePlan {
         let table = ctx.get_table(&plan.db, &plan.table)?;
 
         if !table.is_local() {
-            let new_partitions_size = ctx.get_max_threads()? as usize * cluster_nodes.len();
+            let max_threads = ctx.get_settings().get_max_threads()? as usize;
+            let new_partitions_size = max_threads * cluster_nodes.len();
             let new_source_plan =
                 table.read_plan(ctx.clone(), &*plan.scan_plan, new_partitions_size)?;
 

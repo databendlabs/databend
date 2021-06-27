@@ -69,6 +69,7 @@ impl SessionManager {
     }
 
     pub fn get_cluster(self: &Arc<Self>) -> ClusterRef {
+
         self.cluster.clone()
     }
 

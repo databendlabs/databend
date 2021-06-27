@@ -105,12 +105,12 @@ impl FuseQueryContext {
 
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
-    pub fn execute_task<T>(&self, task: T) -> JoinHandle<T::Output>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
+    pub fn execute_task<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
+        where
+            T: Future + Send + 'static,
+            T::Output: Send + 'static,
     {
-        self.shared.runtime.read().spawn(task)
+        Ok(self.shared.try_get_runtime()?.spawn(task))
     }
 
     /// Set progress callback to context.
@@ -173,17 +173,15 @@ impl FuseQueryContext {
     }
 
     pub fn try_get_cluster(&self) -> Result<ClusterRef> {
-        // TODO: get cluster from session.
-        let cluster = self.cluster.read();
-        Ok(cluster.clone())
+        self.shared.try_get_cluster()
     }
 
     pub fn get_datasource(&self) -> Arc<DataSource> {
-        self.datasource.clone()
+        self.shared.get_datasource()
     }
 
-    pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
-        self.datasource.get_table(db_name, table_name)
+    pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+        self.get_datasource().get_table(database, table)
     }
 
     // This is an adhoc solution for the metadata syncing problem, far from elegant. let's tweak this later.
@@ -191,16 +189,12 @@ impl FuseQueryContext {
     // The reason of not extending IDataSource::get_table (e.g. by adding a remote_hint parameter):
     // Implementation of fetching remote table involves async operations which is not
     // straight forward (but not infeasible) to do in a non-async method.
-    pub async fn get_remote_table(
-        &self,
-        db_name: &str,
-        table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
-        self.datasource.get_remote_table(db_name, table_name).await
+    pub async fn get_remote_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+        self.get_datasource().get_remote_table(database, table).await
     }
 
     pub fn get_table_function(&self, function_name: &str) -> Result<Arc<dyn TableFunction>> {
-        self.datasource.get_table_function(function_name)
+        self.get_datasource().get_table_function(function_name)
     }
 
     pub fn get_id(&self) -> String {
@@ -213,30 +207,19 @@ impl FuseQueryContext {
     }
 
     pub fn get_current_database(&self) -> String {
-        self.current_database.as_ref().read().clone()
+        self.shared.get_current_database()
     }
 
     pub fn set_current_database(&self, new_database_name: String) -> Result<()> {
-        self.datasource
-            .get_database(new_database_name.as_str())
-            .map(|_| {
-                *self.current_database.write() = new_database_name.to_string();
-            })
-            .map_err(|_| {
-                ErrorCode::UnknownDatabase(format!(
-                    "Database {}  doesn't exist.",
-                    new_database_name
-                ))
-            })
-    }
-
-    pub fn get_max_threads(&self) -> Result<u64> {
-        self.settings.get_max_threads()
-    }
-
-    pub fn set_max_threads(&self, threads: u64) -> Result<()> {
-        *self.runtime.write() = Runtime::with_worker_threads(threads as usize)?;
-        self.settings.set_max_threads(threads)
+        match self.get_datasource().get_database(new_database_name.as_str()) {
+            Err(_) => Err(ErrorCode::UnknownDatabase(format!(
+                "Database {}  doesn't exist.", new_database_name
+            ))),
+            Ok(_) => {
+                self.shared.set_current_database(new_database_name);
+                Ok(())
+            }
+        }
     }
 
     pub fn get_fuse_version(&self) -> String {
@@ -244,11 +227,11 @@ impl FuseQueryContext {
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {
-        self.settings.clone()
+        self.shared.get_settings()
     }
 
     pub fn get_config(&self) -> Config {
-        self.conf.clone()
+        self.shared.conf.clone()
     }
 }
 

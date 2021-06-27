@@ -18,6 +18,8 @@ use crate::sessions::SessionManagerRef;
 use std::net::SocketAddr;
 use futures::channel::oneshot::{Receiver, Sender};
 use crate::sessions::context_shared::FuseQueryContextShared;
+use crate::clusters::ClusterRef;
+use crate::datasources::DataSource;
 
 #[derive(PartialEq, Clone)]
 pub enum State {
@@ -94,8 +96,25 @@ impl Session {
         });
     }
 
-    pub fn update_database(self: &Arc<Self>, database_name: String) {
+    pub fn set_current_database(self: &Arc<Self>, database_name: String) {
         let mut inner = self.mutable_status.lock();
         inner.current_database = database_name;
+    }
+
+    pub fn get_current_database(self: &Arc<Self>) -> String {
+        let mut inner = self.mutable_status.lock();
+        inner.current_database.clone()
+    }
+
+    pub fn try_get_cluster(self: &Arc<Self>) -> Result<ClusterRef> {
+        Ok(self.sessions.get_cluster())
+    }
+
+    pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
+        self.mutable_status.lock().session_settings.clone()
+    }
+
+    pub fn get_datasource(self: &Arc<Self>) -> Arc<DataSource> {
+        self.sessions.get_datasource()
     }
 }

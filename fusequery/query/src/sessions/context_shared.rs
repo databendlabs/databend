@@ -18,12 +18,13 @@ use common_exception::Result;
 ///         (SELECT scalar FROM table_name_3) AS scalar_3
 ///     FROM table_name_4;
 /// For each subquery, they will share a runtime, session, progress, init_query_id
-pub(in sessions) struct FuseQueryContextShared {
-    pub(in sessions) conf: Config,
-    pub(in sessions) progress: Arc<Progress>,
-    pub(in sessions) session: Arc<Session>,
-    pub(in sessions) runtime: Arc<RwLock<Runtime>>,
-    pub(in sessions) init_query_id: Arc<RwLock<String>>,
+pub(in crate::sessions) struct FuseQueryContextShared {
+    pub(in crate::sessions) conf: Config,
+    pub(in crate::sessions) progress: Arc<Progress>,
+    pub(in crate::sessions) session: Arc<Session>,
+    pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
+    pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
+    pub(in crate::sessions) cluster_cache: Arc<RwLock<Option<ClusterRef>>>,
 }
 
 impl FuseQueryContextShared {
@@ -33,9 +34,53 @@ impl FuseQueryContextShared {
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             progress: Arc::new(Progress::create()),
             session: session,
-            runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(
-                settings.get_max_threads()? as usize,
-            )?)),
+            runtime: Arc::new(RwLock::new(None)),
+            cluster_cache: Arc::new(RwLock::new(None)),
         }))
+    }
+
+    pub fn try_get_cluster(&self) -> Result<ClusterRef> {
+        // We only get the cluster once during the query.
+        let cluster_cache = self.cluster_cache.write();
+
+        match &*cluster_cache {
+            Some(cached) => Ok(cached.clone()),
+            None => {
+                let cluster = self.session.try_get_cluster()?;
+                *cluster_cache = Some(cluster.clone());
+                Ok(cluster)
+            }
+        }
+    }
+
+    pub fn get_current_database(&self) -> String {
+        self.session.get_current_database()
+    }
+
+    pub fn set_current_database(&self, new_database_name: String) {
+        self.session.set_current_database(new_database_name);
+    }
+
+    pub fn get_settings(&self) -> Arc<Settings> {
+        self.session.get_settings()
+    }
+
+    pub fn get_datasource(&self) -> Arc<DataSource> {
+        self.session.get_datasource()
+    }
+
+    pub fn try_get_runtime(&self) -> Result<Arc<Runtime>> {
+        let query_runtime = self.runtime.write();
+
+        match &*query_runtime {
+            Some(query_runtime) => Ok(query_runtime.clone()),
+            None => {
+                let settings = self.get_settings();
+                let max_threads = settings.get_max_threads()? as usize;
+                let runtime = Arc::new(Runtime::with_worker_threads(max_threads)?);
+                *query_runtime = Some(runtime.clone());
+                Ok(runtime)
+            }
+        }
     }
 }

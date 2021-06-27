@@ -20,7 +20,7 @@ pub fn try_create_context() -> Result<FuseQueryContextRef> {
 
     let ctx = FuseQueryContext::try_create(config)?;
     ctx.with_id("2021")?;
-    ctx.set_max_threads(8)?;
+    ctx.get_settings().set_max_threads(8)?;
 
     Ok(ctx)
 }

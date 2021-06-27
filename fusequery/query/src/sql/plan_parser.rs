@@ -577,7 +577,7 @@ impl PlanParser {
                         .read_plan(
                             self.ctx.clone(),
                             dummy_scan_plan,
-                            self.ctx.get_max_threads()? as usize,
+                            self.ctx.get_settings().get_max_threads()? as usize,
                         )
                         .map(PlanNode::ReadSource),
                     _unreachable_plan => panic!("Logical error: cannot downcast to scan plan"),
@@ -644,9 +644,10 @@ impl PlanParser {
                 };
 
                 // TODO: Move ReadSourcePlan to SelectInterpreter
+                let partitions = self.ctx.get_settings().get_max_threads()? as usize;
                 scan.and_then(|scan| match scan {
                     PlanNode::Scan(ref scan) => table
-                        .read_plan(self.ctx.clone(), scan, self.ctx.get_max_threads()? as usize)
+                        .read_plan(self.ctx.clone(), scan, partitions)
                         .map(PlanNode::ReadSource),
                     _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan"),
                 })

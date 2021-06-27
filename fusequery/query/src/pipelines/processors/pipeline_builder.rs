@@ -287,7 +287,7 @@ impl PipelineBuilder {
         // Bind plan partitions to context.
         self.ctx.try_set_partitions(plan.parts.clone())?;
 
-        let max_threads = self.ctx.get_max_threads()? as usize;
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         let max_threads = std::cmp::min(max_threads, plan.parts.len());
         let workers = std::cmp::max(max_threads, 1);
 

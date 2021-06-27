@@ -49,7 +49,7 @@ impl NumberTestData {
                 projected_schema: Arc::new(DataSchema::empty()),
                 push_downs: Extras::default(),
             },
-            self.ctx.get_max_threads()? as usize,
+            self.ctx.get_settings().get_max_threads()? as usize,
         )
     }
 

@@ -237,7 +237,7 @@ impl FlightDispatcher {
             let _ = request_sender
                 .send(Request::TerminalStage(context, query_id, stage_id))
                 .await;
-        });
+        })?;
 
         Ok(())
     }
@@ -252,7 +252,7 @@ impl FlightDispatcher {
             .try_create_context()
             .and_then(|ctx| ctx.with_cluster(state.cluster.clone()))
             .and_then(|ctx| {
-                ctx.set_max_threads(state.conf.num_cpus)?;
+                ctx.get_settings().set_max_threads(state.conf.num_cpus)?;
                 PipelineBuilder::create(ctx.clone(), plan.clone())
                     .build()
                     .map(move |pipeline| (ctx, pipeline))
