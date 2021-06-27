@@ -78,7 +78,7 @@ fn arithmetic_helper<T, Kernel, F>(
     rhs: &DataArray<T>,
     kernel: Kernel,
     operation: F,
-) -> DataArray<T>
+) -> Result<DataArray<T>>
 where
     T: DFNumericType,
     T::Native: Add<Output = T::Native>
@@ -116,10 +116,8 @@ where
         }
         _ => unreachable!(),
     };
-    ca
+    Ok(ca)
 }
-
-// Operands on DataArray & DataArray
 
 impl<T> Add for &DataArray<T>
 where
@@ -130,7 +128,7 @@ where
         + Div<Output = T::Native>
         + num::Zero,
 {
-    type Output = DataArray<T>;
+    type Output = Result<DataArray<T>>;
 
     fn add(self, rhs: Self) -> Self::Output {
         arithmetic_helper(self, rhs, compute::add, |lhs, rhs| lhs + rhs)
@@ -148,7 +146,7 @@ where
         + num::Zero
         + num::One,
 {
-    type Output = DataArray<T>;
+    type Output = Result<DataArray<T>>;
 
     fn div(self, rhs: Self) -> Self::Output {
         arithmetic_helper(self, rhs, compute::divide, |lhs, rhs| lhs / rhs)
@@ -165,7 +163,7 @@ where
         + Rem<Output = T::Native>
         + num::Zero,
 {
-    type Output = DataArray<T>;
+    type Output = Result<DataArray<T>>;
 
     fn mul(self, rhs: Self) -> Self::Output {
         arithmetic_helper(self, rhs, compute::multiply, |lhs, rhs| lhs * rhs)
@@ -183,7 +181,7 @@ where
         + num::Zero
         + num::One,
 {
-    type Output = DataArray<T>;
+    type Output = Result<DataArray<T>>;
 
     fn rem(self, rhs: Self) -> Self::Output {
         arithmetic_helper(self, rhs, compute::modulus, |lhs, rhs| lhs % rhs)
@@ -200,7 +198,7 @@ where
         + Rem<Output = T::Native>
         + num::Zero,
 {
-    type Output = DataArray<T>;
+    type Output = Result<DataArray<T>>;
 
     fn sub(self, rhs: Self) -> Self::Output {
         arithmetic_helper(self, rhs, compute::subtract, |lhs, rhs| lhs - rhs)
@@ -217,7 +215,7 @@ where
         + Rem<Output = T::Native>
         + num::Zero,
 {
-    type Output = Self;
+    type Output = Result<Self>;
 
     fn add(self, rhs: Self) -> Self::Output {
         (&self).add(&rhs)
@@ -235,7 +233,7 @@ where
         + num::Zero
         + num::One,
 {
-    type Output = Self;
+    type Output = Result<Self>;
 
     fn div(self, rhs: Self) -> Self::Output {
         (&self).div(&rhs)
@@ -252,7 +250,7 @@ where
         + Rem<Output = T::Native>
         + num::Zero,
 {
-    type Output = Self;
+    type Output = Result<Self>;
 
     fn mul(self, rhs: Self) -> Self::Output {
         (&self).mul(&rhs)
@@ -269,7 +267,7 @@ where
         + Rem<Output = T::Native>
         + num::Zero,
 {
-    type Output = Self;
+    type Output = Result<Self>;
 
     fn sub(self, rhs: Self) -> Self::Output {
         (&self).sub(&rhs)
@@ -287,7 +285,7 @@ where
         + num::Zero
         + num::One,
 {
-    type Output = DataArray<T>;
+    type Output = Result<DataArray<T>>;
 
     fn rem(self, rhs: Self) -> Self::Output {
         (&self).rem(&rhs)
@@ -303,11 +301,11 @@ where
     N: Num + ToPrimitive,
     T::Native: Add<Output = T::Native>,
 {
-    type Output = DataArray<T>;
+    type Output = Result<DataArray<T>>;
 
     fn add(self, rhs: N) -> Self::Output {
         let adder: T::Native = NumCast::from(rhs).unwrap();
-        self.apply(|val| val + adder)
+        Ok(self.apply(|val| val + adder))
     }
 }
 
@@ -318,11 +316,11 @@ where
     N: Num + ToPrimitive,
     T::Native: Sub<Output = T::Native>,
 {
-    type Output = DataArray<T>;
+    type Output = Result<DataArray<T>>;
 
     fn sub(self, rhs: N) -> Self::Output {
         let subber: T::Native = NumCast::from(rhs).unwrap();
-        self.apply(|val| val - subber)
+        Ok(self.apply(|val| val - subber))
     }
 }
 
@@ -337,11 +335,11 @@ where
         + Sub<Output = T::Native>,
     N: Num + ToPrimitive,
 {
-    type Output = DataArray<T>;
+    type Output = Result<DataArray<T>>;
 
     fn div(self, rhs: N) -> Self::Output {
         let rhs: T::Native = NumCast::from(rhs).expect("could not cast");
-        self.apply_kernel(|arr| Arc::new(divide_scalar(arr, rhs).unwrap()))
+        Ok(self.apply_kernel(|arr| Arc::new(divide_scalar(arr, rhs).unwrap())))
     }
 }
 
@@ -352,11 +350,11 @@ where
     N: Num + ToPrimitive,
     T::Native: Mul<Output = T::Native>,
 {
-    type Output = DataArray<T>;
+    type Output = Result<DataArray<T>>;
 
     fn mul(self, rhs: N) -> Self::Output {
         let multiplier: T::Native = NumCast::from(rhs).unwrap();
-        self.apply(|val| val * multiplier)
+        Ok(self.apply(|val| val * multiplier))
     }
 }
 
@@ -368,11 +366,11 @@ where
     T::Native:
         Div<Output = T::Native> + One + Zero + Rem<Output = T::Native> + Sub<Output = T::Native>,
 {
-    type Output = DataArray<T>;
+    type Output = Result<DataArray<T>>;
 
     fn rem(self, rhs: N) -> Self::Output {
         let rhs: T::Native = NumCast::from(rhs).expect("could not cast");
-        self.apply_kernel(|arr| Arc::new(compute::modulus_scalar(arr, rhs).unwrap()))
+        Ok(self.apply_kernel(|arr| Arc::new(compute::modulus_scalar(arr, rhs).unwrap())))
     }
 }
 
@@ -383,7 +381,7 @@ where
     N: Num + ToPrimitive,
     T::Native: Add<Output = T::Native>,
 {
-    type Output = DataArray<T>;
+    type Output = Result<DataArray<T>>;
 
     fn add(self, rhs: N) -> Self::Output {
         (&self).add(rhs)
@@ -397,7 +395,7 @@ where
     N: Num + ToPrimitive,
     T::Native: Sub<Output = T::Native>,
 {
-    type Output = DataArray<T>;
+    type Output = Result<DataArray<T>>;
 
     fn sub(self, rhs: N) -> Self::Output {
         (&self).sub(rhs)
@@ -415,7 +413,7 @@ where
         + Rem<Output = T::Native>,
     N: Num + ToPrimitive,
 {
-    type Output = DataArray<T>;
+    type Output = Result<DataArray<T>>;
 
     fn div(self, rhs: N) -> Self::Output {
         (&self).div(rhs)
@@ -429,7 +427,7 @@ where
     N: Num + ToPrimitive,
     T::Native: Mul<Output = T::Native>,
 {
-    type Output = DataArray<T>;
+    type Output = Result<DataArray<T>>;
 
     fn mul(self, rhs: N) -> Self::Output {
         (&self).mul(rhs)
@@ -444,7 +442,7 @@ where
     T::Native:
         Div<Output = T::Native> + One + Zero + Rem<Output = T::Native> + Sub<Output = T::Native>,
 {
-    type Output = DataArray<T>;
+    type Output = Result<DataArray<T>>;
 
     fn rem(self, rhs: N) -> Self::Output {
         (&self).rem(rhs)
@@ -460,7 +458,7 @@ fn concat_strings(l: &str, r: &str) -> String {
 }
 
 impl Add for &DFStringArray {
-    type Output = DFStringArray;
+    type Output = Result<DFStringArray>;
 
     fn add(self, rhs: Self) -> Self::Output {
         // broadcasting path
@@ -468,23 +466,24 @@ impl Add for &DFStringArray {
             let rhs = rhs.get(0);
             return match rhs {
                 Some(rhs) => self.add(rhs),
-                None => DFStringArray::full_null(self.len()),
+                None => Ok(DFStringArray::full_null(self.len())),
             };
         }
 
         // todo! add no_null variants. Need 4 paths.
-        self.into_iter()
+        Ok(self
+            .into_iter()
             .zip(rhs.into_iter())
             .map(|(opt_l, opt_r)| match (opt_l, opt_r) {
                 (Some(l), Some(r)) => Some(concat_strings(l, r)),
                 _ => None,
             })
-            .collect()
+            .collect())
     }
 }
 
 impl Add for DFStringArray {
-    type Output = DFStringArray;
+    type Output = Result<DFStringArray>;
 
     fn add(self, rhs: Self) -> Self::Output {
         (&self).add(&rhs)
@@ -492,10 +491,10 @@ impl Add for DFStringArray {
 }
 
 impl Add<&str> for &DFStringArray {
-    type Output = DFStringArray;
+    type Output = Result<DFStringArray>;
 
     fn add(self, rhs: &str) -> Self::Output {
-        match self.null_count() {
+        Ok(match self.null_count() {
             0 => self
                 .into_no_null_iter()
                 .map(|l| concat_strings(l, rhs))
@@ -504,7 +503,7 @@ impl Add<&str> for &DFStringArray {
                 .into_iter()
                 .map(|opt_l| opt_l.map(|l| concat_strings(l, rhs)))
                 .collect(),
-        }
+        })
     }
 }
 

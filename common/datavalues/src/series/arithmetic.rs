@@ -1,5 +1,10 @@
 use std::fmt::Debug;
 use std::ops;
+use std::ops::Add;
+use std::ops::Div;
+use std::ops::Mul;
+use std::ops::Rem;
+use std::ops::Sub;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -17,32 +22,48 @@ use crate::DFStringArray;
 use crate::DFStructArray;
 use crate::DataValueArithmeticOperator;
 
-pub struct Arithmetic;
+impl Add for &Series {
+    type Output = Result<Series>;
 
-impl Arithmetic {
-    pub fn sub(lhs: &Series, rhs: &Series) -> Result<Series> {
-        let (lhs, rhs) = coerce_lhs_rhs(&DataValueArithmeticOperator::Minus, lhs, rhs)?;
-        lhs.subtract(&rhs)
-    }
-
-    pub fn add(lhs: &Series, rhs: &Series) -> Result<Series> {
-        let (lhs, rhs) = coerce_lhs_rhs(&DataValueArithmeticOperator::Plus, lhs, rhs)?;
+    fn add(self, rhs: Self) -> Self::Output {
+        let (lhs, rhs) = coerce_lhs_rhs(&DataValueArithmeticOperator::Plus, self, rhs)?;
         lhs.add_to(&rhs)
     }
+}
 
-    pub fn mul(lhs: &Series, rhs: &Series) -> Result<Series> {
-        let (lhs, rhs) = coerce_lhs_rhs(&DataValueArithmeticOperator::Mul, lhs, rhs)?;
+impl Sub for &Series {
+    type Output = Result<Series>;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        let (lhs, rhs) = coerce_lhs_rhs(&DataValueArithmeticOperator::Minus, self, rhs)?;
+        lhs.subtract(&rhs)
+    }
+}
+
+impl Mul for &Series {
+    type Output = Result<Series>;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        let (lhs, rhs) = coerce_lhs_rhs(&DataValueArithmeticOperator::Mul, self, rhs)?;
         lhs.multiply(&rhs)
     }
+}
 
-    pub fn div(lhs: &Series, rhs: &Series) -> Result<Series> {
-        let (lhs, rhs) = coerce_lhs_rhs(&DataValueArithmeticOperator::Div, lhs, rhs)?;
+impl Div for &Series {
+    type Output = Result<Series>;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        let (lhs, rhs) = coerce_lhs_rhs(&DataValueArithmeticOperator::Div, self, rhs)?;
         lhs.divide(&rhs)
     }
+}
 
-    pub fn rem(lhs: &Series, rhs: &Series) -> Result<Series> {
-        let (lhs, rhs) = coerce_lhs_rhs(&DataValueArithmeticOperator::Modulo, lhs, rhs)?;
-        lhs.subtract(&rhs)
+impl Rem for &Series {
+    type Output = Result<Series>;
+
+    fn rem(self, rhs: Self) -> Self::Output {
+        let (lhs, rhs) = coerce_lhs_rhs(&DataValueArithmeticOperator::Modulo, self, rhs)?;
+        lhs.remainder(&rhs)
     }
 }
 
@@ -94,27 +115,27 @@ where
 {
     fn subtract(&self, rhs: &Series) -> Result<Series> {
         let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
-        let out = self - rhs;
+        let out = (self - rhs)?;
         Ok(out.into_series().into())
     }
     fn add_to(&self, rhs: &Series) -> Result<Series> {
         let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
-        let out = self + rhs;
+        let out = (self + rhs)?;
         Ok(out.into_series().into())
     }
     fn multiply(&self, rhs: &Series) -> Result<Series> {
         let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
-        let out = self * rhs;
+        let out = (self * rhs)?;
         Ok(out.into_series().into())
     }
     fn divide(&self, rhs: &Series) -> Result<Series> {
         let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
-        let out = self / rhs;
+        let out = (self / rhs)?;
         Ok(out.into_series().into())
     }
     fn remainder(&self, rhs: &Series) -> Result<Series> {
         let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
-        let out = self % rhs;
+        let out = (self % rhs)?;
         Ok(out.into_series().into())
     }
 }
@@ -122,7 +143,7 @@ where
 impl NumOpsDispatch for DFStringArray {
     fn add_to(&self, rhs: &Series) -> Result<Series> {
         let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
-        let out = self + rhs;
+        let out = (self + rhs)?;
         Ok(out.into_series().into())
     }
 }

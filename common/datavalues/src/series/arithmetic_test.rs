@@ -1,38 +1,46 @@
+use std::ops::Add;
+use std::ops::Div;
+use std::ops::Mul;
+use std::ops::Sub;
+
 use common_exception::Result;
 
-use crate::series::Arithmetic;
 use crate::series::Series;
 use crate::series::SeriesFrom;
+use crate::DataValueArithmeticOperator;
 
 #[test]
 #[allow(clippy::eq_op)]
 fn test_arithmetic_simple_series() {
     // Series +-/* Series
     let s = Series::new([1, 2, 3]);
-    assert_eq!(
-        Vec::from(Arithmetic::add(&s, &s).unwrap().i64().unwrap()),
-        vec![Some(2i64), Some(4), Some(6)]
-    );
-    assert_eq!(
-        Vec::from(Arithmetic::sub(&s, &s).unwrap().i64().unwrap()),
-        vec![Some(0i64), Some(0), Some(0)]
-    );
 
-    assert_eq!(
-        Vec::from(Arithmetic::mul(&s, &s).unwrap().i64().unwrap()),
-        vec![Some(1), Some(4), Some(9)]
-    );
-    assert_eq!(
-        Vec::from(Arithmetic::div(&s, &s).unwrap().f64().unwrap()),
-        vec![Some(1f64), Some(1f64), Some(1f64)]
-    );
+    assert_eq!(Vec::from((&s + &s).unwrap().i64().unwrap()), vec![
+        Some(2i64),
+        Some(4),
+        Some(6)
+    ]);
+    assert_eq!(Vec::from((&s - &s).unwrap().i64().unwrap()), vec![
+        Some(0i64),
+        Some(0),
+        Some(0)
+    ]);
+
+    assert_eq!(Vec::from((&s * &s).unwrap().i64().unwrap()), vec![
+        Some(1),
+        Some(4),
+        Some(9)
+    ]);
+    assert_eq!(Vec::from((&s / &s).unwrap().f64().unwrap()), vec![
+        Some(1f64),
+        Some(1f64),
+        Some(1f64)
+    ]);
 }
 
 #[test]
 fn test_arithmetic_series() {
     use pretty_assertions::assert_eq;
-
-    type Op = fn(&Series, &Series) -> Result<Series>;
 
     fn eq_series(a: &Series, b: &Series) -> Result<()> {
         assert_eq!(a.len(), b.len());
@@ -52,7 +60,7 @@ fn test_arithmetic_series() {
         args: Vec<Vec<Series>>,
         expect: Vec<Series>,
         error: Vec<&'static str>,
-        op: Op,
+        op: DataValueArithmeticOperator,
     }
 
     let tests = vec![
@@ -78,7 +86,7 @@ fn test_arithmetic_series() {
                     Series::new(vec![1.0f32, 2.0, 3.0, 4.0]),
                 ],
             ],
-            op: Arithmetic::add,
+            op: DataValueArithmeticOperator::Plus,
             expect: vec![
                 Series::new(vec![""]),
                 Series::new(vec![5i64, 5, 5, 5]),
@@ -117,7 +125,7 @@ fn test_arithmetic_series() {
                     Series::new(vec![1.0, 2.0, 3.0, 4.0]),
                 ],
             ],
-            op: Arithmetic::sub,
+            op: DataValueArithmeticOperator::Minus,
 
             expect: vec![
                 Series::new(vec![""]),
@@ -158,7 +166,8 @@ fn test_arithmetic_series() {
                     Series::new(vec![1.0, 2.0, 3.0, 4.0]),
                 ],
             ],
-            op: Arithmetic::mul,
+            op: DataValueArithmeticOperator::Mul,
+
             expect: vec![
                 Series::new(vec![""]),
                 Series::new(vec![4i64, 6, 6, 4]),
@@ -221,7 +230,8 @@ fn test_arithmetic_series() {
                     Series::new(vec![1.0, 2.0, 3.0, 4.0]),
                 ],
             ],
-            op: Arithmetic::div,
+            op: DataValueArithmeticOperator::Div,
+
             expect: vec![
                 Series::new(vec![""]),
                 Series::new(vec![4.0, 1.5, 0.6666666666666666, 0.25]),
@@ -243,8 +253,13 @@ fn test_arithmetic_series() {
 
     for t in tests {
         for (i, args) in t.args.iter().enumerate() {
-            let func = t.op;
-            let result = func(&args[0], &args[1]);
+            let result = match t.op {
+                DataValueArithmeticOperator::Plus => &args[0] + &args[1],
+                DataValueArithmeticOperator::Minus => &args[0] - &args[1],
+                DataValueArithmeticOperator::Mul => &args[0] * &args[1],
+                DataValueArithmeticOperator::Div => &args[0] / &args[1],
+                DataValueArithmeticOperator::Modulo => todo!(),
+            };
 
             match result {
                 Ok(v) => eq_series(&v, &t.expect[i]).unwrap(),

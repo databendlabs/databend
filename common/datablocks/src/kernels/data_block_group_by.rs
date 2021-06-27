@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-#![feature1(hash_raw_entry)]
-
 use std::collections::hash_map::RawEntryMut;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -96,15 +94,15 @@ impl DataBlock {
                 let hash_key = IdxHash::new(row, *hash);
                 let entry = group_indices
                     .raw_entry_mut()
-                    .from_hash(hash, |idx_hash| unsafe {
+                    .from_hash(*hash, |idx_hash| unsafe {
                         unsafe {
                             compare_series_row(&group_series, idx_hash.idx as usize, row as usize)
                         }
                     });
 
                 match entry {
-                    RawEntryMut::Occupied(mut entry) => {
-                        let (v, _) = entry.get_mut();
+                    RawEntryMut::Occupied(entry) => {
+                        let v = entry.get_mut();
                         v.push(row as u32);
                     }
                     RawEntryMut::Vacant(entry) => {
@@ -139,8 +137,6 @@ impl DataBlock {
 
 #[inline]
 pub unsafe fn compare_series_row(group_series: &[Series], idx_a: usize, idx_b: usize) -> bool {
-    todo!();
-
     for s in group_series {
         if !s.equal_element(idx_a, idx_b, s) {
             return false;

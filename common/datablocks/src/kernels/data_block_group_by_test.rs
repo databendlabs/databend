@@ -2,8 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
+use common_datavalues::series::*;
 use common_datavalues::*;
 
 use crate::*;
@@ -16,13 +15,13 @@ fn test_data_block_group_by() -> anyhow::Result<()> {
     ]);
 
     let block = DataBlock::create_by_array(schema.clone(), vec![
-        Arc::new(Int64Array::from(vec![1, 1, 2, 1, 2, 3])),
-        Arc::new(StringArray::from(vec!["x1", "x1", "x2", "x1", "x2", "x3"])),
+        Series::new(vec![164, 1, 2, 1, 2, 3]),
+        Series::new(vec!["x1", "x1", "x2", "x1", "x2", "x3"]),
     ]);
 
     let columns = &["a".to_string(), "b".to_string()];
     let table = DataBlock::group_by(&block, columns)?;
-    for (_, _, block) in table {
+    for (_, block) in table {
         match block.num_rows() {
             1 => {
                 let expected = vec![
