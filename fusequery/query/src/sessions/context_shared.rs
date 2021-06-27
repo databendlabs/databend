@@ -8,6 +8,7 @@ use common_progress::Progress;
 use common_runtime::Runtime;
 use uuid::Uuid;
 use common_exception::Result;
+use futures::future::AbortHandle;
 
 /// Data that needs to be shared in a query context.
 /// This is very useful, for example, for queries:
@@ -25,6 +26,7 @@ pub(in crate::sessions) struct FuseQueryContextShared {
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
     pub(in crate::sessions) cluster_cache: Arc<RwLock<Option<ClusterRef>>>,
+    pub(in crate::sessions) sources_abort_handle: Arc<RwLock<Vec<AbortHandle>>>,
 }
 
 impl FuseQueryContextShared {
@@ -36,6 +38,7 @@ impl FuseQueryContextShared {
             session: session,
             runtime: Arc::new(RwLock::new(None)),
             cluster_cache: Arc::new(RwLock::new(None)),
+            sources_abort_handle: Arc::new(RwLock::new(Vec::new()))
         }))
     }
 
@@ -82,5 +85,10 @@ impl FuseQueryContextShared {
                 Ok(runtime)
             }
         }
+    }
+
+    pub fn add_source_abort_handle(&self, handle: AbortHandle) {
+        let mut sources_abort_handle = self.sources_abort_handle.write();
+        sources_abort_handle.push(handle);
     }
 }

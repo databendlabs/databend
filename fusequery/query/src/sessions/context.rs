@@ -203,6 +203,7 @@ impl FuseQueryContext {
 
     pub fn try_create_abortable(&self, input: SendableDataBlockStream) -> Result<AbortStream> {
         let (abort_handle, abort_stream) = AbortStream::try_create(input)?;
+        self.shared.add_source_abort_handle(abort_handle);
         Ok(abort_stream)
     }
 

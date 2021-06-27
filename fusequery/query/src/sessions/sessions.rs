@@ -69,7 +69,6 @@ impl SessionManager {
     }
 
     pub fn get_cluster(self: &Arc<Self>) -> ClusterRef {
-
         self.cluster.clone()
     }
 
@@ -84,6 +83,7 @@ impl SessionManager {
     ) -> Result<SessionRef> {
         counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
 
+        // TODO: get session
         let mut sessions = self.active_sessions.write();
         match sessions.len() == self.max_sessions {
             true => Err(ErrorCode::TooManyUserConnections(
@@ -123,15 +123,6 @@ impl SessionManager {
 
         self.queries_context.write().remove(&*ctx.get_id());
         Ok(())
-    }
-
-    /// Fetch nums partitions from session manager by context id.
-    pub fn try_fetch_partitions(&self, ctx_id: String, nums: usize) -> Result<Partitions> {
-        let session_map = self.queries_context.read();
-        let ctx = session_map.get(&*ctx_id).ok_or_else(|| {
-            ErrorCode::UnknownContextID(format!("Unsupported context id: {}", ctx_id))
-        })?;
-        ctx.try_get_partitions(nums)
     }
 }
 
