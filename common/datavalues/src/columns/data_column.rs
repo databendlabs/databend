@@ -111,7 +111,7 @@ impl DataColumn {
     }
 
     #[inline]
-    pub fn get(&self, index: usize) -> Result<DataValue> {
+    pub fn try_get(&self, index: usize) -> Result<DataValue> {
         match self {
             DataColumn::Array(array) => Ok(array.try_get(index)?),
             DataColumn::Constant(scalar, _) => Ok(scalar.clone()),

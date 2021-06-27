@@ -7,8 +7,9 @@ use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeListArray;
 use common_arrow::arrow::array::LargeStringArray;
 
+use crate::series::IntoSeries;
 use crate::series::Series;
-use crate::series::SeriesWrap;
+use crate::series::SeriesFrom;
 use crate::DFBooleanArray;
 use crate::DFListArray;
 use crate::DFStringArray;
@@ -156,7 +157,7 @@ impl DFStringArray {
 }
 
 impl<'a> IntoIterator for &'a DFListArray {
-    type Item = Option<ArrayRef>;
+    type Item = Option<Series>;
     type IntoIter = Box<dyn DFIterator<Item = Self::Item> + 'a>;
     fn into_iter(self) -> Self::IntoIter {
         Box::new(self.downcast_iter())
@@ -181,7 +182,7 @@ impl<'a> ListIterNoNull<'a> {
 }
 
 impl<'a> Iterator for ListIterNoNull<'a> {
-    type Item = ArrayRef;
+    type Item = Series;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current == self.current_end {
@@ -189,7 +190,8 @@ impl<'a> Iterator for ListIterNoNull<'a> {
         } else {
             let old = self.current;
             self.current += 1;
-            unsafe { Some(self.array.value_unchecked(old)) }
+            let array = unsafe { self.array.value_unchecked(old) };
+            Some(array.into_series())
         }
     }
 
@@ -207,7 +209,9 @@ impl<'a> DoubleEndedIterator for ListIterNoNull<'a> {
             None
         } else {
             self.current_end -= 1;
-            unsafe { Some(self.array.value_unchecked(self.current_end)) }
+
+            let array = unsafe { self.array.value_unchecked(self.current_end) };
+            Some(array.into_series())
         }
     }
 }
@@ -219,7 +223,7 @@ impl DFListArray {
     #[allow(clippy::wrong_self_convention)]
     pub fn into_no_null_iter(
         &self,
-    ) -> impl Iterator<Item = ArrayRef> + '_ + Send + Sync + DoubleEndedIterator {
+    ) -> impl Iterator<Item = Series> + '_ + Send + Sync + DoubleEndedIterator {
         ListIterNoNull::new(self.downcast_ref())
     }
 }

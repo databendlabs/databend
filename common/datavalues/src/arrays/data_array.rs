@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::hash_map::RandomState;
 use std::convert::TryFrom;
 use std::fmt::Formatter;
 use std::marker::PhantomData;

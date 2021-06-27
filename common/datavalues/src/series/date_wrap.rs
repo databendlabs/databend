@@ -6,6 +6,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use ahash::RandomState;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::datatypes::IntervalUnit;
 use common_exception::Result;
@@ -127,6 +128,10 @@ macro_rules! impl_dyn_arrays {
                 self.0.is_null(row)
             }
 
+            fn null_count(&self) -> usize {
+                self.0.null_count()
+            }
+
             fn get_array_memory_size(&self) -> usize {
                 self.0.get_array_memory_size()
             }
@@ -139,12 +144,25 @@ macro_rules! impl_dyn_arrays {
                 self.0.slice(offset, length).into_series()
             }
 
+            unsafe fn equal_element(
+                &self,
+                idx_self: usize,
+                idx_other: usize,
+                other: &Series,
+            ) -> bool {
+                self.0.equal_element(idx_self, idx_other, other)
+            }
+
             fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
                 ArrayCast::cast_with_type(&self.0, data_type)
             }
 
             fn try_get(&self, index: usize) -> Result<DataValue> {
                 unsafe { self.0.try_get(index) }
+            }
+
+            fn vec_hash(&self, random_state: RandomState) -> DFUInt64Array {
+                self.0.vec_hash(random_state)
             }
 
             fn subtract(&self, rhs: &Series) -> Result<Series> {

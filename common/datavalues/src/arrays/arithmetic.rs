@@ -45,20 +45,20 @@ macro_rules! apply_operand_on_array_by_iter {
                     (0, _) => {
                         $self
                         .into_no_null_iter()
-                        .zip($rhs.into_iter())
+                        .zip($rhs.downcast_iter())
                         .map(|(left, opt_right)| opt_right.map(|right| left $operand right))
                         .collect()
                     },
                     (_, 0) => {
                         $self
-                        .into_iter()
+                        .downcast_iter()
                         .zip($rhs.into_no_null_iter())
                         .map(|(opt_left, right)| opt_left.map(|left| left $operand right))
                         .collect()
                     },
                     (_, _) => {
-                    $self.into_iter()
-                        .zip($rhs.into_iter())
+                    $self.downcast_iter()
+                        .zip($rhs.downcast_iter())
                         .map(|(opt_left, opt_right)| match (opt_left, opt_right) {
                             (None, None) => None,
                             (None, Some(_)) => None,

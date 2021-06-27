@@ -3,17 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use core::fmt;
-use std::convert::From;
 use std::convert::TryFrom;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use ahash::RandomState;
 use common_arrow::arrow::array::ArrayRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::arrays::*;
 use crate::data_df_type::*;
+use crate::series::*;
 use crate::DataType;
 use crate::DataValue;
 
@@ -44,13 +45,18 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool;
     fn is_null(&self, row: usize) -> bool;
+    fn null_count(&self) -> usize;
+
     fn get_array_memory_size(&self) -> usize;
     fn get_array_ref(&self) -> ArrayRef;
     fn slice(&self, offset: usize, length: usize) -> Series;
+    unsafe fn equal_element(&self, idx_self: usize, idx_other: usize, other: &Series) -> bool;
 
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series>;
 
     fn try_get(&self, index: usize) -> Result<DataValue>;
+
+    fn vec_hash(&self, random_state: RandomState) -> DFUInt64Array;
 
     fn subtract(&self, rhs: &Series) -> Result<Series>;
     fn add_to(&self, rhs: &Series) -> Result<Series>;
@@ -170,6 +176,25 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     }
 }
 
+impl<'a, T> AsRef<DataArray<T>> for dyn SeriesTrait + 'a
+where T: 'static + DFDataType
+{
+    fn as_ref(&self) -> &DataArray<T> {
+        if T::data_type() == self.data_type() ||
+            // needed because we want to get ref of List no matter what the inner type is.
+            (matches!(T::data_type(), DataType::List(_)) && matches!(self.data_type(), DataType::List(_)) )
+        {
+            unsafe { &*(self as *const dyn SeriesTrait as *const DataArray<T>) }
+        } else {
+            panic!(
+                "implementation error, cannot get ref {:?} from {:?}",
+                T::data_type(),
+                self.data_type()
+            )
+        }
+    }
+}
+
 pub trait SeriesFrom<T, Phantom: ?Sized> {
     /// Initialize by name and values.
     fn new(_: T) -> Self;
@@ -226,8 +251,8 @@ impl_from!([Option<f64>], Float64Type, new_from_opt_slice);
 impl IntoSeries for ArrayRef {
     fn into_series(self) -> Series
     where Self: Sized {
-        let dtype = DataType::try_from(self.data_type()).unwrap();
-        match dtype {
+        let data_type = DataType::try_from(self.data_type()).unwrap();
+        match data_type {
             DataType::Null => DFNullArray::new(self).into_series(),
             DataType::Boolean => DFBooleanArray::new(self).into_series(),
             DataType::UInt8 => DFUInt8Array::new(self).into_series(),
@@ -252,5 +277,58 @@ impl IntoSeries for ArrayRef {
 
             _ => unreachable!(),
         }
+    }
+}
+
+impl Series {
+    /// Check if series are equal. Note that `None == None` evaluates to `false`
+    pub fn series_equal(&self, other: &Series) -> bool {
+        if self.get_data_ptr() == other.get_data_ptr() {
+            return true;
+        }
+        if self.len() != other.len() {
+            return false;
+        }
+        if self.null_count() != other.null_count() {
+            return false;
+        }
+
+        match self.eq(other) {
+            Ok(arr) => arr.all_true(),
+            Err(_) => false,
+        }
+    }
+
+    /// Check if all values in series are equal where `None == None` evaluates to `true`.
+    pub fn series_equal_missing(&self, other: &Series) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+        if self.null_count() != other.null_count() {
+            return false;
+        }
+        // if all null and previous check did not return (so other is also all null)
+        if self.null_count() == self.len() {
+            return true;
+        }
+
+        match self.eq_missing(other) {
+            Ok(arr) => arr.all_true(),
+            Err(_) => false,
+        }
+    }
+
+    /// Get a pointer to the underlying data of this Series.
+    /// Can be useful for fast comparisons.
+    pub fn get_data_ptr(&self) -> usize {
+        let object = self.0.deref();
+
+        // Safety:
+        // A fat pointer consists of a data ptr and a ptr to the vtable.
+        // we specifically check that we only transmute &dyn SeriesTrait e.g.
+        // a trait object, therefore this is sound.
+        let (data_ptr, _vtable_ptr) =
+            unsafe { std::mem::transmute::<&dyn SeriesTrait, (usize, usize)>(object) };
+        data_ptr
     }
 }

@@ -4,6 +4,7 @@
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::compute;
+use common_datavalues::series::SeriesHelper;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -24,13 +25,12 @@ impl DataBlock {
 
         let mut arrays = Vec::with_capacity(first_block.num_columns());
         for (i, _f) in blocks[0].schema().fields().iter().enumerate() {
-            let mut arr = Vec::with_capacity(blocks.len());
+            let mut series = Vec::with_capacity(blocks.len());
             for block in blocks.iter() {
-                arr.push(block.column(i).to_array()?);
+                series.push(block.column(i).to_array()?);
             }
 
-            let arr: Vec<&dyn Array> = arr.iter().map(|c| c.as_ref()).collect();
-            arrays.push(compute::concat(&arr)?);
+            arrays.push(SeriesHelper::concat(&series)?);
         }
 
         Ok(DataBlock::create_by_array(

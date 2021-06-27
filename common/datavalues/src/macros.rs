@@ -41,6 +41,29 @@ macro_rules! match_data_type_apply_macro_ca {
     }};
 }
 
+// doesn't include Bool and Utf8
+#[macro_export]
+macro_rules! apply_method_numeric_series {
+    ($self:ident, $method:ident, $($args:expr),*) => {
+        match $self.data_type() {
+            DataType::UInt8 => $self.u8().unwrap().$method($($args),*),
+            DataType::UInt16 => $self.u16().unwrap().$method($($args),*),
+            DataType::UInt32 => $self.u32().unwrap().$method($($args),*),
+            DataType::UInt64 => $self.u64().unwrap().$method($($args),*),
+            DataType::Int8 => $self.i8().unwrap().$method($($args),*),
+            DataType::Int16 => $self.i16().unwrap().$method($($args),*),
+            DataType::Int32 => $self.i32().unwrap().$method($($args),*),
+            DataType::Int64 => $self.i64().unwrap().$method($($args),*),
+            DataType::Float32 => $self.f32().unwrap().$method($($args),*),
+            DataType::Float64 => $self.f64().unwrap().$method($($args),*),
+            DataType::Date32 => $self.date32().unwrap().$method($($args),*),
+            DataType::Date64 => $self.date64().unwrap().$method($($args),*),
+
+            _ => unimplemented!(),
+        }
+    }
+}
+
 macro_rules! typed_cast_from_array_to_data_value {
     ($array:expr, $index:expr, $ARRAYTYPE:ident, $SCALAR:ident) => {{
         use common_arrow::arrow::array::*;

@@ -1,8 +1,10 @@
 mod arrow_array;
 mod data_array;
 
+#[macro_use]
 mod arithmetic;
 mod builders;
+mod comparison;
 mod kernels;
 mod ops;
 mod upstream_traits;
@@ -10,6 +12,7 @@ mod upstream_traits;
 pub use arithmetic::*;
 pub use arrow_array::*;
 pub use builders::*;
+pub use comparison::*;
 pub use data_array::*;
 pub use kernels::*;
 pub use ops::*;

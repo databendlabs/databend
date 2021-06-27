@@ -3,16 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeListArray;
 use common_arrow::arrow::array::LargeStringArray;
 use common_arrow::arrow::array::PrimitiveArray;
 
 use crate::arrays::DataArray;
+use crate::series::IntoSeries;
+use crate::series::Series;
 use crate::DFBooleanArray;
 use crate::DFListArray;
-use crate::DFNumericType;
 use crate::DFPrimitiveType;
 use crate::DFStringArray;
 
@@ -63,12 +63,13 @@ impl DFListArray {
         unsafe { &*(arr as *const dyn Array as *const LargeListArray) }
     }
 
-    pub fn downcast_iter<'a>(
-        &self,
-    ) -> impl Iterator<Item = Option<ArrayRef>> + DoubleEndedIterator {
+    pub fn downcast_iter<'a>(&self) -> impl Iterator<Item = Option<Series>> + DoubleEndedIterator {
         let arr = &*self.array;
         let arr = unsafe { &*(arr as *const dyn Array as *const LargeListArray) };
 
-        arr.iter()
+        arr.iter().map(|a| match a {
+            Some(a) => Some(a.into_series()),
+            None => None,
+        })
     }
 }

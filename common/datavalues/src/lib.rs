@@ -34,3 +34,4 @@ pub use data_type_coercion::*;
 pub use data_value::DataValue;
 pub use data_value::DataValueRef;
 pub use data_value_operator::*;
+pub use vec::*;

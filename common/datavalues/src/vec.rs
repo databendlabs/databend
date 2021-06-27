@@ -9,7 +9,7 @@ use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::datatypes::*;
 
 /// A `Vec` wrapper with a memory alignment equal to Arrow's primitive arrays.
-/// Can be useful in creating a new ChunkedArray or Arrow Primitive array without copying.
+/// Can be useful in creating a new DataArray or Arrow Primitive array without copying.
 #[derive(Debug)]
 pub struct AlignedVec<T> {
     pub inner: Vec<T>,
