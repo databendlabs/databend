@@ -11,14 +11,14 @@ use common_store_api::UpsertKVActionResult;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
-use crate::meta_service::ClientRequest;
-use crate::meta_service::ClientResponse;
+use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
+use crate::meta_service::LogEntry;
 
 #[async_trait::async_trait]
 impl RequestHandler<UpsertKVAction> for ActionHandler {
     async fn handle(&self, act: UpsertKVAction) -> common_exception::Result<UpsertKVActionResult> {
-        let cr = ClientRequest {
+        let cr = LogEntry {
             txid: None,
             cmd: Cmd::UpsertKV {
                 key: act.key,
@@ -34,7 +34,7 @@ impl RequestHandler<UpsertKVAction> for ActionHandler {
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
         match rst {
-            ClientResponse::KV { prev, result } => Ok(UpsertKVActionResult { prev, result }),
+            AppliedState::KV { prev, result } => Ok(UpsertKVActionResult { prev, result }),
             _ => Err(ErrorCode::MetaNodeInternalError("not a KV result")),
         }
     }

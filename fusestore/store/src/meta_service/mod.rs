@@ -2,22 +2,28 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+pub mod applied_state;
+pub mod cmd;
+pub mod errors;
+pub mod log_entry;
 pub mod meta_service_impl;
 pub mod placement;
+pub mod raft_txid;
 pub mod raftmeta;
 pub mod state_machine;
 
+pub use applied_state::AppliedState;
 pub use async_raft::NodeId;
+pub use cmd::Cmd;
+pub use errors::RetryableError;
+pub use errors::ShutdownError;
+pub use log_entry::LogEntry;
 pub use meta_service_impl::MetaServiceImpl;
 pub use placement::Placement;
-pub use raftmeta::ClientRequest;
-pub use raftmeta::ClientResponse;
-pub use raftmeta::Cmd;
-pub use raftmeta::MemStore;
+pub use raft_txid::RaftTxId;
 pub use raftmeta::MetaNode;
+pub use raftmeta::MetaStore;
 pub use raftmeta::Network;
-pub use raftmeta::RaftTxId;
-pub use raftmeta::ShutdownError;
 pub use state_machine::Node;
 pub use state_machine::Slot;
 pub use state_machine::StateMachine;

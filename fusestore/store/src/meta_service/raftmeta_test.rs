@@ -13,13 +13,13 @@ use common_tracing::tracing;
 use maplit::hashset;
 use pretty_assertions::assert_eq;
 
-use crate::meta_service::raftmeta::RetryableError;
-use crate::meta_service::ClientRequest;
-use crate::meta_service::ClientResponse;
+use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
+use crate::meta_service::LogEntry;
 use crate::meta_service::MetaNode;
 use crate::meta_service::NodeId;
 use crate::meta_service::RaftTxId;
+use crate::meta_service::RetryableError;
 use crate::tests::assert_meta_connection;
 use crate::tests::Seq;
 
@@ -234,7 +234,7 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
     for id in 0u64..4 {
         let mn = &all[id as usize];
         let rst = mn
-            .write_to_local_leader(ClientRequest {
+            .write_to_local_leader(LogEntry {
                 txid: None,
                 cmd: Cmd::SetFile {
                     key: key.to_string(),
@@ -290,7 +290,7 @@ async fn test_meta_node_set_file() -> anyhow::Result<()> {
         let last_applied = mn.raft.metrics().borrow().last_applied;
 
         let rst = mn
-            .write(ClientRequest {
+            .write(LogEntry {
                 txid: None,
                 cmd: Cmd::SetFile {
                     key: key.to_string(),
@@ -331,7 +331,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
         let last_applied = mn.raft.metrics().borrow().last_applied;
 
         let rst = mn
-            .write(ClientRequest {
+            .write(LogEntry {
                 txid: None,
                 cmd: Cmd::AddDatabase {
                     name: name.to_string(),
@@ -510,7 +510,7 @@ async fn setup_non_voter(
         // add node to cluster as a non-voter
         let resp = leader.add_node(id, addr.clone()).await?;
         match resp {
-            ClientResponse::Node { prev: _, result } => {
+            AppliedState::Node { prev: _, result } => {
                 assert_eq!(addr.clone(), result.unwrap().address);
             }
             _ => {
@@ -537,7 +537,7 @@ async fn assert_set_file_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> an
     tracing::info!("leader: last_applied={}", last_applied);
     {
         leader
-            .write_to_local_leader(ClientRequest {
+            .write_to_local_leader(LogEntry {
                 txid: None,
                 cmd: Cmd::SetFile {
                     key: key.to_string(),
