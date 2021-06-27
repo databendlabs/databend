@@ -105,7 +105,7 @@ impl FlightClient {
     //        "FuseQuery does not implement do_put.",
     //    ))
     //}
-
+    /*
     type DoPutStream = FlightStream<PutResult>;
     async fn do_put_subquery_res(
         &self,
@@ -167,5 +167,5 @@ impl FlightClient {
         //let put_result = res.into_inner().next().await.context("empty response")??;
         //let vec = serde_json::from_slice(&put_result.app_metadata)?;
         //Ok(put_result)
-    }
+    } */
 }
