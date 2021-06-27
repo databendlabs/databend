@@ -19,7 +19,7 @@ impl RequestHandler<ReadPlanAction> for ActionHandler {
         let db_name = splits[0];
         let tbl_name = splits[1];
 
-        let meta = self.meta.lock().unwrap();
+        let meta = self.meta.lock();
         Ok(meta.get_data_parts(db_name, tbl_name))
     }
 }

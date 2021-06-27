@@ -4,8 +4,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_infallible::Mutex;
 use common_exception::ErrorCode;
+use common_infallible::Mutex;
 use common_planners::Part;
 use common_planners::Statistics;
 use common_store_api::AppendResult;

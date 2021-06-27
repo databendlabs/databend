@@ -41,7 +41,7 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
         act: CreateDatabaseAction,
     ) -> common_exception::Result<CreateDatabaseActionResult> {
         let plan = act.plan;
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
 
         let cmd = CmdCreateDatabase {
             db_name: plan.db,
@@ -68,7 +68,7 @@ impl RequestHandler<GetDatabaseAction> for ActionHandler {
     ) -> common_exception::Result<GetDatabaseActionResult> {
         // TODO(xp): create/drop/get database should base on MetaNode
         let db_name = &act.db;
-        let meta = self.meta.lock().unwrap();
+        let meta = self.meta.lock();
 
         let db = meta.dbs.get(db_name);
 
@@ -91,7 +91,7 @@ impl RequestHandler<DropDatabaseAction> for ActionHandler {
         &self,
         act: DropDatabaseAction,
     ) -> common_exception::Result<DropDatabaseActionResult> {
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
         let _ = meta.drop_database(&act.plan.db, act.plan.if_exists)?;
         Ok(DropDatabaseActionResult {})
     }
@@ -110,7 +110,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
 
         info!("create table: {:}: {:?}", db_name, table_name);
 
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
 
         let options = common_arrow::arrow::ipc::writer::IpcWriteOptions::default();
         let flight_data =
@@ -145,7 +145,7 @@ impl RequestHandler<DropTableAction> for ActionHandler {
         &self,
         act: DropTableAction,
     ) -> common_exception::Result<DropTableActionResult> {
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
         let _ = meta.drop_table(&act.plan.db, &act.plan.table, act.plan.if_exists)?;
         Ok(DropTableActionResult {})
     }
@@ -159,7 +159,7 @@ impl RequestHandler<GetTableAction> for ActionHandler {
 
         info!("create table: {:}: {:?}", db_name, table_name);
 
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
 
         let table = meta.get_table(db_name.clone(), table_name.clone())?;
 

@@ -162,28 +162,10 @@ impl ActionHandler {
         Ok(res)
     }
 
-<<<<<<< HEAD
-    fn scan_partitions(&self, cmd: &ScanPartitionAction) -> Result<StoreDoActionResult, Status> {
-        let schema = &cmd.scan_plan.schema_name;
-        let splits: Vec<&str> = schema.split('/').collect();
-        // TODO error handling
-        println!("schema {}, splits {:?}", schema, splits);
-        let db_name = splits[0];
-        let tbl_name = splits[1];
-
-        let meta = self.meta.lock();
-        Ok(StoreDoActionResult::ScanPartition(
-            meta.get_data_parts(db_name, tbl_name),
-        ))
-    }
-
-    pub async fn read_partition(&self, action: ReadAction) -> anyhow::Result<DoGetStream> {
-=======
     pub async fn read_partition(
         &self,
         action: ReadAction,
     ) -> common_exception::Result<DoGetStream> {
->>>>>>> refactoring: store api
         log::info!("entering read");
         let part_file = action.part.name;
 
