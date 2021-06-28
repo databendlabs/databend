@@ -1,5 +1,6 @@
-use common_datavalues::series::Series;
-use common_datavalues::series::SeriesFrom;
+use common_datavalues::prelude::*;
+
+use crate::DataBlock;
 
 // Copyright 2020-2021 The Datafuse Authors.
 //
@@ -7,12 +8,6 @@ use common_datavalues::series::SeriesFrom;
 
 #[test]
 fn test_data_block() -> anyhow::Result<()> {
-    use std::sync::Arc;
-
-    use common_datavalues::*;
-
-    use crate::DataBlock;
-
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
 
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);

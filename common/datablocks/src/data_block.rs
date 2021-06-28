@@ -157,7 +157,7 @@ impl TryFrom<arrow::record_batch::RecordBatch> for DataBlock {
         let series = v
             .columns()
             .iter()
-            .map(|array| array.into_series())
+            .map(|array| array.clone().into_series())
             .collect();
         Ok(DataBlock::create_by_array(schema, series))
     }

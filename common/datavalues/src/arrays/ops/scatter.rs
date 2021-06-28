@@ -46,16 +46,16 @@ where T: DFNumericType
 
         match self.null_count() {
             0 => {
-                indices.zip(0..self.len()).for_each(|(row, index)| {
-                    builders[index].append_value(array.value(row as usize));
+                indices.zip(0..self.len()).for_each(|(index, row)| {
+                    builders[index as usize].append_value(array.value(row));
                 });
             }
             _ => {
-                indices.zip(0..self.len()).for_each(|(row, index)| {
-                    if self.is_null(row as usize) {
-                        builders[index].append_null();
+                indices.zip(0..self.len()).for_each(|(index, row)| {
+                    if self.is_null(row) {
+                        builders[index as usize].append_null();
                     } else {
-                        builders[index].append_value(array.value(row as usize));
+                        builders[index as usize].append_value(array.value(row));
                     }
                 });
             }
@@ -89,16 +89,16 @@ impl ArrayScatter for DFUtf8Array {
 
         match self.null_count() {
             0 => {
-                indices.zip(0..self.len()).for_each(|(row, index)| {
-                    builders[index].append_value(array.value(row as usize));
+                indices.zip(0..self.len()).for_each(|(index, row)| {
+                    builders[index as usize].append_value(array.value(row));
                 });
             }
             _ => {
-                indices.zip(0..self.len()).for_each(|(row, index)| {
-                    if self.is_null(row as usize) {
-                        builders[index].append_null();
+                indices.zip(0..self.len()).for_each(|(index, row)| {
+                    if self.is_null(row) {
+                        builders[index as usize].append_null();
                     } else {
-                        builders[index].append_value(array.value(row as usize));
+                        builders[index as usize].append_value(array.value(row));
                     }
                 });
             }
@@ -129,16 +129,16 @@ impl ArrayScatter for DFBooleanArray {
 
         match self.null_count() {
             0 => {
-                indices.zip(0..self.len()).for_each(|(row, index)| {
-                    builders[index].append_value(array.value(row as usize));
+                indices.zip(0..self.len()).for_each(|(index, row)| {
+                    builders[index as usize].append_value(array.value(row));
                 });
             }
             _ => {
-                indices.zip(0..self.len()).for_each(|(row, index)| {
-                    if self.is_null(row as usize) {
-                        builders[index].append_null();
+                indices.zip(0..self.len()).for_each(|(index, row)| {
+                    if self.is_null(row) {
+                        builders[index as usize].append_null();
                     } else {
-                        builders[index].append_value(array.value(row as usize));
+                        builders[index as usize].append_value(array.value(row));
                     }
                 });
             }
@@ -173,16 +173,16 @@ impl ArrayScatter for DFListArray {
 
         match self.null_count() {
             0 => {
-                indices.zip(0..self.len()).for_each(|(row, index)| {
-                    builders[index].append_series(&taker.get_unchecked(row as usize));
+                indices.zip(0..self.len()).for_each(|(index, row)| {
+                    builders[index as usize].append_series(&taker.get_unchecked(row));
                 });
             }
             _ => {
-                indices.zip(0..self.len()).for_each(|(row, index)| {
-                    if self.is_null(row as usize) {
-                        builders[index].append_null();
+                indices.zip(0..self.len()).for_each(|(index, row)| {
+                    if self.is_null(row) {
+                        builders[index as usize].append_null();
                     } else {
-                        builders[index].append_series(&taker.get_unchecked(row as usize));
+                        builders[index as usize].append_series(&taker.get_unchecked(row));
                     }
                 });
             }

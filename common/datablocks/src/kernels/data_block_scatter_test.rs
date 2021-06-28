@@ -2,9 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
-use common_arrow::arrow::array::UInt32Builder;
 use common_datavalues::prelude::*;
 
 use crate::*;
@@ -17,7 +14,7 @@ fn test_data_block_scatter() -> anyhow::Result<()> {
     ]);
 
     let raw = DataBlock::create(schema.clone(), vec![
-        Series::new(vec![164, 2, 3]).into(),
+        Series::new(vec![1i64, 2, 3]).into(),
         Series::new(vec![1.0f64, 2., 3.]).into(),
     ]);
 

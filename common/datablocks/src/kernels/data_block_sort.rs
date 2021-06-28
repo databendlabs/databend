@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_arrow::arrow::compute;
-use common_datavalues::DataArrayMerge;
+use common_datavalues::series::SeriesHelper;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -25,7 +25,7 @@ impl DataBlock {
             .iter()
             .map(|f| {
                 Ok(compute::SortColumn {
-                    values: block.try_array_by_name(&f.column_name)?.clone(),
+                    values: block.try_array_by_name(&f.column_name)?.get_array_ref(),
                     options: Some(compute::SortOptions {
                         descending: !f.asc,
                         nulls_first: f.nulls_first,
@@ -72,7 +72,7 @@ impl DataBlock {
             .collect::<Result<Vec<_>>>()?;
 
         let indices =
-            DataArrayMerge::merge_indices(&sort_arrays[0], &sort_arrays[1], &sort_options, limit)?;
+            SeriesHelper::merge_indices(&sort_arrays[0], &sort_arrays[1], &sort_options, limit)?;
 
         let indices = match limit {
             Some(limit) => &indices[0..limit.min(indices.len())],
@@ -86,7 +86,7 @@ impl DataBlock {
             .map(|(a, b)| {
                 let a = a.to_array()?;
                 let b = b.to_array()?;
-                DataArrayMerge::merge_array(&a, &b, &indices)
+                SeriesHelper::merge_series(&a, &b, &indices)
             })
             .collect::<Result<Vec<_>>>()?;
 

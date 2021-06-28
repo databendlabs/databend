@@ -2,9 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_arrow::arrow::array::UInt32Builder;
-use common_arrow::arrow::compute;
-use common_datavalues::DataColumnarValue;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::DataBlock;
@@ -15,13 +13,12 @@ impl DataBlock {
             .columns()
             .iter()
             .map(|column| match column {
-                DataColumnarValue::Array(array) => {
-                    let taked_array = compute::take(array.as_ref(), &batch_indices, None)?;
-                    Ok(DataColumnarValue::Array(taked_array))
+                DataColumn::Array(array) => {
+                    let mut indices = indices.iter().map(|f| *f as usize);
+                    let series = unsafe { array.take_iter_unchecked(&mut indices) }?;
+                    Ok(DataColumn::Array(series))
                 }
-                DataColumnarValue::Constant(v, _) => {
-                    Ok(DataColumnarValue::Constant(v.clone(), indices.len()))
-                }
+                DataColumn::Constant(v, _) => Ok(DataColumn::Constant(v.clone(), indices.len())),
             })
             .collect::<Result<Vec<_>>>()?;
 

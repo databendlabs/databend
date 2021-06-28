@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::compute;
 use common_datavalues::series::SeriesHelper;
 use common_exception::ErrorCode;
 use common_exception::Result;

@@ -12,7 +12,6 @@ use std::hash::Hasher;
 use ahash::RandomState;
 use common_datavalues::series::Series;
 use common_datavalues::AlignedVec;
-use common_datavalues::DataValue;
 use common_datavalues::UInt64Type;
 use common_exception::Result;
 
@@ -56,7 +55,7 @@ impl DataBlock {
         let mut hashes = Vec::with_capacity(column_names.len());
         let mut values = Vec::with_capacity(column_names.len());
 
-        let mut hash_builder = RandomState::new();
+        let hash_builder = RandomState::new();
         // 1. Get group by columns.
         let mut group_series = Vec::with_capacity(column_names.len());
         {
@@ -67,10 +66,13 @@ impl DataBlock {
                 let hash = series.vec_hash(hash_builder.clone());
 
                 group_series.push(series);
-                values.push(hash.downcast_ref().values());
                 hashes.push(hash);
             }
         }
+
+        hashes.iter().for_each(|hash| {
+            values.push(hash.downcast_ref().values());
+        });
 
         // 2. Build vec hashes
         let mut av = AlignedVec::with_capacity_aligned(block.num_rows());
@@ -91,17 +93,14 @@ impl DataBlock {
             let mut row = 0;
             for hash in keys.values() {
                 // TODO improve the conflicts
-                let hash_key = IdxHash::new(row, *hash);
                 let entry = group_indices
                     .raw_entry_mut()
                     .from_hash(*hash, |idx_hash| unsafe {
-                        unsafe {
-                            compare_series_row(&group_series, idx_hash.idx as usize, row as usize)
-                        }
+                        compare_series_row(&group_series, idx_hash.idx as usize, row as usize)
                     });
 
                 match entry {
-                    RawEntryMut::Occupied(entry) => {
+                    RawEntryMut::Occupied(mut entry) => {
                         let v = entry.get_mut();
                         v.push(row as u32);
                     }
@@ -109,7 +108,13 @@ impl DataBlock {
                         entry.insert_hashed_nocheck(*hash, IdxHash::new(row, *hash), vec![
                             row as u32,
                         ]);
-                    }
+                    } // RawEntryMut::Vacant(entry) => {
+                      //     entry.insert_hashed_nocheck(original_h, IdxHash::new(idx, original_h), vacant_fn());
+                      // }
+                      // RawEntryMut::Occupied(mut entry) => {
+                      //     let (_k, v) = entry.get_key_value_mut();
+                      //     occupied_fn(v);
+                      // }
                 }
 
                 row += 1;
@@ -231,8 +236,6 @@ impl Default for IdHasher {
         IdHasher { hash: 0 }
     }
 }
-
-pub type IdBuildHasher = BuildHasherDefault<IdHasher>;
 
 #[derive(Debug)]
 /// Contains an idx of a row in a DataFrame and the precomputed hash of that row.

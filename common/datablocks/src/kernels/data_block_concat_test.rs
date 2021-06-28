@@ -21,11 +21,11 @@ fn test_data_block_concat() -> anyhow::Result<()> {
             Series::new(vec!["b1", "b2", "b3"]),
         ]),
         DataBlock::create_by_array(schema.clone(), vec![
-            Series::new(vec![4, 5, 6]),
+            Series::new(vec![4i64, 5, 6]),
             Series::new(vec!["b1", "b2", "b3"]),
         ]),
         DataBlock::create_by_array(schema.clone(), vec![
-            Series::new(vec![7, 8, 9]),
+            Series::new(vec![7i64, 8, 9]),
             Series::new(vec!["b1", "b2", "b3"]),
         ]),
     ];

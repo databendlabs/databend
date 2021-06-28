@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 
 use crate::*;
 
@@ -16,8 +16,8 @@ fn test_data_block_sort() -> anyhow::Result<()> {
     ]);
 
     let raw = DataBlock::create_by_array(schema.clone(), vec![
-        Arc::new(Int64Array::from(vec![6, 4, 3, 2, 1, 7])),
-        Arc::new(StringArray::from(vec!["b1", "b2", "b3", "b4", "b5", "b6"])),
+        Series::new(vec![6, 4, 3, 2, 1, 7]),
+        Series::new(vec!["b1", "b2", "b3", "b4", "b5", "b6"]),
     ]);
 
     {
