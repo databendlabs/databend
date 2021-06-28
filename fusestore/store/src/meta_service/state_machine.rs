@@ -236,21 +236,7 @@ impl StateMachine {
                 ref value,
             } => {
                 let prev = self.kv.get(key).cloned();
-
-                let seq_matched = if let Some(seq) = seq {
-                    if *seq == 0 {
-                        prev.is_none()
-                    } else {
-                        match prev {
-                            Some(ref p) => *seq == (*p).0,
-                            None => false,
-                        }
-                    }
-                } else {
-                    // If seq is None, always override it.
-                    true
-                };
-
+                let seq_matched = StateMachine::match_seq(&prev, seq);
                 if !seq_matched {
                     return Ok((prev, None).into());
                 }
@@ -262,6 +248,60 @@ impl StateMachine {
 
                 Ok((prev, Some(record_value)).into())
             }
+
+            Cmd::DeleteByKeyKV { ref key, ref seq } => {
+                let prev = self.kv.get(key).cloned();
+                let seq_matched = match prev {
+                    Some((s, _)) if seq.is_some() && seq.unwrap() == s => true,
+                    Some(_) if seq.is_none() => true,
+                    _ => false,
+                };
+                if !seq_matched {
+                    return Ok((prev, None).into());
+                }
+
+                self.kv.remove(key);
+                tracing::debug!("applied DeleteByKeyKV: {}={:?}", key, seq);
+                Ok((prev, None).into())
+            }
+
+            Cmd::UpdateByKeyKV {
+                ref key,
+                ref seq,
+                ref value,
+            } => {
+                let prev = self.kv.get(key).cloned();
+                let seq_matched = match prev {
+                    Some((s, _)) if seq.is_some() && seq.unwrap() == s => true,
+                    Some(_) if seq.is_none() => true,
+                    _ => false,
+                };
+                if !seq_matched {
+                    return Ok((prev, None).into());
+                }
+
+                let new_seq = self.incr_seq(SEQ_GENERIC_KV);
+                let record_value = (new_seq, value.clone());
+                self.kv.insert(key.clone(), record_value.clone());
+                tracing::debug!("applied UpdateByKeyKV: {}={:?}", key, seq);
+                Ok((prev, Some(record_value)).into())
+            }
+        }
+    }
+
+    fn match_seq(prev: &Option<SeqValue>, seq: &Option<u64>) -> bool {
+        if let Some(seq) = seq {
+            if *seq == 0 {
+                prev.is_none()
+            } else {
+                match prev {
+                    Some(ref p) => *seq == (*p).0,
+                    None => false,
+                }
+            }
+        } else {
+            // If seq is None, always override it.
+            true
         }
     }
 
@@ -318,6 +358,20 @@ impl StateMachine {
     pub fn get_kv(&self, key: &str) -> Option<SeqValue> {
         let x = self.kv.get(key);
         x.cloned()
+    }
+
+    pub fn mget_kv(&self, keys: &[impl AsRef<str>]) -> Vec<Option<SeqValue>> {
+        keys.iter()
+            .map(|key| self.kv.get(key.as_ref()).cloned())
+            .collect()
+    }
+
+    pub fn prefix_list_kv(&self, prefix: &str) -> Vec<SeqValue> {
+        self.kv
+            .range(prefix.to_string()..)
+            .take_while(|(k, _)| k.starts_with(prefix))
+            .map(|v| v.1.clone())
+            .collect()
     }
 }
 
