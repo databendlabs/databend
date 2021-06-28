@@ -102,7 +102,7 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
         case(
             "foo",
             false,
-            Err(ErrorCode::DatabaseAlreadExists("foo database exists")),
+            Err(ErrorCode::DatabaseAlreadyExists("foo database exists")),
         ),
         case("bar", true, Ok(1)),
     ];

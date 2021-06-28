@@ -47,7 +47,7 @@ impl MemEngine {
             return if if_not_exists {
                 Ok(curr.db_id)
             } else {
-                Err(ErrorCode::DatabaseAlreadExists(format!(
+                Err(ErrorCode::DatabaseAlreadyExists(format!(
                     "{} database exists",
                     cmd.db_name
                 )))
@@ -113,7 +113,7 @@ impl MemEngine {
             return if if_not_exists {
                 Ok(*table_id)
             } else {
-                Err(ErrorCode::TableAlreadExists("table exists"))
+                Err(ErrorCode::TableAlreadyExists("table exists"))
             };
         }
 

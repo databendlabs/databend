@@ -192,8 +192,8 @@ build_exceptions! {
     UserAlreadyExists(3001),
 
     // meta-api error codes
-    DatabaseAlreadExists(4001),
-    TableAlreadExists(4003),
+    DatabaseAlreadyExists(4001),
+    TableAlreadyExists(4003),
     IllegalMetaOperationArgument(4004),
     IllegalSchema(4005),
     IllegalMetaState(4005),
