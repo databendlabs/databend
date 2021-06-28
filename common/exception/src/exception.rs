@@ -150,23 +150,6 @@ build_exceptions! {
     NotFoundSession(44),
     CannotListenerPort(45),
 
-    // user api error codes
-    UnknownUser(300),
-    UserAlreadyExists(301),
-
-
-    // metastore error codes
-    DatabaseAlreadExists(401),
-    TableAlreadExists(403),
-    IllegalMetaOperationArgument(404),
-    IllegalSchema(405),
-    IllegalMetaState(405),
-    MetaNodeInternalError(406),
-
-    // storage
-    IllegalScanPlan(500),
-    ReadFileError(501),
-    BrokenChannel(502),
 
     // uncategorized
     UnexpectedResponseType(600),
@@ -197,6 +180,29 @@ build_exceptions! {
     // config errors
 
     InvalidConfig(2301),
+
+
+    // TODO
+    // We may need to separate front-end errors from API errors (and system errors?)
+    // That may depend which components are using these error codes, and for what purposes,
+    // let's figure it out latter.
+
+    // user-api error codes
+    UnknownUser(3000),
+    UserAlreadyExists(3001),
+
+    // meta-api error codes
+    DatabaseAlreadExists(4001),
+    TableAlreadExists(4003),
+    IllegalMetaOperationArgument(4004),
+    IllegalSchema(4005),
+    IllegalMetaState(4005),
+    MetaNodeInternalError(4006),
+
+    // storage-api error codes
+    IllegalScanPlan(5000),
+    ReadFileError(5001),
+    BrokenChannel(5002),
 
 }
 

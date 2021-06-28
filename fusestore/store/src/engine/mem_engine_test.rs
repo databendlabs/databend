@@ -87,7 +87,7 @@ fn test_mem_engine_create_database() -> anyhow::Result<()> {
         // create db bar failure
         let rst = eng.create_database(cmdbar.clone(), false);
         assert_eq!(
-            "Code: 401, displayText = bar database exists.",
+            "Code: 4001, displayText = bar database exists.",
             format!("{}", rst.err().unwrap())
         );
         assert_eq!(

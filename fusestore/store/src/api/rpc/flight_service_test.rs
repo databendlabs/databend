@@ -181,7 +181,10 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
             tracing::info!("create table res: {:?}", res);
 
             let status = res.err().unwrap();
-            assert_eq!("Code: 403, displayText = table exists.", status.to_string());
+            assert_eq!(
+                "Code: 4003, displayText = table exists.",
+                status.to_string()
+            );
 
             // get_table returns the old table
 
