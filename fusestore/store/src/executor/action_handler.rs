@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::error::Error;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -35,8 +34,7 @@ use crate::user::UserMgr;
 
 pub trait ReplySerializer {
     type Output;
-    type Error: Error;
-    fn serialize<T>(&self, v: T) -> Result<Self::Output, Self::Error>
+    fn serialize<T>(&self, v: T) -> Result<Self::Output, ErrorCode>
     where T: Serialize;
 }
 
@@ -96,10 +94,7 @@ impl ActionHandler {
     }
 
     pub async fn execute<S, R>(&self, action: StoreDoAction, s: S) -> common_exception::Result<R>
-    where
-        S: ReplySerializer<Output = R>,
-        <S as ReplySerializer>::Error: Into<ErrorCode>,
-    {
+    where S: ReplySerializer<Output = R> {
         // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one by one
         //
         // Technically we can eliminate these kind of duplications by using proc-macros, or eliminate
@@ -123,25 +118,21 @@ impl ActionHandler {
 
         match action {
             // database
-            StoreDoAction::CreateDatabase(a) => {
-                s.serialize(self.handle(a).await?).map_err(Into::into)
-            }
-            StoreDoAction::GetDatabase(a) => s.serialize(self.handle(a).await?).map_err(Into::into),
-            StoreDoAction::DropDatabase(a) => {
-                s.serialize(self.handle(a).await?).map_err(Into::into)
-            }
+            StoreDoAction::CreateDatabase(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::GetDatabase(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::DropDatabase(a) => s.serialize(self.handle(a).await?),
 
             // table
-            StoreDoAction::CreateTable(a) => s.serialize(self.handle(a).await?).map_err(Into::into),
-            StoreDoAction::DropTable(a) => s.serialize(self.handle(a).await?).map_err(Into::into),
-            StoreDoAction::GetTable(a) => s.serialize(self.handle(a).await?).map_err(Into::into),
+            StoreDoAction::CreateTable(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::DropTable(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::GetTable(a) => s.serialize(self.handle(a).await?),
 
             // part
-            StoreDoAction::ReadPlan(a) => s.serialize(self.handle(a).await?).map_err(Into::into),
+            StoreDoAction::ReadPlan(a) => s.serialize(self.handle(a).await?),
 
             // general-purpose kv
-            StoreDoAction::UpsertKV(a) => s.serialize(self.handle(a).await?).map_err(Into::into),
-            StoreDoAction::GetKV(a) => s.serialize(self.handle(a).await?).map_err(Into::into),
+            StoreDoAction::UpsertKV(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::GetKV(a) => s.serialize(self.handle(a).await?),
         }
     }
 

@@ -21,7 +21,6 @@ use common_arrow::arrow_flight::HandshakeResponse;
 use common_arrow::arrow_flight::PutResult;
 use common_arrow::arrow_flight::SchemaResult;
 use common_arrow::arrow_flight::Ticket;
-use common_exception::ErrorCode;
 use common_flights::FlightClaim;
 use common_flights::FlightToken;
 use common_flights::StoreDoAction;
@@ -244,10 +243,9 @@ impl FlightService for StoreFlightImpl {
 struct JsonSer;
 impl ReplySerializer for JsonSer {
     type Output = Vec<u8>;
-    type Error = ErrorCode;
-    fn serialize<T>(&self, v: T) -> Result<Self::Output, Self::Error>
+    fn serialize<T>(&self, v: T) -> common_exception::Result<Self::Output>
     where T: Serialize {
-        let v = serde_json::to_vec(&v).unwrap();
+        let v = serde_json::to_vec(&v)?;
         Ok(v)
     }
 }

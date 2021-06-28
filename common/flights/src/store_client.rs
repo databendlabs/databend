@@ -101,7 +101,7 @@ impl StoreClient {
         R: DeserializeOwned,
     {
         let act: StoreDoAction = v.into();
-        let mut req: Request<Action> = (&act).try_into().unwrap(); // TODO
+        let mut req: Request<Action> = (&act).try_into()?;
         req.set_timeout(self.timeout);
 
         let mut stream = self.client.do_action(req).await?.into_inner();
@@ -112,7 +112,7 @@ impl StoreClient {
             ))),
             Some(resp) => {
                 info!("do_action: resp: {:}", flight_result_to_str(&resp));
-                let v = serde_json::from_slice::<R>(&resp.body).unwrap();
+                let v = serde_json::from_slice::<R>(&resp.body)?;
                 Ok(v)
             }
         }
