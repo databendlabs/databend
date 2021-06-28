@@ -75,30 +75,6 @@ macro_rules! arrow_primitive_array_op {
     };
 }
 
-/// Invoke a compute kernel on primitive array op scalar
-/// Like: modulus_scalar, divide_scalar
-macro_rules! arrow_primitive_array_scalar_op {
-    ($LEFT:expr, $RIGHT:expr, $RESULT:expr, $OP:ident) => {
-        match $RESULT {
-            DataType::Int8 => compute_op_scalar!($LEFT, $RIGHT, $OP, Int8Array),
-            DataType::Int16 => compute_op_scalar!($LEFT, $RIGHT, $OP, Int16Array),
-            DataType::Int32 => compute_op_scalar!($LEFT, $RIGHT, $OP, Int32Array),
-            DataType::Int64 => compute_op_scalar!($LEFT, $RIGHT, $OP, Int64Array),
-            DataType::UInt8 => compute_op_scalar!($LEFT, $RIGHT, $OP, UInt8Array),
-            DataType::UInt16 => compute_op_scalar!($LEFT, $RIGHT, $OP, UInt16Array),
-            DataType::UInt32 => compute_op_scalar!($LEFT, $RIGHT, $OP, UInt32Array),
-            DataType::UInt64 => compute_op_scalar!($LEFT, $RIGHT, $OP, UInt64Array),
-            DataType::Float32 => compute_op_scalar!($LEFT, $RIGHT, $OP, Float32Array),
-            DataType::Float64 => compute_op_scalar!($LEFT, $RIGHT, $OP, Float64Array),
-            _ => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unsupported arithmetic_compute::{} for data type: {:?}",
-                stringify!($OP),
-                ($LEFT).data_type(),
-            ))),
-        }
-    };
-}
-
 /// The arrow_array_op macro includes types that extend beyond the primitive,
 /// such as Utf8 strings.
 macro_rules! arrow_array_op {

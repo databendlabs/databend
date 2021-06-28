@@ -51,7 +51,8 @@ impl DataArrayArithmetic {
                         scalar.to_array_with_size(1)?
                     }
                 };
-                let result = Self::array_scalar_arithmetic_op(op, &left_array, right_value)?;
+                let right_array = right_value.to_array_with_size(left_array.len())?;
+                let result = Self::array_array_arithmetic_op(op, &left_array, &right_array)?;
                 if all_const {
                     let scalar = DataValue::try_from_array(&result, 0)?;
                     Ok(DataColumnarValue::Constant(scalar, left.len()))
@@ -92,45 +93,6 @@ impl DataArrayArithmetic {
             }
             DataValueArithmeticOperator::Modulo => {
                 arrow_primitive_array_op!(&left_array, &right_array, &coercion_type, modulus)
-            }
-        }
-    }
-
-    #[inline]
-    fn array_scalar_arithmetic_op(
-        op: DataValueArithmeticOperator,
-        left: &DataArrayRef,
-        right_value: &DataValue,
-    ) -> Result<DataArrayRef> {
-        let coercion_type = super::data_type::numerical_arithmetic_coercion(
-            &op,
-            &left.data_type(),
-            &right_value.data_type(),
-        )?;
-
-        let left_array = data_array_cast(left, &coercion_type)?;
-        let casted_right_value = right_value.cast(&coercion_type)?;
-
-        match op {
-            DataValueArithmeticOperator::Div => {
-                arrow_primitive_array_scalar_op!(
-                    left_array,
-                    casted_right_value,
-                    &coercion_type,
-                    divide
-                )
-            }
-            DataValueArithmeticOperator::Modulo => {
-                arrow_primitive_array_scalar_op!(
-                    left_array,
-                    casted_right_value,
-                    &coercion_type,
-                    modulus
-                )
-            }
-            _ => {
-                let right_array = right_value.to_array_with_size(left.len())?;
-                Self::array_array_arithmetic_op(op, left, &right_array)
             }
         }
     }
