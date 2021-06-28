@@ -75,7 +75,7 @@ async fn test_prepare_query_stage() -> Result<()> {
     let response = service.do_action(Request::new(
         Action {
             r#type: "PrepareQueryStage".to_string(),
-            body: "{\"query_id\":\"query_id\",\"stage_id\":\"stage_id\",\"plan\":{\"Empty\":{\"schema\":{\"fields\":[]}}},\"scatters\":[\"stream_1\",\"stream_2\"], \"scatters_action\":{\"Literal\":{\"UInt64\":1}},\"exists_res_map\":{}}".as_bytes().to_vec(),
+            body: "{\"query_id\":\"query_id\",\"stage_id\":\"stage_id\",\"plan\":{\"Empty\":{\"schema\":{\"fields\":[]}}},\"scatters\":[\"stream_1\",\"stream_2\"], \"scatters_action\":{\"Literal\":{\"UInt64\":1}},\"subquery_res_map\":{}}".as_bytes().to_vec(),
         }
     )).await;
 

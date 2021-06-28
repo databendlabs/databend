@@ -35,7 +35,7 @@ impl PlanScheduler {
     #[tracing::instrument(level = "info", skip(ctx, plan))]
     pub fn reschedule(
         ctx: FuseQueryContextRef,
-        subquery_res_map: HashMap<String, u32>,
+        subquery_res_map: HashMap<String, bool>,
         plan: &PlanNode,
     ) -> Result<ScheduledActions> {
         let cluster = ctx.try_get_cluster()?;
@@ -322,7 +322,7 @@ impl ExecutionPlanBuilder {
         &self,
         node_name: &str,
         cluster_nodes: &[Arc<Node>],
-        subquery_res_map: HashMap<String, u32>,
+        subquery_res_map: HashMap<String, bool>,
     ) -> Result<Option<ExecutePlanWithShuffleAction>> {
         match self.2.kind {
             StageKind::Expansive => {

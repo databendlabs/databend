@@ -54,9 +54,10 @@ fn get_filter_plan(plan: PlanNode) -> Result<FilterPlan> {
 async fn execute_one_select(
     ctx: FuseQueryContextRef,
     plan: PlanNode,
-    subquery_res_map: HashMap<String, u32>,
+    subquery_res_map: HashMap<String, bool>,
 ) -> Result<SendableDataBlockStream> {
-    let scheduled_actions = PlanScheduler::reschedule(ctx.clone(), subquery_res_map.clone(), &plan)?;
+    let scheduled_actions =
+        PlanScheduler::reschedule(ctx.clone(), subquery_res_map.clone(), &plan)?;
 
     let remote_actions_ref = &scheduled_actions.remote_actions;
     let prepare_error_handler = move |error: ErrorCode, end: usize| {
@@ -140,7 +141,7 @@ impl Interpreter for SelectInterpreter {
             queue2 = VecDeque::<PlanNode>::new();
         }
 
-        let mut subquery_res_map = HashMap::<String, u32>::new();
+        let mut subquery_res_map = HashMap::<String, bool>::new();
         let size = levels.len();
         for i in (0..size).rev() {
             let ex_plans = &levels[i];
@@ -148,13 +149,13 @@ impl Interpreter for SelectInterpreter {
                 let stream =
                     execute_one_select(self.ctx.clone(), exp.clone(), subquery_res_map.clone())
                         .await?;
-                 
+
                 let result = stream.try_collect::<Vec<_>>().await?;
                 let b = if result.len() > 0 { true } else { false };
                 let name = names.get(&format!("{:?}", exp));
                 subquery_res_map.insert(name.unwrap().to_string(), b);
             }
         }
-        execute_one_select(self.ctx.clone(), plan, exists_res_map).await
+        execute_one_select(self.ctx.clone(), plan, subquery_res_map).await
     }
 }
