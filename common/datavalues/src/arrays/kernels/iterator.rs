@@ -12,7 +12,7 @@ use crate::series::Series;
 use crate::series::SeriesFrom;
 use crate::DFBooleanArray;
 use crate::DFListArray;
-use crate::DFStringArray;
+use crate::DFUtf8Array;
 
 /// A `DFIterator` is an iterator over a `DFArray` which contains DF types. A `DFIterator`
 /// must implement   `DoubleEndedIterator`.
@@ -87,7 +87,7 @@ impl DFBooleanArray {
     }
 }
 
-impl<'a> IntoIterator for &'a DFStringArray {
+impl<'a> IntoIterator for &'a DFUtf8Array {
     type Item = Option<&'a str>;
     type IntoIter = Box<dyn DFIterator<Item = Self::Item> + 'a>;
     fn into_iter(self) -> Self::IntoIter {
@@ -147,7 +147,7 @@ impl<'a> DoubleEndedIterator for Utf8IterNoNull<'a> {
 /// all arrays have known size.
 impl<'a> ExactSizeIterator for Utf8IterNoNull<'a> {}
 
-impl DFStringArray {
+impl DFUtf8Array {
     #[allow(clippy::wrong_self_convention)]
     pub fn into_no_null_iter<'a>(
         &'a self,

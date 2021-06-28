@@ -12,6 +12,7 @@ use common_arrow::arrow::datatypes::IntervalUnit;
 use common_exception::Result;
 
 use crate::arrays::*;
+use crate::prelude::*;
 use crate::series::wrap::SeriesWrap;
 use crate::series::*;
 use crate::*;
@@ -63,6 +64,27 @@ macro_rules! try_physical_dispatch {
         else {
             Ok(s)
         }
+    }}
+}
+
+macro_rules! try_physical_dispatch_vec {
+    ($s: expr, $method: ident, $($args:expr),*) => {{
+        let data_type = $s.data_type();
+        let phys_type = $s.physical_type();
+        let s = $s.cast_with_type(&phys_type).unwrap();
+
+        let results = s.$method($($args),*)?;
+
+        if results.is_empty() {
+           return Ok(vec![]);
+        }
+
+        let mut cast_results = Vec::with_capacity(results.len());
+        for result in results {
+            cast_results.push(result.cast_with_type(&data_type)?);
+        }
+
+        Ok(cast_results)
     }}
 }
 
@@ -179,6 +201,26 @@ macro_rules! impl_dyn_arrays {
             }
             fn remainder(&self, rhs: &Series) -> Result<Series> {
                 try_physical_dispatch!(self, remainder, rhs)
+            }
+
+            fn take_iter(&self, iter: &mut dyn Iterator<Item = usize>) -> Result<Series> {
+                try_physical_dispatch!(self, take_iter, iter.into())
+            }
+
+            unsafe fn take_iter_unchecked(
+                &self,
+                iter: &mut dyn Iterator<Item = usize>,
+            ) -> Result<Series> {
+                try_physical_dispatch!(self, take_iter_unchecked, iter.into())
+            }
+
+            /// scatter the arrays by indices, the size of indices must be equal to the size of array
+            unsafe fn scatter_unchecked(
+                &self,
+                indices: &mut dyn Iterator<Item = u32>,
+                scattered_size: usize,
+            ) -> Result<Vec<Series>> {
+                try_physical_dispatch_vec!(self, scatter_unchecked, indices, scattered_size)
             }
         }
     };

@@ -7,7 +7,7 @@ use crate::utils::NoNull;
 use crate::DFBooleanArray;
 use crate::DFListArray;
 use crate::DFPrimitiveType;
-use crate::DFStringArray;
+use crate::DFUtf8Array;
 
 // Copyright 2020-2021 The Datafuse Authors.
 //
@@ -100,7 +100,7 @@ impl ArrayFullNull for DFBooleanArray {
     }
 }
 
-impl<'a> ArrayFull<&'a str> for DFStringArray {
+impl<'a> ArrayFull<&'a str> for DFUtf8Array {
     fn full(value: &'a str, length: usize) -> Self {
         let mut builder = Utf8ArrayBuilder::new(length, length * value.len());
 
@@ -111,7 +111,7 @@ impl<'a> ArrayFull<&'a str> for DFStringArray {
     }
 }
 
-impl ArrayFullNull for DFStringArray {
+impl ArrayFullNull for DFUtf8Array {
     fn full_null(length: usize) -> Self {
         let mut ca = (0..length)
             .map::<Option<String>, _>(|_| None)

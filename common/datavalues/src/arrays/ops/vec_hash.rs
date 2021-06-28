@@ -16,9 +16,9 @@ use crate::DFFloat64Array;
 use crate::DFIntegerType;
 use crate::DFListArray;
 use crate::DFNullArray;
-use crate::DFStringArray;
 use crate::DFStructArray;
 use crate::DFUInt64Array;
+use crate::DFUtf8Array;
 
 // Read more:
 //  https://www.cockroachlabs.com/blog/vectorized-hash-joiner/
@@ -54,7 +54,7 @@ where
     }
 }
 
-impl VecHash for DFStringArray {
+impl VecHash for DFUtf8Array {
     fn vec_hash(&self, random_state: RandomState) -> DFUInt64Array {
         self.branch_apply_cast_numeric_no_null(|opt_v| {
             let mut hasher = random_state.build_hasher();

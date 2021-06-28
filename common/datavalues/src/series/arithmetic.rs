@@ -18,8 +18,8 @@ use crate::DFBooleanArray;
 use crate::DFListArray;
 use crate::DFNullArray;
 use crate::DFNumericType;
-use crate::DFStringArray;
 use crate::DFStructArray;
+use crate::DFUtf8Array;
 use crate::DataValueArithmeticOperator;
 
 impl Add for &Series {
@@ -140,7 +140,7 @@ where
     }
 }
 
-impl NumOpsDispatch for DFStringArray {
+impl NumOpsDispatch for DFUtf8Array {
     fn add_to(&self, rhs: &Series) -> Result<Series> {
         let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
         let out = (self + rhs)?;

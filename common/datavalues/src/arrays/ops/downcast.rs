@@ -14,7 +14,7 @@ use crate::series::Series;
 use crate::DFBooleanArray;
 use crate::DFListArray;
 use crate::DFPrimitiveType;
-use crate::DFStringArray;
+use crate::DFUtf8Array;
 
 impl<T> DataArray<T>
 where T: DFPrimitiveType
@@ -44,7 +44,7 @@ impl DFBooleanArray {
     }
 }
 
-impl DFStringArray {
+impl DFUtf8Array {
     pub fn downcast_ref(&self) -> &LargeStringArray {
         let arr = &*self.array;
         unsafe { &*(arr as *const dyn Array as *const LargeStringArray) }

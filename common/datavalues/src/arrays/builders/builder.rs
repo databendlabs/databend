@@ -7,15 +7,22 @@ use common_arrow::arrow::array::LargeListBuilder;
 use common_arrow::arrow::array::LargeStringBuilder;
 use common_arrow::arrow::array::PrimitiveBuilder;
 use common_arrow::arrow::buffer::Buffer;
+use num::Num;
 
+use super::ArrowBooleanArrayBuilder;
+use super::ArrowPrimitiveArrayBuilder;
 use crate::arrays::DataArray;
-use crate::series::Series;
+use crate::arrays::GetValues;
+use crate::data_df_type::*;
+use crate::prelude::*;
 use crate::utils::get_iter_capacity;
 use crate::utils::NoNull;
 use crate::BooleanType;
 use crate::DFBooleanArray;
+use crate::DFListArray;
 use crate::DFNumericType;
-use crate::DFStringArray;
+use crate::DFPrimitiveType;
+use crate::DFUtf8Array;
 use crate::Utf8Type;
 
 pub trait ArrayBuilder<N, T> {
@@ -27,7 +34,7 @@ pub trait ArrayBuilder<N, T> {
             None => self.append_null(),
         }
     }
-    fn finish(self) -> DataArray<T>;
+    fn finish(&mut self) -> DataArray<T>;
 }
 
 pub struct BooleanArrayBuilder {
@@ -47,7 +54,7 @@ impl ArrayBuilder<bool, BooleanType> for BooleanArrayBuilder {
         self.builder.append_null().unwrap();
     }
 
-    fn finish(mut self) -> DFBooleanArray {
+    fn finish(&mut self) -> DFBooleanArray {
         let array = Arc::new(self.builder.finish()) as ArrayRef;
         array.into()
     }
@@ -86,7 +93,7 @@ where
         self.builder.append_null().unwrap();
     }
 
-    fn finish(mut self) -> DataArray<T> {
+    fn finish(&mut self) -> DataArray<T> {
         let array = Arc::new(self.builder.finish()) as ArrayRef;
 
         array.into()
@@ -142,7 +149,7 @@ impl Utf8ArrayBuilder {
         }
     }
 
-    pub fn finish(mut self) -> DFStringArray {
+    pub fn finish(&mut self) -> DFUtf8Array {
         let array = Arc::new(self.builder.finish()) as ArrayRef;
         array.into()
     }
@@ -216,7 +223,7 @@ impl NewDataArray<BooleanType, bool> for DFBooleanArray {
     }
 }
 
-impl<S> NewDataArray<Utf8Type, S> for DFStringArray
+impl<S> NewDataArray<Utf8Type, S> for DFUtf8Array
 where S: AsRef<str>
 {
     fn new_from_slice(v: &[S]) -> Self {
@@ -259,4 +266,226 @@ where S: AsRef<str>
         it.for_each(|v| builder.append_value(v));
         builder.finish()
     }
+}
+
+pub trait ListBuilderTrait {
+    fn append_opt_series(&mut self, opt_s: Option<&Series>);
+    fn append_series(&mut self, s: &Series);
+    fn append_null(&mut self);
+    fn finish(&mut self) -> DFListArray;
+}
+
+pub struct ListPrimitiveArrayBuilder<T>
+where T: DFPrimitiveType
+{
+    pub builder: LargeListBuilder<ArrowPrimitiveArrayBuilder<T>>,
+}
+
+macro_rules! finish_list_builder {
+    ($self:ident) => {{
+        let arr = Arc::new($self.builder.finish());
+        DFListArray::from(arr as ArrayRef)
+    }};
+}
+
+impl<T> ListPrimitiveArrayBuilder<T>
+where T: DFPrimitiveType
+{
+    pub fn new(values_builder: ArrowPrimitiveArrayBuilder<T>, capacity: usize) -> Self {
+        let builder = LargeListBuilder::with_capacity(values_builder, capacity);
+        ListPrimitiveArrayBuilder { builder }
+    }
+
+    pub fn append_slice(&mut self, opt_v: Option<&[T::Native]>) {
+        match opt_v {
+            Some(v) => {
+                self.builder.values().append_slice(v);
+                self.builder.append(true).expect("should not fail");
+            }
+            None => {
+                self.builder.append(false).expect("should not fail");
+            }
+        }
+    }
+
+    pub fn append_null(&mut self) {
+        self.builder.append(false).expect("should not fail");
+    }
+}
+
+impl<T> ListBuilderTrait for ListPrimitiveArrayBuilder<T>
+where
+    T: DFPrimitiveType,
+    T::Native: Num,
+{
+    #[inline]
+    fn append_opt_series(&mut self, opt_s: Option<&Series>) {
+        match opt_s {
+            Some(s) => self.append_series(s),
+            None => {
+                self.builder.append(false).unwrap();
+            }
+        }
+    }
+
+    #[inline]
+    fn append_null(&mut self) {
+        let builder = self.builder.values();
+        builder.append_null();
+        self.builder.append(true).unwrap();
+    }
+
+    #[inline]
+    fn append_series(&mut self, s: &Series) {
+        let builder = self.builder.values();
+        let array = s.get_array_ref();
+        let values = array.get_values::<T>();
+        // we would like to check if array has no null values.
+        // however at the time of writing there is a bug in append_slice, because it does not update
+        // the null bitmap
+        if s.null_count() == 0 {
+            builder.append_slice(values);
+        } else {
+            values.iter().enumerate().for_each(|(idx, v)| {
+                if array.is_valid(idx) {
+                    builder.append_value(*v);
+                } else {
+                    builder.append_null();
+                }
+            });
+        }
+        self.builder.append(true).unwrap();
+    }
+
+    fn finish(&mut self) -> DFListArray {
+        finish_list_builder!(self)
+    }
+}
+
+pub struct ListUtf8ArrayBuilder {
+    builder: LargeListBuilder<LargeStringBuilder>,
+}
+
+impl ListUtf8ArrayBuilder {
+    pub fn new(values_builder: LargeStringBuilder, capacity: usize) -> Self {
+        let builder = LargeListBuilder::with_capacity(values_builder, capacity);
+        ListUtf8ArrayBuilder { builder }
+    }
+}
+
+impl ListBuilderTrait for ListUtf8ArrayBuilder {
+    fn append_opt_series(&mut self, opt_s: Option<&Series>) {
+        match opt_s {
+            Some(s) => self.append_series(s),
+            None => {
+                self.builder.append(false).unwrap();
+            }
+        }
+    }
+
+    #[inline]
+    fn append_null(&mut self) {
+        let builder = self.builder.values();
+        builder.append_null().unwrap();
+        self.builder.append(true).unwrap();
+    }
+
+    #[inline]
+    fn append_series(&mut self, s: &Series) {
+        let ca = s.utf8().unwrap();
+        let value_builder = self.builder.values();
+        for s in ca {
+            match s {
+                Some(s) => value_builder.append_value(s).unwrap(),
+                None => value_builder.append_null().unwrap(),
+            };
+        }
+        self.builder.append(true).unwrap();
+    }
+
+    fn finish(&mut self) -> DFListArray {
+        finish_list_builder!(self)
+    }
+}
+
+pub struct ListBooleanArrayBuilder {
+    builder: LargeListBuilder<ArrowBooleanArrayBuilder>,
+}
+
+impl ListBooleanArrayBuilder {
+    pub fn new(values_builder: ArrowBooleanArrayBuilder, capacity: usize) -> Self {
+        let builder = LargeListBuilder::with_capacity(values_builder, capacity);
+
+        Self { builder }
+    }
+}
+
+impl ListBuilderTrait for ListBooleanArrayBuilder {
+    fn append_opt_series(&mut self, opt_s: Option<&Series>) {
+        match opt_s {
+            Some(s) => self.append_series(s),
+            None => {
+                self.builder.append(false).unwrap();
+            }
+        }
+    }
+
+    #[inline]
+    fn append_null(&mut self) {
+        let builder = self.builder.values();
+        builder.append_null();
+        self.builder.append(true).unwrap();
+    }
+
+    #[inline]
+    fn append_series(&mut self, s: &Series) {
+        let ca = s.bool().unwrap();
+        let value_builder = self.builder.values();
+        for s in ca {
+            match s {
+                Some(s) => value_builder.append_value(s),
+                None => value_builder.append_null(),
+            };
+        }
+        self.builder.append(true).unwrap();
+    }
+
+    fn finish(&mut self) -> DFListArray {
+        finish_list_builder!(self)
+    }
+}
+
+pub fn get_list_builder(
+    dt: &DataType,
+    value_capacity: usize,
+    list_capacity: usize,
+) -> Box<dyn ListBuilderTrait> {
+    macro_rules! get_primitive_builder {
+        ($type:ty) => {{
+            let values_builder = ArrowPrimitiveArrayBuilder::<$type>::new(value_capacity);
+            let builder = ListPrimitiveArrayBuilder::new(values_builder, list_capacity);
+            Box::new(builder)
+        }};
+    }
+    macro_rules! get_bool_builder {
+        () => {{
+            let values_builder = ArrowBooleanArrayBuilder::new(value_capacity);
+            let builder = ListBooleanArrayBuilder::new(values_builder, list_capacity);
+            Box::new(builder)
+        }};
+    }
+    macro_rules! get_utf8_builder {
+        () => {{
+            let values_builder =
+                LargeStringBuilder::with_capacity(value_capacity * 5, value_capacity);
+            let builder = ListUtf8ArrayBuilder::new(values_builder, list_capacity);
+            Box::new(builder)
+        }};
+    }
+    match_data_type_apply_macro!(
+        dt,
+        get_primitive_builder,
+        get_utf8_builder,
+        get_bool_builder
+    )
 }

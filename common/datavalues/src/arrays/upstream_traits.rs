@@ -11,16 +11,17 @@ use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeStringArray;
 use common_arrow::arrow::array::PrimitiveArray;
 
+use super::get_list_builder;
 use crate::arrays::DataArray;
+use crate::series::Series;
+use crate::utils::get_iter_capacity;
 use crate::utils::NoNull;
 use crate::vec::AlignedVec;
-use crate::BooleanType;
 use crate::DFBooleanArray;
 use crate::DFListArray;
 use crate::DFNumericType;
 use crate::DFPrimitiveType;
-use crate::DFStringArray;
-use crate::Utf8Type;
+use crate::DFUtf8Array;
 
 /// FromIterator trait
 
@@ -95,7 +96,7 @@ impl FromIterator<bool> for NoNull<DFBooleanArray> {
 
 // FromIterator for Utf8Type variants.Array
 
-impl<Ptr> FromIterator<Option<Ptr>> for DFStringArray
+impl<Ptr> FromIterator<Option<Ptr>> for DFUtf8Array
 where Ptr: AsRef<str>
 {
     fn from_iter<I: IntoIterator<Item = Option<Ptr>>>(iter: I) -> Self {
@@ -115,7 +116,7 @@ impl DFAsRef<str> for &str {}
 impl DFAsRef<str> for &&str {}
 impl<'a> DFAsRef<str> for Cow<'a, str> {}
 
-impl<Ptr> FromIterator<Ptr> for DFStringArray
+impl<Ptr> FromIterator<Ptr> for DFUtf8Array
 where Ptr: DFAsRef<str>
 {
     fn from_iter<I: IntoIterator<Item = Ptr>>(iter: I) -> Self {
@@ -127,14 +128,14 @@ where Ptr: DFAsRef<str>
 }
 
 /// From trait
-impl<'a> From<&'a DFStringArray> for Vec<Option<&'a str>> {
-    fn from(ca: &'a DFStringArray) -> Self {
+impl<'a> From<&'a DFUtf8Array> for Vec<Option<&'a str>> {
+    fn from(ca: &'a DFUtf8Array) -> Self {
         ca.downcast_iter().collect()
     }
 }
 
-impl From<DFStringArray> for Vec<Option<String>> {
-    fn from(ca: DFStringArray) -> Self {
+impl From<DFUtf8Array> for Vec<Option<String>> {
+    fn from(ca: DFUtf8Array) -> Self {
         ca.downcast_iter()
             .map(|opt| opt.map(|s| s.to_string()))
             .collect()
@@ -158,5 +159,76 @@ where T: DFNumericType
 {
     fn from(ca: &'a DataArray<T>) -> Self {
         ca.downcast_iter().collect()
+    }
+}
+
+impl<Ptr> FromIterator<Ptr> for DFListArray
+where Ptr: Borrow<Series>
+{
+    fn from_iter<I: IntoIterator<Item = Ptr>>(iter: I) -> Self {
+        let mut it = iter.into_iter();
+        let capacity = get_iter_capacity(&it);
+
+        // first take one to get the dtype. We panic if we have an empty iterator
+        let v = it.next().unwrap();
+        // We don't know the needed capacity. We arbitrarily choose an average of 5 elements per series.
+        let mut builder = get_list_builder(&v.borrow().data_type(), capacity * 5, capacity);
+
+        builder.append_series(v.borrow());
+        for s in it {
+            builder.append_series(s.borrow());
+        }
+        builder.finish()
+    }
+}
+
+impl<Ptr> FromIterator<Option<Ptr>> for DFListArray
+where Ptr: Borrow<Series>
+{
+    fn from_iter<I: IntoIterator<Item = Option<Ptr>>>(iter: I) -> Self {
+        let mut it = iter.into_iter();
+        let owned_v;
+        let mut cnt = 0;
+
+        loop {
+            let opt_v = it.next();
+
+            match opt_v {
+                Some(opt_v) => match opt_v {
+                    Some(val) => {
+                        owned_v = val;
+                        break;
+                    }
+                    None => cnt += 1,
+                },
+                // end of iterator
+                None => {
+                    // type is not known
+                    panic!("Type of Series cannot be determined as they are all null")
+                }
+            }
+        }
+        let v = owned_v.borrow();
+        let capacity = get_iter_capacity(&it);
+        let mut builder = get_list_builder(&v.data_type(), capacity * 5, capacity);
+
+        // first fill all None's we encountered
+        while cnt > 0 {
+            builder.append_opt_series(None);
+            cnt -= 1;
+        }
+
+        // now the first non None
+        builder.append_series(&v);
+
+        // now we have added all Nones, we can consume the rest of the iterator.
+        for opt_s in it {
+            match opt_s {
+                Some(s) => builder.append_series(s.borrow()),
+                None => builder.append_null(),
+            }
+        }
+
+        builder.finish()
     }
 }

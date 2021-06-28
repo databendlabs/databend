@@ -13,6 +13,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::arrays::*;
+use crate::prelude::*;
 use crate::series::*;
 use crate::*;
 
@@ -253,9 +254,9 @@ macro_rules! impl_dyn_array {
                 }
             }
 
-            fn utf8(&self) -> Result<&DFStringArray> {
+            fn utf8(&self) -> Result<&DFUtf8Array> {
                 if matches!(self.0.data_type(), DataType::Utf8) {
-                    unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFStringArray)) }
+                    unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFUtf8Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
                         "cannot unpack Series: {:?} of type {:?} into utf8",
@@ -288,6 +289,30 @@ macro_rules! impl_dyn_array {
                     )))
                 }
             }
+
+            fn take_iter(&self, iter: &mut dyn Iterator<Item = usize>) -> Result<Series> {
+                Ok(ArrayTake::take(&self.0, iter.into())?.into_series())
+            }
+
+            unsafe fn take_iter_unchecked(
+                &self,
+                iter: &mut dyn Iterator<Item = usize>,
+            ) -> Result<Series> {
+                Ok(ArrayTake::take_unchecked(&self.0, iter.into())?.into_series())
+            }
+
+            /// scatter the arrays by indices, the size of indices must be equal to the size of array
+            unsafe fn scatter_unchecked(
+                &self,
+                indices: &mut dyn Iterator<Item = u32>,
+                scattered_size: usize,
+            ) -> Result<Vec<Series>> {
+                let results = ArrayScatter::scatter_unchecked(&self.0, indices, scattered_size)?;
+                Ok(results
+                    .iter()
+                    .map(|array| array.clone().into_series())
+                    .collect())
+            }
         }
     };
 }
@@ -303,7 +328,7 @@ impl_dyn_array!(DFInt8Array);
 impl_dyn_array!(DFInt16Array);
 impl_dyn_array!(DFInt32Array);
 impl_dyn_array!(DFInt64Array);
-impl_dyn_array!(DFStringArray);
+impl_dyn_array!(DFUtf8Array);
 impl_dyn_array!(DFListArray);
 impl_dyn_array!(DFBooleanArray);
 impl_dyn_array!(DFBinaryArray);

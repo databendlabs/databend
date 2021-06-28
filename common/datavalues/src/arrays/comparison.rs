@@ -211,10 +211,10 @@ impl ArrayCompare<&DFBooleanArray> for DFBooleanArray {
     }
 }
 
-impl DFStringArray {
+impl DFUtf8Array {
     fn comparison(
         &self,
-        rhs: &DFStringArray,
+        rhs: &DFUtf8Array,
         operator: impl Fn(
             &LargeStringArray,
             &LargeStringArray,
@@ -225,32 +225,32 @@ impl DFStringArray {
     }
 }
 
-impl ArrayCompare<&DFStringArray> for DFStringArray {
-    fn eq_missing(&self, rhs: &DFStringArray) -> Result<DFBooleanArray> {
+impl ArrayCompare<&DFUtf8Array> for DFUtf8Array {
+    fn eq_missing(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
         Ok(impl_eq_missing!(self, rhs))
     }
 
-    fn eq(&self, rhs: &DFStringArray) -> Result<DFBooleanArray> {
+    fn eq(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
         impl_cmp_numeric_utf8! {self, rhs, eq, eq_utf8,  ==}
     }
 
-    fn neq(&self, rhs: &DFStringArray) -> Result<DFBooleanArray> {
+    fn neq(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
         impl_cmp_numeric_utf8! {self, rhs, neq, neq_utf8,  ==}
     }
 
-    fn gt(&self, rhs: &DFStringArray) -> Result<DFBooleanArray> {
+    fn gt(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
         impl_cmp_numeric_utf8! {self, rhs, gt, gt_utf8,  ==}
     }
 
-    fn gt_eq(&self, rhs: &DFStringArray) -> Result<DFBooleanArray> {
+    fn gt_eq(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
         impl_cmp_numeric_utf8! {self, rhs, gt_eq, gt_eq_utf8,  ==}
     }
 
-    fn lt(&self, rhs: &DFStringArray) -> Result<DFBooleanArray> {
+    fn lt(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
         impl_cmp_numeric_utf8! {self, rhs, lt, lt_utf8,  ==}
     }
 
-    fn lt_eq(&self, rhs: &DFStringArray) -> Result<DFBooleanArray> {
+    fn lt_eq(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
         impl_cmp_numeric_utf8! {self, rhs, lt_eq, lt_eq_utf8,  ==}
     }
 }
@@ -352,7 +352,7 @@ where
     }
 }
 
-impl ArrayCompare<&str> for DFStringArray {
+impl ArrayCompare<&str> for DFUtf8Array {
     fn eq_missing(&self, rhs: &str) -> Result<DFBooleanArray> {
         self.eq(rhs)
     }
@@ -520,11 +520,11 @@ impl ArrayEqualElement for DFBooleanArray {
     }
 }
 
-impl ArrayEqualElement for DFStringArray {
+impl ArrayEqualElement for DFUtf8Array {
     unsafe fn equal_element(&self, idx_self: usize, idx_other: usize, other: &Series) -> bool {
         let ca_other = other.as_ref().as_ref();
         debug_assert!(self.data_type() == other.data_type());
-        let ca_other = &*(ca_other as *const DFStringArray);
+        let ca_other = &*(ca_other as *const DFUtf8Array);
         self.get(idx_self) == ca_other.get(idx_other)
     }
 }

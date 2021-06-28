@@ -9,6 +9,7 @@
 #[macro_use]
 mod macros;
 
+mod bit_util;
 mod data_df_type;
 mod data_field;
 mod data_schema;
@@ -19,8 +20,9 @@ mod data_value_operator;
 mod utils;
 mod vec;
 
-mod arrays;
+pub mod arrays;
 pub mod columns;
+pub mod prelude;
 pub mod series;
 
 pub use data_df_type::*;

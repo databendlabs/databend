@@ -152,7 +152,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     }
 
     /// Unpack to DFArray of data_type utf8
-    fn utf8(&self) -> Result<&DFStringArray> {
+    fn utf8(&self) -> Result<&DFUtf8Array> {
         Err(ErrorCode::IllegalDataType(format!(
             "{:?} != utf8",
             self.data_type()
@@ -174,6 +174,27 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
             self.data_type()
         )))
     }
+
+    /// Take by index from an iterator. This operation clones the data.
+    ///
+    /// # Safety
+    ///
+    /// Out of bounds access doesn't Error but will return a Null value
+    fn take_iter(&self, _iter: &mut dyn Iterator<Item = usize>) -> Result<Series>;
+
+    /// Take by index from an iterator. This operation clones the data.
+    ///
+    /// # Safety
+    ///
+    /// This doesn't check any bounds or null validity.
+    unsafe fn take_iter_unchecked(&self, _iter: &mut dyn Iterator<Item = usize>) -> Result<Series>;
+
+    /// scatter the arrays by indices, the size of indices must be equal to the size of array
+    unsafe fn scatter_unchecked(
+        &self,
+        indices: &mut dyn Iterator<Item = u32>,
+        scattered_size: usize,
+    ) -> Result<Vec<Series>>;
 }
 
 impl<'a, T> AsRef<DataArray<T>> for dyn SeriesTrait + 'a
@@ -213,13 +234,13 @@ macro_rules! impl_from {
 
 impl<'a, T: AsRef<[&'a str]>> SeriesFrom<T, [&'a str]> for Series {
     fn new(v: T) -> Self {
-        DFStringArray::new_from_slice(v.as_ref()).into_series()
+        DFUtf8Array::new_from_slice(v.as_ref()).into_series()
     }
 }
 
 impl<'a, T: AsRef<[Option<&'a str>]>> SeriesFrom<T, [Option<&'a str>]> for Series {
     fn new(v: T) -> Self {
-        DFStringArray::new_from_opt_slice(v.as_ref()).into_series()
+        DFUtf8Array::new_from_opt_slice(v.as_ref()).into_series()
     }
 }
 
@@ -267,7 +288,7 @@ impl IntoSeries for ArrayRef {
 
             DataType::Float32 => DFFloat32Array::new(self).into_series(),
             DataType::Float64 => DFFloat64Array::new(self).into_series(),
-            DataType::Utf8 => DFStringArray::new(self).into_series(),
+            DataType::Utf8 => DFUtf8Array::new(self).into_series(),
             DataType::Date32 => DFDate32Array::new(self).into_series(),
             DataType::Date64 => DFDate64Array::new(self).into_series(),
 

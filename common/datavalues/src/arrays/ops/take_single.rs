@@ -17,7 +17,7 @@ use crate::series::Series;
 use crate::DFBooleanArray;
 use crate::DFListArray;
 use crate::DFNumericType;
-use crate::DFStringArray;
+use crate::DFUtf8Array;
 
 macro_rules! impl_take_random_get {
     ($self:ident, $index:ident, $array_type:ty) => {{
@@ -87,7 +87,7 @@ impl TakeRandom for DFBooleanArray {
     }
 }
 
-impl<'a> TakeRandom for &'a DFStringArray {
+impl<'a> TakeRandom for &'a DFUtf8Array {
     type Item = &'a str;
 
     #[inline]
@@ -105,7 +105,7 @@ impl<'a> TakeRandom for &'a DFStringArray {
 
 // extra trait such that it also works without extra reference.
 // Autoref will insert the reference and
-impl<'a> TakeRandomUtf8 for &'a DFStringArray {
+impl<'a> TakeRandomUtf8 for &'a DFUtf8Array {
     type Item = &'a str;
 
     #[inline]

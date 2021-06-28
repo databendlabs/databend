@@ -185,7 +185,7 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
     }
 }
 
-impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFStringArray {
+impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
     fn apply_cast_numeric<F, S>(&'a self, f: F) -> DataArray<S>
     where
         F: Fn(&'a str) -> S::Native + Copy,
@@ -267,7 +267,7 @@ where T: DFNumericType
     }
 }
 
-impl ArrayApplyKernel<LargeStringArray> for DFStringArray {
+impl ArrayApplyKernel<LargeStringArray> for DFUtf8Array {
     fn apply_kernel<F>(&self, f: F) -> Self
     where F: Fn(&LargeStringArray) -> ArrayRef {
         self.apply_kernel_cast(f)

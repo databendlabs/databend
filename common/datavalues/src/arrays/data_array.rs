@@ -11,6 +11,7 @@ use std::sync::Arc;
 use common_arrow::arrow::array as arrow_array;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::buffer::Buffer;
+use common_arrow::arrow::compute;
 use common_arrow::arrow::datatypes::IntervalUnit;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
@@ -222,6 +223,15 @@ where T: DFPrimitiveType
         // .copied was significantly slower in benchmark, next call did not inline?
         #[allow(clippy::map_clone)]
         self.data_views().map(|v| *v)
+    }
+}
+
+impl DFListArray {
+    pub fn sub_data_type(&self) -> DataType {
+        match self.data_type() {
+            DataType::List(sub_types) => sub_types.data_type().clone(),
+            _ => unreachable!(),
+        }
     }
 }
 

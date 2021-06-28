@@ -64,6 +64,29 @@ macro_rules! apply_method_numeric_series {
     }
 }
 
+#[macro_export]
+macro_rules! match_data_type_apply_macro {
+    ($obj:expr, $macro:ident, $macro_utf8:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
+        match $obj {
+            DataType::Utf8 => $macro_utf8!($($opt_args)*),
+            DataType::Boolean => $macro_bool!($($opt_args)*),
+            DataType::UInt8 => $macro!(UInt8Type $(, $opt_args)*),
+            DataType::UInt16 => $macro!(UInt16Type $(, $opt_args)*),
+            DataType::UInt32 => $macro!(UInt32Type $(, $opt_args)*),
+            DataType::UInt64 => $macro!(UInt64Type $(, $opt_args)*),
+            DataType::Int8 => $macro!(Int8Type $(, $opt_args)*),
+            DataType::Int16 => $macro!(Int16Type $(, $opt_args)*),
+            DataType::Int32 => $macro!(Int32Type $(, $opt_args)*),
+            DataType::Int64 => $macro!(Int64Type $(, $opt_args)*),
+            DataType::Float32 => $macro!(Float32Type $(, $opt_args)*),
+            DataType::Float64 => $macro!(Float64Type $(, $opt_args)*),
+            DataType::Date32 => $macro!(Date32Type $(, $opt_args)*),
+            DataType::Date64 => $macro!(Date64Type $(, $opt_args)*),
+            _ => unimplemented!(),
+        }
+    }};
+}
+
 macro_rules! typed_cast_from_array_to_data_value {
     ($array:expr, $index:expr, $ARRAYTYPE:ident, $SCALAR:ident) => {{
         use common_arrow::arrow::array::*;

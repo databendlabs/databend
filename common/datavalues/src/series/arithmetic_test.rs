@@ -249,6 +249,27 @@ fn test_arithmetic_series() {
                 "Code: 10, displayText = DataValue Error: Unsupported (Utf8) divide (Utf8).",
             ],
         },
+        ArrayTest {
+            name: "rem-passed",
+            args: vec![
+                vec![Series::new(vec!["xx"]), Series::new(vec!["yy"])],
+                vec![Series::new(vec![4, 3, 2, 1]), Series::new(vec![1, 2, 3, 4])],
+                vec![
+                    Series::new(vec![100, 99, 98, 96]),
+                    Series::new(vec![2, 3, 2, 4]),
+                ],
+            ],
+            op: DataValueArithmeticOperator::Modulo,
+
+            expect: vec![
+                Series::new(vec![""]),
+                Series::new(vec![0i64, 1, 2, 1]),
+                Series::new(vec![0i64, 0, 0, 0]),
+            ],
+            error: vec![
+                "Code: 10, displayText = DataValue Error: Unsupported (Utf8) modulo (Utf8).",
+            ],
+        },
     ];
 
     for t in tests {
@@ -258,7 +279,7 @@ fn test_arithmetic_series() {
                 DataValueArithmeticOperator::Minus => &args[0] - &args[1],
                 DataValueArithmeticOperator::Mul => &args[0] * &args[1],
                 DataValueArithmeticOperator::Div => &args[0] / &args[1],
-                DataValueArithmeticOperator::Modulo => todo!(),
+                DataValueArithmeticOperator::Modulo => &args[0] % &args[1],
             };
 
             match result {

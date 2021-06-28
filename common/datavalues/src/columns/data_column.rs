@@ -117,10 +117,38 @@ impl DataColumn {
             DataColumn::Constant(scalar, _) => Ok(scalar.clone()),
         }
     }
+
+    #[inline]
+    pub unsafe fn scatter_unchecked(
+        &self,
+        indices: &mut dyn Iterator<Item = u32>,
+        scatter_size: usize,
+    ) -> Result<Vec<DataColumn>> {
+        match self {
+            DataColumn::Array(array) => {
+                let series = array.scatter_unchecked(indices, scatter_size)?;
+                Ok(series.iter().map(|s| s.into()).collect())
+            }
+            DataColumn::Constant(scalar, _) => {
+                let mut vs = vec![0; scatter_size];
+                indices.for_each(|d| vs[d as usize] = vs[d as usize] + 1);
+
+                Ok(vs
+                    .iter()
+                    .map(|v| DataColumn::Constant(scalar.clone(), *v))
+                    .collect())
+            }
+        }
+    }
 }
 
 impl From<Series> for DataColumn {
     fn from(array: Series) -> Self {
         DataColumn::Array(array)
+    }
+}
+impl From<&Series> for DataColumn {
+    fn from(array: &Series) -> Self {
+        DataColumn::Array(array.clone())
     }
 }

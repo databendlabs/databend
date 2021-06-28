@@ -25,7 +25,7 @@ use crate::DFFloat32Array;
 use crate::DFFloat64Array;
 use crate::DFListArray;
 use crate::DFNumericType;
-use crate::DFStringArray;
+use crate::DFUtf8Array;
 use crate::Float32Type;
 use crate::Float64Type;
 
@@ -457,8 +457,8 @@ fn concat_strings(l: &str, r: &str) -> String {
     s
 }
 
-impl Add for &DFStringArray {
-    type Output = Result<DFStringArray>;
+impl Add for &DFUtf8Array {
+    type Output = Result<DFUtf8Array>;
 
     fn add(self, rhs: Self) -> Self::Output {
         // broadcasting path
@@ -466,7 +466,7 @@ impl Add for &DFStringArray {
             let rhs = rhs.get(0);
             return match rhs {
                 Some(rhs) => self.add(rhs),
-                None => Ok(DFStringArray::full_null(self.len())),
+                None => Ok(DFUtf8Array::full_null(self.len())),
             };
         }
 
@@ -482,16 +482,16 @@ impl Add for &DFStringArray {
     }
 }
 
-impl Add for DFStringArray {
-    type Output = Result<DFStringArray>;
+impl Add for DFUtf8Array {
+    type Output = Result<DFUtf8Array>;
 
     fn add(self, rhs: Self) -> Self::Output {
         (&self).add(&rhs)
     }
 }
 
-impl Add<&str> for &DFStringArray {
-    type Output = Result<DFStringArray>;
+impl Add<&str> for &DFUtf8Array {
+    type Output = Result<DFUtf8Array>;
 
     fn add(self, rhs: &str) -> Self::Output {
         Ok(match self.null_count() {
@@ -535,5 +535,5 @@ where
 }
 
 impl Pow for DFBooleanArray {}
-impl Pow for DFStringArray {}
+impl Pow for DFUtf8Array {}
 impl Pow for DFListArray {}

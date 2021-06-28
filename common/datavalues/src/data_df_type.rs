@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use common_arrow::arrow::datatypes as arrow_data_types;
 use common_arrow::arrow::datatypes::ArrowNumericType;
 use common_arrow::arrow::datatypes::ArrowPrimitiveType;
@@ -68,7 +72,7 @@ pub type DFBooleanArray = DataArray<BooleanType>;
 pub type DFFloat32Array = DataArray<Float32Type>;
 pub type DFFloat64Array = DataArray<Float64Type>;
 
-pub type DFStringArray = DataArray<Utf8Type>;
+pub type DFUtf8Array = DataArray<Utf8Type>;
 pub type DFListArray = DataArray<ListType>;
 pub type DFStructArray = DataArray<StructType>;
 pub type DFBinaryArray = DataArray<BinaryType>;
