@@ -17,13 +17,13 @@ fn test_aggregate_function() -> Result<()> {
         eval_nums: usize,
         args: Vec<DataField>,
         display: &'static str,
-        columns: Vec<DataColumnarValue>,
+        columns: Vec<DataColumn>,
         expect: DataValue,
         error: &'static str,
         func_name: &'static str,
     }
 
-    let columns: Vec<DataColumnarValue> = vec![
+    let columns: Vec<DataColumn> = vec![
         Arc::new(Int64Array::from(vec![4, 3, 2, 1])).into(),
         Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
     ];
@@ -167,13 +167,13 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         eval_nums: usize,
         args: Vec<DataField>,
         display: &'static str,
-        columns: Vec<DataColumnarValue>,
+        columns: Vec<DataColumn>,
         expect: DataValue,
         error: &'static str,
         func_name: &'static str,
     }
 
-    let columns: Vec<DataColumnarValue> = vec![
+    let columns: Vec<DataColumn> = vec![
         Arc::new(Int64Array::builder(0).finish()).into(),
         Arc::new(Int64Array::builder(0).finish()).into(),
     ];

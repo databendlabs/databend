@@ -19,5 +19,5 @@ use num::ToPrimitive;
 use num::Zero;
 
 use crate::DFNumericType;
-use crate::DataColumnarValue;
+use crate::DataColumn;
 use crate::*;

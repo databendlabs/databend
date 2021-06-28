@@ -58,7 +58,7 @@ impl AggregateFunction for AggregateArgMinFunction {
         self
     }
 
-    fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
+    fn accumulate(&mut self, columns: &[DataColumn], _input_rows: usize) -> Result<()> {
         if let DataValue::Struct(min_arg_val) = Self::arg_min_batch(columns[1].clone())? {
             if min_arg_val[0].is_null() {
                 return Ok(());
@@ -220,13 +220,13 @@ macro_rules! string_array_min_to_data_value {
 }
 
 impl AggregateArgMinFunction {
-    pub fn arg_min_batch(column: DataColumnarValue) -> Result<DataValue> {
+    pub fn arg_min_batch(column: DataColumn) -> Result<DataValue> {
         match column {
-            DataColumnarValue::Constant(value, _) => {
+            DataColumn::Constant(value, _) => {
                 Ok(DataValue::Struct(vec![DataValue::UInt64(Some(0)), value]))
             }
 
-            DataColumnarValue::Array(array) => {
+            DataColumn::Array(array) => {
                 if let Ok(v) =
                     dispatch_primitive_array! { typed_array_min_to_data_value, array, argMin}
                 {

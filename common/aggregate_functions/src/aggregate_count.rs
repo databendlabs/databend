@@ -5,7 +5,7 @@
 use std::any::Any;
 use std::fmt;
 
-use common_datavalues::DataColumnarValue;
+use common_datavalues::columns::DataColumn;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
@@ -55,7 +55,7 @@ impl AggregateFunction for AggregateCountFunction {
         self
     }
 
-    fn accumulate(&mut self, _columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
+    fn accumulate(&mut self, _columns: &[DataColumn], input_rows: usize) -> Result<()> {
         self.state = DataValueArithmetic::data_value_arithmetic_op(
             DataValueArithmeticOperator::Plus,
             self.state.clone(),

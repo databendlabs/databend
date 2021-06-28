@@ -8,7 +8,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::data_array_cast;
-use crate::DataColumnarValue;
+use crate::DataColumn;
 use crate::DataType;
 use crate::DataValue;
 use crate::DataValueComparisonOperator;
@@ -32,11 +32,11 @@ impl DataArrayComparison {
     #[inline]
     pub fn data_array_comparison_op(
         op: DataValueComparisonOperator,
-        left: &DataColumnarValue,
-        right: &DataColumnarValue,
+        left: &DataColumn,
+        right: &DataColumn,
     ) -> Result<Series> {
         match (left, right) {
-            (DataColumnarValue::Array(left_array), DataColumnarValue::Array(right_array)) => {
+            (DataColumn::Array(left_array), DataColumn::Array(right_array)) => {
                 let coercion_type = super::data_type_coercion::equal_coercion(
                     &left_array.get_data_type(),
                     &right_array.get_data_type(),
@@ -72,7 +72,7 @@ impl DataArrayComparison {
                 }
             }
 
-            (DataColumnarValue::Array(array), DataColumnarValue::Constant(scalar, _)) => {
+            (DataColumn::Array(array), DataColumn::Constant(scalar, _)) => {
                 let coercion_type = super::data_type_coercion::equal_coercion(
                     &array.get_data_type(),
                     &scalar.data_type(),
@@ -109,7 +109,7 @@ impl DataArrayComparison {
                 }
             }
 
-            (DataColumnarValue::Constant(scalar, _), DataColumnarValue::Array(array)) => {
+            (DataColumn::Constant(scalar, _), DataColumn::Array(array)) => {
                 let coercion_type = super::data_type_coercion::equal_coercion(
                     &array.get_data_type(),
                     &scalar.data_type(),
@@ -145,10 +145,7 @@ impl DataArrayComparison {
                     }
                 }
             }
-            (
-                DataColumnarValue::Constant(left_scala, rows),
-                DataColumnarValue::Constant(right_scalar, _),
-            ) => {
+            (DataColumn::Constant(left_scala, rows), DataColumn::Constant(right_scalar, _)) => {
                 let coercion_type = super::data_type_coercion::equal_coercion(
                     &left_scala.data_type(),
                     &right_scalar.data_type(),

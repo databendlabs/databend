@@ -4,8 +4,8 @@
 
 use std::fmt;
 
+use common_datavalues::columns::DataColumn;
 use common_datavalues::DataArrayLogic;
-use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValueLogicOperator;
@@ -49,10 +49,11 @@ impl Function for LogicFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
-        Ok(DataColumnarValue::Array(
-            DataArrayLogic::data_array_logic_op(self.op.clone(), columns)?,
-        ))
+    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
+        Ok(DataColumn::Array(DataArrayLogic::data_array_logic_op(
+            self.op.clone(),
+            columns,
+        )?))
     }
 }
 

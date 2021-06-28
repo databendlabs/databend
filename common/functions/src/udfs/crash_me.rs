@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use common_datavalues::DataColumnarValue;
+use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
@@ -41,11 +41,7 @@ impl Function for CrashMeFunction {
         Ok(false)
     }
 
-    fn eval(
-        &self,
-        _columns: &[DataColumnarValue],
-        _input_rows: usize,
-    ) -> Result<DataColumnarValue> {
+    fn eval(&self, _columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
         panic!("crash me function");
     }
 }

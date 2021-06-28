@@ -8,7 +8,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::data_array_cast;
-use crate::DataColumnarValue;
+use crate::DataColumn;
 use crate::DataType;
 use crate::DataValue;
 use crate::DataValueArithmeticOperator;
@@ -61,23 +61,23 @@ impl DataArrayArithmetic {
     #[inline]
     pub fn data_array_arithmetic_op(
         op: DataValueArithmeticOperator,
-        left: &DataColumnarValue,
-        right: &DataColumnarValue,
-    ) -> Result<DataColumnarValue> {
+        left: &DataColumn,
+        right: &DataColumn,
+    ) -> Result<DataColumn> {
         match right {
-            DataColumnarValue::Array(right_array) => {
+            DataColumn::Array(right_array) => {
                 let left_array = left.to_array()?;
-                Ok(DataColumnarValue::Array(Self::array_array_arithmetic_op(
+                Ok(DataColumn::Array(Self::array_array_arithmetic_op(
                     op,
                     &left_array,
                     &right_array,
                 )?))
             }
-            DataColumnarValue::Constant(right_value, _) => {
+            DataColumn::Constant(right_value, _) => {
                 let mut all_const = false;
                 let left_array = match left {
-                    DataColumnarValue::Array(array) => array.clone(),
-                    DataColumnarValue::Constant(scalar, _) => {
+                    DataColumn::Array(array) => array.clone(),
+                    DataColumn::Constant(scalar, _) => {
                         all_const = true;
                         scalar.to_series_with_size(1)?
                     }
@@ -85,9 +85,9 @@ impl DataArrayArithmetic {
                 let result = Self::array_scalar_arithmetic_op(op, &left_array, right_value)?;
                 if all_const {
                     let scalar = DataValue::try_from_array(&result, 0)?;
-                    Ok(DataColumnarValue::Constant(scalar, left.len()))
+                    Ok(DataColumn::Constant(scalar, left.len()))
                 } else {
-                    Ok(DataColumnarValue::Array(result))
+                    Ok(DataColumn::Array(result))
                 }
             }
         }
@@ -169,14 +169,12 @@ impl DataArrayArithmetic {
     #[inline]
     pub fn data_array_unary_arithmetic_op(
         op: DataValueArithmeticOperator,
-        value: &DataColumnarValue,
+        value: &DataColumn,
     ) -> Result<Series> {
         match op {
             DataValueArithmeticOperator::Minus => {
                 let value_array = match value {
-                    DataColumnarValue::Constant(value_scalar, _) => {
-                        value_scalar.to_series_with_size(1)?
-                    }
+                    DataColumn::Constant(value_scalar, _) => value_scalar.to_series_with_size(1)?,
                     _ => value.to_array()?,
                 };
 

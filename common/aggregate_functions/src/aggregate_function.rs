@@ -5,7 +5,7 @@
 use std::any::Any;
 use std::fmt;
 
-use common_datavalues::DataColumnarValue;
+use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -21,7 +21,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send + DynClone {
 
     // accumulate is to accumulate the columns in batch mod
     // if some aggregate functions wants to iterate over the columns row by row, it doesn't need to implement this function
-    fn accumulate(&mut self, columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
+    fn accumulate(&mut self, columns: &[DataColumn], input_rows: usize) -> Result<()> {
         if columns.is_empty() {
             return Ok(());
         };

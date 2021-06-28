@@ -131,8 +131,8 @@ fn test_array_comparison() {
         for (i, args) in t.args.iter().enumerate() {
             let result = DataArrayComparison::data_array_comparison_op(
                 t.op.clone(),
-                &DataColumnarValue::Array(args[0].clone()),
-                &DataColumnarValue::Array(args[1].clone()),
+                &DataColumn::Array(args[0].clone()),
+                &DataColumn::Array(args[1].clone()),
             );
             match result {
                 Ok(v) => assert_eq!(v.as_ref(), t.expect[i].as_ref()),
@@ -228,8 +228,8 @@ fn test_array_scalar_comparison() {
     for t in tests {
         let result = DataArrayComparison::data_array_comparison_op(
             t.op.clone(),
-            &DataColumnarValue::Array(t.array.clone()),
-            &DataColumnarValue::Constant(t.scalar, t.array.len()),
+            &DataColumn::Array(t.array.clone()),
+            &DataColumn::Constant(t.scalar, t.array.len()),
         );
         match result {
             Ok(v) => assert_eq!(v.as_ref(), t.expect.as_ref()),
@@ -324,8 +324,8 @@ fn test_scalar_array_comparison() {
     for t in tests {
         let result = DataArrayComparison::data_array_comparison_op(
             t.op.clone(),
-            &DataColumnarValue::Constant(t.scalar, t.array.len()),
-            &DataColumnarValue::Array(t.array),
+            &DataColumn::Constant(t.scalar, t.array.len()),
+            &DataColumn::Array(t.array),
         );
         match result {
             Ok(v) => assert_eq!(v.as_ref(), t.expect.as_ref()),

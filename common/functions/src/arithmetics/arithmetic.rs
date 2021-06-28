@@ -4,8 +4,7 @@
 
 use std::fmt;
 
-use common_datavalues::DataArrayArithmetic;
-use common_datavalues::DataColumnarValue;
+use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -62,20 +61,21 @@ impl Function for ArithmeticFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
-        if columns.len() == 1 {
-            let result =
-                DataArrayArithmetic::data_array_unary_arithmetic_op(self.op.clone(), &columns[0])?;
-            match &columns[0] {
-                DataColumnarValue::Constant(_, _) => {
-                    let data_value = DataValue::try_from_array(&result, 0)?;
-                    Ok(DataColumnarValue::Constant(data_value, input_rows))
-                }
-                _ => Ok(DataColumnarValue::Array(result)),
-            }
-        } else {
-            DataArrayArithmetic::data_array_arithmetic_op(self.op.clone(), &columns[0], &columns[1])
-        }
+    fn eval(&self, columns: &[DataColumn], input_rows: usize) -> Result<DataColumn> {
+        todo!()
+        // if columns.len() == 1 {
+        //     let result =
+        //         DataArrayArithmetic::data_array_unary_arithmetic_op(self.op.clone(), &columns[0])?;
+        //     match &columns[0] {
+        //         DataColumn::Constant(_, _) => {
+        //             let data_value = DataValue::try_from_array(&result, 0)?;
+        //             Ok(DataColumn::Constant(data_value, input_rows))
+        //         }
+        //         _ => Ok(DataColumn::Array(result)),
+        //     }
+        // } else {
+        //     DataArrayArithmetic::data_array_arithmetic_op(self.op.clone(), &columns[0], &columns[1])
+        // }
     }
 
     fn num_arguments(&self) -> usize {

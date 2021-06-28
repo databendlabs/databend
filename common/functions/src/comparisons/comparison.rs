@@ -4,8 +4,7 @@
 
 use std::fmt;
 
-use common_datavalues::DataArrayComparison;
-use common_datavalues::DataColumnarValue;
+use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValueComparisonOperator;
@@ -61,7 +60,7 @@ impl Function for ComparisonFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
+    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
         let result = DataArrayComparison::data_array_comparison_op(
             self.op.clone(),
             &columns[0],

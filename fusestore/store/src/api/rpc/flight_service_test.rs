@@ -4,7 +4,7 @@
 
 use common_arrow::arrow::array::ArrayRef;
 use common_datablocks::DataBlock;
-use common_datavalues::DataColumnarValue;
+use common_datavalues::columns::DataColumn;
 use common_flights::GetTableActionResult;
 use common_flights::StoreClient;
 use common_planners::CreateDatabasePlan;
@@ -304,8 +304,8 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     let expected_cols = 2;
 
     let block = DataBlock::create(schema.clone(), vec![
-        DataColumnarValue::Array(col0),
-        DataColumnarValue::Array(col1),
+        DataColumn::Array(col0),
+        DataColumn::Array(col1),
     ]);
     let batches = vec![block.clone(), block];
     let num_batch = batches.len();

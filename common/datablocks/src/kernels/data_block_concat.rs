@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_datavalues::series::SeriesHelper;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -21,19 +21,19 @@ impl DataBlock {
             }
         }
 
-        let mut arrays = Vec::with_capacity(first_block.num_columns());
+        let mut concat_columns = Vec::with_capacity(first_block.num_columns());
         for (i, _f) in blocks[0].schema().fields().iter().enumerate() {
-            let mut series = Vec::with_capacity(blocks.len());
+            let mut columns = Vec::with_capacity(blocks.len());
             for block in blocks.iter() {
-                series.push(block.column(i).to_array()?);
+                columns.push(block.column(i).clone());
             }
 
-            arrays.push(SeriesHelper::concat(&series)?);
+            concat_columns.push(DataColumnCommon::concat(&columns)?);
         }
 
-        Ok(DataBlock::create_by_array(
+        Ok(DataBlock::create(
             first_block.schema().clone(),
-            arrays,
+            concat_columns,
         ))
     }
 }

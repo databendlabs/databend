@@ -16,13 +16,13 @@ fn test_aggregate_combinator_function() -> Result<()> {
         name: &'static str,
         args: Vec<DataField>,
         display: &'static str,
-        columns: Vec<DataColumnarValue>,
+        columns: Vec<DataColumn>,
         expect: DataValue,
         error: &'static str,
         func_name: &'static str,
     }
 
-    let columns: Vec<DataColumnarValue> = vec![
+    let columns: Vec<DataColumn> = vec![
         Arc::new(Int64Array::from(vec![4, 3, 2, 1, 3, 4])).into(),
         Arc::new(BooleanArray::from(vec![
             true, true, false, true, true, true,
@@ -143,13 +143,13 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
         name: &'static str,
         args: Vec<DataField>,
         display: &'static str,
-        columns: Vec<DataColumnarValue>,
+        columns: Vec<DataColumn>,
         expect: DataValue,
         error: &'static str,
         func_name: &'static str,
     }
 
-    let columns: Vec<DataColumnarValue> = vec![
+    let columns: Vec<DataColumn> = vec![
         Arc::new(Int64Array::builder(0).finish()).into(),
         Arc::new(BooleanArray::builder(0).finish()).into(),
     ];

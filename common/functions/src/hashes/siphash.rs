@@ -6,8 +6,8 @@ use std::collections::hash_map::DefaultHasher;
 use std::fmt;
 use std::hash::Hasher;
 
+use common_datavalues::columns::DataColumn;
 use common_datavalues::DataArrayHashDispatcher;
-use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::FuseDataHasher;
@@ -74,7 +74,7 @@ impl Function for SipHashFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
+    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
         DataArrayHashDispatcher::<SipHasher>::dispatch(&columns[0])
     }
 }

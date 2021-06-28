@@ -53,7 +53,7 @@ impl AggregateFunction for AggregateSumFunction {
         self
     }
 
-    fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
+    fn accumulate(&mut self, columns: &[DataColumn], _input_rows: usize) -> Result<()> {
         let value = Self::sum_batch(columns[0].clone())?;
 
         self.state = DataValueArithmetic::data_value_arithmetic_op(
@@ -119,16 +119,14 @@ impl AggregateSumFunction {
         }
     }
 
-    pub fn sum_batch(column: DataColumnarValue) -> Result<DataValue> {
+    pub fn sum_batch(column: DataColumn) -> Result<DataValue> {
         match column {
-            DataColumnarValue::Constant(value, size) => {
-                DataValueArithmetic::data_value_arithmetic_op(
-                    DataValueArithmeticOperator::Mul,
-                    value,
-                    DataValue::UInt64(Some(size as u64)),
-                )
-            }
-            DataColumnarValue::Array(array) => {
+            DataColumn::Constant(value, size) => DataValueArithmetic::data_value_arithmetic_op(
+                DataValueArithmeticOperator::Mul,
+                value,
+                DataValue::UInt64(Some(size as u64)),
+            ),
+            DataColumn::Array(array) => {
                 dispatch_primitive_array! { typed_array_op_to_data_value,  array, sum}
             }
         }

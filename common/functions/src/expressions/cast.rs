@@ -6,7 +6,7 @@ use std::fmt;
 
 use common_arrow::arrow::compute;
 use common_arrow::arrow::compute::CastOptions;
-use common_datavalues::DataColumnarValue;
+use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
@@ -42,9 +42,9 @@ impl Function for CastFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
+    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
         let value = columns[0].to_array()?;
-        Ok(DataColumnarValue::Array(
+        Ok(DataColumn::Array(
             compute::kernels::cast::cast_with_options(
                 &value,
                 &self.cast_type,

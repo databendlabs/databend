@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataColumnarValue;
+use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -58,7 +58,7 @@ impl ExpressionExecutor {
             self.chain.actions
         );
 
-        let mut column_map: HashMap<String, DataColumnarValue> = HashMap::new();
+        let mut column_map: HashMap<String, DataColumn> = HashMap::new();
 
         // a + 1 as b, a + 1 as c
         let mut alias_map: HashMap<String, Vec<String>> = HashMap::new();
@@ -101,7 +101,7 @@ impl ExpressionExecutor {
                                 )
                             })
                         })
-                        .collect::<Result<Vec<DataColumnarValue>>>()?;
+                        .collect::<Result<Vec<DataColumn>>>()?;
 
                     let func = f.to_function()?;
                     let column = func.eval(&arg_columns, rows)?;
@@ -109,7 +109,7 @@ impl ExpressionExecutor {
                     column_map.insert(f.name.clone(), column);
                 }
                 ExpressionAction::Constant(constant) => {
-                    let column = DataColumnarValue::Constant(constant.value.clone(), rows);
+                    let column = DataColumn::Constant(constant.value.clone(), rows);
                     column_map.insert(constant.name.clone(), column);
                 }
 

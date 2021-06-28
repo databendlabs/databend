@@ -45,7 +45,7 @@ use common_arrow::arrow::datatypes::UInt8Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::DataColumnarValue;
+use crate::DataColumn;
 use crate::DataValue;
 use crate::Series;
 
@@ -71,15 +71,12 @@ pub trait FuseDataHasher {
 pub struct DataArrayHashDispatcher<Hasher: FuseDataHasher>(PhantomData<Hasher>);
 
 impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
-    pub fn dispatch(input: &DataColumnarValue) -> Result<DataColumnarValue> {
+    pub fn dispatch(input: &DataColumn) -> Result<DataColumn> {
         match input {
-            DataColumnarValue::Array(input) => {
-                Ok(DataColumnarValue::Array(Self::dispatch_array(input)?))
+            DataColumn::Array(input) => Ok(DataColumn::Array(Self::dispatch_array(input)?)),
+            DataColumn::Constant(input, rows) => {
+                Ok(DataColumn::Constant(Self::dispatch_constant(input)?, *rows))
             }
-            DataColumnarValue::Constant(input, rows) => Ok(DataColumnarValue::Constant(
-                Self::dispatch_constant(input)?,
-                *rows,
-            )),
         }
     }
 

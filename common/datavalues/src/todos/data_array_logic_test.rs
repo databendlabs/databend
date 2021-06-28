@@ -53,7 +53,7 @@ fn test_array_logic() {
         for (i, args) in t.args.iter().enumerate() {
             let arrays = args
                 .iter()
-                .map(|x| DataColumnarValue::Array(x.clone()))
+                .map(|x| DataColumn::Array(x.clone()))
                 .collect::<Vec<_>>();
 
             let result = DataArrayLogic::data_array_logic_op(t.op.clone(), &arrays);

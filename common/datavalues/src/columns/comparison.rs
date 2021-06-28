@@ -1,0 +1,34 @@
+//! Comparison operations on DataColumn.
+
+use common_exception::Result;
+
+use crate::prelude::*;
+use crate::DataValueComparisonOperator;
+
+macro_rules! apply_cmp {
+    ($self: ident, $rhs: ident, $op: ident) => {{
+        let lhs = $self.to_minal_array()?;
+        let rhs = $rhs.to_minal_array()?;
+
+        let result = lhs.$op(&rhs)?;
+        let result: DataColumn = result.into_series().into();
+        Ok(result.resize_constant($self.len()))
+    }};
+}
+
+impl DataColumn {
+    #[allow(unused)]
+    fn compare(&self, op: DataValueComparisonOperator, rhs: &DataColumn) -> Result<DataColumn> {
+        match op {
+            DataValueComparisonOperator::Eq => apply_cmp! {self, rhs, eq},
+            DataValueComparisonOperator::Lt => apply_cmp! {self, rhs, lt},
+            DataValueComparisonOperator::LtEq => apply_cmp! {self, rhs, lt_eq},
+            DataValueComparisonOperator::Gt => apply_cmp! {self, rhs, gt},
+            DataValueComparisonOperator::GtEq => apply_cmp! {self, rhs, gt_eq},
+            DataValueComparisonOperator::NotEq => apply_cmp! {self, rhs, neq},
+            _ => todo!()
+            // DataValueComparisonOperator::Like => apply_cmp! {self, rhs, like},
+            // DataValueComparisonOperator::NotLike => apply_cmp! {self, rhs, nlike},
+        }
+    }
+}

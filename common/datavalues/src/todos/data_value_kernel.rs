@@ -7,7 +7,7 @@ use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::DataColumnarValue;
+use crate::DataColumn;
 use crate::DataType;
 use crate::DataValue;
 use crate::IGetDataType;
@@ -24,14 +24,10 @@ impl DataValue {
     /// key-0: u8[1, 'a']
     /// key-1: u8[2, 'b']
     #[inline]
-    pub fn concat_row_to_one_key(
-        col: &DataColumnarValue,
-        row: usize,
-        vec: &mut Vec<u8>,
-    ) -> Result<()> {
+    pub fn concat_row_to_one_key(col: &DataColumn, row: usize, vec: &mut Vec<u8>) -> Result<()> {
         let (col, row) = match col {
-            DataColumnarValue::Array(array) => (Ok(array.clone()), row),
-            DataColumnarValue::Constant(v, _) => (v.to_series_with_size(1), 0),
+            DataColumn::Array(array) => (Ok(array.clone()), row),
+            DataColumn::Constant(v, _) => (v.to_series_with_size(1), 0),
         };
         let col = col?;
 
@@ -142,7 +138,7 @@ impl DataValue {
             ))
         })?;
 
-        let col = DataColumnarValue::Array(dict_col.values().clone());
+        let col = DataColumn::Array(dict_col.values().clone());
         Self::concat_row_to_one_key(&col, values_index, vec)
     }
 
@@ -168,10 +164,10 @@ impl DataValue {
     }
 
     #[inline]
-    pub fn try_from_column(column: &DataColumnarValue, index: usize) -> Result<DataValue> {
+    pub fn try_from_column(column: &DataColumn, index: usize) -> Result<DataValue> {
         match column {
-            DataColumnarValue::Constant(scalar, _) => Ok(scalar.clone()),
-            DataColumnarValue::Array(array) => DataValue::try_from_array(array, index),
+            DataColumn::Constant(scalar, _) => Ok(scalar.clone()),
+            DataColumn::Array(array) => DataValue::try_from_array(array, index),
         }
     }
 

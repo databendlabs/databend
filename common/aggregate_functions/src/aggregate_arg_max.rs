@@ -58,7 +58,7 @@ impl AggregateFunction for AggregateArgMaxFunction {
         self
     }
 
-    fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
+    fn accumulate(&mut self, columns: &[DataColumn], _input_rows: usize) -> Result<()> {
         if let DataValue::Struct(max_arg_val) = Self::arg_max_batch(columns[1].clone())? {
             if max_arg_val[0].is_null() {
                 return Ok(());
@@ -220,13 +220,13 @@ macro_rules! string_array_max_to_data_value {
 }
 
 impl AggregateArgMaxFunction {
-    pub fn arg_max_batch(column: DataColumnarValue) -> Result<DataValue> {
+    pub fn arg_max_batch(column: DataColumn) -> Result<DataValue> {
         match column {
-            DataColumnarValue::Constant(value, _) => {
+            DataColumn::Constant(value, _) => {
                 Ok(DataValue::Struct(vec![DataValue::UInt64(Some(0)), value]))
             }
 
-            DataColumnarValue::Array(array) => {
+            DataColumn::Array(array) => {
                 if let Ok(v) =
                     dispatch_primitive_array! { typed_array_max_to_data_value, array, argMax}
                 {

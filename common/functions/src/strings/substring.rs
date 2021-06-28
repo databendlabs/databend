@@ -6,7 +6,7 @@ use std::fmt;
 
 use common_arrow::arrow::array::Int64Array;
 use common_arrow::arrow::compute;
-use common_datavalues::DataColumnarValue;
+use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::UInt64Array;
@@ -41,7 +41,7 @@ impl Function for SubstringFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
+    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
         // TODO: make this function support column value as arguments rather than literal
         let mut from = match columns[1].data_type() {
             DataType::UInt64 => Ok(columns[1]
@@ -107,9 +107,11 @@ impl Function for SubstringFunction {
         }
 
         let value = columns[0].to_array()?;
-        Ok(DataColumnarValue::Array(
-            compute::kernels::substring::substring(value.as_ref(), from, &end)?,
-        ))
+        Ok(DataColumn::Array(compute::kernels::substring::substring(
+            value.as_ref(),
+            from,
+            &end,
+        )?))
     }
 
     // substring(str, from)

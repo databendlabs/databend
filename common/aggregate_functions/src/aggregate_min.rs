@@ -52,7 +52,7 @@ impl AggregateFunction for AggregateMinFunction {
         self
     }
 
-    fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
+    fn accumulate(&mut self, columns: &[DataColumn], _input_rows: usize) -> Result<()> {
         let value = Self::min_batch(columns[0].clone())?;
 
         self.state = DataValueAggregate::data_value_aggregate_op(
@@ -100,10 +100,10 @@ impl fmt::Display for AggregateMinFunction {
 }
 
 impl AggregateMinFunction {
-    pub fn min_batch(column: DataColumnarValue) -> Result<DataValue> {
+    pub fn min_batch(column: DataColumn) -> Result<DataValue> {
         match column {
-            DataColumnarValue::Constant(value, _) => Ok(value),
-            DataColumnarValue::Array(array) => {
+            DataColumn::Constant(value, _) => Ok(value),
+            DataColumn::Array(array) => {
                 if let Ok(v) = dispatch_primitive_array! { typed_array_op_to_data_value, array, min}
                 {
                     Ok(v)

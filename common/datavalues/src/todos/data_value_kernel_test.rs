@@ -44,7 +44,7 @@ fn test_data_value_kernel_concat_row_key() -> anyhow::Result<()> {
             let mut key: Vec<u8> = vec![];
             for col in 0..t.args.len() {
                 DataValue::concat_row_to_one_key(
-                    &DataColumnarValue::Array(t.args[col].clone()),
+                    &DataColumn::Array(t.args[col].clone()),
                     row,
                     &mut key,
                 )?;

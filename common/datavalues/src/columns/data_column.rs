@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_arrow::arrow::array::ArrayRef;
 use common_exception::Result;
 
+use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::DataType;
 use crate::DataValue;
@@ -30,6 +32,16 @@ impl DataColumn {
         match self {
             DataColumn::Array(array) => Ok(array.clone()),
             DataColumn::Constant(scalar, size) => scalar.to_series_with_size(*size),
+        }
+    }
+
+    #[inline]
+    pub fn get_array_ref(&self) -> Result<ArrayRef> {
+        match self {
+            DataColumn::Array(array) => Ok(array.get_array_ref()),
+            DataColumn::Constant(scalar, size) => {
+                Ok(scalar.to_series_with_size(*size)?.get_array_ref())
+            }
         }
     }
 
@@ -150,5 +162,13 @@ impl From<Series> for DataColumn {
 impl From<&Series> for DataColumn {
     fn from(array: &Series) -> Self {
         DataColumn::Array(array.clone())
+    }
+}
+
+impl<T> From<T> for DataColumn
+where T: IntoSeries
+{
+    fn from(array: T) -> Self {
+        DataColumn::Array(array.into_series())
     }
 }

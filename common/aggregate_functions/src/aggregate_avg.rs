@@ -5,7 +5,7 @@
 use std::any::Any;
 use std::fmt;
 
-use common_datavalues::DataColumnarValue;
+use common_datavalues::columns::DataColumn;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
@@ -57,7 +57,7 @@ impl AggregateFunction for AggregateAvgFunction {
         self
     }
 
-    fn accumulate(&mut self, columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
+    fn accumulate(&mut self, columns: &[DataColumn], input_rows: usize) -> Result<()> {
         if let DataValue::Struct(values) = self.state.clone() {
             let sum = DataValueArithmetic::data_value_arithmetic_op(
                 DataValueArithmeticOperator::Plus,

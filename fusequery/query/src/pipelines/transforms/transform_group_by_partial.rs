@@ -12,7 +12,7 @@ use common_arrow::arrow::array::BinaryBuilder;
 use common_arrow::arrow::array::StringBuilder;
 use common_datablocks::DataBlock;
 use common_datavalues::DataArrayRef;
-use common_datavalues::DataColumnarValue;
+use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataValue;
@@ -152,7 +152,7 @@ impl Processor for GroupByPartialTransform {
                                     .map(|arg| {
                                         take_block.try_column_by_name(arg).map(|c| c.clone())
                                     })
-                                    .collect::<Result<Vec<DataColumnarValue>>>()?;
+                                    .collect::<Result<Vec<DataColumn>>>()?;
                                 func.accumulate(&arg_columns, rows)?;
                                 aggr_funcs.push((func, name, args));
                             }
@@ -168,7 +168,7 @@ impl Processor for GroupByPartialTransform {
                                     .map(|arg| {
                                         take_block.try_column_by_name(arg).map(|c| c.clone())
                                     })
-                                    .collect::<Result<Vec<DataColumnarValue>>>()?;
+                                    .collect::<Result<Vec<DataColumn>>>()?;
 
                                 func.0.accumulate(&arg_columns, rows)?
                             }

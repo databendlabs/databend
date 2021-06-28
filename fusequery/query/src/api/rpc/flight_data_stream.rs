@@ -7,7 +7,7 @@ use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
 use common_arrow::arrow_flight::FlightData;
 use common_datablocks::DataBlock;
-use common_datavalues::DataColumnarValue;
+use common_datavalues::columns::DataColumn;
 use common_exception::ErrorCode;
 use common_runtime::tokio::sync::mpsc::Receiver;
 use tokio_stream::wrappers::ReceiverStream;
@@ -32,7 +32,7 @@ impl FlightDataStream {
                         let columns = record_batch
                             .columns()
                             .iter()
-                            .map(|column| DataColumnarValue::Array(column.clone()))
+                            .map(|column| DataColumn::Array(column.clone()))
                             .collect::<Vec<_>>();
 
                         DataBlock::create(record_batch.schema(), columns)
@@ -61,7 +61,7 @@ impl FlightDataStream {
                     let columns = record_batch
                         .columns()
                         .iter()
-                        .map(|column| DataColumnarValue::Array(column.clone()))
+                        .map(|column| DataColumn::Array(column.clone()))
                         .collect::<Vec<_>>();
 
                     DataBlock::create(record_batch.schema(), columns)

@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
@@ -19,8 +19,8 @@ fn test_comparison_function() -> Result<()> {
         display: &'static str,
         nullable: bool,
         arg_names: Vec<&'static str>,
-        columns: Vec<DataColumnarValue>,
-        expect: DataArrayRef,
+        columns: Vec<DataColumn>,
+        expect: Series,
         error: &'static str,
         func: Box<dyn Function>,
     }
@@ -38,10 +38,10 @@ fn test_comparison_function() -> Result<()> {
             func: ComparisonEqFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
+                Series::new(vec![4i64, 3, 2, 4]).into(),
+                Series::new(vec![1i64, 2, 3, 4]).into(),
             ],
-            expect: Arc::new(BooleanArray::from(vec![false, false, false, true])),
+            expect: Series::new(vec![false, false, false, true]),
             error: "",
         },
         Test {
@@ -51,10 +51,10 @@ fn test_comparison_function() -> Result<()> {
             func: ComparisonGtFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
+                Series::new(vec![4i64, 3, 2, 4]).into(),
+                Series::new(vec![1i64, 2, 3, 4]).into(),
             ],
-            expect: Arc::new(BooleanArray::from(vec![true, true, false, false])),
+            expect: Series::new(vec![true, true, false, false]),
             error: "",
         },
         Test {
@@ -64,10 +64,10 @@ fn test_comparison_function() -> Result<()> {
             func: ComparisonGtEqFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
+                Series::new(vec![4i64, 3, 2, 4]).into(),
+                Series::new(vec![1i64, 2, 3, 4]).into(),
             ],
-            expect: Arc::new(BooleanArray::from(vec![true, true, false, true])),
+            expect: Series::new(vec![true, true, false, true]),
             error: "",
         },
         Test {
@@ -77,10 +77,10 @@ fn test_comparison_function() -> Result<()> {
             func: ComparisonLtFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
+                Series::new(vec![4i64, 3, 2, 4]).into(),
+                Series::new(vec![1i64, 2, 3, 4]).into(),
             ],
-            expect: Arc::new(BooleanArray::from(vec![false, false, true, false])),
+            expect: Series::new(vec![false, false, true, false]),
             error: "",
         },
         Test {
@@ -90,10 +90,10 @@ fn test_comparison_function() -> Result<()> {
             func: ComparisonLtEqFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
+                Series::new(vec![4i64, 3, 2, 4]).into(),
+                Series::new(vec![1i64, 2, 3, 4]).into(),
             ],
-            expect: Arc::new(BooleanArray::from(vec![false, false, true, true])),
+            expect: Series::new(vec![false, false, true, true]),
             error: "",
         },
         Test {
@@ -103,10 +103,10 @@ fn test_comparison_function() -> Result<()> {
             func: ComparisonNotEqFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into(),
-                Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
+                Series::new(vec![4i64, 3, 2, 4]).into(),
+                Series::new(vec![1i64, 2, 3, 4]).into(),
             ],
-            expect: Arc::new(BooleanArray::from(vec![true, true, true, false])),
+            expect: Series::new(vec![true, true, true, false]),
             error: "",
         },
         Test {
@@ -116,10 +116,10 @@ fn test_comparison_function() -> Result<()> {
             func: ComparisonLikeFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(StringArray::from(vec!["abc", "abd", "abe", "abf"])).into(),
-                Arc::new(StringArray::from(vec!["a%", "_b_", "abe", "a"])).into(),
+                Series::new(vec!["abc", "abd", "abe", "abf"]).into(),
+                Series::new(vec!["a%", "_b_", "abe", "a"]).into(),
             ],
-            expect: Arc::new(BooleanArray::from(vec![true, true, true, false])),
+            expect: Series::new(vec![true, true, true, false]),
             error: "",
         },
         Test {
@@ -129,10 +129,10 @@ fn test_comparison_function() -> Result<()> {
             func: ComparisonNotLikeFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(StringArray::from(vec!["abc", "abd", "abe", "abf"])).into(),
-                Arc::new(StringArray::from(vec!["a%", "_b_", "abe", "a"])).into(),
+                Series::new(vec!["abc", "abd", "abe", "abf"]).into(),
+                Series::new(vec!["a%", "_b_", "abe", "a"]).into(),
             ],
-            expect: Arc::new(BooleanArray::from(vec![false, false, false, true])),
+            expect: Series::new(vec![false, false, false, true]),
             error: "",
         },
     ];

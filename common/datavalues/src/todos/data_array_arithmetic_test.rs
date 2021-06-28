@@ -298,8 +298,8 @@ fn test_array_arithmetic() {
         for (i, args) in t.args.iter().enumerate() {
             let result = DataArrayArithmetic::data_array_arithmetic_op(
                 t.op.clone(),
-                &DataColumnarValue::Array(args[0].clone()),
-                &DataColumnarValue::Array(args[1].clone()),
+                &DataColumn::Array(args[0].clone()),
+                &DataColumn::Array(args[1].clone()),
             );
             match result {
                 Ok(v) => assert_eq!(
@@ -375,8 +375,8 @@ fn test_array_scalar_arithmetic() {
     for t in tests {
         let result = DataArrayArithmetic::data_array_arithmetic_op(
             t.op.clone(),
-            &DataColumnarValue::Array(t.array.clone()),
-            &DataColumnarValue::Constant(t.scalar, t.array.len()),
+            &DataColumn::Array(t.array.clone()),
+            &DataColumn::Constant(t.scalar, t.array.len()),
         );
         match result {
             Ok(v) => assert_eq!(
@@ -444,8 +444,8 @@ fn test_scalar_array_arithmetic() {
     for t in tests {
         let result = DataArrayArithmetic::data_array_arithmetic_op(
             t.op.clone(),
-            &DataColumnarValue::Constant(t.scalar, t.array.len()),
-            &DataColumnarValue::Array(t.array),
+            &DataColumn::Constant(t.scalar, t.array.len()),
+            &DataColumn::Array(t.array),
         );
         match result {
             Ok(v) => assert_eq!(
@@ -512,7 +512,7 @@ fn test_array_unary_arithmetic() {
         for (i, args) in t.args.iter().enumerate() {
             let result = DataArrayArithmetic::data_array_unary_arithmetic_op(
                 t.op.clone(),
-                &DataColumnarValue::Array(args[0].clone()),
+                &DataColumn::Array(args[0].clone()),
             );
             match result {
                 Ok(v) => assert_eq!(

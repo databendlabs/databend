@@ -10,6 +10,7 @@ pub use crate::arrays::ArrayApply;
 pub use crate::arrays::ArrayApplyKernel;
 pub use crate::arrays::ArrayBuilder;
 pub use crate::arrays::ArrayCast;
+pub use crate::arrays::ArrayCompare;
 pub use crate::arrays::ArrayFillNone;
 pub use crate::arrays::ArrayFull;
 pub use crate::arrays::ArrayFullNull;
@@ -24,6 +25,7 @@ pub use crate::arrays::TakeRandom;
 pub use crate::arrays::ToPrimitive;
 // columns
 pub use crate::columns::DataColumn;
+pub use crate::columns::DataColumnCommon;
 // series
 pub use crate::series::IntoSeries;
 pub use crate::series::Series;

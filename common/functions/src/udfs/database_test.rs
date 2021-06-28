@@ -17,7 +17,7 @@ fn test_database_function() -> anyhow::Result<()> {
         name: &'static str,
         display: &'static str,
         nullable: bool,
-        columns: Vec<DataColumnarValue>,
+        columns: Vec<DataColumn>,
         expect: DataArrayRef,
         error: &'static str,
         func: Box<dyn Function>,

@@ -19,7 +19,7 @@ fn test_to_type_name_function() -> Result<()> {
         display: &'static str,
         nullable: bool,
         arg_names: Vec<&'static str>,
-        columns: Vec<DataColumnarValue>,
+        columns: Vec<DataColumn>,
         expect: DataArrayRef,
         error: &'static str,
         func: Box<dyn Function>,

@@ -17,7 +17,7 @@ fn test_cast_function() -> Result<()> {
         name: &'static str,
         display: &'static str,
         nullable: bool,
-        columns: Vec<DataColumnarValue>,
+        columns: Vec<DataColumn>,
         cast_type: DataType,
         expect: DataArrayRef,
         error: &'static str,

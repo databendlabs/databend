@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use common_datavalues::BooleanArray;
 use common_datavalues::DataArrayRef;
-use common_datavalues::DataColumnarValue;
+use common_datavalues::columns::DataColumn;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
@@ -21,7 +21,7 @@ fn test_udf_example_function() -> anyhow::Result<()> {
         name: &'static str,
         display: &'static str,
         nullable: bool,
-        columns: Vec<DataColumnarValue>,
+        columns: Vec<DataColumn>,
         expect: DataArrayRef,
         error: &'static str,
         func: Box<dyn Function>,

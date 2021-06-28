@@ -18,7 +18,7 @@ fn test_aggregate_batch() {
         args: Vec<ArrayRef>,
         expect: Vec<DataValue>,
         error: Vec<&'static str>,
-        func: Box<dyn Fn(DataColumnarValue) -> Result<DataValue>>,
+        func: Box<dyn Fn(DataColumn) -> Result<DataValue>>,
     }
 
     let tests = vec![
