@@ -150,7 +150,7 @@ impl Interpreter for SelectInterpreter {
                         .await?;
 
                 let result = stream.try_collect::<Vec<_>>().await?;
-                let num_all_rows : usize = result.iter().map(|b| b.num_rows()).sum();
+                let num_all_rows: usize = result.iter().map(|b| b.num_rows()).sum();
                 let b = if num_all_rows > 0 { true } else { false };
                 let name = names.get(&format!("{:?}", exp));
                 subquery_res_map.insert(name.unwrap().to_string(), b);
