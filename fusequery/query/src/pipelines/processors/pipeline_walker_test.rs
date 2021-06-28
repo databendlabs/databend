@@ -2,15 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+use common_runtime::tokio;
+use pretty_assertions::assert_eq;
+
+use crate::pipelines::processors::*;
+use crate::sql::*;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_pipeline_walker() -> anyhow::Result<()> {
-    use std::collections::HashMap;
-
-    use pretty_assertions::assert_eq;
-
-    use crate::pipelines::processors::*;
-    use crate::sql::*;
-
+async fn test_pipeline_walker() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let plan = PlanParser::create(ctx.clone()).build_from_sql(
@@ -24,7 +24,7 @@ async fn test_pipeline_walker() -> anyhow::Result<()> {
         pipeline.walk_preorder(|pipe| {
             let processor = pipe.processor_by_index(0).clone();
             actual.push(processor.name().to_string() + " x " + &*format!("{}", pipe.nums()));
-            Ok(true)
+            Result::Ok(true)
         })?;
 
         let expect = vec![
@@ -47,7 +47,7 @@ async fn test_pipeline_walker() -> anyhow::Result<()> {
         pipeline.walk_postorder(|pipe| {
             let processor = pipe.processor_by_index(0).clone();
             actual.push(processor.name().to_string() + " x " + &*format!("{}", pipe.nums()));
-            Ok(true)
+            Result::Ok(true)
         })?;
 
         let expect = vec![

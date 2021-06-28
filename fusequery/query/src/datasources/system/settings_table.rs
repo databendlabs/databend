@@ -13,7 +13,7 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::StringArray;
 use common_exception::Result;
-use common_planners::Partition;
+use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
@@ -72,7 +72,7 @@ impl Table for SettingsTable {
             db: "system".to_string(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
-            partitions: vec![Partition {
+            parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
             }],
@@ -83,7 +83,11 @@ impl Table for SettingsTable {
         })
     }
 
-    async fn read(&self, ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
+    async fn read(
+        &self,
+        ctx: FuseQueryContextRef,
+        _source_plan: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream> {
         let settings = ctx.get_settings();
 
         let mut names: Vec<String> = vec![];

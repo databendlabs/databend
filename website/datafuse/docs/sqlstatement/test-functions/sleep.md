@@ -3,7 +3,11 @@ id: sleep
 title: Sleep
 ---
 
-Sleeps 'seconds' seconds on each data block.
+Sleeps `seconds` seconds on each data block.
+
+!!! warning 
+    Only used for testing where sleep is required.
+
 
 ## Syntax
 

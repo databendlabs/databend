@@ -6,7 +6,6 @@ use std::convert::TryInto;
 use std::fs::File;
 use std::task::Poll;
 
-use anyhow::Context;
 use common_arrow::arrow::csv;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -44,9 +43,7 @@ impl CsvTableStream {
         let bounds = Some((begin, end));
         let block_size = end - begin;
 
-        let file = File::open(self.file.clone())
-            .with_context(|| format!("Failed to read csv file:{}", self.file.clone()))
-            .map_err(ErrorCode::from)?;
+        let file = File::open(self.file.clone())?;
         let mut reader: csv::Reader<File> = csv::Reader::new(
             file,
             self.schema.clone(),

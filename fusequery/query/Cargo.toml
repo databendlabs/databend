@@ -39,7 +39,7 @@ common-profling = {path = "../../common/profiling"}
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "5a7ae3d" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9"}
-sqlparser =  { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "35ef0ee"}
+sqlparser =  { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "56e50dc"}
 
 
 # Crates.io dependencies
@@ -62,6 +62,7 @@ num = "0.4"
 nom = "6.1.2"
 num_cpus = "1.0"
 paste = "^1.0"
+pnet = "0.27.2"
 prost = "0.7"
 rand = "0.8.4"
 serde = { version = "1.0", features = ["derive"] }
@@ -69,13 +70,12 @@ serde_json = "1.0"
 structopt = "0.3"
 structopt-toml = "0.4.5"
 threadpool = "1.8.1"
-tokio = { version = "1.7", features = ["macros", "rt", "rt-multi-thread", "sync"] }
 tokio-stream = { version = "0.1", features = ["net"] }
 toml = "0.5.6"
 tonic = "0.4"
+walkdir = "2.3.2"
 warp = "0.3.1"
 uuid = { version = "0.8", features = ["serde", "v4"] }
-pnet = "0.27.2"
 
 [dev-dependencies]
 pretty_assertions = "0.7"

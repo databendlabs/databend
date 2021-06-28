@@ -2,16 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+use common_runtime::tokio;
+use futures::TryStreamExt;
+use pretty_assertions::assert_eq;
+
+use crate::pipelines::processors::*;
+use crate::sql::*;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_local_pipeline_builds() -> anyhow::Result<()> {
-    use std::collections::HashMap;
-
-    use futures::TryStreamExt;
-    use pretty_assertions::assert_eq;
-
-    use crate::pipelines::processors::*;
-    use crate::sql::*;
-
+async fn test_local_pipeline_builds() -> Result<()> {
     struct Test {
         name: &'static str,
         query: &'static str,

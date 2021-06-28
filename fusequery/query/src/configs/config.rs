@@ -34,6 +34,9 @@ pub struct Config {
     #[structopt(long, env = "FUSE_QUERY_LOG_LEVEL", default_value = "INFO")]
     pub log_level: String,
 
+    #[structopt(long, env = "FUSE_QUERY_LOG_DIR", default_value = "./_logs")]
+    pub log_dir: String,
+
     #[structopt(long, env = "FUSE_QUERY_NUM_CPUS", default_value = "0")]
     pub num_cpus: u64,
 
@@ -114,6 +117,7 @@ impl Config {
     pub fn default() -> Self {
         Config {
             log_level: "debug".to_string(),
+            log_dir: "./_logs".to_string(),
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,

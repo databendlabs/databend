@@ -2,12 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+use common_runtime::tokio;
+use pretty_assertions::assert_eq;
+
+use crate::pipelines::processors::*;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_processor_empty() -> anyhow::Result<()> {
-    use pretty_assertions::assert_eq;
-
-    use crate::pipelines::processors::*;
-
+async fn test_processor_empty() -> Result<()> {
     let empty = EmptyProcessor::create();
 
     let expect_name = "EmptyProcessor";

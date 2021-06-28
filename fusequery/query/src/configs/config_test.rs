@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+
 #[test]
-fn test_config() -> common_exception::Result<()> {
+fn test_config() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     use crate::configs::Config;
@@ -12,6 +14,7 @@ fn test_config() -> common_exception::Result<()> {
     {
         let expect = Config {
             log_level: "debug".to_string(),
+            log_dir: "./_logs".to_string(),
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
@@ -61,7 +64,7 @@ fn test_config() -> common_exception::Result<()> {
 }
 
 #[test]
-fn test_fuse_commit_version() -> anyhow::Result<()> {
+fn test_fuse_commit_version() -> Result<()> {
     let v = &crate::configs::config::FUSE_COMMIT_VERSION;
     assert!(v.len() > 0);
     Ok(())

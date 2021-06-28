@@ -2,15 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+use common_planners::*;
+use common_runtime::tokio;
+use futures::stream::StreamExt;
+use pretty_assertions::assert_eq;
+
+use crate::interpreters::*;
+use crate::sql::*;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_setting_interpreter() -> anyhow::Result<()> {
-    use common_planners::*;
-    use futures::stream::StreamExt;
-    use pretty_assertions::assert_eq;
-
-    use crate::interpreters::*;
-    use crate::sql::*;
-
+async fn test_setting_interpreter() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     if let PlanNode::SetVariable(plan) =
@@ -29,13 +31,7 @@ async fn test_setting_interpreter() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_setting_interpreter_error() -> anyhow::Result<()> {
-    use common_planners::*;
-    use pretty_assertions::assert_eq;
-
-    use crate::interpreters::*;
-    use crate::sql::*;
-
+async fn test_setting_interpreter_error() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     if let PlanNode::SetVariable(plan) =

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::Result;
+use common_exception::Result;
 use warp::Filter;
 
 use crate::clusters::ClusterRef;

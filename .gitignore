@@ -19,6 +19,8 @@ perf.*
 *.stdout
 *.out
 *.swp
+_logs/*
+
 # for tests in mac
 *.stderr-e
 *.stdout-e

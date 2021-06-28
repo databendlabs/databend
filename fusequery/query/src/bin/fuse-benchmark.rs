@@ -17,7 +17,9 @@ use std::time::Instant;
 use clickhouse_rs::Pool;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::ToErrorCode;
 use common_infallible::RwLock;
+use common_runtime::tokio;
 use crossbeam_queue::ArrayQueue;
 use futures::future::try_join_all;
 use futures::StreamExt;
@@ -132,9 +134,7 @@ async fn main() -> Result<()> {
     report_text(bench.clone()).await?;
 
     if !bench.config.json.is_empty() {
-        report_json(bench.clone(), &bench.config.json)
-            .await
-            .map_err(to_error_codes)?;
+        report_json(bench.clone(), &bench.config.json).await?;
     }
     Ok(())
 }
@@ -168,16 +168,19 @@ async fn run(bench: BenchmarkRef) -> Result<()> {
         }
     }
 
-    try_join_all(executors).await.map_err(to_error_codes)?;
-    Ok(())
+    match try_join_all(executors).await {
+        Ok(_) => Ok(()),
+        Err(join_error) => Err(ErrorCode::TokioError(format!(
+            "Cannot join executors, cause: {:?}",
+            join_error
+        ))),
+    }
 }
 
 fn read_queries(query: &str) -> Result<Vec<String>> {
     if query.is_empty() {
         let mut buffer = String::new();
-        io::stdin()
-            .read_to_string(&mut buffer)
-            .map_err(to_error_codes)?;
+        io::stdin().read_to_string(&mut buffer)?;
 
         return Ok(buffer
             .split('\n')
@@ -203,7 +206,10 @@ async fn execute(bench: BenchmarkRef) -> Result<()> {
 
             if let Some(query) = query {
                 let start = Instant::now();
-                let mut client = pool.get_handle().await.map_err(to_error_codes)?;
+                let mut client = pool
+                    .get_handle()
+                    .await
+                    .map_err_to_code(ErrorCode::LogicalError, || "")?;
 
                 {
                     let result = client.query(&query);
@@ -350,9 +356,4 @@ async fn report_json(bench: BenchmarkRef, json_path: &str) -> std::io::Result<()
 
     writer.write_all(b"}\n}\n")?;
     writer.flush()
-}
-
-fn to_error_codes<T>(err: T) -> ErrorCode
-where T: ToString {
-    anyhow::anyhow!(err.to_string()).into()
 }

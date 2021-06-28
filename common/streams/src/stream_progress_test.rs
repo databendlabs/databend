@@ -2,17 +2,18 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
+use common_datablocks::*;
+use common_datavalues::*;
+use common_progress::*;
+use common_runtime::tokio;
+use futures::TryStreamExt;
+
+use crate::*;
+
 #[tokio::test]
 async fn test_progress_stream() -> anyhow::Result<()> {
-    use std::sync::Arc;
-
-    use common_datablocks::*;
-    use common_datavalues::*;
-    use common_progress::*;
-    use futures::TryStreamExt;
-
-    use crate::*;
-
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
 
     let block = DataBlock::create_by_array(schema.clone(), vec![Arc::new(Int64Array::from(vec![

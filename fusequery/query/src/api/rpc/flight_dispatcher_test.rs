@@ -10,8 +10,9 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
-use tokio::sync::mpsc::channel;
-use tokio::sync::mpsc::Sender;
+use common_runtime::tokio;
+use common_runtime::tokio::sync::mpsc::channel;
+use common_runtime::tokio::sync::mpsc::Sender;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_data_stream::FlightDataStream;
@@ -64,8 +65,8 @@ async fn test_prepare_stage_with_no_scatter() -> Result<()> {
         let create_prepare_query_stage = |sender: Sender<Result<()>>| {
             let ctx = crate::tests::try_create_context()?;
             let test_source = crate::tests::NumberTestData::create(ctx.clone());
-            let read_source_plan = test_source.number_read_source_plan_for_test(5)?;
-            let plan = PlanBuilder::from(&PlanNode::ReadSource(read_source_plan)).build()?;
+            let source_plan = test_source.number_read_source_plan_for_test(5)?;
+            let plan = PlanBuilder::from(&PlanNode::ReadSource(source_plan)).build()?;
             Result::Ok((
                 plan.schema().clone(),
                 Request::PrepareQueryStage(
@@ -147,8 +148,8 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
         let create_prepare_query_stage = |sender: Sender<Result<()>>| {
             let ctx = crate::tests::try_create_context()?;
             let test_source = crate::tests::NumberTestData::create(ctx.clone());
-            let read_source_plan = test_source.number_read_source_plan_for_test(5)?;
-            let plan = PlanBuilder::from(&PlanNode::ReadSource(read_source_plan)).build()?;
+            let source_plan = test_source.number_read_source_plan_for_test(5)?;
+            let plan = PlanBuilder::from(&PlanNode::ReadSource(source_plan)).build()?;
 
             Result::Ok((
                 plan.schema().clone(),

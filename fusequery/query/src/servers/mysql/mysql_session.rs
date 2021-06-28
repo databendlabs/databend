@@ -10,10 +10,13 @@ use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_infallible::exit_scope;
 use common_infallible::Mutex;
+use common_runtime::tokio;
+use common_runtime::tokio::net::TcpStream;
 use msql_srv::MysqlIntermediary;
-use tokio::net::TcpStream;
 
+use crate::configs::Config;
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
 use crate::servers::AbortableService;
 use crate::servers::Elapsed;
@@ -24,6 +27,7 @@ use crate::sessions::SessionManagerRef;
 use crate::sessions::SessionStatus;
 
 pub struct Session {
+    conf: Config,
     session_id: String,
     session_manager: SessionManagerRef,
     session_status: Arc<Mutex<SessionStatus>>,
@@ -38,6 +42,7 @@ impl ISession for Session {
 
     fn try_create_context(&self) -> Result<FuseQueryContextRef> {
         self.session_status.lock().try_create_context(
+            self.conf.clone(),
             self.session_manager.get_cluster(),
             self.session_manager.get_datasource(),
         )
@@ -68,12 +73,18 @@ impl AbortableService<TcpStream, ()> for Session {
                 "Cannot to convert Tokio TcpStream to Std TcpStream"
             })?;
 
-        let session_id = self.get_id();
         let cloned_stream = stream.try_clone()?;
         let session = session_manager.get_session(&self.session_id)?;
 
         std::thread::spawn(move || {
             session.get_status().lock().enter_init(cloned_stream);
+
+            let session_ref = session.clone();
+            exit_scope!({
+                session_ref.get_status().lock().enter_aborted();
+                session_manager.destroy_session(session_ref.get_id());
+                abort_notify.notify_waiters();
+            });
 
             if let Err(error) =
                 MysqlIntermediary::run_on_tcp(InteractiveWorker::create(session.clone()), stream)
@@ -85,10 +96,6 @@ impl AbortableService<TcpStream, ()> for Session {
                     );
                 }
             };
-
-            session.get_status().lock().enter_aborted();
-            session_manager.destroy_session(session_id);
-            abort_notify.notify_waiters();
         });
 
         Ok(())
@@ -125,8 +132,13 @@ impl AbortableService<TcpStream, ()> for Session {
 impl SessionCreator for Session {
     type Session = Self;
 
-    fn create(session_id: String, sessions: SessionManagerRef) -> Result<Arc<Box<dyn ISession>>> {
+    fn create(
+        conf: Config,
+        session_id: String,
+        sessions: SessionManagerRef,
+    ) -> Result<Arc<Box<dyn ISession>>> {
         Ok(Arc::new(Box::new(Session {
+            conf,
             session_id,
             session_manager: sessions,
             session_status: Arc::new(Mutex::new(SessionStatus::try_create()?)),

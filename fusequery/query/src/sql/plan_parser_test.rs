@@ -2,12 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 use crate::sql::PlanParser;
 
 #[test]
-fn test_plan_parser() -> anyhow::Result<()> {
+fn test_plan_parser() -> Result<()> {
     struct Test {
         name: &'static str,
         sql: &'static str,

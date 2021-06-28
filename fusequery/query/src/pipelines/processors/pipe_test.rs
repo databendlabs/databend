@@ -2,14 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
+use common_exception::Result;
+use common_runtime::tokio;
+use pretty_assertions::assert_eq;
+
+use crate::pipelines::processors::*;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_pipe() -> anyhow::Result<()> {
-    use std::sync::Arc;
-
-    use pretty_assertions::assert_eq;
-
-    use crate::pipelines::processors::*;
-
+async fn test_pipe() -> Result<()> {
     let mut pipe = Pipe::create();
     let empty = Arc::new(EmptyProcessor::create());
     pipe.add(empty.clone());

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use anyhow::Result;
+use common_runtime::tokio;
 use rand::Rng;
 
 use crate::api::StoreServer;
@@ -14,7 +15,7 @@ use crate::meta_service::MetaServiceClient;
 pub async fn start_store_server() -> Result<String> {
     let addr = rand_local_addr();
 
-    let mut conf = Config::default();
+    let mut conf = Config::empty();
     conf.flight_api_address = addr.clone();
 
     let srv = StoreServer::create(conf);

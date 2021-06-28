@@ -27,12 +27,13 @@ use common_flights::FlightToken;
 use common_flights::StoreDoAction;
 use common_flights::StoreDoActionResult;
 use common_flights::StoreDoGet;
+use common_runtime::tokio;
+use common_runtime::tokio::sync::mpsc::Receiver;
+use common_runtime::tokio::sync::mpsc::Sender;
 use futures::Stream;
 use futures::StreamExt;
 use log::info;
 use prost::Message;
-use tokio::sync::mpsc::Receiver;
-use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::metadata::MetadataMap;
 use tonic::Request;
@@ -43,6 +44,7 @@ use tonic::Streaming;
 use crate::configs::Config;
 use crate::executor::ActionHandler;
 use crate::fs::FileSystem;
+use crate::meta_service::MetaNode;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -54,11 +56,11 @@ pub struct StoreFlightImpl {
 }
 
 impl StoreFlightImpl {
-    pub fn create(_conf: Config, fs: Arc<dyn FileSystem>) -> Self {
+    pub fn create(_conf: Config, fs: Arc<dyn FileSystem>, meta_node: Arc<MetaNode>) -> Self {
         Self {
             token: FlightToken::create(),
             // TODO pass in action handler
-            action_handler: ActionHandler::create(fs),
+            action_handler: ActionHandler::create(fs, meta_node),
         }
     }
 

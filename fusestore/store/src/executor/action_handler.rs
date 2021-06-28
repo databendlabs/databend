@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use common_arrow::arrow::datatypes::Schema;
 use common_arrow::arrow::ipc::writer::IpcWriteOptions;
@@ -17,6 +16,7 @@ use common_arrow::parquet::arrow::ArrowReader;
 use common_arrow::parquet::arrow::ParquetFileArrowReader;
 use common_arrow::parquet::file::reader::SerializedFileReader;
 use common_arrow::parquet::file::serialized_reader::SliceableCursor;
+use common_exception::ErrorCode;
 use common_flights::CreateDatabaseAction;
 use common_flights::CreateDatabaseActionResult;
 use common_flights::CreateTableAction;
@@ -25,16 +25,23 @@ use common_flights::DropDatabaseAction;
 use common_flights::DropDatabaseActionResult;
 use common_flights::DropTableAction;
 use common_flights::DropTableActionResult;
+use common_flights::GetDatabaseAction;
+use common_flights::GetDatabaseActionResult;
+use common_flights::GetKVAction;
+use common_flights::GetKVActionResult;
 use common_flights::GetTableAction;
 use common_flights::GetTableActionResult;
 use common_flights::ReadAction;
 use common_flights::ScanPartitionAction;
 use common_flights::StoreDoAction;
 use common_flights::StoreDoActionResult;
+use common_flights::UpsertKVAction;
+use common_flights::UpsertKVActionResult;
+use common_infallible::Mutex;
 use common_planners::PlanNode;
+use common_runtime::tokio::sync::mpsc::Sender;
 use futures::Stream;
 use log::info;
-use tokio::sync::mpsc::Sender;
 use tokio_stream::StreamExt;
 use tonic::Status;
 use tonic::Streaming;
@@ -42,6 +49,10 @@ use tonic::Streaming;
 use crate::data_part::appender::Appender;
 use crate::engine::MemEngine;
 use crate::fs::FileSystem;
+use crate::meta_service::ClientRequest;
+use crate::meta_service::ClientResponse;
+use crate::meta_service::Cmd;
+use crate::meta_service::MetaNode;
 use crate::protobuf::CmdCreateDatabase;
 use crate::protobuf::CmdCreateTable;
 use crate::protobuf::Db;
@@ -49,6 +60,12 @@ use crate::protobuf::Table;
 
 pub struct ActionHandler {
     meta: Arc<Mutex<MemEngine>>,
+    /// The raft-based meta data entry.
+    /// In our design meta serves for both the distributed file system and the catalog storage such as db,tabel etc.
+    /// Thus in case the `fs` is a Dfs impl, `meta_node` is just a reference to the `Dfs.meta_node`.
+    /// TODO(xp): turn on dead_code warning when we finished action handler unit test.
+    #[allow(dead_code)]
+    meta_node: Arc<MetaNode>,
     fs: Arc<dyn FileSystem>,
 }
 
@@ -56,9 +73,10 @@ type DoGetStream =
     Pin<Box<dyn Stream<Item = Result<FlightData, tonic::Status>> + Send + Sync + 'static>>;
 
 impl ActionHandler {
-    pub fn create(fs: Arc<dyn FileSystem>) -> Self {
+    pub fn create(fs: Arc<dyn FileSystem>, meta_node: Arc<MetaNode>) -> Self {
         ActionHandler {
             meta: MemEngine::create(),
+            meta_node,
             fs,
         }
     }
@@ -88,18 +106,29 @@ impl ActionHandler {
     pub async fn execute(&self, action: StoreDoAction) -> Result<StoreDoActionResult, Status> {
         match action {
             StoreDoAction::ReadPlan(_) => Err(Status::internal("Store read plan unimplemented")),
+
+            // database
             StoreDoAction::CreateDatabase(a) => self.create_db(a).await,
+            StoreDoAction::GetDatabase(a) => self.get_db(a).await,
             StoreDoAction::DropDatabase(act) => self.drop_db(act).await,
+
+            // table
             StoreDoAction::CreateTable(a) => self.create_table(a).await,
             StoreDoAction::DropTable(act) => self.drop_table(act).await,
             StoreDoAction::GetTable(a) => self.get_table(a).await,
+
+            // part
             StoreDoAction::ScanPartition(act) => self.scan_partitions(&act),
+
+            // general-purpose kv
+            StoreDoAction::UpsertKV(a) => self.upsert_kv(a).await,
+            StoreDoAction::GetKV(a) => self.get_kv(a).await,
         }
     }
 
     async fn create_db(&self, act: CreateDatabaseAction) -> Result<StoreDoActionResult, Status> {
         let plan = act.plan;
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
 
         let cmd = CmdCreateDatabase {
             db_name: plan.db,
@@ -121,6 +150,28 @@ impl ActionHandler {
         ))
     }
 
+    async fn get_db(&self, act: GetDatabaseAction) -> Result<StoreDoActionResult, Status> {
+        // TODO(xp): create/drop/get database should base on MetaNode
+        let db_name = &act.db;
+        let meta = self.meta.lock();
+
+        let db = meta.dbs.get(db_name);
+
+        match db {
+            Some(db) => {
+                let rst = GetDatabaseActionResult {
+                    database_id: db.db_id,
+                    db: db_name.clone(),
+                };
+                Ok(StoreDoActionResult::GetDatabase(rst))
+            }
+            None => {
+                let e = ErrorCode::UnknownDatabase(db_name.to_string());
+                Err(e.into())
+            }
+        }
+    }
+
     async fn create_table(&self, act: CreateTableAction) -> Result<StoreDoActionResult, Status> {
         let plan = act.plan;
         let db_name = plan.db;
@@ -128,7 +179,7 @@ impl ActionHandler {
 
         info!("create table: {:}: {:?}", db_name, table_name);
 
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
 
         let options = common_arrow::arrow::ipc::writer::IpcWriteOptions::default();
         let flight_data =
@@ -164,7 +215,7 @@ impl ActionHandler {
 
         info!("create table: {:}: {:?}", db_name, table_name);
 
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
 
         let table = meta.get_table(db_name.clone(), table_name.clone())?;
 
@@ -185,7 +236,7 @@ impl ActionHandler {
     }
 
     async fn drop_db(&self, act: DropDatabaseAction) -> Result<StoreDoActionResult, Status> {
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
         let _ = meta.drop_database(&act.plan.db, act.plan.if_exists)?;
         Ok(StoreDoActionResult::DropDatabase(
             DropDatabaseActionResult {},
@@ -193,7 +244,7 @@ impl ActionHandler {
     }
 
     async fn drop_table(&self, act: DropTableAction) -> Result<StoreDoActionResult, Status> {
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
         let _ = meta.drop_table(&act.plan.db, &act.plan.table, act.plan.if_exists)?;
         Ok(StoreDoActionResult::DropTable(DropTableActionResult {}))
     }
@@ -205,7 +256,7 @@ impl ActionHandler {
         parts: Streaming<FlightData>,
     ) -> anyhow::Result<common_flights::AppendResult> {
         {
-            let mut meta = self.meta.lock().unwrap();
+            let mut meta = self.meta.lock();
             let _tbl_meta = meta.get_table(db_name.clone(), table_name.clone())?;
 
             // TODO:  Validates the schema of input stream:
@@ -222,7 +273,7 @@ impl ActionHandler {
             .append_data(format!("{}/{}", &db_name, &table_name), Box::pin(parts))
             .await?;
 
-        let mut meta = self.meta.lock().unwrap();
+        let mut meta = self.meta.lock();
         meta.append_data_parts(&db_name, &table_name, &res);
         Ok(res)
     }
@@ -235,7 +286,7 @@ impl ActionHandler {
         let db_name = splits[0];
         let tbl_name = splits[1];
 
-        let meta = self.meta.lock().unwrap();
+        let meta = self.meta.lock();
         Ok(StoreDoActionResult::ScanPartition(
             meta.get_data_parts(db_name, tbl_name),
         ))
@@ -243,7 +294,7 @@ impl ActionHandler {
 
     pub async fn read_partition(&self, action: ReadAction) -> anyhow::Result<DoGetStream> {
         log::info!("entering read");
-        let part_file = action.partition.name;
+        let part_file = action.part.name;
 
         let plan = if let PlanNode::ReadSource(read_source_plan) = action.push_down {
             read_source_plan
@@ -288,5 +339,37 @@ impl ActionHandler {
         // # let stream = stream.map(|v| Ok(v));
 
         Ok(Box::pin(stream))
+    }
+
+    async fn upsert_kv(&self, act: UpsertKVAction) -> Result<StoreDoActionResult, Status> {
+        let cr = ClientRequest {
+            txid: None,
+            cmd: Cmd::UpsertKV {
+                key: act.key,
+                seq: act.seq,
+                value: act.value,
+            },
+        };
+        // TODO(xp): raftmeta should use ErrorCode instead of anyhow::Error
+        let rst = self
+            .meta_node
+            .write(cr)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        match rst {
+            ClientResponse::KV { prev, result } => {
+                Ok(StoreDoActionResult::UpsertKV(UpsertKVActionResult {
+                    prev,
+                    result,
+                }))
+            }
+            _ => Err(Status::internal("not a KV result")),
+        }
+    }
+
+    async fn get_kv(&self, act: GetKVAction) -> Result<StoreDoActionResult, Status> {
+        let result = self.meta_node.get_kv(&act.key).await;
+        Ok(StoreDoActionResult::GetKV(GetKVActionResult { result }))
     }
 }

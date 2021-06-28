@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-exception = {path = "../exception"}
+common-runtime = {path = "../runtime"}
 
 # Crates.io dependencies
 pprof = { version = "0.4", features = ["flamegraph", "protobuf"] }
-tokio = { version = "1.7"}

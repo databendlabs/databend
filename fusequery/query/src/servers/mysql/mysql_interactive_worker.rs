@@ -9,6 +9,7 @@ use std::time::Instant;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_runtime::tokio;
 use common_streams::AbortStream;
 use metrics::histogram;
 use msql_srv::ErrorKind;

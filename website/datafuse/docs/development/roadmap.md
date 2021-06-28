@@ -47,7 +47,13 @@ Datafuse roadmap 2021.
 
 | Task                                         | Status    | Release Target | Comments        | 
 | ----------------------------------------------- | --------- | -------------- | --------------- | 
-| Access Control and Account Management | PLANNING  | v0.6  |  Access right |
+| [RBAC track #894](https://github.com/datafuselabs/datafuse/issues/894) | PLANNING  | v0.5  |  Access Control and Account Management |
+
+### 7. CBO task
+
+| Task                                         | Status    | Release Target | Comments        | 
+| ----------------------------------------------- | --------- | -------------- | --------------- | 
+| [Cost based optimizer(CBO) track #915](https://github.com/datafuselabs/datafuse/issues/915) | PLANNING  |   |  Table statistics and CBO |
 
 # Experimental and interns tasks
 
@@ -56,7 +62,6 @@ Datafuse roadmap 2021.
 | [Join #559](https://github.com/datafuselabs/datafuse/pull/559) |  PROGRESS | v0.5  | @leiysky  |
 | Online Playgroud  | PLANNING  |   | User can try the demo on the datafuse.rs website |
 | Sharding |  PLANNING |   | Store supports partition sharding |
-| Cost based optimizer(CBO) | PLANNING  |   |  Table statistics and CBO |
 | Window functions | PLANNING  |   |  |
 | Limited support for transactions | PLANNING  |   |  |
 | [Hash method in ClickHouse way #754](https://github.com/datafuselabs/datafuse/issues/754) | PLANNING  |   |  |

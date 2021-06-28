@@ -1,5 +1,6 @@
 HUB ?= datafusedev
 TAG ?= latest
+PLATFORM ?= linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6,linux/ppc64le
 
 # Setup dev toolchain
 setup:
@@ -38,6 +39,10 @@ lint:
 
 docker:
 	docker build --network host -f docker/Dockerfile -t ${HUB}/fuse-query:${TAG} .
+
+# experiment feature: take a look at docker/README.md for detailed multi architecture image build support
+dockerx:
+	docker buildx build . -f ./docker/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/fuse-query:${TAG} --push
 
 perf-tool:
 	docker build --network host -f docker/perf-tool/Dockerfile -t ${HUB}/perf-tool:${TAG} .

@@ -8,6 +8,7 @@ mod tests {
     use std::sync::Arc;
 
     use common_datavalues::*;
+    use common_exception::Result;
     use common_planners::*;
     use pretty_assertions::assert_eq;
 
@@ -15,7 +16,7 @@ mod tests {
     use crate::optimizers::*;
 
     #[test]
-    fn test_constant_folding_optimizer() -> anyhow::Result<()> {
+    fn test_constant_folding_optimizer() -> Result<()> {
         let ctx = crate::tests::try_create_context()?;
 
         let total = ctx.get_settings().get_max_block_size()? as u64;
@@ -32,7 +33,7 @@ mod tests {
                 DataField::new("b", DataType::Utf8, false),
                 DataField::new("c", DataType::Utf8, false),
             ]),
-            partitions: generate_partitions(8, total as u64),
+            parts: generate_partitions(8, total as u64),
             statistics: statistics.clone(),
             description: format!(
                 "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",

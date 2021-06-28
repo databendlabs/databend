@@ -10,3 +10,10 @@ pub mod exception;
 pub use exception::ErrorCode;
 pub use exception::Result;
 pub use exception::ToErrorCode;
+
+pub mod prelude {
+
+    pub use crate::exception::ErrorCode;
+    pub use crate::exception::Result;
+    pub use crate::exception::ToErrorCode;
+}

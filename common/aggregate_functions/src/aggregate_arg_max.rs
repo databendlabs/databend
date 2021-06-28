@@ -60,6 +60,9 @@ impl AggregateFunction for AggregateArgMaxFunction {
 
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
         if let DataValue::Struct(max_arg_val) = Self::arg_max_batch(columns[1].clone())? {
+            if max_arg_val[0].is_null() {
+                return Ok(());
+            }
             let index: u64 = max_arg_val[0].clone().try_into()?;
             let max_arg = DataValue::try_from_array(&columns[0].to_array()?, index as usize)?;
             let max_val = max_arg_val[1].clone();
@@ -153,6 +156,12 @@ macro_rules! typed_array_max_to_data_value {
         let values = array.values();
         let data = array.data();
         let null_count = array.null_count();
+        if null_count == array.len() {
+            return Result::Ok(DataValue::Struct(vec![
+                DataValue::UInt64(None),
+                DataValue::$SCALAR(None),
+            ]));
+        }
         let mut max_row_val = (0, values[0]);
 
         if null_count == 0 {

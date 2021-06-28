@@ -23,6 +23,7 @@ mod test {
     use common_datavalues::DataSchema;
     use common_datavalues::Int64Array;
     use common_datavalues::StringArray;
+    use common_runtime::tokio;
 
     use crate::data_part::appender::*;
     use crate::localfs::LocalFS;

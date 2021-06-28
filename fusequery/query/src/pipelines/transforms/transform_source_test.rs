@@ -2,15 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
+use common_exception::Result;
+use common_runtime::tokio;
+use futures::TryStreamExt;
+use pretty_assertions::assert_eq;
+
+use crate::pipelines::processors::*;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn transform_source_test() -> anyhow::Result<()> {
-    use std::sync::Arc;
-
-    use futures::TryStreamExt;
-    use pretty_assertions::assert_eq;
-
-    use crate::pipelines::processors::*;
-
+async fn transform_source_test() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 

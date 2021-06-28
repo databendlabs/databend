@@ -14,6 +14,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::Partitions;
+use common_runtime::tokio;
 use metrics::counter;
 
 use crate::clusters::Cluster;
@@ -28,6 +29,7 @@ use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct SessionManager {
+    conf: Config,
     cluster: ClusterRef,
     datasource: Arc<DataSource>,
 
@@ -45,6 +47,7 @@ pub type SessionManagerRef = Arc<SessionManager>;
 impl SessionManager {
     pub fn try_create(max_mysql_sessions: u64) -> Result<SessionManagerRef> {
         Ok(Arc::new(SessionManager {
+            conf: Config::default(),
             cluster: Cluster::empty(),
             datasource: Arc::new(DataSource::try_create()?),
 
@@ -60,6 +63,7 @@ impl SessionManager {
     pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
         let max_mysql_sessions = conf.mysql_handler_thread_num as usize;
         Ok(Arc::new(SessionManager {
+            conf,
             cluster,
             datasource: Arc::new(DataSource::try_create()?),
 
@@ -90,7 +94,7 @@ impl SessionManager {
             )),
             false => {
                 let id = uuid::Uuid::new_v4().to_string();
-                let session = S::create(id.clone(), self.clone())?;
+                let session = S::create(self.conf.clone(), id.clone(), self.clone())?;
                 sessions.insert(id, session.clone());
                 Ok(session)
             }
@@ -117,7 +121,7 @@ impl SessionManager {
     pub fn try_create_context(&self) -> Result<FuseQueryContextRef> {
         counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
 
-        let ctx = FuseQueryContext::try_create()?;
+        let ctx = FuseQueryContext::try_create(self.conf.clone())?;
         self.queries_context
             .write()
             .insert(ctx.get_id(), ctx.clone());

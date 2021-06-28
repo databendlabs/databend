@@ -8,8 +8,8 @@ use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::Ticket;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_runtime::tokio::time::Duration;
 use common_streams::SendableDataBlockStream;
-use tokio::time::Duration;
 use tonic::transport::channel::Channel;
 use tonic::Request;
 

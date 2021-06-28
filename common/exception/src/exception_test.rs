@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use tonic::Code;
+use tonic::Status;
+
 #[test]
 fn test_format_with_error_codes() {
     use crate::exception::*;
@@ -46,4 +49,51 @@ fn test_derive_from_std_error() {
         "Code: 0, displayText = wrapper, cause: Code: 1000, displayText = 123, cause: an error occurred when formatting an argument..",
         format!("{}", rst2.as_ref().unwrap_err())
     );
+}
+
+#[test]
+fn test_derive_from_display() {
+    use crate::exception::ErrorCode;
+    use crate::exception::ToErrorCode;
+
+    let rst: std::result::Result<(), u64> = Err(3);
+
+    let rst1: crate::exception::Result<()> =
+        rst.map_err_to_code(ErrorCode::UnknownException, || 123);
+
+    assert_eq!(
+        "Code: 1000, displayText = 123, cause: 3.",
+        format!("{}", rst1.as_ref().unwrap_err())
+    );
+}
+
+#[test]
+fn test_from_and_to_status() -> anyhow::Result<()> {
+    use crate::exception::*;
+    let e = ErrorCode::IllegalDataType("foo");
+    let status: Status = e.into();
+    assert_eq!(Code::Internal, status.code());
+
+    // Only compare the code and message. Discard backtrace.
+    assert_eq!(r#"{"code":7,"message":"foo","#, &status.message()[..26]);
+
+    {
+        // test from &Status
+
+        let e2: ErrorCode = (&status).into();
+
+        assert_eq!(7, e2.code());
+        assert_eq!("foo", e2.message());
+    }
+
+    {
+        // test from Status
+
+        let e2: ErrorCode = status.into();
+
+        assert_eq!(7, e2.code());
+        assert_eq!("foo", e2.message());
+    }
+
+    Ok(())
 }

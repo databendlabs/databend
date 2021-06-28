@@ -9,18 +9,19 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_planners::Partition;
+use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::Statistics;
 use common_progress::Progress;
 use common_progress::ProgressCallback;
 use common_progress::ProgressValues;
+use common_runtime::tokio::task::JoinHandle;
 use common_runtime::Runtime;
-use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 use crate::clusters::Cluster;
 use crate::clusters::ClusterRef;
+use crate::configs::Config;
 use crate::datasources::DataSource;
 use crate::datasources::Table;
 use crate::datasources::TableFunction;
@@ -28,12 +29,13 @@ use crate::sessions::Settings;
 
 #[derive(Clone)]
 pub struct FuseQueryContext {
+    conf: Config,
     uuid: Arc<RwLock<String>>,
     settings: Arc<Settings>,
     cluster: Arc<RwLock<ClusterRef>>,
     datasource: Arc<DataSource>,
     statistics: Arc<RwLock<Statistics>>,
-    partition_queue: Arc<RwLock<VecDeque<Partition>>>,
+    partition_queue: Arc<RwLock<VecDeque<Part>>>,
     current_database: Arc<RwLock<String>>,
     progress: Arc<Progress>,
     runtime: Arc<RwLock<Runtime>>,
@@ -43,9 +45,10 @@ pub struct FuseQueryContext {
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
-    pub fn try_create() -> Result<FuseQueryContextRef> {
+    pub fn try_create(conf: Config) -> Result<FuseQueryContextRef> {
         let settings = Settings::try_create()?;
         let ctx = FuseQueryContext {
+            conf,
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings: settings.clone(),
             cluster: Arc::new(RwLock::new(Cluster::empty())),
@@ -67,11 +70,13 @@ impl FuseQueryContext {
     }
 
     pub fn from_settings(
+        conf: Config,
         settings: Arc<Settings>,
         default_database: String,
         datasource: Arc<DataSource>,
     ) -> Result<FuseQueryContextRef> {
         Ok(Arc::new(FuseQueryContext {
+            conf,
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings: settings.clone(),
             cluster: Arc::new(RwLock::new(Cluster::empty())),
@@ -244,6 +249,10 @@ impl FuseQueryContext {
 
     pub fn get_settings(&self) -> Arc<Settings> {
         self.settings.clone()
+    }
+
+    pub fn get_config(&self) -> Config {
+        self.conf.clone()
     }
 }
 
