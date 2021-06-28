@@ -27,8 +27,19 @@ lazy_static! {
         ver
     };
 }
-
-#[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+impl fmt::Debug for Config{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{{ log_level: \"{}\", log_dir: \"{}\", num_cpus: {}, mysql_handler_host: \"{}\",
+        mysql_handler_port: {}, mysql_handler_thread_num: {}, clickhouse_handler_host: \"{}\", clickhouse_handler_clickhouse_handler_port: {}, 
+        clickhouse_handler_thread_num: {}, flight_api_address: \"{}\", http_api_address: \"{}\", metric_api_address: \"{}\", 
+        store_api_address: \"{}\", config_file: \"{}\", }}",
+        self.log_level, self.log_dir, self.num_cpus, self.mysql_handler_host, self.mysql_handler_port,
+        self.mysql_handler_thread_num, self.clickhouse_handler_host, self.clickhouse_handler_port,
+        self.clickhouse_handler_thread_num, self.flight_api_address, self.http_api_address, self.metric_api_address,
+        self.store_api_address, self.config_file)
+    }
+}
+#[derive(Clone,  serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 #[serde(default)]
 pub struct Config {
     #[structopt(long, env = "FUSE_QUERY_LOG_LEVEL", default_value = "INFO")]
