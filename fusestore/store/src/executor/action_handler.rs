@@ -100,37 +100,49 @@ impl ActionHandler {
         S: ReplySerializer<Output = R>,
         <S as ReplySerializer>::Error: Into<ErrorCode>,
     {
+        // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one by one
+        //
+        // Technically we can eliminate these kind of duplications by using proc-macros, or eliminate
+        // parts of them by introducing another func like this:
+        //#  async fn invoke<S, O, A, R>(&self, a: A, s: S) -> common_exception::Result<O>
+        //#      where
+        //#          A: Serialize + RequestFor<Reply = R>,
+        //#          S: ReplySerializer<Output = O>,
+        //#          Self: RequestHandler<A>,
+        //#          R: Serialize,
+        //#          <S as ReplySerializer>::Error: Into<ErrorCode>,
+        //#  {
+        //#      let r = self.handle(a).await?;
+        //#      let v = s.serialize(r).map_err(Into::into)?;
+        //#      Ok(v)
+        //#  }
+        //
+        // But, that may be too much, IDEs like "clion" will be confused (and unable to jump around)
+        //
+        // New suggestions/ideas are welcome.
+
         match action {
             // database
-            StoreDoAction::CreateDatabase(a) => self.invoke(a, s).await,
-            StoreDoAction::GetDatabase(a) => self.invoke(a, s).await,
-            StoreDoAction::DropDatabase(a) => self.invoke(a, s).await,
+            StoreDoAction::CreateDatabase(a) => {
+                s.serialize(self.handle(a).await?).map_err(Into::into)
+            }
+            StoreDoAction::GetDatabase(a) => s.serialize(self.handle(a).await?).map_err(Into::into),
+            StoreDoAction::DropDatabase(a) => {
+                s.serialize(self.handle(a).await?).map_err(Into::into)
+            }
 
             // table
-            StoreDoAction::CreateTable(a) => self.invoke(a, s).await,
-            StoreDoAction::DropTable(a) => self.invoke(a, s).await,
-            StoreDoAction::GetTable(a) => self.invoke(a, s).await,
+            StoreDoAction::CreateTable(a) => s.serialize(self.handle(a).await?).map_err(Into::into),
+            StoreDoAction::DropTable(a) => s.serialize(self.handle(a).await?).map_err(Into::into),
+            StoreDoAction::GetTable(a) => s.serialize(self.handle(a).await?).map_err(Into::into),
 
             // part
-            StoreDoAction::ReadPlan(a) => self.invoke(a, s).await,
+            StoreDoAction::ReadPlan(a) => s.serialize(self.handle(a).await?).map_err(Into::into),
 
             // general-purpose kv
-            StoreDoAction::UpsertKV(a) => self.invoke(a, s).await,
-            StoreDoAction::GetKV(a) => self.invoke(a, s).await,
+            StoreDoAction::UpsertKV(a) => s.serialize(self.handle(a).await?).map_err(Into::into),
+            StoreDoAction::GetKV(a) => s.serialize(self.handle(a).await?).map_err(Into::into),
         }
-    }
-
-    async fn invoke<S, O, A, R>(&self, a: A, s: S) -> common_exception::Result<O>
-    where
-        A: Serialize + RequestFor<Reply = R>,
-        S: ReplySerializer<Output = O>,
-        Self: RequestHandler<A>,
-        R: Serialize,
-        <S as ReplySerializer>::Error: Into<ErrorCode>,
-    {
-        let r = self.handle(a).await?;
-        let v = s.serialize(r).map_err(Into::into)?;
-        Ok(v)
     }
 
     pub(crate) async fn do_put(
