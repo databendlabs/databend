@@ -36,7 +36,7 @@ pub fn find_aggregate_exprs(exprs: &[Expression]) -> Vec<Expression> {
 /// Find all `Expression::Exists` in a predicate
 pub fn find_exists_exprs(exprs: &[Expression]) -> Vec<Expression> {
     find_exprs_in_exprs(exprs, &|nest_exprs| {
-        matches!(nest_exprs, Expression::Exists { .. })
+        matches!(nest_exprs, Expression::Exists(..))
     })
 }
 

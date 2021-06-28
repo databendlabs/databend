@@ -71,7 +71,6 @@ async fn test_prepare_query_stage() -> Result<()> {
         }
     });
 
-    println!("map: {:?}", HashMap::<String, bool>::new());
     let response = service.do_action(Request::new(
         Action {
             r#type: "PrepareQueryStage".to_string(),

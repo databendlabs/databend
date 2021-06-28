@@ -122,6 +122,7 @@ impl Interpreter for SelectInterpreter {
             while queue1.len() > 0 {
                 if let Some(begin) = queue1.pop_front() {
                     if let Ok(p) = get_filter_plan(begin) {
+                        println!("predicate: {:?}", p.predicate);
                         let exists_vec = find_exists_exprs(&[p.predicate.clone()]);
                         for exst in exists_vec {
                             let expr_name = format!("{:?}", exst);
@@ -140,7 +141,7 @@ impl Interpreter for SelectInterpreter {
             queue1 = VecDeque::from(queue2);
             queue2 = VecDeque::<PlanNode>::new();
         }
-
+        println!("names: {:?}", names);
         let mut subquery_res_map = HashMap::<String, bool>::new();
         let size = levels.len();
         for i in (0..size).rev() {
@@ -151,11 +152,13 @@ impl Interpreter for SelectInterpreter {
                         .await?;
 
                 let result = stream.try_collect::<Vec<_>>().await?;
-                let b = if result.len() > 0 { true } else { false };
+                let num_all_rows : usize = result.iter().map(|b| b.num_rows()).sum();
+                let b = if num_all_rows > 0 { true } else { false };
                 let name = names.get(&format!("{:?}", exp));
                 subquery_res_map.insert(name.unwrap().to_string(), b);
             }
         }
+        println!("subquery_res_map: {:?}", subquery_res_map);
         execute_one_select(self.ctx.clone(), plan, subquery_res_map).await
     }
 }

@@ -75,6 +75,11 @@ impl Expression {
                 visitor = right.accept(visitor)?;
                 Ok(visitor)
             }
+            Expression::UnaryExpression { op, expr, .. } => {
+                let mut visitor = visitor;
+                visitor = expr.accept(visitor)?;
+                Ok(visitor)
+            }
             Expression::ScalarFunction { args, .. } => {
                 let mut visitor = visitor;
                 for arg in args {
