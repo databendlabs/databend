@@ -61,7 +61,6 @@ pub struct ActionFunction {
 #[derive(Debug, Clone)]
 pub struct ActionExists {
     pub name: String,
-    //pub value: DataValue,
 }
 
 impl ExpressionAction {
