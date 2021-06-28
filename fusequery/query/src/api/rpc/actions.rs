@@ -14,5 +14,5 @@ pub struct ExecutePlanWithShuffleAction {
     pub plan: PlanNode,
     pub scatters: Vec<String>,
     pub scatters_action: Expression,
-    pub subquery_res_map: HashMap<String, u32>,
+    pub subquery_res_map: HashMap<String, bool>,
 }

@@ -40,19 +40,19 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct PipelineBuilder {
     ctx: FuseQueryContextRef,
-    exists_res_map: HashMap<String, bool>,
+    subquery_res_map: HashMap<String, bool>,
     plan: PlanNode,
 }
 
 impl PipelineBuilder {
     pub fn create(
         ctx: FuseQueryContextRef,
-        exists_res_map: HashMap<String, bool>,
+        subquery_res_map: HashMap<String, bool>,
         plan: PlanNode,
     ) -> Self {
         PipelineBuilder {
             ctx,
-            exists_res_map,
+            subquery_res_map,
             plan,
         }
     }
@@ -206,7 +206,7 @@ impl PipelineBuilder {
     fn visit_filter_plan(&self, pipeline: &mut Pipeline, plan: &FilterPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
-                self.exists_res_map.clone(),
+                self.subquery_res_map.clone(),
                 plan.input.schema(),
                 plan.predicate.clone(),
                 false,

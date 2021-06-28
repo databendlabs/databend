@@ -35,7 +35,7 @@ impl PlanScheduler {
     #[tracing::instrument(level = "info", skip(ctx, plan))]
     pub fn reschedule(
         ctx: FuseQueryContextRef,
-        exists_res_map: HashMap<String, u32>,
+        subquery_res_map: HashMap<String, u32>,
         plan: &PlanNode,
     ) -> Result<ScheduledActions> {
         let cluster = ctx.try_get_cluster()?;
@@ -102,7 +102,7 @@ impl PlanScheduler {
         for node in &cluster_nodes {
             for builder in &builders {
                 if let Some(action) =
-                    builder.build(&node.name, &cluster_nodes, exists_res_map.clone())?
+                    builder.build(&node.name, &cluster_nodes, subquery_res_map.clone())?
                 {
                     remote_actions.push((node.clone(), action));
                 }
