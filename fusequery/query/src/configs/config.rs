@@ -28,27 +28,29 @@ lazy_static! {
     };
 }
 
-macro_rules! env_helper{
+macro_rules! env_helper {
     ($config:expr, $field:tt, $field_type: ty, $env:expr) => {
         let env_var = std::env::var_os($env)
-                            .unwrap_or($config.$field.to_string().into()).into_string()
-                            .expect(format!("cannot convert {} to string", $env).as_str());
-        $config.$field = env_var.parse::<$field_type>()
-        .expect(format!("cannot convert {} to {}", $env, stringify!($field_type)).as_str());
+            .unwrap_or($config.$field.to_string().into())
+            .into_string()
+            .expect(format!("cannot convert {} to string", $env).as_str());
+        $config.$field = env_var
+            .parse::<$field_type>()
+            .expect(format!("cannot convert {} to {}", $env, stringify!($field_type)).as_str());
     };
 }
 
-const LOG_LEVEL :&str = "FUSE_QUERY_LOG_LEVEL";
-const LOG_DIR :&str = "FUSE_QUERY_LOG_DIR";
-const NUM_CPUS :&str = "FUSE_QUERY_NUM_CPUS";
+const LOG_LEVEL: &str = "FUSE_QUERY_LOG_LEVEL";
+const LOG_DIR: &str = "FUSE_QUERY_LOG_DIR";
+const NUM_CPUS: &str = "FUSE_QUERY_NUM_CPUS";
 
-const MYSQL_HANDLER_HOST :&str = "FUSE_QUERY_MYSQL_HANDLER_HOST";
-const MYSQL_HANDLER_PORT :&str = "FUSE_QUERY_MYSQL_HANDLER_PORT";
-const MYSQL_HANDLER_THREAD_NUM :&str = "FUSE_QUERY_MYSQL_HANDLER_THREAD_NUM";
+const MYSQL_HANDLER_HOST: &str = "FUSE_QUERY_MYSQL_HANDLER_HOST";
+const MYSQL_HANDLER_PORT: &str = "FUSE_QUERY_MYSQL_HANDLER_PORT";
+const MYSQL_HANDLER_THREAD_NUM: &str = "FUSE_QUERY_MYSQL_HANDLER_THREAD_NUM";
 
 const CLICKHOUSE_HANDLER_HOST: &str = "FUSE_QUERY_CLICKHOUSE_HANDLER_HOST";
 const CLICKHOUSE_HANDLER_PORT: &str = "FUSE_QUERY_CLICKHOUSE_HANDLER_PORT";
-const CLICKHOUSE_HANDLER_THREAD_NUM :&str = "FUSE_QUERY_CLICKHOUSE_HANDLER_THREAD_NUM";
+const CLICKHOUSE_HANDLER_THREAD_NUM: &str = "FUSE_QUERY_CLICKHOUSE_HANDLER_THREAD_NUM";
 
 const FLIGHT_API_ADDRESS: &str = "FUSE_QUERY_FLIGHT_API_ADDRESS";
 const HTTP_API_ADDRESS: &str = "FUSE_QUERY_HTTP_API_ADDRESS";
@@ -192,23 +194,45 @@ impl Config {
     pub fn load_from_env(cfg: &Config) -> Result<Self> {
         let mut mut_config = cfg.clone();
         if std::env::var_os(CONFIG_FILE).is_some() {
-            return Config::load_from_toml(std::env::var_os(CONFIG_FILE).unwrap().to_str().unwrap());
+            return Config::load_from_toml(
+                std::env::var_os(CONFIG_FILE).unwrap().to_str().unwrap(),
+            );
         }
         env_helper!(mut_config, log_level, String, LOG_LEVEL);
         env_helper!(mut_config, log_dir, String, LOG_DIR);
         env_helper!(mut_config, num_cpus, u64, NUM_CPUS);
         env_helper!(mut_config, mysql_handler_host, String, MYSQL_HANDLER_HOST);
         env_helper!(mut_config, mysql_handler_port, u16, MYSQL_HANDLER_PORT);
-        env_helper!(mut_config, mysql_handler_thread_num, u64, MYSQL_HANDLER_THREAD_NUM);
-        env_helper!(mut_config, clickhouse_handler_host,String, CLICKHOUSE_HANDLER_HOST);
-        env_helper!(mut_config, clickhouse_handler_port, u64,CLICKHOUSE_HANDLER_PORT);
-        env_helper!(mut_config, clickhouse_handler_thread_num, u64,CLICKHOUSE_HANDLER_THREAD_NUM);
-        env_helper!(mut_config, flight_api_address, String,FLIGHT_API_ADDRESS);
-        env_helper!(mut_config, http_api_address,String, HTTP_API_ADDRESS);
-        env_helper!(mut_config, metric_api_address,String, METRICS_API_ADDRESS);
-        env_helper!(mut_config, store_api_address,String, STORE_API_ADDRESS);
-        env_helper!(mut_config, store_api_username,String, STORE_API_USERNAME);
-        env_helper!(mut_config, store_api_password,String, STORE_API_PASSWORD);
+        env_helper!(
+            mut_config,
+            mysql_handler_thread_num,
+            u64,
+            MYSQL_HANDLER_THREAD_NUM
+        );
+        env_helper!(
+            mut_config,
+            clickhouse_handler_host,
+            String,
+            CLICKHOUSE_HANDLER_HOST
+        );
+        env_helper!(
+            mut_config,
+            clickhouse_handler_port,
+            u64,
+            CLICKHOUSE_HANDLER_PORT
+        );
+        env_helper!(
+            mut_config,
+            clickhouse_handler_thread_num,
+            u64,
+            CLICKHOUSE_HANDLER_THREAD_NUM
+        );
+        env_helper!(mut_config, flight_api_address, String, FLIGHT_API_ADDRESS);
+        env_helper!(mut_config, http_api_address, String, HTTP_API_ADDRESS);
+        env_helper!(mut_config, metric_api_address, String, METRICS_API_ADDRESS);
+        env_helper!(mut_config, store_api_address, String, STORE_API_ADDRESS);
+        env_helper!(mut_config, store_api_username, String, STORE_API_USERNAME);
+        env_helper!(mut_config, store_api_password, String, STORE_API_PASSWORD);
 
         Ok(mut_config)
     }
