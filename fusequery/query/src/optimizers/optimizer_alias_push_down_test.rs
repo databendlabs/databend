@@ -1,9 +1,10 @@
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
+use common_exception::Result;
 
 #[test]
-fn test_filter_alias_push_down_optimizer() -> anyhow::Result<()> {
+fn test_filter_alias_push_down_optimizer() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     use crate::optimizers::*;

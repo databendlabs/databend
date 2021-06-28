@@ -6,7 +6,8 @@ use std::ops::Sub;
 use std::time::Duration;
 
 use common_exception::ErrorCode;
-use common_tracing::init_tracing_with_level;
+use common_runtime::tokio;
+use common_tracing::init_tracing_with_file;
 use fuse_query::api::HttpService;
 use fuse_query::api::RpcService;
 use fuse_query::clusters::Cluster;
@@ -30,11 +31,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         conf = Config::load_from_toml(conf.config_file.as_str())?;
     }
 
+    // Prefer to use env variable in cloud native deployment
+    // Override configs based on env variables
+    conf = Config::load_from_env(&conf)?;
+
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or(conf.log_level.to_lowercase().as_str()),
     )
     .init();
-    init_tracing_with_level(conf.log_level.as_str());
+    let _guards =
+        init_tracing_with_file("fuse-query", conf.log_dir.as_str(), conf.log_level.as_str());
 
     info!("{:?}", conf);
     info!(
@@ -82,20 +88,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Metric API service.
     {
-        let srv = MetricService::create(conf.clone());
-        tokio::spawn(async move {
-            srv.make_server().expect("Metrics service error");
-        });
-        info!("Metric API server listening on {}", conf.metric_api_address);
+        let addr = conf.metric_api_address.parse::<std::net::SocketAddr>()?;
+        let srv = MetricService::create();
+        let addr = srv.start((addr.ip().to_string(), addr.port())).await?;
+        services.push(srv);
+        info!("Metric API server listening on {}", addr);
     }
 
     // HTTP API service.
     {
+        let addr = conf.http_api_address.parse::<std::net::SocketAddr>()?;
         let srv = HttpService::create(conf.clone(), cluster.clone());
-        tokio::spawn(async move {
-            srv.make_server().await.expect("HTTP service error");
-        });
-        info!("HTTP API server listening on {}", conf.http_api_address);
+        let addr = srv.start((addr.ip().to_string(), addr.port())).await?;
+        services.push(srv);
+        info!("HTTP API server listening on {}", addr);
     }
 
     // RPC API service.

@@ -2,15 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+use common_planners::*;
+use common_runtime::tokio;
+use futures::TryStreamExt;
+use pretty_assertions::assert_eq;
+
+use crate::interpreters::*;
+use crate::sql::*;
+
 #[tokio::test]
-async fn test_drop_table_interpreter() -> anyhow::Result<()> {
-    use common_planners::*;
-    use futures::TryStreamExt;
-    use pretty_assertions::assert_eq;
-
-    use crate::interpreters::*;
-    use crate::sql::*;
-
+async fn test_drop_table_interpreter() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     // Create table.

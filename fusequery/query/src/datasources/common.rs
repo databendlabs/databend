@@ -6,7 +6,7 @@ use std::io;
 use std::io::BufRead;
 use std::io::BufReader;
 
-use common_planners::Partition;
+use common_planners::Part;
 use common_planners::Partitions;
 
 pub struct Common;
@@ -18,7 +18,7 @@ impl Common {
 
         let mut partitions = Vec::with_capacity(workers as usize);
         if part_size == 0 {
-            partitions.push(Partition {
+            partitions.push(Part {
                 name: format!("{}-{}-{}", total, start, total,),
                 version: 0,
             })
@@ -32,7 +32,7 @@ impl Common {
                 if part == (workers - 1) && part_remain > 0 {
                     part_end += part_remain;
                 }
-                partitions.push(Partition {
+                partitions.push(Part {
                     name: format!("{}-{}-{}", total, part_begin, part_end,),
                     version: 0,
                 })

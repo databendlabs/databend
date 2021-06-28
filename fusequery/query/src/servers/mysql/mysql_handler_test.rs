@@ -2,25 +2,21 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::io::stderr;
 use std::sync::Arc;
 use std::sync::Barrier;
 use std::thread::JoinHandle;
+use std::time::Duration;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use msql_srv::ErrorKind;
+use common_runtime::tokio;
 use mysql::prelude::FromRow;
 use mysql::prelude::Queryable;
 use mysql::Conn;
-use mysql::Error;
 use mysql::FromRowError;
 use mysql::Row;
 
-use crate::clusters::Cluster;
-use crate::configs::Config;
-use crate::servers::AbortableService;
 use crate::servers::MySQLHandler;
 use crate::sessions::SessionManager;
 
@@ -61,6 +57,8 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
         drop(conn);
     }
 
+    // Wait for the connection to be destroyed
+    std::thread::sleep(Duration::from_secs(5));
     // Accepted connection
     create_connection(listener_addr.port())?;
 

@@ -1,6 +1,7 @@
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
+use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 use tempfile::tempdir;
 

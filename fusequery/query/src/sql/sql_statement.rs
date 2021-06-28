@@ -6,11 +6,10 @@ use common_planners::DatabaseEngineType;
 use common_planners::ExplainType;
 use common_planners::TableEngineType;
 use nom::bytes::complete::tag;
-use nom::bytes::complete::take_till;
-use nom::bytes::complete::take_while1;
+use nom::bytes::complete::take_till1;
+use nom::character::complete::digit1;
 use nom::character::complete::multispace0;
-use nom::character::is_digit;
-use nom::sequence::tuple;
+use nom::character::complete::multispace1;
 use nom::IResult;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ObjectName;
@@ -102,7 +101,7 @@ pub struct DfHint {
 impl DfHint {
     pub fn create_from_comment(comment: &str, prefix: &str) -> Self {
         let error_code = match Self::parse_code(comment) {
-            Ok((_, c)) => Some(c),
+            Ok((_, c)) => c,
             Err(_) => None,
         };
 
@@ -114,24 +113,15 @@ impl DfHint {
     }
 
     //  { ErrorCode 25 }
-    pub fn parse_code(
-        comment: &str,
-    ) -> std::result::Result<(&[u8], u16), Box<dyn std::error::Error + '_>> {
-        let input = comment.as_bytes();
+    pub fn parse_code(comment: &str) -> IResult<&str, Option<u16>> {
+        let (comment, _) = take_till1(|c| c == '{')(comment)?;
+        let (comment, _) = tag("{")(comment)?;
+        let (comment, _) = multispace0(comment)?;
+        let (comment, _) = tag("ErrorCode")(comment)?;
+        let (comment, _) = multispace1(comment)?;
+        let (comment, code) = digit1(comment)?;
 
-        let before = take_till(|c| c == b'{');
-        let text = tag("ErrorCode");
-        let code = take_while1(is_digit);
-
-        let res: IResult<&[u8], (&[u8], &[u8], &[u8], &[u8], &[u8], &[u8])> =
-            tuple((before, tag("{"), multispace0, text, multispace0, code))(input);
-
-        let res = res?;
-
-        let code = res.1 .5;
-        let code = String::from_utf8_lossy(code).to_string();
-        let code = code.parse::<u16>()?;
-
-        Ok((res.0, code))
+        let code = code.parse::<u16>().ok();
+        Ok((comment, code))
     }
 }

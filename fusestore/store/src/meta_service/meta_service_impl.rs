@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+//! Meta service impl a grpc server that serves both raft protocol: append_entries, vote and install_snapshot.
+//! It also serves RPC for user-data access.
+
 use std::convert::TryInto;
 use std::sync::Arc;
 

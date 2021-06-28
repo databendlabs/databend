@@ -2,16 +2,18 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::env;
+
+use common_datavalues::*;
+use common_exception::Result;
+use common_planners::*;
+use common_runtime::tokio;
+use futures::TryStreamExt;
+
+use crate::datasources::local::*;
+
 #[tokio::test]
-async fn test_csv_table() -> anyhow::Result<()> {
-    use std::env;
-
-    use common_datavalues::*;
-    use common_planners::*;
-    use futures::TryStreamExt;
-
-    use crate::datasources::local::*;
-
+async fn test_csv_table() -> Result<()> {
     let options: TableOptions = [(
         "location".to_string(),
         env::current_dir()?
@@ -35,19 +37,17 @@ async fn test_csv_table() -> anyhow::Result<()> {
         schema_name: "".to_string(),
         table_schema: DataSchemaRefExt::create(vec![]),
         table_args: None,
-        projection: None,
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "column1",
             DataType::UInt64,
             false,
         )]),
-        filters: vec![],
-        limit: None,
+        push_downs: Extras::default(),
     };
     let source_plan = table.read_plan(ctx.clone(), &scan_plan, ctx.get_max_threads()? as usize)?;
-    ctx.try_set_partitions(source_plan.partitions)?;
+    ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.read(ctx).await?;
+    let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);
@@ -70,7 +70,7 @@ async fn test_csv_table() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn test_csv_table_parse_error() -> anyhow::Result<()> {
+async fn test_csv_table_parse_error() -> Result<()> {
     use std::env;
 
     use common_datavalues::*;
@@ -108,19 +108,17 @@ async fn test_csv_table_parse_error() -> anyhow::Result<()> {
         schema_name: "".to_string(),
         table_schema: DataSchemaRefExt::create(vec![]),
         table_args: None,
-        projection: None,
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "column2",
             DataType::UInt64,
             false,
         )]),
-        filters: vec![],
-        limit: None,
+        push_downs: Extras::default(),
     };
     let source_plan = table.read_plan(ctx.clone(), &scan_plan, ctx.get_max_threads()? as usize)?;
-    ctx.try_set_partitions(source_plan.partitions)?;
+    ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.read(ctx).await?;
+    let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await;
     assert_eq!(true, result.is_err());
     if let Err(e) = result {

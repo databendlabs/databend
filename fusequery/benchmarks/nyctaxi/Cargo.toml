@@ -10,6 +10,7 @@ edition = "2018"
 # Workspace dependencies
 common-datavalues = {path = "../../../common/datavalues"}
 common-planners = {path = "../../../common/planners"}
+common-runtime = {path = "../../../common/runtime"}
 fuse-query = {path = "../../query"}
 
 # Github dependencies
@@ -17,6 +18,5 @@ fuse-query = {path = "../../query"}
 # Crates.io dependencies
 futures = "0.3"
 structopt = "0.3"
-tokio = { version = "1.7", features = ["macros", "rt","rt-multi-thread", "sync"] }
 
 [dev-dependencies]

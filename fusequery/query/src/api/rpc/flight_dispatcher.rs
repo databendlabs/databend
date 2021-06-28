@@ -14,10 +14,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_planners::PlanNode;
+use common_runtime::tokio;
+use common_runtime::tokio::sync::mpsc::channel;
+use common_runtime::tokio::sync::mpsc::Receiver;
+use common_runtime::tokio::sync::mpsc::Sender;
 use log::error;
-use tokio::sync::mpsc::channel;
-use tokio::sync::mpsc::Receiver;
-use tokio::sync::mpsc::Sender;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_scatter::FlightScatterByHash;

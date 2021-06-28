@@ -24,7 +24,9 @@ common-exception = {path = "../../common/exception"}
 common-flights = {path = "../../common/flights"}
 common-functions = {path = "../../common/functions"}
 common-infallible = {path = "../../common/infallible"}
+common-metatypes = {path = "../../common/metatypes"}
 common-planners = {path = "../../common/planners"}
+common-runtime = {path = "../../common/runtime"}
 common-tracing = {path = "../../common/tracing"}
 
 
@@ -32,8 +34,7 @@ common-tracing = {path = "../../common/tracing"}
 
 # Crates.io dependencies
 anyhow = "1.0.41"
-# track self maintained branch with hot fixes
-async-raft = { git = "https://github.com/datafuse-extras/async-raft", branch = "master" }
+async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.1" }
 async-trait = "0.1"
 env_logger = "0.8"
 futures = "0.3"
@@ -54,9 +55,8 @@ structopt-toml = "0.4.5"
 tempfile = "3.2.0"
 thiserror = "1.0.25"
 threadpool = "1.8.1"
-tokio = { version = "1.7", features = ["macros", "rt","rt-multi-thread", "sync"] }
 tokio-stream = "0.1"
-tonic = "0.4"
+tonic = "0.4.3"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 
 [dev-dependencies]

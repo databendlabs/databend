@@ -79,7 +79,7 @@ impl<'plan> PlanRewriter<'plan> for ProjectionPushDownImpl {
                     db: plan.db.to_string(),
                     table: plan.table.to_string(),
                     schema: projected_schema,
-                    partitions: plan.partitions.clone(),
+                    parts: plan.parts.clone(),
                     statistics: plan.statistics.clone(),
                     description: plan.description.to_string(),
                     scan_plan: plan.scan_plan.clone(),

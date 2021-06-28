@@ -21,7 +21,6 @@ jobs:
           - {os: ubuntu-latest, toolchain: stable, target: aarch64-unknown-linux-gnu, cross: true}
           - {os: ubuntu-latest, toolchain: stable, target: arm-unknown-linux-gnueabi, cross: true}
           - {os: ubuntu-latest, toolchain: stable, target: armv7-unknown-linux-gnueabihf, cross: true}
-          - {os: ubuntu-latest, toolchain: stable, target: aarch64-linux-android, cross: true}
           # Macos
           - {os: macos-latest, toolchain: stable, target: x86_64-apple-darwin, cross: false}
     steps:
@@ -38,13 +37,6 @@ jobs:
           command: build
           args: --release --target=${{ matrix.config.target }}
           use-cross: ${{ matrix.config.cross }}
-
-      - name: Compress binaries
-        uses: svenstaro/upx-action@v2
-        with:
-          file: ${{ matrix.config.artifact_name }}
-          args: --lzma
-          strip: ${{ matrix.config.strip }}
 
       - name: Get tag name
         id: tag_name

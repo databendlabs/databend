@@ -32,24 +32,29 @@ use async_raft::Raft;
 use async_raft::RaftMetrics;
 use async_raft::RaftNetwork;
 use async_raft::RaftStorage;
+use common_exception::prelude::ErrorCode;
+use common_exception::prelude::ToErrorCode;
+use common_metatypes::Database;
+use common_metatypes::SeqValue;
+use common_runtime::tokio;
+use common_runtime::tokio::sync::watch;
+use common_runtime::tokio::sync::Mutex;
+use common_runtime::tokio::sync::RwLock;
+use common_runtime::tokio::sync::RwLockReadGuard;
+use common_runtime::tokio::sync::RwLockWriteGuard;
+use common_runtime::tokio::task::JoinHandle;
 use common_tracing::tracing;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
-use tokio::sync::watch;
-use tokio::sync::Mutex;
-use tokio::sync::RwLock;
-use tokio::sync::RwLockReadGuard;
-use tokio::sync::RwLockWriteGuard;
-use tokio::task::JoinHandle;
 use tonic::transport::channel::Channel;
 
-use crate::meta_service::MemStoreStateMachine;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::MetaServiceServer;
 use crate::meta_service::Node;
 use crate::meta_service::RaftMes;
+use crate::meta_service::StateMachine;
 
 const ERR_INCONSISTENT_LOG: &str =
     "a query was received which was expecting data to be in place which does not exist in the log";
@@ -69,22 +74,40 @@ pub enum Cmd {
 
     /// Add node if absent
     AddNode { node_id: NodeId, node: Node },
+
+    /// Add a database if absent
+    AddDatabase { name: String },
+
+    /// Update or insert a general purpose kv store
+    UpsertKV {
+        key: String,
+        /// Set to Some() to modify the value only when the seq matches.
+        /// Since a sequence number is positive, use Some(0) to perform an add-if-absent operation.
+        seq: Option<u64>,
+        value: Vec<u8>,
+    },
 }
 
 impl fmt::Display for Cmd {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Cmd::AddFile { key, value } => {
-                write!(f, "addfile:{}={}", key, value)
+                write!(f, "add_file:{}={}", key, value)
             }
             Cmd::SetFile { key, value } => {
-                write!(f, "setfile:{}={}", key, value)
+                write!(f, "set_file:{}={}", key, value)
             }
             Cmd::IncrSeq { key } => {
                 write!(f, "incr_seq:{}", key)
             }
             Cmd::AddNode { node_id, node } => {
-                write!(f, "addnode:{}={}", node_id, node)
+                write!(f, "add_node:{}={}", node_id, node)
+            }
+            Cmd::AddDatabase { name } => {
+                write!(f, "add_db:{}", name)
+            }
+            Cmd::UpsertKV { key, seq, value } => {
+                write!(f, "upsert_kv: {}({:?}) = {:?}", key, seq, value)
             }
         }
     }
@@ -198,6 +221,15 @@ pub enum ClientResponse {
         prev: Option<Node>,
         result: Option<Node>,
     },
+    DataBase {
+        prev: Option<Database>,
+        result: Option<Database>,
+    },
+
+    KV {
+        prev: Option<SeqValue>,
+        result: Option<SeqValue>,
+    },
 }
 
 impl AppDataResponse for ClientResponse {}
@@ -268,6 +300,24 @@ impl From<(Option<Node>, Option<Node>)> for ClientResponse {
     }
 }
 
+impl From<(Option<Database>, Option<Database>)> for ClientResponse {
+    fn from(v: (Option<Database>, Option<Database>)) -> Self {
+        ClientResponse::DataBase {
+            prev: v.0,
+            result: v.1,
+        }
+    }
+}
+
+impl From<(Option<SeqValue>, Option<SeqValue>)> for ClientResponse {
+    fn from(v: (Option<SeqValue>, Option<SeqValue>)) -> Self {
+        ClientResponse::KV {
+            prev: v.0,
+            result: v.1,
+        }
+    }
+}
+
 /// Error used to trigger Raft shutdown from storage.
 #[derive(Clone, Debug, Error)]
 pub enum ShutdownError {
@@ -295,7 +345,7 @@ pub struct MemStore {
     /// The Raft log.
     log: RwLock<BTreeMap<u64, Entry<ClientRequest>>>,
     /// The Raft state machine.
-    sm: RwLock<MemStoreStateMachine>,
+    sm: RwLock<StateMachine>,
     /// The current hard state.
     hs: RwLock<Option<HardState>>,
     /// The current snapshot.
@@ -306,7 +356,7 @@ impl MemStore {
     /// Create a new `MemStore` instance.
     pub fn new(id: NodeId) -> Self {
         let log = RwLock::new(BTreeMap::new());
-        let sm = RwLock::new(MemStoreStateMachine::default());
+        let sm = RwLock::new(StateMachine::default());
         let hs = RwLock::new(None);
         let current_snapshot = RwLock::new(None);
 
@@ -324,7 +374,7 @@ impl MemStore {
     pub fn new_with_state(
         id: NodeId,
         log: BTreeMap<u64, Entry<ClientRequest>>,
-        sm: MemStoreStateMachine,
+        sm: StateMachine,
         hs: Option<HardState>,
         current_snapshot: Option<MemStoreSnapshot>,
     ) -> Self {
@@ -347,7 +397,7 @@ impl MemStore {
     }
 
     /// Get a handle to the state machine for testing purposes.
-    pub async fn get_state_machine(&self) -> RwLockWriteGuard<'_, MemStoreStateMachine> {
+    pub async fn get_state_machine(&self) -> RwLockWriteGuard<'_, StateMachine> {
         self.sm.write().await
     }
 
@@ -604,7 +654,7 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
 
         // Update the state machine.
         {
-            let new_sm: MemStoreStateMachine = serde_json::from_slice(&new_snapshot.data)?;
+            let new_sm: StateMachine = serde_json::from_slice(&new_snapshot.data)?;
             let mut sm = self.sm.write().await;
             *sm = new_sm;
         }
@@ -723,22 +773,23 @@ pub struct MetaNode {
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
-    pub join_handles: Mutex<Vec<JoinHandle<anyhow::Result<()>>>>,
+    pub join_handles: Mutex<Vec<JoinHandle<common_exception::Result<()>>>>,
 }
 
 impl MemStore {
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         let sm = self.sm.read().await;
 
-        sm.meta.get_node(node_id)
+        sm.get_node(node_id)
     }
 
-    pub async fn get_node_addr(&self, node_id: &NodeId) -> anyhow::Result<String> {
+    pub async fn get_node_addr(&self, node_id: &NodeId) -> common_exception::Result<String> {
         let addr = self
             .get_node(node_id)
             .await
             .map(|n| n.address)
-            .ok_or_else(|| anyhow::anyhow!("node not found {}", node_id))?;
+            .ok_or_else(|| ErrorCode::UnknownNode(format!("{}", node_id)))?;
+
         Ok(addr)
     }
 
@@ -751,7 +802,7 @@ impl MemStore {
             .await
             .expect("fail to get membership");
 
-        for i in sm.meta.nodes.keys() {
+        for i in sm.nodes.keys() {
             // it has been added into this cluster and is not a voter.
             if !ms.contains(i) {
                 rst.insert(*i);
@@ -770,20 +821,20 @@ pub struct MetaNodeBuilder {
 }
 
 impl MetaNodeBuilder {
-    pub async fn build(mut self) -> anyhow::Result<Arc<MetaNode>> {
+    pub async fn build(mut self) -> common_exception::Result<Arc<MetaNode>> {
         let node_id = self
             .node_id
-            .ok_or_else(|| anyhow::anyhow!("node_id is not set"))?;
+            .ok_or_else(|| ErrorCode::InvalidConfig("node_id is not set"))?;
 
         let config = self
             .config
             .take()
-            .ok_or_else(|| anyhow::anyhow!("config is not set"))?;
+            .ok_or_else(|| ErrorCode::InvalidConfig("config is not set"))?;
 
         let sto = self
             .sto
             .take()
-            .ok_or_else(|| anyhow::anyhow!("sto is not set"))?;
+            .ok_or_else(|| ErrorCode::InvalidConfig("sto is not set"))?;
 
         let net = Network::new(sto.clone());
 
@@ -855,7 +906,7 @@ impl MetaNode {
 
     /// Start the grpc service for raft communication and meta operation API.
     #[tracing::instrument(level = "info", skip(mn))]
-    pub async fn start_grpc(mn: Arc<MetaNode>, addr: &str) -> anyhow::Result<()> {
+    pub async fn start_grpc(mn: Arc<MetaNode>, addr: &str) -> common_exception::Result<()> {
         let mut rx = mn.running_rx.clone();
 
         let meta_srv_impl = MetaServiceImpl::create(mn.clone());
@@ -877,8 +928,9 @@ impl MetaNode {
                 );
             })
             .await
-            .map_err(|e| anyhow::anyhow!("MetaNode service error: {:?}", e))?;
-            Ok::<(), anyhow::Error>(())
+            .map_err_to_code(ErrorCode::MetaServiceError, || "fail to serve")?;
+
+            Ok::<(), common_exception::ErrorCode>(())
         });
 
         let mut jh = mn.join_handles.lock().await;
@@ -897,12 +949,15 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    pub async fn stop(&self) -> anyhow::Result<i32> {
+    pub async fn stop(&self) -> common_exception::Result<i32> {
         // TODO need to be reentrant.
 
         let mut rx = self.raft.metrics();
 
-        self.raft.shutdown().await?;
+        self.raft
+            .shutdown()
+            .await
+            .map_err_to_code(ErrorCode::MetaServiceError, || "fail to stop raft")?;
         self.running_tx.send(()).unwrap();
 
         // wait for raft to close the metrics tx
@@ -918,7 +973,9 @@ impl MetaNode {
         // raft counts 1
         let mut joined = 1;
         for j in self.join_handles.lock().await.iter_mut() {
-            let _rst = j.await?;
+            let _rst = j
+                .await
+                .map_err_to_code(ErrorCode::MetaServiceError, || "fail to join")?;
             joined += 1;
         }
 
@@ -931,7 +988,7 @@ impl MetaNode {
     pub async fn subscribe_metrics(mn: Arc<Self>, mut metrics_rx: watch::Receiver<RaftMetrics>) {
         //TODO: return a handle for join
         // TODO: every state change triggers add_non_voter!!!
-        let mut rx = mn.running_rx.clone();
+        let mut running_rx = mn.running_rx.clone();
         let mut jh = mn.join_handles.lock().await;
 
         // TODO: reduce dependency: it does not need all of the fields in MetaNode
@@ -940,8 +997,8 @@ impl MetaNode {
         let h = tokio::task::spawn(async move {
             loop {
                 let changed = tokio::select! {
-                    _ = rx.changed() => {
-                       return Ok::<(), anyhow::Error>(());
+                    _ = running_rx.changed() => {
+                       return Ok::<(), common_exception::ErrorCode>(());
                     }
                     changed = metrics_rx.changed() => {
                         changed
@@ -969,7 +1026,7 @@ impl MetaNode {
                 }
             }
 
-            Ok::<(), anyhow::Error>(())
+            Ok::<(), common_exception::ErrorCode>(())
         });
         jh.push(h);
     }
@@ -978,7 +1035,7 @@ impl MetaNode {
     /// For every cluster this func should be called exactly once.
     /// When a node is initialized with boot or boot_non_voter, start it with MetaStore::new().
     #[tracing::instrument(level = "info")]
-    pub async fn boot(node_id: NodeId, addr: String) -> anyhow::Result<Arc<MetaNode>> {
+    pub async fn boot(node_id: NodeId, addr: String) -> common_exception::Result<Arc<MetaNode>> {
         let mn = MetaNode::boot_non_voter(node_id, &addr).await?;
 
         let mut cluster_node_ids = HashSet::new();
@@ -988,7 +1045,7 @@ impl MetaNode {
             .raft
             .initialize(cluster_node_ids)
             .await
-            .map_err(|x| anyhow::anyhow!("{:?}", x))?;
+            .map_err(|x| ErrorCode::MetaServiceError(format!("{:?}", x)))?;
 
         tracing::info!("booted, rst: {:?}", rst);
         mn.add_node(node_id, addr).await?;
@@ -1000,7 +1057,10 @@ impl MetaNode {
     /// For every node this should be called exactly once.
     /// When successfully initialized(e.g. received logs from raft leader), a node should be started with MetaNode::new().
     #[tracing::instrument(level = "info")]
-    pub async fn boot_non_voter(node_id: NodeId, addr: &str) -> anyhow::Result<Arc<MetaNode>> {
+    pub async fn boot_non_voter(
+        node_id: NodeId,
+        addr: &str,
+    ) -> common_exception::Result<Arc<MetaNode>> {
         // TODO test MetaNode::new() on a booted store.
         // TODO: Before calling this func, the node should be added as a non-voter to leader.
         // TODO: check raft initialState to see if the store is clean.
@@ -1029,7 +1089,7 @@ impl MetaNode {
     /// async-raft does not persist the node set of non-voters, thus we need to do it manually.
     /// This fn should be called once a node found it becomes leader.
     #[tracing::instrument(level = "info", skip(self))]
-    pub async fn add_configured_non_voters(&self) -> anyhow::Result<()> {
+    pub async fn add_configured_non_voters(&self) -> common_exception::Result<()> {
         // TODO after leader established, add non-voter through apis
         let node_ids = self.sto.list_non_voters().await;
         for i in node_ids.iter() {
@@ -1051,7 +1111,7 @@ impl MetaNode {
         // inconsistent get: from local state machine
 
         let sm = self.sto.sm.read().await;
-        sm.meta.get_file(key)
+        sm.get_file(key)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -1059,13 +1119,17 @@ impl MetaNode {
         // inconsistent get: from local state machine
 
         let sm = self.sto.sm.read().await;
-        sm.meta.get_node(node_id)
+        sm.get_node(node_id)
     }
 
     /// Add a new node into this cluster.
     /// The node info is committed with raft, thus it must be called on an initialized node.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn add_node(&self, node_id: NodeId, addr: String) -> anyhow::Result<ClientResponse> {
+    pub async fn add_node(
+        &self,
+        node_id: NodeId,
+        addr: String,
+    ) -> common_exception::Result<ClientResponse> {
         // TODO: use txid?
         let _resp = self
             .write(ClientRequest {
@@ -1082,9 +1146,27 @@ impl MetaNode {
         Ok(_resp)
     }
 
+    /// Get a database from local meta state machine.
+    /// The returned value may not be the latest written.
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_database(&self, name: &str) -> Option<Database> {
+        // inconsistent get: from local state machine
+
+        let sm = self.sto.sm.read().await;
+        sm.get_database(name)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_kv(&self, key: &str) -> Option<SeqValue> {
+        // inconsistent get: from local state machine
+
+        let sm = self.sto.sm.read().await;
+        sm.get_kv(key)
+    }
+
     /// Submit a write request to the known leader. Returns the response after applying the request.
     #[tracing::instrument(level = "info", skip(self))]
-    pub async fn write(&self, req: ClientRequest) -> anyhow::Result<ClientResponse> {
+    pub async fn write(&self, req: ClientRequest) -> common_exception::Result<ClientResponse> {
         let mut curr_leader = self.get_leader().await;
         loop {
             let rst = if curr_leader == self.sto.id {
@@ -1093,7 +1175,11 @@ impl MetaNode {
                 // forward to leader
 
                 let addr = self.sto.get_node_addr(&curr_leader).await?;
-                let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
+
+                // TODO: retry
+                let mut client = MetaServiceClient::connect(format!("http://{}", addr))
+                    .await
+                    .map_err(|e| ErrorCode::CannotConnectNode(e.to_string()))?;
                 let resp = client.write(req.clone()).await?;
                 let rst: Result<ClientResponse, RetryableError> = resp.into_inner().into();
                 rst
@@ -1147,7 +1233,7 @@ impl MetaNode {
     pub async fn write_to_local_leader(
         &self,
         req: ClientRequest,
-    ) -> anyhow::Result<Result<ClientResponse, RetryableError>> {
+    ) -> common_exception::Result<Result<ClientResponse, RetryableError>> {
         let write_rst = self.raft.client_write(ClientWriteRequest::new(req)).await;
 
         tracing::debug!("raft.client_write rst: {:?}", write_rst);
@@ -1156,11 +1242,15 @@ impl MetaNode {
             Ok(resp) => Ok(Ok(resp.data)),
             Err(cli_write_err) => match cli_write_err {
                 // fatal error
-                ClientWriteError::RaftError(raft_err) => Err(anyhow::anyhow!(raft_err.to_string())),
+                ClientWriteError::RaftError(raft_err) => {
+                    Err(ErrorCode::MetaServiceError(raft_err.to_string()))
+                }
                 // retryable error
                 ClientWriteError::ForwardToLeader(_, leader) => match leader {
                     Some(id) => Ok(Err(RetryableError::ForwardToLeader { leader: id })),
-                    None => Err(anyhow::anyhow!("no leader to write")),
+                    None => Err(ErrorCode::MetaServiceUnavailable(
+                        "no leader to write".to_string(),
+                    )),
                 },
             },
         }

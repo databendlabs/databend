@@ -2,13 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
+use crate::*;
+
 #[test]
 fn test_limit_plan() -> anyhow::Result<()> {
-    use std::sync::Arc;
-
     use pretty_assertions::assert_eq;
-
-    use crate::*;
 
     let limit = PlanNode::Limit(LimitPlan {
         n: Some(33),

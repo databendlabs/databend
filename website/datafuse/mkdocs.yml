@@ -138,7 +138,6 @@ nav:
       - Show Commands:
           - SHOW DATABASES: sqlstatement/show-commands/show-databases.md
           - SHOW TABLES: sqlstatement/show-commands/show-tables.md
-      - System Tables: system/system-tables.md
       - Aggregate Functions:
           - AVG: sqlstatement/aggregate-functions/aggregate-avg.md
           - COUNT: sqlstatement/aggregate-functions/aggregate-count.md
@@ -156,8 +155,12 @@ nav:
           - VERSION: sqlstatement/information-functions/version.md
       - String Functions:
           - SUBSTRING: sqlstatement/string-functions/substring.md
+      - Test Functions:
+          - SLEEP: sqlstatement/test-functions/sleep.md
+          - CRASHME: sqlstatement/test-functions/crashme.md
       - Other Functions:
           - ToTypeName: sqlstatement/other-functions/totypename.md
+      - System Tables: system/system-tables.md
   - Development:
       - Contributing: development/contributing.md
       - Coding Guideline: development/coding-guidelines.md
@@ -165,9 +168,10 @@ nav:
       - Profling: development/profiling.md
       - Roadmap: development/roadmap.md
       - RFCs:
-        - FuseQuery Join: rfcs/query/2021-05-01-join-framework-design.md
-        - FuseQuery Expression: rfcs/query/2021-05-22-plan-expression.md
-        - FuseStore Design: rfcs/store/2021-04-22-store-design.md
+        - FuseQuery Join: rfcs/query/0001-join-framework-design.md
+        - FuseQuery Expression: rfcs/query/0002-plan-expression.md
+        - FuseQuery Shuffle: rfcs/query/0003-data-shuffle.md
+        - FuseStore Design: rfcs/store/0001-store-design.md
   - Performance: overview/performance.md
 
 # Google Analytics

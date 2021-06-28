@@ -6,6 +6,7 @@ use std::mem::size_of;
 use std::sync::Arc;
 
 use common_datavalues::*;
+use common_exception::Result;
 use common_planners::*;
 use pretty_assertions::assert_eq;
 
@@ -14,7 +15,7 @@ use crate::optimizers::*;
 use crate::sql::*;
 
 #[test]
-fn test_projection_push_down_optimizer_1() -> anyhow::Result<()> {
+fn test_projection_push_down_optimizer_1() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let schema = DataSchemaRefExt::create(vec![
@@ -49,7 +50,7 @@ fn test_projection_push_down_optimizer_1() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_projection_push_down_optimizer_group_by() -> anyhow::Result<()> {
+fn test_projection_push_down_optimizer_group_by() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let plan = PlanParser::create(ctx.clone())
@@ -70,7 +71,7 @@ fn test_projection_push_down_optimizer_group_by() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
+fn test_projection_push_down_optimizer_2() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let total = ctx.get_settings().get_max_block_size()? as u64;
@@ -87,7 +88,7 @@ fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
             DataField::new("b", DataType::Utf8, false),
             DataField::new("c", DataType::Utf8, false),
         ]),
-        partitions: generate_partitions(8, total as u64),
+        parts: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
         description: format!(
             "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
@@ -123,7 +124,7 @@ fn test_projection_push_down_optimizer_2() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_projection_push_down_optimizer_3() -> anyhow::Result<()> {
+fn test_projection_push_down_optimizer_3() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let total = ctx.get_settings().get_max_block_size()? as u64;
@@ -144,7 +145,7 @@ fn test_projection_push_down_optimizer_3() -> anyhow::Result<()> {
             DataField::new("f", DataType::Utf8, false),
             DataField::new("g", DataType::Utf8, false),
         ]),
-        partitions: generate_partitions(8, total as u64),
+        parts: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
         description: format!(
             "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",

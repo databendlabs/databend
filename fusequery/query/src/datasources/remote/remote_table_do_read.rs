@@ -19,6 +19,7 @@ impl RemoteTable {
     pub(super) async fn do_read(
         &self,
         ctx: FuseQueryContextRef,
+        _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let client = self.store_client_provider.try_get_client().await?;
         let schema = self.schema.clone();
@@ -30,7 +31,7 @@ impl RemoteTable {
             Err(_) => None,
             Ok(parts) if parts.is_empty() => None,
             Ok(parts) => Some(ReadAction {
-                partition: parts[0].clone(),
+                part: parts[0].clone(),
                 push_down: PlanNode::ReadSource(ReadDataSourcePlan {
                     db: db.clone(),
                     table: tbl.clone(),

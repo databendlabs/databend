@@ -9,7 +9,7 @@ use common_arrow::arrow_flight::FlightData;
 use common_datablocks::DataBlock;
 use common_datavalues::DataColumnarValue;
 use common_exception::ErrorCode;
-use tokio::sync::mpsc::Receiver;
+use common_runtime::tokio::sync::mpsc::Receiver;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::Stream;
 use tokio_stream::StreamExt;

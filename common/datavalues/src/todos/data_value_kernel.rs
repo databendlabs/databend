@@ -125,6 +125,27 @@ impl DataValue {
         Ok(())
     }
 
+    #[inline]
+    fn dictionary_create_key_for_col<K: ArrowDictionaryKeyType>(
+        col: &ArrayRef,
+        row: usize,
+        vec: &mut Vec<u8>,
+    ) -> Result<()> {
+        let dict_col = col.as_any().downcast_ref::<DictionaryArray<K>>().unwrap();
+
+        // look up the index in the values dictionary
+        let keys_col = dict_col.keys();
+        let values_index = keys_col.value(row).to_usize().ok_or_else(|| {
+            ErrorCode::BadDataValueType(format!(
+                "Can not convert index to usize in dictionary of type creating group by value {:?}",
+                keys_col.data_type()
+            ))
+        })?;
+
+        let col = DataColumnarValue::Array(dict_col.values().clone());
+        Self::concat_row_to_one_key(&col, values_index, vec)
+    }
+
     /// Convert data value vectors to data array.
     pub fn try_into_data_array(values: &[DataValue]) -> Result<Series> {
         match values[0].data_type() {

@@ -14,17 +14,17 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Partition;
+use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_planners::TableOptions;
+use common_runtime::tokio::task;
 use common_streams::ParquetStream;
 use common_streams::SendableDataBlockStream;
 use crossbeam::channel::bounded;
 use crossbeam::channel::Receiver;
 use crossbeam::channel::Sender;
-use tokio::task;
 
 use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
@@ -133,7 +133,7 @@ impl Table for ParquetTable {
             db: self.db.clone(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
-            partitions: vec![Partition {
+            parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
             }],
@@ -147,7 +147,11 @@ impl Table for ParquetTable {
         })
     }
 
-    async fn read(&self, _ctx: FuseQueryContextRef) -> Result<SendableDataBlockStream> {
+    async fn read(
+        &self,
+        _ctx: FuseQueryContextRef,
+        _source_plan: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream> {
         type BlockSender = Sender<Option<Result<DataBlock>>>;
         type BlockReceiver = Receiver<Option<Result<DataBlock>>>;
 
