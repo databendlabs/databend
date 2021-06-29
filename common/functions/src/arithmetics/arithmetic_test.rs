@@ -5,13 +5,9 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
-use common_datavalues::DataArrayRef;
-use common_datavalues::columns::DataColumn;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::Float64Array;
-use common_datavalues::Int64Array;
+use common_arrow::arrow::array::Float64Array;
+use common_arrow::arrow::array::Int64Array;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
@@ -27,7 +23,7 @@ fn test_arithmetic_function() -> Result<()> {
         nullable: bool,
         arg_names: Vec<&'static str>,
         columns: Vec<DataColumn>,
-        expect: DataArrayRef,
+        expect: Series,
         error: &'static str,
         func: Box<dyn Function>,
     }

@@ -2,23 +2,23 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
+use common_datavalues::prelude::*;
+use pretty_assertions::assert_eq;
+
+use crate::udfs::*;
+use crate::*;
+
 #[test]
 fn test_database_function() -> anyhow::Result<()> {
-    use std::sync::Arc;
-
-    use common_datavalues::*;
-    use pretty_assertions::assert_eq;
-
-    use crate::udfs::*;
-    use crate::*;
-
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
         display: &'static str,
         nullable: bool,
         columns: Vec<DataColumn>,
-        expect: DataArrayRef,
+        expect: Series,
         error: &'static str,
         func: Box<dyn Function>,
     }
@@ -29,10 +29,10 @@ fn test_database_function() -> anyhow::Result<()> {
         nullable: false,
         func: DatabaseFunction::try_create("database")?,
         columns: vec![
-            Arc::new(StringArray::from(vec!["default"])).into(),
-            Arc::new(Int64Array::from(vec![4])).into(),
+            Series::new(vec!["default"]).into(),
+            Series::new(vec![4]).into(),
         ],
-        expect: Arc::new(StringArray::from(vec!["default"])),
+        expect: Series::new(vec!["default"]),
         error: "",
     }];
 

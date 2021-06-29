@@ -6,10 +6,7 @@ use std::fmt;
 
 use common_arrow::arrow::array::Int64Array;
 use common_arrow::arrow::compute;
-use common_datavalues::columns::DataColumn;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
-use common_datavalues::UInt64Array;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -44,22 +41,16 @@ impl Function for SubstringFunction {
     fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
         // TODO: make this function support column value as arguments rather than literal
         let mut from = match columns[1].data_type() {
-            DataType::UInt64 => Ok(columns[1]
-                .to_array()
-                .unwrap()
-                .as_any()
-                .downcast_ref::<UInt64Array>()
-                .unwrap()
-                .value(0) as i64),
-
-            DataType::Int64 => Ok(columns[1]
-                .to_array()
-                .unwrap()
-                .as_any()
-                .downcast_ref::<Int64Array>()
-                .unwrap()
-                .value(0)),
-
+            DataType::UInt64 => columns[1]
+                .to_minimal_array()?
+                .u64()?
+                .downcast_ref()
+                .value(0) as i64,
+            DataType::Int64 => columns[1]
+                .to_minimal_array()?
+                .i64()?
+                .downcast_ref()
+                .value(0) as i64,
             other => Err(ErrorCode::BadArguments(format!(
                 "Unsupport datatype {:?} as argument",
                 other
@@ -76,11 +67,9 @@ impl Function for SubstringFunction {
                 DataType::UInt64 => {
                     end = Some(
                         columns[2]
-                            .to_array()
-                            .unwrap()
-                            .as_any()
-                            .downcast_ref::<UInt64Array>()
-                            .unwrap()
+                            .to_minimal_array()?
+                            .u64()?
+                            .downcast_ref()
                             .value(0),
                     );
                 }
@@ -108,7 +97,7 @@ impl Function for SubstringFunction {
 
         let value = columns[0].to_array()?;
         Ok(DataColumn::Array(compute::kernels::substring::substring(
-            value.as_ref(),
+            value.get_array_ref().as_ref(),
             from,
             &end,
         )?))

@@ -45,8 +45,12 @@ impl DataColumn {
         }
     }
 
+    /// Return the minimal series, if it's constant value, it's size is 1.
+    /// This could be useful when Constant <op> Constant
+    /// Since our kernel is based on Array <op> Array
+    /// 1. Constant -----> minimal Array; 2. Array <op> Array; 3. resize_constant
     #[inline]
-    pub fn to_minal_array(&self) -> Result<Series> {
+    pub fn to_minimal_array(&self) -> Result<Series> {
         match self {
             DataColumn::Array(array) => Ok(array.clone()),
             DataColumn::Constant(scalar, _) => scalar.to_series_with_size(1),

@@ -60,6 +60,14 @@ pub trait ArrayCompare<Rhs> {
     fn lt_eq(&self, rhs: Rhs) -> Result<DFBooleanArray> {
         unimplemented!()
     }
+
+    fn like(&self, rhs: Rhs) -> Result<DFBooleanArray> {
+        unimplemented!()
+    }
+
+    fn nlike(&self, rhs: Rhs) -> Result<DFBooleanArray> {
+        unimplemented!()
+    }
 }
 
 impl<T> DataArray<T>
@@ -161,17 +169,17 @@ macro_rules! impl_cmp_bool {
             if let Some(value) = $rhs.get(0) {
                 match value {
                     true => Ok($self.clone()),
-                    false => Ok($self.not()),
+                    false => $self.not(),
                 }
             } else {
                 Ok(DFBooleanArray::full(false, $self.len()))
             }
         } else if $self.len() == 1 {
             if let Some(value) = $self.get(0) {
-                Ok(match value {
-                    true => $rhs.clone(),
+                match value {
+                    true => Ok($rhs.clone()),
                     false => $rhs.not(),
-                })
+                }
             } else {
                 Ok(DFBooleanArray::full(false, $self.len()))
             }
@@ -221,8 +229,29 @@ impl DFUtf8Array {
         ) -> common_arrow::arrow::error::Result<BooleanArray>,
     ) -> Result<DFBooleanArray> {
         let arr = operator(self.downcast_ref(), rhs.downcast_ref())?;
-        Ok(DFBooleanArray::new(Arc::new(arr) as ArrayRef))
+        Ok(DFBooleanArray::from_arrow_array(arr))
     }
+}
+
+macro_rules! impl_like_utf8 {
+    ($self:ident, $rhs:ident, $op:ident, $kop:ident) => {{
+        // broadcast
+        if $rhs.len() == 1 {
+            if let Some(value) = $rhs.get(0) {
+                $self.$op(value)
+            } else {
+                Ok(DFBooleanArray::full(false, $self.len()))
+            }
+        } else if $self.len() == 1 {
+            if let Some(value) = $self.get(0) {
+                $rhs.$op(value)
+            } else {
+                Ok(DFBooleanArray::full(false, $self.len()))
+            }
+        } else {
+            $self.comparison($rhs, comparison::$kop)
+        }
+    }};
 }
 
 impl ArrayCompare<&DFUtf8Array> for DFUtf8Array {
@@ -252,6 +281,14 @@ impl ArrayCompare<&DFUtf8Array> for DFUtf8Array {
 
     fn lt_eq(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
         impl_cmp_numeric_utf8! {self, rhs, lt_eq, lt_eq_utf8,  ==}
+    }
+
+    fn like(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
+        impl_like_utf8! {self, rhs, like, like_utf8}
+    }
+
+    fn nlike(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
+        impl_like_utf8! {self, rhs, nlike, nlike_utf8}
     }
 }
 
@@ -287,7 +324,7 @@ where
         match rhs {
             Some(v) => {
                 let arr = eq_scalar(self.downcast_ref(), v)?;
-                Ok(DFBooleanArray::new(Arc::new(arr) as ArrayRef))
+                Ok(DFBooleanArray::from_arrow_array(arr))
             }
             None => Ok(DFBooleanArray::full(false, self.len())),
         }
@@ -298,7 +335,7 @@ where
         match rhs {
             Some(v) => {
                 let arr = neq_scalar(self.downcast_ref(), v)?;
-                Ok(DFBooleanArray::new(Arc::new(arr) as ArrayRef))
+                Ok(DFBooleanArray::from_arrow_array(arr))
             }
             None => Ok(DFBooleanArray::full(false, self.len())),
         }
@@ -309,7 +346,7 @@ where
         match rhs {
             Some(v) => {
                 let arr = gt_scalar(self.downcast_ref(), v)?;
-                Ok(DFBooleanArray::new(Arc::new(arr) as ArrayRef))
+                Ok(DFBooleanArray::from_arrow_array(arr))
             }
             None => Ok(DFBooleanArray::full(false, self.len())),
         }
@@ -321,7 +358,7 @@ where
         match rhs {
             Some(v) => {
                 let arr = gt_eq_scalar(self.downcast_ref(), v)?;
-                Ok(DFBooleanArray::new(Arc::new(arr) as ArrayRef))
+                Ok(DFBooleanArray::from_arrow_array(arr))
             }
             None => Ok(DFBooleanArray::full(false, self.len())),
         }
@@ -333,7 +370,7 @@ where
         match rhs {
             Some(v) => {
                 let arr = lt_scalar(self.downcast_ref(), v)?;
-                Ok(DFBooleanArray::new(Arc::new(arr) as ArrayRef))
+                Ok(DFBooleanArray::from_arrow_array(arr))
             }
             None => Ok(DFBooleanArray::full(false, self.len())),
         }
@@ -345,7 +382,7 @@ where
         match rhs {
             Some(v) => {
                 let arr = lt_eq_scalar(self.downcast_ref(), v)?;
-                Ok(DFBooleanArray::new(Arc::new(arr) as ArrayRef))
+                Ok(DFBooleanArray::from_arrow_array(arr))
             }
             None => Ok(DFBooleanArray::full(false, self.len())),
         }
@@ -359,32 +396,42 @@ impl ArrayCompare<&str> for DFUtf8Array {
 
     fn eq(&self, rhs: &str) -> Result<DFBooleanArray> {
         let arr = eq_utf8_scalar(self.downcast_ref(), rhs)?;
-        Ok(DFBooleanArray::new(Arc::new(arr) as ArrayRef))
+        Ok(DFBooleanArray::from_arrow_array(arr))
     }
 
     fn neq(&self, rhs: &str) -> Result<DFBooleanArray> {
         let arr = neq_utf8_scalar(self.downcast_ref(), rhs)?;
-        Ok(DFBooleanArray::new(Arc::new(arr) as ArrayRef))
+        Ok(DFBooleanArray::from_arrow_array(arr))
     }
 
     fn gt(&self, rhs: &str) -> Result<DFBooleanArray> {
         let arr = gt_utf8_scalar(self.downcast_ref(), rhs)?;
-        Ok(DFBooleanArray::new(Arc::new(arr) as ArrayRef))
+        Ok(DFBooleanArray::from_arrow_array(arr))
     }
 
     fn gt_eq(&self, rhs: &str) -> Result<DFBooleanArray> {
         let arr = gt_eq_utf8_scalar(self.downcast_ref(), rhs)?;
-        Ok(DFBooleanArray::new(Arc::new(arr) as ArrayRef))
+        Ok(DFBooleanArray::from_arrow_array(arr))
     }
 
     fn lt(&self, rhs: &str) -> Result<DFBooleanArray> {
         let arr = lt_utf8_scalar(self.downcast_ref(), rhs)?;
-        Ok(DFBooleanArray::new(Arc::new(arr) as ArrayRef))
+        Ok(DFBooleanArray::from_arrow_array(arr))
     }
 
     fn lt_eq(&self, rhs: &str) -> Result<DFBooleanArray> {
         let arr = lt_eq_utf8_scalar(self.downcast_ref(), rhs)?;
-        Ok(DFBooleanArray::new(Arc::new(arr) as ArrayRef))
+        Ok(DFBooleanArray::from_arrow_array(arr))
+    }
+
+    fn like(&self, rhs: &str) -> Result<DFBooleanArray> {
+        let arr = like_utf8_scalar(self.downcast_ref(), rhs)?;
+        Ok(DFBooleanArray::from_arrow_array(arr))
+    }
+
+    fn nlike(&self, rhs: &str) -> Result<DFBooleanArray> {
+        let arr = nlike_utf8_scalar(self.downcast_ref(), rhs)?;
+        Ok(DFBooleanArray::from_arrow_array(arr))
     }
 }
 
@@ -430,7 +477,7 @@ impl ArrayCompare<&DFListArray> for DFListArray {
     }
 
     fn neq(&self, rhs: &DFListArray) -> Result<DFBooleanArray> {
-        Ok(self.eq(rhs)?.not())
+        self.eq(rhs)?.not()
     }
 
     // following are not implemented because gt, lt comparison of series don't make sense
@@ -448,40 +495,6 @@ impl ArrayCompare<&DFListArray> for DFListArray {
 
     fn lt_eq(&self, _rhs: &DFListArray) -> Result<DFBooleanArray> {
         unimplemented!()
-    }
-}
-
-impl Not for &DFBooleanArray {
-    type Output = DFBooleanArray;
-
-    fn not(self) -> Self::Output {
-        let arr = compute::not(self.downcast_ref()).expect("should not fail");
-        let arr = Arc::new(arr) as ArrayRef;
-        DataArray::new(arr)
-    }
-}
-
-impl Not for DFBooleanArray {
-    type Output = DFBooleanArray;
-
-    fn not(self) -> Self::Output {
-        (&self).not()
-    }
-}
-
-impl DFBooleanArray {
-    /// Check if all values are true
-    pub fn all_true(&self) -> bool {
-        let mut values = self.downcast_iter();
-        values.all(|f| f.unwrap_or(false))
-    }
-}
-
-impl DFBooleanArray {
-    /// Check if all values are false
-    pub fn all_false(&self) -> bool {
-        let mut values = self.downcast_iter();
-        values.all(|f| !f.unwrap_or(true))
     }
 }
 

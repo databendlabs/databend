@@ -5,7 +5,6 @@
 use std::fmt;
 
 use common_datavalues::columns::DataColumn;
-use common_datavalues::DataArrayLogic;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValueLogicOperator;
@@ -50,10 +49,7 @@ impl Function for LogicFunction {
     }
 
     fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
-        Ok(DataColumn::Array(DataArrayLogic::data_array_logic_op(
-            self.op.clone(),
-            columns,
-        )?))
+        columns[0].logic(self.op.clone(), columns[1..])
     }
 }
 

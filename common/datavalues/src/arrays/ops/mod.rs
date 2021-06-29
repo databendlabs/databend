@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 mod apply;
+mod boolean;
 mod cast;
 mod downcast;
 mod fill;
@@ -13,6 +14,7 @@ mod take_single;
 mod vec_hash;
 
 pub use apply::*;
+pub use boolean::*;
 pub use cast::*;
 pub use downcast::*;
 pub use fill::*;

@@ -15,8 +15,8 @@ use crate::DataValueArithmeticOperator;
 
 macro_rules! apply_arithmetic {
     ($self: ident, $rhs: ident, $op: tt) => {{
-        let lhs = $self.to_minal_array()?;
-        let rhs = $rhs.to_minal_array()?;
+        let lhs = $self.to_minimal_array()?;
+        let rhs = $rhs.to_minimal_array()?;
 
         let result = (&lhs $op &rhs)?;
         let result: DataColumn = result.into();

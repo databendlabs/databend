@@ -7,8 +7,8 @@ use crate::DataValueComparisonOperator;
 
 macro_rules! apply_cmp {
     ($self: ident, $rhs: ident, $op: ident) => {{
-        let lhs = $self.to_minal_array()?;
-        let rhs = $rhs.to_minal_array()?;
+        let lhs = $self.to_minimal_array()?;
+        let rhs = $rhs.to_minimal_array()?;
 
         let result = lhs.$op(&rhs)?;
         let result: DataColumn = result.into_series().into();
@@ -18,7 +18,7 @@ macro_rules! apply_cmp {
 
 impl DataColumn {
     #[allow(unused)]
-    fn compare(&self, op: DataValueComparisonOperator, rhs: &DataColumn) -> Result<DataColumn> {
+    pub fn compare(&self, op: DataValueComparisonOperator, rhs: &DataColumn) -> Result<DataColumn> {
         match op {
             DataValueComparisonOperator::Eq => apply_cmp! {self, rhs, eq},
             DataValueComparisonOperator::Lt => apply_cmp! {self, rhs, lt},
@@ -26,9 +26,8 @@ impl DataColumn {
             DataValueComparisonOperator::Gt => apply_cmp! {self, rhs, gt},
             DataValueComparisonOperator::GtEq => apply_cmp! {self, rhs, gt_eq},
             DataValueComparisonOperator::NotEq => apply_cmp! {self, rhs, neq},
-            _ => todo!()
-            // DataValueComparisonOperator::Like => apply_cmp! {self, rhs, like},
-            // DataValueComparisonOperator::NotLike => apply_cmp! {self, rhs, nlike},
+            DataValueComparisonOperator::Like => apply_cmp! {self, rhs, like},
+            DataValueComparisonOperator::NotLike => apply_cmp! {self, rhs, nlike},
         }
     }
 }

@@ -7,7 +7,6 @@ use std::fmt;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 

@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
-use common_datavalues::BooleanArray;
-use common_datavalues::DataArrayRef;
 use common_datavalues::columns::DataColumn;
+use common_datavalues::prelude::*;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
@@ -22,7 +21,7 @@ fn test_udf_example_function() -> anyhow::Result<()> {
         display: &'static str,
         nullable: bool,
         columns: Vec<DataColumn>,
-        expect: DataArrayRef,
+        expect: Series,
         error: &'static str,
         func: Box<dyn Function>,
     }
@@ -41,7 +40,7 @@ fn test_udf_example_function() -> anyhow::Result<()> {
             Arc::new(BooleanArray::from(vec![true, true, true, false])).into(),
             Arc::new(BooleanArray::from(vec![true, false, true, true])).into(),
         ],
-        expect: Arc::new(BooleanArray::from(vec![true, true, true, true])),
+        expect: Series::new(vec![true, true, true, true]),
         error: "",
     }];
 

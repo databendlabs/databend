@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
@@ -20,7 +20,7 @@ fn test_substring_function() -> Result<()> {
         nullable: bool,
         arg_names: Vec<&'static str>,
         columns: Vec<DataColumn>,
-        expect: DataArrayRef,
+        expect: Series,
         error: &'static str,
         func: Box<dyn Function>,
     }
@@ -38,12 +38,12 @@ fn test_substring_function() -> Result<()> {
             nullable: false,
             arg_names: vec!["a", "b", "c"],
             columns: vec![
-                Arc::new(StringArray::from(vec!["abcde"])).into(),
-                Arc::new(Int64Array::from(vec![2])).into(),
-                Arc::new(UInt64Array::from(vec![3])).into(),
+                Series::new(vec!["abcde"]).into(),
+                Series::new(vec![2]).into(),
+                Series::new(vec![3]).into(),
             ],
             func: SubstringFunction::try_create("substring")?,
-            expect: Arc::new(StringArray::from(vec!["bcd"])),
+            expect: Series::new(vec!["bcd"]),
             error: "",
         },
         Test {
@@ -52,12 +52,12 @@ fn test_substring_function() -> Result<()> {
             nullable: false,
             arg_names: vec!["a", "b", "c"],
             columns: vec![
-                Arc::new(StringArray::from(vec!["abcde"])).into(),
-                Arc::new(Int64Array::from(vec![1])).into(),
-                Arc::new(UInt64Array::from(vec![3])).into(),
+                Series::new(vec!["abcde"]).into(),
+                Series::new(vec![1]).into(),
+                Series::new(vec![3]).into(),
             ],
             func: SubstringFunction::try_create("substring")?,
-            expect: Arc::new(StringArray::from(vec!["abc"])),
+            expect: Series::new(vec!["abc"]),
             error: "",
         },
         Test {
@@ -66,12 +66,12 @@ fn test_substring_function() -> Result<()> {
             nullable: false,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(StringArray::from(vec!["abcde"])).into(),
-                Arc::new(Int64Array::from(vec![2])).into(),
+                Series::new(vec!["abcde"]).into(),
+                Series::new(vec![2]).into(),
             ],
 
             func: SubstringFunction::try_create("substring")?,
-            expect: Arc::new(StringArray::from(vec!["bcde"])),
+            expect: Series::new(vec!["bcde"]),
             error: "",
         },
         Test {
@@ -80,13 +80,13 @@ fn test_substring_function() -> Result<()> {
             nullable: false,
             arg_names: vec!["a", "b", "c"],
             columns: vec![
-                Arc::new(StringArray::from(vec!["1234567890"])).into(),
-                Arc::new(Int64Array::from(vec![-3])).into(),
-                Arc::new(UInt64Array::from(vec![3])).into(),
+                Series::new(vec!["1234567890"]).into(),
+                Series::new(vec![-3]).into(),
+                Series::new(vec![3]).into(),
             ],
 
             func: SubstringFunction::try_create("substring")?,
-            expect: Arc::new(StringArray::from(vec!["890"])),
+            expect: Series::new(vec!["890"]),
             error: "",
         },
     ];

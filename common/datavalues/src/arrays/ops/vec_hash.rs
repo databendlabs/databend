@@ -26,9 +26,7 @@ use crate::DFUtf8Array;
 
 pub trait VecHash {
     /// Compute the hash for all values in the array.
-    ///
-    /// This currently only works with the AHash RandomState hasher builder.
-    fn vec_hash(&self, _random_state: RandomState) -> DFUInt64Array {
+    fn vec_hash<H: Hasher>(&self, hasher: &mut H) -> DFUInt64Array {
         unimplemented!()
     }
 }
@@ -38,8 +36,7 @@ where
     T: DFIntegerType,
     T::Native: Hash,
 {
-    //TODO: maybe better just to use the native value as u64
-    fn vec_hash(&self, random_state: RandomState) -> DFUInt64Array {
+    fn vec_hash<H: Hasher>(&self, hasher: &mut H) -> DFUInt64Array {
         // Note that we don't use the no null branch! This can break in unexpected ways.
         // for instance with threading we split an array in n_threads, this may lead to
         // splits that have no nulls and splits that have nulls. Then one array is hashed with
@@ -47,55 +44,54 @@ where
         // Meaning that they cannot be compared. By always hashing on Option<T> the random_state is
         // the only deterministic seed.
         self.branch_apply_cast_numeric_no_null(|opt_v| {
-            let mut hasher = random_state.build_hasher();
-            opt_v.hash(&mut hasher);
+            opt_v.hash(hasher);
             hasher.finish()
         })
     }
 }
 
-impl VecHash for DFUtf8Array {
-    fn vec_hash(&self, random_state: RandomState) -> DFUInt64Array {
-        self.branch_apply_cast_numeric_no_null(|opt_v| {
-            let mut hasher = random_state.build_hasher();
-            opt_v.hash(&mut hasher);
-            hasher.finish()
-        })
-    }
-}
+// impl VecHash for DFUtf8Array {
+//     fn vec_hash<H>(&self, random_state: RandomState) -> DFUInt64Array {
+//         self.branch_apply_cast_numeric_no_null(|opt_v| {
+//             let mut hasher = random_state.build_hasher();
+//             opt_v.hash(&mut hasher);
+//             hasher.finish()
+//         })
+//     }
+// }
 
-impl VecHash for DFBooleanArray {
-    fn vec_hash(&self, random_state: RandomState) -> DFUInt64Array {
-        self.branch_apply_cast_numeric_no_null(|opt_v| {
-            let mut hasher = random_state.build_hasher();
-            opt_v.hash(&mut hasher);
-            hasher.finish()
-        })
-    }
-}
+// impl VecHash for DFBooleanArray {
+//     fn vec_hash<H>(&self, random_state: RandomState) -> DFUInt64Array {
+//         self.branch_apply_cast_numeric_no_null(|opt_v| {
+//             let mut hasher = random_state.build_hasher();
+//             opt_v.hash(&mut hasher);
+//             hasher.finish()
+//         })
+//     }
+// }
 
-impl VecHash for DFFloat32Array {
-    fn vec_hash(&self, random_state: RandomState) -> DFUInt64Array {
-        self.branch_apply_cast_numeric_no_null(|opt_v| {
-            let opt_v = opt_v.map(|v| v.to_bits());
-            let mut hasher = random_state.build_hasher();
-            opt_v.hash(&mut hasher);
-            hasher.finish()
-        })
-    }
-}
-impl VecHash for DFFloat64Array {
-    fn vec_hash(&self, random_state: RandomState) -> DFUInt64Array {
-        self.branch_apply_cast_numeric_no_null(|opt_v| {
-            let opt_v = opt_v.map(|v| v.to_bits());
-            let mut hasher = random_state.build_hasher();
-            opt_v.hash(&mut hasher);
-            hasher.finish()
-        })
-    }
-}
+// impl VecHash for DFFloat32Array {
+//     fn vec_hash<H>(&self, random_state: RandomState) -> DFUInt64Array {
+//         self.branch_apply_cast_numeric_no_null(|opt_v| {
+//             let opt_v = opt_v.map(|v| v.to_bits());
+//             let mut hasher = random_state.build_hasher();
+//             opt_v.hash(&mut hasher);
+//             hasher.finish()
+//         })
+//     }
+// }
+// impl VecHash for DFFloat64Array {
+//     fn vec_hash<H>(&self, random_state: RandomState) -> DFUInt64Array {
+//         self.branch_apply_cast_numeric_no_null(|opt_v| {
+//             let opt_v = opt_v.map(|v| v.to_bits());
+//             let mut hasher = random_state.build_hasher();
+//             opt_v.hash(&mut hasher);
+//             hasher.finish()
+//         })
+//     }
+// }
 
-impl VecHash for DFListArray {}
-impl VecHash for DFBinaryArray {}
-impl VecHash for DFNullArray {}
-impl VecHash for DFStructArray {}
+// impl VecHash for DFListArray {}
+// impl VecHash for DFBinaryArray {}
+// impl VecHash for DFNullArray {}
+// impl VecHash for DFStructArray {}

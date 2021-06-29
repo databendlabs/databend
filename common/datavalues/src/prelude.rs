@@ -33,6 +33,9 @@ pub use crate::series::SeriesFrom;
 pub use crate::series::SeriesTrait;
 // common structs
 pub use crate::DataField;
+pub use crate::DataHasher;
+pub use crate::DataSchema;
+pub use crate::DataSchemaRef;
 pub use crate::DataSchemaRefExt;
 pub use crate::DataType;
 pub use crate::DataValue;

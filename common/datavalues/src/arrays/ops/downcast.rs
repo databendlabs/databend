@@ -2,7 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeListArray;
 use common_arrow::arrow::array::LargeStringArray;
@@ -29,6 +32,11 @@ where T: DFPrimitiveType
         let arr = unsafe { &*(arr as *const dyn Array as *const PrimitiveArray<T>) };
         arr.iter()
     }
+
+    pub fn from_arrow_array(array: PrimitiveArray<T>) -> Self {
+        let array_ref = Arc::new(array) as ArrayRef;
+        array_ref.into()
+    }
 }
 
 impl DFBooleanArray {
@@ -42,6 +50,11 @@ impl DFBooleanArray {
         let arr = unsafe { &*(arr as *const dyn Array as *const BooleanArray) };
         arr.iter()
     }
+
+    pub fn from_arrow_array(array: BooleanArray) -> Self {
+        let array_ref = Arc::new(array) as ArrayRef;
+        array_ref.into()
+    }
 }
 
 impl DFUtf8Array {
@@ -54,6 +67,11 @@ impl DFUtf8Array {
         let arr = &*self.array;
         let arr = unsafe { &*(arr as *const dyn Array as *const LargeStringArray) };
         arr.iter()
+    }
+
+    pub fn from_arrow_array(array: LargeStringArray) -> Self {
+        let array_ref = Arc::new(array) as ArrayRef;
+        array_ref.into()
     }
 }
 
@@ -71,5 +89,10 @@ impl DFListArray {
             Some(a) => Some(a.into_series()),
             None => None,
         })
+    }
+
+    pub fn from_arrow_array(array: LargeListArray) -> Self {
+        let array_ref = Arc::new(array) as ArrayRef;
+        array_ref.into()
     }
 }
