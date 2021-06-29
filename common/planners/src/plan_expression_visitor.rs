@@ -75,7 +75,7 @@ impl Expression {
                 visitor = right.accept(visitor)?;
                 Ok(visitor)
             }
-            Expression::UnaryExpression { op, expr, .. } => {
+            Expression::UnaryExpression { expr, .. } => {
                 let mut visitor = visitor;
                 visitor = expr.accept(visitor)?;
                 Ok(visitor)

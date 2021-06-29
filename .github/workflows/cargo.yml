@@ -18,7 +18,7 @@ jobs:
       - name: Run clippy
         uses: actions-rs/cargo@v1
         with:
-          command: clippy
+          command: clippy -- -D warnings
 
       - name: Check formating
         uses: actions-rs/cargo@v1

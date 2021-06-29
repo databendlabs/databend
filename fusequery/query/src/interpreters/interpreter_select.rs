@@ -48,7 +48,7 @@ fn get_filter_plan(plan: PlanNode) -> Result<FilterPlan> {
             _ => Ok(true),
         }
     })?;
-    return res;
+    res
 }
 
 async fn execute_one_select(
@@ -99,10 +99,6 @@ impl Interpreter for SelectInterpreter {
         "SelectInterpreter"
     }
 
-    fn schema(&self) -> DataSchemaRef {
-        self.select.schema()
-    }
-
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = Optimizers::create(self.ctx.clone()).optimize(&self.select.input)?;
@@ -111,22 +107,22 @@ impl Interpreter for SelectInterpreter {
         // The execution order is from the bottom to the top
         let mut levels = Vec::<Vec<PlanNode>>::new();
         // The queue for the current level
-        let mut queue1 = VecDeque::<PlanNode>::new();
+        let mut current_level_queue = VecDeque::<PlanNode>::new();
         // The queue for the next level
-        let mut queue2 = VecDeque::<PlanNode>::new();
+        let mut next_level_queue = VecDeque::<PlanNode>::new();
 
-        queue1.push_back(plan.clone());
+        current_level_queue.push_back(plan.clone());
 
-        while queue1.len() > 0 {
+        while !current_level_queue.is_empty() {
             let mut one_level = Vec::<PlanNode>::new();
-            while queue1.len() > 0 {
-                if let Some(begin) = queue1.pop_front() {
+            while !current_level_queue.is_empty() {
+                if let Some(begin) = current_level_queue.pop_front() {
                     if let Ok(p) = get_filter_plan(begin) {
                         let exists_vec = find_exists_exprs(&[p.predicate.clone()]);
                         for exst in exists_vec {
                             let expr_name = format!("{:?}", exst);
                             if let Expression::Exists(p) = exst {
-                                queue2.push_back((*p).clone());
+                                next_level_queue.push_back((*p).clone());
                                 one_level.push((*p).clone());
                                 names.insert(format!("{:?}", p), expr_name);
                             }
@@ -134,11 +130,11 @@ impl Interpreter for SelectInterpreter {
                     }
                 }
             }
-            if one_level.len() > 0 {
+            if !one_level.is_empty() {
                 levels.push(one_level);
             }
-            queue1 = VecDeque::from(queue2);
-            queue2 = VecDeque::<PlanNode>::new();
+            current_level_queue = next_level_queue;
+            next_level_queue = VecDeque::<PlanNode>::new();
         }
         let mut subquery_res_map = HashMap::<String, bool>::new();
         let size = levels.len();
@@ -151,11 +147,15 @@ impl Interpreter for SelectInterpreter {
 
                 let result = stream.try_collect::<Vec<_>>().await?;
                 let num_all_rows: usize = result.iter().map(|b| b.num_rows()).sum();
-                let b = if num_all_rows > 0 { true } else { false };
+                let b = num_all_rows > 0;
                 let name = names.get(&format!("{:?}", exp));
                 subquery_res_map.insert(name.unwrap().to_string(), b);
             }
         }
         execute_one_select(self.ctx.clone(), plan, subquery_res_map).await
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.select.schema()
     }
 }

@@ -28,6 +28,10 @@ stateless-test:
 	bash ./scripts/build/build-debug.sh
 	bash ./scripts/ci/ci-run-stateless-tests.sh
 
+stateless-cluster-test:
+	bash ./scripts/build/build-debug.sh
+	bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
+
 test: unit-test stateless-test
 
 fmt:

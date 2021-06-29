@@ -126,11 +126,10 @@ impl ExpressionExecutor {
                 }
                 ExpressionAction::Exists(exists) => {
                     let res = column_map.get(&exists.name);
-                    match res {
-                        None => return Err(ErrorCode::LogicalError(
-                            "Exisit subquery must be prepared before the main query's execution",
-                        )),
-                        _ => (),
+                    if res.is_none() {
+                        return Err(ErrorCode::LogicalError(
+                            "Exist subquery must be prepared before the main query's execution",
+                        ));
                     }
                 }
                 _ => {}
