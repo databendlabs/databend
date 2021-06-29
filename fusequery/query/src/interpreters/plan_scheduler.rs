@@ -338,7 +338,7 @@ impl ExecutionPlanBuilder {
                             plan: self.3.get_plan(node_name, cluster_nodes)?,
                             scatters: all_nodes_name,
                             scatters_action: self.2.scatters_expr.clone(),
-                            subquery_res_map: subquery_res_map,
+                            subquery_res_map,
                         }));
                     }
                 }
@@ -353,7 +353,7 @@ impl ExecutionPlanBuilder {
                             plan: self.3.get_plan(node_name, cluster_nodes)?,
                             scatters: vec![cluster_node.name.clone()],
                             scatters_action: self.2.scatters_expr.clone(),
-                            subquery_res_map: subquery_res_map,
+                            subquery_res_map,
                         }));
                     }
                 }
@@ -373,7 +373,7 @@ impl ExecutionPlanBuilder {
                     plan: self.3.get_plan(node_name, cluster_nodes)?,
                     scatters: all_nodes_name,
                     scatters_action: self.2.scatters_expr.clone(),
-                    subquery_res_map: subquery_res_map,
+                    subquery_res_map,
                 }))
             }
         }
