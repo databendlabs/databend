@@ -713,6 +713,7 @@ name = "common-flights"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
@@ -720,6 +721,7 @@ dependencies = [
  "common-metatypes",
  "common-planners",
  "common-runtime",
+ "common-store-api",
  "common-streams",
  "common-tracing",
  "futures",
@@ -809,6 +811,22 @@ dependencies = [
  "anyhow",
  "common-exception",
  "tokio",
+]
+
+[[package]]
+name = "common-store-api"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-metatypes",
+ "common-planners",
+ "common-streams",
+ "futures",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]
@@ -1500,6 +1518,7 @@ dependencies = [
  "common-profling",
  "common-progress",
  "common-runtime",
+ "common-store-api",
  "common-streams",
  "common-tracing",
  "criterion",
@@ -1556,6 +1575,7 @@ dependencies = [
  "common-metatypes",
  "common-planners",
  "common-runtime",
+ "common-store-api",
  "common-tracing",
  "env_logger",
  "futures",
@@ -1573,6 +1593,7 @@ dependencies = [
  "rand 0.8.4",
  "serde",
  "serde_json",
+ "sha2 0.9.5",
  "structopt",
  "structopt-toml",
  "tempfile",
@@ -2339,6 +2360,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b823e83b2affd8f40a9ee8c29dbc56404c1e34cd2710921f2801e2cf29527afa"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "management"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-exception",
+ "common-store-api",
+ "serde",
+ "serde_json",
+ "sha2 0.9.5",
 ]
 
 [[package]]

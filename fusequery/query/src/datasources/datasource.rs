@@ -12,6 +12,7 @@ use common_planners::CreateDatabasePlan;
 use common_planners::DatabaseEngineType;
 use common_planners::DropDatabasePlan;
 use common_planners::TableOptions;
+use common_store_api::MetaApi;
 
 use crate::configs::Config;
 use crate::datasources::local::LocalDatabase;
