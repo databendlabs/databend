@@ -26,13 +26,13 @@ mod functions_table;
 mod numbers_stream;
 mod numbers_table;
 mod one_table;
+mod processes_table;
 mod settings_table;
 mod system_database;
 mod system_factory;
 mod tables_table;
 mod tracing_table;
 mod tracing_table_stream;
-mod processes_table;
 
 pub use clusters_table::ClustersTable;
 pub use contributors_table::ContributorsTable;

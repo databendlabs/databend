@@ -2,24 +2,21 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 
-use futures::future::AbortHandle;
-
-use common_exception::{ErrorCode, Result};
+use common_exception::Result;
 use common_infallible::Mutex;
-use common_planners::PlanNode;
-use common_runtime::tokio::net::TcpStream;
+use futures::channel::oneshot::Sender;
 
-use crate::configs::Config;
-use crate::servers::AbortableService;
-use crate::sessions::{FuseQueryContext, FuseQueryContextRef, Settings};
-use crate::sessions::SessionManagerRef;
-use std::net::SocketAddr;
-use futures::channel::oneshot::{Receiver, Sender};
-use crate::sessions::context_shared::FuseQueryContextShared;
 use crate::clusters::ClusterRef;
+use crate::configs::Config;
 use crate::datasources::DataSource;
+use crate::sessions::context_shared::FuseQueryContextShared;
+use crate::sessions::FuseQueryContext;
+use crate::sessions::FuseQueryContextRef;
+use crate::sessions::SessionManagerRef;
+use crate::sessions::Settings;
 
 #[derive(PartialEq, Clone)]
 pub enum State {
@@ -28,7 +25,6 @@ pub enum State {
     Aborting,
     Aborted,
 }
-
 
 struct MutableStatus {
     state: State,
@@ -47,7 +43,11 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn try_create(config: Config, id: String, sessions: SessionManagerRef) -> Result<Arc<Session>> {
+    pub fn try_create(
+        config: Config,
+        id: String,
+        sessions: SessionManagerRef,
+    ) -> Result<Arc<Session>> {
         Ok(Arc::new(Session {
             id,
             config,
@@ -69,7 +69,7 @@ impl Session {
     pub fn is_aborting(self: &Arc<Self>) -> bool {
         match self.mutable_status.lock().state {
             State::Aborting | State::Aborted => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -83,7 +83,11 @@ impl Session {
         )?)
     }
 
-    pub fn attach<F: FnOnce() + Send + 'static>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F) {
+    pub fn attach<F: FnOnce() + Send + 'static>(
+        self: &Arc<Self>,
+        host: Option<SocketAddr>,
+        io_shutdown: F,
+    ) {
         let (tx, rx) = futures::channel::oneshot::channel();
         let mut inner = self.mutable_status.lock();
         inner.client_host = host;

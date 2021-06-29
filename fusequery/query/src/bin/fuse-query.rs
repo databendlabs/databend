@@ -9,13 +9,14 @@ use common_exception::ErrorCode;
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
 use fuse_query::api::HttpService;
-use fuse_query::api::RpcService;
 use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
 use fuse_query::metrics::MetricService;
 use fuse_query::servers::AbortableServer;
+use fuse_query::servers::AbortableService;
 use fuse_query::servers::ClickHouseHandler;
 use fuse_query::servers::MySQLHandler;
+use fuse_query::servers::RpcService;
 use fuse_query::sessions::SessionManager;
 use log::info;
 
@@ -102,11 +103,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // RPC API service.
     {
-        let srv = RpcService::create(conf.clone(), cluster.clone(), session_manager.clone());
-        tokio::spawn(async move {
-            srv.make_server().await.expect("RPC service error");
-        });
-        info!("RPC API server listening on {}", conf.flight_api_address);
+        let addr = conf.flight_api_address.parse::<std::net::SocketAddr>()?;
+        let srv = RpcService::create(session_manager.clone());
+        let addr = srv.start((addr.ip().to_string(), addr.port())).await?;
+        services.push(srv);
+        info!("RPC API server listening on {}", addr);
     }
 
     // Ctrl + C 100 times in five seconds

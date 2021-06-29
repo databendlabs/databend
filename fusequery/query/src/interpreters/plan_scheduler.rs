@@ -19,7 +19,7 @@ use common_planners::StageKind;
 use common_planners::StagePlan;
 use common_tracing::tracing;
 
-use crate::api::ExecutePlanWithShuffleAction;
+use crate::api::ShuffleAction;
 use crate::clusters::Node;
 use crate::sessions::FuseQueryContextRef;
 
@@ -27,7 +27,7 @@ pub struct PlanScheduler;
 
 pub struct ScheduledActions {
     pub local_plan: PlanNode,
-    pub remote_actions: Vec<(Arc<Node>, ExecutePlanWithShuffleAction)>,
+    pub remote_actions: Vec<(Arc<Node>, ShuffleAction)>,
 }
 
 impl PlanScheduler {
@@ -317,7 +317,7 @@ impl ExecutionPlanBuilder {
         &self,
         node_name: &str,
         cluster_nodes: &[Arc<Node>],
-    ) -> Result<Option<ExecutePlanWithShuffleAction>> {
+    ) -> Result<Option<ShuffleAction>> {
         match self.2.kind {
             StageKind::Expansive => {
                 let all_nodes_name = cluster_nodes
@@ -326,12 +326,12 @@ impl ExecutionPlanBuilder {
                     .collect::<Vec<_>>();
                 for cluster_node in cluster_nodes {
                     if cluster_node.name == *node_name && cluster_node.local {
-                        return Ok(Some(ExecutePlanWithShuffleAction {
+                        return Ok(Some(ShuffleAction {
                             query_id: self.0.clone(),
                             stage_id: self.1.clone(),
                             plan: self.3.get_plan(node_name, cluster_nodes)?,
-                            scatters: all_nodes_name,
-                            scatters_action: self.2.scatters_expr.clone(),
+                            sinks: all_nodes_name,
+                            scatters_expression: self.2.scatters_expr.clone(),
                         }));
                     }
                 }
@@ -340,12 +340,12 @@ impl ExecutionPlanBuilder {
             StageKind::Convergent => {
                 for cluster_node in cluster_nodes {
                     if cluster_node.local {
-                        return Ok(Some(ExecutePlanWithShuffleAction {
+                        return Ok(Some(ShuffleAction {
                             query_id: self.0.clone(),
                             stage_id: self.1.clone(),
                             plan: self.3.get_plan(node_name, cluster_nodes)?,
-                            scatters: vec![cluster_node.name.clone()],
-                            scatters_action: self.2.scatters_expr.clone(),
+                            sinks: vec![cluster_node.name.clone()],
+                            scatters_expression: self.2.scatters_expr.clone(),
                         }));
                     }
                 }
@@ -359,12 +359,12 @@ impl ExecutionPlanBuilder {
                     .iter()
                     .map(|node| node.name.clone())
                     .collect::<Vec<_>>();
-                Ok(Some(ExecutePlanWithShuffleAction {
+                Ok(Some(ShuffleAction {
                     query_id: self.0.clone(),
                     stage_id: self.1.clone(),
                     plan: self.3.get_plan(node_name, cluster_nodes)?,
-                    scatters: all_nodes_name,
-                    scatters_action: self.2.scatters_expr.clone(),
+                    sinks: all_nodes_name,
+                    scatters_expression: self.2.scatters_expr.clone(),
                 }))
             }
         }

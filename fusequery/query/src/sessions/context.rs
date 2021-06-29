@@ -12,23 +12,19 @@ use common_infallible::RwLock;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::Statistics;
-use common_progress::Progress;
 use common_progress::ProgressCallback;
 use common_progress::ProgressValues;
 use common_runtime::tokio::task::JoinHandle;
-use common_runtime::Runtime;
-use uuid::Uuid;
+use common_streams::AbortStream;
+use common_streams::SendableDataBlockStream;
 
-use crate::clusters::Cluster;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::DataSource;
 use crate::datasources::Table;
 use crate::datasources::TableFunction;
-use crate::sessions::Settings;
-use common_streams::{AbortStream, SendableDataBlockStream};
 use crate::sessions::context_shared::FuseQueryContextShared;
-
+use crate::sessions::Settings;
 
 #[derive(Clone)]
 pub struct FuseQueryContext {
@@ -78,7 +74,9 @@ impl FuseQueryContext {
         })
     }
 
-    pub fn from_shared(shared: Arc<FuseQueryContextShared>) -> Result<FuseQueryContextRef> {
+    pub(in crate::sessions) fn from_shared(
+        shared: Arc<FuseQueryContextShared>,
+    ) -> Result<FuseQueryContextRef> {
         Ok(Arc::new(FuseQueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
@@ -106,9 +104,9 @@ impl FuseQueryContext {
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
     pub fn execute_task<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-        where
-            T: Future + Send + 'static,
-            T::Output: Send + 'static,
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
     {
         Ok(self.shared.try_get_runtime()?.spawn(task))
     }
@@ -133,7 +131,10 @@ impl FuseQueryContext {
 
     // Some table can estimate the approx total rows, such as NumbersTable
     pub fn add_total_rows_approx(&self, total_rows: usize) {
-        self.shared.progress.as_ref().add_total_rows_approx(total_rows);
+        self.shared
+            .progress
+            .as_ref()
+            .add_total_rows_approx(total_rows);
     }
 
     // Steal n partitions from the partition pool by the pipeline worker.
@@ -190,7 +191,9 @@ impl FuseQueryContext {
     // Implementation of fetching remote table involves async operations which is not
     // straight forward (but not infeasible) to do in a non-async method.
     pub async fn get_remote_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
-        self.get_datasource().get_remote_table(database, table).await
+        self.get_datasource()
+            .get_remote_table(database, table)
+            .await
     }
 
     pub fn get_table_function(&self, function_name: &str) -> Result<Arc<dyn TableFunction>> {
@@ -212,9 +215,13 @@ impl FuseQueryContext {
     }
 
     pub fn set_current_database(&self, new_database_name: String) -> Result<()> {
-        match self.get_datasource().get_database(new_database_name.as_str()) {
+        match self
+            .get_datasource()
+            .get_database(new_database_name.as_str())
+        {
             Err(_) => Err(ErrorCode::UnknownDatabase(format!(
-                "Database {}  doesn't exist.", new_database_name
+                "Database {}  doesn't exist.",
+                new_database_name
             ))),
             Ok(_) => {
                 self.shared.set_current_database(new_database_name);

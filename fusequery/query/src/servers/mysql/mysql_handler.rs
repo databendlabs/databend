@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::net::SocketAddr;
-use std::ops::Sub;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -80,7 +79,7 @@ impl MySQLHandler {
 impl AbortableService<(String, u16), SocketAddr> for MySQLHandler {
     fn abort(&self, force: bool) -> Result<()> {
         self.abort_parts.lock().0.abort();
-        self.session_manager.abort(force)
+        Ok(())
     }
 
     async fn start(&self, args: (String, u16)) -> Result<SocketAddr> {
@@ -91,7 +90,7 @@ impl AbortableService<(String, u16), SocketAddr> for MySQLHandler {
             let aborted_notify = self.aborted_notify.clone();
             let rejected_executor = Runtime::with_worker_threads(1)?;
 
-            let (stream, addr) = Self::listener_tcp(&args.0, args.1).await?;
+            let (stream, listener) = Self::listener_tcp(&args.0, args.1).await?;
 
             tokio::spawn(async move {
                 let mut listener_stream = Abortable::new(stream, abort_registration);
@@ -102,21 +101,21 @@ impl AbortableService<(String, u16), SocketAddr> for MySQLHandler {
                         Some(Err(error)) => {
                             log::error!("Unexpected error during process accept: {}", error)
                         }
-                        Some(Ok(tcp_stream)) => {
-                            match sessions.get_or_create_session("MySQL", None) {
-                                Err(error) => {
-                                    Self::reject_session(tcp_stream, &rejected_executor, error)
-                                }
-                                Ok(mysql_session) => {
-                                    if let Err(error) = MySQLConnection::run_on_stream(mysql_session, tcp_stream) {
-                                        log::error!(
-                                            "Unexpected error occurred during start session: {:?}",
-                                            error
-                                        );
-                                    };
-                                }
+                        Some(Ok(tcp_stream)) => match sessions.create_session("MySQL") {
+                            Err(error) => {
+                                Self::reject_session(tcp_stream, &rejected_executor, error)
                             }
-                        }
+                            Ok(mysql_session) => {
+                                if let Err(error) =
+                                    MySQLConnection::run_on_stream(mysql_session, tcp_stream)
+                                {
+                                    log::error!(
+                                        "Unexpected error occurred during start session: {:?}",
+                                        error
+                                    );
+                                };
+                            }
+                        },
                     }
                 }
 
@@ -124,7 +123,7 @@ impl AbortableService<(String, u16), SocketAddr> for MySQLHandler {
                 aborted_notify.notify_waiters();
             });
 
-            return Ok(addr);
+            return Ok(listener);
         }
 
         Err(ErrorCode::LogicalError("MySQLHandler already running."))
@@ -138,7 +137,6 @@ impl AbortableService<(String, u16), SocketAddr> for MySQLHandler {
                 if !self.aborted.load(Ordering::Relaxed) {
                     self.aborted_notify.notified().await;
                 }
-                self.session_manager.wait_terminal(None).await?;
             }
             Some(duration) => {
                 if !self.aborted.load(Ordering::Relaxed) {
@@ -151,8 +149,6 @@ impl AbortableService<(String, u16), SocketAddr> for MySQLHandler {
                             ))
                         })?;
                 }
-                let duration = duration.sub(instant.elapsed());
-                self.session_manager.wait_terminal(Some(duration)).await?;
             }
         };
 

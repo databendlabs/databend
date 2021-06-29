@@ -8,10 +8,12 @@ pub use abortable::AbortableServer;
 pub use abortable::AbortableService;
 pub use abortable::Elapsed;
 pub use clickhouse::ClickHouseHandler;
+pub use rpc::RpcService;
 
-pub use self::mysql::MySQLHandler;
 pub use self::mysql::MySQLConnection;
+pub use self::mysql::MySQLHandler;
 
 mod abortable;
 mod clickhouse;
 mod mysql;
+mod rpc;

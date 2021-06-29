@@ -248,7 +248,7 @@ async fn prepare_session_and_connect() -> Result<(mysql::Conn, Arc<Box<dyn Sessi
 
     let session = tokio::spawn(async move {
         let (stream, _) = listener.accept().await?;
-        let session = session_manager.get_or_create_session::<MySQLConnection>()?;
+        let session = session_manager.create_session("MySQL")?;
         session.start(stream).await?;
         Result::Ok(session)
     });

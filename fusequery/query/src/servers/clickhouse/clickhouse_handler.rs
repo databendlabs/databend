@@ -86,25 +86,27 @@ impl ClickHouseSession for Session {
             }
         });
 
-        self.ctx.execute_task(async move {
-            let clickhouse_stream = interpreter
-                .execute()
-                .await
-                .map(|stream| ClickHouseStream::create(stream, schema));
+        self.ctx
+            .execute_task(async move {
+                let clickhouse_stream = interpreter
+                    .execute()
+                    .await
+                    .map(|stream| ClickHouseStream::create(stream, schema));
 
-            match clickhouse_stream {
-                Ok(mut clickhouse_stream) => {
-                    while let Some(block) = clickhouse_stream.next().await {
-                        tx2.send(BlockItem::Block(block)).await.ok();
+                match clickhouse_stream {
+                    Ok(mut clickhouse_stream) => {
+                        while let Some(block) = clickhouse_stream.next().await {
+                            tx2.send(BlockItem::Block(block)).await.ok();
+                        }
+                    }
+
+                    Err(e) => {
+                        tx2.send(BlockItem::Block(Err(e))).await.ok();
                     }
                 }
-
-                Err(e) => {
-                    tx2.send(BlockItem::Block(Err(e))).await.ok();
-                }
-            }
-            cancel_clone.store(true, Ordering::Relaxed);
-        })?;
+                cancel_clone.store(true, Ordering::Relaxed);
+            })
+            .map_err(to_clickhouse_err)?;
 
         while let Some(item) = rx.recv().await {
             match item {

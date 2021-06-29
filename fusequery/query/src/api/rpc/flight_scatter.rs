@@ -25,14 +25,14 @@ pub struct FlightScatterByHash {
 impl FlightScatterByHash {
     pub fn try_create(
         schema: DataSchemaRef,
-        action: Expression,
+        expression: Expression,
         num: usize,
     ) -> Result<FlightScatterByHash> {
         let indices_expression_action = Expression::ScalarFunction {
             op: String::from("modulo"),
             args: vec![
                 Expression::Cast {
-                    expr: Box::new(action),
+                    expr: Box::new(expression),
                     data_type: DataType::UInt64,
                 },
                 Expression::Literal(DataValue::UInt64(Some(num as u64))),

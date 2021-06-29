@@ -1,14 +1,17 @@
-use crate::configs::Config;
 use std::sync::Arc;
+
+use common_exception::Result;
 use common_infallible::RwLock;
-use crate::sessions::{Settings, Session};
-use crate::clusters::ClusterRef;
-use crate::datasources::DataSource;
 use common_progress::Progress;
 use common_runtime::Runtime;
-use uuid::Uuid;
-use common_exception::Result;
 use futures::future::AbortHandle;
+use uuid::Uuid;
+
+use crate::clusters::ClusterRef;
+use crate::configs::Config;
+use crate::datasources::DataSource;
+use crate::sessions::Session;
+use crate::sessions::Settings;
 
 /// Data that needs to be shared in a query context.
 /// This is very useful, for example, for queries:
@@ -35,16 +38,16 @@ impl FuseQueryContextShared {
             conf,
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             progress: Arc::new(Progress::create()),
-            session: session,
+            session,
             runtime: Arc::new(RwLock::new(None)),
             cluster_cache: Arc::new(RwLock::new(None)),
-            sources_abort_handle: Arc::new(RwLock::new(Vec::new()))
+            sources_abort_handle: Arc::new(RwLock::new(Vec::new())),
         }))
     }
 
     pub fn try_get_cluster(&self) -> Result<ClusterRef> {
         // We only get the cluster once during the query.
-        let cluster_cache = self.cluster_cache.write();
+        let mut cluster_cache = self.cluster_cache.write();
 
         match &*cluster_cache {
             Some(cached) => Ok(cached.clone()),
@@ -72,8 +75,9 @@ impl FuseQueryContextShared {
         self.session.get_datasource()
     }
 
+    /// Init runtime when first get
     pub fn try_get_runtime(&self) -> Result<Arc<Runtime>> {
-        let query_runtime = self.runtime.write();
+        let mut query_runtime = self.runtime.write();
 
         match &*query_runtime {
             Some(query_runtime) => Ok(query_runtime.clone()),

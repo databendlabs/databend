@@ -2,25 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::net::{Shutdown, SocketAddr};
-use std::net::TcpStream;
+use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Instant;
 
-use futures::future::AbortHandle;
-
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::Mutex;
-use common_planners::PlanNode;
 
-use crate::clusters::ClusterRef;
-use crate::configs::Config;
-use crate::datasources::DataSource;
-use crate::sessions::{FuseQueryContext, Session, SessionManagerRef};
 use crate::sessions::FuseQueryContextRef;
-use crate::sessions::Settings;
-use futures::channel::oneshot::Receiver;
+use crate::sessions::Session;
+use crate::sessions::SessionManagerRef;
 
 /// SessionRef is the ptr of session.
 /// Remove it in session_manager when the current session is not referenced (ref_count = 1)
@@ -67,4 +56,3 @@ impl Drop for SessionRef {
         self.sessions.destroy_session(&self.get_id())
     }
 }
-

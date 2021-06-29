@@ -13,9 +13,8 @@ use common_streams::SendableDataBlockStream;
 use tonic::transport::channel::Channel;
 use tonic::Request;
 
-use crate::api::rpc::actions::ExecutePlanWithShuffleAction;
 use crate::api::rpc::flight_data_stream::FlightDataStream;
-use crate::api::rpc::from_status;
+use crate::api::ShuffleAction;
 
 pub struct FlightClient {
     inner: FlightServiceClient<Channel>,
@@ -43,11 +42,7 @@ impl FlightClient {
         .await
     }
 
-    pub async fn prepare_query_stage(
-        &mut self,
-        action: ExecutePlanWithShuffleAction,
-        timeout: u64,
-    ) -> Result<()> {
+    pub async fn prepare_query_stage(&mut self, action: ShuffleAction, timeout: u64) -> Result<()> {
         self.do_action(
             Action {
                 r#type: "PrepareQueryStage".to_string(),
@@ -70,11 +65,11 @@ impl FlightClient {
         let mut request = Request::new(ticket);
         request.set_timeout(Duration::from_secs(timeout));
 
-        let response = self.inner.do_get(request).await.map_err(from_status);
+        let response = self.inner.do_get(request).await?;
 
         Ok(Box::pin(FlightDataStream::from_remote(
             schema,
-            response?.into_inner(),
+            response.into_inner(),
         )))
     }
 
@@ -84,14 +79,9 @@ impl FlightClient {
         let mut request = Request::new(action);
         request.set_timeout(Duration::from_secs(timeout));
 
-        let response = self.inner.do_action(request).await.map_err(from_status);
+        let response = self.inner.do_action(request).await?;
 
-        match response?
-            .into_inner()
-            .message()
-            .await
-            .map_err(from_status)?
-        {
+        match response.into_inner().message().await? {
             Some(response) => Ok(response.body),
             None => Result::Err(ErrorCode::EmptyDataFromServer(format!(
                 "Can not receive data from flight server, action: {:?}",

@@ -3,20 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashMap;
-use std::ops::Sub;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
-
-use metrics::counter;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_planners::Partitions;
-use common_runtime::tokio;
+use metrics::counter;
 
 use crate::clusters::Cluster;
 use crate::clusters::ClusterRef;
@@ -24,10 +18,10 @@ use crate::configs::Config;
 use crate::datasources::DataSource;
 use crate::servers::AbortableService;
 use crate::servers::Elapsed;
+use crate::sessions::session::Session;
+use crate::sessions::session_ref::SessionRef;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
-use crate::sessions::session_ref::SessionRef;
-use crate::sessions::session::Session;
 
 pub struct SessionManager {
     conf: Config,
@@ -76,14 +70,9 @@ impl SessionManager {
         self.datasource.clone()
     }
 
-    pub fn get_or_create_session(
-        self: &Arc<Self>,
-        typ: impl Into<String>,
-        _session_id: Option<String>,
-    ) -> Result<SessionRef> {
+    pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
         counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
 
-        // TODO: get session
         let mut sessions = self.active_sessions.write();
         match sessions.len() == self.max_sessions {
             true => Err(ErrorCode::TooManyUserConnections(

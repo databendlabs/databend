@@ -3,14 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::marker::PhantomData;
-use std::sync::Arc;
 use std::time::Instant;
 
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_runtime::tokio;
-use common_streams::AbortStream;
 use metrics::histogram;
 use msql_srv::ErrorKind;
 use msql_srv::InitWriter;
@@ -19,12 +17,12 @@ use msql_srv::ParamParser;
 use msql_srv::QueryResultWriter;
 use msql_srv::StatementMetaWriter;
 use tokio_stream::StreamExt;
-use common_infallible::exit_scope;
 
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
-use crate::sessions::{FuseQueryContextRef, SessionRef};
+use crate::sessions::FuseQueryContextRef;
+use crate::sessions::SessionRef;
 use crate::sql::DfHint;
 use crate::sql::PlanParser;
 
@@ -50,7 +48,8 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             ));
         }
 
-        self.base.do_prepare(query, writer, self.session.try_create_context()?)
+        self.base
+            .do_prepare(query, writer, self.session.try_create_context()?)
     }
 
     fn on_execute(
@@ -70,7 +69,8 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             ));
         }
 
-        self.base.do_execute(id, param, writer, self.session.try_create_context()?)
+        self.base
+            .do_execute(id, param, writer, self.session.try_create_context()?)
     }
 
     fn on_close(&mut self, id: u32) {
@@ -122,7 +122,12 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
 }
 
 impl<W: std::io::Write> InteractiveWorkerBase<W> {
-    fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>, _: FuseQueryContextRef) -> Result<()> {
+    fn do_prepare(
+        &mut self,
+        _: &str,
+        writer: StatementMetaWriter<'_, W>,
+        _: FuseQueryContextRef,
+    ) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
             "Prepare is not support in DataFuse.".as_bytes(),
@@ -135,7 +140,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         _: u32,
         _: ParamParser<'_>,
         writer: QueryResultWriter<'_, W>,
-        _: FuseQueryContextRef
+        _: FuseQueryContextRef,
     ) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
