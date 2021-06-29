@@ -91,7 +91,7 @@ impl FuseQueryFlightDispatcher {
         let query_context = session.try_create_context()?;
         let action_context = FuseQueryContext::new(query_context.clone());
         let mut pipeline =
-            PipelineBuilder::create(action_context.clone(), action.plan.clone()).build()?;
+            PipelineBuilder::create(action_context.clone(), HashMap::new(), action.plan.clone()).build()?;
 
         let (stage_notify, tx) = {
             assert_eq!(action.sinks.len(), 1);
@@ -148,7 +148,7 @@ impl FuseQueryFlightDispatcher {
         let query_context = session.try_create_context()?;
         let action_context = FuseQueryContext::new(query_context.clone());
         let mut pipeline =
-            PipelineBuilder::create(action_context.clone(), action.plan.clone()).build()?;
+            PipelineBuilder::create(action_context.clone(), HashMap::new(), action.plan.clone()).build()?;
 
         let (stage_notify, sinks_tx) = {
             assert!(action.sinks.len() > 1);

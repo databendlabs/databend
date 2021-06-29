@@ -9,13 +9,14 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flights::ScanPartitionResult;
 use common_planners::InsertIntoPlan;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_planners::TableOptions;
+use common_store_api::ReadPlanResult;
+use common_store_api::StorageApi;
 use common_streams::SendableDataBlockStream;
 
 use crate::datasources::remote::StoreClientProvider;
@@ -87,7 +88,7 @@ impl Table for RemoteTable {
                 match cli_provider.try_get_client().await {
                     Ok(mut client) => {
                         let parts_info = client
-                            .scan_partition(db_name, tbl_name, &scan)
+                            .read_plan(db_name, tbl_name, &scan)
                             .await
                             .map_err(ErrorCode::from);
                         let _ = tx.send(parts_info);
@@ -137,11 +138,7 @@ impl Table for RemoteTable {
 }
 
 impl RemoteTable {
-    fn partitions_to_plan(
-        &self,
-        res: ScanPartitionResult,
-        scan_plan: ScanPlan,
-    ) -> ReadDataSourcePlan {
+    fn partitions_to_plan(&self, res: ReadPlanResult, scan_plan: ScanPlan) -> ReadDataSourcePlan {
         let mut partitions = vec![];
         let mut statistics = Statistics {
             read_rows: 0,

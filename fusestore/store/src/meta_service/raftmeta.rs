@@ -49,12 +49,12 @@ use serde::Serialize;
 use thiserror::Error;
 use tonic::transport::channel::Channel;
 
-use crate::meta_service::MemStoreStateMachine;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::MetaServiceServer;
 use crate::meta_service::Node;
 use crate::meta_service::RaftMes;
+use crate::meta_service::StateMachine;
 
 const ERR_INCONSISTENT_LOG: &str =
     "a query was received which was expecting data to be in place which does not exist in the log";
@@ -345,7 +345,7 @@ pub struct MemStore {
     /// The Raft log.
     log: RwLock<BTreeMap<u64, Entry<ClientRequest>>>,
     /// The Raft state machine.
-    sm: RwLock<MemStoreStateMachine>,
+    sm: RwLock<StateMachine>,
     /// The current hard state.
     hs: RwLock<Option<HardState>>,
     /// The current snapshot.
@@ -356,7 +356,7 @@ impl MemStore {
     /// Create a new `MemStore` instance.
     pub fn new(id: NodeId) -> Self {
         let log = RwLock::new(BTreeMap::new());
-        let sm = RwLock::new(MemStoreStateMachine::default());
+        let sm = RwLock::new(StateMachine::default());
         let hs = RwLock::new(None);
         let current_snapshot = RwLock::new(None);
 
@@ -374,7 +374,7 @@ impl MemStore {
     pub fn new_with_state(
         id: NodeId,
         log: BTreeMap<u64, Entry<ClientRequest>>,
-        sm: MemStoreStateMachine,
+        sm: StateMachine,
         hs: Option<HardState>,
         current_snapshot: Option<MemStoreSnapshot>,
     ) -> Self {
@@ -397,7 +397,7 @@ impl MemStore {
     }
 
     /// Get a handle to the state machine for testing purposes.
-    pub async fn get_state_machine(&self) -> RwLockWriteGuard<'_, MemStoreStateMachine> {
+    pub async fn get_state_machine(&self) -> RwLockWriteGuard<'_, StateMachine> {
         self.sm.write().await
     }
 
@@ -654,7 +654,7 @@ impl RaftStorage<ClientRequest, ClientResponse> for MemStore {
 
         // Update the state machine.
         {
-            let new_sm: MemStoreStateMachine = serde_json::from_slice(&new_snapshot.data)?;
+            let new_sm: StateMachine = serde_json::from_slice(&new_snapshot.data)?;
             let mut sm = self.sm.write().await;
             *sm = new_sm;
         }
@@ -780,7 +780,7 @@ impl MemStore {
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         let sm = self.sm.read().await;
 
-        sm.meta.get_node(node_id)
+        sm.get_node(node_id)
     }
 
     pub async fn get_node_addr(&self, node_id: &NodeId) -> common_exception::Result<String> {
@@ -802,7 +802,7 @@ impl MemStore {
             .await
             .expect("fail to get membership");
 
-        for i in sm.meta.nodes.keys() {
+        for i in sm.nodes.keys() {
             // it has been added into this cluster and is not a voter.
             if !ms.contains(i) {
                 rst.insert(*i);
@@ -1111,7 +1111,7 @@ impl MetaNode {
         // inconsistent get: from local state machine
 
         let sm = self.sto.sm.read().await;
-        sm.meta.get_file(key)
+        sm.get_file(key)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -1119,7 +1119,7 @@ impl MetaNode {
         // inconsistent get: from local state machine
 
         let sm = self.sto.sm.read().await;
-        sm.meta.get_node(node_id)
+        sm.get_node(node_id)
     }
 
     /// Add a new node into this cluster.
@@ -1153,7 +1153,7 @@ impl MetaNode {
         // inconsistent get: from local state machine
 
         let sm = self.sto.sm.read().await;
-        sm.meta.get_database(name)
+        sm.get_database(name)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -1161,7 +1161,7 @@ impl MetaNode {
         // inconsistent get: from local state machine
 
         let sm = self.sto.sm.read().await;
-        sm.meta.get_kv(key)
+        sm.get_kv(key)
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.

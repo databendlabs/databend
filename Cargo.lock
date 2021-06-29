@@ -713,6 +713,7 @@ name = "common-flights"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
@@ -720,6 +721,7 @@ dependencies = [
  "common-metatypes",
  "common-planners",
  "common-runtime",
+ "common-store-api",
  "common-streams",
  "common-tracing",
  "futures",
@@ -756,6 +758,9 @@ dependencies = [
 [[package]]
 name = "common-infallible"
 version = "0.1.0"
+dependencies = [
+ "parking_lot",
+]
 
 [[package]]
 name = "common-metatypes"
@@ -775,6 +780,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-infallible",
  "futures",
  "lazy_static",
  "pretty_assertions",
@@ -805,6 +811,22 @@ dependencies = [
  "anyhow",
  "common-exception",
  "tokio",
+]
+
+[[package]]
+name = "common-store-api"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-metatypes",
+ "common-planners",
+ "common-streams",
+ "futures",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]
@@ -1496,6 +1518,7 @@ dependencies = [
  "common-profling",
  "common-progress",
  "common-runtime",
+ "common-store-api",
  "common-streams",
  "common-tracing",
  "criterion",
@@ -1552,6 +1575,7 @@ dependencies = [
  "common-metatypes",
  "common-planners",
  "common-runtime",
+ "common-store-api",
  "common-tracing",
  "env_logger",
  "futures",
@@ -1569,6 +1593,7 @@ dependencies = [
  "rand 0.8.4",
  "serde",
  "serde_json",
+ "sha2 0.9.5",
  "structopt",
  "structopt-toml",
  "tempfile",
@@ -2335,6 +2360,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b823e83b2affd8f40a9ee8c29dbc56404c1e34cd2710921f2801e2cf29527afa"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "management"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-exception",
+ "common-store-api",
+ "serde",
+ "serde_json",
+ "sha2 0.9.5",
 ]
 
 [[package]]
@@ -3120,9 +3157,9 @@ dependencies = [
 
 [[package]]
 name = "pin-project-lite"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc0e1f259c92177c30a4c9d177246edd0a3568b25756a977d0632cf8fa37e905"
+checksum = "8d31d11c69a6b52a174b42bdc0c30e5e11670f90788b2c471c31c1d17d449443"
 
 [[package]]
 name = "pin-utils"
@@ -4794,9 +4831,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.2.18"
+version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa5553bf0883ba7c9cbe493b085c29926bd41b66afc31ff72cf17ff4fb60dcd5"
+checksum = "ab69019741fca4d98be3c62d2b75254528b5432233fd8a4d2739fec20278de48"
 dependencies = [
  "ansi_term 0.12.1",
  "chrono",

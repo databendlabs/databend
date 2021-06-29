@@ -18,6 +18,8 @@ members = [
     "common/exception",
     "common/tracing",
     "common/profiling",
+    "common/store-api",
+    "common/management",
 
     # FuseQuery
     "fusequery/query",

@@ -17,6 +17,17 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::expand_aggregate_arg_exprs;
+use common_planners::expand_wildcard;
+use common_planners::expr_as_column_expr;
+use common_planners::extract_aliases;
+use common_planners::find_aggregate_exprs;
+use common_planners::find_columns_not_satisfy_exprs;
+use common_planners::rebase_expr;
+use common_planners::rebase_expr_from_input;
+use common_planners::resolve_aliases_to_exprs;
+use common_planners::sort_to_inner_expr;
+use common_planners::unwrap_alias_exprs;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -40,20 +51,9 @@ use sqlparser::ast::Query;
 use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 
-use super::expr_common::rebase_expr_from_input;
 use crate::datasources::Table;
 use crate::functions::ContextFunction;
 use crate::sessions::FuseQueryContextRef;
-use crate::sql::expr_common::expand_aggregate_arg_exprs;
-use crate::sql::expr_common::expand_wildcard;
-use crate::sql::expr_common::expr_as_column_expr;
-use crate::sql::expr_common::extract_aliases;
-use crate::sql::expr_common::find_aggregate_exprs;
-use crate::sql::expr_common::find_columns_not_satisfy_exprs;
-use crate::sql::expr_common::rebase_expr;
-use crate::sql::expr_common::resolve_aliases_to_exprs;
-use crate::sql::expr_common::sort_to_inner_expr;
-use crate::sql::expr_common::unwrap_alias_exprs;
 use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::sql_statement::DfDropDatabase;
 use crate::sql::sql_statement::DfUseDatabase;
@@ -790,6 +790,9 @@ impl PlanParser {
                 op: format!("{}", op),
                 expr: Box::new(self.sql_to_rex(expr, schema, select)?),
             }),
+            sqlparser::ast::Expr::Exists(q) => {
+                Ok(Expression::Exists(Arc::new(self.query_to_plan(q)?)))
+            }
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema, select),
             sqlparser::ast::Expr::CompoundIdentifier(ids) => {
                 self.process_compound_ident(ids.as_slice(), select)

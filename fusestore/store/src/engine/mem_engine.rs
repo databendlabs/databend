@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0.
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::Mutex;
 
-use common_flights::AppendResult;
-use common_flights::DataPartInfo;
+use common_exception::ErrorCode;
+use common_infallible::Mutex;
 use common_planners::Part;
 use common_planners::Statistics;
-use tonic::Status;
+use common_store_api::AppendResult;
+use common_store_api::DataPartInfo;
 
 use crate::protobuf::CmdCreateDatabase;
 use crate::protobuf::CmdCreateTable;
@@ -40,20 +40,23 @@ impl MemEngine {
         &mut self,
         cmd: CmdCreateDatabase,
         if_not_exists: bool,
-    ) -> anyhow::Result<i64> {
+    ) -> common_exception::Result<i64> {
         // TODO: support plan.engine plan.options
         let curr = self.dbs.get(&cmd.db_name);
         if let Some(curr) = curr {
             return if if_not_exists {
                 Ok(curr.db_id)
             } else {
-                Err(anyhow::anyhow!("{} database exists", cmd.db_name))
+                Err(ErrorCode::DatabaseAlreadyExists(format!(
+                    "{} database exists",
+                    cmd.db_name
+                )))
             };
         }
 
-        let mut db = cmd
-            .db
-            .ok_or_else(|| Status::invalid_argument("require field: CmdCreateDatabase::db"))?;
+        let mut db = cmd.db.ok_or_else(|| {
+            ErrorCode::IllegalMetaOperationArgument("require field: CmdCreateDatabase::db")
+        })?;
 
         let db_id = self.create_id();
         db.db_id = db_id;
@@ -64,22 +67,29 @@ impl MemEngine {
         Ok(db_id)
     }
 
-    pub fn drop_database(&mut self, db_name: &str, if_exists: bool) -> Result<(), Status> {
+    pub fn drop_database(
+        &mut self,
+        db_name: &str,
+        if_exists: bool,
+    ) -> common_exception::Result<()> {
         self.remove_db_data_parts(db_name);
         let entry = self.dbs.remove_entry(db_name);
         match (entry, if_exists) {
             (_, true) => Ok(()),
             (Some((_id, _db)), false) => Ok(()),
-            (_, false) => Err(Status::not_found(format!("database {} not found", db_name))),
+            (_, false) => Err(ErrorCode::UnknownDatabase(format!(
+                "database {} not found",
+                db_name
+            ))),
         }
     }
 
     #[allow(dead_code)]
-    pub fn get_database(&self, db: String) -> anyhow::Result<Db> {
+    pub fn get_database(&self, db: String) -> common_exception::Result<Db> {
         let x = self
             .dbs
             .get(&db)
-            .ok_or_else(|| anyhow::anyhow!("database not found"))?;
+            .ok_or_else(|| ErrorCode::UnknownDatabase(format!("database {} not found", db)))?;
         Ok(x.clone())
     }
 
@@ -89,13 +99,13 @@ impl MemEngine {
         &mut self,
         cmd: CmdCreateTable,
         if_not_exists: bool,
-    ) -> Result<i64, Status> {
+    ) -> common_exception::Result<i64> {
         // TODO: support plan.engine plan.options
 
         let table_id = self
             .dbs
             .get(&cmd.db_name)
-            .ok_or_else(|| Status::invalid_argument("database not found"))?
+            .ok_or_else(|| ErrorCode::UnknownDatabase("database not found"))?
             .table_name_to_id
             .get(&cmd.table_name);
 
@@ -103,13 +113,13 @@ impl MemEngine {
             return if if_not_exists {
                 Ok(*table_id)
             } else {
-                Err(Status::already_exists("table exists"))
+                Err(ErrorCode::TableAlreadyExists("table exists"))
             };
         }
 
-        let mut table = cmd
-            .table
-            .ok_or_else(|| Status::invalid_argument("require field: CmdCreateTable::table"))?;
+        let mut table = cmd.table.ok_or_else(|| {
+            ErrorCode::IllegalMetaOperationArgument("require field: CmdCreateTable::table")
+        })?;
 
         let table_id = self.create_id();
         table.table_id = table_id;
@@ -128,7 +138,7 @@ impl MemEngine {
         db_name: &str,
         tbl_name: &str,
         if_exists: bool,
-    ) -> Result<(), Status> {
+    ) -> common_exception::Result<()> {
         self.remove_table_data_parts(db_name, tbl_name);
         let r = self.dbs.get_mut(db_name).map(|db| {
             let name2id_removed = db.table_name_to_id.remove_entry(tbl_name);
@@ -139,28 +149,34 @@ impl MemEngine {
         });
         match (r, if_exists) {
             (_, true) => Ok(()),
-            (None, false) => Err(Status::not_found(format!("database {} not found", db_name))),
-            (Some((None, _)), false) => {
-                Err(Status::not_found(format!("table {} not found", tbl_name)))
-            }
+            (None, false) => Err(ErrorCode::UnknownDatabase(format!(
+                "database {} not found",
+                db_name
+            ))),
+            (Some((None, _)), false) => Err(ErrorCode::UnknownTable(format!(
+                "table {} not found",
+                tbl_name
+            ))),
             (Some((Some(_), Some(_))), false) => Ok(()),
-            _ => Err(Status::internal(
-                "inconsistent meta state, mappings between names and ids are out-of-sync"
-                    .to_string(),
+            _ => Err(ErrorCode::IllegalMetaState(
+                "inconsistent meta state, mappings between names and ids are out-of-sync",
             )),
         }
     }
 
-    pub fn get_table(&mut self, db_name: String, table_name: String) -> Result<Table, Status> {
-        let db = self
-            .dbs
-            .get(&db_name)
-            .ok_or_else(|| Status::not_found(format!("database not found: {:}", db_name)))?;
+    pub fn get_table(
+        &mut self,
+        db_name: String,
+        table_name: String,
+    ) -> common_exception::Result<Table> {
+        let db = self.dbs.get(&db_name).ok_or_else(|| {
+            ErrorCode::UnknownDatabase(format!("database not found: {:}", db_name))
+        })?;
 
         let table_id = db
             .table_name_to_id
             .get(&table_name)
-            .ok_or_else(|| Status::not_found(format!("table not found: {:}", table_name)))?;
+            .ok_or_else(|| ErrorCode::UnknownTable(format!("table not found: {:}", table_name)))?;
 
         let table = db.tables.get(&table_id).unwrap();
         Ok(table.clone())

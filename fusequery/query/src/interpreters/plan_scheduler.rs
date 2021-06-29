@@ -33,7 +33,11 @@ pub struct ScheduledActions {
 impl PlanScheduler {
     /// Schedule the plan to Local or Remote mode.
     #[tracing::instrument(level = "info", skip(ctx, plan))]
-    pub fn reschedule(ctx: FuseQueryContextRef, plan: &PlanNode) -> Result<ScheduledActions> {
+    pub fn reschedule(
+        ctx: FuseQueryContextRef,
+        subquery_res_map: HashMap<String, bool>,
+        plan: &PlanNode,
+    ) -> Result<ScheduledActions> {
         let cluster = ctx.try_get_cluster()?;
 
         if cluster.is_empty()? {
@@ -97,7 +101,9 @@ impl PlanScheduler {
         let mut remote_actions = vec![];
         for node in &cluster_nodes {
             for builder in &builders {
-                if let Some(action) = builder.build(&node.name, &cluster_nodes)? {
+                if let Some(action) =
+                builder.build(&node.name, &cluster_nodes)?
+                {
                     remote_actions.push((node.clone(), action));
                 }
             }
