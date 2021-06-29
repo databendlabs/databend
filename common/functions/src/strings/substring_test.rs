@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
@@ -20,7 +18,7 @@ fn test_substring_function() -> Result<()> {
         nullable: bool,
         arg_names: Vec<&'static str>,
         columns: Vec<DataColumn>,
-        expect: Series,
+        expect: DataColumn,
         error: &'static str,
         func: Box<dyn Function>,
     }
@@ -39,11 +37,11 @@ fn test_substring_function() -> Result<()> {
             arg_names: vec!["a", "b", "c"],
             columns: vec![
                 Series::new(vec!["abcde"]).into(),
-                Series::new(vec![2]).into(),
-                Series::new(vec![3]).into(),
+                Series::new(vec![2 as i64]).into(),
+                Series::new(vec![3 as u64]).into(),
             ],
             func: SubstringFunction::try_create("substring")?,
-            expect: Series::new(vec!["bcd"]),
+            expect: Series::new(vec!["bcd"]).into(),
             error: "",
         },
         Test {
@@ -53,11 +51,11 @@ fn test_substring_function() -> Result<()> {
             arg_names: vec!["a", "b", "c"],
             columns: vec![
                 Series::new(vec!["abcde"]).into(),
-                Series::new(vec![1]).into(),
-                Series::new(vec![3]).into(),
+                Series::new(vec![1 as i64]).into(),
+                Series::new(vec![3 as u64]).into(),
             ],
             func: SubstringFunction::try_create("substring")?,
-            expect: Series::new(vec!["abc"]),
+            expect: Series::new(vec!["abc"]).into(),
             error: "",
         },
         Test {
@@ -67,11 +65,11 @@ fn test_substring_function() -> Result<()> {
             arg_names: vec!["a", "b"],
             columns: vec![
                 Series::new(vec!["abcde"]).into(),
-                Series::new(vec![2]).into(),
+                Series::new(vec![2 as i64]).into(),
             ],
 
             func: SubstringFunction::try_create("substring")?,
-            expect: Series::new(vec!["bcde"]),
+            expect: Series::new(vec!["bcde"]).into(),
             error: "",
         },
         Test {
@@ -81,12 +79,12 @@ fn test_substring_function() -> Result<()> {
             arg_names: vec!["a", "b", "c"],
             columns: vec![
                 Series::new(vec!["1234567890"]).into(),
-                Series::new(vec![-3]).into(),
-                Series::new(vec![3]).into(),
+                Series::new(vec![-3 as i64]).into(),
+                Series::new(vec![3 as u64]).into(),
             ],
 
             func: SubstringFunction::try_create("substring")?,
-            expect: Series::new(vec!["890"]),
+            expect: Series::new(vec!["890"]).into(),
             error: "",
         },
     ];
@@ -120,8 +118,7 @@ fn test_substring_function() -> Result<()> {
         let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
-
-        assert_eq!(v.to_array()?.as_ref(), t.expect.as_ref());
+        assert_eq!(v, &t.expect);
     }
     Ok(())
 }

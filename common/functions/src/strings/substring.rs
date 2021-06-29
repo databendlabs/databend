@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use common_arrow::arrow::array::Int64Array;
+use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -41,16 +41,16 @@ impl Function for SubstringFunction {
     fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
         // TODO: make this function support column value as arguments rather than literal
         let mut from = match columns[1].data_type() {
-            DataType::UInt64 => columns[1]
+            DataType::UInt64 => Ok(columns[1]
                 .to_minimal_array()?
                 .u64()?
                 .downcast_ref()
-                .value(0) as i64,
-            DataType::Int64 => columns[1]
+                .value(0) as i64),
+            DataType::Int64 => Ok(columns[1]
                 .to_minimal_array()?
                 .i64()?
                 .downcast_ref()
-                .value(0) as i64,
+                .value(0) as i64),
             other => Err(ErrorCode::BadArguments(format!(
                 "Unsupport datatype {:?} as argument",
                 other
@@ -77,11 +77,9 @@ impl Function for SubstringFunction {
                 DataType::Int64 => {
                     end = Some(
                         columns[2]
-                            .to_array()
-                            .unwrap()
-                            .as_any()
-                            .downcast_ref::<Int64Array>()
-                            .unwrap()
+                            .to_minimal_array()?
+                            .i16()?
+                            .downcast_ref()
                             .value(0) as u64,
                     );
                 }
@@ -95,12 +93,12 @@ impl Function for SubstringFunction {
             }
         }
 
+        // todo, move these to datavalues
         let value = columns[0].to_array()?;
-        Ok(DataColumn::Array(compute::kernels::substring::substring(
-            value.get_array_ref().as_ref(),
-            from,
-            &end,
-        )?))
+        let arrow_array = value.get_array_ref();
+        let result =
+            compute::kernels::substring::substring(arrow_array.as_ref(), from, &end)? as ArrayRef;
+        Ok(result.into())
     }
 
     // substring(str, from)

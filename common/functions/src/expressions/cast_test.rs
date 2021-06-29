@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
@@ -70,7 +68,9 @@ fn test_cast_function() -> Result<()> {
         let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
-        assert_eq!(v.to_array()?.as_ref(), t.expect.as_ref());
+
+        let c: DataColumn = t.expect.into();
+        assert_eq!(v, &c);
     }
     Ok(())
 }

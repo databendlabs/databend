@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::array::LargeStringArray;
 use common_arrow::arrow::array::PrimitiveArray;
+use common_arrow::arrow::array::StringArray;
 
 use super::get_list_builder;
 use crate::arrays::DataArray;
@@ -101,7 +101,7 @@ where Ptr: AsRef<str>
 {
     fn from_iter<I: IntoIterator<Item = Option<Ptr>>>(iter: I) -> Self {
         // 2021-02-07: this was ~30% faster than with the builder.
-        let arr = LargeStringArray::from_iter(iter);
+        let arr = StringArray::from_iter(iter);
         let array = Arc::new(arr) as ArrayRef;
         array.into()
     }
@@ -120,7 +120,7 @@ impl<Ptr> FromIterator<Ptr> for DFUtf8Array
 where Ptr: DFAsRef<str>
 {
     fn from_iter<I: IntoIterator<Item = Ptr>>(iter: I) -> Self {
-        let arr = LargeStringArray::from_iter_values(iter);
+        let arr = StringArray::from_iter_values(iter);
 
         let array = Arc::new(arr) as ArrayRef;
         array.into()

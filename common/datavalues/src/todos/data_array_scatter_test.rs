@@ -11,7 +11,7 @@ use common_arrow::arrow::array::DurationSecondArray;
 use common_arrow::arrow::array::IntervalDayTimeArray;
 use common_arrow::arrow::array::IntervalYearMonthArray;
 use common_arrow::arrow::array::LargeBinaryArray;
-use common_arrow::arrow::array::LargeStringArray;
+use common_arrow::arrow::array::StringArray;
 use common_arrow::arrow::array::Time32MillisecondArray;
 use common_arrow::arrow::array::Time32SecondArray;
 use common_arrow::arrow::array::Time64MicrosecondArray;
@@ -356,11 +356,11 @@ fn test_scatter_array_data_column() -> Result<()> {
         },
         ArrayTest {
             name: "non-null-LargeString",
-            array: Arc::new(LargeStringArray::from(vec!["1", "2", "3"])),
+            array: Arc::new(StringArray::from(vec!["1", "2", "3"])),
             indices: Arc::new(UInt64Array::from(vec![0, 1, 0])),
             expect: vec![
-                Arc::new(LargeStringArray::from(vec!["1", "3"])),
-                Arc::new(LargeStringArray::from(vec!["2"])),
+                Arc::new(StringArray::from(vec!["1", "3"])),
+                Arc::new(StringArray::from(vec!["2"])),
             ],
             error: "",
         },
@@ -879,7 +879,7 @@ fn test_scatter_array_data_column() -> Result<()> {
         },
         ArrayTest {
             name: "null-LargeString",
-            array: Arc::new(LargeStringArray::from(vec![
+            array: Arc::new(StringArray::from(vec![
                 None,
                 Some("1"),
                 None,
@@ -889,8 +889,8 @@ fn test_scatter_array_data_column() -> Result<()> {
             ])),
             indices: Arc::new(UInt64Array::from(vec![0, 1, 1, 0, 0, 1])),
             expect: vec![
-                Arc::new(LargeStringArray::from(vec![None, Some("2"), None])),
-                Arc::new(LargeStringArray::from(vec![Some("1"), None, Some("3")])),
+                Arc::new(StringArray::from(vec![None, Some("2"), None])),
+                Arc::new(StringArray::from(vec![Some("1"), None, Some("3")])),
             ],
             error: "",
         },

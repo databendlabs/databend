@@ -4,9 +4,9 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayData;
 use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::array::LargeStringArray;
-use common_arrow::arrow::array::LargeStringBuilder;
 use common_arrow::arrow::array::PrimitiveArray;
+use common_arrow::arrow::array::StringArray;
+use common_arrow::arrow::array::StringBuilder;
 use common_arrow::arrow::array::UInt32Array;
 use common_arrow::arrow::buffer::MutableBuffer;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
@@ -271,9 +271,9 @@ pub unsafe fn take_no_null_bool_opt_iter_unchecked<I: IntoIterator<Item = Option
 }
 
 pub unsafe fn take_no_null_utf8_iter_unchecked<I: IntoIterator<Item = usize>>(
-    arr: &LargeStringArray,
+    arr: &StringArray,
     indices: I,
-) -> Arc<LargeStringArray> {
+) -> Arc<StringArray> {
     let iter = indices
         .into_iter()
         .map(|idx| Some(arr.value_unchecked(idx)));
@@ -282,9 +282,9 @@ pub unsafe fn take_no_null_utf8_iter_unchecked<I: IntoIterator<Item = usize>>(
 }
 
 pub unsafe fn take_utf8_iter_unchecked<I: IntoIterator<Item = usize>>(
-    arr: &LargeStringArray,
+    arr: &StringArray,
     indices: I,
-) -> Arc<LargeStringArray> {
+) -> Arc<StringArray> {
     let iter = indices.into_iter().map(|idx| {
         if arr.is_null(idx) {
             None
@@ -297,9 +297,9 @@ pub unsafe fn take_utf8_iter_unchecked<I: IntoIterator<Item = usize>>(
 }
 
 pub unsafe fn take_no_null_utf8_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>>(
-    arr: &LargeStringArray,
+    arr: &StringArray,
     indices: I,
-) -> Arc<LargeStringArray> {
+) -> Arc<StringArray> {
     let iter = indices
         .into_iter()
         .map(|opt_idx| opt_idx.map(|idx| arr.value_unchecked(idx)));
@@ -308,9 +308,9 @@ pub unsafe fn take_no_null_utf8_opt_iter_unchecked<I: IntoIterator<Item = Option
 }
 
 pub unsafe fn take_utf8_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>>(
-    arr: &LargeStringArray,
+    arr: &StringArray,
     indices: I,
-) -> Arc<LargeStringArray> {
+) -> Arc<StringArray> {
     let iter = indices.into_iter().map(|opt_idx| {
         opt_idx.and_then(|idx| {
             if arr.is_null(idx) {
@@ -325,18 +325,18 @@ pub unsafe fn take_utf8_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>
 }
 
 pub fn take_no_null_utf8_iter<I: IntoIterator<Item = usize>>(
-    arr: &LargeStringArray,
+    arr: &StringArray,
     indices: I,
-) -> Arc<LargeStringArray> {
+) -> Arc<StringArray> {
     let iter = indices.into_iter().map(|idx| Some(arr.value(idx)));
 
     Arc::new(iter.collect())
 }
 
 pub fn take_utf8_iter<I: IntoIterator<Item = usize>>(
-    arr: &LargeStringArray,
+    arr: &StringArray,
     indices: I,
-) -> Arc<LargeStringArray> {
+) -> Arc<StringArray> {
     let iter = indices.into_iter().map(|idx| {
         if arr.is_null(idx) {
             None
@@ -348,7 +348,7 @@ pub fn take_utf8_iter<I: IntoIterator<Item = usize>>(
     Arc::new(iter.collect())
 }
 
-pub unsafe fn take_utf8(arr: &LargeStringArray, indices: &UInt32Array) -> Arc<LargeStringArray> {
+pub unsafe fn take_utf8(arr: &StringArray, indices: &UInt32Array) -> Arc<StringArray> {
     let data_len = indices.len();
 
     let offset_len_in_bytes = (data_len + 1) * mem::size_of::<i64>();
@@ -415,7 +415,7 @@ pub unsafe fn take_utf8(arr: &LargeStringArray, indices: &UInt32Array) -> Arc<La
             });
         nulls = indices.data_ref().null_buffer().cloned();
     } else {
-        let mut builder = LargeStringBuilder::with_capacity(data_len, length_so_far as usize);
+        let mut builder = StringBuilder::with_capacity(data_len, length_so_far as usize);
 
         if indices.null_count() == 0 {
             (0..data_len).for_each(|idx| {
@@ -447,14 +447,14 @@ pub unsafe fn take_utf8(arr: &LargeStringArray, indices: &UInt32Array) -> Arc<La
         return Arc::new(builder.finish());
     }
 
-    let mut data = ArrayData::builder(ArrowDataType::LargeUtf8)
+    let mut data = ArrayData::builder(ArrowDataType::Utf8)
         .len(data_len)
         .add_buffer(offset_buf.into())
         .add_buffer(values_buf.into_arrow_buffer());
     if let Some(null_buffer) = nulls {
         data = data.null_bit_buffer(null_buffer);
     }
-    Arc::new(LargeStringArray::from(data.build()))
+    Arc::new(StringArray::from(data.build()))
 }
 
 #[cfg(test)]
@@ -463,7 +463,7 @@ mod test {
 
     #[test]
     fn test_utf8_kernel() {
-        let s = LargeStringArray::from(vec![Some("foo"), None, Some("bar")]);
+        let s = StringArray::from(vec![Some("foo"), None, Some("bar")]);
         unsafe {
             let out = take_utf8(&s, &UInt32Array::from(vec![1, 2]));
             assert!(out.is_null(0));

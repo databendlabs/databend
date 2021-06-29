@@ -4,9 +4,9 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::hash::Hasher;
 use std::sync::Arc;
 
-use ahash::RandomState;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::datatypes::IntervalUnit;
 use common_exception::Result;
@@ -183,8 +183,8 @@ macro_rules! impl_dyn_arrays {
                 unsafe { self.0.try_get(index) }
             }
 
-            fn vec_hash(&self, random_state: RandomState) -> DFUInt64Array {
-                self.0.vec_hash(random_state)
+            fn vec_hash(&self, hasher: DFHasher) -> DFUInt64Array {
+                cast_and_apply!(self, vec_hash, hasher)
             }
 
             fn subtract(&self, rhs: &Series) -> Result<Series> {
@@ -201,6 +201,9 @@ macro_rules! impl_dyn_arrays {
             }
             fn remainder(&self, rhs: &Series) -> Result<Series> {
                 try_physical_dispatch!(self, remainder, rhs)
+            }
+            fn negative(&self) -> Result<Series> {
+                try_physical_dispatch!(self, negative,)
             }
 
             fn take_iter(&self, iter: &mut dyn Iterator<Item = usize>) -> Result<Series> {

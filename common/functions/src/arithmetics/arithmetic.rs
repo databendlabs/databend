@@ -5,8 +5,8 @@
 use std::fmt;
 
 use common_datavalues::columns::DataColumn;
+use common_datavalues::prelude::*;
 use common_datavalues::DataSchema;
-use common_datavalues::DataType;
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
@@ -60,21 +60,11 @@ impl Function for ArithmeticFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], input_rows: usize) -> Result<DataColumn> {
-        todo!()
-        // if columns.len() == 1 {
-        //     let result =
-        //         DataArrayArithmetic::data_array_unary_arithmetic_op(self.op.clone(), &columns[0])?;
-        //     match &columns[0] {
-        //         DataColumn::Constant(_, _) => {
-        //             let data_value = DataValue::try_from_array(&result, 0)?;
-        //             Ok(DataColumn::Constant(data_value, input_rows))
-        //         }
-        //         _ => Ok(DataColumn::Array(result)),
-        //     }
-        // } else {
-        //     DataArrayArithmetic::data_array_arithmetic_op(self.op.clone(), &columns[0], &columns[1])
-        // }
+    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
+        match columns.len() {
+            1 => std::ops::Neg::neg(&columns[0]),
+            _ => columns[0].arithmetic(self.op.clone(), &columns[1]),
+        }
     }
 
     fn num_arguments(&self) -> usize {

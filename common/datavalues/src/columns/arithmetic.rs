@@ -5,6 +5,7 @@
 use std::ops::Add;
 use std::ops::Div;
 use std::ops::Mul;
+use std::ops::Neg;
 use std::ops::Rem;
 use std::ops::Sub;
 
@@ -61,6 +62,17 @@ impl Rem for &DataColumn {
 
     fn rem(self, rhs: Self) -> Self::Output {
         apply_arithmetic! {self, rhs, %}
+    }
+}
+
+impl Neg for &DataColumn {
+    type Output = Result<DataColumn>;
+
+    fn neg(self) -> Self::Output {
+        let lhs = self.to_minimal_array()?;
+        let lhs = Neg::neg(&lhs)?;
+        let result: DataColumn = lhs.into();
+        Ok(result.resize_constant(self.len()))
     }
 }
 

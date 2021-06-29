@@ -4,17 +4,12 @@
 
 use std::fmt;
 
-use common_arrow::arrow::compute;
-use common_arrow::arrow::compute::CastOptions;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
 
 use crate::function::Function;
-
-/// provide Datafuse default cast options
-pub const DEFAULT_DATAFUSE_CAST_OPTIONS: CastOptions = CastOptions { safe: false };
 
 #[derive(Clone)]
 pub struct CastFunction {
@@ -42,15 +37,10 @@ impl Function for CastFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
-        let value = columns[0].to_array()?;
-        Ok(DataColumn::Array(
-            compute::kernels::cast::cast_with_options(
-                &value,
-                &self.cast_type,
-                &DEFAULT_DATAFUSE_CAST_OPTIONS,
-            )?,
-        ))
+    fn eval(&self, columns: &[DataColumn], input_rows: usize) -> Result<DataColumn> {
+        let series = columns[0].to_minimal_array()?;
+        let column: DataColumn = series.cast_with_type(&self.cast_type)?.into();
+        Ok(column.resize_constant(input_rows))
     }
 
     fn num_arguments(&self) -> usize {

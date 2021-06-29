@@ -21,7 +21,7 @@ fn test_udf_example_function() -> anyhow::Result<()> {
         display: &'static str,
         nullable: bool,
         columns: Vec<DataColumn>,
-        expect: Series,
+        expect: DataColumn,
         error: &'static str,
         func: Box<dyn Function>,
     }
@@ -37,10 +37,10 @@ fn test_udf_example_function() -> anyhow::Result<()> {
         nullable: false,
         func: UdfExampleFunction::try_create("example")?,
         columns: vec![
-            Arc::new(BooleanArray::from(vec![true, true, true, false])).into(),
-            Arc::new(BooleanArray::from(vec![true, false, true, true])).into(),
+            Series::new(vec![true, true, true, false]).into(),
+            Series::new(vec![true, false, true, true]).into(),
         ],
-        expect: Series::new(vec![true, true, true, true]),
+        expect: Series::new(vec![true, true, true, true]).into(),
         error: "",
     }];
 
@@ -66,7 +66,7 @@ fn test_udf_example_function() -> anyhow::Result<()> {
         let expect_type = func.return_type(&arg_types)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
-        assert_eq!(v.to_array()?.as_ref(), t.expect.as_ref());
+        assert_eq!(v, &t.expect);
     }
     Ok(())
 }

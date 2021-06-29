@@ -7,13 +7,11 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use ahash::RandomState;
 use common_arrow::arrow::array::ArrayRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::arrays::*;
-use crate::prelude::*;
 use crate::series::*;
 use crate::*;
 
@@ -101,8 +99,8 @@ macro_rules! impl_dyn_array {
                 unsafe { self.0.try_get(index) }
             }
 
-            fn vec_hash(&self, random_state: RandomState) -> DFUInt64Array {
-                self.0.vec_hash(random_state)
+            fn vec_hash(&self, hasher: DFHasher) -> DFUInt64Array {
+                self.0.vec_hash(hasher)
             }
 
             fn subtract(&self, rhs: &Series) -> Result<Series> {
@@ -119,6 +117,10 @@ macro_rules! impl_dyn_array {
             }
             fn remainder(&self, rhs: &Series) -> Result<Series> {
                 NumOpsDispatch::remainder(&self.0, rhs)
+            }
+
+            fn negative(&self) -> Result<Series> {
+                NumOpsDispatch::negative(&self.0)
             }
 
             fn i8(&self) -> Result<&DFInt8Array> {

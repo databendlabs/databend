@@ -7,6 +7,7 @@ use std::ops;
 use std::ops::Add;
 use std::ops::Div;
 use std::ops::Mul;
+use std::ops::Neg;
 use std::ops::Rem;
 use std::ops::Sub;
 
@@ -15,6 +16,8 @@ use common_exception::Result;
 
 use crate::arrays::DataArray;
 use crate::numerical_arithmetic_coercion;
+use crate::numerical_signed_coercion;
+use crate::prelude::*;
 use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::DFBinaryArray;
@@ -71,6 +74,15 @@ impl Rem for &Series {
     }
 }
 
+impl Neg for &Series {
+    type Output = Result<Series>;
+
+    fn neg(self) -> Self::Output {
+        let lhs = coerce_to_signed(self)?;
+        todo!()
+    }
+}
+
 pub trait NumOpsDispatch: Debug {
     fn subtract(&self, rhs: &Series) -> Result<Series> {
         Err(ErrorCode::NumberArgumentsNotMatch(format!(
@@ -103,6 +115,13 @@ pub trait NumOpsDispatch: Debug {
             self, rhs
         )))
     }
+
+    fn negative(&self) -> Result<Series> {
+        Err(ErrorCode::NumberArgumentsNotMatch(format!(
+            "negative operation not supported for {:?}",
+            self,
+        )))
+    }
 }
 
 impl<T> NumOpsDispatch for DataArray<T>
@@ -120,27 +139,32 @@ where
     fn subtract(&self, rhs: &Series) -> Result<Series> {
         let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
         let out = (self - rhs)?;
-        Ok(out.into_series().into())
+        Ok(out.into_series())
     }
     fn add_to(&self, rhs: &Series) -> Result<Series> {
         let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
         let out = (self + rhs)?;
-        Ok(out.into_series().into())
+        Ok(out.into_series())
     }
     fn multiply(&self, rhs: &Series) -> Result<Series> {
         let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
         let out = (self * rhs)?;
-        Ok(out.into_series().into())
+        Ok(out.into_series())
     }
     fn divide(&self, rhs: &Series) -> Result<Series> {
         let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
         let out = (self / rhs)?;
-        Ok(out.into_series().into())
+        Ok(out.into_series())
     }
     fn remainder(&self, rhs: &Series) -> Result<Series> {
         let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
         let out = (self % rhs)?;
-        Ok(out.into_series().into())
+        Ok(out.into_series())
+    }
+
+    fn negative(&self) -> Result<Series> {
+        let out = std::ops::Neg::neg(self)?;
+        Ok(out.into_series())
     }
 }
 
@@ -148,7 +172,7 @@ impl NumOpsDispatch for DFUtf8Array {
     fn add_to(&self, rhs: &Series) -> Result<Series> {
         let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
         let out = (self + rhs)?;
-        Ok(out.into_series().into())
+        Ok(out.into_series())
     }
 }
 impl NumOpsDispatch for DFBooleanArray {}
@@ -175,4 +199,15 @@ fn coerce_lhs_rhs<'a>(
     }
 
     Ok((left, right))
+}
+
+fn coerce_to_signed<'a>(lhs: &Series) -> Result<Series> {
+    let dtype = numerical_signed_coercion(&lhs.data_type())?;
+
+    let mut left = lhs.clone();
+    if lhs.data_type() != dtype {
+        left = lhs.cast_with_type(&dtype)?;
+    }
+
+    Ok(left)
 }

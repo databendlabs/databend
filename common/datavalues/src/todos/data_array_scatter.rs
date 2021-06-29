@@ -189,7 +189,7 @@ impl DataArrayScatter {
             DataType::Binary => Self::scatter_binary_data(data, indices, nums),
             DataType::LargeBinary => Self::scatter_large_binary_data(data, indices, nums),
             DataType::Utf8 => Self::scatter_string_data::<i32>(data, indices, nums),
-            DataType::LargeUtf8 => Self::scatter_string_data::<i64>(data, indices, nums),
+            DataType::Utf8 => Self::scatter_string_data::<i64>(data, indices, nums),
             _ => Result::Err(ErrorCode::BadDataValueType(format!(
                 "DataType:{:?} does not implement scatter",
                 stringify!(PrimitiveArray<T>)

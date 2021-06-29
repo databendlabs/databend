@@ -3,8 +3,8 @@ use std::convert::TryFrom;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeListArray;
-use common_arrow::arrow::array::LargeStringArray;
 use common_arrow::arrow::array::PrimitiveArray;
+use common_arrow::arrow::array::StringArray;
 use common_arrow::arrow::array::UInt32Array;
 use num::Num;
 use unsafe_unwrap::UnsafeUnwrap;
@@ -158,7 +158,7 @@ where T: DFNumericType
 }
 
 pub struct Utf8TakeRandom<'a> {
-    arr: &'a LargeStringArray,
+    arr: &'a StringArray,
 }
 
 impl<'a> TakeRandom for Utf8TakeRandom<'a> {

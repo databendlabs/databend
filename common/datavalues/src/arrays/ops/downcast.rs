@@ -8,8 +8,8 @@ use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeListArray;
-use common_arrow::arrow::array::LargeStringArray;
 use common_arrow::arrow::array::PrimitiveArray;
+use common_arrow::arrow::array::StringArray;
 
 use crate::arrays::DataArray;
 use crate::series::IntoSeries;
@@ -58,18 +58,18 @@ impl DFBooleanArray {
 }
 
 impl DFUtf8Array {
-    pub fn downcast_ref(&self) -> &LargeStringArray {
+    pub fn downcast_ref(&self) -> &StringArray {
         let arr = &*self.array;
-        unsafe { &*(arr as *const dyn Array as *const LargeStringArray) }
+        unsafe { &*(arr as *const dyn Array as *const StringArray) }
     }
 
     pub fn downcast_iter<'a>(&self) -> impl Iterator<Item = Option<&'a str>> + DoubleEndedIterator {
         let arr = &*self.array;
-        let arr = unsafe { &*(arr as *const dyn Array as *const LargeStringArray) };
+        let arr = unsafe { &*(arr as *const dyn Array as *const StringArray) };
         arr.iter()
     }
 
-    pub fn from_arrow_array(array: LargeStringArray) -> Self {
+    pub fn from_arrow_array(array: StringArray) -> Self {
         let array_ref = Arc::new(array) as ArrayRef;
         array_ref.into()
     }

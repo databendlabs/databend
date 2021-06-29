@@ -4,7 +4,6 @@ use common_exception::Result;
 
 use super::Series;
 use crate::arrays::ArrayCompare;
-use crate::arrays::NumComp;
 use crate::numerical_coercion;
 use crate::DFBooleanArray;
 use crate::DataType;
@@ -32,6 +31,12 @@ macro_rules! impl_compare {
 }
 
 fn coerce_cmp_lhs_rhs<'a>(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
+    if lhs.data_type() == rhs.data_type()
+        && (lhs.data_type() == DataType::Utf8 || lhs.data_type() == DataType::Boolean)
+    {
+        return Ok((lhs.clone(), rhs.clone()));
+    }
+
     let dtype = numerical_coercion(&lhs.data_type(), &rhs.data_type())?;
 
     let mut left = lhs.clone();
@@ -88,90 +93,16 @@ impl ArrayCompare<&Series> for Series {
         let (lhs, rhs) = coerce_cmp_lhs_rhs(self, rhs)?;
         impl_compare!(lhs.as_ref(), rhs.as_ref(), lt_eq)
     }
-}
 
-impl<Rhs> ArrayCompare<Rhs> for Series
-where Rhs: NumComp
-{
-    fn eq_missing(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        self.eq(rhs)
+    /// Create a boolean mask by checking if lhs < rhs.
+    fn like(&self, rhs: &Series) -> Result<DFBooleanArray> {
+        let (lhs, rhs) = coerce_cmp_lhs_rhs(self, rhs)?;
+        impl_compare!(lhs.as_ref(), rhs.as_ref(), like)
     }
 
-    fn eq(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        apply_method_numeric_series!(self, eq, rhs)
-    }
-
-    fn neq(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        apply_method_numeric_series!(self, neq, rhs)
-    }
-
-    fn gt(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        apply_method_numeric_series!(self, gt, rhs)
-    }
-
-    fn gt_eq(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        apply_method_numeric_series!(self, gt_eq, rhs)
-    }
-
-    fn lt(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        apply_method_numeric_series!(self, lt, rhs)
-    }
-
-    fn lt_eq(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        apply_method_numeric_series!(self, lt_eq, rhs)
-    }
-}
-
-impl ArrayCompare<&str> for Series {
-    fn eq_missing(&self, rhs: &str) -> Result<DFBooleanArray> {
-        self.eq(rhs)
-    }
-
-    fn eq(&self, rhs: &str) -> Result<DFBooleanArray> {
-        if let Ok(a) = self.utf8() {
-            a.eq(rhs)
-        } else {
-            Ok(std::iter::repeat(false).take(self.len()).collect())
-        }
-    }
-
-    fn neq(&self, rhs: &str) -> Result<DFBooleanArray> {
-        if let Ok(a) = self.utf8() {
-            a.neq(rhs)
-        } else {
-            Ok(std::iter::repeat(false).take(self.len()).collect())
-        }
-    }
-
-    fn gt(&self, rhs: &str) -> Result<DFBooleanArray> {
-        if let Ok(a) = self.utf8() {
-            a.gt(rhs)
-        } else {
-            Ok(std::iter::repeat(false).take(self.len()).collect())
-        }
-    }
-
-    fn gt_eq(&self, rhs: &str) -> Result<DFBooleanArray> {
-        if let Ok(a) = self.utf8() {
-            a.gt_eq(rhs)
-        } else {
-            Ok(std::iter::repeat(false).take(self.len()).collect())
-        }
-    }
-
-    fn lt(&self, rhs: &str) -> Result<DFBooleanArray> {
-        if let Ok(a) = self.utf8() {
-            a.lt(rhs)
-        } else {
-            Ok(std::iter::repeat(false).take(self.len()).collect())
-        }
-    }
-
-    fn lt_eq(&self, rhs: &str) -> Result<DFBooleanArray> {
-        if let Ok(a) = self.utf8() {
-            a.lt_eq(rhs)
-        } else {
-            Ok(std::iter::repeat(false).take(self.len()).collect())
-        }
+    /// Create a boolean mask by checking if lhs <= rhs.
+    fn nlike(&self, rhs: &Series) -> Result<DFBooleanArray> {
+        let (lhs, rhs) = coerce_cmp_lhs_rhs(self, rhs)?;
+        impl_compare!(lhs.as_ref(), rhs.as_ref(), nlike)
     }
 }

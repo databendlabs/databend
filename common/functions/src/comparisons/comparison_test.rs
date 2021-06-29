@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
@@ -167,7 +165,8 @@ fn test_comparison_function() -> Result<()> {
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
 
-        assert_eq!(v.to_array()?.as_ref(), t.expect.as_ref());
+        let cmp = v.to_array()?.eq(&t.expect)?;
+        assert!(cmp.all_true());
     }
     Ok(())
 }

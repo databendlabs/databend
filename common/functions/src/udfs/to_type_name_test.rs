@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
@@ -20,7 +20,7 @@ fn test_to_type_name_function() -> Result<()> {
         nullable: bool,
         arg_names: Vec<&'static str>,
         columns: Vec<DataColumn>,
-        expect: DataArrayRef,
+        expect: DataColumn,
         error: &'static str,
         func: Box<dyn Function>,
     }
@@ -33,10 +33,8 @@ fn test_to_type_name_function() -> Result<()> {
         nullable: false,
         arg_names: vec!["a"],
         func: ToTypeNameFunction::try_create("toTypeName")?,
-        columns: vec![Arc::new(BooleanArray::from(vec![true, true, true, false])).into()],
-        expect: Arc::new(StringArray::from(vec![
-            "Boolean", "Boolean", "Boolean", "Boolean",
-        ])),
+        columns: vec![Series::new(vec![true, true, true, false]).into()],
+        expect: Series::new(vec!["Boolean", "Boolean", "Boolean", "Boolean"]).into(),
         error: "",
     }];
 
@@ -68,7 +66,8 @@ fn test_to_type_name_function() -> Result<()> {
         let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
-        assert_eq!(v.to_array()?.as_ref(), t.expect.as_ref());
+
+        assert!(v.to_array()?.series_equal(&t.expect.to_array()?));
     }
     Ok(())
 }

@@ -5,12 +5,14 @@
 use std::collections::hash_map::RawEntryMut;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::hash::BuildHasher;
 use std::hash::BuildHasherDefault;
 use std::hash::Hash;
 use std::hash::Hasher;
 
+use ahash::AHasher;
 use ahash::RandomState;
-use common_datavalues::series::Series;
+use common_datavalues::prelude::*;
 use common_datavalues::AlignedVec;
 use common_datavalues::UInt64Type;
 use common_exception::Result;
@@ -55,15 +57,15 @@ impl DataBlock {
         let mut hashes = Vec::with_capacity(column_names.len());
         let mut values = Vec::with_capacity(column_names.len());
 
-        let hash_builder = RandomState::new();
-        // 1. Get group by columns.
+        let random_state = RandomState::new();
         let mut group_series = Vec::with_capacity(column_names.len());
         {
             for col in column_names {
                 let column = block.try_column_by_name(&col)?;
 
                 let series = column.to_array()?;
-                let hash = series.vec_hash(hash_builder.clone());
+                let df_hasher = DFHasher::AhashHasher(random_state.build_hasher());
+                let hash = series.vec_hash(df_hasher);
 
                 group_series.push(series);
                 hashes.push(hash);

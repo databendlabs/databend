@@ -9,9 +9,8 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::array::LargeStringArray;
 use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::compute;
+use common_arrow::arrow::array::StringArray;
 use common_arrow::arrow::compute::kernels::comparison;
 use common_arrow::arrow::compute::*;
 use common_exception::Result;
@@ -116,9 +115,10 @@ macro_rules! impl_cmp_numeric_utf8 {
             }
         } else if $self.len() == 1 {
             if let Some(value) = $self.get(0) {
-                $rhs.$op(value)
+                let res = $rhs.$op(value)?;
+                res.not()
             } else {
-                Ok(DFBooleanArray::full(false, $self.len()))
+                Ok(DFBooleanArray::full(false, $rhs.len()))
             }
         } else if $self.len() == $rhs.len() {
             $self.comparison($rhs, comparison::$kop)
@@ -181,7 +181,7 @@ macro_rules! impl_cmp_bool {
                     false => $rhs.not(),
                 }
             } else {
-                Ok(DFBooleanArray::full(false, $self.len()))
+                Ok(DFBooleanArray::full(false, $rhs.len()))
             }
         } else {
             Ok(apply_operand_on_array_by_iter!($self, $rhs, $operand))
@@ -224,8 +224,8 @@ impl DFUtf8Array {
         &self,
         rhs: &DFUtf8Array,
         operator: impl Fn(
-            &LargeStringArray,
-            &LargeStringArray,
+            &StringArray,
+            &StringArray,
         ) -> common_arrow::arrow::error::Result<BooleanArray>,
     ) -> Result<DFBooleanArray> {
         let arr = operator(self.downcast_ref(), rhs.downcast_ref())?;
@@ -246,7 +246,7 @@ macro_rules! impl_like_utf8 {
             if let Some(value) = $self.get(0) {
                 $rhs.$op(value)
             } else {
-                Ok(DFBooleanArray::full(false, $self.len()))
+                Ok(DFBooleanArray::full(false, $rhs.len()))
             }
         } else {
             $self.comparison($rhs, comparison::$kop)
@@ -264,23 +264,23 @@ impl ArrayCompare<&DFUtf8Array> for DFUtf8Array {
     }
 
     fn neq(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, neq, neq_utf8,  ==}
+        impl_cmp_numeric_utf8! {self, rhs, neq, neq_utf8,  !=}
     }
 
     fn gt(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, gt, gt_utf8,  ==}
+        impl_cmp_numeric_utf8! {self, rhs, gt, gt_utf8,  >}
     }
 
     fn gt_eq(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, gt_eq, gt_eq_utf8,  ==}
+        impl_cmp_numeric_utf8! {self, rhs, gt_eq, gt_eq_utf8,  >=}
     }
 
     fn lt(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, lt, lt_utf8,  ==}
+        impl_cmp_numeric_utf8! {self, rhs, lt, lt_utf8,  <}
     }
 
     fn lt_eq(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, lt_eq, lt_eq_utf8,  ==}
+        impl_cmp_numeric_utf8! {self, rhs, lt_eq, lt_eq_utf8,  <=}
     }
 
     fn like(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {

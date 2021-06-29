@@ -5,8 +5,8 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::array::LargeStringArray;
 use common_arrow::arrow::array::PrimitiveArray;
+use common_arrow::arrow::array::StringArray;
 
 use crate::arrays::DataArray;
 use crate::utils::NoNull;
@@ -267,15 +267,15 @@ where T: DFNumericType
     }
 }
 
-impl ArrayApplyKernel<LargeStringArray> for DFUtf8Array {
+impl ArrayApplyKernel<StringArray> for DFUtf8Array {
     fn apply_kernel<F>(&self, f: F) -> Self
-    where F: Fn(&LargeStringArray) -> ArrayRef {
+    where F: Fn(&StringArray) -> ArrayRef {
         self.apply_kernel_cast(f)
     }
 
     fn apply_kernel_cast<F, S>(&self, f: F) -> DataArray<S>
     where
-        F: Fn(&LargeStringArray) -> ArrayRef,
+        F: Fn(&StringArray) -> ArrayRef,
         S: DFDataType,
     {
         let array = self.downcast_ref();

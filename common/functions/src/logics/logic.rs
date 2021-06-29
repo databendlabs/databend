@@ -49,7 +49,7 @@ impl Function for LogicFunction {
     }
 
     fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
-        columns[0].logic(self.op.clone(), columns[1..])
+        columns[0].logic(self.op.clone(), &columns[1..])
     }
 }
 

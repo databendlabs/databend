@@ -7,14 +7,13 @@ use std::convert::TryFrom;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use ahash::RandomState;
 use common_arrow::arrow::array::ArrayRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::arrays::*;
 use crate::data_df_type::*;
-use crate::series::*;
+use crate::DFHasher;
 use crate::DataType;
 use crate::DataValue;
 
@@ -56,13 +55,14 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
 
     fn try_get(&self, index: usize) -> Result<DataValue>;
 
-    fn vec_hash(&self, random_state: RandomState) -> DFUInt64Array;
+    fn vec_hash(&self, hasher: DFHasher) -> DFUInt64Array;
 
     fn subtract(&self, rhs: &Series) -> Result<Series>;
     fn add_to(&self, rhs: &Series) -> Result<Series>;
     fn multiply(&self, rhs: &Series) -> Result<Series>;
     fn divide(&self, rhs: &Series) -> Result<Series>;
     fn remainder(&self, rhs: &Series) -> Result<Series>;
+    fn negative(&self) -> Result<Series>;
 
     /// Unpack to DFArray of data_type i8
     fn i8(&self) -> Result<&DFInt8Array> {

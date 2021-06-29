@@ -2,15 +2,18 @@
 use std::ops::Add;
 use std::ops::Div;
 use std::ops::Mul;
+use std::ops::Neg;
 use std::ops::Rem;
 use std::ops::Sub;
 use std::sync::Arc;
 
+use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::compute;
 use common_arrow::arrow::compute::divide_scalar;
 use common_arrow::arrow::error::ArrowError;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use num::Num;
 use num::NumCast;
@@ -20,14 +23,7 @@ use num::Zero;
 
 use crate::arrays::ops::*;
 use crate::arrays::DataArray;
-use crate::DFBooleanArray;
-use crate::DFFloat32Array;
-use crate::DFFloat64Array;
-use crate::DFListArray;
-use crate::DFNumericType;
-use crate::DFUtf8Array;
-use crate::Float32Type;
-use crate::Float64Type;
+use crate::*;
 
 macro_rules! apply_operand_on_array_by_iter {
 
@@ -135,7 +131,7 @@ where
     }
 }
 
-impl<T> Div for &DataArray<T>
+impl<T> Sub for &DataArray<T>
 where
     T: DFNumericType,
     T::Native: Add<Output = T::Native>
@@ -143,13 +139,12 @@ where
         + Mul<Output = T::Native>
         + Div<Output = T::Native>
         + Rem<Output = T::Native>
-        + num::Zero
-        + num::One,
+        + num::Zero,
 {
     type Output = Result<DataArray<T>>;
 
-    fn div(self, rhs: Self) -> Self::Output {
-        arithmetic_helper(self, rhs, compute::divide, |lhs, rhs| lhs / rhs)
+    fn sub(self, rhs: Self) -> Self::Output {
+        arithmetic_helper(self, rhs, compute::subtract, |lhs, rhs| lhs - rhs)
     }
 }
 
@@ -167,6 +162,24 @@ where
 
     fn mul(self, rhs: Self) -> Self::Output {
         arithmetic_helper(self, rhs, compute::multiply, |lhs, rhs| lhs * rhs)
+    }
+}
+
+impl<T> Div for &DataArray<T>
+where
+    T: DFNumericType,
+    T::Native: Add<Output = T::Native>
+        + Sub<Output = T::Native>
+        + Mul<Output = T::Native>
+        + Div<Output = T::Native>
+        + Rem<Output = T::Native>
+        + num::Zero
+        + num::One,
+{
+    type Output = Result<DataArray<T>>;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        arithmetic_helper(self, rhs, compute::divide, |lhs, rhs| lhs / rhs)
     }
 }
 
@@ -188,7 +201,7 @@ where
     }
 }
 
-impl<T> Sub for &DataArray<T>
+impl<T> Neg for &DataArray<T>
 where
     T: DFNumericType,
     T::Native: Add<Output = T::Native>
@@ -196,12 +209,44 @@ where
         + Mul<Output = T::Native>
         + Div<Output = T::Native>
         + Rem<Output = T::Native>
-        + num::Zero,
+        + num::Zero
+        + num::One,
 {
     type Output = Result<DataArray<T>>;
 
-    fn sub(self, rhs: Self) -> Self::Output {
-        arithmetic_helper(self, rhs, compute::subtract, |lhs, rhs| lhs - rhs)
+    fn neg(self) -> Self::Output {
+        let arr = &*self.array;
+        let result = unsafe {
+            match self.data_type() {
+                DataType::Int8 => Ok(Arc::new(compute::negate(
+                    &*(arr as *const dyn Array as *const PrimitiveArray<Int8Type>),
+                )?) as ArrayRef),
+
+                DataType::Int16 => Ok(Arc::new(compute::negate(
+                    &*(arr as *const dyn Array as *const PrimitiveArray<Int16Type>),
+                )?) as ArrayRef),
+
+                DataType::Int32 => Ok(Arc::new(compute::negate(
+                    &*(arr as *const dyn Array as *const PrimitiveArray<Int32Type>),
+                )?) as ArrayRef),
+                DataType::Int64 => Ok(Arc::new(compute::negate(
+                    &*(arr as *const dyn Array as *const PrimitiveArray<Int64Type>),
+                )?) as ArrayRef),
+                DataType::Float32 => Ok(Arc::new(compute::negate(
+                    &*(arr as *const dyn Array as *const PrimitiveArray<Float32Type>),
+                )?) as ArrayRef),
+                DataType::Float64 => Ok(Arc::new(compute::negate(
+                    &*(arr as *const dyn Array as *const PrimitiveArray<Float64Type>),
+                )?) as ArrayRef),
+
+                _ => Err(ErrorCode::IllegalDataType(format!(
+                    "DataType {:?} is Unsupported for neg op",
+                    self.data_type()
+                ))),
+            }
+        };
+        let result = result?;
+        Ok(result.into())
     }
 }
 

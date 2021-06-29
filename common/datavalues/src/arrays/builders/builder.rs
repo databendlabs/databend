@@ -3,9 +3,9 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BooleanBuilder;
-use common_arrow::arrow::array::LargeListBuilder;
-use common_arrow::arrow::array::LargeStringBuilder;
+use common_arrow::arrow::array::ListBuilder;
 use common_arrow::arrow::array::PrimitiveBuilder;
+use common_arrow::arrow::array::StringBuilder;
 use common_arrow::arrow::buffer::Buffer;
 use num::Num;
 
@@ -111,7 +111,7 @@ where T: DFNumericType
 }
 
 pub struct Utf8ArrayBuilder {
-    pub builder: LargeStringBuilder,
+    pub builder: StringBuilder,
     pub capacity: usize,
 }
 
@@ -124,7 +124,7 @@ impl Utf8ArrayBuilder {
     /// * `bytes_capacity` - Number of bytes needed to store the string values.
     pub fn new(capacity: usize, bytes_capacity: usize) -> Self {
         Utf8ArrayBuilder {
-            builder: LargeStringBuilder::with_capacity(bytes_capacity, capacity),
+            builder: StringBuilder::with_capacity(bytes_capacity, capacity),
             capacity,
         }
     }
@@ -229,7 +229,7 @@ where S: AsRef<str>
     fn new_from_slice(v: &[S]) -> Self {
         let values_size = v.iter().fold(0, |acc, s| acc + s.as_ref().len());
 
-        let mut builder = LargeStringBuilder::with_capacity(values_size, v.len());
+        let mut builder = StringBuilder::with_capacity(values_size, v.len());
         v.iter().for_each(|val| {
             builder.append_value(val.as_ref()).unwrap();
         });
@@ -278,7 +278,7 @@ pub trait ListBuilderTrait {
 pub struct ListPrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
 {
-    pub builder: LargeListBuilder<ArrowPrimitiveArrayBuilder<T>>,
+    pub builder: ListBuilder<ArrowPrimitiveArrayBuilder<T>>,
 }
 
 macro_rules! finish_list_builder {
@@ -292,7 +292,7 @@ impl<T> ListPrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
 {
     pub fn new(values_builder: ArrowPrimitiveArrayBuilder<T>, capacity: usize) -> Self {
-        let builder = LargeListBuilder::with_capacity(values_builder, capacity);
+        let builder = ListBuilder::with_capacity(values_builder, capacity);
         ListPrimitiveArrayBuilder { builder }
     }
 
@@ -363,12 +363,12 @@ where
 }
 
 pub struct ListUtf8ArrayBuilder {
-    builder: LargeListBuilder<LargeStringBuilder>,
+    builder: ListBuilder<StringBuilder>,
 }
 
 impl ListUtf8ArrayBuilder {
-    pub fn new(values_builder: LargeStringBuilder, capacity: usize) -> Self {
-        let builder = LargeListBuilder::with_capacity(values_builder, capacity);
+    pub fn new(values_builder: StringBuilder, capacity: usize) -> Self {
+        let builder = ListBuilder::with_capacity(values_builder, capacity);
         ListUtf8ArrayBuilder { builder }
     }
 }
@@ -409,12 +409,12 @@ impl ListBuilderTrait for ListUtf8ArrayBuilder {
 }
 
 pub struct ListBooleanArrayBuilder {
-    builder: LargeListBuilder<ArrowBooleanArrayBuilder>,
+    builder: ListBuilder<ArrowBooleanArrayBuilder>,
 }
 
 impl ListBooleanArrayBuilder {
     pub fn new(values_builder: ArrowBooleanArrayBuilder, capacity: usize) -> Self {
-        let builder = LargeListBuilder::with_capacity(values_builder, capacity);
+        let builder = ListBuilder::with_capacity(values_builder, capacity);
 
         Self { builder }
     }
@@ -476,8 +476,7 @@ pub fn get_list_builder(
     }
     macro_rules! get_utf8_builder {
         () => {{
-            let values_builder =
-                LargeStringBuilder::with_capacity(value_capacity * 5, value_capacity);
+            let values_builder = StringBuilder::with_capacity(value_capacity * 5, value_capacity);
             let builder = ListUtf8ArrayBuilder::new(values_builder, list_capacity);
             Box::new(builder)
         }};

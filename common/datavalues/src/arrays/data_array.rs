@@ -142,7 +142,7 @@ where T: DFDataType
 
         // TODO: insert types
         match T::data_type() {
-            DataType::Utf8 => downcast_and_pack!(LargeStringArray, Utf8),
+            DataType::Utf8 => downcast_and_pack!(StringArray, Utf8),
             DataType::Boolean => downcast_and_pack!(BooleanArray, Boolean),
             DataType::UInt8 => downcast_and_pack!(UInt8Array, UInt8),
             DataType::UInt16 => downcast_and_pack!(UInt16Array, UInt16),

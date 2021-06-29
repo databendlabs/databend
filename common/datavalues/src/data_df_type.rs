@@ -5,6 +5,7 @@
 use common_arrow::arrow::datatypes as arrow_data_types;
 use common_arrow::arrow::datatypes::ArrowNumericType;
 use common_arrow::arrow::datatypes::ArrowPrimitiveType;
+use common_arrow::arrow::datatypes::ArrowSignedNumericType;
 use common_arrow::arrow::datatypes::IntervalUnit;
 use common_arrow::arrow::datatypes::TimeUnit;
 

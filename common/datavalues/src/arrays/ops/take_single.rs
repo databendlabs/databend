@@ -6,8 +6,8 @@ use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeListArray;
-use common_arrow::arrow::array::LargeStringArray;
 use common_arrow::arrow::array::PrimitiveArray;
+use common_arrow::arrow::array::StringArray;
 use unsafe_unwrap::UnsafeUnwrap;
 
 use super::take_random::TakeRandom;
@@ -94,12 +94,12 @@ impl<'a> TakeRandom for &'a DFUtf8Array {
     fn get(&self, index: usize) -> Option<Self::Item> {
         // Safety:
         // Out of bounds is checked and downcast is of correct type
-        unsafe { impl_take_random_get!(self, index, LargeStringArray) }
+        unsafe { impl_take_random_get!(self, index, StringArray) }
     }
 
     #[inline]
     unsafe fn get_unchecked(&self, index: usize) -> Self::Item {
-        impl_take_random_get_unchecked!(self, index, LargeStringArray)
+        impl_take_random_get_unchecked!(self, index, StringArray)
     }
 }
 
@@ -112,12 +112,12 @@ impl<'a> TakeRandomUtf8 for &'a DFUtf8Array {
     fn get(self, index: usize) -> Option<Self::Item> {
         // Safety:
         // Out of bounds is checkedn and downcast is of correct type
-        unsafe { impl_take_random_get!(self, index, LargeStringArray) }
+        unsafe { impl_take_random_get!(self, index, StringArray) }
     }
 
     #[inline]
     unsafe fn get_unchecked(self, index: usize) -> Self::Item {
-        impl_take_random_get_unchecked!(self, index, LargeStringArray)
+        impl_take_random_get_unchecked!(self, index, StringArray)
     }
 }
 

@@ -220,7 +220,7 @@ impl<Hasher: FuseDataHasher> DataArrayHashDispatcher<Hasher> {
                 Self::dispatch_primitive_array(input, TimestampNanosecondType {}, Hasher::hash_i64)
             }
             DataType::Utf8 => Self::dispatch_string_array::<i32>(input),
-            DataType::LargeUtf8 => Self::dispatch_string_array::<i64>(input),
+            DataType::Utf8 => Self::dispatch_string_array::<i64>(input),
             DataType::Binary => Self::dispatch_binary_array(input),
             DataType::LargeBinary => Self::dispatch_large_binary_array(input),
             _ => Result::Err(ErrorCode::BadDataValueType(

@@ -5,7 +5,7 @@ use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeListArray;
-use common_arrow::arrow::array::LargeStringArray;
+use common_arrow::arrow::array::StringArray;
 
 use crate::series::IntoSeries;
 use crate::series::Series;
@@ -96,14 +96,14 @@ impl<'a> IntoIterator for &'a DFUtf8Array {
 }
 
 pub struct Utf8IterNoNull<'a> {
-    array: &'a LargeStringArray,
+    array: &'a StringArray,
     current: usize,
     current_end: usize,
 }
 
 impl<'a> Utf8IterNoNull<'a> {
     /// create a new iterator
-    pub fn new(array: &'a LargeStringArray) -> Self {
+    pub fn new(array: &'a StringArray) -> Self {
         Utf8IterNoNull {
             array,
             current: 0,

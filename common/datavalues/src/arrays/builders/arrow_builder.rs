@@ -6,9 +6,8 @@ use common_arrow::arrow::array::ArrayBuilder;
 use common_arrow::arrow::array::ArrayData;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::array::LargeStringArray;
-use common_arrow::arrow::array::LargeStringBuilder;
 use common_arrow::arrow::array::PrimitiveArray;
+use common_arrow::arrow::array::StringArray;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::buffer::MutableBuffer;
 use common_arrow::arrow::datatypes::ArrowPrimitiveType;
@@ -350,12 +349,12 @@ where T: ArrowPrimitiveType
 }
 
 #[derive(Debug)]
-pub struct ArrowNoNullLargeStringBuilder {
+pub struct ArrowNoNullStringBuilder {
     values: AlignedVec<u8>,
-    offsets: AlignedVec<i64>,
+    offsets: AlignedVec<i32>,
 }
 
-impl ArrowNoNullLargeStringBuilder {
+impl ArrowNoNullStringBuilder {
     pub fn with_capacity(values_capacity: usize, list_capacity: usize) -> Self {
         let mut offsets = AlignedVec::with_capacity_aligned(list_capacity + 1);
         offsets.push(0);
@@ -366,7 +365,7 @@ impl ArrowNoNullLargeStringBuilder {
     }
 
     /// Extends with values and offsets.
-    pub fn extend_from_slices(&mut self, values: &[u8], offsets: &[i64]) {
+    pub fn extend_from_slices(&mut self, values: &[u8], offsets: &[i32]) {
         self.values.extend_from_slice(values);
         self.offsets.extend_from_slice(offsets);
     }
@@ -374,11 +373,11 @@ impl ArrowNoNullLargeStringBuilder {
     #[inline]
     pub fn append_value(&mut self, value: &str) {
         self.values.extend_from_slice(value.as_bytes());
-        self.offsets.push(self.values.len() as i64);
+        self.offsets.push(self.values.len() as i32);
     }
 
     /// Builds the `StringArray` and reset this builder.
-    pub fn finish(&mut self) -> LargeStringArray {
+    pub fn finish(&mut self) -> StringArray {
         // values are u8 typed
         let values = mem::take(&mut self.values);
         // offsets are i64 typed
@@ -391,11 +390,11 @@ impl ArrowNoNullLargeStringBuilder {
         assert_eq!(buf_offsets.len(), buf_offsets.capacity());
 
         // note that the arrays are already shrunk when transformed to an arrow buffer.
-        let arraydata = ArrayData::builder(DataType::LargeUtf8)
+        let arraydata = ArrayData::builder(DataType::Utf8)
             .len(offsets_len)
             .add_buffer(buf_offsets)
             .add_buffer(buf_values)
             .build();
-        LargeStringArray::from(arraydata)
+        StringArray::from(arraydata)
     }
 }
