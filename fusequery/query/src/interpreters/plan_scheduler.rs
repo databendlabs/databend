@@ -33,7 +33,11 @@ pub struct ScheduledActions {
 impl PlanScheduler {
     /// Schedule the plan to Local or Remote mode.
     #[tracing::instrument(level = "info", skip(ctx, plan))]
-    pub fn reschedule(ctx: FuseQueryContextRef, plan: &PlanNode) -> Result<ScheduledActions> {
+    pub fn reschedule(
+        ctx: FuseQueryContextRef,
+        subquery_res_map: HashMap<String, bool>,
+        plan: &PlanNode,
+    ) -> Result<ScheduledActions> {
         let cluster = ctx.try_get_cluster()?;
 
         if cluster.is_empty()? {
@@ -97,7 +101,9 @@ impl PlanScheduler {
         let mut remote_actions = vec![];
         for node in &cluster_nodes {
             for builder in &builders {
-                if let Some(action) = builder.build(&node.name, &cluster_nodes)? {
+                if let Some(action) =
+                    builder.build(&node.name, &cluster_nodes, subquery_res_map.clone())?
+                {
                     remote_actions.push((node.clone(), action));
                 }
             }
@@ -316,6 +322,7 @@ impl ExecutionPlanBuilder {
         &self,
         node_name: &str,
         cluster_nodes: &[Arc<Node>],
+        subquery_res_map: HashMap<String, bool>,
     ) -> Result<Option<ExecutePlanWithShuffleAction>> {
         match self.2.kind {
             StageKind::Expansive => {
@@ -331,6 +338,7 @@ impl ExecutionPlanBuilder {
                             plan: self.3.get_plan(node_name, cluster_nodes)?,
                             scatters: all_nodes_name,
                             scatters_action: self.2.scatters_expr.clone(),
+                            subquery_res_map: subquery_res_map,
                         }));
                     }
                 }
@@ -345,6 +353,7 @@ impl ExecutionPlanBuilder {
                             plan: self.3.get_plan(node_name, cluster_nodes)?,
                             scatters: vec![cluster_node.name.clone()],
                             scatters_action: self.2.scatters_expr.clone(),
+                            subquery_res_map: subquery_res_map,
                         }));
                     }
                 }
@@ -364,6 +373,7 @@ impl ExecutionPlanBuilder {
                     plan: self.3.get_plan(node_name, cluster_nodes)?,
                     scatters: all_nodes_name,
                     scatters_action: self.2.scatters_expr.clone(),
+                    subquery_res_map: subquery_res_map,
                 }))
             }
         }
