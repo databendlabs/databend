@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::hash_map::Entry::Occupied;
+use std::collections::hash_map::Entry::Vacant;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -91,6 +93,29 @@ impl SessionManager {
         }
     }
 
+    pub fn create_rpc_session(self: &Arc<Self>, id: String, aborted: bool) -> Result<SessionRef> {
+        counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
+
+        let mut sessions = self.active_sessions.write();
+
+        let session = match sessions.entry(id) {
+            Occupied(entry) => entry.get().clone(),
+            Vacant(_) if aborted => return Err(ErrorCode::AbortedSession("Aborting server.")),
+            Vacant(entry) => {
+                let session =
+                    Session::try_create(self.conf.clone(), entry.key().clone(), self.clone())?;
+
+                entry.insert(session).clone()
+            }
+        };
+
+        Ok(SessionRef::create(
+            String::from("RpcSession"),
+            session,
+            self.clone(),
+        ))
+    }
+
     pub fn destroy_session(self: &Arc<Self>, session_id: &String) {
         counter!(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
 
@@ -117,7 +142,7 @@ impl SessionManager {
 
 #[async_trait::async_trait]
 impl AbortableService<(), ()> for SessionManager {
-    fn abort(&self, force: bool) -> Result<()> {
+    fn abort(&self, _force: bool) -> Result<()> {
         // self.sessions
         //     .write()
         //     .iter()
@@ -138,7 +163,7 @@ impl AbortableService<(), ()> for SessionManager {
         ))
     }
 
-    async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed> {
+    async fn wait_terminal(&self, _duration: Option<Duration>) -> Result<Elapsed> {
         let instant = Instant::now();
 
         // let active_sessions_snapshot = || {

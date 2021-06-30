@@ -37,7 +37,7 @@ pub struct FuseQueryContext {
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
-    pub fn try_create(conf: Config) -> Result<FuseQueryContextRef> {
+    pub fn try_create(_conf: Config) -> Result<FuseQueryContextRef> {
         // let settings = Settings::try_create()?;
         // let ctx = FuseQueryContext {
         //     conf,
@@ -74,9 +74,7 @@ impl FuseQueryContext {
         })
     }
 
-    pub(in crate::sessions) fn from_shared(
-        shared: Arc<FuseQueryContextShared>,
-    ) -> Result<FuseQueryContextRef> {
+    pub fn from_shared(shared: Arc<FuseQueryContextShared>) -> Result<FuseQueryContextRef> {
         Ok(Arc::new(FuseQueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
@@ -92,7 +90,7 @@ impl FuseQueryContext {
         unimplemented!();
     }
 
-    pub fn with_id(&self, uuid: &str) -> Result<FuseQueryContextRef> {
+    pub fn with_id(&self, _uuid: &str) -> Result<FuseQueryContextRef> {
         unimplemented!();
     }
 

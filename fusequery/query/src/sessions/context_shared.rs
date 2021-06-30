@@ -22,7 +22,7 @@ use crate::sessions::Settings;
 ///         (SELECT scalar FROM table_name_3) AS scalar_3
 ///     FROM table_name_4;
 /// For each subquery, they will share a runtime, session, progress, init_query_id
-pub(in crate::sessions) struct FuseQueryContextShared {
+pub struct FuseQueryContextShared {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) progress: Arc<Progress>,
     pub(in crate::sessions) session: Arc<Session>,

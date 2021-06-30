@@ -4,10 +4,9 @@
 
 use std::convert::TryInto;
 use std::pin::Pin;
+use std::sync::Arc;
 
-use common_arrow::arrow_flight::flight_descriptor::DescriptorType;
 use common_arrow::arrow_flight::flight_service_server::FlightService;
-use common_arrow::arrow_flight::utils::flight_schema_from_arrow_schema;
 use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::ActionType;
 use common_arrow::arrow_flight::Criteria;
@@ -21,14 +20,7 @@ use common_arrow::arrow_flight::PutResult;
 use common_arrow::arrow_flight::Result as FlightResult;
 use common_arrow::arrow_flight::SchemaResult;
 use common_arrow::arrow_flight::Ticket;
-use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
-use common_runtime::tokio::sync::mpsc::channel;
-use common_runtime::tokio::sync::mpsc::Receiver;
-use common_runtime::tokio::sync::mpsc::Sender;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::Stream;
-use tokio_stream::StreamExt;
 use tonic::Request;
 use tonic::Response as RawResponse;
 use tonic::Status;
@@ -45,11 +37,11 @@ pub type FlightStream<T> =
 
 pub struct FuseQueryFlightService {
     sessions: SessionManagerRef,
-    dispatcher: FuseQueryFlightDispatcher,
+    dispatcher: Arc<FuseQueryFlightDispatcher>,
 }
 
 impl FuseQueryFlightService {
-    pub fn create(dispatcher: FuseQueryFlightDispatcher, sessions: SessionManagerRef) -> Self {
+    pub fn create(dispatcher: Arc<FuseQueryFlightDispatcher>, sessions: SessionManagerRef) -> Self {
         FuseQueryFlightService {
             sessions,
             dispatcher,
@@ -81,13 +73,13 @@ impl FlightService for FuseQueryFlightService {
         ))
     }
 
-    async fn get_flight_info(&self, request: Request<FlightDescriptor>) -> Response<FlightInfo> {
+    async fn get_flight_info(&self, _: Request<FlightDescriptor>) -> Response<FlightInfo> {
         Err(Status::unimplemented(
             "FuseQuery does not implement get_flight_info.",
         ))
     }
 
-    async fn get_schema(&self, request: Request<FlightDescriptor>) -> Response<SchemaResult> {
+    async fn get_schema(&self, _: Request<FlightDescriptor>) -> Response<SchemaResult> {
         Err(Status::unimplemented(
             "FuseQuery does not implement get_schema.",
         ))
@@ -138,11 +130,11 @@ impl FlightService for FuseQueryFlightService {
         let do_flight_action = || -> common_exception::Result<FlightResult> {
             match flight_action {
                 FlightAction::PrepareQueryStage(action) => {
-                    let session_id = Some(action.query_id.clone());
-                    let session = self.sessions.create_session("RPCSession")?;
+                    let session_id = action.query_id.clone();
+                    let is_aborted = self.dispatcher.is_aborted();
+                    let session = self.sessions.create_rpc_session(session_id, is_aborted)?;
 
-                    self.dispatcher
-                        .run_shuffle_action(session, action.clone())?;
+                    self.dispatcher.run_shuffle_action(session, action)?;
                     Ok(FlightResult { body: vec![] })
                 }
             }

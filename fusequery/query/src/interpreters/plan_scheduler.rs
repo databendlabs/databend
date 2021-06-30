@@ -101,9 +101,7 @@ impl PlanScheduler {
         let mut remote_actions = vec![];
         for node in &cluster_nodes {
             for builder in &builders {
-                if let Some(action) =
-                builder.build(&node.name, &cluster_nodes)?
-                {
+                if let Some(action) = builder.build(&node.name, &cluster_nodes)? {
                     remote_actions.push((node.clone(), action));
                 }
             }

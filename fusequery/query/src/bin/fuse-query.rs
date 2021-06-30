@@ -117,7 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Ctrl + C 100 times in five seconds
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
     ctrlc::set_handler(move || {
-        if let Err(error) = futures::executor::block_on(tx.send(())) {
+        if let Err(error) = tx.blocking_send(()) {
             log::error!("Could not send signal on channel {}", error);
             std::process::exit(1);
         }

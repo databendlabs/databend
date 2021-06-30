@@ -77,7 +77,7 @@ impl MySQLHandler {
 
 #[async_trait::async_trait]
 impl AbortableService<(String, u16), SocketAddr> for MySQLHandler {
-    fn abort(&self, force: bool) -> Result<()> {
+    fn abort(&self, _force: bool) -> Result<()> {
         self.abort_parts.lock().0.abort();
         Ok(())
     }

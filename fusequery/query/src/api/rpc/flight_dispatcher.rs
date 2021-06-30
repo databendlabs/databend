@@ -1,5 +1,6 @@
-use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -10,8 +11,6 @@ use common_exception::ToErrorCode;
 use common_infallible::RwLock;
 use common_runtime::tokio::sync::*;
 use common_streams::AbortStream;
-use common_streams::SendableDataBlockStream;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_actions::ShuffleAction;
@@ -31,6 +30,7 @@ struct StreamInfo {
 pub struct FuseQueryFlightDispatcher {
     streams: Arc<RwLock<HashMap<String, StreamInfo>>>,
     stages_notify: Arc<RwLock<HashMap<String, Arc<Notify>>>>,
+    abort: Arc<AtomicBool>,
 }
 
 impl FuseQueryFlightDispatcher {
@@ -38,7 +38,17 @@ impl FuseQueryFlightDispatcher {
         FuseQueryFlightDispatcher {
             streams: Arc::new(RwLock::new(HashMap::new())),
             stages_notify: Arc::new(RwLock::new(HashMap::new())),
+            abort: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Reject new session if is aborted.
+    pub fn abort(&self) {
+        self.abort.store(true, Ordering::Relaxed)
+    }
+
+    pub fn is_aborted(&self) -> bool {
+        self.abort.load(Ordering::Relaxed)
     }
 
     pub fn get_stream(
@@ -54,11 +64,8 @@ impl FuseQueryFlightDispatcher {
 
         let stream_name = format!("{}/{}", stage_name, stream);
         match self.streams.write().remove(&stream_name) {
-            None => Err(ErrorCode::NotFoundStream(format!(
-                "Stream {} is not found",
-                stream_name
-            ))),
-            Some(mut stream_info) => Ok(stream_info.rx),
+            None => Err(ErrorCode::NotFoundStream(format!("Stream is not found"))),
+            Some(stream_info) => Ok(stream_info.rx),
         }
     }
 
@@ -90,8 +97,9 @@ impl FuseQueryFlightDispatcher {
     ) -> Result<()> {
         let query_context = session.try_create_context()?;
         let action_context = FuseQueryContext::new(query_context.clone());
-        let mut pipeline =
-            PipelineBuilder::create(action_context.clone(), HashMap::new(), action.plan.clone()).build()?;
+        let pipeline =
+            PipelineBuilder::create(action_context.clone(), HashMap::new(), action.plan.clone())
+                .build()?;
 
         let (stage_notify, tx) = {
             assert_eq!(action.sinks.len(), 1);
@@ -147,15 +155,16 @@ impl FuseQueryFlightDispatcher {
     ) -> Result<()> {
         let query_context = session.try_create_context()?;
         let action_context = FuseQueryContext::new(query_context.clone());
-        let mut pipeline =
-            PipelineBuilder::create(action_context.clone(), HashMap::new(), action.plan.clone()).build()?;
+        let pipeline =
+            PipelineBuilder::create(action_context.clone(), HashMap::new(), action.plan.clone())
+                .build()?;
 
         let (stage_notify, sinks_tx) = {
             assert!(action.sinks.len() > 1);
 
             let mut sinks_tx = Vec::with_capacity(action.sinks.len());
             let stage_name = format!("{}/{}", action.query_id, action.stage_id);
-            let stage_notify = self.stages_notify.write().get(&stage_name).map(Arc::clone);
+            let stage_notify = self.stages_notify.read().get(&stage_name).map(Arc::clone);
 
             for sink in &action.sinks {
                 let stream_name = format!("{}/{}", stage_name, sink);
@@ -179,46 +188,46 @@ impl FuseQueryFlightDispatcher {
             }
         }?;
 
-        query_context
-            .execute_task(async move {
-                stage_notify.notified().await;
+        query_context.execute_task(async move {
+            stage_notify.notified().await;
 
-                let sinks_tx_ref = &sinks_tx;
-                let forward_blocks = async move {
-                    let mut abortable_stream = Self::execute(pipeline, action_context).await?;
-                    while let Some(item) = abortable_stream.next().await {
-                        let forward_blocks = scatter.execute(&item?)?;
+            let sinks_tx_ref = &sinks_tx;
+            let forward_blocks = async move {
+                let mut abortable_stream = Self::execute(pipeline, action_context).await?;
+                while let Some(item) = abortable_stream.next().await {
+                    let forward_blocks = scatter.execute(&item?)?;
 
-                        assert_eq!(forward_blocks.len(), sinks_tx_ref.len());
+                    assert_eq!(forward_blocks.len(), sinks_tx_ref.len());
 
-                        for (index, forward_block) in forward_blocks.iter().enumerate() {
-                            let tx = &sinks_tx_ref[index];
-                            tx.send(Ok(forward_block.clone()))
-                                .await
-                                .map_err_to_code(ErrorCode::LogicalError, || {
-                                    "Cannot push data when run_action"
-                                })?;
-                        }
-                    }
-
-                    Result::Ok(())
-                };
-
-                if let Err(error) = forward_blocks.await {
-                    for tx in &sinks_tx {
-                        tx.send(Err(ErrorCode::create(
-                            error.code(),
-                            error.message(),
-                            error.backtrace(),
-                        )))
-                        .await
-                        .ok();
+                    for (index, forward_block) in forward_blocks.iter().enumerate() {
+                        let tx = &sinks_tx_ref[index];
+                        tx.send(Ok(forward_block.clone()))
+                            .await
+                            .map_err_to_code(ErrorCode::LogicalError, || {
+                                "Cannot push data when run_action"
+                            })?;
                     }
                 }
 
-                drop(session);
-            })
-            .map(|_| ())
+                Result::Ok(())
+            };
+
+            if let Err(error) = forward_blocks.await {
+                for tx in &sinks_tx {
+                    tx.send(Err(ErrorCode::create(
+                        error.code(),
+                        error.message(),
+                        error.backtrace(),
+                    )))
+                    .await
+                    .ok();
+                }
+            }
+
+            drop(session);
+        })?;
+
+        Ok(())
     }
 
     async fn execute(mut pipeline: Pipeline, context: FuseQueryContextRef) -> Result<AbortStream> {

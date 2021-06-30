@@ -74,7 +74,7 @@ impl Session {
     }
 
     pub fn try_create_context(self: &Arc<Self>) -> Result<FuseQueryContextRef> {
-        let inner = self.mutable_status.lock();
+        // let inner = self.mutable_status.lock();
 
         // TODO: take inner context shared.
         FuseQueryContext::from_shared(FuseQueryContextShared::try_create(
@@ -106,7 +106,7 @@ impl Session {
     }
 
     pub fn get_current_database(self: &Arc<Self>) -> String {
-        let mut inner = self.mutable_status.lock();
+        let inner = self.mutable_status.lock();
         inner.current_database.clone()
     }
 

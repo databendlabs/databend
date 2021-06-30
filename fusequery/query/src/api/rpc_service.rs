@@ -23,6 +23,7 @@ use crate::sessions::SessionManagerRef;
 pub struct RpcService {
     sessions: SessionManagerRef,
     abort_notify: Notify,
+    dispatcher: Arc<FuseQueryFlightDispatcher>,
 }
 
 impl RpcService {
@@ -30,35 +31,46 @@ impl RpcService {
         Arc::new(Self {
             sessions,
             abort_notify: Notify::new(),
+            dispatcher: Arc::new(FuseQueryFlightDispatcher::create()),
         })
+    }
+
+    async fn listener_tcp(address: (String, u16)) -> Result<(TcpListenerStream, SocketAddr)> {
+        let listener = TcpListener::bind(address).await?;
+        let listener_addr = listener.local_addr()?;
+        Ok((TcpListenerStream::new(listener), listener_addr))
     }
 }
 
 #[async_trait::async_trait]
 impl AbortableService<(String, u16), SocketAddr> for RpcService {
     fn abort(&self, force: bool) -> Result<()> {
-        self.abort_notify.notify_waiters();
+        match force {
+            false => self.dispatcher.abort(),
+            true => {
+                self.dispatcher.abort();
+                self.abort_notify.notify_waiters();
+            }
+        };
+
         Ok(())
     }
 
     async fn start(&self, addr: (String, u16)) -> Result<SocketAddr> {
         let sessions = self.sessions.clone();
-        let listener = TcpListener::bind(addr).await?;
-        let listener_socket = listener.local_addr()?;
-        let flight_dispatcher = FuseQueryFlightDispatcher::create();
+        let flight_dispatcher = self.dispatcher.clone();
         let flight_service = FuseQueryFlightService::create(flight_dispatcher, sessions);
+
+        let (listener_stream, socket) = Self::listener_tcp(addr).await?;
 
         Server::builder()
             .add_service(FlightServiceServer::new(flight_service))
-            .serve_with_incoming_shutdown(
-                TcpListenerStream::new(listener),
-                self.abort_notify.notified(),
-            );
+            .serve_with_incoming_shutdown(listener_stream, self.abort_notify.notified());
 
-        Ok(listener_socket)
+        Ok(socket)
     }
 
-    async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed> {
+    async fn wait_terminal(&self, _duration: Option<Duration>) -> Result<Elapsed> {
         unimplemented!()
     }
 }
