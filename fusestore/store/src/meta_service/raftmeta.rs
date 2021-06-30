@@ -934,7 +934,10 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn mget_kv(&self, keys: &[impl AsRef<str> + Debug]) -> Vec<Option<SeqValue>> {
+    pub async fn mget_kv(
+        &self,
+        keys: &[impl AsRef<str> + std::fmt::Debug],
+    ) -> Vec<Option<SeqValue>> {
         // inconsistent get: from local state machine
         let sm = self.sto.sm.read().await;
         sm.mget_kv(keys)

@@ -78,7 +78,7 @@ impl RequestHandler<PrefixListReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<DeleteKVReq> for ActionHandler {
     async fn handle(&self, act: DeleteKVReq) -> common_exception::Result<DeleteKVReply> {
-        let cr = ClientRequest {
+        let cr = LogEntry {
             txid: None,
             cmd: Cmd::DeleteByKeyKV {
                 key: act.key,
@@ -93,7 +93,7 @@ impl RequestHandler<DeleteKVReq> for ActionHandler {
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
         match rst {
-            ClientResponse::KV { prev, result } => Ok(DeleteKVReply { prev, result }),
+            AppliedState::KV { prev, result } => Ok(DeleteKVReply { prev, result }),
             _ => Err(ErrorCode::MetaNodeInternalError("not a KV result")),
         }
     }
@@ -102,7 +102,7 @@ impl RequestHandler<DeleteKVReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<UpdateKVReq> for ActionHandler {
     async fn handle(&self, act: UpdateKVReq) -> common_exception::Result<UpdateByKeyReply> {
-        let cr = ClientRequest {
+        let cr = LogEntry {
             txid: None,
             cmd: Cmd::UpdateByKeyKV {
                 key: act.key,
@@ -118,7 +118,7 @@ impl RequestHandler<UpdateKVReq> for ActionHandler {
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
         match rst {
-            ClientResponse::KV { prev, result } => Ok(UpdateByKeyReply { prev, result }),
+            AppliedState::KV { prev, result } => Ok(UpdateByKeyReply { prev, result }),
             _ => Err(ErrorCode::MetaNodeInternalError("not a KV result")),
         }
     }
