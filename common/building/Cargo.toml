@@ -7,5 +7,5 @@ publish = false
 edition = "2018"
 
 [dependencies]
-vergen = "5.1.9"
+vergen = "5.1.11"
 run_script = "^0.8.0"
