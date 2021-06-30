@@ -139,10 +139,10 @@ pub struct Config {
     #[structopt(long, env = STORE_API_ADDRESS, default_value = "127.0.0.1:9191")]
     pub store_api_address: String,
 
-    #[structopt(long, env = "STORE_API_USERNAME", default_value = "root")]
+    #[structopt(long, env = STORE_API_USERNAME, default_value = "root")]
     pub store_api_username: User,
 
-    #[structopt(long, env = "STORE_API_PASSWORD", default_value = "root")]
+    #[structopt(long, env = STORE_API_PASSWORD, default_value = "root")]
     pub store_api_password: Password,
 
     #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
