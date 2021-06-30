@@ -1186,6 +1186,7 @@ dependencies = [
  "common-building",
  "futures",
  "pretty_assertions",
+ "sha2 0.9.5",
  "structopt",
  "thiserror",
 ]

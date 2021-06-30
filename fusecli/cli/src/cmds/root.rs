@@ -7,8 +7,10 @@ use structopt::StructOpt;
 use crate::cmds::VersionCommand;
 use crate::error::Result;
 
-#[derive(StructOpt, Debug)]
+#[derive(Debug, StructOpt)]
 pub enum RootCommand {
+    // Print datafuse-cli version.
+    #[structopt(name = "version")]
     Version(VersionCommand),
 }
 
