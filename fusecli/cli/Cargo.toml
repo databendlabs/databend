@@ -1,0 +1,23 @@
+[package]
+name = "datafuse-cli"
+version = "0.1.0"
+description = "All-in-one tool for setting up, managing with Datafuse"
+authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[[bin]]
+name = "datafuse-cli"
+path = "src/bin/datafuse-cli.rs"
+
+[features]
+
+[dependencies]
+# Workspace dependencies
+
+[dev-dependencies]
+pretty_assertions = "0.7"
+
+[build-dependencies]
+common-building = {path = "../../common/building"}

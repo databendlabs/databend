@@ -31,7 +31,10 @@ members = [
     "fusequery/benchmarks/nyctaxi",
 
     # Fuzz
-    "fusequery/fuzz"
+    "fusequery/fuzz",
+
+    # CLI
+    "fusecli/cli"
 ]
 
 [profile.release]
