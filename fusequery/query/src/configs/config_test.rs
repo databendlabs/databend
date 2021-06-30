@@ -4,6 +4,8 @@
 
 use common_exception::Result;
 
+use crate::configs::config::{Password, User};
+
 #[test]
 fn test_config() -> Result<()> {
     use pretty_assertions::assert_eq;
@@ -26,8 +28,8 @@ fn test_config() -> Result<()> {
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
             store_api_address: "127.0.0.1:9191".to_string(),
-            store_api_username: "root".to_string(),
-            store_api_password: "root".to_string(),
+            store_api_username: User{store_api_username:"root".to_string()},
+            store_api_password: Password{store_api_password: "root".to_string()},
             config_file: "".to_string(),
         };
         let actual = Config::default();

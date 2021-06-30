@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -29,19 +29,8 @@ lazy_static! {
         ver
     };
 }
-impl fmt::Debug for Config{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{ log_level: \"{}\", log_dir: \"{}\", num_cpus: {}, mysql_handler_host: \"{}\",
-        mysql_handler_port: {}, mysql_handler_thread_num: {}, clickhouse_handler_host: \"{}\", clickhouse_handler_clickhouse_handler_port: {}, 
-        clickhouse_handler_thread_num: {}, flight_api_address: \"{}\", http_api_address: \"{}\", metric_api_address: \"{}\", 
-        store_api_address: \"{}\", config_file: \"{}\", }}",
-        self.log_level, self.log_dir, self.num_cpus, self.mysql_handler_host, self.mysql_handler_port,
-        self.mysql_handler_thread_num, self.clickhouse_handler_host, self.clickhouse_handler_port,
-        self.clickhouse_handler_thread_num, self.flight_api_address, self.http_api_address, self.metric_api_address,
-        self.store_api_address, self.config_file)
-    }
-}
-#[derive(Clone,  serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+
+#[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 #[serde(default)]
 pub struct Config {
     #[structopt(long, env = "FUSE_QUERY_LOG_LEVEL", default_value = "INFO")]
@@ -114,15 +103,66 @@ pub struct Config {
 
     #[structopt(long, env = "STORE_API_ADDRESS", default_value = "127.0.0.1:9191")]
     pub store_api_address: String,
-
+    
     #[structopt(long, env = "STORE_API_USERNAME", default_value = "root")]
-    pub store_api_username: String,
+    pub store_api_username: User,
 
     #[structopt(long, env = "STORE_API_PASSWORD", default_value = "root")]
-    pub store_api_password: String,
+    pub store_api_password: Password,
 
     #[structopt(long, short = "c", env = "CONFIG_FILE", default_value = "")]
     pub config_file: String,
+}
+#[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[serde(default)]
+pub struct Password{
+   pub store_api_password: String,
+}
+
+impl AsRef<String> for Password {
+    fn as_ref(&self) -> &String{
+        &self.store_api_password
+    }
+}
+
+impl FromStr for Password{
+    type Err = ErrorCode;
+    fn from_str(s: &str) -> common_exception::Result<Self> {
+        Ok(Self{
+            store_api_password: s.to_string(),
+        })
+    }
+}
+
+impl fmt::Debug for Password{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "******")
+    }
+}
+#[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[serde(default)]
+pub struct User{
+   pub store_api_username: String,
+}
+
+impl fmt::Debug for User {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "******")
+    }
+}
+impl AsRef<String> for User {
+    fn as_ref(&self) -> &String {
+        &self.store_api_username
+    }
+}
+
+impl FromStr for User{
+    type Err = ErrorCode;
+    fn from_str(s: &str) -> common_exception::Result<Self> {
+        Ok(Self{
+            store_api_username: s.to_string(),
+        })
+    }
 }
 
 impl Config {
@@ -142,8 +182,8 @@ impl Config {
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
             store_api_address: "127.0.0.1:9191".to_string(),
-            store_api_username: "root".to_string(),
-            store_api_password: "root".to_string(),
+            store_api_username: User{store_api_username: "root".to_string()},
+            store_api_password: Password{store_api_password: "root".to_string()},
             config_file: "".to_string(),
         }
     }
