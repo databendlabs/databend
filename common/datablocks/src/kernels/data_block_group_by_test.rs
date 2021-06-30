@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_datavalues::prelude::*;
 use common_datavalues::series::*;
-use common_datavalues::*;
 
 use crate::*;
 

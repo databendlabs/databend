@@ -5,7 +5,7 @@
 use std::any::Any;
 use std::fmt;
 
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 

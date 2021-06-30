@@ -96,14 +96,14 @@ impl Processor for GroupByFinalTransform {
             let block = block?;
             for row in 0..block.num_rows() {
                 if let DataValue::Binary(Some(group_key)) =
-                    DataValue::try_from_column(block.column(1 + aggr_funcs_len), row)?
+                    DataValue::from_column(block.column(1 + aggr_funcs_len), row)?
                 {
                     match groups.get_mut(&group_key) {
                         None => {
                             let mut funcs = aggr_funcs.clone();
                             for (i, func) in funcs.iter_mut().enumerate() {
                                 if let DataValue::Utf8(Some(col)) =
-                                    DataValue::try_from_column(block.column(i), row)?
+                                    DataValue::from_column(block.column(i), row)?
                                 {
                                     let val: DataValue = serde_json::from_str(&col)?;
                                     if let DataValue::Struct(states) = val {
@@ -114,7 +114,7 @@ impl Processor for GroupByFinalTransform {
                             groups.insert(group_key.clone(), funcs);
 
                             if let DataValue::Utf8(Some(col)) =
-                                DataValue::try_from_column(block.column(aggr_funcs_len), row)?
+                                DataValue::from_column(block.column(aggr_funcs_len), row)?
                             {
                                 let val: DataValue = serde_json::from_str(&col)?;
                                 if let DataValue::Struct(states) = val {
@@ -125,7 +125,7 @@ impl Processor for GroupByFinalTransform {
                         Some(funcs) => {
                             for (i, func) in funcs.iter_mut().enumerate() {
                                 if let DataValue::Utf8(Some(col)) =
-                                    DataValue::try_from_column(block.column(i), row)?
+                                    DataValue::from_column(block.column(i), row)?
                                 {
                                     let val: DataValue = serde_json::from_str(&col)?;
                                     if let DataValue::Struct(states) = val {

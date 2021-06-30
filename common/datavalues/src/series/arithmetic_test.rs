@@ -1,13 +1,10 @@
-use std::ops::Add;
-use std::ops::Div;
-use std::ops::Mul;
-use std::ops::Sub;
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
 
 use common_exception::Result;
 
-use crate::series::Series;
-use crate::series::SeriesFrom;
-use crate::DataValueArithmeticOperator;
+use crate::prelude::*;
 
 #[test]
 #[allow(clippy::eq_op)]

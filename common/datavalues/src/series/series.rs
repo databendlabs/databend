@@ -64,6 +64,12 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn remainder(&self, rhs: &Series) -> Result<Series>;
     fn negative(&self) -> Result<Series>;
 
+    fn sum(&self) -> Result<DataValue>;
+    fn max(&self) -> Result<DataValue>;
+    fn min(&self) -> Result<DataValue>;
+    fn arg_min(&self) -> Result<DataValue>;
+    fn arg_max(&self) -> Result<DataValue>;
+
     /// Unpack to DFArray of data_type i8
     fn i8(&self) -> Result<&DFInt8Array> {
         Err(ErrorCode::IllegalDataType(format!(

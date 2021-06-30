@@ -12,12 +12,14 @@ mod macros;
 mod bit_util;
 mod data_df_type;
 mod data_field;
+mod data_group_value;
 mod data_hasher;
 mod data_schema;
 mod data_type;
 mod data_type_coercion;
 mod data_value;
 mod data_value_operator;
+mod data_value_ops;
 mod utils;
 mod vec;
 
@@ -28,6 +30,7 @@ pub mod series;
 
 pub use data_df_type::*;
 pub use data_field::DataField;
+pub use data_group_value::DataGroupValue;
 pub use data_hasher::*;
 pub use data_schema::DataSchema;
 pub use data_schema::DataSchemaRef;

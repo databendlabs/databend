@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 use common_runtime::tokio;

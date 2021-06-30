@@ -84,7 +84,7 @@ impl DataArrayArithmetic {
                 };
                 let result = Self::array_scalar_arithmetic_op(op, &left_array, right_value)?;
                 if all_const {
-                    let scalar = DataValue::try_from_array(&result, 0)?;
+                    let scalar = DataValue::from_array(&result, 0)?;
                     Ok(DataColumn::Constant(scalar, left.len()))
                 } else {
                     Ok(DataColumn::Array(result))

@@ -18,8 +18,6 @@ use crate::arrays::DataArray;
 use crate::numerical_arithmetic_coercion;
 use crate::numerical_signed_coercion;
 use crate::prelude::*;
-use crate::series::IntoSeries;
-use crate::series::Series;
 use crate::DFBinaryArray;
 use crate::DFBooleanArray;
 use crate::DFListArray;
@@ -79,45 +77,45 @@ impl Neg for &Series {
 
     fn neg(self) -> Self::Output {
         let lhs = coerce_to_signed(self)?;
-        todo!()
+        lhs.negative()
     }
 }
 
 pub trait NumOpsDispatch: Debug {
     fn subtract(&self, rhs: &Series) -> Result<Series> {
-        Err(ErrorCode::NumberArgumentsNotMatch(format!(
+        Err(ErrorCode::BadDataValueType(format!(
             "subtraction operation not supported for {:?} and {:?}",
             self, rhs
         )))
     }
 
     fn add_to(&self, rhs: &Series) -> Result<Series> {
-        Err(ErrorCode::NumberArgumentsNotMatch(format!(
+        Err(ErrorCode::BadDataValueType(format!(
             "addition operation not supported for {:?} and {:?}",
             self, rhs
         )))
     }
     fn multiply(&self, rhs: &Series) -> Result<Series> {
-        Err(ErrorCode::NumberArgumentsNotMatch(format!(
+        Err(ErrorCode::BadDataValueType(format!(
             "multiplication operation not supported for {:?} and {:?}",
             self, rhs
         )))
     }
     fn divide(&self, rhs: &Series) -> Result<Series> {
-        Err(ErrorCode::NumberArgumentsNotMatch(format!(
+        Err(ErrorCode::BadDataValueType(format!(
             "division operation not supported for {:?} and {:?}",
             self, rhs
         )))
     }
     fn remainder(&self, rhs: &Series) -> Result<Series> {
-        Err(ErrorCode::NumberArgumentsNotMatch(format!(
+        Err(ErrorCode::BadDataValueType(format!(
             "remainder operation not supported for {:?} and {:?}",
             self, rhs
         )))
     }
 
     fn negative(&self) -> Result<Series> {
-        Err(ErrorCode::NumberArgumentsNotMatch(format!(
+        Err(ErrorCode::BadDataValueType(format!(
             "negative operation not supported for {:?}",
             self,
         )))

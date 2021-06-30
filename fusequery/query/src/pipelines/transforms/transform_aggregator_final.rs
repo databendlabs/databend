@@ -73,8 +73,7 @@ impl Processor for AggregatorFinalTransform {
         while let Some(block) = stream.next().await {
             let block = block?;
             for (i, func) in funcs.iter_mut().enumerate() {
-                if let DataValue::Utf8(Some(col)) = DataValue::try_from_column(block.column(i), 0)?
-                {
+                if let DataValue::Utf8(Some(col)) = DataValue::from_column(block.column(i), 0)? {
                     let val: DataValue = serde_json::from_str(&col)?;
                     if let DataValue::Struct(states) = val {
                         func.merge(&states)?;

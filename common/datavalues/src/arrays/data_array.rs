@@ -58,6 +58,10 @@ impl<T> DataArray<T> {
         self.array.null_count()
     }
 
+    pub fn all_is_null(&self) -> bool {
+        self.null_count() == self.len()
+    }
+
     pub fn get_array_ref(&self) -> ArrayRef {
         self.array.clone()
     }
@@ -224,6 +228,10 @@ where T: DFPrimitiveType
         #[allow(clippy::map_clone)]
         self.data_views().map(|v| *v)
     }
+
+    pub fn into_iter(&self) -> impl Iterator<Item = Option<T::Native>> + DoubleEndedIterator {
+        self.downcast_iter()
+    }
 }
 
 impl DFListArray {
@@ -257,6 +265,6 @@ impl<T> std::fmt::Debug for DataArray<T>
 where T: DFDataType
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Array: {:?}, rows: {:?}", self.data_type(), self.len())
+        write!(f, "DataArray<{:?}>", self.data_type())
     }
 }

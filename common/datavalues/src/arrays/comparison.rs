@@ -104,6 +104,16 @@ macro_rules! impl_eq_missing {
     }};
 }
 
+macro_rules! apply {
+    ($self:expr, $f:expr) => {{
+        if $self.null_count() == 0 {
+            $self.into_no_null_iter().map($f).collect()
+        } else {
+            $self.into_iter().map(|opt_v| opt_v.map($f)).collect()
+        }
+    }};
+}
+
 macro_rules! impl_cmp_numeric_utf8 {
     ($self:ident, $rhs:ident, $op:ident, $kop:ident, $operand:tt) => {{
         // broadcast
@@ -115,8 +125,8 @@ macro_rules! impl_cmp_numeric_utf8 {
             }
         } else if $self.len() == 1 {
             if let Some(value) = $self.get(0) {
-                let res = $rhs.$op(value)?;
-                res.not()
+                let f = |c| value $operand c;
+                Ok(apply! {$rhs, f})
             } else {
                 Ok(DFBooleanArray::full(false, $rhs.len()))
             }

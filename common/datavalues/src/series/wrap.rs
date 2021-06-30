@@ -123,6 +123,23 @@ macro_rules! impl_dyn_array {
                 NumOpsDispatch::negative(&self.0)
             }
 
+            fn sum(&self) -> Result<DataValue> {
+                self.0.sum()
+            }
+
+            fn max(&self) -> Result<DataValue> {
+                self.0.max()
+            }
+            fn min(&self) -> Result<DataValue> {
+                self.0.min()
+            }
+            fn arg_max(&self) -> Result<DataValue> {
+                self.0.arg_max()
+            }
+            fn arg_min(&self) -> Result<DataValue> {
+                self.0.arg_min()
+            }
+
             fn i8(&self) -> Result<&DFInt8Array> {
                 if matches!(self.0.data_type(), DataType::Int8) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFInt8Array)) }

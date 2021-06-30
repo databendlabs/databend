@@ -6,7 +6,7 @@ use std::any::Any;
 use std::convert::TryFrom;
 use std::fmt;
 
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -29,7 +29,7 @@ impl AggregateMinFunction {
 
         Ok(Box::new(AggregateMinFunction {
             display_name: display_name.to_string(),
-            state: DataValue::try_from(arguments[0].data_type())?,
+            state: DataValue::from(arguments[0].data_type()),
             arguments,
         }))
     }
@@ -53,23 +53,14 @@ impl AggregateFunction for AggregateMinFunction {
     }
 
     fn accumulate(&mut self, columns: &[DataColumn], _input_rows: usize) -> Result<()> {
-        let value = Self::min_batch(columns[0].clone())?;
+        let value = Self::min_batch(&columns[0])?;
 
-        self.state = DataValueAggregate::data_value_aggregate_op(
-            DataValueAggregateOperator::Min,
-            self.state.clone(),
-            value,
-        )?;
-
+        self.state = self.state.min(&value)?;
         Ok(())
     }
 
     fn accumulate_scalar(&mut self, values: &[DataValue]) -> Result<()> {
-        self.state = DataValueAggregate::data_value_aggregate_op(
-            DataValueAggregateOperator::Min,
-            self.state.clone(),
-            values[0].clone(),
-        )?;
+        self.state = self.state.min(&values[0])?;
 
         Ok(())
     }
@@ -79,12 +70,8 @@ impl AggregateFunction for AggregateMinFunction {
     }
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        let val = states[0].clone();
-        self.state = DataValueAggregate::data_value_aggregate_op(
-            DataValueAggregateOperator::Min,
-            self.state.clone(),
-            val,
-        )?;
+        let value = states[0].clone();
+        self.state = self.state.min(&value)?;
         Ok(())
     }
 
@@ -100,17 +87,10 @@ impl fmt::Display for AggregateMinFunction {
 }
 
 impl AggregateMinFunction {
-    pub fn min_batch(column: DataColumn) -> Result<DataValue> {
+    pub fn min_batch(column: &DataColumn) -> Result<DataValue> {
         match column {
-            DataColumn::Constant(value, _) => Ok(value),
-            DataColumn::Array(array) => {
-                if let Ok(v) = dispatch_primitive_array! { typed_array_op_to_data_value, array, min}
-                {
-                    Ok(v)
-                } else {
-                    dispatch_string_array! {typed_string_array_op_to_data_value, array, min_string}
-                }
-            }
+            DataColumn::Constant(value, _) => Ok(value.clone()),
+            DataColumn::Array(array) => array.min(),
         }
     }
 }

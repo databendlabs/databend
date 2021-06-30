@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+mod agg;
 mod apply;
 mod boolean;
 mod cast;
@@ -13,6 +14,7 @@ mod take_random;
 mod take_single;
 mod vec_hash;
 
+pub use agg::*;
 pub use apply::*;
 pub use boolean::*;
 pub use cast::*;

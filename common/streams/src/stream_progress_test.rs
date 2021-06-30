@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use common_datablocks::*;
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 use common_progress::*;
 use common_runtime::tokio;
 use futures::TryStreamExt;

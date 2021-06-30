@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
-use common_datavalues::*;
+use common_datavalues::prelude::*;
+use common_datavalues::DFBooleanArray;
+use common_datavalues::DFInt64Array;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
@@ -23,11 +23,8 @@ fn test_aggregate_combinator_function() -> Result<()> {
     }
 
     let columns: Vec<DataColumn> = vec![
-        Arc::new(Int64Array::from(vec![4, 3, 2, 1, 3, 4])).into(),
-        Arc::new(BooleanArray::from(vec![
-            true, true, false, true, true, true,
-        ]))
-        .into(),
+        Series::new(vec![4 as i64, 3, 2, 1, 3, 4]).into(),
+        Series::new(vec![true, true, false, true, true, true]).into(),
     ];
 
     let args = vec![
@@ -150,8 +147,8 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
     }
 
     let columns: Vec<DataColumn> = vec![
-        Arc::new(Int64Array::builder(0).finish()).into(),
-        Arc::new(BooleanArray::builder(0).finish()).into(),
+        DFInt64Array::new_from_slice(&vec![]).into(),
+        DFBooleanArray::new_from_slice(&vec![]).into(),
     ];
 
     let args = vec![

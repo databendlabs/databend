@@ -89,6 +89,7 @@ impl DataValue {
                 | DataValue::Utf8(None)
                 | DataValue::Date32(None)
                 | DataValue::Date64(None)
+                | DataValue::Null
                 | DataValue::TimestampMillisecond(None)
                 | DataValue::TimestampMicrosecond(None)
                 | DataValue::TimestampNanosecond(None)
@@ -314,38 +315,69 @@ typed_cast_from_data_value_to_std!(Float32, f32);
 typed_cast_from_data_value_to_std!(Float64, f64);
 typed_cast_from_data_value_to_std!(Boolean, bool);
 
-impl TryFrom<&DataType> for DataValue {
-    type Error = ErrorCode;
+std_to_data_value!(Int8, i8);
+std_to_data_value!(Int16, i16);
+std_to_data_value!(Int32, i32);
+std_to_data_value!(Int64, i64);
+std_to_data_value!(UInt8, u8);
+std_to_data_value!(UInt16, u16);
+std_to_data_value!(UInt32, u32);
+std_to_data_value!(UInt64, u64);
+std_to_data_value!(Float32, f32);
+std_to_data_value!(Float64, f64);
+std_to_data_value!(Boolean, bool);
 
-    fn try_from(data_type: &DataType) -> Result<Self> {
+impl From<&str> for DataValue {
+    fn from(x: &str) -> Self {
+        DataValue::Utf8(Some(x.to_string()))
+    }
+}
+
+impl From<String> for DataValue {
+    fn from(x: String) -> Self {
+        DataValue::Utf8(Some(x))
+    }
+}
+
+impl From<&DataType> for DataValue {
+    fn from(data_type: &DataType) -> Self {
         match data_type {
-            DataType::Null => Ok(DataValue::Null),
-            DataType::Boolean => Ok(DataValue::Boolean(None)),
-            DataType::Int8 => Ok(DataValue::Int8(None)),
-            DataType::Int16 => Ok(DataValue::Int16(None)),
-            DataType::Int32 => Ok(DataValue::Int32(None)),
-            DataType::Int64 => Ok(DataValue::Int64(None)),
-            DataType::UInt8 => Ok(DataValue::UInt8(None)),
-            DataType::UInt16 => Ok(DataValue::UInt16(None)),
-            DataType::UInt32 => Ok(DataValue::UInt32(None)),
-            DataType::UInt64 => Ok(DataValue::UInt64(None)),
-            DataType::Float32 => Ok(DataValue::Float32(None)),
-            DataType::Float64 => Ok(DataValue::Float64(None)),
-            DataType::Utf8 => Ok(DataValue::Utf8(None)),
-            DataType::Date32 => Ok(DataValue::UInt32(None)),
-            DataType::Date64 => Ok(DataValue::UInt64(None)),
-            DataType::Timestamp(_, _) => Ok(DataValue::UInt64(None)),
-            DataType::Interval(IntervalUnit::YearMonth) => Ok(DataValue::UInt32(None)),
-            DataType::Interval(IntervalUnit::DayTime) => Ok(DataValue::UInt64(None)),
-            DataType::List(f) => Ok(DataValue::List(None, f.data_type().clone())),
-            DataType::Struct(_) => Ok(DataValue::Struct(vec![])),
-            DataType::Binary => Ok(DataValue::Binary(None)),
+            DataType::Null => DataValue::Null,
+            DataType::Boolean => DataValue::Boolean(None),
+            DataType::Int8 => DataValue::Int8(None),
+            DataType::Int16 => DataValue::Int16(None),
+            DataType::Int32 => DataValue::Int32(None),
+            DataType::Int64 => DataValue::Int64(None),
+            DataType::UInt8 => DataValue::UInt8(None),
+            DataType::UInt16 => DataValue::UInt16(None),
+            DataType::UInt32 => DataValue::UInt32(None),
+            DataType::UInt64 => DataValue::UInt64(None),
+            DataType::Float32 => DataValue::Float32(None),
+            DataType::Float64 => DataValue::Float64(None),
+            DataType::Utf8 => DataValue::Utf8(None),
+            DataType::Date32 => DataValue::UInt32(None),
+            DataType::Date64 => DataValue::UInt64(None),
+            DataType::Timestamp(_, _) => DataValue::UInt64(None),
+            DataType::Interval(IntervalUnit::YearMonth) => DataValue::UInt32(None),
+            DataType::Interval(IntervalUnit::DayTime) => DataValue::UInt64(None),
+            DataType::List(f) => DataValue::List(None, f.data_type().clone()),
+            DataType::Struct(_) => DataValue::Struct(vec![]),
+            DataType::Binary => DataValue::Binary(None),
         }
+    }
+}
+
+impl From<DataType> for DataValue {
+    fn from(data_type: DataType) -> Self {
+        DataValue::from(&data_type)
     }
 }
 
 impl fmt::Display for DataValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.is_null() {
+            return write!(f, "null");
+        }
         match self {
             DataValue::Null => write!(f, "null"),
             DataValue::Boolean(v) => format_data_value_with_option!(f, v),
@@ -393,6 +425,9 @@ impl fmt::Display for DataValue {
 
 impl fmt::Debug for DataValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_null() {
+            return write!(f, "null");
+        }
         match self {
             DataValue::Null => write!(f, "null"),
             DataValue::Boolean(v) => format_data_value_with_option!(f, v),

@@ -79,7 +79,7 @@ impl DataArrayComparison {
                 )?;
                 let left_array = data_array_cast(&array, &coercion_type)?;
                 let right_array = data_array_cast(&scalar.to_series_with_size(1)?, &coercion_type)?;
-                let scalar = DataValue::try_from_array(&right_array, 0)?;
+                let scalar = DataValue::from_array(&right_array, 0)?;
 
                 match op {
                     DataValueComparisonOperator::Eq => {
@@ -116,7 +116,7 @@ impl DataArrayComparison {
                 )?;
                 let left_array = data_array_cast(&scalar.to_series_with_size(1)?, &coercion_type)?;
                 let right_array = data_array_cast(&array, &coercion_type)?;
-                let scalar = DataValue::try_from_array(&left_array, 0)?;
+                let scalar = DataValue::from_array(&left_array, 0)?;
 
                 match op {
                     DataValueComparisonOperator::Eq => {

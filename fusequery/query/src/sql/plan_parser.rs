@@ -747,7 +747,7 @@ impl PlanParser {
         fn value_to_rex(value: &sqlparser::ast::Value) -> Result<Expression> {
             match value {
                 sqlparser::ast::Value::Number(ref n, _) => {
-                    DataValue::try_from_literal(n).map(Expression::Literal)
+                    DataValue::from_literal(n).map(Expression::Literal)
                 }
                 sqlparser::ast::Value::SingleQuotedString(ref value) => {
                     Ok(Expression::Literal(DataValue::Utf8(Some(value.clone()))))

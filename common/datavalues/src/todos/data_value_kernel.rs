@@ -167,7 +167,7 @@ impl DataValue {
     pub fn try_from_column(column: &DataColumn, index: usize) -> Result<DataValue> {
         match column {
             DataColumn::Constant(scalar, _) => Ok(scalar.clone()),
-            DataColumn::Array(array) => DataValue::try_from_array(array, index),
+            DataColumn::Array(array) => DataValue::from_array(array, index),
         }
     }
 

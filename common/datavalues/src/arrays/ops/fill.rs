@@ -113,7 +113,7 @@ impl<'a> ArrayFull<&'a str> for DFUtf8Array {
 
 impl ArrayFullNull for DFUtf8Array {
     fn full_null(length: usize) -> Self {
-        let mut ca = (0..length)
+        let ca = (0..length)
             .map::<Option<String>, _>(|_| None)
             .collect::<Self>();
         ca

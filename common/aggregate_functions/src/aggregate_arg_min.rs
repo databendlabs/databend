@@ -7,9 +7,7 @@ use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt;
 
-use common_arrow::arrow::array::Array;
-use common_datavalues::downcast_array;
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -33,8 +31,8 @@ impl AggregateArgMinFunction {
         Ok(Box::new(AggregateArgMinFunction {
             display_name: display_name.to_string(),
             state: DataValue::Struct(vec![
-                DataValue::try_from(arguments[0].data_type())?,
-                DataValue::try_from(arguments[1].data_type())?,
+                DataValue::from(arguments[0].data_type()),
+                DataValue::from(arguments[1].data_type()),
             ]),
             arguments,
         }))
@@ -59,22 +57,29 @@ impl AggregateFunction for AggregateArgMinFunction {
     }
 
     fn accumulate(&mut self, columns: &[DataColumn], _input_rows: usize) -> Result<()> {
-        if let DataValue::Struct(min_arg_val) = Self::arg_min_batch(columns[1].clone())? {
+        let value = match &columns[1] {
+            DataColumn::Constant(value, _) => Ok(DataValue::Struct(vec![
+                DataValue::UInt64(Some(0)),
+                value.clone(),
+            ])),
+            DataColumn::Array(array) => array.arg_min(),
+        }?;
+
+        if let DataValue::Struct(min_arg_val) = value {
             if min_arg_val[0].is_null() {
                 return Ok(());
             }
             let index: u64 = min_arg_val[0].clone().try_into()?;
-            let min_arg = DataValue::try_from_array(&columns[0].to_array()?, index as usize)?;
             let min_val = min_arg_val[1].clone();
+
+            let min_arg = columns[0].try_get(index as usize)?;
 
             if let DataValue::Struct(old_min_arg_val) = self.state.clone() {
                 let old_min_arg = old_min_arg_val[0].clone();
                 let old_min_val = old_min_arg_val[1].clone();
-                let new_min_val = DataValueAggregate::data_value_aggregate_op(
-                    DataValueAggregateOperator::Min,
-                    old_min_val.clone(),
-                    min_val,
-                )?;
+
+                let new_min_val = old_min_val.min(&min_val)?;
+
                 self.state = DataValue::Struct(vec![
                     if new_min_val == old_min_val {
                         old_min_arg
@@ -92,11 +97,8 @@ impl AggregateFunction for AggregateArgMinFunction {
         if let DataValue::Struct(old_min_arg_val) = self.state.clone() {
             let old_min_arg = old_min_arg_val[0].clone();
             let old_min_val = old_min_arg_val[1].clone();
-            let new_min_val = DataValueAggregate::data_value_aggregate_op(
-                DataValueAggregateOperator::Min,
-                old_min_val.clone(),
-                values[1].clone(),
-            )?;
+            let new_min_val = old_min_val.min(&values[1])?;
+
             self.state = DataValue::Struct(vec![
                 if new_min_val == old_min_val {
                     old_min_arg
@@ -118,11 +120,8 @@ impl AggregateFunction for AggregateArgMinFunction {
         if let (DataValue::Struct(new_states), DataValue::Struct(old_states)) =
             (arg_val, self.state.clone())
         {
-            let new_min_val = DataValueAggregate::data_value_aggregate_op(
-                DataValueAggregateOperator::Min,
-                new_states[1].clone(),
-                old_states[1].clone(),
-            )?;
+            let new_min_val = new_states[1].min(&old_states[1])?;
+
             self.state = DataValue::Struct(vec![
                 if new_min_val == old_states[1] {
                     old_states[0].clone()
@@ -147,94 +146,5 @@ impl AggregateFunction for AggregateArgMinFunction {
 impl fmt::Display for AggregateArgMinFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
-    }
-}
-
-macro_rules! typed_array_min_to_data_value {
-    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:expr $(,)?) => {{
-        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
-        let data = array.data();
-        let values = array.values();
-        let null_count = array.null_count();
-        if null_count == array.len() {
-            return Result::Ok(DataValue::Struct(vec![
-                DataValue::UInt64(None),
-                DataValue::$SCALAR(None),
-            ]));
-        }
-        let mut min_row_val = (0, values[0]);
-
-        if null_count == 0 {
-            for row in 1..data.len() {
-                if values[row] < min_row_val.1 {
-                    min_row_val = (row, values[row]);
-                }
-            }
-        } else {
-            for row in 1..data.len() {
-                if data.is_valid(row) && values[row] > min_row_val.1 {
-                    min_row_val = (row, values[row]);
-                }
-            }
-        }
-
-        Result::Ok(DataValue::Struct(vec![
-            DataValue::UInt64(Some(min_row_val.0 as u64)),
-            DataValue::$SCALAR(Some(min_row_val.1)),
-        ]))
-    }};
-}
-
-macro_rules! string_array_min_to_data_value {
-    ($VALUES:expr, $ARRAYTYPE:ident, $SCALAR:ident, $OP:expr $(,)?) => {{
-        fn cmp(a: &str, b: &str) -> bool {
-            a < b
-        }
-        let array = downcast_array!($VALUES, $ARRAYTYPE)?;
-        let data = array.data();
-
-        let null_count = array.null_count();
-        let mut min_row_val = (0usize, array.value(0));
-
-        if null_count == 0 {
-            for row in 1..data.len() {
-                let item = array.value(row);
-                if cmp(&min_row_val.1, item) {
-                    min_row_val = (row, item);
-                }
-            }
-        } else {
-            for row in 1..data.len() {
-                let item = array.value(row);
-                if data.is_valid(row) && cmp(&min_row_val.1, item) {
-                    min_row_val = (row, item);
-                }
-            }
-        }
-
-        Result::Ok(DataValue::Struct(vec![
-            DataValue::UInt64(Some(min_row_val.0 as u64)),
-            DataValue::$SCALAR(Some(min_row_val.1.to_string())),
-        ]))
-    }};
-}
-
-impl AggregateArgMinFunction {
-    pub fn arg_min_batch(column: DataColumn) -> Result<DataValue> {
-        match column {
-            DataColumn::Constant(value, _) => {
-                Ok(DataValue::Struct(vec![DataValue::UInt64(Some(0)), value]))
-            }
-
-            DataColumn::Array(array) => {
-                if let Ok(v) =
-                    dispatch_primitive_array! { typed_array_min_to_data_value, array, argMin}
-                {
-                    Ok(v)
-                } else {
-                    dispatch_string_array! { string_array_min_to_data_value, array, argMin}
-                }
-            }
-        }
     }
 }

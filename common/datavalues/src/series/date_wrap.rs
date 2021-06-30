@@ -206,6 +206,24 @@ macro_rules! impl_dyn_arrays {
                 try_physical_dispatch!(self, negative,)
             }
 
+            fn sum(&self) -> Result<DataValue> {
+                cast_and_apply!(self, sum,)
+            }
+
+            fn max(&self) -> Result<DataValue> {
+                cast_and_apply!(self, max,)
+            }
+            fn min(&self) -> Result<DataValue> {
+                cast_and_apply!(self, min,)
+            }
+
+            fn arg_max(&self) -> Result<DataValue> {
+                cast_and_apply!(self, arg_max,)
+            }
+            fn arg_min(&self) -> Result<DataValue> {
+                cast_and_apply!(self, arg_min,)
+            }
+
             fn take_iter(&self, iter: &mut dyn Iterator<Item = usize>) -> Result<Series> {
                 try_physical_dispatch!(self, take_iter, iter.into())
             }
