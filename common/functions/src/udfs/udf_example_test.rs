@@ -1,4 +1,3 @@
-use std::sync::Arc;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;

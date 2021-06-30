@@ -3,12 +3,9 @@
 //! IntoTakeRandom provides structs that implement the TakeRandom trait.
 //! There are several structs that implement the fastest path for random access.
 //!
-use std::ops::Deref;
 
-use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute;
-use common_arrow::arrow::compute::kernels::take::take;
 use common_exception::Result;
 
 use super::TakeIdx;

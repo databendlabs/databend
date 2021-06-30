@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_arrow::arrow::datatypes::SchemaRef;
+use common_arrow::arrow::datatypes::SchemaRef as ArrowSchemaRef;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::Ticket;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_runtime::tokio::time::Duration;
@@ -30,7 +31,7 @@ impl FlightClient {
     pub async fn fetch_stream(
         &mut self,
         name: String,
-        schema: SchemaRef,
+        schema: DataSchemaRef,
         timeout: u64,
     ) -> Result<SendableDataBlockStream> {
         self.do_get(
@@ -64,7 +65,7 @@ impl FlightClient {
     async fn do_get(
         &mut self,
         ticket: Ticket,
-        schema: SchemaRef,
+        schema: DataSchemaRef,
         timeout: u64,
     ) -> Result<SendableDataBlockStream> {
         let mut request = Request::new(ticket);

@@ -159,25 +159,42 @@ macro_rules! build_list {
     }};
 }
 
-// macro_rules! try_build_array {
-//     ($VALUE_BUILDER_TY:ident, $SCALAR_TY:ident, $VALUES:expr) => {{
-//         let len = $VALUES.len();
-//         let mut builder = $VALUE_BUILDER_TY::new(len);
-//         for scalar_value in $VALUES {
-//             match scalar_value {
-//                 DataValue::$SCALAR_TY(Some(v)) => {
-//                     builder.append_value(v.clone()).map_err(ErrorCode::from)?
-//                 }
-//                 DataValue::$SCALAR_TY(None) => {
-//                     builder.append_null().map_err(ErrorCode::from)?;
-//                 }
-//                 _ => {
-//                     return Result::Err(ErrorCode::BadDataValueType(
-//                         "Incompatible DataValue for list",
-//                     ))
-//                 }
-//             };
-//         }
-//         Ok(builder.finish().slice(0, len))
-//     }};
-// }
+macro_rules! try_build_array {
+    ($VALUE_BUILDER_TY:ident, $DF_TY:ident, $SCALAR_TY:ident, $VALUES:expr) => {{
+        let mut builder = $VALUE_BUILDER_TY::<crate::$DF_TY>::new($VALUES.len());
+        for value in $VALUES.iter() {
+            match value {
+                DataValue::$SCALAR_TY(Some(v)) => builder.append_value(*v),
+                DataValue::$SCALAR_TY(None) => builder.append_null(),
+                _ => unreachable!(),
+            }
+        }
+        Ok(builder.finish().into_series())
+    }};
+
+    // Boolean
+    ($VALUES:expr) => {{
+        let mut builder = BooleanArrayBuilder::new($VALUES.len());
+        for value in $VALUES.iter() {
+            match value {
+                DataValue::Boolean(Some(v)) => builder.append_value(*v),
+                DataValue::Boolean(None) => builder.append_null(),
+                _ => unreachable!(),
+            }
+        }
+        Ok(builder.finish().into_series())
+    }};
+
+    // utf8
+    ($utf8:ident, $VALUES:expr) => {{
+        let mut builder = Utf8ArrayBuilder::new($VALUES.len(), $VALUES.len() * 4);
+        for value in $VALUES.iter() {
+            match value {
+                DataValue::Utf8(Some(v)) => builder.append_value(v),
+                DataValue::Utf8(None) => builder.append_null(),
+                _ => unreachable!(),
+            }
+        }
+        Ok(builder.finish().into_series())
+    }};
+}

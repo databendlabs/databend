@@ -1,8 +1,5 @@
-use std::convert::TryInto;
-use std::hash::BuildHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::sync::Arc;
 
 use super::ArrayApply;
 use crate::arrays::DataArray;

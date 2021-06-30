@@ -33,6 +33,10 @@ where T: DFPrimitiveType
         arr.iter()
     }
 
+    pub fn collect_values(&self) -> Vec<Option<T::Native>> {
+        self.downcast_iter().collect()
+    }
+
     pub fn from_arrow_array(array: PrimitiveArray<T>) -> Self {
         let array_ref = Arc::new(array) as ArrayRef;
         array_ref.into()
@@ -51,6 +55,10 @@ impl DFBooleanArray {
         arr.iter()
     }
 
+    pub fn collect_values(&self) -> Vec<Option<bool>> {
+        self.downcast_iter().collect()
+    }
+
     pub fn from_arrow_array(array: BooleanArray) -> Self {
         let array_ref = Arc::new(array) as ArrayRef;
         array_ref.into()
@@ -67,6 +75,10 @@ impl DFUtf8Array {
         let arr = &*self.array;
         let arr = unsafe { &*(arr as *const dyn Array as *const StringArray) };
         arr.iter()
+    }
+
+    pub fn collect_values<'a>(&self) -> Vec<Option<&'a str>> {
+        self.downcast_iter().collect()
     }
 
     pub fn from_arrow_array(array: StringArray) -> Self {

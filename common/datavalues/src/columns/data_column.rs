@@ -7,7 +7,6 @@ use common_exception::Result;
 
 use crate::series::IntoSeries;
 use crate::series::Series;
-use crate::series::SeriesFrom;
 use crate::DataType;
 use crate::DataValue;
 

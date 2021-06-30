@@ -13,4 +13,6 @@ mod kernels;
 
 pub use data_block::DataBlock;
 pub use data_block_debug::*;
+pub use kernels::compare_series_row;
+pub use kernels::IdxHash;
 pub use kernels::SortColumnDescription;

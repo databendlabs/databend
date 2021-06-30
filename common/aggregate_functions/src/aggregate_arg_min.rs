@@ -3,12 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
-use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt;
 
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_binary_arguments;

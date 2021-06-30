@@ -1,15 +1,11 @@
-use std::convert::TryFrom;
-use std::ops::Deref;
 
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeListArray;
 use common_arrow::arrow::array::StringArray;
 
 use crate::series::IntoSeries;
 use crate::series::Series;
-use crate::series::SeriesFrom;
 use crate::DFBooleanArray;
 use crate::DFListArray;
 use crate::DFUtf8Array;

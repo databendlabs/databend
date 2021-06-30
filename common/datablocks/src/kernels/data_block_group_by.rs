@@ -6,11 +6,9 @@ use std::collections::hash_map::RawEntryMut;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::hash::BuildHasher;
-use std::hash::BuildHasherDefault;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-use ahash::AHasher;
 use ahash::RandomState;
 use common_datavalues::prelude::*;
 use common_datavalues::AlignedVec;
@@ -59,6 +57,7 @@ impl DataBlock {
 
         let random_state = RandomState::new();
         let mut group_series = Vec::with_capacity(column_names.len());
+        let mut group_columns = Vec::with_capacity(column_names.len());
         {
             for col in column_names {
                 let column = block.try_column_by_name(&col)?;
@@ -68,6 +67,7 @@ impl DataBlock {
                 let hash = series.vec_hash(df_hasher);
 
                 group_series.push(series);
+                group_columns.push(column.clone());
                 hashes.push(hash);
             }
         }
@@ -107,16 +107,16 @@ impl DataBlock {
                         v.push(row as u32);
                     }
                     RawEntryMut::Vacant(entry) => {
-                        entry.insert_hashed_nocheck(*hash, IdxHash::new(row, *hash), vec![
-                            row as u32,
-                        ]);
-                    } // RawEntryMut::Vacant(entry) => {
-                      //     entry.insert_hashed_nocheck(original_h, IdxHash::new(idx, original_h), vacant_fn());
-                      // }
-                      // RawEntryMut::Occupied(mut entry) => {
-                      //     let (_k, v) = entry.get_key_value_mut();
-                      //     occupied_fn(v);
-                      // }
+                        let mut v: Vec<u8> = Vec::with_capacity(4 * column_names.len());
+                        for c in group_columns.iter() {
+                            c.concat_row_to_one_key(row, &mut v)?;
+                        }
+                        entry.insert_hashed_nocheck(
+                            *hash,
+                            IdxHash::new(row as u32, *hash, v),
+                            vec![row as u32],
+                        );
+                    }
                 }
 
                 row += 1;
@@ -247,7 +247,8 @@ pub struct IdxHash {
     // idx in row of Series, DataFrame
     pub idx: u32,
     // precomputed hash of T
-    hash: u64,
+    pub hash: u64,
+    pub keys: Vec<u8>,
 }
 
 impl Hash for IdxHash {
@@ -258,8 +259,8 @@ impl Hash for IdxHash {
 
 impl IdxHash {
     #[inline]
-    pub fn new(idx: u32, hash: u64) -> Self {
-        IdxHash { idx, hash }
+    pub fn new(idx: u32, hash: u64, keys: Vec<u8>) -> Self {
+        IdxHash { idx, hash, keys }
     }
 }
 

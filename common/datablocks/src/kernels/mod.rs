@@ -19,4 +19,6 @@ mod data_block_scatter;
 mod data_block_sort;
 mod data_block_take;
 
+pub use data_block_group_by::compare_series_row;
+pub use data_block_group_by::IdxHash;
 pub use data_block_sort::SortColumnDescription;

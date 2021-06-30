@@ -7,14 +7,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use common_aggregate_functions::AggregateFunctionFactory;
-use common_arrow::arrow::array::ArrayRef;
-use common_arrow::arrow::array::StringArray;
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::CreateDatabasePlan;
@@ -319,9 +313,7 @@ impl PlanParser {
                     let cols = transposed
                         .iter()
                         .map(|col| {
-                            Arc::new(StringArray::from(
-                                col.iter().map(|s| s as &str).collect::<Vec<&str>>(),
-                            )) as ArrayRef
+                            Series::new(col.iter().map(|s| s as &str).collect::<Vec<&str>>())
                         })
                         .collect::<Vec<_>>();
 
@@ -747,7 +739,7 @@ impl PlanParser {
         fn value_to_rex(value: &sqlparser::ast::Value) -> Result<Expression> {
             match value {
                 sqlparser::ast::Value::Number(ref n, _) => {
-                    DataValue::from_literal(n).map(Expression::Literal)
+                    DataValue::try_from_literal(n).map(Expression::Literal)
                 }
                 sqlparser::ast::Value::SingleQuotedString(ref value) => {
                     Ok(Expression::Literal(DataValue::Utf8(Some(value.clone()))))

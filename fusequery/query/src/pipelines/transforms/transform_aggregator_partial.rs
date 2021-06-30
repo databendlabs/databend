@@ -8,10 +8,7 @@ use std::time::Instant;
 
 use common_aggregate_functions::AggregateFunction;
 use common_datablocks::DataBlock;
-use common_datavalues::DataArrayRef;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
-use common_datavalues::StringArray;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
@@ -102,7 +99,7 @@ impl Processor for AggregatorPartialTransform {
             // Column.
             let states = DataValue::Struct(func.accumulate_result()?);
             let ser = serde_json::to_string(&states)?;
-            let col = Arc::new(StringArray::from(vec![ser.as_str()]));
+            let col = Series::new(vec![ser.as_str()]);
             columns.push(col);
         }
 

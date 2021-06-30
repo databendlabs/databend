@@ -130,7 +130,7 @@ impl ProjectionPushDownImpl {
             .required_columns
             .iter()
             .map(|name| schema.index_of(name))
-            .filter_map(ArrowResult::ok)
+            .filter_map(Result::ok)
             .collect();
         if projection.is_empty() {
             if self.has_projection {

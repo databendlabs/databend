@@ -60,13 +60,14 @@ impl DataField {
     }
 }
 
-impl TryFrom<&ArrowField> for DataField {
-    type Error = ErrorCode;
-    fn try_from(f: &ArrowField) -> Result<Self> {
-        Ok(DataField::new(
-            f.name(),
-            f.data_type().try_into()?,
-            f.is_nullable(),
-        ))
+impl From<&ArrowField> for DataField {
+    fn from(f: &ArrowField) -> Self {
+        DataField::new(f.name(), f.data_type().into(), f.is_nullable())
+    }
+}
+
+impl std::fmt::Display for DataField {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }

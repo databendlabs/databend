@@ -1,19 +1,10 @@
-use std::convert::TryFrom;
-use std::ops::Deref;
-use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
-use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::array::LargeListArray;
-use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::array::StringArray;
-use unsafe_unwrap::UnsafeUnwrap;
 
 use super::take_random::TakeRandom;
 use super::take_random::TakeRandomUtf8;
 use crate::arrays::DataArray;
-use crate::series::Series;
 use crate::DFBooleanArray;
 use crate::DFListArray;
 use crate::DFNumericType;

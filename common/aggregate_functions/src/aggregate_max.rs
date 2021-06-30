@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
-use std::convert::TryFrom;
 use std::fmt;
 
 use common_datavalues::prelude::*;

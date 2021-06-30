@@ -6,7 +6,6 @@ use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::time::Duration;
 
-use common_arrow::arrow::datatypes::SchemaRef;
 use common_arrow::arrow::ipc::writer::IpcWriteOptions;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
@@ -18,6 +17,7 @@ use common_arrow::arrow_flight::BasicAuth;
 use common_arrow::arrow_flight::HandshakeRequest;
 use common_arrow::arrow_flight::Ticket;
 use common_datablocks::DataBlock;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -211,7 +211,7 @@ impl StoreClient {
     /// Get partition.
     pub async fn read_partition(
         &mut self,
-        schema: SchemaRef,
+        schema: DataSchemaRef,
         read_action: &ReadAction,
     ) -> anyhow::Result<SendableDataBlockStream> {
         let cmd = StoreDoGet::Read(read_action.clone());
@@ -221,7 +221,9 @@ impl StoreClient {
         let res_stream = res.map(move |item| {
             item.map_err(|status| ErrorCode::TokioError(status.to_string()))
                 .and_then(|item| {
-                    flight_data_to_arrow_batch(&item, schema.clone(), &[]).map_err(ErrorCode::from)
+                    let arrow_schema = schema.to_arrow();
+                    flight_data_to_arrow_batch(&item, Arc::new(arrow_schema), &[])
+                        .map_err(ErrorCode::from)
                 })
                 .and_then(DataBlock::try_from)
         });
@@ -351,11 +353,12 @@ impl StoreClient {
         &mut self,
         db_name: String,
         tbl_name: String,
-        scheme_ref: SchemaRef,
+        scheme_ref: DataSchemaRef,
         mut block_stream: BlockStream,
     ) -> anyhow::Result<AppendResult> {
         let ipc_write_opt = IpcWriteOptions::default();
-        let flight_schema = flight_data_from_arrow_schema(&scheme_ref, &ipc_write_opt);
+        let arrow_schema = Arc::new(scheme_ref.to_arrow());
+        let flight_schema = flight_data_from_arrow_schema(&arrow_schema, &ipc_write_opt);
         let (mut tx, flight_stream) = futures::channel::mpsc::channel(100);
 
         tx.send(flight_schema).await?;

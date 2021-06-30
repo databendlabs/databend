@@ -8,13 +8,13 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use anyhow::Result;
+use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
 use common_arrow::arrow_flight::FlightData;
 use common_arrow::parquet::arrow::ArrowWriter;
 use common_arrow::parquet::file::writer::InMemoryWriteableCursor;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
 use futures::StreamExt;
 use uuid::Uuid;
 
@@ -40,11 +40,10 @@ impl Appender {
         mut stream: InputData,
     ) -> Result<common_flights::AppendResult> {
         if let Some(flight_data) = stream.next().await {
-            let data_schema = DataSchema::try_from(&flight_data)?;
-            let schema_ref = Arc::new(data_schema);
+            let arrow_schem = Arc::new(ArrowSchema::try_from(&flight_data)?);
             let mut result = common_flights::AppendResult::default();
             while let Some(flight_data) = stream.next().await {
-                let batch = flight_data_to_arrow_batch(&flight_data, schema_ref.clone(), &[])?;
+                let batch = flight_data_to_arrow_batch(&flight_data, arrow_schem.clone(), &[])?;
                 let block = DataBlock::try_from(batch)?;
                 let (rows, cols, wire_bytes) =
                     (block.num_rows(), block.num_columns(), block.memory_size());

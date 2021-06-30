@@ -153,7 +153,7 @@ impl TryFrom<arrow::record_batch::RecordBatch> for DataBlock {
     type Error = ErrorCode;
 
     fn try_from(v: arrow::record_batch::RecordBatch) -> Result<DataBlock> {
-        let schema = Arc::new(v.schema().as_ref().try_into()?);
+        let schema = Arc::new(v.schema().into());
         let series = v
             .columns()
             .iter()

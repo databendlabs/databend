@@ -6,7 +6,6 @@
 // See notice.md
 
 use std::convert::TryFrom;
-use std::convert::TryInto;
 use std::fmt;
 use std::iter::repeat;
 use std::ops::Deref;

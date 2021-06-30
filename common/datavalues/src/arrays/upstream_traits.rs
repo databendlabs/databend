@@ -1,9 +1,7 @@
 //! Implementations of upstream traits for DataArray<T>
 use std::borrow::Borrow;
 use std::borrow::Cow;
-use std::collections::LinkedList;
 use std::iter::FromIterator;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;

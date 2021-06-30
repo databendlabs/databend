@@ -16,6 +16,7 @@ use common_arrow::parquet::arrow::ArrowReader;
 use common_arrow::parquet::arrow::ParquetFileArrowReader;
 use common_arrow::parquet::file::reader::SerializedFileReader;
 use common_arrow::parquet::file::serialized_reader::SliceableCursor;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_flights::CreateDatabaseAction;
 use common_flights::CreateDatabaseActionResult;
@@ -182,8 +183,9 @@ impl ActionHandler {
         let mut meta = self.meta.lock();
 
         let options = common_arrow::arrow::ipc::writer::IpcWriteOptions::default();
+        let arrow_schema = plan.schema.to_arrow();
         let flight_data =
-            arrow_flight::utils::flight_data_from_arrow_schema(&plan.schema, &options);
+            arrow_flight::utils::flight_data_from_arrow_schema(&arrow_schema, &options);
 
         let table = Table {
             // the storage engine fills the id.
@@ -223,6 +225,7 @@ impl ActionHandler {
             data_header: table.schema,
             ..Default::default()
         })
+        .map(|sc| DataSchema::from(sc))
         .map_err(|e| Status::internal(format!("invalid schema: {:}", e.to_string())))?;
 
         let rst = StoreDoActionResult::GetTable(GetTableActionResult {

@@ -8,11 +8,8 @@ use std::io::BufReader;
 use std::sync::Arc;
 use std::task::Poll;
 
-use common_arrow::arrow::array::StringArray;
-use common_arrow::arrow::datatypes::SchemaRef;
 use common_datablocks::DataBlock;
-use common_datavalues::Int64Array;
-use common_datavalues::Int8Array;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use futures::Stream;
 
@@ -28,7 +25,7 @@ struct LogEntry {
 }
 
 pub struct TracingTableStream {
-    schema: SchemaRef,
+    schema: DataSchemaRef,
     file_idx: usize,
     log_files: Vec<String>,
     limit: usize,
@@ -36,7 +33,7 @@ pub struct TracingTableStream {
 }
 
 impl TracingTableStream {
-    pub fn try_create(schema: SchemaRef, log_files: Vec<String>, limit: usize) -> Result<Self> {
+    pub fn try_create(schema: DataSchemaRef, log_files: Vec<String>, limit: usize) -> Result<Self> {
         Ok(TracingTableStream {
             schema,
             log_files,
@@ -89,13 +86,13 @@ impl TracingTableStream {
         let times: Vec<&str> = time_col.iter().map(|x| x.as_str()).collect();
 
         let block = DataBlock::create_by_array(self.schema.clone(), vec![
-            Arc::new(Int64Array::from(version_col)),
-            Arc::new(StringArray::from(names)),
-            Arc::new(StringArray::from(msgs)),
-            Arc::new(Int8Array::from(level_col)),
-            Arc::new(StringArray::from(hosts)),
-            Arc::new(Int64Array::from(pid_col)),
-            Arc::new(StringArray::from(times)),
+            Series::new(version_col),
+            Series::new(names),
+            Series::new(msgs),
+            Series::new(level_col),
+            Series::new(hosts),
+            Series::new(pid_col),
+            Series::new(times),
         ]);
 
         Ok(Some(block))

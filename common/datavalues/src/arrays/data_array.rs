@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::hash_map::RandomState;
 use std::convert::TryFrom;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
@@ -11,7 +10,6 @@ use std::sync::Arc;
 use common_arrow::arrow::array as arrow_array;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::compute;
 use common_arrow::arrow::datatypes::IntervalUnit;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;

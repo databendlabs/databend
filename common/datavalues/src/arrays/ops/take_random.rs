@@ -1,4 +1,3 @@
-use std::convert::TryFrom;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::BooleanArray;
@@ -6,11 +5,8 @@ use common_arrow::arrow::array::LargeListArray;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::array::StringArray;
 use common_arrow::arrow::array::UInt32Array;
-use num::Num;
-use unsafe_unwrap::UnsafeUnwrap;
 
 use crate::arrays::DataArray;
-use crate::arrays::GetValues;
 use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::series::SeriesWrap;

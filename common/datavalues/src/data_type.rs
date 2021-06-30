@@ -3,10 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use core::fmt;
-use std::convert::TryFrom;
-use std::convert::TryInto;
 
-use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::datatypes::IntervalUnit;
 use common_arrow::arrow::datatypes::TimeUnit;
@@ -83,56 +80,53 @@ impl PartialEq<ArrowDataType> for DataType {
     }
 }
 
-impl TryFrom<&ArrowDataType> for DataType {
-    type Error = ErrorCode;
-
-    fn try_from(dt: &ArrowDataType) -> Result<Self> {
+impl From<&ArrowDataType> for DataType {
+    fn from(dt: &ArrowDataType) -> DataType {
         match dt {
-            ArrowDataType::Null => Ok(DataType::Null),
-            ArrowDataType::UInt8 => Ok(DataType::UInt8),
-            ArrowDataType::UInt16 => Ok(DataType::UInt16),
-            ArrowDataType::UInt32 => Ok(DataType::UInt32),
-            ArrowDataType::UInt64 => Ok(DataType::UInt64),
-            ArrowDataType::Int8 => Ok(DataType::Int8),
-            ArrowDataType::Int16 => Ok(DataType::Int16),
-            ArrowDataType::Int32 => Ok(DataType::Int32),
-            ArrowDataType::Int64 => Ok(DataType::Int64),
-            ArrowDataType::Boolean => Ok(DataType::Boolean),
-            ArrowDataType::Float32 => Ok(DataType::Float32),
-            ArrowDataType::Float64 => Ok(DataType::Float64),
+            ArrowDataType::Null => DataType::Null,
+            ArrowDataType::UInt8 => DataType::UInt8,
+            ArrowDataType::UInt16 => DataType::UInt16,
+            ArrowDataType::UInt32 => DataType::UInt32,
+            ArrowDataType::UInt64 => DataType::UInt64,
+            ArrowDataType::Int8 => DataType::Int8,
+            ArrowDataType::Int16 => DataType::Int16,
+            ArrowDataType::Int32 => DataType::Int32,
+            ArrowDataType::Int64 => DataType::Int64,
+            ArrowDataType::Boolean => DataType::Boolean,
+            ArrowDataType::Float32 => DataType::Float32,
+            ArrowDataType::Float64 => DataType::Float64,
             ArrowDataType::List(f) => {
-                let f: DataField = (f.as_ref()).try_into()?;
-                Ok(DataType::List(Box::new(f)))
+                let f: DataField = (f.as_ref()).into();
+                DataType::List(Box::new(f))
             }
-            ArrowDataType::Date32 => Ok(DataType::Date32),
-            ArrowDataType::Date64 => Ok(DataType::Date64),
+            ArrowDataType::Date32 => DataType::Date32,
+            ArrowDataType::Date64 => DataType::Date64,
 
             ArrowDataType::Timestamp(TimeUnit::Second, f) => {
-                Ok(DataType::Timestamp(TimeUnit::Second, f.clone()))
+                DataType::Timestamp(TimeUnit::Second, f.clone())
             }
             ArrowDataType::Timestamp(TimeUnit::Millisecond, f) => {
-                Ok(DataType::Timestamp(TimeUnit::Millisecond, f.clone()))
+                DataType::Timestamp(TimeUnit::Millisecond, f.clone())
             }
 
             ArrowDataType::Timestamp(TimeUnit::Microsecond, f) => {
-                Ok(DataType::Timestamp(TimeUnit::Microsecond, f.clone()))
+                DataType::Timestamp(TimeUnit::Microsecond, f.clone())
             }
             ArrowDataType::Timestamp(TimeUnit::Nanosecond, f) => {
-                Ok(DataType::Timestamp(TimeUnit::Nanosecond, f.clone()))
+                DataType::Timestamp(TimeUnit::Nanosecond, f.clone())
             }
             ArrowDataType::Interval(IntervalUnit::YearMonth) => {
-                Ok(DataType::Interval(IntervalUnit::YearMonth))
+                DataType::Interval(IntervalUnit::YearMonth)
             }
             ArrowDataType::Interval(IntervalUnit::DayTime) => {
-                Ok(DataType::Interval(IntervalUnit::DayTime))
+                DataType::Interval(IntervalUnit::DayTime)
             }
 
-            ArrowDataType::Utf8 => Ok(DataType::Utf8),
-            ArrowDataType::Binary => Ok(DataType::Binary),
-            dt => Err(ErrorCode::IllegalDataType(format!(
-                "Arrow datatype {:?} not supported by Datafuse",
-                dt
-            ))),
+            ArrowDataType::Utf8 => DataType::Utf8,
+            ArrowDataType::Binary => DataType::Binary,
+
+            // this is safe, because we define the datatype firstly
+            _ => unimplemented!(),
         }
     }
 }

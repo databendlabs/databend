@@ -9,10 +9,8 @@ use std::task::Poll;
 use anyhow::anyhow;
 use clickhouse_srv::types::Block as ClickHouseBlock;
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::datatypes::*;
 use common_datablocks::DataBlock;
-use common_datavalues::DataArrayRef;
-use common_datavalues::DataSchemaRef;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
@@ -46,64 +44,59 @@ impl ClickHouseStream {
 
             match column.data_type() {
                 DataType::Int8 => {
-                    let data = build_primitive_column::<Int8Type>(&column)?;
-                    result = result.column(name, data);
+                    result = result.column(name, column.i8()?.collect_values());
                 }
                 DataType::Int16 => {
-                    let data = build_primitive_column::<Int16Type>(&column)?;
-                    result = result.column(name, data);
+                    result = result.column(name, column.i16()?.collect_values());
                 }
                 DataType::Int32 => {
-                    let data = build_primitive_column::<Int32Type>(&column)?;
-                    result = result.column(name, data);
+                    result = result.column(name, column.i32()?.collect_values());
                 }
                 DataType::Int64 => {
-                    let data = build_primitive_column::<Int64Type>(&column)?;
-                    result = result.column(name, data);
+                    result = result.column(name, column.i64()?.collect_values());
                 }
                 DataType::UInt8 => {
-                    let data = build_primitive_column::<UInt8Type>(&column)?;
-                    result = result.column(name, data);
+                    result = result.column(name, column.u8()?.collect_values());
                 }
                 DataType::UInt16 => {
-                    let data = build_primitive_column::<UInt16Type>(&column)?;
-                    result = result.column(name, data);
+                    result = result.column(name, column.u16()?.collect_values());
                 }
                 DataType::UInt32 => {
-                    let data = build_primitive_column::<UInt32Type>(&column)?;
-                    result = result.column(name, data);
+                    result = result.column(name, column.u32()?.collect_values());
                 }
                 DataType::UInt64 => {
-                    let data = build_primitive_column::<UInt64Type>(&column)?;
-                    result = result.column(name, data);
+                    result = result.column(name, column.u64()?.collect_values());
                 }
 
                 DataType::Float32 => {
-                    let data = build_primitive_column::<Float32Type>(&column)?;
-                    result = result.column(name, data);
+                    result = result.column(name, column.f32()?.collect_values());
                 }
                 DataType::Float64 => {
-                    let data = build_primitive_column::<Float64Type>(&column)?;
-                    result = result.column(name, data);
+                    result = result.column(name, column.f64()?.collect_values());
                 }
 
                 DataType::Date32 => {
-                    let data = build_primitive_column::<Date32Type>(&column)?;
-                    result = result.column(name, data);
+                    result = result.column(name, column.date32()?.collect_values());
                 }
                 DataType::Date64 => {
-                    let data = build_primitive_column::<Date64Type>(&column)?;
-                    result = result.column(name, data);
+                    result = result.column(name, column.date64()?.collect_values());
                 }
 
                 DataType::Boolean => {
-                    let data = build_boolean_column(&column)?;
-                    result = result.column(name, data);
+                    let v: Vec<Option<u8>> = column
+                        .bool()?
+                        .downcast_iter()
+                        .map(|f| match f {
+                            Some(v) => Some(v as u8),
+                            None => None,
+                        })
+                        .collect();
+
+                    result = result.column(name, v);
                 }
 
                 DataType::Utf8 => {
-                    let data = build_string_column(&column)?;
-                    result = result.column(name, data);
+                    result = result.column(name, column.utf8()?.collect_values());
                 }
 
                 _ => {
@@ -136,64 +129,4 @@ impl Stream for ClickHouseStream {
             _other => None,
         })
     }
-}
-
-fn build_primitive_column<T>(values: &DataArrayRef) -> Result<Vec<Option<T::Native>>>
-where T: ArrowPrimitiveType {
-    let values = as_primitive_array::<T>(values);
-
-    Ok(match values.null_count() {
-        //faster path
-        0 => (0..values.len())
-            .map(|i| Some(values.value(i)))
-            .collect::<Vec<Option<T::Native>>>(),
-        _ => (0..values.len())
-            .map(|i| {
-                if values.is_null(i) {
-                    None
-                } else {
-                    Some(values.value(i))
-                }
-            })
-            .collect::<Vec<Option<T::Native>>>(),
-    })
-}
-
-fn build_boolean_column(values: &DataArrayRef) -> Result<Vec<Option<u8>>> {
-    let values = as_boolean_array(values);
-
-    Ok(match values.null_count() {
-        //faster path
-        0 => (0..values.len())
-            .map(|i| Some(values.value(i) as u8))
-            .collect::<Vec<Option<u8>>>(),
-        _ => (0..values.len())
-            .map(|i| {
-                if values.is_null(i) {
-                    None
-                } else {
-                    Some(values.value(i) as u8)
-                }
-            })
-            .collect::<Vec<Option<u8>>>(),
-    })
-}
-
-fn build_string_column(values: &DataArrayRef) -> Result<Vec<Option<&str>>> {
-    let values = as_string_array(values);
-    Ok(match values.null_count() {
-        //faster path
-        0 => (0..values.len())
-            .map(|i| Some(values.value(i)))
-            .collect::<Vec<Option<&str>>>(),
-        _ => (0..values.len())
-            .map(|i| {
-                if values.is_null(i) {
-                    None
-                } else {
-                    Some(values.value(i))
-                }
-            })
-            .collect::<Vec<Option<&str>>>(),
-    })
 }

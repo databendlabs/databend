@@ -2,18 +2,20 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use core::fmt;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use common_arrow::arrow::datatypes::SchemaRef as ArrowSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataField;
 
 /// memory layout.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct DataSchema {
     pub(crate) fields: Vec<DataField>,
 }
@@ -23,7 +25,7 @@ impl DataSchema {
         Self { fields: vec![] }
     }
 
-    fn new(fields: Vec<DataField>) -> Self {
+    pub fn new(fields: Vec<DataField>) -> Self {
         Self { fields }
     }
 
@@ -101,22 +103,39 @@ impl DataSchemaRefExt {
     }
 }
 
-impl TryFrom<&ArrowSchema> for DataSchema {
-    type Error = ErrorCode;
-    fn try_from(a_schema: &ArrowSchema) -> Result<Self> {
+impl From<&ArrowSchema> for DataSchema {
+    fn from(a_schema: &ArrowSchema) -> Self {
         let fields = a_schema
             .fields()
             .iter()
-            .map(|arrow_f| arrow_f.try_into())
-            .collect::<Result<Vec<_>>>()?;
+            .map(|arrow_f| arrow_f.into())
+            .collect::<Vec<_>>();
 
-        Ok(DataSchema::new(fields))
+        DataSchema::new(fields)
     }
 }
 
-impl TryFrom<ArrowSchema> for DataSchema {
-    type Error = ErrorCode;
-    fn try_from(a_schema: ArrowSchema) -> Result<Self> {
-        (&a_schema).try_into()
+impl From<ArrowSchema> for DataSchema {
+    fn from(a_schema: ArrowSchema) -> Self {
+        (&a_schema).into()
+    }
+}
+
+impl From<ArrowSchemaRef> for DataSchema {
+    fn from(a_schema: ArrowSchemaRef) -> Self {
+        (a_schema.as_ref()).into()
+    }
+}
+
+impl fmt::Display for DataSchema {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(
+            &self
+                .fields
+                .iter()
+                .map(|c| c.to_string())
+                .collect::<Vec<String>>()
+                .join(", "),
+        )
     }
 }

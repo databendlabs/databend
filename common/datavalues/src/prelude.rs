@@ -26,6 +26,7 @@ pub use crate::arrays::NewDataArray;
 pub use crate::arrays::PrimitiveArrayBuilder;
 pub use crate::arrays::TakeRandom;
 pub use crate::arrays::ToPrimitive;
+pub use crate::arrays::Utf8ArrayBuilder;
 // columns
 pub use crate::columns::DataColumn;
 pub use crate::columns::DataColumnCommon;
