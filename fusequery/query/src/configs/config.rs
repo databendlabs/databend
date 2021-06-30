@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::{fmt, str::FromStr};
+use std::fmt;
+use std::str::FromStr;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -150,26 +151,32 @@ pub struct Config {
 
 #[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 #[serde(default)]
-pub struct Password{
-   pub store_api_password: String,
+pub struct Password {
+    pub store_api_password: String,
 }
 
 impl AsRef<String> for Password {
-    fn as_ref(&self) -> &String{
+    fn as_ref(&self) -> &String {
         &self.store_api_password
     }
 }
 
-impl FromStr for Password{
+impl FromStr for Password {
     type Err = ErrorCode;
     fn from_str(s: &str) -> common_exception::Result<Self> {
-        Ok(Self{
+        Ok(Self {
             store_api_password: s.to_string(),
         })
     }
 }
 
-impl fmt::Debug for Password{
+impl ToString for Password {
+    fn to_string(&self) -> String {
+        self.store_api_password.clone()
+    }
+}
+
+impl fmt::Debug for Password {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "******")
     }
@@ -177,8 +184,14 @@ impl fmt::Debug for Password{
 
 #[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 #[serde(default)]
-pub struct User{
-   pub store_api_username: String,
+pub struct User {
+    pub store_api_username: String,
+}
+
+impl ToString for User {
+    fn to_string(&self) -> String {
+        self.store_api_username.clone()
+    }
 }
 
 impl fmt::Debug for User {
@@ -193,10 +206,10 @@ impl AsRef<String> for User {
     }
 }
 
-impl FromStr for User{
+impl FromStr for User {
     type Err = ErrorCode;
     fn from_str(s: &str) -> common_exception::Result<Self> {
-        Ok(Self{
+        Ok(Self {
             store_api_username: s.to_string(),
         })
     }
@@ -219,8 +232,12 @@ impl Config {
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
             store_api_address: "127.0.0.1:9191".to_string(),
-            store_api_username: User{store_api_username: "root".to_string()},
-            store_api_password: Password{store_api_password: "root".to_string()},
+            store_api_username: User {
+                store_api_username: "root".to_string(),
+            },
+            store_api_password: Password {
+                store_api_password: "root".to_string(),
+            },
             config_file: "".to_string(),
         }
     }
@@ -287,8 +304,8 @@ impl Config {
         env_helper!(mut_config, http_api_address, String, HTTP_API_ADDRESS);
         env_helper!(mut_config, metric_api_address, String, METRICS_API_ADDRESS);
         env_helper!(mut_config, store_api_address, String, STORE_API_ADDRESS);
-        env_helper!(mut_config, store_api_username, String, STORE_API_USERNAME);
-        env_helper!(mut_config, store_api_password, String, STORE_API_PASSWORD);
+        env_helper!(mut_config, store_api_username, User, STORE_API_USERNAME);
+        env_helper!(mut_config, store_api_password, Password, STORE_API_PASSWORD);
 
         Ok(mut_config)
     }
