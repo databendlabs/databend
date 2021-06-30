@@ -20,6 +20,7 @@ path = "src/bin/datafuse-cli.rs"
 futures = "0.3"
 sha2 = "0.9.5"
 structopt = "0.3"
+sysinfo = "0.19.0"
 thiserror = "1.0.20"
 
 [dev-dependencies]

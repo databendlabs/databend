@@ -1188,6 +1188,7 @@ dependencies = [
  "pretty_assertions",
  "sha2 0.9.5",
  "structopt",
+ "sysinfo 0.19.0",
  "thiserror",
 ]
 
@@ -4394,6 +4395,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sysinfo"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41c72bb3368a39bb153f226d8dd426ee33d54bc31f44037c078391b4a0b8dc04"
+dependencies = [
+ "cfg-if 1.0.0",
+ "core-foundation-sys",
+ "doc-comment",
+ "libc",
+ "ntapi",
+ "once_cell",
+ "rayon",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "t1ha"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5080,7 +5097,7 @@ dependencies = [
  "git2",
  "rustc_version 0.4.0",
  "rustversion",
- "sysinfo",
+ "sysinfo 0.18.2",
  "thiserror",
 ]
 
