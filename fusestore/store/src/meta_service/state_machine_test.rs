@@ -8,9 +8,9 @@ use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 
 use crate::meta_service::state_machine::Replication;
-use crate::meta_service::ClientRequest;
-use crate::meta_service::ClientResponse;
+use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
+use crate::meta_service::LogEntry;
 use crate::meta_service::Node;
 use crate::meta_service::Slot;
 use crate::meta_service::StateMachine;
@@ -109,23 +109,23 @@ fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
     for i in 0..3 {
         // incr "foo"
 
-        let resp = m.apply_non_dup(&ClientRequest {
+        let resp = m.apply_non_dup(&LogEntry {
             txid: None,
             cmd: Cmd::IncrSeq {
                 key: "foo".to_string(),
             },
         })?;
-        assert_eq!(ClientResponse::Seq { seq: i + 1 }, resp);
+        assert_eq!(AppliedState::Seq { seq: i + 1 }, resp);
 
         // incr "bar"
 
-        let resp = m.apply_non_dup(&ClientRequest {
+        let resp = m.apply_non_dup(&LogEntry {
             txid: None,
             cmd: Cmd::IncrSeq {
                 key: "bar".to_string(),
             },
         })?;
-        assert_eq!(ClientResponse::Seq { seq: i + 1 }, resp);
+        assert_eq!(AppliedState::Seq { seq: i + 1 }, resp);
     }
 
     Ok(())
@@ -140,16 +140,11 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
     let cases = crate::meta_service::raftmeta_test::cases_incr_seq();
 
     for (name, txid, k, want) in cases.iter() {
-        let resp = sm.apply(5, &ClientRequest {
+        let resp = sm.apply(5, &LogEntry {
             txid: txid.clone(),
             cmd: Cmd::IncrSeq { key: k.to_string() },
         });
-        assert_eq!(
-            ClientResponse::Seq { seq: *want },
-            resp.unwrap(),
-            "{}",
-            name
-        );
+        assert_eq!(AppliedState::Seq { seq: *want }, resp.unwrap(), "{}", name);
     }
 
     Ok(())
@@ -194,14 +189,14 @@ fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
     for c in cases.iter() {
         // add
 
-        let resp = m.apply_non_dup(&ClientRequest {
+        let resp = m.apply_non_dup(&LogEntry {
             txid: None,
             cmd: Cmd::AddDatabase {
                 name: c.name.to_string(),
             },
         })?;
         assert_eq!(
-            ClientResponse::DataBase {
+            AppliedState::DataBase {
                 prev: c.prev.clone(),
                 result: c.result.clone(),
             },
@@ -281,7 +276,7 @@ fn test_state_machine_apply_non_dup_generic_kv() -> anyhow::Result<()> {
 
         // write
 
-        let resp = m.apply_non_dup(&ClientRequest {
+        let resp = m.apply_non_dup(&LogEntry {
             txid: None,
             cmd: Cmd::UpsertKV {
                 key: c.key.clone(),
@@ -290,7 +285,7 @@ fn test_state_machine_apply_non_dup_generic_kv() -> anyhow::Result<()> {
             },
         })?;
         assert_eq!(
-            ClientResponse::KV {
+            AppliedState::KV {
                 prev: c.prev.clone(),
                 result: c.result.clone(),
             },
@@ -323,7 +318,7 @@ async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
     let cases = crate::meta_service::raftmeta_test::cases_add_file();
 
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
-        let resp = sm.apply(5, &ClientRequest {
+        let resp = sm.apply(5, &LogEntry {
             txid: txid.clone(),
             cmd: Cmd::AddFile {
                 key: k.to_string(),
@@ -331,7 +326,7 @@ async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
             },
         });
         assert_eq!(
-            ClientResponse::String {
+            AppliedState::String {
                 prev: want_prev.clone(),
                 result: want_result.clone()
             },
@@ -353,7 +348,7 @@ async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
     let cases = crate::meta_service::raftmeta_test::cases_set_file();
 
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
-        let resp = sm.apply(5, &ClientRequest {
+        let resp = sm.apply(5, &LogEntry {
             txid: txid.clone(),
             cmd: Cmd::SetFile {
                 key: k.to_string(),
@@ -361,7 +356,7 @@ async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
             },
         });
         assert_eq!(
-            ClientResponse::String {
+            AppliedState::String {
                 prev: want_prev.clone(),
                 result: want_result.clone()
             },

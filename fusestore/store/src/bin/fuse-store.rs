@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_runtime::tokio;
+use common_tracing::init_tracing_with_file;
 use fuse_store::api::StoreServer;
 use fuse_store::configs::Config;
 use fuse_store::metrics::MetricService;
@@ -16,6 +17,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         env_logger::Env::default().default_filter_or(conf.log_level.to_lowercase().as_str()),
     )
     .init();
+
+    let _guards =
+        init_tracing_with_file("fuse-store", conf.log_dir.as_str(), conf.log_level.as_str());
 
     info!("{:?}", conf.clone());
     info!(
