@@ -2,5 +2,4 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-pub mod cmds;
-pub mod error;
+pub mod version;

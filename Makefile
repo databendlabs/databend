@@ -21,6 +21,9 @@ build:
 build-debug:
 	bash ./scripts/build/build-debug.sh
 
+build-cli:
+	bash ./scripts/build/build-cli.sh
+
 unit-test:
 	bash ./scripts/ci/ci-run-unit-tests.sh
 

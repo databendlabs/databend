@@ -16,6 +16,11 @@ path = "src/bin/datafuse-cli.rs"
 [dependencies]
 # Workspace dependencies
 
+# Crates.io dependencies
+futures = "0.3"
+structopt = "0.3"
+thiserror = "1.0.20"
+
 [dev-dependencies]
 pretty_assertions = "0.7"
 

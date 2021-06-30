@@ -2,6 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    todo!()
+use datafuse_cli::cmds::RootCommand;
+use datafuse_cli::error::Result;
+use structopt::StructOpt;
+
+fn main() -> Result<()> {
+    let root: RootCommand = RootCommand::from_args();
+    futures::executor::block_on(root.execute())
 }
