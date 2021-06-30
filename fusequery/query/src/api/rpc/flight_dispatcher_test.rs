@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashMap;
+
 use common_datablocks::assert_blocks_eq;
 use common_datavalues::DataValue;
 use common_exception::Result;
@@ -74,6 +76,7 @@ async fn test_prepare_stage_with_no_scatter() -> Result<()> {
                         plan.clone(),
                         vec![stream_id.clone()],
                         Expression::Literal(DataValue::UInt64(Some(1))),
+                        HashMap::<String, bool>::new(),
                     ),
                     sender,
                 ),
@@ -157,6 +160,7 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
                         plan.clone(),
                         vec!["stream_1".to_string(), "stream_2".to_string()],
                         Expression::Column("number".to_string()),
+                        HashMap::<String, bool>::new(),
                     ),
                     sender,
                 ),

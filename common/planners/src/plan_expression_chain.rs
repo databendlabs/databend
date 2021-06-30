@@ -8,6 +8,7 @@ use common_functions::FunctionFactory;
 
 use crate::ActionAlias;
 use crate::ActionConstant;
+use crate::ActionExists;
 use crate::ActionFunction;
 use crate::ActionInput;
 use crate::Expression;
@@ -64,7 +65,12 @@ impl ExpressionChain {
 
                 self.actions.push(ExpressionAction::Constant(value));
             }
-
+            Expression::Exists(_p) => {
+                let value = ActionExists {
+                    name: format!("{:?}", expr),
+                };
+                self.actions.push(ExpressionAction::Exists(value));
+            }
             Expression::UnaryExpression {
                 op,
                 expr: nested_expr,

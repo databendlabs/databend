@@ -72,10 +72,13 @@ fn test_from_and_to_status() -> anyhow::Result<()> {
     use crate::exception::*;
     let e = ErrorCode::IllegalDataType("foo");
     let status: Status = e.into();
-    assert_eq!(Code::Internal, status.code());
+    assert_eq!(Code::Unknown, status.code());
 
     // Only compare the code and message. Discard backtrace.
-    assert_eq!(r#"{"code":7,"message":"foo","#, &status.message()[..26]);
+    assert_eq!(
+        r#"{"code":7,"message":"foo","#.as_bytes(),
+        &status.details()[..26]
+    );
 
     {
         // test from &Status

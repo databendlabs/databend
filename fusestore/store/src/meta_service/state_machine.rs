@@ -17,9 +17,9 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta_service::placement::rand_n_from_m;
-use crate::meta_service::ClientRequest;
-use crate::meta_service::ClientResponse;
+use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
+use crate::meta_service::LogEntry;
 use crate::meta_service::NodeId;
 use crate::meta_service::Placement;
 
@@ -52,9 +52,9 @@ pub struct StateMachine {
     pub last_applied_log: u64,
 
     /// raft state: A mapping of client IDs to their state info:
-    /// (serial, ClientResponse)
-    /// This is used to de-dup client request, to impl  idempotent operations.
-    pub client_serial_responses: HashMap<String, (u64, ClientResponse)>,
+    /// (serial, RaftResponse)
+    /// This is used to de-dup client request, to impl idempotent operations.
+    pub client_last_resp: HashMap<String, (u64, AppliedState)>,
 
     /// The file names stored in this cluster
     pub keys: BTreeMap<String, String>,
@@ -81,14 +81,14 @@ pub struct StateMachine {
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct MetaBuilder {
+pub struct StateMachineBuilder {
     /// The number of slots to allocated.
     initial_slots: Option<u64>,
     /// The replication strategy.
     replication: Option<Replication>,
 }
 
-impl MetaBuilder {
+impl StateMachineBuilder {
     /// Set the number of slots to boot up a cluster.
     pub fn slots(mut self, n: u64) -> Self {
         self.initial_slots = Some(n);
@@ -107,7 +107,7 @@ impl MetaBuilder {
 
         let mut m = StateMachine {
             last_applied_log: 0,
-            client_serial_responses: Default::default(),
+            client_last_resp: Default::default(),
             keys: BTreeMap::new(),
             sequences: BTreeMap::new(),
             slots: Vec::with_capacity(initial_slots as usize),
@@ -125,8 +125,8 @@ impl MetaBuilder {
 }
 
 impl StateMachine {
-    pub fn builder() -> MetaBuilder {
-        MetaBuilder {
+    pub fn builder() -> StateMachineBuilder {
+        StateMachineBuilder {
             ..Default::default()
         }
     }
@@ -152,10 +152,10 @@ impl StateMachine {
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn apply(&mut self, index: u64, data: &ClientRequest) -> anyhow::Result<ClientResponse> {
+    pub fn apply(&mut self, index: u64, data: &LogEntry) -> anyhow::Result<AppliedState> {
         self.last_applied_log = index;
         if let Some(ref txid) = data.txid {
-            if let Some((serial, resp)) = self.client_serial_responses.get(&txid.client) {
+            if let Some((serial, resp)) = self.client_last_resp.get(&txid.client) {
                 if serial == &txid.serial {
                     return Ok(resp.clone());
                 }
@@ -165,7 +165,7 @@ impl StateMachine {
         let resp = self.apply_non_dup(data)?;
 
         if let Some(ref txid) = data.txid {
-            self.client_serial_responses
+            self.client_last_resp
                 .insert(txid.client.clone(), (txid.serial, resp.clone()));
         }
         Ok(resp)
@@ -176,10 +176,7 @@ impl StateMachine {
     /// This is the only entry to modify state machine.
     /// The `data` is always committed by raft before applying.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub fn apply_non_dup(
-        &mut self,
-        data: &ClientRequest,
-    ) -> common_exception::Result<ClientResponse> {
+    pub fn apply_non_dup(&mut self, data: &LogEntry) -> common_exception::Result<AppliedState> {
         match data.cmd {
             Cmd::AddFile { ref key, ref value } => {
                 if self.keys.contains_key(key) {

@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashMap;
+
 use common_exception::Result;
 use common_runtime::tokio;
 use pretty_assertions::assert_eq;
@@ -16,7 +18,7 @@ async fn test_pipeline_walker() -> Result<()> {
     let plan = PlanParser::create(ctx.clone()).build_from_sql(
         "select sum(number+1)+2 as sumx from numbers_mt(80000) where (number+1)=4 limit 1",
     )?;
-    let pipeline = PipelineBuilder::create(ctx, plan).build()?;
+    let pipeline = PipelineBuilder::create(ctx, HashMap::<String, bool>::new(), plan).build()?;
 
     // PreOrder.
     {

@@ -21,6 +21,7 @@ pub enum ExpressionAction {
     Constant(ActionConstant),
     Alias(ActionAlias),
     Function(ActionFunction),
+    Exists(ActionExists),
 }
 
 #[derive(Debug, Clone)]
@@ -57,6 +58,11 @@ pub struct ActionFunction {
     pub arg_fields: Vec<DataField>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ActionExists {
+    pub name: String,
+}
+
 impl ExpressionAction {
     pub fn column_name(&self) -> &str {
         match self {
@@ -64,6 +70,7 @@ impl ExpressionAction {
             ExpressionAction::Constant(c) => &c.name,
             ExpressionAction::Alias(a) => &a.name,
             ExpressionAction::Function(f) => &f.name,
+            ExpressionAction::Exists(f) => &f.name,
         }
     }
 }
