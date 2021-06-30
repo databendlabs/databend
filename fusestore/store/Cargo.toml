@@ -39,7 +39,7 @@ async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.
 async-trait = "0.1"
 env_logger = "0.8"
 futures = "0.3"
-indexmap = "1.6.1"
+indexmap = "1.7.0"
 lazy_static = "1.4.0"
 log = "0.4"
 metrics = "0.16.0"
