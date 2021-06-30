@@ -31,7 +31,7 @@ lazy_static! {
 }
 
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
-#[serde(default)]
+ #[serde(default)]
 pub struct Config {
     #[structopt(long, env = "FUSE_QUERY_LOG_LEVEL", default_value = "INFO")]
     pub log_level: String,
@@ -103,7 +103,7 @@ pub struct Config {
 
     #[structopt(long, env = "STORE_API_ADDRESS", default_value = "127.0.0.1:9191")]
     pub store_api_address: String,
-    
+
     #[structopt(long, env = "STORE_API_USERNAME", default_value = "root")]
     pub store_api_username: User,
 
@@ -113,6 +113,7 @@ pub struct Config {
     #[structopt(long, short = "c", env = "CONFIG_FILE", default_value = "")]
     pub config_file: String,
 }
+
 #[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 #[serde(default)]
 pub struct Password{
@@ -139,6 +140,7 @@ impl fmt::Debug for Password{
         write!(f, "******")
     }
 }
+
 #[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 #[serde(default)]
 pub struct User{
@@ -150,6 +152,7 @@ impl fmt::Debug for User {
         write!(f, "******")
     }
 }
+
 impl AsRef<String> for User {
     fn as_ref(&self) -> &String {
         &self.store_api_username
