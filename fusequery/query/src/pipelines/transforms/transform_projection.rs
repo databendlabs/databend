@@ -73,7 +73,7 @@ impl Processor for ProjectionTransform {
             |executor: Arc<ExpressionExecutor>, block: Result<DataBlock>| -> Result<DataBlock> {
                 let block = block?;
                 let start = Instant::now();
-                let r = executor.execute(&block);
+                let r = executor.execute(&block, None);
                 let delta = start.elapsed();
                 tracing::debug!("Projection cost: {:?}", delta);
                 r

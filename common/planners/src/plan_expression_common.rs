@@ -7,9 +7,10 @@ use std::collections::HashMap;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Expression;
-use common_planners::ExpressionVisitor;
-use common_planners::Recursion;
+
+use crate::Expression;
+use crate::ExpressionVisitor;
+use crate::Recursion;
 
 /// Resolves an `Expression::Wildcard` to a collection of `Expression::Column`'s.
 pub fn expand_wildcard(expr: &Expression, schema: &DataSchemaRef) -> Vec<Expression> {
@@ -29,6 +30,13 @@ pub fn expand_wildcard(expr: &Expression, schema: &DataSchemaRef) -> Vec<Express
 pub fn find_aggregate_exprs(exprs: &[Expression]) -> Vec<Expression> {
     find_exprs_in_exprs(exprs, &|nest_exprs| {
         matches!(nest_exprs, Expression::AggregateFunction { .. })
+    })
+}
+
+/// Find all `Expression::Exists` in a predicate
+pub fn find_exists_exprs(exprs: &[Expression]) -> Vec<Expression> {
+    find_exprs_in_exprs(exprs, &|nest_exprs| {
+        matches!(nest_exprs, Expression::Exists(..))
     })
 }
 
@@ -293,7 +301,9 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                 data_type: data_type.clone(),
             }),
 
-            Expression::Column(_) | Expression::Literal(_) => Ok(expr.clone()),
+            Expression::Column(_) | Expression::Literal(_) | Expression::Exists(_) => {
+                Ok(expr.clone())
+            }
         },
     }
 }

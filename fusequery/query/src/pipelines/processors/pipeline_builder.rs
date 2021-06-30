@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -39,12 +40,21 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct PipelineBuilder {
     ctx: FuseQueryContextRef,
+    subquery_res_map: HashMap<String, bool>,
     plan: PlanNode,
 }
 
 impl PipelineBuilder {
-    pub fn create(ctx: FuseQueryContextRef, plan: PlanNode) -> Self {
-        PipelineBuilder { ctx, plan }
+    pub fn create(
+        ctx: FuseQueryContextRef,
+        subquery_res_map: HashMap<String, bool>,
+        plan: PlanNode,
+    ) -> Self {
+        PipelineBuilder {
+            ctx,
+            subquery_res_map,
+            plan,
+        }
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -80,8 +90,8 @@ impl PipelineBuilder {
                 PlanNode::AggregatorFinal(plan) => {
                     PipelineBuilder::visit_aggregator_final_plan(&mut pipeline, plan)
                 }
-                PlanNode::Filter(plan) => PipelineBuilder::visit_filter_plan(&mut pipeline, plan),
-                PlanNode::Having(plan) => PipelineBuilder::visit_having_plan(&mut pipeline, plan),
+                PlanNode::Filter(plan) => self.visit_filter_plan(&mut pipeline, plan),
+                PlanNode::Having(plan) => self.visit_having_plan(&mut pipeline, plan),
                 PlanNode::Sort(plan) => {
                     PipelineBuilder::visit_sort_plan(limit, &mut pipeline, plan)
                 }
@@ -193,9 +203,10 @@ impl PipelineBuilder {
         Ok(true)
     }
 
-    fn visit_filter_plan(pipeline: &mut Pipeline, plan: &FilterPlan) -> Result<bool> {
+    fn visit_filter_plan(&self, pipeline: &mut Pipeline, plan: &FilterPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
+                self.subquery_res_map.clone(),
                 plan.input.schema(),
                 plan.predicate.clone(),
                 false,
@@ -204,9 +215,10 @@ impl PipelineBuilder {
         Ok(true)
     }
 
-    fn visit_having_plan(pipeline: &mut Pipeline, plan: &HavingPlan) -> Result<bool> {
+    fn visit_having_plan(&self, pipeline: &mut Pipeline, plan: &HavingPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
+                HashMap::<String, bool>::new(),
                 plan.input.schema(),
                 plan.predicate.clone(),
                 true,

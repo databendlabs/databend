@@ -3,9 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0.
 use std::collections::HashMap;
 
-use common_flights::status_err;
+use common_exception::ErrorCode;
 use pretty_assertions::assert_eq;
-use tonic::Code;
 
 use crate::engine::mem_engine::MemEngine;
 use crate::protobuf::CmdCreateDatabase;
@@ -87,7 +86,10 @@ fn test_mem_engine_create_database() -> anyhow::Result<()> {
     {
         // create db bar failure
         let rst = eng.create_database(cmdbar.clone(), false);
-        assert_eq!("bar database exists", format!("{}", rst.err().unwrap()));
+        assert_eq!(
+            "Code: 4001, displayText = bar database exists.",
+            format!("{}", rst.err().unwrap())
+        );
         assert_eq!(
             Db {
                 db_id: 1,
@@ -164,8 +166,8 @@ fn test_mem_engine_create_get_table() -> anyhow::Result<()> {
         let got = eng.get_table("notfound".into(), "t1".into());
         assert!(got.is_err());
         assert_eq!(
-            "status: Some requested entity was not found: database not found: notfound",
-            status_err(got.err().unwrap()).to_string()
+            got.unwrap_err().code(),
+            ErrorCode::UnknownDatabase("database not found: notfound").code()
         );
     }
 
@@ -174,8 +176,8 @@ fn test_mem_engine_create_get_table() -> anyhow::Result<()> {
         let got = eng.get_table("foo".into(), "notfound".into());
         assert!(got.is_err());
         assert_eq!(
-            "status: Some requested entity was not found: table not found: notfound",
-            status_err(got.err().unwrap()).to_string()
+            got.unwrap_err().code(),
+            ErrorCode::UnknownTable("table not found: notfound").code()
         );
     }
 
@@ -206,7 +208,7 @@ fn test_mem_engine_drop_database() -> anyhow::Result<()> {
 
     let r = eng.drop_database(test_db_name, false);
     assert!(r.is_err());
-    assert_eq!(r.unwrap_err().code(), Code::NotFound);
+    assert_eq!(r.unwrap_err().code(), ErrorCode::UnknownDatabase("").code());
     Ok(())
 }
 
@@ -259,16 +261,16 @@ fn test_mem_engine_drop_table() -> anyhow::Result<()> {
     // table not exist
     let r = eng.drop_table(test_db, test_tbl, false);
     assert!(r.is_err());
-    assert_eq!(r.unwrap_err().code(), Code::NotFound);
+    assert_eq!(r.unwrap_err().code(), ErrorCode::UnknownTable("").code());
 
     // db not exist
     let r = eng.drop_table("fak_db", test_tbl, false);
     assert!(r.is_err());
-    assert_eq!(r.unwrap_err().code(), Code::NotFound);
+    assert_eq!(r.unwrap_err().code(), ErrorCode::UnknownDatabase("").code());
 
     let r = eng.drop_table("fak_db", "fake_tbl", false);
     assert!(r.is_err());
-    assert_eq!(r.unwrap_err().code(), Code::NotFound);
+    assert_eq!(r.unwrap_err().code(), ErrorCode::UnknownDatabase("").code());
 
     Ok(())
 }

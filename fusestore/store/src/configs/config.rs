@@ -31,6 +31,9 @@ pub struct Config {
     #[structopt(long, env = "FUSE_STORE_LOG_LEVEL", default_value = "INFO")]
     pub log_level: String,
 
+    #[structopt(long, env = "FUSE_STORE_LOG_DIR", default_value = "./_logs")]
+    pub log_dir: String,
+
     #[structopt(
         long,
         env = "FUSE_STORE_METRIC_API_ADDRESS",
