@@ -77,7 +77,7 @@ impl PipelineBuilder {
             match node {
                 PlanNode::Select(_) => Ok(true),
                 PlanNode::Stage(plan) => self.visit_stage_plan(&mut pipeline, &plan),
-                PlanNode::Remote(plan) => self.visit_remote_plan(&mut pipeline, &plan),
+                PlanNode::Remote(plan) => self.visit_remote_plan(&mut pipeline, plan),
                 PlanNode::Expression(plan) => {
                     PipelineBuilder::visit_expression_plan(&mut pipeline, plan)
                 }
@@ -117,13 +117,15 @@ impl PipelineBuilder {
         ))
     }
 
-    fn visit_remote_plan(&self, pipeline: &mut Pipeline, plan: &&RemotePlan) -> Result<bool> {
+    fn visit_remote_plan(&self, pipeline: &mut Pipeline, plan: &RemotePlan) -> Result<bool> {
         for fetch_node in &plan.fetch_nodes {
             pipeline.add_source(Arc::new(RemoteTransform::try_create(
-                self.ctx.clone(),
-                plan.fetch_name.clone(),
+                plan.query_id.clone(),
+                plan.stage_id.clone(),
+                plan.stream_id.clone(),
                 fetch_node.clone(),
                 plan.schema.clone(),
+                self.ctx.clone(),
             )?))?;
         }
 

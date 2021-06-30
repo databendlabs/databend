@@ -172,7 +172,9 @@ impl GetNodePlan for RemoteGetNodePlan {
                     if cluster_node.local {
                         return Ok(PlanNode::Remote(RemotePlan {
                             schema: self.2.schema(),
-                            fetch_name: format!("{}/{}/{}", self.0, self.1, node_name),
+                            query_id: self.0.clone(),
+                            stage_id: self.1.clone(),
+                            stream_id: node_name.to_string(),
                             fetch_nodes: vec![cluster_node.name.clone()],
                         }));
                     }
@@ -189,7 +191,9 @@ impl GetNodePlan for RemoteGetNodePlan {
                     .collect::<Vec<_>>();
                 Ok(PlanNode::Remote(RemotePlan {
                     schema: self.2.schema(),
-                    fetch_name: format!("{}/{}/{}", self.0, self.1, node_name),
+                    query_id: self.0.clone(),
+                    stage_id: self.1.clone(),
+                    stream_id: node_name.to_string(),
                     fetch_nodes: all_nodes_name,
                 }))
             }

@@ -213,7 +213,10 @@ impl FuseQueryContext {
     }
 
     pub fn set_current_database(&self, new_database_name: String) -> Result<()> {
-        match self.get_datasource().get_database(new_database_name.as_str()) {
+        match self
+            .get_datasource()
+            .get_database(new_database_name.as_str())
+        {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(

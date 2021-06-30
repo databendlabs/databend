@@ -12,6 +12,7 @@ pub use flight_actions::ShuffleAction;
 pub use flight_client_new::FlightClient;
 pub use flight_dispatcher::FuseQueryFlightDispatcher;
 pub use flight_service::FuseQueryFlightService;
+pub use flight_tickets::FlightTicket;
 
 mod flight_actions;
 mod flight_client_new;

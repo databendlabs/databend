@@ -9,6 +9,7 @@ use common_exception::ErrorCode;
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
 use fuse_query::api::HttpService;
+use fuse_query::api::RpcService;
 use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
 use fuse_query::metrics::MetricService;
@@ -16,7 +17,6 @@ use fuse_query::servers::AbortableServer;
 use fuse_query::servers::AbortableService;
 use fuse_query::servers::ClickHouseHandler;
 use fuse_query::servers::MySQLHandler;
-use fuse_query::servers::RpcService;
 use fuse_query::sessions::SessionManager;
 use log::info;
 

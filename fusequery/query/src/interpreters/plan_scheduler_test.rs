@@ -158,7 +158,7 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
 
     match scheduled_actions.local_plan {
         PlanNode::Remote(plan) => {
-            assert!(plan.fetch_name.ends_with("/dummy_local"));
+            assert_eq!(plan.stream_id, "dummy_local");
             assert_eq!(plan.fetch_nodes, ["dummy_local", "dummy"]);
         }
         _ => assert!(
@@ -262,12 +262,12 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
         (PlanNode::Select(left), PlanNode::Select(right), PlanNode::Select(finalize)) => {
             match (&*left.input, &*right.input, &*finalize.input) {
                 (PlanNode::Remote(left), PlanNode::Remote(right), PlanNode::Remote(finalize)) => {
-                    assert!(left.fetch_name.ends_with("/dummy_local"));
-                    assert!(right.fetch_name.ends_with("/dummy"));
+                    assert_eq!(right.stream_id, "dummy");
+                    assert_eq!(left.stream_id, "dummy_local");
                     assert_eq!(left.fetch_nodes, ["dummy_local"]);
                     assert_eq!(right.fetch_nodes, ["dummy_local"]);
 
-                    assert!(finalize.fetch_name.ends_with("/dummy_local"));
+                    assert_eq!(finalize.stream_id, "dummy_local");
                     assert_eq!(finalize.fetch_nodes, ["dummy_local", "dummy"]);
                 },
                 _ => assert!(false, "test_scheduler_plan_with_convergent_and_expansive_stage must be have Remote plan!"),
@@ -385,12 +385,12 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
         (PlanNode::Select(left), PlanNode::Select(right), PlanNode::Select(finalize)) => {
             match (&*left.input, &*right.input, &*finalize.input) {
                 (PlanNode::Remote(left), PlanNode::Remote(right), PlanNode::Remote(finalize)) => {
-                    assert!(left.fetch_name.ends_with("/dummy_local"));
-                    assert!(right.fetch_name.ends_with("/dummy"));
+                    assert_eq!(right.stream_id, "dummy");
+                    assert_eq!(left.stream_id, "dummy_local");
                     assert_eq!(left.fetch_nodes, ["dummy_local", "dummy"]);
                     assert_eq!(right.fetch_nodes, ["dummy_local", "dummy"]);
 
-                    assert!(finalize.fetch_name.ends_with("/dummy_local"));
+                    assert_eq!(finalize.stream_id, "dummy_local");
                     assert_eq!(finalize.fetch_nodes, ["dummy_local", "dummy"]);
                 },
                 _ => assert!(false, "test_scheduler_plan_with_convergent_and_expansive_stage must be have Remote plan!"),

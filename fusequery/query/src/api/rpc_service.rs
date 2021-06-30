@@ -22,7 +22,7 @@ use crate::sessions::SessionManagerRef;
 
 pub struct RpcService {
     sessions: SessionManagerRef,
-    abort_notify: Notify,
+    abort_notify: Arc<Notify>,
     dispatcher: Arc<FuseQueryFlightDispatcher>,
 }
 
@@ -30,7 +30,7 @@ impl RpcService {
     pub fn create(sessions: SessionManagerRef) -> AbortableServer {
         Arc::new(Self {
             sessions,
-            abort_notify: Notify::new(),
+            abort_notify: Arc::new(Notify::new()),
             dispatcher: Arc::new(FuseQueryFlightDispatcher::create()),
         })
     }
@@ -58,14 +58,18 @@ impl AbortableService<(String, u16), SocketAddr> for RpcService {
 
     async fn start(&self, addr: (String, u16)) -> Result<SocketAddr> {
         let sessions = self.sessions.clone();
+        let shutdown_notify = self.abort_notify.clone();
         let flight_dispatcher = self.dispatcher.clone();
-        let flight_service = FuseQueryFlightService::create(flight_dispatcher, sessions);
+        let flight_api_service = FuseQueryFlightService::create(flight_dispatcher, sessions);
 
         let (listener_stream, socket) = Self::listener_tcp(addr).await?;
 
-        Server::builder()
-            .add_service(FlightServiceServer::new(flight_service))
-            .serve_with_incoming_shutdown(listener_stream, self.abort_notify.notified());
+        common_runtime::tokio::spawn(async move {
+            let _ = Server::builder()
+                .add_service(FlightServiceServer::new(flight_api_service))
+                .serve_with_incoming_shutdown(listener_stream, shutdown_notify.notified())
+                .await;
+        });
 
         Ok(socket)
     }

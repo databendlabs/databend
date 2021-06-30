@@ -1,6 +1,8 @@
 use std::convert::TryInto;
 
 use common_arrow::arrow_flight::Ticket;
+use common_exception::ErrorCode;
+use common_exception::ToErrorCode;
 use tonic::Status;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -15,6 +17,16 @@ pub enum FlightTicket {
     StreamTicket(StreamTicket),
 }
 
+impl FlightTicket {
+    pub fn stream(query_id: &str, stage_id: &str, stream: &str) -> FlightTicket {
+        FlightTicket::StreamTicket(StreamTicket {
+            query_id: query_id.to_string(),
+            stage_id: stage_id.to_string(),
+            stream: stream.to_string(),
+        })
+    }
+}
+
 impl TryInto<FlightTicket> for Ticket {
     type Error = Status;
 
@@ -26,5 +38,20 @@ impl TryInto<FlightTicket> for Ticket {
                 Ok(ticket) => Ok(ticket),
             },
         }
+    }
+}
+
+impl TryInto<Ticket> for FlightTicket {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<Ticket, Self::Error> {
+        let serialized_ticket = serde_json::to_string(&self)
+            .map_err_to_code(ErrorCode::LogicalError, || {
+                "Logical error: cannot serialize FlightTicket."
+            })?;
+
+        Ok(Ticket {
+            ticket: serialized_ticket.as_bytes().to_vec(),
+        })
     }
 }

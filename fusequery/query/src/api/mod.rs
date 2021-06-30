@@ -6,9 +6,11 @@
 
 pub use http_service::HttpService;
 pub use rpc::FlightClient;
+pub use rpc::FlightTicket;
 pub use rpc::ShuffleAction;
+pub use rpc_service::RpcService;
 
 mod http;
 mod http_service;
 mod rpc;
-pub mod rpc_service;
+mod rpc_service;
