@@ -390,6 +390,7 @@ impl RewriteHelper {
             Expression::Wildcard
             | Expression::Literal(_)
             | Expression::Exists(_)
+            | Expression::InList { .. }
             | Expression::Sort { .. } => Ok(expr.clone()),
         }
     }
@@ -442,6 +443,7 @@ impl RewriteHelper {
             Expression::Column(_) => vec![],
             Expression::Literal(_) => vec![],
             Expression::Exists(_) => vec![],
+            Expression::InList { .. } => vec![],
             Expression::UnaryExpression { expr, .. } => {
                 vec![expr.as_ref().clone()]
             }
@@ -463,6 +465,7 @@ impl RewriteHelper {
             Expression::Column(_) => vec![expr.clone()],
             Expression::Literal(_) => vec![],
             Expression::Exists(_) => vec![],
+            Expression::InList { .. } => vec![],
             Expression::UnaryExpression { expr, .. } => Self::expression_plan_columns(expr)?,
             Expression::BinaryExpression { left, right, .. } => {
                 let mut l = Self::expression_plan_columns(left)?;

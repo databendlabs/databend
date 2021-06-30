@@ -792,6 +792,17 @@ impl PlanParser {
             sqlparser::ast::Expr::Exists(q) => {
                 Ok(Expression::Exists(Arc::new(self.query_to_plan(q)?)))
             }
+            sqlparser::ast::Expr::InList { expr, list, negated } => {
+                let mut list_expr = vec!();
+                for item in list {
+                    list_expr.push(self.sql_to_rex(item, schema, select)?);
+                }
+                Ok(Expression::InList {
+                    expr: Box::new(self.sql_to_rex(expr, schema, select)?),
+                    list: list_expr,
+                    negated: *negated,
+                })
+            }
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema, select),
             sqlparser::ast::Expr::CompoundIdentifier(ids) => {
                 self.process_compound_ident(ids.as_slice(), select)

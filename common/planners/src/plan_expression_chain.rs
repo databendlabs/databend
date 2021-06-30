@@ -7,6 +7,7 @@ use common_exception::Result;
 use common_functions::FunctionFactory;
 
 use crate::ActionAlias;
+use crate::ActionInList;
 use crate::ActionConstant;
 use crate::ActionExists;
 use crate::ActionFunction;
@@ -64,6 +65,18 @@ impl ExpressionChain {
                 };
 
                 self.actions.push(ExpressionAction::Constant(value));
+            }
+            // maybe use Function is better
+            Expression::InList { expr, list, negated } => {
+                self.add_expr(expr)?;
+                for e in list {
+                    self.add_expr(e)?;
+                }
+                let v = ActionInList {
+                    name: expr.column_name(),
+                    negated: *negated,
+                };
+                self.actions.push(ExpressionAction::InList(v));
             }
             Expression::Exists(_p) => {
                 let value = ActionExists {

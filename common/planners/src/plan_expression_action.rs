@@ -19,6 +19,7 @@ pub enum ExpressionAction {
     Input(ActionInput),
     /// Constant column with known value.
     Constant(ActionConstant),
+    InList(ActionInList),
     Alias(ActionAlias),
     Function(ActionFunction),
     Exists(ActionExists),
@@ -41,6 +42,12 @@ pub struct ActionAlias {
     pub name: String,
     pub arg_name: String,
     pub arg_type: DataType,
+}
+
+#[derive(Debug, Clone)]
+pub struct ActionInList {
+    pub name: String,
+    pub negated: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +75,7 @@ impl ExpressionAction {
         match self {
             ExpressionAction::Input(input) => &input.name,
             ExpressionAction::Constant(c) => &c.name,
+            ExpressionAction::InList(l) => &l.name,
             ExpressionAction::Alias(a) => &a.name,
             ExpressionAction::Function(f) => &f.name,
             ExpressionAction::Exists(f) => &f.name,

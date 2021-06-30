@@ -51,6 +51,8 @@ pub enum Expression {
     Literal(DataValue),
     /// select * from t where xxx and exists (subquery)
     Exists(Arc<PlanNode>),
+    /// select number from t where number in (1, 3, 5)
+    InList{ expr: Box<Expression>, list: Vec<Expression>, negated: bool },
     /// A unary expression such as "NOT foo"
     UnaryExpression { op: String, expr: Box<Expression> },
 
@@ -97,6 +99,7 @@ impl Expression {
     pub fn column_name(&self) -> String {
         match self {
             Expression::Alias(name, _expr) => name.clone(),
+            Expression::InList { expr, list: _, negated: _ } => expr.column_name(),
             Expression::ScalarFunction { op, .. } => {
                 match OP_SET.get(&op.to_lowercase().as_ref()) {
                     Some(_) => format!("{}()", op),
@@ -125,6 +128,7 @@ impl Expression {
             Expression::Alias(_, expr) => expr.to_data_type(input_schema),
             Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
             Expression::Literal(v) => Ok(v.data_type()),
+            Expression::InList { expr, list: _ , negated: _} => expr.to_data_type(input_schema),
             Expression::Exists(_p) => Ok(DataType::Boolean),
             Expression::BinaryExpression { op, left, right } => {
                 let arg_types = vec![
@@ -215,7 +219,12 @@ impl fmt::Debug for Expression {
             Expression::UnaryExpression { op, expr } => {
                 write!(f, "({} {:?})", op, expr)
             }
-
+            Expression::InList{ expr, list, negated } => {
+                if *negated {
+                    write!(f, "Not ")?;
+                }
+                write!(f, "({:?} In ({:?}))", expr, list)
+            }
             Expression::ScalarFunction { op, args } => {
                 write!(f, "{}(", op)?;
 

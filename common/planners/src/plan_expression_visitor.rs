@@ -99,6 +99,7 @@ impl Expression {
             Expression::Column(_)
             | Expression::Literal(_)
             | Expression::Exists(_)
+            | Expression::InList {..}
             | Expression::Wildcard => Ok(visitor),
         }?;
 
