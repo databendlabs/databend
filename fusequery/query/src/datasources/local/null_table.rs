@@ -73,7 +73,7 @@ impl Table for NullTable {
                 name: "".to_string(),
                 version: 0,
             }],
-            statistics: Statistics::default(),
+            statistics: Statistics::new_exact(0, 0),
             description: format!("(Read from Null Engine table  {}.{})", self.db, self.name),
             scan_plan: Arc::new(scan.clone()),
             remote: false,

@@ -8,6 +8,7 @@ use common_tracing::tracing;
 
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::ProjectionPushDownOptimizer;
+use crate::optimizers::StatisticsExactOptimizer;
 use crate::sessions::FuseQueryContextRef;
 
 pub trait Optimizer {
@@ -23,7 +24,8 @@ impl Optimizers {
     pub fn create(ctx: FuseQueryContextRef) -> Self {
         let optimizers: Vec<Box<dyn Optimizer>> = vec![
             Box::new(ProjectionPushDownOptimizer::create(ctx.clone())),
-            Box::new(ScattersOptimizer::create(ctx)),
+            Box::new(ScattersOptimizer::create(ctx.clone())),
+            Box::new(StatisticsExactOptimizer::create(ctx)),
         ];
         Optimizers { inner: optimizers }
     }

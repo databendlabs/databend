@@ -204,10 +204,7 @@ impl MemEngine {
                             name: loc.clone(),
                             version: 0,
                         },
-                        stats: Statistics {
-                            read_bytes: p.disk_bytes,
-                            read_rows: p.rows,
-                        },
+                        stats: Statistics::new_exact(p.disk_bytes, p.rows),
                     }
                 })
                 .collect::<Vec<_>>()
