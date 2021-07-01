@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
-use common_datavalues::*;
+use common_datavalues::prelude::*;
+use common_datavalues::DFBooleanArray;
+use common_datavalues::DFInt64Array;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
@@ -17,15 +17,15 @@ fn test_aggregate_function() -> Result<()> {
         eval_nums: usize,
         args: Vec<DataField>,
         display: &'static str,
-        columns: Vec<DataColumnarValue>,
+        columns: Vec<DataColumn>,
         expect: DataValue,
         error: &'static str,
         func_name: &'static str,
     }
 
-    let columns: Vec<DataColumnarValue> = vec![
-        Arc::new(Int64Array::from(vec![4, 3, 2, 1])).into(),
-        Arc::new(Int64Array::from(vec![1, 2, 3, 4])).into(),
+    let columns: Vec<DataColumn> = vec![
+        Series::new(vec![4i64, 3, 2, 1]).into(),
+        Series::new(vec![1i64, 2, 3, 4]).into(),
     ];
 
     let args = vec![
@@ -167,15 +167,15 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         eval_nums: usize,
         args: Vec<DataField>,
         display: &'static str,
-        columns: Vec<DataColumnarValue>,
+        columns: Vec<DataColumn>,
         expect: DataValue,
         error: &'static str,
         func_name: &'static str,
     }
 
-    let columns: Vec<DataColumnarValue> = vec![
-        Arc::new(Int64Array::builder(0).finish()).into(),
-        Arc::new(Int64Array::builder(0).finish()).into(),
+    let columns: Vec<DataColumn> = vec![
+        DFInt64Array::new_from_slice(&vec![]).into(),
+        DFBooleanArray::new_from_slice(&vec![]).into(),
     ];
 
     let args = vec![
@@ -275,6 +275,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             for _ in 0..t.eval_nums {
                 func1.accumulate(&t.columns, rows)?;
             }
+
             let state1 = func1.accumulate_result()?;
 
             let mut func2 = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
@@ -288,6 +289,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             final_func.merge(&*state2)?;
 
             let result = final_func.merge_result()?;
+
             assert_eq!(&t.expect, &result, "{}", t.name);
             assert_eq!(t.display, format!("{:}", final_func), "{}", t.name);
             Ok(())

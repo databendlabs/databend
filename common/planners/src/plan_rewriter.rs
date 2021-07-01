@@ -244,7 +244,7 @@ impl RewriteHelper {
     /// SELECT (x+1) as y, (x+1)*(x+1) FROM ..
     pub fn rewrite_projection_aliases(exprs: &[Expression]) -> Result<Vec<Expression>> {
         let mut mp = HashMap::new();
-        RewriteHelper::alias_exprs_to_map(&exprs, &mut mp)?;
+        RewriteHelper::alias_exprs_to_map(exprs, &mut mp)?;
 
         let mut data = QueryAliasData {
             aliases: mp,
@@ -414,7 +414,7 @@ impl RewriteHelper {
                 return Ok(expr.clone());
             }
         }
-        Ok(Self::rebuild_from_exprs(&expr, &expressions))
+        Ok(Self::rebuild_from_exprs(expr, &expressions))
     }
 
     /// replaces expressions columns by its name on the projection.

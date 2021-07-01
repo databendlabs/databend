@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_arrow::arrow::compute;
-use common_datavalues::DataArrayMerge;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -25,7 +25,7 @@ impl DataBlock {
             .iter()
             .map(|f| {
                 Ok(compute::SortColumn {
-                    values: block.try_array_by_name(&f.column_name)?.clone(),
+                    values: block.try_array_by_name(&f.column_name)?.get_array_ref(),
                     options: Some(compute::SortOptions {
                         descending: !f.asc,
                         nulls_first: f.nulls_first,
@@ -35,7 +35,7 @@ impl DataBlock {
             .collect::<Result<Vec<_>>>()?;
 
         let indices = compute::lexsort_to_indices(&order_columns, limit)?;
-        DataBlock::block_take_by_indices(&block, indices.values())
+        DataBlock::block_take_by_indices(block, indices.values())
     }
 
     pub fn merge_sort_block(
@@ -52,13 +52,13 @@ impl DataBlock {
             return Ok(lhs.clone());
         }
 
-        let mut sort_arrays = vec![];
+        let mut sort_columns = vec![];
         for block in [lhs, rhs].iter() {
             let columns = sort_columns_descriptions
                 .iter()
-                .map(|f| Ok(block.try_array_by_name(&f.column_name)?.clone()))
+                .map(|f| Ok(block.try_column_by_name(&f.column_name)?.clone()))
                 .collect::<Result<Vec<_>>>()?;
-            sort_arrays.push(columns);
+            sort_columns.push(columns);
         }
 
         let sort_options = sort_columns_descriptions
@@ -71,8 +71,12 @@ impl DataBlock {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let indices =
-            DataArrayMerge::merge_indices(&sort_arrays[0], &sort_arrays[1], &sort_options, limit)?;
+        let indices = DataColumnCommon::merge_indices(
+            &sort_columns[0],
+            &sort_columns[1],
+            &sort_options,
+            limit,
+        )?;
 
         let indices = match limit {
             Some(limit) => &indices[0..limit.min(indices.len())],
@@ -83,14 +87,10 @@ impl DataBlock {
             .columns()
             .iter()
             .zip(rhs.columns().iter())
-            .map(|(a, b)| {
-                let a = a.to_array()?;
-                let b = b.to_array()?;
-                DataArrayMerge::merge_array(&a, &b, &indices)
-            })
+            .map(|(a, b)| DataColumnCommon::merge_columns(a, b, indices))
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(DataBlock::create_by_array(lhs.schema().clone(), arrays))
+        Ok(DataBlock::create(lhs.schema().clone(), arrays))
     }
 
     pub fn merge_sort_blocks(

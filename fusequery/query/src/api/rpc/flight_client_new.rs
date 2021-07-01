@@ -3,12 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::convert::TryInto;
-
-use common_arrow::arrow::datatypes::SchemaRef;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::FlightData;
 use common_arrow::arrow_flight::Ticket;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_runtime::tokio::time::Duration;
@@ -35,7 +34,7 @@ impl FlightClient {
     pub async fn fetch_stream(
         &mut self,
         ticket: FlightTicket,
-        schema: SchemaRef,
+        schema: DataSchemaRef,
         timeout: u64,
     ) -> Result<SendableDataBlockStream> {
         let ticket = ticket.try_into()?;

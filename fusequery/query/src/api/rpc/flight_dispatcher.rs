@@ -3,7 +3,8 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
+use common_arrow::arrow::record_batch::RecordBatch;
+use common_arrow::arrow_flight::FlightData;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -20,6 +21,7 @@ use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionRef;
+use common_datablocks::DataBlock;
 
 struct StreamInfo {
     schema: DataSchemaRef,

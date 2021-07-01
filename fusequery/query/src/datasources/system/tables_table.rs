@@ -6,11 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::StringArray;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -93,9 +89,9 @@ impl Table for TablesTable {
         let engines: Vec<&str> = database_tables.iter().map(|(_, v)| v.engine()).collect();
 
         let block = DataBlock::create_by_array(self.schema.clone(), vec![
-            Arc::new(StringArray::from(databases)),
-            Arc::new(StringArray::from(names)),
-            Arc::new(StringArray::from(engines)),
+            Series::new(databases),
+            Series::new(names),
+            Series::new(engines),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(

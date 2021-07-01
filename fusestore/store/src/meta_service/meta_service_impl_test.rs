@@ -8,13 +8,13 @@ use common_runtime::tokio;
 use log::info;
 use pretty_assertions::assert_eq;
 
-use crate::meta_service::raftmeta::RetryableError;
-use crate::meta_service::ClientRequest;
-use crate::meta_service::ClientResponse;
+use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::GetReq;
+use crate::meta_service::LogEntry;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
+use crate::meta_service::RetryableError;
 use crate::tests::assert_meta_connection;
 use crate::tests::rand_local_addr;
 
@@ -32,7 +32,7 @@ async fn test_meta_server_add_file() -> anyhow::Result<()> {
     let cases = crate::meta_service::raftmeta_test::cases_add_file();
 
     for (name, txid, k, v, want_prev, want_rst) in cases.iter() {
-        let req = ClientRequest {
+        let req = LogEntry {
             txid: txid.clone(),
             cmd: Cmd::AddFile {
                 key: k.to_string(),
@@ -41,10 +41,10 @@ async fn test_meta_server_add_file() -> anyhow::Result<()> {
         };
         let raft_mes = client.write(req).await?.into_inner();
 
-        let rst: Result<ClientResponse, RetryableError> = raft_mes.into();
-        let resp: ClientResponse = rst?;
+        let rst: Result<AppliedState, RetryableError> = raft_mes.into();
+        let resp: AppliedState = rst?;
         match resp {
-            ClientResponse::String { prev, result } => {
+            AppliedState::String { prev, result } => {
                 assert_eq!(*want_prev, prev, "{}", name);
                 assert_eq!(*want_rst, result, "{}", name);
             }
@@ -71,7 +71,7 @@ async fn test_meta_server_set_file() -> anyhow::Result<()> {
     let cases = crate::meta_service::raftmeta_test::cases_set_file();
 
     for (name, txid, k, v, want_prev, want_rst) in cases.iter() {
-        let req = ClientRequest {
+        let req = LogEntry {
             txid: txid.clone(),
             cmd: Cmd::SetFile {
                 key: k.to_string(),
@@ -80,10 +80,10 @@ async fn test_meta_server_set_file() -> anyhow::Result<()> {
         };
         let raft_mes = client.write(req).await?.into_inner();
 
-        let rst: Result<ClientResponse, RetryableError> = raft_mes.into();
-        let resp: ClientResponse = rst?;
+        let rst: Result<AppliedState, RetryableError> = raft_mes.into();
+        let resp: AppliedState = rst?;
         match resp {
-            ClientResponse::String { prev, result } => {
+            AppliedState::String { prev, result } => {
                 assert_eq!(*want_prev, prev, "{}", name);
                 assert_eq!(*want_rst, result, "{}", name);
             }
@@ -111,7 +111,7 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
 
     {
         // add: ok
-        let req = ClientRequest {
+        let req = LogEntry {
             txid: None,
             cmd: Cmd::AddFile {
                 key: "foo".to_string(),
@@ -120,10 +120,10 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
         };
         let raft_mes = client.write(req).await?.into_inner();
 
-        let rst: Result<ClientResponse, RetryableError> = raft_mes.into();
-        let resp: ClientResponse = rst?;
+        let rst: Result<AppliedState, RetryableError> = raft_mes.into();
+        let resp: AppliedState = rst?;
         match resp {
-            ClientResponse::String { prev: _, result } => {
+            AppliedState::String { prev: _, result } => {
                 assert_eq!("bar".to_string(), result.unwrap());
             }
             _ => {
@@ -140,7 +140,7 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
 
     {
         // add: conflict with existent.
-        let req = ClientRequest {
+        let req = LogEntry {
             txid: None,
             cmd: Cmd::AddFile {
                 key: "foo".to_string(),
@@ -149,10 +149,10 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
         };
         let raft_mes = client.write(req).await?.into_inner();
 
-        let rst: Result<ClientResponse, RetryableError> = raft_mes.into();
-        let resp: ClientResponse = rst?;
+        let rst: Result<AppliedState, RetryableError> = raft_mes.into();
+        let resp: AppliedState = rst?;
         match resp {
-            ClientResponse::String { prev: _, result } => {
+            AppliedState::String { prev: _, result } => {
                 assert!(result.is_none());
             }
             _ => {
@@ -161,8 +161,8 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
         }
     }
     {
-        // set: overrde. ok.
-        let req = ClientRequest {
+        // set: override. ok.
+        let req = LogEntry {
             txid: None,
             cmd: Cmd::SetFile {
                 key: "foo".to_string(),
@@ -171,10 +171,10 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
         };
         let raft_mes = client.write(req).await?.into_inner();
 
-        let rst: Result<ClientResponse, RetryableError> = raft_mes.into();
-        let resp: ClientResponse = rst?;
+        let rst: Result<AppliedState, RetryableError> = raft_mes.into();
+        let resp: AppliedState = rst?;
         match resp {
-            ClientResponse::String { prev: _, result } => {
+            AppliedState::String { prev: _, result } => {
                 assert_eq!(Some("bar2".to_string()), result);
             }
             _ => {
@@ -206,16 +206,16 @@ async fn test_meta_server_incr_seq() -> anyhow::Result<()> {
     let cases = crate::meta_service::raftmeta_test::cases_incr_seq();
 
     for (name, txid, k, want) in cases.iter() {
-        let req = ClientRequest {
+        let req = LogEntry {
             txid: txid.clone(),
             cmd: Cmd::IncrSeq { key: k.to_string() },
         };
         let raft_mes = client.write(req).await?.into_inner();
 
-        let rst: Result<ClientResponse, RetryableError> = raft_mes.into();
-        let resp: ClientResponse = rst?;
+        let rst: Result<AppliedState, RetryableError> = raft_mes.into();
+        let resp: AppliedState = rst?;
         match resp {
-            ClientResponse::Seq { seq } => {
+            AppliedState::Seq { seq } => {
                 assert_eq!(*want, seq, "{}", name);
             }
             _ => {
@@ -247,7 +247,7 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
 
         let resp = mn0.add_node(1, addr1.clone()).await?;
         match resp {
-            ClientResponse::Node { prev: _, result } => {
+            AppliedState::Node { prev: _, result } => {
                 assert_eq!(addr1.clone(), result.unwrap().address);
             }
             _ => {
@@ -260,7 +260,7 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr1)).await?;
 
-    let req = ClientRequest {
+    let req = LogEntry {
         txid: None,
         cmd: Cmd::SetFile {
             key: "t-write-on-non-voter".to_string(),
@@ -269,7 +269,7 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
     };
     let raft_mes = client.write(req).await?.into_inner();
 
-    let rst: Result<ClientResponse, RetryableError> = raft_mes.into();
+    let rst: Result<AppliedState, RetryableError> = raft_mes.into();
     assert!(rst.is_err());
     let err = rst.unwrap_err();
     match err {

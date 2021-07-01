@@ -2,8 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::compute;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -22,20 +21,19 @@ impl DataBlock {
             }
         }
 
-        let mut arrays = Vec::with_capacity(first_block.num_columns());
+        let mut concat_columns = Vec::with_capacity(first_block.num_columns());
         for (i, _f) in blocks[0].schema().fields().iter().enumerate() {
-            let mut arr = Vec::with_capacity(blocks.len());
+            let mut columns = Vec::with_capacity(blocks.len());
             for block in blocks.iter() {
-                arr.push(block.column(i).to_array()?);
+                columns.push(block.column(i).clone());
             }
 
-            let arr: Vec<&dyn Array> = arr.iter().map(|c| c.as_ref()).collect();
-            arrays.push(compute::concat(&arr)?);
+            concat_columns.push(DataColumnCommon::concat(&columns)?);
         }
 
-        Ok(DataBlock::create_by_array(
+        Ok(DataBlock::create(
             first_block.schema().clone(),
-            arrays,
+            concat_columns,
         ))
     }
 }

@@ -8,14 +8,10 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_aggregate_functions::AggregateFunction;
+use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BinaryBuilder;
-use common_arrow::arrow::array::StringBuilder;
 use common_datablocks::DataBlock;
-use common_datavalues::DataArrayRef;
-use common_datavalues::DataColumnarValue;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataValue;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::Expression;
@@ -152,7 +148,7 @@ impl Processor for GroupByPartialTransform {
                                     .map(|arg| {
                                         take_block.try_column_by_name(arg).map(|c| c.clone())
                                     })
-                                    .collect::<Result<Vec<DataColumnarValue>>>()?;
+                                    .collect::<Result<Vec<DataColumn>>>()?;
                                 func.accumulate(&arg_columns, rows)?;
                                 aggr_funcs.push((func, name, args));
                             }
@@ -168,7 +164,7 @@ impl Processor for GroupByPartialTransform {
                                     .map(|arg| {
                                         take_block.try_column_by_name(arg).map(|c| c.clone())
                                     })
-                                    .collect::<Result<Vec<DataColumnarValue>>>()?;
+                                    .collect::<Result<Vec<DataColumn>>>()?;
 
                                 func.0.accumulate(&arg_columns, rows)?
                             }
@@ -192,8 +188,8 @@ impl Processor for GroupByPartialTransform {
         let groups = self.groups.read();
 
         // Builders.
-        let mut builders: Vec<StringBuilder> = (0..1 + aggr_len)
-            .map(|_| StringBuilder::new(groups.len()))
+        let mut builders: Vec<Utf8ArrayBuilder> = (0..1 + aggr_len)
+            .map(|_| Utf8ArrayBuilder::new(groups.len(), groups.len() * 4))
             .collect();
 
         let mut group_key_builder = BinaryBuilder::new(groups.len());
@@ -201,21 +197,22 @@ impl Processor for GroupByPartialTransform {
             for (idx, func) in funcs.iter().enumerate() {
                 let states = DataValue::Struct(func.0.accumulate_result()?);
                 let ser = serde_json::to_string(&states)?;
-                builders[idx].append_value(ser.as_str())?;
+                builders[idx].append_value(ser.as_str());
             }
 
             // TODO: separate keys in each column
             let key_ser = serde_json::to_string(&DataValue::Struct(values.clone()))?;
-            builders[aggr_len].append_value(key_ser.as_str())?;
+            builders[aggr_len].append_value(key_ser.as_str());
 
             group_key_builder.append_value(key)?;
         }
 
-        let mut columns: Vec<DataArrayRef> = Vec::with_capacity(self.schema.fields().len());
+        let mut columns: Vec<Series> = Vec::with_capacity(self.schema.fields().len());
         for mut builder in builders {
-            columns.push(Arc::new(builder.finish()));
+            columns.push(builder.finish().into_series());
         }
-        columns.push(Arc::new(group_key_builder.finish()));
+        let array = Arc::new(group_key_builder.finish()) as ArrayRef;
+        columns.push(array.into_series());
 
         let block = DataBlock::create_by_array(self.schema.clone(), columns);
         Ok(Box::pin(DataBlockStream::create(

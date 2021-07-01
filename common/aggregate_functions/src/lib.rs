@@ -9,9 +9,6 @@ mod aggregate_combinator_test;
 #[cfg(test)]
 mod aggregate_function_test;
 
-#[macro_use]
-mod macros;
-
 mod aggregate_arg_max;
 mod aggregate_arg_min;
 mod aggregate_avg;

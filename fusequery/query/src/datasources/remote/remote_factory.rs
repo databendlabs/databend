@@ -53,8 +53,8 @@ impl TryGetStoreClient for ClientProvider {
     async fn try_get_client(&self) -> Result<StoreClient> {
         let client = StoreClient::try_create(
             &self.conf.store_api_address,
-            &self.conf.store_api_username,
-            &self.conf.store_api_password,
+            self.conf.store_api_username.as_ref(),
+            self.conf.store_api_password.as_ref(),
         )
         .await
         .map_err(ErrorCode::from)?;

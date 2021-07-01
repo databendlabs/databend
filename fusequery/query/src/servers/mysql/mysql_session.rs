@@ -23,7 +23,9 @@ impl MySQLConnection {
         let host = blocking_stream.peer_addr().ok();
         let blocking_stream_ref = blocking_stream.try_clone()?;
         session.attach(host, move || {
-            blocking_stream_ref.shutdown(Shutdown::Both)?;
+            if let Err(error) = blocking_stream_ref.shutdown(Shutdown::Both) {
+                log::error!("Cannot shutdown MySQL session io {}", error);
+            }
         });
 
         std::thread::spawn(move || {

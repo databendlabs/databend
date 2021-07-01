@@ -5,13 +5,7 @@
 use std::any::Any;
 use std::fmt;
 
-use common_datavalues::DataColumnarValue;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use common_datavalues::DataValueArithmetic;
-use common_datavalues::DataValueArithmeticOperator;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_variadic_arguments;
@@ -55,21 +49,14 @@ impl AggregateFunction for AggregateCountFunction {
         self
     }
 
-    fn accumulate(&mut self, _columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
-        self.state = DataValueArithmetic::data_value_arithmetic_op(
-            DataValueArithmeticOperator::Plus,
-            self.state.clone(),
-            DataValue::UInt64(Some(input_rows as u64)),
-        )?;
+    fn accumulate(&mut self, _columns: &[DataColumn], input_rows: usize) -> Result<()> {
+        self.state = (&self.state + &DataValue::UInt64(Some(input_rows as u64)))?;
+
         Ok(())
     }
 
     fn accumulate_scalar(&mut self, _values: &[DataValue]) -> Result<()> {
-        self.state = DataValueArithmetic::data_value_arithmetic_op(
-            DataValueArithmeticOperator::Plus,
-            self.state.clone(),
-            DataValue::UInt64(Some(1u64)),
-        )?;
+        self.state = (&self.state + &DataValue::UInt64(Some(1u64)))?;
         Ok(())
     }
 
@@ -78,12 +65,8 @@ impl AggregateFunction for AggregateCountFunction {
     }
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        let val = states[0].clone();
-        self.state = DataValueArithmetic::data_value_arithmetic_op(
-            DataValueArithmeticOperator::Plus,
-            self.state.clone(),
-            val,
-        )?;
+        let value = states[0].clone();
+        self.state = (&self.state + &value)?;
         Ok(())
     }
 

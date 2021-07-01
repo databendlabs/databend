@@ -149,7 +149,7 @@ impl FlightService for StoreFlightImpl {
         request: Request<Ticket>,
     ) -> Result<Response<Self::DoGetStream>, Status> {
         // Check token.
-        let _claim = self.check_token(&request.metadata())?;
+        let _claim = self.check_token(request.metadata())?;
 
         // Action.
         let action: StoreDoGet = request.try_into()?;
@@ -183,11 +183,11 @@ impl FlightService for StoreFlightImpl {
         &self,
         request: Request<Streaming<FlightData>>,
     ) -> Result<Response<Self::DoPutStream>, Status> {
-        let _claim = self.check_token(&request.metadata())?;
+        let _claim = self.check_token(request.metadata())?;
         let meta = request.metadata();
 
-        let (db_name, tbl_name) =
-            common_flights::get_do_put_meta(meta).map_err(|e| Status::internal(e.to_string()))?;
+        let (db_name, tbl_name) = common_flights::storage_api_impl::get_do_put_meta(meta)
+            .map_err(|e| Status::internal(e.to_string()))?;
 
         let append_res = self
             .action_handler
@@ -219,7 +219,7 @@ impl FlightService for StoreFlightImpl {
         request: Request<Action>,
     ) -> Result<Response<Self::DoActionStream>, Status> {
         // Check token.
-        let _claim = self.check_token(&request.metadata())?;
+        let _claim = self.check_token(request.metadata())?;
 
         let action: StoreDoAction = request.try_into()?;
         info!("Receive do_action: {:?}", action);

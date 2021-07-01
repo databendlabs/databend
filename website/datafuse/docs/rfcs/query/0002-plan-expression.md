@@ -80,13 +80,13 @@ For ScalarFunctions, we really don't care about the whole block, we just care ab
 
 
 ```rust
-fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue>;
+fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn>;
 ```
 
 For AggregateFunctions, we should keep the state in the corresponding function instance to apply the two-level merge, we have the following virtual method in `IAggregateFunction`:
 
 ```rust
-fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()>;
+fn accumulate(&mut self, columns: &[DataColumn], _input_rows: usize) -> Result<()>;
 fn accumulate_result(&self) -> Result<Vec<DataValue>>;
 fn merge(&mut self, _states: &[DataValue]) -> Result<()>;
 fn merge_result(&self) -> Result<DataValue>;
@@ -100,10 +100,10 @@ ps: We don't store the arguments types and arguments names in functions, we can 
 ### Column
 
 *Block* is the unit of data passed between streams for pipeline processing, while *Column* is the unit of data passed between expressions.
-So in the view of expression(functions, literal, ...), everything is *Column*, we have *DataColumnarValue* to represent a column.
+So in the view of expression(functions, literal, ...), everything is *Column*, we have *DataColumn* to represent a column.
 ```rust
 #[derive(Clone, Debug)]
-pub enum DataColumnarValue {
+pub enum DataColumn {
     // Array of values.
     Array(DataArrayRef),
     // A Single value.
@@ -111,7 +111,7 @@ pub enum DataColumnarValue {
 }
 ```
 
-*DataColumnarValue::Constant* is like  *ConstantColumn* in *ClickHouse*.
+*DataColumn::Constant* is like  *ConstantColumn* in *ClickHouse*.
 
 Note: We don't have *ScalarValue* , because it can be known as `Constant(DataValue, 1)`, and there is *DataValue* struct.
 

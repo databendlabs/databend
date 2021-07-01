@@ -6,11 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::UInt8Array;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -82,9 +78,7 @@ impl Table for OneTable {
         _ctx: FuseQueryContextRef,
         _read_source: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let block = DataBlock::create_by_array(self.schema.clone(), vec![Arc::new(
-            UInt8Array::from(vec![1u8]),
-        )]);
+        let block = DataBlock::create_by_array(self.schema.clone(), vec![Series::new(vec![1u8])]);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,

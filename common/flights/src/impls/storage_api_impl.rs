@@ -5,6 +5,7 @@
 
 use std::convert::TryFrom;
 
+use common_arrow::arrow::datatypes::SchemaRef as ArrowSchemaRef;
 use common_arrow::arrow::ipc::writer::IpcWriteOptions;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
@@ -12,24 +13,42 @@ use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
 use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
 use common_arrow::arrow_flight::Ticket;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_planners::ScanPlan;
 use common_runtime::tokio;
-use common_store_api::AppendResult;
-use common_store_api::BlockStream;
-use common_store_api::ReadAction;
-use common_store_api::ReadPlanResult;
-use common_store_api::StorageApi;
+pub use common_store_api::AppendResult;
+pub use common_store_api::BlockStream;
+pub use common_store_api::DataPartInfo;
+pub use common_store_api::ReadAction;
+pub use common_store_api::ReadPlanResult;
+pub use common_store_api::StorageApi;
 use common_streams::SendableDataBlockStream;
 use futures::SinkExt;
 use futures::StreamExt;
 use tonic::Request;
 
 use crate::impls::storage_api_impl_utils;
-use crate::ReadPlanAction;
+pub use crate::impls::storage_api_impl_utils::get_do_put_meta;
+use crate::RequestFor;
 use crate::StoreClient;
+use crate::StoreDoAction;
 use crate::StoreDoGet;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct ReadPlanAction {
+    pub scan_plan: ScanPlan,
+}
+
+impl RequestFor for ReadPlanAction {
+    type Reply = ReadPlanResult;
+}
+
+impl From<ReadPlanAction> for StoreDoAction {
+    fn from(act: ReadPlanAction) -> Self {
+        StoreDoAction::ReadPlan(act)
+    }
+}
 
 #[async_trait::async_trait]
 impl StorageApi for StoreClient {
@@ -54,10 +73,12 @@ impl StorageApi for StoreClient {
         let mut req = tonic::Request::<Ticket>::from(&cmd);
         req.set_timeout(self.timeout);
         let res = self.client.do_get(req).await?.into_inner();
+        let arrow_schema: ArrowSchemaRef = Arc::new(schema.to_arrow());
         let res_stream = res.map(move |item| {
             item.map_err(|status| ErrorCode::TokioError(status.to_string()))
                 .and_then(|item| {
-                    flight_data_to_arrow_batch(&item, schema.clone(), &[]).map_err(ErrorCode::from)
+                    flight_data_to_arrow_batch(&item, arrow_schema.clone(), &[])
+                        .map_err(ErrorCode::from)
                 })
                 .and_then(DataBlock::try_from)
         });
@@ -72,7 +93,8 @@ impl StorageApi for StoreClient {
         mut block_stream: BlockStream,
     ) -> common_exception::Result<AppendResult> {
         let ipc_write_opt = IpcWriteOptions::default();
-        let flight_schema = flight_data_from_arrow_schema(&scheme_ref, &ipc_write_opt);
+        let arrow_schema: ArrowSchemaRef = Arc::new(scheme_ref.to_arrow());
+        let flight_schema = flight_data_from_arrow_schema(arrow_schema.as_ref(), &ipc_write_opt);
         let (mut tx, flight_stream) = futures::channel::mpsc::channel(100);
 
         tx.send(flight_schema)

@@ -5,8 +5,8 @@
 use std::fmt;
 use std::time::Duration;
 
+use common_datavalues::columns::DataColumn;
 use common_datavalues::is_numeric;
-use common_datavalues::DataColumnarValue;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -53,13 +53,13 @@ impl Function for SleepFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
+    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
         match &columns[0] {
-            DataColumnarValue::Array(_) => Err(ErrorCode::BadArguments(format!(
+            DataColumn::Array(_) => Err(ErrorCode::BadArguments(format!(
                 "The argument of function {} must be constant.",
                 self.display_name
             ))),
-            DataColumnarValue::Constant(value, rows) => {
+            DataColumn::Constant(value, rows) => {
                 let seconds = match value {
                     DataValue::UInt8(Some(v)) => Duration::from_secs(*v as u64),
                     DataValue::UInt16(Some(v)) => Duration::from_secs(*v as u64),
@@ -87,10 +87,7 @@ impl Function for SleepFunction {
                 }
 
                 std::thread::sleep(seconds);
-                Ok(DataColumnarValue::Constant(
-                    DataValue::UInt8(Some(0)),
-                    *rows,
-                ))
+                Ok(DataColumn::Constant(DataValue::UInt8(Some(0)), *rows))
             }
         }
     }

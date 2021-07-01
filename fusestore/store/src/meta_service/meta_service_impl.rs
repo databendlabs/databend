@@ -10,9 +10,9 @@ use std::sync::Arc;
 
 use common_tracing::tracing;
 
-use crate::meta_service::ClientRequest;
 use crate::meta_service::GetReply;
 use crate::meta_service::GetReq;
+use crate::meta_service::LogEntry;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaService;
 use crate::meta_service::RaftMes;
@@ -37,7 +37,7 @@ impl MetaService for MetaServiceImpl {
         request: tonic::Request<RaftMes>,
     ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
         let mes = request.into_inner();
-        let req: ClientRequest = mes.try_into()?;
+        let req: LogEntry = mes.try_into()?;
 
         let rst = self
             .meta_node

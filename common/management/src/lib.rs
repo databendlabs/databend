@@ -4,3 +4,7 @@
 //
 
 mod user;
+
+pub use user::user_api::UserInfo;
+pub use user::user_api::UserMgrApi;
+pub use user::user_mgr::UserMgr;
