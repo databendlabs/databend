@@ -2,10 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_arrow::arrow::array::ArrayRef;
 use common_datablocks::DataBlock;
-use common_datavalues::DataColumnarValue;
-use common_flights::GetTableActionResult;
+use common_datavalues::prelude::*;
+use common_flights::meta_api_impl::GetTableActionResult;
+use common_flights::KVApi;
+use common_flights::MetaApi;
+use common_flights::StorageApi;
 use common_flights::StoreClient;
 use common_planners::CreateDatabasePlan;
 use common_planners::DatabaseEngineType;
@@ -85,10 +87,10 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
     use std::sync::Arc;
 
-    use common_arrow::arrow::datatypes::DataType;
     use common_datavalues::DataField;
     use common_datavalues::DataSchema;
     use common_flights::StoreClient;
+    use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
     use common_planners::DatabaseEngineType;
     use common_planners::TableEngineType;
@@ -178,7 +180,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
 
             let status = res.err().unwrap();
             assert_eq!(
-                "status: Some entity that we attempted to create already exists: table exists",
+                "Code: 4003, displayText = table exists.",
                 status.to_string()
             );
 
@@ -203,11 +205,7 @@ async fn test_do_append() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
     use std::sync::Arc;
 
-    use common_arrow::arrow::datatypes::DataType;
-    use common_datavalues::DataField;
-    use common_datavalues::DataSchema;
-    use common_datavalues::Int64Array;
-    use common_datavalues::StringArray;
+    use common_datavalues::prelude::*;
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
@@ -223,10 +221,10 @@ async fn test_do_append() -> anyhow::Result<()> {
     let db_name = "test_db";
     let tbl_name = "test_tbl";
 
-    let col0: ArrayRef = Arc::new(Int64Array::from(vec![0, 1, 2]));
-    let col1: ArrayRef = Arc::new(StringArray::from(vec!["str1", "str2", "str3"]));
+    let col0 = Series::new(vec![0i64, 1, 2]);
+    let col1 = Series::new(vec!["str1", "str2", "str3"]);
 
-    let expected_rows = col0.data().len() * 2;
+    let expected_rows = col0.len() * 2;
     let expected_cols = 2;
 
     let block = DataBlock::create_by_array(schema.clone(), vec![col0, col1]);
@@ -277,11 +275,7 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
     use std::sync::Arc;
 
-    use common_arrow::arrow::datatypes::DataType;
-    use common_datavalues::DataField;
-    use common_datavalues::DataSchema;
-    use common_datavalues::Int64Array;
-    use common_datavalues::StringArray;
+    use common_datavalues::prelude::*;
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
@@ -297,15 +291,15 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     let db_name = "test_db";
     let tbl_name = "test_tbl";
 
-    let col0: ArrayRef = Arc::new(Int64Array::from(vec![0, 1, 2]));
-    let col1: ArrayRef = Arc::new(StringArray::from(vec!["str1", "str2", "str3"]));
+    let col0 = Series::new(vec![0i64, 1, 2]);
+    let col1 = Series::new(vec!["str1", "str2", "str3"]);
 
-    let expected_rows = col0.data().len() * 2;
+    let expected_rows = col0.len() * 2;
     let expected_cols = 2;
 
     let block = DataBlock::create(schema.clone(), vec![
-        DataColumnarValue::Array(col0),
-        DataColumnarValue::Array(col1),
+        DataColumn::Array(col0),
+        DataColumn::Array(col1),
     ]);
     let batches = vec![block.clone(), block];
     let num_batch = batches.len();
@@ -352,7 +346,7 @@ async fn test_scan_partition() -> anyhow::Result<()> {
         ..ScanPlan::empty()
     };
     let res = client
-        .scan_partition(db_name.to_string(), tbl_name.to_string(), &plan)
+        .read_plan(db_name.to_string(), tbl_name.to_string(), &plan)
         .await;
     // TODO d assertions, de-duplicated codes
     println!("scan res is {:?}", res);
@@ -407,11 +401,139 @@ async fn test_flight_generic_kv() -> anyhow::Result<()> {
         );
     }
 
-    // get
+    // mget
 
     {
         let res = client.get_kv("foo").await?;
         assert_eq!(Some((2, "wow".to_string().into_bytes())), res.result);
+
+        client
+            .upsert_kv("another_key", None, "value of ak".to_string().into_bytes())
+            .await?;
+        let res = client
+            .mget_kv(&vec!["foo".to_string(), "another_key".to_string()])
+            .await?;
+        assert_eq!(res.result, vec![
+            Some((2, "wow".to_string().into_bytes())),
+            // NOTE, the sequence number is increased globally (inside the namespace of generic kv)
+            Some((3, "value of ak".to_string().into_bytes())),
+        ]);
+
+        let res = client
+            .mget_kv(&vec!["foo".to_string(), "key_no exist".to_string()])
+            .await?;
+        assert_eq!(res.result, vec![
+            Some((2, "wow".to_string().into_bytes())),
+            None
+        ]);
+    }
+
+    // prefix list
+
+    let mut values = vec![];
+    {
+        client.upsert_kv("t", None, "".as_bytes().to_vec()).await?;
+
+        for i in 0..9 {
+            let key = format!("__users/{}", i);
+            let val = format!("val_{}", i);
+            values.push(val.clone());
+            client
+                .upsert_kv(&key, None, val.as_bytes().to_vec())
+                .await?;
+        }
+        client.upsert_kv("v", None, "".as_bytes().to_vec()).await?;
+    }
+
+    let res = client.prefix_list_kv("__users/").await?;
+    assert_eq!(
+        res.iter()
+            .map(|(_key, (_s, val))| val.clone())
+            .collect::<Vec<_>>(),
+        values
+            .iter()
+            .map(|v| v.as_bytes().to_vec())
+            .collect::<Vec<_>>()
+    );
+
+    // delete
+    {
+        let test_key = "test_key";
+        client
+            .upsert_kv(test_key, None, "value of ak".to_string().into_bytes())
+            .await?;
+
+        let current = client.get_kv(test_key).await?;
+        if let Some((seq, _val)) = current.result {
+            // seq mismatch
+            let wrong_seq = Some(seq + 1);
+            let res = client.delete_kv(test_key, wrong_seq).await?;
+            assert!(res.is_none());
+
+            // seq match
+            let res = client.delete_kv(test_key, Some(seq)).await?;
+            assert!(res.is_some());
+
+            // read nothing
+            let r = client.get_kv(test_key).await?;
+            assert!(r.result.is_none());
+        } else {
+            panic!("expecting a value, but got nothing");
+        }
+
+        // key not exist
+        let res = client.delete_kv("not exists", None).await?;
+        assert!(res.is_none());
+
+        // do not care seq
+        client
+            .upsert_kv(test_key, None, "value of ak".to_string().into_bytes())
+            .await?;
+
+        let res = client.delete_kv(test_key, None).await?;
+        assert!(res.is_some());
+    }
+
+    // update
+    {
+        let test_key = "test_key_for_update";
+        let r = client
+            .update_kv(test_key, None, "value of ak".to_string().into_bytes())
+            .await?;
+        assert!(r.is_none());
+
+        let r = client
+            .upsert_kv(test_key, None, "value of ak".to_string().into_bytes())
+            .await?;
+        assert!(r.result.is_some());
+        let seq = r.result.unwrap().0;
+
+        // unmatched seq
+        let r = client
+            .update_kv(
+                test_key,
+                Some(seq + 1),
+                "value of ak".to_string().into_bytes(),
+            )
+            .await?;
+        assert!(r.is_none());
+
+        // matched seq
+        let r = client
+            .update_kv(test_key, Some(seq), "value of ak".to_string().into_bytes())
+            .await?;
+        assert!(r.is_some());
+
+        // blind update
+        let r = client
+            .update_kv(test_key, None, "brand new value".to_string().into_bytes())
+            .await?;
+        assert!(r.is_some());
+
+        // value updated
+        let kv = client.get_kv(test_key).await?;
+        assert!(kv.result.is_some());
+        assert_eq!(kv.result.unwrap().1, "brand new value".as_bytes());
     }
 
     Ok(())

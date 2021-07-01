@@ -21,11 +21,9 @@ use common_arrow::arrow_flight::HandshakeResponse;
 use common_arrow::arrow_flight::PutResult;
 use common_arrow::arrow_flight::SchemaResult;
 use common_arrow::arrow_flight::Ticket;
-use common_flights::flight_result_to_str;
 use common_flights::FlightClaim;
 use common_flights::FlightToken;
 use common_flights::StoreDoAction;
-use common_flights::StoreDoActionResult;
 use common_flights::StoreDoGet;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::mpsc::Receiver;
@@ -34,6 +32,7 @@ use futures::Stream;
 use futures::StreamExt;
 use log::info;
 use prost::Message;
+use serde::Serialize;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::metadata::MetadataMap;
 use tonic::Request;
@@ -43,6 +42,7 @@ use tonic::Streaming;
 
 use crate::configs::Config;
 use crate::executor::ActionHandler;
+use crate::executor::ReplySerializer;
 use crate::fs::FileSystem;
 use crate::meta_service::MetaNode;
 
@@ -149,7 +149,7 @@ impl FlightService for StoreFlightImpl {
         request: Request<Ticket>,
     ) -> Result<Response<Self::DoGetStream>, Status> {
         // Check token.
-        let _claim = self.check_token(&request.metadata())?;
+        let _claim = self.check_token(request.metadata())?;
 
         // Action.
         let action: StoreDoGet = request.try_into()?;
@@ -183,11 +183,11 @@ impl FlightService for StoreFlightImpl {
         &self,
         request: Request<Streaming<FlightData>>,
     ) -> Result<Response<Self::DoPutStream>, Status> {
-        let _claim = self.check_token(&request.metadata())?;
+        let _claim = self.check_token(request.metadata())?;
         let meta = request.metadata();
 
-        let (db_name, tbl_name) =
-            common_flights::get_do_put_meta(meta).map_err(|e| Status::internal(e.to_string()))?;
+        let (db_name, tbl_name) = common_flights::storage_api_impl::get_do_put_meta(meta)
+            .map_err(|e| Status::internal(e.to_string()))?;
 
         let append_res = self
             .action_handler
@@ -219,13 +219,16 @@ impl FlightService for StoreFlightImpl {
         request: Request<Action>,
     ) -> Result<Response<Self::DoActionStream>, Status> {
         // Check token.
-        let _claim = self.check_token(&request.metadata())?;
+        let _claim = self.check_token(request.metadata())?;
 
         let action: StoreDoAction = request.try_into()?;
         info!("Receive do_action: {:?}", action);
-        let rst = self.action_handler.execute(action).await?;
 
-        self.once_stream_resp(rst)
+        let s = JsonSer;
+        let body = self.action_handler.execute(action, s).await?;
+        let arrow = arrow_flight::Result { body };
+        let output = futures::stream::once(async { Ok(arrow) });
+        Ok(Response::new(Box::pin(output)))
     }
 
     type ListActionsStream = FlightStream<ActionType>;
@@ -237,17 +240,12 @@ impl FlightService for StoreFlightImpl {
     }
 }
 
-impl StoreFlightImpl {
-    fn once_stream_resp(
-        &self,
-        action_rst: StoreDoActionResult,
-    ) -> Result<Response<FlightStream<arrow_flight::Result>>, Status> {
-        let rst = arrow_flight::Result::from(action_rst);
-
-        info!("oneshot Result stream: {:}", flight_result_to_str(&rst));
-
-        let output = futures::stream::once(async { Ok(rst) });
-
-        Ok(Response::new(Box::pin(output)))
+struct JsonSer;
+impl ReplySerializer for JsonSer {
+    type Output = Vec<u8>;
+    fn serialize<T>(&self, v: T) -> common_exception::Result<Self::Output>
+    where T: Serialize {
+        let v = serde_json::to_vec(&v)?;
+        Ok(v)
     }
 }

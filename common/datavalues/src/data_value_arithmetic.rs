@@ -2,39 +2,98 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::ops::Add;
+use std::ops::Div;
+use std::ops::Mul;
+use std::ops::Neg;
+use std::ops::Rem;
+use std::ops::Sub;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataValue;
 use crate::DataValueArithmeticOperator;
-
-pub struct DataValueArithmetic;
+use crate::DataValueArithmeticOperator::*;
 
 macro_rules! typed_data_value_operator {
     ($OP: expr, $LHS:expr, $RHS:expr, $SCALAR:ident, $TYPE:ident) => {{
         match $OP {
-            DataValueArithmeticOperator::Plus => {
+            Plus => {
                 typed_data_value_add!($LHS, $RHS, $SCALAR, $TYPE)
             }
-            DataValueArithmeticOperator::Minus => {
+            Minus => {
                 typed_data_value_sub!($LHS, $RHS, $SCALAR, $TYPE)
             }
-            DataValueArithmeticOperator::Mul => {
+            Mul => {
                 typed_data_value_mul!($LHS, $RHS, $SCALAR, $TYPE)
             }
-            DataValueArithmeticOperator::Div => {
+            Div => {
                 typed_data_value_div!($LHS, $RHS, Float64, $TYPE)
             }
-            DataValueArithmeticOperator::Modulo => {
+            Modulo => {
                 typed_data_value_modulo!($LHS, $RHS, $SCALAR, $TYPE)
             }
         }
     }};
 }
 
-impl DataValueArithmetic {
+impl Add for &DataValue {
+    type Output = Result<DataValue>;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        DataValue::arithmetic(Plus, self.clone(), rhs.clone())
+    }
+}
+
+impl Sub for &DataValue {
+    type Output = Result<DataValue>;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        DataValue::arithmetic(Minus, self.clone(), rhs.clone())
+    }
+}
+
+impl Mul for &DataValue {
+    type Output = Result<DataValue>;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        DataValue::arithmetic(Mul, self.clone(), rhs.clone())
+    }
+}
+
+impl Div for &DataValue {
+    type Output = Result<DataValue>;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        DataValue::arithmetic(Div, self.clone(), rhs.clone())
+    }
+}
+
+impl Rem for &DataValue {
+    type Output = Result<DataValue>;
+
+    fn rem(self, rhs: Self) -> Self::Output {
+        DataValue::arithmetic(Modulo, self.clone(), rhs.clone())
+    }
+}
+
+impl Neg for &DataValue {
+    type Output = Result<DataValue>;
+
+    fn neg(self) -> Self::Output {
+        if self.is_null() {
+            return Ok(self.clone());
+        }
+        let lhs = self.to_series_with_size(1)?;
+        let result = Neg::neg(&lhs)?;
+        result.try_get(0)
+    }
+}
+
+impl DataValue {
     #[inline]
-    pub fn data_value_arithmetic_op(
+    pub fn arithmetic(
         op: DataValueArithmeticOperator,
         left: DataValue,
         right: DataValue,

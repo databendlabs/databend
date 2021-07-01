@@ -38,7 +38,7 @@ async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.
 async-trait = "0.1"
 env_logger = "0.8"
 futures = "0.3"
-indexmap = "1.6.1"
+indexmap = "1.7.0"
 lazy_static = "1.4.0"
 log = "0.4"
 metrics = "0.16.0"
@@ -58,6 +58,7 @@ threadpool = "1.8.1"
 tokio-stream = "0.1"
 tonic = "0.4.3"
 uuid = { version = "0.8", features = ["serde", "v4"] }
+sha2 = "0.9.5"
 
 [dev-dependencies]
 env_logger = "*"

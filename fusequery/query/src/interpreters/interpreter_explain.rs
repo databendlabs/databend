@@ -6,11 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::StringArray;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::ExplainPlan;
 use common_planners::ExplainType;
@@ -59,9 +55,7 @@ impl Interpreter for ExplainInterpreter {
             _ => format!("{:?}", plan),
         };
         let block =
-            DataBlock::create_by_array(schema.clone(), vec![Arc::new(StringArray::from(vec![
-                result.as_str(),
-            ]))]);
+            DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![result.as_str()])]);
         debug!("Explain executor result: {:?}", block);
 
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))

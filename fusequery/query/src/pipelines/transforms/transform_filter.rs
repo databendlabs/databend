@@ -10,11 +10,7 @@ use std::time::Instant;
 
 use common_arrow::arrow;
 use common_datablocks::DataBlock;
-use common_datavalues as datavalues;
-use common_datavalues::BooleanArray;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_exception::ErrorCode;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
@@ -103,8 +99,7 @@ impl Processor for FilterTransform {
             let filter_array = filter_block.try_column_by_name(column_name)?.to_array()?;
             // Downcast to boolean array
             println!("{:?}", filter_array);
-            let filter_array = datavalues::downcast_array!(filter_array, BooleanArray)?;
-
+            let filter_array = filter_array.bool()?.downcast_ref();
             // Convert to arrow record_batch
             let batch = block.try_into()?;
             let batch = arrow::compute::filter_record_batch(&batch, filter_array)?;

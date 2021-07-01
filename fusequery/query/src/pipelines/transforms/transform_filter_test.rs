@@ -78,7 +78,7 @@ async fn test_transform_filter_error() -> Result<()> {
             false,
         );
         let actual = format!("{}", result.err().unwrap());
-        let expect = "Code: 1002, displayText = Invalid argument error: Unable to get field named \"not_found_filed\". Valid fields: [\"number\"].";
+        let expect = "Code: 6, displayText = Unable to get field named \"not_found_filed\". Valid fields: [\"number\"].";
         assert_eq!(expect, actual);
     }
     Ok(())

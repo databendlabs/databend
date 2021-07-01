@@ -121,8 +121,8 @@ impl Expression {
 
     pub fn to_data_field(&self, input_schema: &DataSchemaRef) -> Result<DataField> {
         let name = self.column_name();
-        self.to_data_type(&input_schema).and_then(|return_type| {
-            self.nullable(&input_schema)
+        self.to_data_type(input_schema).and_then(|return_type| {
+            self.nullable(input_schema)
                 .map(|nullable| DataField::new(&name, return_type, nullable))
         })
     }

@@ -4,10 +4,8 @@
 
 use std::fmt;
 
-use common_datavalues::DataArrayComparison;
-use common_datavalues::DataColumnarValue;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
+use common_datavalues::columns::DataColumn;
+use common_datavalues::prelude::*;
 use common_datavalues::DataValueComparisonOperator;
 use common_exception::Result;
 
@@ -61,14 +59,8 @@ impl Function for ComparisonFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<DataColumnarValue> {
-        let result = DataArrayComparison::data_array_comparison_op(
-            self.op.clone(),
-            &columns[0],
-            &columns[1],
-        )?;
-
-        Ok(result.into())
+    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
+        columns[0].compare(self.op.clone(), &columns[1])
     }
 
     fn num_arguments(&self) -> usize {

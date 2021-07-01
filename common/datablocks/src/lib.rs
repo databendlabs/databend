@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#![feature(hash_raw_entry)]
+
 #[cfg(test)]
 mod data_block_test;
 

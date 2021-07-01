@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 
+use common_datavalues::prelude::DataColumn;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
@@ -49,7 +50,7 @@ impl DataBlock {
         let mut group_columns = Vec::with_capacity(column_names.len());
         {
             for col in column_names {
-                group_columns.push(block.try_column_by_name(&col)?);
+                group_columns.push(block.try_column_by_name(col)?);
             }
         }
 
@@ -70,14 +71,14 @@ impl DataBlock {
                 group_key.clear();
 
                 for col in &group_columns {
-                    DataValue::concat_row_to_one_key(col, row, &mut group_key)?;
+                    DataColumn::concat_row_to_one_key(col, row, &mut group_key)?;
                 }
 
                 match group_indices.get_mut(&group_key) {
                     None => {
                         let mut group_keys = Vec::with_capacity(group_key.len());
                         for col in &group_columns {
-                            group_keys.push(DataValue::try_from_column(col, row)?);
+                            group_keys.push(col.try_get(row)?);
                         }
                         group_indices.insert(group_key.clone(), (vec![row as u32], group_keys));
                     }
@@ -99,7 +100,7 @@ impl DataBlock {
 
         let mut group_blocks = GroupBlocksTable::default();
         for (group_key, (group_indices, group_keys)) in group_indices {
-            let take_block = DataBlock::block_take_by_indices(&block, &group_indices)?;
+            let take_block = DataBlock::block_take_by_indices(block, &group_indices)?;
             group_blocks.push((group_key, group_keys, take_block));
         }
 

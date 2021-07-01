@@ -8,12 +8,10 @@ use std::sync::Arc;
 
 use common_arrow::arrow_flight::FlightData;
 use common_exception::ErrorCode;
-use common_flights::CreateDatabaseAction;
-use common_flights::CreateDatabaseActionResult;
-use common_flights::GetDatabaseAction;
-use common_flights::GetDatabaseActionResult;
-use common_flights::StoreDoAction;
-use common_flights::StoreDoActionResult;
+use common_flights::meta_api_impl::CreateDatabaseAction;
+use common_flights::meta_api_impl::CreateDatabaseActionResult;
+use common_flights::meta_api_impl::GetDatabaseAction;
+use common_flights::meta_api_impl::GetDatabaseActionResult;
 use common_planners::CreateDatabasePlan;
 use common_planners::DatabaseEngineType;
 use common_runtime::tokio;
@@ -23,9 +21,9 @@ use common_tracing::tracing;
 use maplit::hashmap;
 use pretty_assertions::assert_eq;
 use tempfile::tempdir;
-use tonic::Status;
 
 use crate::dfs::Dfs;
+use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
 use crate::fs::FileSystem;
 use crate::localfs::LocalFS;
@@ -76,11 +74,11 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
 
     struct T {
         plan: CreateDatabasePlan,
-        want: Result<StoreDoActionResult, Status>,
+        want: common_exception::Result<CreateDatabaseActionResult>,
     }
 
     /// helper to build a T
-    fn case(dbname: &str, if_not_exists: bool, want: Result<i64, &str>) -> T {
+    fn case(dbname: &str, if_not_exists: bool, want: common_exception::Result<i64>) -> T {
         let plan = CreateDatabasePlan {
             db: dbname.to_string(),
             if_not_exists,
@@ -88,12 +86,10 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
             options: Default::default(),
         };
         let want = match want {
-            Ok(want_db_id) => Ok(StoreDoActionResult::CreateDatabase(
-                CreateDatabaseActionResult {
-                    database_id: want_db_id,
-                },
-            )),
-            Err(err_str) => Err(Status::internal(err_str)),
+            Ok(want_db_id) => Ok(CreateDatabaseActionResult {
+                database_id: want_db_id,
+            }),
+            Err(err) => Err(err), // Result<i64,_> to Result<StoreDoActionResult, _>
         };
 
         T { plan, want }
@@ -103,7 +99,11 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
     let cases: Vec<T> = vec![
         case("foo", false, Ok(0)),
         case("foo", true, Ok(0)),
-        case("foo", false, Err("foo database exists")),
+        case(
+            "foo",
+            false,
+            Err(ErrorCode::DatabaseAlreadyExists("foo database exists")),
+        ),
         case("bar", true, Ok(1)),
     ];
 
@@ -114,11 +114,10 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
 
         for (i, c) in cases.iter().enumerate() {
             let mes = format!("{}-th: plan: {:?}, want: {:?}", i, c.plan, c.want);
-            let cba = CreateDatabaseAction {
+            let a = CreateDatabaseAction {
                 plan: c.plan.clone(),
             };
-            let a = StoreDoAction::CreateDatabase(cba);
-            let rst = hdlr.execute(a).await;
+            let rst = hdlr.handle(a).await;
             match c.want {
                 Ok(ref id) => {
                     assert_eq!(id, &rst.unwrap(), "{}", mes);
@@ -145,16 +144,16 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
 
     struct T {
         db_name: &'static str,
-        want: Result<StoreDoActionResult, ErrorCode>,
+        want: Result<GetDatabaseActionResult, ErrorCode>,
     }
 
     /// helper to build a T
     fn case(db_name: &'static str, want: Result<i64, &str>) -> T {
         let want = match want {
-            Ok(want_db_id) => Ok(StoreDoActionResult::GetDatabase(GetDatabaseActionResult {
+            Ok(want_db_id) => Ok(GetDatabaseActionResult {
                 database_id: want_db_id,
                 db: db_name.to_string(),
-            })),
+            }),
             Err(err_str) => Err(ErrorCode::UnknownDatabase(err_str)),
         };
 
@@ -178,8 +177,7 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
                 options: Default::default(),
             };
             let cba = CreateDatabaseAction { plan: plan };
-            let a = StoreDoAction::CreateDatabase(cba);
-            hdlr.execute(a).await?;
+            hdlr.handle(cba).await?;
         }
 
         for (i, c) in cases.iter().enumerate() {
@@ -187,9 +185,9 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
 
             // get db
             let rst = hdlr
-                .execute(StoreDoAction::GetDatabase(GetDatabaseAction {
+                .handle(GetDatabaseAction {
                     db: c.db_name.to_string(),
-                }))
+                })
                 .await;
 
             match c.want {

@@ -5,18 +5,11 @@
 use std::any::Any;
 use std::fmt;
 
-use common_datavalues::DataColumnarValue;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use common_datavalues::DataValueArithmetic;
-use common_datavalues::DataValueArithmeticOperator;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_unary_arguments;
 use crate::AggregateFunction;
-use crate::AggregateSumFunction;
 
 #[derive(Clone)]
 pub struct AggregateAvgFunction {
@@ -57,18 +50,19 @@ impl AggregateFunction for AggregateAvgFunction {
         self
     }
 
-    fn accumulate(&mut self, columns: &[DataColumnarValue], input_rows: usize) -> Result<()> {
+    fn accumulate(&mut self, columns: &[DataColumn], input_rows: usize) -> Result<()> {
         if let DataValue::Struct(values) = self.state.clone() {
-            let sum = DataValueArithmetic::data_value_arithmetic_op(
-                DataValueArithmeticOperator::Plus,
-                values[0].clone(),
-                AggregateSumFunction::sum_batch(columns[0].clone())?,
-            )?;
-            let count = DataValueArithmetic::data_value_arithmetic_op(
-                DataValueArithmeticOperator::Plus,
-                values[1].clone(),
-                DataValue::UInt64(Some(input_rows as u64)),
-            )?;
+            let sum = match &columns[0] {
+                DataColumn::Constant(value, size) => {
+                    DataValue::arithmetic(Mul, value.clone(), DataValue::UInt64(Some(*size as u64)))
+                }
+                DataColumn::Array(array) => array.sum(),
+            }?;
+
+            let sum = (&sum + &values[0])?;
+
+            let count = DataValue::UInt64(Some(input_rows as u64));
+            let count = (&count + &values[1])?;
 
             self.state = DataValue::Struct(vec![sum, count]);
         }
@@ -77,17 +71,9 @@ impl AggregateFunction for AggregateAvgFunction {
 
     fn accumulate_scalar(&mut self, scalar_values: &[DataValue]) -> Result<()> {
         if let DataValue::Struct(values) = self.state.clone() {
-            let sum = DataValueArithmetic::data_value_arithmetic_op(
-                DataValueArithmeticOperator::Plus,
-                values[0].clone(),
-                scalar_values[0].clone(),
-            )?;
-
-            let count = DataValueArithmetic::data_value_arithmetic_op(
-                DataValueArithmeticOperator::Plus,
-                values[1].clone(),
-                DataValue::UInt64(Some(1u64)),
-            )?;
+            let sum = (&scalar_values[0] + &values[0])?;
+            let count = DataValue::UInt64(Some(1_u64));
+            let count = (&count + &values[1])?;
 
             self.state = DataValue::Struct(vec![sum, count]);
         }
@@ -103,16 +89,8 @@ impl AggregateFunction for AggregateAvgFunction {
         if let (DataValue::Struct(new_states), DataValue::Struct(old_states)) =
             (val, self.state.clone())
         {
-            let sum = DataValueArithmetic::data_value_arithmetic_op(
-                DataValueArithmeticOperator::Plus,
-                new_states[0].clone(),
-                old_states[0].clone(),
-            )?;
-            let count = DataValueArithmetic::data_value_arithmetic_op(
-                DataValueArithmeticOperator::Plus,
-                new_states[1].clone(),
-                old_states[1].clone(),
-            )?;
+            let sum = (&new_states[0] + &old_states[0])?;
+            let count = (&new_states[1] + &old_states[1])?;
 
             self.state = DataValue::Struct(vec![sum, count]);
         }
@@ -124,11 +102,7 @@ impl AggregateFunction for AggregateAvgFunction {
             if states[1].eq(&DataValue::UInt64(Some(0))) {
                 DataValue::Float64(None)
             } else {
-                DataValueArithmetic::data_value_arithmetic_op(
-                    DataValueArithmeticOperator::Div,
-                    states[0].clone(),
-                    states[1].clone(),
-                )?
+                (&states[0] / &states[1])?
             }
         } else {
             self.state.clone()

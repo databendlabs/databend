@@ -5,7 +5,7 @@
 use std::mem::size_of;
 use std::sync::Arc;
 
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 use pretty_assertions::assert_eq;

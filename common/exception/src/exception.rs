@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use backtrace::Backtrace;
 use thiserror::Error;
+use tonic::Code;
 use tonic::Status;
 
 pub static ABORT_SESSION: u16 = 42;
@@ -149,6 +150,10 @@ build_exceptions! {
     NotFoundSession(44),
     CannotListenerPort(45),
 
+
+    // uncategorized
+    UnexpectedResponseType(600),
+
     UnknownException(1000),
     TokioError(1001),
 }
@@ -175,6 +180,33 @@ build_exceptions! {
     // config errors
 
     InvalidConfig(2301),
+
+
+    // TODO
+    // We may need to separate front-end errors from API errors (and system errors?)
+    // That may depend which components are using these error codes, and for what purposes,
+    // let's figure it out latter.
+
+    // user-api error codes
+    UnknownUser(3000),
+    UserAlreadyExists(3001),
+    IllegalUserInfoFormat(3002),
+
+    // meta-api error codes
+    DatabaseAlreadyExists(4001),
+    TableAlreadyExists(4003),
+    IllegalMetaOperationArgument(4004),
+    IllegalSchema(4005),
+    IllegalMetaState(4005),
+    MetaNodeInternalError(4006),
+
+    // storage-api error codes
+    IllegalScanPlan(5000),
+    ReadFileError(5001),
+    BrokenChannel(5002),
+
+    // kv-api error codes
+    UnknownKey(6000),
 
 }
 
@@ -369,8 +401,8 @@ struct SerializedError {
 impl From<&Status> for ErrorCode {
     fn from(status: &Status) -> Self {
         match status.code() {
-            tonic::Code::Internal => {
-                match serde_json::from_str::<SerializedError>(&status.message()) {
+            tonic::Code::Unknown => {
+                match serde_json::from_slice::<SerializedError>(status.details()) {
                     Err(error) => ErrorCode::from(error),
                     Ok(serialized_error) => match serialized_error.backtrace.len() {
                         0 => {
@@ -399,7 +431,7 @@ impl From<Status> for ErrorCode {
 
 impl From<ErrorCode> for Status {
     fn from(err: ErrorCode) -> Self {
-        let rst_json = serde_json::to_string::<SerializedError>(&SerializedError {
+        let rst_json = serde_json::to_vec::<SerializedError>(&SerializedError {
             code: err.code(),
             message: err.message(),
             backtrace: {
@@ -410,7 +442,11 @@ impl From<ErrorCode> for Status {
         });
 
         match rst_json {
-            Ok(serialized_error_json) => Status::internal(serialized_error_json),
+            Ok(serialized_error_json) => {
+                // Code::Internal will be used by h2, if something goes wrong internally.
+                // To distinguish from that, we use Code::Unknown here
+                Status::with_details(Code::Unknown, err.message(), serialized_error_json.into())
+            }
             Err(error) => Status::unknown(error.to_string()),
         }
     }

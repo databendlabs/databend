@@ -4,9 +4,7 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::DataType;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::Expression;
 use common_planners::ExpressionPlan;

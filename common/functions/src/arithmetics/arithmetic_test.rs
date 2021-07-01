@@ -2,16 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
-use common_arrow::arrow::array::ArrayRef;
-use common_datavalues::DataArrayRef;
-use common_datavalues::DataColumnarValue;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::Float64Array;
-use common_datavalues::Int64Array;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
@@ -26,8 +17,8 @@ fn test_arithmetic_function() -> Result<()> {
         display: &'static str,
         nullable: bool,
         arg_names: Vec<&'static str>,
-        columns: Vec<DataColumnarValue>,
-        expect: DataArrayRef,
+        columns: Vec<DataColumn>,
+        expect: DataColumn,
         error: &'static str,
         func: Box<dyn Function>,
     }
@@ -46,11 +37,11 @@ fn test_arithmetic_function() -> Result<()> {
             arg_names: vec!["a", "b"],
             func: ArithmeticPlusFunction::try_create_func("")?,
             columns: vec![
-                ((Arc::new(Int64Array::from(vec![4, 3, 2, 1]))) as ArrayRef).into(),
-                ((Arc::new(Int64Array::from(vec![1, 2, 3, 4]))) as ArrayRef).into(),
-                ((Arc::new(Int64Array::from(vec![1, 2, 3, 4]))) as ArrayRef).into(),
+                Series::new(vec![4i64, 3, 2, 1]).into(),
+                Series::new(vec![1i64, 2, 3, 4]).into(),
+                Series::new(vec![1i16, 2, 3, 4]).into(),
             ],
-            expect: Arc::new(Int64Array::from(vec![5, 5, 5, 5])),
+            expect: Series::new(vec![5i64, 5, 5, 5]).into(),
             error: "",
         },
         Test {
@@ -60,11 +51,11 @@ fn test_arithmetic_function() -> Result<()> {
             arg_names: vec!["c", "b"],
             func: ArithmeticPlusFunction::try_create_func("")?,
             columns: vec![
-                ((Arc::new(Int64Array::from(vec![4, 3, 2, 1]))) as ArrayRef).into(),
-                ((Arc::new(Int64Array::from(vec![1, 2, 3, 4]))) as ArrayRef).into(),
-                ((Arc::new(Int64Array::from(vec![1, 2, 3, 4]))) as ArrayRef).into(),
+                Series::new(vec![4i64, 3, 2, 1]).into(),
+                Series::new(vec![1i64, 2, 3, 4]).into(),
+                Series::new(vec![1i16, 2, 3, 4]).into(),
             ],
-            expect: Arc::new(Int64Array::from(vec![5, 5, 5, 5])),
+            expect: Series::new(vec![5i64, 5, 5, 5]).into(),
             error: "",
         },
         Test {
@@ -74,11 +65,11 @@ fn test_arithmetic_function() -> Result<()> {
             nullable: false,
             func: ArithmeticMinusFunction::try_create_func("")?,
             columns: vec![
-                ((Arc::new(Int64Array::from(vec![4, 3, 2]))) as ArrayRef).into(),
-                ((Arc::new(Int64Array::from(vec![1, 2, 3]))) as ArrayRef).into(),
-                ((Arc::new(Int64Array::from(vec![1, 2, 3]))) as ArrayRef).into(),
+                Series::new(vec![4i64, 3, 2]).into(),
+                Series::new(vec![1i64, 2, 3]).into(),
+                Series::new(vec![1i16, 2, 3]).into(),
             ],
-            expect: Arc::new(Int64Array::from(vec![3, 1, -1])),
+            expect: Series::new(vec![3i64, 1, -1]).into(),
             error: "",
         },
         Test {
@@ -88,11 +79,11 @@ fn test_arithmetic_function() -> Result<()> {
             nullable: false,
             func: ArithmeticMulFunction::try_create_func("")?,
             columns: vec![
-                ((Arc::new(Int64Array::from(vec![4, 3, 2]))) as ArrayRef).into(),
-                ((Arc::new(Int64Array::from(vec![1, 2, 3]))) as ArrayRef).into(),
-                ((Arc::new(Int64Array::from(vec![1, 2, 3]))) as ArrayRef).into(),
+                Series::new(vec![4i64, 3, 2]).into(),
+                Series::new(vec![1i64, 2, 3]).into(),
+                Series::new(vec![1i16, 2, 3]).into(),
             ],
-            expect: Arc::new(Int64Array::from(vec![4, 6, 6])),
+            expect: Series::new(vec![4i64, 6, 6]).into(),
             error: "",
         },
         Test {
@@ -102,11 +93,11 @@ fn test_arithmetic_function() -> Result<()> {
             nullable: false,
             func: ArithmeticDivFunction::try_create_func("")?,
             columns: vec![
-                ((Arc::new(Int64Array::from(vec![4, 3, 2]))) as ArrayRef).into(),
-                ((Arc::new(Int64Array::from(vec![1, 2, 3]))) as ArrayRef).into(),
-                ((Arc::new(Int64Array::from(vec![1, 2, 3]))) as ArrayRef).into(),
+                Series::new(vec![4i64, 3, 2]).into(),
+                Series::new(vec![1i64, 2, 3]).into(),
+                Series::new(vec![1i16, 2, 3]).into(),
             ],
-            expect: Arc::new(Float64Array::from(vec![4.0, 1.5, 0.6666666666666666])),
+            expect: Series::new(vec![4.0, 1.5, 0.6666666666666666]).into(),
             error: "",
         },
         Test {
@@ -116,11 +107,11 @@ fn test_arithmetic_function() -> Result<()> {
             nullable: false,
             func: ArithmeticModuloFunction::try_create_func("")?,
             columns: vec![
-                ((Arc::new(Int64Array::from(vec![4, 3, 2]))) as ArrayRef).into(),
-                ((Arc::new(Int64Array::from(vec![1, 2, 3]))) as ArrayRef).into(),
-                ((Arc::new(Int64Array::from(vec![1, 2, 3]))) as ArrayRef).into(),
+                Series::new(vec![4i64, 3, 2]).into(),
+                Series::new(vec![1i64, 2, 3]).into(),
+                Series::new(vec![1i16, 2, 3]).into(),
             ],
-            expect: Arc::new(Int64Array::from(vec![0, 1, 2])),
+            expect: Series::new(vec![0i64, 1, 2]).into(),
             error: "",
         },
     ];
@@ -153,7 +144,7 @@ fn test_arithmetic_function() -> Result<()> {
         let actual_type = v.data_type().clone();
         assert_eq!(expect_type, actual_type);
 
-        assert_eq!(v.to_array()?.as_ref(), t.expect.as_ref());
+        assert_eq!(v, &t.expect);
     }
     Ok(())
 }

@@ -3,10 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
-use std::convert::TryFrom;
 use std::fmt;
 
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -30,7 +29,7 @@ impl AggregateSumFunction {
         let return_type = Self::sum_return_type(arguments[0].data_type())?;
         Ok(Box::new(AggregateSumFunction {
             display_name: display_name.to_string(),
-            state: DataValue::try_from(&return_type)?,
+            state: DataValue::from(&return_type),
             arguments,
         }))
     }
@@ -53,24 +52,14 @@ impl AggregateFunction for AggregateSumFunction {
         self
     }
 
-    fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
-        let value = Self::sum_batch(columns[0].clone())?;
-
-        self.state = DataValueArithmetic::data_value_arithmetic_op(
-            DataValueArithmeticOperator::Plus,
-            self.state.clone(),
-            value,
-        )?;
-
+    fn accumulate(&mut self, columns: &[DataColumn], _input_rows: usize) -> Result<()> {
+        let value = Self::sum_batch(&columns[0])?;
+        self.state = (&self.state + &value)?;
         Ok(())
     }
 
     fn accumulate_scalar(&mut self, values: &[DataValue]) -> Result<()> {
-        self.state = DataValueArithmetic::data_value_arithmetic_op(
-            DataValueArithmeticOperator::Plus,
-            self.state.clone(),
-            values[0].clone(),
-        )?;
+        self.state = (&self.state + &values[0])?;
 
         Ok(())
     }
@@ -81,11 +70,7 @@ impl AggregateFunction for AggregateSumFunction {
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
         let val = states[0].clone();
-        self.state = DataValueArithmetic::data_value_arithmetic_op(
-            DataValueArithmeticOperator::Plus,
-            self.state.clone(),
-            val,
-        )?;
+        self.state = (&self.state + &val)?;
         Ok(())
     }
 
@@ -119,18 +104,17 @@ impl AggregateSumFunction {
         }
     }
 
-    pub fn sum_batch(column: DataColumnarValue) -> Result<DataValue> {
+    pub fn sum_batch(column: &DataColumn) -> Result<DataValue> {
+        if column.is_empty() {
+            return Ok(DataValue::from(&Self::sum_return_type(
+                &column.data_type(),
+            )?));
+        }
         match column {
-            DataColumnarValue::Constant(value, size) => {
-                DataValueArithmetic::data_value_arithmetic_op(
-                    DataValueArithmeticOperator::Mul,
-                    value,
-                    DataValue::UInt64(Some(size as u64)),
-                )
+            DataColumn::Constant(value, size) => {
+                DataValue::arithmetic(Mul, value.clone(), DataValue::UInt64(Some(*size as u64)))
             }
-            DataColumnarValue::Array(array) => {
-                dispatch_primitive_array! { typed_array_op_to_data_value,  array, sum}
-            }
+            DataColumn::Array(array) => array.sum(),
         }
     }
 }

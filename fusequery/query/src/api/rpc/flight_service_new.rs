@@ -102,8 +102,10 @@ impl FlightService for FuseQueryService {
         fn create_flight_info(stream_info: StreamInfo) -> FlightInfo {
             let options = common_arrow::arrow::ipc::writer::IpcWriteOptions::default();
 
+            let arrow_schema = stream_info.schema.to_arrow();
+
             FlightInfo {
-                schema: flight_schema_from_arrow_schema(&*stream_info.schema, &options).schema,
+                schema: flight_schema_from_arrow_schema(&arrow_schema, &options).schema,
                 flight_descriptor: Some(create_descriptor(&stream_info.stream_name)),
                 endpoint: vec![],
                 total_records: -1,
@@ -149,7 +151,8 @@ impl FlightService for FuseQueryService {
 
         fn create_schema(schema_ref: DataSchemaRef) -> SchemaResult {
             let options = common_arrow::arrow::ipc::writer::IpcWriteOptions::default();
-            flight_schema_from_arrow_schema(&*schema_ref, &options)
+            let arrow_schema = schema_ref.to_arrow();
+            flight_schema_from_arrow_schema(&arrow_schema, &options)
         }
 
         type ResponseSchema = common_exception::Result<RawResponse<SchemaResult>>;

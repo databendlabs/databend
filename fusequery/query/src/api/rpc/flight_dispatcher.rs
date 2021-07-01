@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::SchemaRef;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::FlightData;
 use common_datavalues::DataSchemaRef;
@@ -304,11 +303,12 @@ impl FlightDispatcher {
                         let scattered_columns = scattered_data[index]
                             .columns()
                             .iter()
-                            .map(|column| column.to_array())
+                            .map(|column| column.get_array_ref())
                             .collect::<Result<Vec<_>>>()?;
 
                         let schema = scattered_data[index].schema().clone();
-                        let record_batch = RecordBatch::try_new(schema, scattered_columns)?;
+                        let record_batch =
+                            RecordBatch::try_new(Arc::new(schema.to_arrow()), scattered_columns)?;
                         let (dicts, values) = flight_data_from_arrow_batch(&record_batch, &options);
                         let normalized_flight_data =
                             dicts.into_iter().chain(std::iter::once(values));
@@ -354,7 +354,7 @@ impl DispatcherState {
 
 impl FlightStreamInfo {
     pub fn create(
-        schema: &SchemaRef,
+        schema: &DataSchemaRef,
         launcher_sender: &Sender<()>,
     ) -> (Sender<Result<FlightData>>, FlightStreamInfo) {
         // TODO: Back pressure buffer size

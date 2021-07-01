@@ -10,6 +10,7 @@ use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
+use common_store_api::MetaApi;
 
 use crate::datasources::remote::remote_table::RemoteTable;
 use crate::datasources::remote::store_client_provider::StoreClientProvider;
