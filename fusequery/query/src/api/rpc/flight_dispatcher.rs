@@ -51,12 +51,7 @@ impl FuseQueryFlightDispatcher {
         self.abort.load(Ordering::Relaxed)
     }
 
-    pub fn get_stream(
-        &self,
-        query_id: String,
-        stage_id: String,
-        stream: String,
-    ) -> Result<mpsc::Receiver<Result<DataBlock>>> {
+    pub fn get_stream(&self, query_id: &str, stage_id: &str, stream: &str) -> Result<mpsc::Receiver<Result<DataBlock>>> {
         let stage_name = format!("{}/{}", query_id, stage_id);
         if let Some(notify) = self.stages_notify.write().remove(&stage_name) {
             notify.notify_waiters();
@@ -77,8 +72,8 @@ impl FuseQueryFlightDispatcher {
 
         match action.sinks.len() {
             0 => Err(ErrorCode::LogicalError("")),
-            1 => self.run_action_without_scatters(session, &action),
-            _ => self.run_action(
+            1 => self.run_action(session, &action),
+            _ => self.run_action_with_scatters(
                 session,
                 &action,
                 FlightScatterByHash::try_create(
@@ -90,38 +85,25 @@ impl FuseQueryFlightDispatcher {
         }
     }
 
-    fn run_action_without_scatters(
-        &self,
-        session: SessionRef,
-        action: &ShuffleAction,
-    ) -> Result<()> {
+    fn run_action(&self, session: SessionRef, action: &ShuffleAction) -> Result<()> {
         let query_context = session.try_create_context()?;
         let action_context = FuseQueryContext::new(query_context.clone());
         let pipeline =
             PipelineBuilder::create(action_context.clone(), HashMap::new(), action.plan.clone())
                 .build()?;
 
-        let (stage_notify, tx) = {
-            assert_eq!(action.sinks.len(), 1);
+        assert_eq!(action.sinks.len(), 1);
 
-            let stage_name = format!("{}/{}", action.query_id, action.stage_id);
-            let stage_notify = self.stages_notify.read().get(&stage_name).map(Arc::clone);
+        let stage_name = format!("{}/{}", action.query_id, action.stage_id);
+        let stages_notify = self.stages_notify.clone();
 
-            let stream_name = format!("{}/{}", stage_name, action.sinks[0]);
-            let tx = self.streams.read().get(&stream_name).map(|x| x.tx.clone());
-
-            match (stage_notify, tx) {
-                (Some(stage_notify), Some(tx)) => Ok((stage_notify, tx)),
-                _ => Err(ErrorCode::NotFoundStream(format!(
-                    "Not found stream {}",
-                    stream_name
-                ))),
-            }
-        }?;
+        let stream_name = format!("{}/{}", stage_name, action.sinks[0]);
+        let tx_ref = self.streams.read().get(&stream_name).map(|x| x.tx.clone());
+        let tx = tx_ref.ok_or_else(|| ErrorCode::NotFoundStream("Not found stream"))?;
 
         query_context
             .execute_task(async move {
-                stage_notify.notified().await;
+                wait_start(stage_name, stages_notify).await;
 
                 let abortable_stream = Self::execute(pipeline, action_context).await;
 
@@ -147,7 +129,7 @@ impl FuseQueryFlightDispatcher {
             .map(|_| ())
     }
 
-    fn run_action(
+    fn run_action_with_scatters(
         &self,
         session: SessionRef,
         action: &ShuffleAction,
@@ -159,15 +141,13 @@ impl FuseQueryFlightDispatcher {
             PipelineBuilder::create(action_context.clone(), HashMap::new(), action.plan.clone())
                 .build()?;
 
-        let (stage_notify, sinks_tx) = {
+        let sinks_tx = {
             assert!(action.sinks.len() > 1);
 
             let mut sinks_tx = Vec::with_capacity(action.sinks.len());
-            let stage_name = format!("{}/{}", action.query_id, action.stage_id);
-            let stage_notify = self.stages_notify.read().get(&stage_name).map(Arc::clone);
 
             for sink in &action.sinks {
-                let stream_name = format!("{}/{}", stage_name, sink);
+                let stream_name = format!("{}/{}/{}", action.query_id, action.stage_id, sink);
                 match self.streams.read().get(&stream_name) {
                     Some(stream) => sinks_tx.push(stream.tx.clone()),
                     None => {
@@ -179,17 +159,15 @@ impl FuseQueryFlightDispatcher {
                 }
             }
 
-            match stage_notify {
-                Some(stage_notify) => Ok((stage_notify, sinks_tx)),
-                _ => Err(ErrorCode::NotFoundSession(format!(
-                    "Not found stream {}",
-                    stage_name
-                ))),
-            }
+            Result::Ok(sinks_tx)
         }?;
 
+        let stage_name = format!("{}/{}", action.query_id, action.stage_id);
+        let stages_notify = self.stages_notify.clone();
+
+
         query_context.execute_task(async move {
-            stage_notify.notified().await;
+            wait_start(stage_name, stages_notify).await;
 
             let sinks_tx_ref = &sinks_tx;
             let forward_blocks = async move {
@@ -259,5 +237,16 @@ impl FuseQueryFlightDispatcher {
                 rx,
             });
         }
+    }
+}
+
+async fn wait_start(stage_name: String, stages_notify: Arc<RwLock<HashMap<String, Arc<Notify>>>>) {
+    let notify = {
+        let stages_notify = stages_notify.read();
+        stages_notify.get(&stage_name).map(Arc::clone)
+    };
+
+    if let Some(notify) = notify {
+        notify.notified().await;
     }
 }

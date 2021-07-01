@@ -209,7 +209,7 @@ impl fmt::Debug for Expression {
             Expression::Literal(ref v) => write!(f, "{:#}", v),
             Expression::Exists(ref v) => write!(f, "Exists(subquery)"),
             Expression::BinaryExpression { op, left, right } => {
-                write!(f, "({:?} {} {:?})", left, op, right, )
+                write!(f, "({:?} {} {:?})", left, op, right,)
             }
 
             Expression::UnaryExpression { op, expr } => {

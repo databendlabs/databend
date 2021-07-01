@@ -93,9 +93,9 @@ impl FlightService for FuseQueryFlightService {
         match ticket {
             FlightTicket::StreamTicket(steam_ticket) => {
                 let receiver = self.dispatcher.get_stream(
-                    steam_ticket.query_id,
-                    steam_ticket.stage_id,
-                    steam_ticket.stream,
+                    &steam_ticket.query_id,
+                    &steam_ticket.stage_id,
+                    &steam_ticket.stream,
                 )?;
 
                 Ok(RawResponse::new(

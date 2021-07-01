@@ -4,8 +4,12 @@
 
 mod context;
 mod number;
+mod parse_query;
+mod sessions;
 
-pub use context::ClusterNode;
-pub use context::try_create_context;
 pub use context::try_create_cluster_context;
+pub use context::try_create_context;
+pub use context::ClusterNode;
 pub use number::NumberTestData;
+pub use parse_query::parse_query;
+pub use sessions::try_create_sessions;

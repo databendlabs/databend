@@ -4,13 +4,16 @@
 
 use std::env;
 
-use common_exception::{Result, ToErrorCode, ErrorCode};
-
-use crate::configs::Config;
-use crate::sessions::{FuseQueryContext, SessionManager};
-use crate::sessions::FuseQueryContextRef;
-use crate::clusters::Cluster;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_exception::ToErrorCode;
 use common_runtime::tokio::runtime::Runtime;
+
+use crate::clusters::Cluster;
+use crate::configs::Config;
+use crate::sessions::FuseQueryContext;
+use crate::sessions::FuseQueryContextRef;
+use crate::sessions::SessionManager;
 
 pub fn try_create_context() -> Result<FuseQueryContextRef> {
     let mut config = Config::default();
@@ -57,13 +60,12 @@ pub fn try_create_cluster_context(nodes: &[ClusterNode]) -> Result<FuseQueryCont
         let cluster = cluster.clone();
         std::thread::spawn(move || -> Result<()> {
             let runtime = Runtime::new()
-                .map_err_to_code(
-                    ErrorCode::TokioError,
-                    || "Cannot create tokio runtime.",
-                )?;
+                .map_err_to_code(ErrorCode::TokioError, || "Cannot create tokio runtime.")?;
 
             runtime.block_on(cluster.add_node(&node.name, node.priority, &node.address))
-        }).join().unwrap()?;
+        })
+        .join()
+        .unwrap()?;
     }
 
     SessionManager::from_conf(config, cluster)?
@@ -74,4 +76,3 @@ pub fn try_create_cluster_context(nodes: &[ClusterNode]) -> Result<FuseQueryCont
             Ok(context)
         })
 }
-

@@ -15,15 +15,14 @@ use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::sessions::FuseQueryContextRef;
-use crate::tests::{try_create_cluster_context, ClusterNode};
+use crate::tests::try_create_cluster_context;
+use crate::tests::ClusterNode;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scheduler_plan_without_stage() -> Result<()> {
     let context = create_env().await?;
-    let scheduled_actions = PlanScheduler::reschedule(
-        context.clone(),
-        &PlanNode::Empty(EmptyPlan::create()),
-    )?;
+    let scheduled_actions =
+        PlanScheduler::reschedule(context.clone(), &PlanNode::Empty(EmptyPlan::create()))?;
 
     assert!(scheduled_actions.remote_actions.is_empty());
     assert_eq!(
@@ -391,7 +390,10 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
                 _ => assert!(false, "test_scheduler_plan_with_convergent_and_expansive_stage must be have Remote plan!"),
             }
         }
-        _ => assert!(false, "test_scheduler_plan_with_convergent_and_expansive_stage must be have Select plan!"),
+        _ => assert!(
+            false,
+            "test_scheduler_plan_with_convergent_and_expansive_stage must be have Select plan!"
+        ),
     };
 
     Ok(())
