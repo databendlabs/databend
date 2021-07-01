@@ -121,13 +121,13 @@ impl ArrayFullNull for DFUtf8Array {
 }
 
 impl ArrayFull<&Series> for DFListArray {
-    fn full(value: &Series, length: usize) -> DFListArray {
+    fn full(_value: &Series, _length: usize) -> DFListArray {
         todo!()
     }
 }
 
 impl ArrayFullNull for DFListArray {
-    fn full_null(length: usize) -> DFListArray {
+    fn full_null(_length: usize) -> DFListArray {
         todo!()
     }
 }

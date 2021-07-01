@@ -130,11 +130,6 @@ impl DataColumn {
                 vec.extend_from_slice(&array.value(row).to_le_bytes());
             }
 
-            DataType::Date32 => {
-                let array = col.date64()?.downcast_ref();
-                vec.extend_from_slice(&array.value(row).to_le_bytes());
-            }
-
             _ => {
                 // This is internal because we should have caught this before.
                 return Result::Err(ErrorCode::BadDataValueType(format!(

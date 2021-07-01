@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::fmt::Debug;
 use std::ops::Not;
 use std::sync::Arc;
 
@@ -11,6 +12,7 @@ use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::array::StringArray;
 use common_arrow::arrow::compute::kernels::comparison;
 use common_arrow::arrow::compute::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use num::Num;
 use num::NumCast;
@@ -22,48 +24,75 @@ use crate::series::Series;
 use crate::utils::NoNull;
 use crate::*;
 
-pub trait ArrayCompare<Rhs> {
+pub trait ArrayCompare<Rhs>: Debug {
     /// Check for equality and regard missing values as equal.
-    fn eq_missing(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        unimplemented!()
+    fn eq_missing(&self, _rhs: Rhs) -> Result<DFBooleanArray> {
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported compare operation: eq_missing for {:?}",
+            self,
+        )))
     }
 
     /// Check for equality.
-    fn eq(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        unimplemented!()
+    fn eq(&self, _rhs: Rhs) -> Result<DFBooleanArray> {
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported compare operation: eq for {:?}",
+            self,
+        )))
     }
 
     /// Check for inequality.
-    fn neq(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        unimplemented!()
+    fn neq(&self, _rhs: Rhs) -> Result<DFBooleanArray> {
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported compare operation: neq for {:?}",
+            self,
+        )))
     }
 
     /// Greater than comparison.
-    fn gt(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        unimplemented!()
+    fn gt(&self, _rhs: Rhs) -> Result<DFBooleanArray> {
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported compare operation: gt for {:?}",
+            self,
+        )))
     }
 
     /// Greater than or equal comparison.
-    fn gt_eq(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        unimplemented!()
+    fn gt_eq(&self, _rhs: Rhs) -> Result<DFBooleanArray> {
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported compare operation: gt_eq for {:?}",
+            self,
+        )))
     }
 
     /// Less than comparison.
-    fn lt(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        unimplemented!()
+    fn lt(&self, _rhs: Rhs) -> Result<DFBooleanArray> {
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported compare operation: lt for {:?}",
+            self,
+        )))
     }
 
     /// Less than or equal comparison
-    fn lt_eq(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        unimplemented!()
+    fn lt_eq(&self, _rhs: Rhs) -> Result<DFBooleanArray> {
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported compare operation: lt_eq for {:?}",
+            self,
+        )))
     }
 
-    fn like(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        unimplemented!()
+    fn like(&self, _rhs: Rhs) -> Result<DFBooleanArray> {
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported compare operation: like for {:?}",
+            self,
+        )))
     }
 
-    fn nlike(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        unimplemented!()
+    fn nlike(&self, _rhs: Rhs) -> Result<DFBooleanArray> {
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported compare operation: nlike for {:?}",
+            self,
+        )))
     }
 }
 

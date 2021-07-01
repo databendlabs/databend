@@ -28,25 +28,6 @@ impl<T> DataArray<T> {
     }
 }
 
-/// Dispatch the method call to the physical type and coerce back to logical type
-macro_rules! physical_dispatch {
-    ($s: expr, $method: ident, $($args:expr),*) => {{
-        let data_type = $s.data_type();
-        let phys_type = $s.physical_type();
-        let s = $s.cast_with_type(&phys_type).unwrap();
-        let s = s.$method($($args),*);
-
-        // if the type is unchanged we return the original type
-        if s.data_type() == &phys_type {
-            s.cast_with_type(data_type).unwrap()
-        }
-        // else the change of type is part of the operation.
-        else {
-            s
-        }
-    }}
-}
-
 macro_rules! try_physical_dispatch {
     ($s: expr, $method: ident, $($args:expr),*) => {{
         let data_type = $s.data_type();
@@ -85,25 +66,6 @@ macro_rules! try_physical_dispatch_vec {
         Ok(cast_results)
     }}
 }
-
-macro_rules! opt_physical_dispatch {
-    ($s: expr, $method: ident, $($args:expr),*) => {{
-        let data_type = $s.data_type();
-        let phys_type = $s.physical_type();
-        let s = $s.cast_with_type(&phys_type).unwrap();
-        let s = s.$method($($args),*)?;
-
-        // if the type is unchanged we return the original type
-        if s.data_type() == &phys_type {
-            Some(s.cast_with_type(data_type).unwrap())
-        }
-        // else the change of type is part of the operation.
-        else {
-            Some(s)
-        }
-    }}
-}
-
 /// Same as physical dispatch, but doesnt care about return type
 macro_rules! cast_and_apply {
     ($s: expr, $method: ident, $($args:expr),*) => {{

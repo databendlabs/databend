@@ -4,8 +4,11 @@
 //! There are several structs that implement the fastest path for random access.
 //!
 
+use std::fmt::Debug;
+
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::TakeIdx;
@@ -15,34 +18,40 @@ use crate::prelude::*;
 use crate::utils::NoNull;
 use crate::*;
 
-pub trait ArrayTake {
+pub trait ArrayTake: Debug {
     /// Take values from DataArray by index.
     ///
     /// # Safety
     ///
     /// Doesn't do any bound checking.
-    unsafe fn take_unchecked<I, INulls>(&self, indices: TakeIdx<I, INulls>) -> Result<Self>
+    unsafe fn take_unchecked<I, INulls>(&self, _indices: TakeIdx<I, INulls>) -> Result<Self>
     where
         Self: std::marker::Sized,
         I: Iterator<Item = usize>,
         INulls: Iterator<Item = Option<usize>>,
     {
-        unimplemented!()
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported take_unchecked operation for {:?}",
+            self,
+        )))
     }
 
     /// Take values from DataArray by index.
-    fn take<I, INulls>(&self, indices: TakeIdx<I, INulls>) -> Result<Self>
+    fn take<I, INulls>(&self, _indices: TakeIdx<I, INulls>) -> Result<Self>
     where
         Self: std::marker::Sized,
         I: Iterator<Item = usize>,
         INulls: Iterator<Item = Option<usize>>,
     {
-        unimplemented!()
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported take operation for {:?}",
+            self,
+        )))
     }
 }
 
 /// Traverse and collect every nth element
-pub trait ArrayTakeEvery<T> {
+pub trait ArrayTakeEvery<T>: Debug {
     /// Traverse and collect every nth element in a new array.
     fn take_every(&self, _n: usize) -> DataArray<T> {
         unimplemented!()
