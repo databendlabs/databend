@@ -1,61 +1,45 @@
-// // Copyright 2020-2021 The Datafuse Authors.
-// //
-// // SPDX-License-Identifier: Apache-2.0.
+// Copyright 2020-2021 The Datafuse Authors.
 //
-// use common_datablocks::assert_blocks_eq;
-// use common_datavalues::DataValue;
-// use common_exception::Result;
-// use common_planners::Expression;
-// use common_planners::PlanBuilder;
-// use common_planners::PlanNode;
-// use common_runtime::tokio;
-// use common_runtime::tokio::sync::mpsc::channel;
-// use common_runtime::tokio::sync::mpsc::Sender;
-// use tokio_stream::StreamExt;
-//
-// use crate::api::rpc::flight_data_stream::FlightDataStream;
-// use crate::api::rpc::flight_dispatcher::PrepareStageInfo;
-// use crate::api::rpc::flight_dispatcher::Request;
-// use crate::api::rpc::FlightDispatcher;
-// use crate::clusters::Cluster;
-// use crate::configs::Config;
-// use crate::sessions::SessionManager;
-//
-// #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-// async fn test_get_stream_with_non_exists_stream() -> Result<()> {
-//     let stream_id = "query_id/stage_id/stream_id".to_string();
-//     let (_dispatcher, request_sender) = create_dispatcher()?;
-//
-//     let (sender_v, mut receiver) = channel(1);
-//     let send_result = request_sender
-//         .send(Request::GetStream(stream_id.clone(), sender_v))
-//         .await;
-//
-//     if let Err(error) = send_result {
-//         assert!(
-//             false,
-//             "Cannot push in test_get_stream_with_non_exists_stream: {}",
-//             error
-//         );
-//     }
-//
-//     match receiver.recv().await.unwrap() {
-//         Ok(_) => assert!(
-//             false,
-//             "Return Ok in test_get_stream_with_non_exists_stream."
-//         ),
-//         Err(error) => {
-//             assert_eq!(error.code(), 29);
-//             assert_eq!(
-//                 error.message(),
-//                 "Stream query_id/stage_id/stream_id is not found"
-//             );
-//         }
-//     }
-//
-//     Ok(())
-// }
-//
+// SPDX-License-Identifier: Apache-2.0.
+
+use common_datablocks::assert_blocks_eq;
+use common_datavalues::DataValue;
+use common_exception::Result;
+use common_planners::Expression;
+use common_planners::PlanBuilder;
+use common_planners::PlanNode;
+use common_runtime::tokio;
+use common_runtime::tokio::sync::mpsc::channel;
+use common_runtime::tokio::sync::mpsc::Sender;
+use tokio_stream::StreamExt;
+
+use crate::api::rpc::flight_data_stream::FlightDataStream;
+use crate::api::rpc::FuseQueryFlightDispatcher;
+use crate::clusters::Cluster;
+use crate::configs::Config;
+use crate::sessions::SessionManager;
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_get_stream_with_non_exists_stream() -> Result<()> {
+    let dispatcher = FuseQueryFlightDispatcher::create();
+
+    let get_stream = dispatcher.get_stream(
+        String::from("query_id"),
+        String::from("stage_id"),
+        String::from("stream_id"),
+    );
+
+    match get_stream {
+        Ok(_) => assert!(false, "Return Ok in test_get_stream_with_non_exists_stream."),
+        Err(error) => {
+            assert_eq!(error.code(), 29);
+            assert_eq!(error.message(), "Stream is not found");
+        }
+    }
+
+    Ok(())
+}
+
 // #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 // async fn test_prepare_stage_with_no_scatter() -> Result<()> {
 //     if let (Some(query_id), Some(stage_id), Some(stream_id)) = generate_uuids(3) {
@@ -79,6 +63,9 @@
 //                 ),
 //             ))
 //         };
+//
+//         let dispatcher = FuseQueryFlightDispatcher::create();
+//         dispatcher.run_shuffle_action()
 //
 //         let (_dispatcher, request_sender) = create_dispatcher()?;
 //
@@ -247,15 +234,6 @@
 //     }
 //
 //     Ok(())
-// }
-//
-// fn create_dispatcher() -> Result<(FlightDispatcher, Sender<Request>)> {
-//     let conf = Config::default();
-//     let cluster = Cluster::create_global(conf.clone())?;
-//     let sessions = SessionManager::from_conf(conf.clone(), cluster.clone())?;
-//     let dispatcher = FlightDispatcher::new(conf, cluster, sessions);
-//     let sender = dispatcher.run();
-//     Ok((dispatcher, sender))
 // }
 //
 // fn generate_uuids(size: usize) -> (Option<String>, Option<String>, Option<String>) {

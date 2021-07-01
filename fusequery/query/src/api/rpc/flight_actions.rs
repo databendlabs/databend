@@ -5,6 +5,8 @@
 use std::convert::TryInto;
 
 use common_arrow::arrow_flight::Action;
+use common_exception::ErrorCode;
+use common_exception::ToErrorCode;
 use common_planners::Expression;
 use common_planners::PlanNode;
 use tonic::Status;
@@ -32,6 +34,16 @@ impl TryInto<ShuffleAction> for Vec<u8> {
     }
 }
 
+impl TryInto<Vec<u8>> for ShuffleAction {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
+        serde_json::to_vec(&self).map_err_to_code(ErrorCode::LogicalError, || {
+            "Logical error: cannot serialize ShuffleAction."
+        })
+    }
+}
+
 pub enum FlightAction {
     PrepareQueryStage(ShuffleAction),
 }
@@ -46,6 +58,19 @@ impl TryInto<FlightAction> for Action {
                 "UnImplement action {}",
                 action_type
             ))),
+        }
+    }
+}
+
+impl TryInto<Action> for FlightAction {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<Action, Self::Error> {
+        match self {
+            FlightAction::PrepareQueryStage(shuffle_action) => Ok(Action {
+                r#type: String::from("PrepareQueryStage"),
+                body: shuffle_action.try_into()?,
+            }),
         }
     }
 }

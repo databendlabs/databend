@@ -33,11 +33,7 @@ pub struct ScheduledActions {
 impl PlanScheduler {
     /// Schedule the plan to Local or Remote mode.
     #[tracing::instrument(level = "info", skip(ctx, plan))]
-    pub fn reschedule(
-        ctx: FuseQueryContextRef,
-        subquery_res_map: HashMap<String, bool>,
-        plan: &PlanNode,
-    ) -> Result<ScheduledActions> {
+    pub fn reschedule(ctx: FuseQueryContextRef, plan: &PlanNode) -> Result<ScheduledActions> {
         let cluster = ctx.try_get_cluster()?;
 
         if cluster.is_empty()? {

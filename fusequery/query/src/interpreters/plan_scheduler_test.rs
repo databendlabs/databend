@@ -15,13 +15,13 @@ use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::sessions::FuseQueryContextRef;
+use crate::tests::{try_create_cluster_context, ClusterNode};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scheduler_plan_without_stage() -> Result<()> {
-    let (context, _cluster) = create_env().await?;
+    let context = create_env().await?;
     let scheduled_actions = PlanScheduler::reschedule(
         context.clone(),
-        HashMap::<String, bool>::new(),
         &PlanNode::Empty(EmptyPlan::create()),
     )?;
 
@@ -36,10 +36,9 @@ async fn test_scheduler_plan_without_stage() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scheduler_plan_with_one_normal_stage() -> Result<()> {
-    let (context, _cluster) = create_env().await?;
+    let context = create_env().await?;
     let reschedule_res = PlanScheduler::reschedule(
         context.clone(),
-        HashMap::<String, bool>::new(),
         &PlanNode::Stage(StagePlan {
             kind: StageKind::Normal,
             scatters_expr: Expression::Literal(DataValue::UInt64(Some(1))),
@@ -66,10 +65,9 @@ async fn test_scheduler_plan_with_one_normal_stage() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scheduler_plan_with_one_expansive_stage() -> Result<()> {
-    let (context, _cluster) = create_env().await?;
+    let context = create_env().await?;
     let reschedule_res = PlanScheduler::reschedule(
         context.clone(),
-        HashMap::<String, bool>::new(),
         &PlanNode::Stage(StagePlan {
             kind: StageKind::Expansive,
             scatters_expr: Expression::Literal(DataValue::UInt64(Some(1))),
@@ -112,10 +110,9 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
      *  |                  |
      *  +------------------+
      */
-    let (context, _cluster) = create_env().await?;
+    let context = create_env().await?;
     let scheduled_actions = PlanScheduler::reschedule(
         context.clone(),
-        HashMap::<String, bool>::new(),
         &PlanNode::Stage(StagePlan {
             kind: StageKind::Convergent,
             scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
@@ -128,11 +125,11 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
         scheduled_actions.remote_actions[0].0.name,
         String::from("dummy_local")
     );
-    assert_eq!(scheduled_actions.remote_actions[0].1.scatters, vec![
+    assert_eq!(scheduled_actions.remote_actions[0].1.sinks, vec![
         String::from("dummy_local")
     ]);
     assert_eq!(
-        scheduled_actions.remote_actions[0].1.scatters_action,
+        scheduled_actions.remote_actions[0].1.scatters_expression,
         Expression::Literal(DataValue::UInt64(Some(0)))
     );
     assert_eq!(
@@ -144,11 +141,11 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
         scheduled_actions.remote_actions[1].0.name,
         String::from("dummy")
     );
-    assert_eq!(scheduled_actions.remote_actions[1].1.scatters, vec![
+    assert_eq!(scheduled_actions.remote_actions[1].1.sinks, vec![
         String::from("dummy_local")
     ]);
     assert_eq!(
-        scheduled_actions.remote_actions[1].1.scatters_action,
+        scheduled_actions.remote_actions[1].1.scatters_expression,
         Expression::Literal(DataValue::UInt64(Some(0)))
     );
     assert_eq!(
@@ -186,10 +183,9 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
      *        +-------->|RemotePlan +------>|SelectPlan +-----------+
      *                  +-----------+       +-----------+
      */
-    let (context, _cluster) = create_env().await?;
+    let context = create_env().await?;
     let scheduled_actions = PlanScheduler::reschedule(
         context.clone(),
-        HashMap::<String, bool>::new(),
         &PlanNode::Select(SelectPlan {
             input: Arc::new(PlanNode::Stage(StagePlan {
                 kind: StageKind::Convergent,
@@ -213,15 +209,15 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
         scheduled_actions.remote_actions[0].0.name,
         String::from("dummy_local")
     );
-    assert_eq!(scheduled_actions.remote_actions[0].1.scatters, vec![
+    assert_eq!(scheduled_actions.remote_actions[0].1.sinks, vec![
         String::from("dummy_local"),
         String::from("dummy")
     ]);
     assert_eq!(
-        scheduled_actions.remote_actions[0].1.scatters_action,
+        scheduled_actions.remote_actions[0].1.scatters_expression,
         Expression::ScalarFunction {
             op: String::from("blockNumber"),
-            args: vec![]
+            args: vec![],
         }
     );
     assert_eq!(
@@ -233,11 +229,11 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
         scheduled_actions.remote_actions[1].0.name,
         String::from("dummy_local")
     );
-    assert_eq!(scheduled_actions.remote_actions[1].1.scatters, vec![
+    assert_eq!(scheduled_actions.remote_actions[1].1.sinks, vec![
         String::from("dummy_local")
     ]);
     assert_eq!(
-        scheduled_actions.remote_actions[1].1.scatters_action,
+        scheduled_actions.remote_actions[1].1.scatters_expression,
         Expression::Literal(DataValue::UInt64(Some(0)))
     );
 
@@ -245,11 +241,11 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
         scheduled_actions.remote_actions[2].0.name,
         String::from("dummy")
     );
-    assert_eq!(scheduled_actions.remote_actions[2].1.scatters, vec![
+    assert_eq!(scheduled_actions.remote_actions[2].1.sinks, vec![
         String::from("dummy_local")
     ]);
     assert_eq!(
-        scheduled_actions.remote_actions[2].1.scatters_action,
+        scheduled_actions.remote_actions[2].1.scatters_expression,
         Expression::Literal(DataValue::UInt64(Some(0)))
     );
 
@@ -298,10 +294,9 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
      *   |EmptyStage +----->|RemotePlan +------>|SelectPlan +-----------+
      *   +-----------+      +-----------+       +-----------+
      */
-    let (context, _cluster) = create_env().await?;
+    let context = create_env().await?;
     let scheduled_actions = PlanScheduler::reschedule(
         context.clone(),
-        HashMap::<String, bool>::new(),
         &PlanNode::Select(SelectPlan {
             input: Arc::new(PlanNode::Stage(StagePlan {
                 kind: StageKind::Convergent,
@@ -322,12 +317,12 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
         scheduled_actions.remote_actions[0].0.name,
         String::from("dummy_local")
     );
-    assert_eq!(scheduled_actions.remote_actions[0].1.scatters, vec![
+    assert_eq!(scheduled_actions.remote_actions[0].1.sinks, vec![
         String::from("dummy_local"),
         String::from("dummy")
     ]);
     assert_eq!(
-        scheduled_actions.remote_actions[0].1.scatters_action,
+        scheduled_actions.remote_actions[0].1.scatters_expression,
         Expression::Literal(DataValue::UInt64(Some(0)))
     );
     assert_eq!(
@@ -339,12 +334,12 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
         scheduled_actions.remote_actions[2].0.name,
         String::from("dummy")
     );
-    assert_eq!(scheduled_actions.remote_actions[2].1.scatters, vec![
+    assert_eq!(scheduled_actions.remote_actions[2].1.sinks, vec![
         String::from("dummy_local"),
         String::from("dummy")
     ]);
     assert_eq!(
-        scheduled_actions.remote_actions[2].1.scatters_action,
+        scheduled_actions.remote_actions[2].1.scatters_expression,
         Expression::Literal(DataValue::UInt64(Some(0)))
     );
     assert_eq!(
@@ -356,11 +351,11 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
         scheduled_actions.remote_actions[1].0.name,
         String::from("dummy_local")
     );
-    assert_eq!(scheduled_actions.remote_actions[1].1.scatters, vec![
+    assert_eq!(scheduled_actions.remote_actions[1].1.sinks, vec![
         String::from("dummy_local")
     ]);
     assert_eq!(
-        scheduled_actions.remote_actions[1].1.scatters_action,
+        scheduled_actions.remote_actions[1].1.scatters_expression,
         Expression::Literal(DataValue::UInt64(Some(1)))
     );
 
@@ -368,11 +363,11 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
         scheduled_actions.remote_actions[3].0.name,
         String::from("dummy")
     );
-    assert_eq!(scheduled_actions.remote_actions[3].1.scatters, vec![
+    assert_eq!(scheduled_actions.remote_actions[3].1.sinks, vec![
         String::from("dummy_local")
     ]);
     assert_eq!(
-        scheduled_actions.remote_actions[3].1.scatters_action,
+        scheduled_actions.remote_actions[3].1.scatters_expression,
         Expression::Literal(DataValue::UInt64(Some(1)))
     );
 
@@ -405,22 +400,9 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     Ok(())
 }
 
-async fn create_env() -> Result<(FuseQueryContextRef, ClusterRef)> {
-    let ctx = crate::tests::try_create_context()?;
-    let cluster = Cluster::create_global(Config::default())?;
-
-    cluster
-        .add_node(
-            &String::from("dummy_local"),
-            1,
-            &String::from("localhost:9090"),
-        )
-        .await?;
-    cluster
-        .add_node(&String::from("dummy"), 1, &String::from("github.com:9090"))
-        .await?;
-
-    ctx.with_cluster(cluster.clone())?;
-
-    Ok((ctx, cluster))
+async fn create_env() -> Result<FuseQueryContextRef> {
+    try_create_cluster_context(&vec![
+        ClusterNode::create("dummy_local", 1, "localhost:9090"),
+        ClusterNode::create("dummy", 1, "github.com:9090"),
+    ])
 }

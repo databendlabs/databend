@@ -17,6 +17,7 @@ use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Streaming;
 
+use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::flight_data_stream::FlightDataStream;
 use crate::api::rpc::flight_tickets::FlightTicket;
 use crate::api::ShuffleAction;
@@ -43,15 +44,8 @@ impl FlightClient {
     }
 
     pub async fn prepare_query_stage(&mut self, action: ShuffleAction, timeout: u64) -> Result<()> {
-        self.do_action(
-            Action {
-                r#type: "PrepareQueryStage".to_string(),
-                body: serde_json::to_string(&action)?.as_bytes().to_vec(),
-            },
-            timeout,
-        )
-        .await?;
-
+        let action = FlightAction::PrepareQueryStage(action);
+        self.do_action(action, timeout).await?;
         Ok(())
     }
 
@@ -65,7 +59,8 @@ impl FlightClient {
     }
 
     // Execute do_action.
-    async fn do_action(&mut self, action: Action, timeout: u64) -> Result<Vec<u8>> {
+    async fn do_action(&mut self, action: FlightAction, timeout: u64) -> Result<Vec<u8>> {
+        let action: Action = action.try_into()?;
         let action_type = action.r#type.clone();
         let mut request = Request::new(action);
         request.set_timeout(Duration::from_secs(timeout));

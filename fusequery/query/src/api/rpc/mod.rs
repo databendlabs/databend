@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-// #[cfg(test)]
-// mod flight_dispatcher_test;
+#[cfg(test)]
+mod flight_dispatcher_test;
 //
 // #[cfg(test)]
 // mod flight_service_new_test;

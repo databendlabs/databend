@@ -56,8 +56,7 @@ async fn execute_one_select(
     plan: PlanNode,
     subquery_res_map: HashMap<String, bool>,
 ) -> Result<SendableDataBlockStream> {
-    let scheduled_actions =
-        PlanScheduler::reschedule(ctx.clone(), subquery_res_map.clone(), &plan)?;
+    let scheduled_actions = PlanScheduler::reschedule(ctx.clone(), &plan)?;
 
     let remote_actions_ref = &scheduled_actions.remote_actions;
     let prepare_error_handler = move |error: ErrorCode, end: usize| {
