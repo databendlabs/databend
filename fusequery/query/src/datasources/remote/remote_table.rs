@@ -9,8 +9,6 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_management::UserMgr;
-use common_management::UserMgrApi;
 use common_planners::InsertIntoPlan;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
