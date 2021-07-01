@@ -4,7 +4,6 @@
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_datavalues::DataColumnarValue;
 use common_flights::meta_api_impl::GetTableActionResult;
 use common_flights::KVApi;
 use common_flights::MetaApi;

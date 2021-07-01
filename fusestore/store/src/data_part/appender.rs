@@ -15,7 +15,6 @@ use common_arrow::arrow_flight::FlightData;
 use common_arrow::parquet::arrow::ArrowWriter;
 use common_arrow::parquet::file::writer::InMemoryWriteableCursor;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
 use common_flights::storage_api_impl::AppendResult;
 use futures::StreamExt;
 use uuid::Uuid;
