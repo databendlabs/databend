@@ -6,6 +6,13 @@
 use async_trait::async_trait;
 use common_exception::Result;
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct UserInfo {
+    pub name: String,
+    pub password_sha256: [u8; 32],
+    pub salt_sha256: [u8; 32],
+}
+
 #[async_trait]
 pub trait UserMgrApi {
     async fn add_user<U, V, W>(
@@ -44,11 +51,4 @@ pub trait UserMgrApi {
 
     async fn drop_user<V>(&mut self, username: V, seq: Option<u64>) -> Result<()>
     where V: AsRef<str> + Send;
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub struct UserInfo {
-    pub name: String,
-    pub password_sha256: [u8; 32],
-    pub salt_sha256: [u8; 32],
 }
