@@ -19,7 +19,6 @@ pub trait AggregateFunction: fmt::Display + Sync + Send + DynClone {
 
     fn as_any(&self) -> &dyn Any;
 
-    // TODO
     // accumulate is to accumulate the columns in batch mod
     // if some aggregate functions wants to iterate over the columns row by row, it doesn't need to implement this function
     fn accumulate(&mut self, columns: &[DataColumn], input_rows: usize) -> Result<()> {

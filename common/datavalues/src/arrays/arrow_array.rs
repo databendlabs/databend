@@ -34,6 +34,7 @@ impl IsNull for &dyn Array {
             BooleanArray::from(array_data)
         }
     }
+
     fn is_not_null_mask(&self) -> BooleanArray {
         if self.null_count() == 0 {
             (0..self.len()).map(|_| Some(true)).collect()

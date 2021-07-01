@@ -515,23 +515,6 @@ impl ArrayCompare<&DFListArray> for DFListArray {
     fn neq(&self, rhs: &DFListArray) -> Result<DFBooleanArray> {
         self.eq(rhs)?.not()
     }
-
-    // following are not implemented because gt, lt comparison of series don't make sense
-    fn gt(&self, _rhs: &DFListArray) -> Result<DFBooleanArray> {
-        unimplemented!()
-    }
-
-    fn gt_eq(&self, _rhs: &DFListArray) -> Result<DFBooleanArray> {
-        unimplemented!()
-    }
-
-    fn lt(&self, _rhs: &DFListArray) -> Result<DFBooleanArray> {
-        unimplemented!()
-    }
-
-    fn lt_eq(&self, _rhs: &DFListArray) -> Result<DFBooleanArray> {
-        unimplemented!()
-    }
 }
 
 // private
