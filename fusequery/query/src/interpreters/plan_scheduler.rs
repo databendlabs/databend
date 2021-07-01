@@ -68,7 +68,7 @@ impl PlanScheduler {
                 }
                 PlanNode::ReadSource(plan) => {
                     get_node_plan =
-                        ReadSourceGetNodePlan::create(&ctx, &plan, &get_node_plan, &cluster_nodes)?;
+                        ReadSourceGetNodePlan::create(&ctx, plan, &get_node_plan, &cluster_nodes)?;
                 }
                 _ => {
                     get_node_plan = Arc::new(Box::new(DefaultGetNodePlan(

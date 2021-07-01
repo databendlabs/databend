@@ -85,10 +85,7 @@ impl ClickHouseStream {
                     let v: Vec<Option<u8>> = column
                         .bool()?
                         .downcast_iter()
-                        .map(|f| match f {
-                            Some(v) => Some(v as u8),
-                            None => None,
-                        })
+                        .map(|f| f.map(|v| v as u8))
                         .collect();
 
                     result = result.column(name, v);
