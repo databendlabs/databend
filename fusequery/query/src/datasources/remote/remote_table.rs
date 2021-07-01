@@ -9,6 +9,8 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_management::UserMgr;
+use common_management::UserMgrApi;
 use common_planners::InsertIntoPlan;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -131,6 +133,15 @@ impl Table for RemoteTable {
                     block_stream,
                 )
                 .await?;
+
+            //            let mut um = UserMgr::new(client);
+            //            let a = "test";
+            //            um.get_users(&vec![a]).await;
+            //            um.add_user("user", "pass", "salt").await;
+            //            um.drop_user("user", None).await;
+            //            um.update_user("user", None, None, None).await;
+            //            um.get_users(&vec!["user"]).await;
+            //            um.get_all_users().await;
         }
 
         Ok(())

@@ -3,14 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0.
 //
 
+use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_store_api::KVApi;
 use common_store_api::UpsertKVActionResult;
 use sha2::Digest;
 
-use crate::user::user_info::NewUser;
-use crate::user::user_info::UserInfo;
+use crate::user::user_api::UserInfo;
+use crate::user::user_api::UserMgrApi;
+use crate::user::utils;
+use crate::user::utils::NewUser;
+
 pub static USER_API_KEY_PREFIX: &str = "__fd_users/";
 
 pub struct UserMgr<KV> {
@@ -26,14 +30,19 @@ where T: KVApi
     }
 }
 
-impl<T: KVApi> UserMgr<T> {
-    #[allow(dead_code)]
-    pub async fn add_user(
+#[async_trait]
+impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
+    async fn add_user<U, V, W>(
         &mut self,
-        username: impl AsRef<str>,
-        password: impl AsRef<str>,
-        salt: impl AsRef<str>,
-    ) -> common_exception::Result<u64> {
+        username: U,
+        password: V,
+        salt: W,
+    ) -> common_exception::Result<u64>
+    where
+        U: AsRef<str> + Send,
+        V: AsRef<str> + Send,
+        W: AsRef<str> + Send,
+    {
         let res = self.upsert_user(username, password, salt, Some(0)).await?;
         match (res.prev, res.result) {
             (None, Some((s, _))) => Ok(s), // do we need to check the seq returned?
@@ -48,26 +57,78 @@ impl<T: KVApi> UserMgr<T> {
         }
     }
 
-    #[allow(dead_code)]
-    pub async fn drop_user(&mut self, username: impl AsRef<str>, seq: Option<u64>) -> Result<()> {
-        let key = prepend(username.as_ref());
-        let r = self.kv_api.delete_kv(&key, seq).await?;
-        if r.is_some() {
-            Ok(())
-        } else {
-            Err(ErrorCode::UnknownUser(format!(
+    async fn get_user<V: AsRef<str> + Send>(
+        &mut self,
+        username: V,
+        seq: Option<u64>,
+    ) -> Result<(u64, UserInfo)> {
+        let key = utils::prepend(username.as_ref());
+        let value = self.kv_api.get_kv(&key).await?;
+        let res = value.result;
+        let f = |s, val| {
+            let user_info = serde_json::from_slice(val);
+            let user_info =
+                user_info.map_err(|e| ErrorCode::IllegalUserInfoFormat(e.to_string()))?;
+            Ok((s, user_info))
+        };
+        match res {
+            Some((s, val)) if seq.is_none() => f(s, val.as_slice()),
+            Some((s, val)) if seq.unwrap() == s => f(s, val.as_slice()),
+            _ => Err(ErrorCode::UnknownUser(format!(
                 "unknown user {}",
                 username.as_ref()
-            )))
+            ))),
         }
     }
 
-    #[allow(dead_code)]
-    pub async fn update_user(
+    async fn get_all_users(&mut self) -> Result<Vec<(u64, UserInfo)>> {
+        let values = self.kv_api.prefix_list_kv(USER_API_KEY_PREFIX).await?;
+        let mut r = vec![];
+        for v in values {
+            let u = serde_json::from_slice::<UserInfo>(&v.1);
+            let val = match u {
+                Err(e) => {
+                    return Err(ErrorCode::IllegalUserInfoFormat(e.to_string()));
+                }
+                Ok(v) => v,
+            };
+            r.push((v.0, val));
+        }
+        Ok(r)
+    }
+
+    async fn get_users<V: AsRef<str> + Sync>(
         &mut self,
-        username: impl AsRef<str>,
-        new_password: Option<impl AsRef<str>>,
-        new_salt: Option<impl AsRef<str>>,
+        usernames: &[V],
+    ) -> Result<Vec<Option<(u64, UserInfo)>>> {
+        let keys = usernames
+            .iter()
+            .map(utils::prepend)
+            .collect::<Vec<String>>();
+        let values = self.kv_api.mget_kv(&keys).await?;
+        let mut r = vec![];
+        for v in values.result {
+            match v {
+                Some(v) => {
+                    let u = match serde_json::from_slice::<UserInfo>(&v.1) {
+                        Err(e) => {
+                            return Err(ErrorCode::IllegalUserInfoFormat(e.to_string()));
+                        }
+                        Ok(val) => val,
+                    };
+                    r.push(Some((v.0, u)));
+                }
+                None => r.push(None),
+            }
+        }
+        Ok(r)
+    }
+
+    async fn update_user<V: AsRef<str> + Sync + Send>(
+        &mut self,
+        username: V,
+        new_password: Option<V>,
+        new_salt: Option<V>,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
         if new_password.is_none() && new_salt.is_none() {
@@ -96,7 +157,7 @@ impl<T: KVApi> UserMgr<T> {
         };
 
         let value = serde_json::to_vec(&user_info)?;
-        let key = prepend(&user_info.name);
+        let key = utils::prepend(&user_info.name);
         let res = self.kv_api.update_kv(&key, seq, value).await?;
         match res {
             Some((s, _)) => Ok(Some(s)),
@@ -107,71 +168,21 @@ impl<T: KVApi> UserMgr<T> {
         }
     }
 
-    #[allow(dead_code)]
-    pub async fn get_user(
+    async fn drop_user<V: AsRef<str> + Send>(
         &mut self,
-        username: impl AsRef<str>,
+        username: V,
         seq: Option<u64>,
-    ) -> Result<(u64, UserInfo)> {
-        let key = prepend(username.as_ref());
-        let value = self.kv_api.get_kv(&key).await?;
-        let res = value.result;
-        let f = |s, val| {
-            let user_info = serde_json::from_slice(val);
-            let user_info =
-                user_info.map_err(|e| ErrorCode::IllegalUserInfoFormat(e.to_string()))?;
-            Ok((s, user_info))
-        };
-        match res {
-            Some((s, val)) if seq.is_none() => f(s, val.as_slice()),
-            Some((s, val)) if seq.unwrap() == s => f(s, val.as_slice()),
-            _ => Err(ErrorCode::UnknownUser(format!(
+    ) -> Result<()> {
+        let key = utils::prepend(username.as_ref());
+        let r = self.kv_api.delete_kv(&key, seq).await?;
+        if r.is_some() {
+            Ok(())
+        } else {
+            Err(ErrorCode::UnknownUser(format!(
                 "unknown user {}",
                 username.as_ref()
-            ))),
+            )))
         }
-    }
-
-    #[allow(dead_code)]
-    pub async fn get_all_users(&mut self) -> Result<Vec<(u64, UserInfo)>> {
-        let values = self.kv_api.prefix_list_kv(USER_API_KEY_PREFIX).await?;
-        let mut r = vec![];
-        for v in values {
-            let u = serde_json::from_slice::<UserInfo>(&v.1);
-            let val = match u {
-                Err(e) => {
-                    return Err(ErrorCode::IllegalUserInfoFormat(e.to_string()));
-                }
-                Ok(v) => v,
-            };
-            r.push((v.0, val));
-        }
-        Ok(r)
-    }
-
-    #[allow(dead_code)]
-    pub async fn get_users<V: AsRef<str>>(
-        &mut self,
-        usernames: &[V],
-    ) -> Result<Vec<Option<(u64, UserInfo)>>> {
-        let keys = usernames.iter().map(prepend).collect::<Vec<String>>();
-        let values = self.kv_api.mget_kv(&keys).await?;
-        let mut r = vec![];
-        for v in values.result {
-            match v {
-                Some(v) => {
-                    let u = match serde_json::from_slice::<UserInfo>(&v.1) {
-                        Err(e) => {
-                            return Err(ErrorCode::IllegalUserInfoFormat(e.to_string()));
-                        }
-                        Ok(val) => val,
-                    };
-                    r.push(Some((v.0, u)));
-                }
-                None => r.push(None),
-            }
-        }
-        Ok(r)
     }
 }
 
@@ -193,13 +204,7 @@ impl<T: KVApi> UserMgr<T> {
         seq: Option<u64>,
     ) -> common_exception::Result<UpsertKVActionResult> {
         let value = serde_json::to_vec(user_info)?;
-        let key = prepend(&user_info.name);
+        let key = utils::prepend(&user_info.name);
         self.kv_api.upsert_kv(&key, seq, value).await
     }
-}
-
-pub(crate) fn prepend(v: impl AsRef<str>) -> String {
-    let mut res = USER_API_KEY_PREFIX.to_string();
-    res.push_str(v.as_ref());
-    res
 }

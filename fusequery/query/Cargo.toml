@@ -36,6 +36,7 @@ common-streams = {path = "../../common/streams"}
 common-tracing = {path = "../../common/tracing"}
 common-profling = {path = "../../common/profiling"}
 common-store-api = {path = "../../common/store-api"}
+common-management = {path = "../../common/management"}
 
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "5a7ae3d" }

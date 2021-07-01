@@ -16,8 +16,9 @@ use mockall::*;
 use sha2::Digest;
 
 use super::user_mgr::USER_API_KEY_PREFIX;
-use crate::user::user_info::NewUser;
-use crate::user::user_info::UserInfo;
+use crate::user::user_api::UserInfo;
+use crate::user::user_api::UserMgrApi;
+use crate::user::utils::NewUser;
 use crate::UserMgr;
 
 // and mock!
@@ -282,7 +283,7 @@ mod get {
 mod get_users {
 
     use super::*;
-    use crate::user::user_mgr::prepend;
+    use crate::user::utils::prepend;
 
     type Strings = Vec<String>;
     type UserInfos = Vec<Option<(u64, UserInfo)>>;
@@ -352,7 +353,7 @@ mod get_all_users {
     use common_metatypes::SeqValue;
 
     use super::*;
-    use crate::user::user_mgr::prepend;
+    use crate::user::utils::prepend;
 
     type UserInfos = Vec<(u64, UserInfo)>;
     fn prepare() -> common_exception::Result<(Vec<SeqValue>, UserInfos)> {
