@@ -5,11 +5,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
+use common_flights::storage_api_impl::AppendResult;
+use common_flights::storage_api_impl::DataPartInfo;
 use common_infallible::Mutex;
 use common_planners::Part;
 use common_planners::Statistics;
-use common_store_api::AppendResult;
-use common_store_api::DataPartInfo;
 
 use crate::protobuf::CmdCreateDatabase;
 use crate::protobuf::CmdCreateTable;

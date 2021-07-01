@@ -6,10 +6,10 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metatypes::SeqValue;
-use common_store_api::kv_api::MGetKVActionResult;
-use common_store_api::kv_api::PrefixListReply;
-use common_store_api::kv_api::UpsertKVActionResult;
-use common_store_api::GetKVActionResult;
+pub use common_store_api::kv_api::MGetKVActionResult;
+pub use common_store_api::kv_api::PrefixListReply;
+pub use common_store_api::kv_api::UpsertKVActionResult;
+pub use common_store_api::GetKVActionResult;
 use common_store_api::KVApi;
 
 use crate::action_declare;

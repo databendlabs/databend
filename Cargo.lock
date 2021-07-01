@@ -1621,7 +1621,6 @@ dependencies = [
  "common-metatypes",
  "common-planners",
  "common-runtime",
- "common-store-api",
  "common-tracing",
  "env_logger",
  "futures",

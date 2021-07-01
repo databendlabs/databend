@@ -7,8 +7,8 @@
 mod test {
     use tonic::metadata::MetadataMap;
 
-    use crate::get_do_put_meta;
-    use crate::set_do_put_meta;
+    use crate::impls::storage_api_impl::get_do_put_meta;
+    use crate::impls::storage_api_impl_utils::set_do_put_meta;
 
     #[test]
     fn test_get_set_meta() {
