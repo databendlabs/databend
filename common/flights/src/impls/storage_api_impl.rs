@@ -15,7 +15,9 @@ use common_arrow::arrow_flight::Ticket;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
+use common_planners::Part;
 use common_planners::ScanPlan;
+use common_planners::Statistics;
 use common_runtime::tokio;
 use common_store_api::AppendResult;
 use common_store_api::BlockStream;
@@ -28,9 +30,31 @@ use futures::StreamExt;
 use tonic::Request;
 
 use crate::impls::storage_api_impl_utils;
-use crate::ReadPlanAction;
+use crate::RequestFor;
 use crate::StoreClient;
+use crate::StoreDoAction;
 use crate::StoreDoGet;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct ReadPlanAction {
+    pub scan_plan: ScanPlan,
+}
+
+impl RequestFor for ReadPlanAction {
+    type Reply = ReadPlanResult;
+}
+
+impl From<ReadPlanAction> for StoreDoAction {
+    fn from(act: ReadPlanAction) -> Self {
+        StoreDoAction::ReadPlan(act)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct DataPartInfo {
+    pub part: Part,
+    pub stats: Statistics,
+}
 
 #[async_trait::async_trait]
 impl StorageApi for StoreClient {

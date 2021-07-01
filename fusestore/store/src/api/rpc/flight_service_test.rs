@@ -401,109 +401,140 @@ async fn test_flight_generic_kv() -> anyhow::Result<()> {
         );
     }
 
-    // get
+    // mget
 
     {
         let res = client.get_kv("foo").await?;
         assert_eq!(Some((2, "wow".to_string().into_bytes())), res.result);
+
+        client
+            .upsert_kv("another_key", None, "value of ak".to_string().into_bytes())
+            .await?;
+        let res = client
+            .mget_kv(&vec!["foo".to_string(), "another_key".to_string()])
+            .await?;
+        assert_eq!(res.result, vec![
+            Some((2, "wow".to_string().into_bytes())),
+            // NOTE, the sequence number is increased globally (inside the namespace of generic kv)
+            Some((3, "value of ak".to_string().into_bytes())),
+        ]);
+
+        let res = client
+            .mget_kv(&vec!["foo".to_string(), "key_no exist".to_string()])
+            .await?;
+        assert_eq!(res.result, vec![
+            Some((2, "wow".to_string().into_bytes())),
+            None
+        ]);
+    }
+
+    // prefix list
+
+    let mut values = vec![];
+    {
+        client.upsert_kv("t", None, "".as_bytes().to_vec()).await?;
+
+        for i in 0..9 {
+            let key = format!("__users/{}", i);
+            let val = format!("val_{}", i);
+            values.push(val.clone());
+            client
+                .upsert_kv(&key, None, val.as_bytes().to_vec())
+                .await?;
+        }
+        client.upsert_kv("v", None, "".as_bytes().to_vec()).await?;
+    }
+
+    let res = client.prefix_list_kv("__users/").await?;
+    assert_eq!(
+        res.iter()
+            .map(|(_key, (_s, val))| val.clone())
+            .collect::<Vec<_>>(),
+        values
+            .iter()
+            .map(|v| v.as_bytes().to_vec())
+            .collect::<Vec<_>>()
+    );
+
+    // delete
+    {
+        let test_key = "test_key";
+        client
+            .upsert_kv(test_key, None, "value of ak".to_string().into_bytes())
+            .await?;
+
+        let current = client.get_kv(test_key).await?;
+        if let Some((seq, _val)) = current.result {
+            // seq mismatch
+            let wrong_seq = Some(seq + 1);
+            let res = client.delete_kv(test_key, wrong_seq).await?;
+            assert!(res.is_none());
+
+            // seq match
+            let res = client.delete_kv(test_key, Some(seq)).await?;
+            assert!(res.is_some());
+
+            // read nothing
+            let r = client.get_kv(test_key).await?;
+            assert!(r.result.is_none());
+        } else {
+            panic!("expecting a value, but got nothing");
+        }
+
+        // key not exist
+        let res = client.delete_kv("not exists", None).await?;
+        assert!(res.is_none());
+
+        // do not care seq
+        client
+            .upsert_kv(test_key, None, "value of ak".to_string().into_bytes())
+            .await?;
+
+        let res = client.delete_kv(test_key, None).await?;
+        assert!(res.is_some());
+    }
+
+    // update
+    {
+        let test_key = "test_key_for_update";
+        let r = client
+            .update_kv(test_key, None, "value of ak".to_string().into_bytes())
+            .await?;
+        assert!(r.is_none());
+
+        let r = client
+            .upsert_kv(test_key, None, "value of ak".to_string().into_bytes())
+            .await?;
+        assert!(r.result.is_some());
+        let seq = r.result.unwrap().0;
+
+        // unmatched seq
+        let r = client
+            .update_kv(
+                test_key,
+                Some(seq + 1),
+                "value of ak".to_string().into_bytes(),
+            )
+            .await?;
+        assert!(r.is_none());
+
+        // matched seq
+        let r = client
+            .update_kv(test_key, Some(seq), "value of ak".to_string().into_bytes())
+            .await?;
+        assert!(r.is_some());
+
+        // blind update
+        let r = client
+            .update_kv(test_key, None, "brand new value".to_string().into_bytes())
+            .await?;
+        assert!(r.is_some());
+
+        // value updated
+        let kv = client.get_kv(test_key).await?;
+        assert!(kv.result.is_some());
+        assert_eq!(kv.result.unwrap().1, "brand new value".as_bytes());
     }
 
     Ok(())
 }
-
-//#[test(tokio::test)]
-//async fn test_user_apis() -> anyhow::Result<()> {
-//    use common_flights::StoreClient;
-//
-//    let addr = crate::tests::start_store_server().await?;
-//
-//    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
-//
-//    let name = "test_user";
-//    let pass = "test_pass";
-//    let salt = "test_salt";
-//    let pass_hash: [u8; 32] = Sha256::digest(pass.as_bytes()).into();
-//    let salt_hash: [u8; 32] = Sha256::digest(salt.as_bytes()).into();
-//
-//    // new user
-//    client.add_user(name, pass, salt).await?;
-//
-//    // duplicated username
-//    let r = client.add_user(name, pass, salt).await;
-//
-//    assert!(r.is_err());
-//    assert_eq!(
-//        r.unwrap_err().code(),
-//        ErrorCode::UserAlreadyExists("").code()
-//    );
-//
-//    // get user
-//    let user = client.get_user(name).await?;
-//    assert!(user.user_info.is_some());
-//    let u = user.user_info.unwrap();
-//    assert_eq!(u.name, name);
-//    assert_eq!(u.password_sha256, pass_hash,);
-//    assert_eq!(u.salt_sha256, salt_hash,);
-//
-//    // get users
-//    let users = client.get_users(&vec![name]).await?;
-//    assert_eq!(users.users_info.len(), 1);
-//    let u = users.users_info[0].as_ref();
-//    assert!(u.is_some());
-//    let u = u.unwrap();
-//    assert_eq!(u.name, name);
-//    assert_eq!(u.password_sha256, pass_hash,);
-//    assert_eq!(u.salt_sha256, salt_hash,);
-//
-//    // drop user
-//    client.drop_user(name).await?;
-//    let user = client.get_users(&vec![name]).await?;
-//    assert_eq!(user.users_info.len(), 1);
-//    let u = user.users_info[0].as_ref();
-//    assert!(u.is_none());
-//
-//    // get all users
-//    let mut names = vec![];
-//    let mut infos = vec![];
-//    for i in 0..10 {
-//        let name = format!("u_{}", i);
-//        let pass = format!("p_{}", i);
-//        let salt = format!("s_{}", i);
-//        client.add_user(&name, &pass, &salt).await?;
-//        names.push(name.clone());
-//        infos.push(UserInfo {
-//            name,
-//            password_sha256: Sha256::digest(pass.as_bytes()).into(),
-//            salt_sha256: Sha256::digest(salt.as_bytes()).into(),
-//        })
-//    }
-//    let mut users = client.get_all_users().await?;
-//    assert_eq!(users.users_info.len(), names.len());
-//    assert_eq!(users.users_info.sort(), infos.sort());
-//
-//    // get users
-//    let mut names = vec![];
-//    let mut infos = vec![];
-//    for i in 0..10 {
-//        let idx = (i % 2) * 100 + i;
-//        let name = format!("u_{}", idx);
-//        let pass = format!("p_{}", idx);
-//        let salt = format!("s_{}", idx);
-//        names.push(name.clone());
-//        if i % 2 == 0 {
-//            infos.push(Some(UserInfo {
-//                name,
-//                password_sha256: Sha256::digest(pass.as_bytes()).into(),
-//                salt_sha256: Sha256::digest(salt.as_bytes()).into(),
-//            }))
-//        } else {
-//            infos.push(None)
-//        }
-//    }
-//
-//    let users = client.get_users(&names).await?;
-//    assert_eq!(users.users_info.len(), names.len());
-//    // order of result should match the order of input
-//    assert_eq!(users.users_info, infos);
-//    Ok(())
-//}

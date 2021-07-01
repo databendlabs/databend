@@ -30,7 +30,6 @@ use crate::data_part::appender::Appender;
 use crate::engine::MemEngine;
 use crate::fs::FileSystem;
 use crate::meta_service::MetaNode;
-use crate::user::UserMgr;
 
 pub trait ReplySerializer {
     type Output;
@@ -46,8 +45,6 @@ pub struct ActionHandler {
     /// TODO(xp): turn on dead_code warning when we finished action handler unit test.
     pub(crate) meta_node: Arc<MetaNode>,
     fs: Arc<dyn FileSystem>,
-    #[allow(dead_code)]
-    user_mgr: UserMgr,
 }
 
 // TODO did this already defined somewhere?
@@ -67,7 +64,6 @@ impl ActionHandler {
             meta: MemEngine::create(),
             meta_node,
             fs,
-            user_mgr: UserMgr::new(),
         }
     }
 
@@ -133,6 +129,10 @@ impl ActionHandler {
             // general-purpose kv
             StoreDoAction::UpsertKV(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::GetKV(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::MGetKV(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::PrefixListKV(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::DeleteKV(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::UpdateKV(a) => s.serialize(self.handle(a).await?),
         }
     }
 
