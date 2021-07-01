@@ -7,10 +7,12 @@ use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeListArray;
 use common_arrow::arrow::array::StringArray;
 
+use crate::prelude::DataArray;
 use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::DFBooleanArray;
 use crate::DFListArray;
+use crate::DFNumericType;
 use crate::DFUtf8Array;
 
 /// A `DFIterator` is an iterator over a `DFArray` which contains DF types. A `DFIterator`
@@ -19,6 +21,16 @@ pub trait DFIterator: DoubleEndedIterator + Send + Sync {}
 /// Implement DFIterator for every iterator that implements the needed traits.
 impl<T: ?Sized> DFIterator for T where T: DoubleEndedIterator + Send + Sync {}
 
+impl<'a, T> IntoIterator for &'a DataArray<T>
+where T: DFNumericType
+{
+    type Item = Option<T::Native>;
+    type IntoIter = Box<dyn DFIterator<Item = Self::Item> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Box::new(self.downcast_iter())
+    }
+}
 /// The no null iterator for a BooleanArray
 pub struct BoolIterNoNull<'a> {
     array: &'a BooleanArray,

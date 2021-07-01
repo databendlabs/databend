@@ -131,7 +131,7 @@ impl ArrayAgg for DFBooleanArray {
         if self.all_is_null() {
             return Ok(DataValue::Boolean(None));
         }
-        let sum = self.into_iter().fold(0, |acc: u32, x| match x {
+        let sum = self.downcast_iter().fold(0, |acc: u32, x| match x {
             Some(v) => acc + v as u32,
             None => acc,
         });
@@ -203,7 +203,7 @@ impl ArrayAgg for DFBooleanArray {
 }
 
 fn min_max_boolean_helper(ca: &DFBooleanArray, min: bool) -> u32 {
-    ca.into_iter().fold(0, |acc: u32, x| match x {
+    ca.downcast_iter().fold(0, |acc: u32, x| match x {
         Some(v) => {
             let v = v as u32;
             if min {
@@ -228,7 +228,7 @@ impl ArrayAgg for DFUtf8Array {
             return Ok(DataValue::Utf8(None));
         }
 
-        let d = self.into_iter().reduce(|acc, x| match (acc, x) {
+        let d = self.downcast_iter().reduce(|acc, x| match (acc, x) {
             (None, _) => x,
             (Some(v_acc), Some(v)) => {
                 if v_acc < v {
@@ -251,7 +251,7 @@ impl ArrayAgg for DFUtf8Array {
             return Ok(DataValue::Utf8(None));
         }
 
-        let d = self.into_iter().reduce(|acc, x| match (acc, x) {
+        let d = self.downcast_iter().reduce(|acc, x| match (acc, x) {
             (None, _) => x,
             (Some(v_acc), Some(v)) => {
                 if v_acc > v {

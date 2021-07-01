@@ -58,7 +58,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
 
     fn try_get(&self, index: usize) -> Result<DataValue>;
 
-    fn vec_hash(&self, hasher: DFHasher) -> DFUInt64Array;
+    fn vec_hash(&self, hasher: DFHasher) -> Result<DFUInt64Array>;
     fn group_hash(&self) -> Result<DFUInt64Array>;
 
     fn subtract(&self, rhs: &Series) -> Result<Series>;

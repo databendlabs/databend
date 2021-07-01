@@ -20,7 +20,7 @@ macro_rules! apply {
         if $self.null_count() == 0 {
             $self.into_no_null_iter().map($f).collect()
         } else {
-            $self.into_iter().map(|opt_v| opt_v.map($f)).collect()
+            $self.downcast_iter().map(|opt_v| opt_v.map($f)).collect()
         }
     }};
 }
@@ -31,7 +31,7 @@ macro_rules! apply_enumerate {
             $self.into_no_null_iter().enumerate().map($f).collect()
         } else {
             $self
-                .into_iter()
+                .downcast_iter()
                 .enumerate()
                 .map(|(idx, opt_v)| opt_v.map(|v| $f((idx, v))))
                 .collect()
@@ -183,7 +183,7 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
 
     fn apply_with_idx_on_opt<F>(&'a self, f: F) -> Self
     where F: Fn((usize, Option<bool>)) -> Option<bool> + Copy {
-        self.into_iter().enumerate().map(f).collect()
+        self.downcast_iter().enumerate().map(f).collect()
     }
 }
 
@@ -227,7 +227,7 @@ impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
 
     fn apply_with_idx_on_opt<F>(&'a self, f: F) -> Self
     where F: Fn((usize, Option<&'a str>)) -> Option<Cow<'a, str>> + Copy {
-        self.into_iter().enumerate().map(f).collect()
+        self.downcast_iter().enumerate().map(f).collect()
     }
 }
 

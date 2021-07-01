@@ -66,7 +66,7 @@ impl Function for SipHashFunction {
     fn eval(&self, columns: &[DataColumn], input_rows: usize) -> Result<DataColumn> {
         let series = columns[0].to_minimal_array()?;
         let hasher = DFHasher::SipHasher(DefaultHasher::new());
-        let res: DataColumn = series.vec_hash(hasher).into();
+        let res: DataColumn = series.vec_hash(hasher)?.into();
         Ok(res.resize_constant(input_rows))
     }
 }

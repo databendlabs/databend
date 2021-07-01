@@ -6,17 +6,21 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
+use common_arrow::arrow::array::BinaryArray;
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeListArray;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::array::StringArray;
+use common_arrow::arrow::array::StructArray;
 
 use crate::arrays::DataArray;
 use crate::series::IntoSeries;
 use crate::series::Series;
+use crate::DFBinaryArray;
 use crate::DFBooleanArray;
 use crate::DFListArray;
 use crate::DFPrimitiveType;
+use crate::DFStructArray;
 use crate::DFUtf8Array;
 
 impl<T> DataArray<T>
@@ -101,6 +105,30 @@ impl DFListArray {
     }
 
     pub fn from_arrow_array(array: LargeListArray) -> Self {
+        let array_ref = Arc::new(array) as ArrayRef;
+        array_ref.into()
+    }
+}
+
+impl DFBinaryArray {
+    pub fn downcast_ref(&self) -> &BinaryArray {
+        let arr = &*self.array;
+        unsafe { &*(arr as *const dyn Array as *const BinaryArray) }
+    }
+
+    pub fn from_arrow_array(array: BinaryArray) -> Self {
+        let array_ref = Arc::new(array) as ArrayRef;
+        array_ref.into()
+    }
+}
+
+impl DFStructArray {
+    pub fn downcast_ref(&self) -> &StructArray {
+        let arr = &*self.array;
+        unsafe { &*(arr as *const dyn Array as *const StructArray) }
+    }
+
+    pub fn from_arrow_array(array: StructArray) -> Self {
         let array_ref = Arc::new(array) as ArrayRef;
         array_ref.into()
     }

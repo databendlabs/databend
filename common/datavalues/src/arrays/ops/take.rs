@@ -373,7 +373,7 @@ impl ArrayTakeEvery<BooleanType> for DFBooleanArray {
         if self.null_count() == 0 {
             self.into_no_null_iter().step_by(n).collect()
         } else {
-            self.into_iter().step_by(n).collect()
+            self.downcast_iter().step_by(n).collect()
         }
     }
 }
@@ -383,7 +383,7 @@ impl ArrayTakeEvery<Utf8Type> for DFUtf8Array {
         if self.null_count() == 0 {
             self.into_no_null_iter().step_by(n).collect()
         } else {
-            self.into_iter().step_by(n).collect()
+            self.downcast_iter().step_by(n).collect()
         }
     }
 }
@@ -393,7 +393,7 @@ impl ArrayTakeEvery<ListType> for DFListArray {
         if self.null_count() == 0 {
             self.into_no_null_iter().step_by(n).collect()
         } else {
-            self.into_iter().step_by(n).collect()
+            self.downcast_iter().step_by(n).collect()
         }
     }
 }

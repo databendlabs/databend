@@ -2,9 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::fmt::Debug;
+
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::arrays::get_list_builder;
+use crate::arrays::BinaryArrayBuilder;
 use crate::arrays::BooleanArrayBuilder;
 use crate::arrays::DataArray;
 use crate::arrays::PrimitiveArrayBuilder;
@@ -13,7 +17,7 @@ use crate::prelude::*;
 use crate::utils::get_iter_capacity;
 use crate::*;
 
-pub trait ArrayScatter {
+pub trait ArrayScatter: Debug {
     /// # Safety
     /// Note this doesn't do any bound checking, for performance reason.
     unsafe fn scatter_unchecked(
@@ -24,7 +28,10 @@ pub trait ArrayScatter {
     where
         Self: std::marker::Sized,
     {
-        unimplemented!()
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported apply scatter_unchecked operation for {:?}",
+            self,
+        )))
     }
 }
 
@@ -197,6 +204,37 @@ impl ArrayScatter for DFListArray {
     }
 }
 
+impl ArrayScatter for DFBinaryArray {
+    unsafe fn scatter_unchecked(
+        &self,
+        indices: &mut dyn Iterator<Item = u64>,
+        scattered_size: usize,
+    ) -> Result<Vec<Self>>
+    where
+        Self: std::marker::Sized,
+    {
+        let mut builders = Vec::with_capacity(scattered_size);
+        let guess_scattered_len = ((self.len() as f64) * 1.1 / (scattered_size as f64)) as usize;
+        for _i in 0..scattered_size {
+            let builder = BinaryArrayBuilder::new(guess_scattered_len);
+            builders.push(builder);
+        }
+
+        let binary_data = self.downcast_ref();
+        for (i, index) in indices.enumerate() {
+            if !self.is_null(i as usize) {
+                builders[index as usize].append_value(binary_data.value(i as usize));
+            } else {
+                builders[index as usize].append_null();
+            }
+        }
+
+        Ok(builders
+            .iter_mut()
+            .map(|builder| builder.finish())
+            .collect())
+    }
+}
+
 impl ArrayScatter for DFNullArray {}
-impl ArrayScatter for DFBinaryArray {}
 impl ArrayScatter for DFStructArray {}

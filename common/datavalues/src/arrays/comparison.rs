@@ -135,7 +135,7 @@ macro_rules! apply {
         if $self.null_count() == 0 {
             $self.into_no_null_iter().map($f).collect()
         } else {
-            $self.into_iter().map(|opt_v| opt_v.map($f)).collect()
+            $self.downcast_iter().map(|opt_v| opt_v.map($f)).collect()
         }
     }};
 }

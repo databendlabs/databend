@@ -261,10 +261,6 @@ where T: DFPrimitiveType
         #[allow(clippy::map_clone)]
         self.data_views().map(|v| *v)
     }
-
-    pub fn into_iter(&self) -> impl Iterator<Item = Option<T::Native>> + DoubleEndedIterator {
-        self.downcast_iter()
-    }
 }
 
 impl DFListArray {

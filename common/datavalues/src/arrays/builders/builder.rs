@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
+use common_arrow::arrow::array::BinaryBuilder;
 use common_arrow::arrow::array::BooleanBuilder;
 use common_arrow::arrow::array::ListBuilder;
 use common_arrow::arrow::array::PrimitiveBuilder;
@@ -491,4 +492,29 @@ pub fn get_list_builder(
         get_utf8_builder,
         get_bool_builder
     )
+}
+
+pub struct BinaryArrayBuilder {
+    builder: BinaryBuilder,
+}
+
+impl BinaryArrayBuilder {
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            builder: BinaryBuilder::new(capacity),
+        }
+    }
+
+    pub fn append_value(&mut self, value: impl AsRef<[u8]>) {
+        self.builder.append_value(value).unwrap();
+    }
+
+    pub fn append_null(&mut self) {
+        self.builder.append_null().unwrap();
+    }
+
+    pub fn finish(&mut self) -> DataArray<BinaryType> {
+        let array = self.builder.finish();
+        DFBinaryArray::from_arrow_array(array)
+    }
 }

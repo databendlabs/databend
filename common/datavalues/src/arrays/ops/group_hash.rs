@@ -2,9 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 use std::collections::hash_map::DefaultHasher;
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use num::NumCast;
 
@@ -26,10 +28,13 @@ use crate::DFUtf8Array;
 //  https://www.cockroachlabs.com/blog/vectorized-hash-joiner/
 //  http://myeyesareblind.com/2017/02/06/Combine-hash-values/
 
-pub trait GroupHash {
+pub trait GroupHash: Debug {
     /// Compute the hash for all values in the array.
     fn group_hash(&self) -> Result<DFUInt64Array> {
-        unimplemented!()
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported apply group_hash operation for {:?}",
+            self,
+        )))
     }
 }
 

@@ -143,7 +143,7 @@ macro_rules! impl_dyn_arrays {
                 unsafe { self.0.try_get(index) }
             }
 
-            fn vec_hash(&self, hasher: DFHasher) -> DFUInt64Array {
+            fn vec_hash(&self, hasher: DFHasher) -> Result<DFUInt64Array> {
                 cast_and_apply!(self, vec_hash, hasher)
             }
 

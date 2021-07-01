@@ -11,21 +11,25 @@ use crate::DataValueLogicOperator;
 macro_rules! apply_logic {
     ($self: ident, $rhs: ident, $op: ident) => {{
         let lhs = $self.to_minimal_array()?;
-        let lhs = lhs.bool()?;
+
+        let left = lhs.cast_with_type(&DataType::Boolean)?;
+        let left = left.bool()?;
 
         let rhs = $rhs[0].to_minimal_array()?;
-        let rhs = rhs.bool()?;
+        let right = rhs.cast_with_type(&DataType::Boolean)?;
+        let right = right.bool()?;
 
-        let result = lhs.$op(&rhs)?;
+        let result = left.$op(&right)?;
         let result: DataColumn = result.into_series().into();
         Ok(result.resize_constant($self.len()))
     }};
 
     ($self: ident, $op: ident) => {{
         let lhs = $self.to_minimal_array()?;
-        let lhs = lhs.bool()?;
+        let left = lhs.cast_with_type(&DataType::Boolean)?;
+        let left = left.bool()?;
 
-        let result = lhs.$op()?;
+        let result = left.$op()?;
         let result: DataColumn = result.into_series().into();
         Ok(result.resize_constant($self.len()))
     }};
