@@ -123,7 +123,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "arrow"
 version = "5.0.0-SNAPSHOT"
-source = "git+https://github.com/datafuse-extras/arrow-rs?rev=ed61617#ed6161750a33d8e44469c6bcfb800659c7f61afc"
+source = "git+https://github.com/datafuse-extras/arrow-rs?rev=f7d182df#f7d182dfc1a93562201a8fbae9e9187866e465f0"
 dependencies = [
  "chrono",
  "csv",
@@ -145,7 +145,7 @@ dependencies = [
 [[package]]
 name = "arrow-flight"
 version = "5.0.0-SNAPSHOT"
-source = "git+https://github.com/datafuse-extras/arrow-rs?rev=ed61617#ed6161750a33d8e44469c6bcfb800659c7f61afc"
+source = "git+https://github.com/datafuse-extras/arrow-rs?rev=f7d182df#f7d182dfc1a93562201a8fbae9e9187866e465f0"
 dependencies = [
  "arrow",
  "bytes 1.0.1",
@@ -716,6 +716,7 @@ name = "common-flights"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
@@ -723,6 +724,7 @@ dependencies = [
  "common-metatypes",
  "common-planners",
  "common-runtime",
+ "common-store-api",
  "common-streams",
  "common-tracing",
  "futures",
@@ -812,6 +814,22 @@ dependencies = [
  "anyhow",
  "common-exception",
  "tokio",
+]
+
+[[package]]
+name = "common-store-api"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-metatypes",
+ "common-planners",
+ "common-streams",
+ "futures",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]
@@ -1503,6 +1521,7 @@ dependencies = [
  "common-profling",
  "common-progress",
  "common-runtime",
+ "common-store-api",
  "common-streams",
  "common-tracing",
  "criterion",
@@ -1559,6 +1578,7 @@ dependencies = [
  "common-metatypes",
  "common-planners",
  "common-runtime",
+ "common-store-api",
  "common-tracing",
  "env_logger",
  "futures",
@@ -1576,6 +1596,7 @@ dependencies = [
  "rand 0.8.4",
  "serde",
  "serde_json",
+ "sha2 0.9.5",
  "structopt",
  "structopt-toml",
  "tempfile",
@@ -2014,12 +2035,12 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.6.2"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "824845a0bf897a9042383849b02c1bc219c2383772efcd5c6f9766fa4b81aef3"
+checksum = "bc633605454125dec4b66843673f01c7df2b89479b32e0ed634e43a91cff62a5"
 dependencies = [
  "autocfg 1.0.1",
- "hashbrown 0.9.1",
+ "hashbrown 0.11.2",
 ]
 
 [[package]]
@@ -2342,6 +2363,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b823e83b2affd8f40a9ee8c29dbc56404c1e34cd2710921f2801e2cf29527afa"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "management"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-exception",
+ "common-store-api",
+ "serde",
+ "serde_json",
+ "sha2 0.9.5",
 ]
 
 [[package]]
@@ -3028,7 +3061,7 @@ dependencies = [
 [[package]]
 name = "parquet"
 version = "5.0.0-SNAPSHOT"
-source = "git+https://github.com/datafuse-extras/arrow-rs?rev=ed61617#ed6161750a33d8e44469c6bcfb800659c7f61afc"
+source = "git+https://github.com/datafuse-extras/arrow-rs?rev=f7d182df#f7d182dfc1a93562201a8fbae9e9187866e465f0"
 dependencies = [
  "arrow",
  "base64 0.13.0",
@@ -3127,9 +3160,9 @@ dependencies = [
 
 [[package]]
 name = "pin-project-lite"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc0e1f259c92177c30a4c9d177246edd0a3568b25756a977d0632cf8fa37e905"
+checksum = "8d31d11c69a6b52a174b42bdc0c30e5e11670f90788b2c471c31c1d17d449443"
 
 [[package]]
 name = "pin-utils"
@@ -4801,9 +4834,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.2.18"
+version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa5553bf0883ba7c9cbe493b085c29926bd41b66afc31ff72cf17ff4fb60dcd5"
+checksum = "ab69019741fca4d98be3c62d2b75254528b5432233fd8a4d2739fec20278de48"
 dependencies = [
  "ansi_term 0.12.1",
  "chrono",

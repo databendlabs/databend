@@ -2,8 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_arrow::arrow::array::ArrayRef;
 use common_datablocks::DataBlock;
-use common_flights::GetTableActionResult;
+use common_datavalues::prelude::*;
 use common_flights::StoreClient;
 use common_planners::CreateDatabasePlan;
 use common_planners::DatabaseEngineType;
@@ -83,8 +84,11 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
     use std::sync::Arc;
 
-    use common_datavalues::prelude::*;
+    use common_arrow::arrow::datatypes::DataType;
+    use common_datavalues::DataField;
+    use common_datavalues::DataSchema;
     use common_flights::StoreClient;
+    use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
     use common_planners::DatabaseEngineType;
     use common_planners::TableEngineType;
@@ -174,7 +178,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
 
             let status = res.err().unwrap();
             assert_eq!(
-                "status: Some entity that we attempted to create already exists: table exists",
+                "Code: 4003, displayText = table exists.",
                 status.to_string()
             );
 
@@ -199,7 +203,11 @@ async fn test_do_append() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
     use std::sync::Arc;
 
-    use common_datavalues::prelude::*;
+    use common_arrow::arrow::datatypes::DataType;
+    use common_datavalues::DataField;
+    use common_datavalues::DataSchema;
+    use common_datavalues::Int64Array;
+    use common_datavalues::StringArray;
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
@@ -215,10 +223,10 @@ async fn test_do_append() -> anyhow::Result<()> {
     let db_name = "test_db";
     let tbl_name = "test_tbl";
 
-    let col0 = Series::new(vec![0 as i64, 1, 2]);
-    let col1 = Series::new(vec!["str1", "str2", "str3"]);
+    let col0: ArrayRef = Arc::new(Int64Array::from(vec![0, 1, 2]));
+    let col1: ArrayRef = Arc::new(StringArray::from(vec!["str1", "str2", "str3"]));
 
-    let expected_rows = col0.len() * 2;
+    let expected_rows = col0.data().len() * 2;
     let expected_cols = 2;
 
     let block = DataBlock::create_by_array(schema.clone(), vec![col0, col1]);
@@ -269,7 +277,11 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
     use std::sync::Arc;
 
-    use common_datavalues::prelude::*;
+    use common_arrow::arrow::datatypes::DataType;
+    use common_datavalues::DataField;
+    use common_datavalues::DataSchema;
+    use common_datavalues::Int64Array;
+    use common_datavalues::StringArray;
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
@@ -285,15 +297,15 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     let db_name = "test_db";
     let tbl_name = "test_tbl";
 
-    let col0 = Series::new(vec![0 as i64, 1, 2]);
-    let col1 = Series::new(vec!["str1", "str2", "str3"]);
+    let col0: ArrayRef = Arc::new(Int64Array::from(vec![0, 1, 2]));
+    let col1: ArrayRef = Arc::new(StringArray::from(vec!["str1", "str2", "str3"]));
 
-    let expected_rows = col0.len() * 2;
+    let expected_rows = col0.data().len() * 2;
     let expected_cols = 2;
 
     let block = DataBlock::create(schema.clone(), vec![
-        DataColumn::Array(col0),
-        DataColumn::Array(col1),
+        DataColumnarValue::Array(col0),
+        DataColumnarValue::Array(col1),
     ]);
     let batches = vec![block.clone(), block];
     let num_batch = batches.len();
@@ -340,7 +352,7 @@ async fn test_scan_partition() -> anyhow::Result<()> {
         ..ScanPlan::empty()
     };
     let res = client
-        .scan_partition(db_name.to_string(), tbl_name.to_string(), &plan)
+        .read_plan(db_name.to_string(), tbl_name.to_string(), &plan)
         .await;
     // TODO d assertions, de-duplicated codes
     println!("scan res is {:?}", res);
@@ -404,3 +416,100 @@ async fn test_flight_generic_kv() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+//#[test(tokio::test)]
+//async fn test_user_apis() -> anyhow::Result<()> {
+//    use common_flights::StoreClient;
+//
+//    let addr = crate::tests::start_store_server().await?;
+//
+//    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+//
+//    let name = "test_user";
+//    let pass = "test_pass";
+//    let salt = "test_salt";
+//    let pass_hash: [u8; 32] = Sha256::digest(pass.as_bytes()).into();
+//    let salt_hash: [u8; 32] = Sha256::digest(salt.as_bytes()).into();
+//
+//    // new user
+//    client.add_user(name, pass, salt).await?;
+//
+//    // duplicated username
+//    let r = client.add_user(name, pass, salt).await;
+//
+//    assert!(r.is_err());
+//    assert_eq!(
+//        r.unwrap_err().code(),
+//        ErrorCode::UserAlreadyExists("").code()
+//    );
+//
+//    // get user
+//    let user = client.get_user(name).await?;
+//    assert!(user.user_info.is_some());
+//    let u = user.user_info.unwrap();
+//    assert_eq!(u.name, name);
+//    assert_eq!(u.password_sha256, pass_hash,);
+//    assert_eq!(u.salt_sha256, salt_hash,);
+//
+//    // get users
+//    let users = client.get_users(&vec![name]).await?;
+//    assert_eq!(users.users_info.len(), 1);
+//    let u = users.users_info[0].as_ref();
+//    assert!(u.is_some());
+//    let u = u.unwrap();
+//    assert_eq!(u.name, name);
+//    assert_eq!(u.password_sha256, pass_hash,);
+//    assert_eq!(u.salt_sha256, salt_hash,);
+//
+//    // drop user
+//    client.drop_user(name).await?;
+//    let user = client.get_users(&vec![name]).await?;
+//    assert_eq!(user.users_info.len(), 1);
+//    let u = user.users_info[0].as_ref();
+//    assert!(u.is_none());
+//
+//    // get all users
+//    let mut names = vec![];
+//    let mut infos = vec![];
+//    for i in 0..10 {
+//        let name = format!("u_{}", i);
+//        let pass = format!("p_{}", i);
+//        let salt = format!("s_{}", i);
+//        client.add_user(&name, &pass, &salt).await?;
+//        names.push(name.clone());
+//        infos.push(UserInfo {
+//            name,
+//            password_sha256: Sha256::digest(pass.as_bytes()).into(),
+//            salt_sha256: Sha256::digest(salt.as_bytes()).into(),
+//        })
+//    }
+//    let mut users = client.get_all_users().await?;
+//    assert_eq!(users.users_info.len(), names.len());
+//    assert_eq!(users.users_info.sort(), infos.sort());
+//
+//    // get users
+//    let mut names = vec![];
+//    let mut infos = vec![];
+//    for i in 0..10 {
+//        let idx = (i % 2) * 100 + i;
+//        let name = format!("u_{}", idx);
+//        let pass = format!("p_{}", idx);
+//        let salt = format!("s_{}", idx);
+//        names.push(name.clone());
+//        if i % 2 == 0 {
+//            infos.push(Some(UserInfo {
+//                name,
+//                password_sha256: Sha256::digest(pass.as_bytes()).into(),
+//                salt_sha256: Sha256::digest(salt.as_bytes()).into(),
+//            }))
+//        } else {
+//            infos.push(None)
+//        }
+//    }
+//
+//    let users = client.get_users(&names).await?;
+//    assert_eq!(users.users_info.len(), names.len());
+//    // order of result should match the order of input
+//    assert_eq!(users.users_info, infos);
+//    Ok(())
+//}

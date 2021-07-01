@@ -105,6 +105,11 @@ impl AggregateSumFunction {
     }
 
     pub fn sum_batch(column: &DataColumn) -> Result<DataValue> {
+        if column.is_empty() {
+            return Ok(DataValue::from(&Self::sum_return_type(
+                &column.data_type(),
+            )?));
+        }
         match column {
             DataColumn::Constant(value, size) => {
                 DataValue::arithmetic(Mul, value.clone(), DataValue::UInt64(Some(*size as u64)))

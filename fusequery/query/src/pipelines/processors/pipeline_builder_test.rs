@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::HashMap;
+
 use common_exception::Result;
 use common_runtime::tokio;
 use futures::TryStreamExt;
@@ -138,7 +140,8 @@ async fn test_local_pipeline_builds() -> Result<()> {
         assert_eq!(test.plan, actual_plan, "{:#?}", test.name);
 
         // Pipeline build check.
-        let mut pipeline = PipelineBuilder::create(ctx.clone(), plan).build()?;
+        let mut pipeline =
+            PipelineBuilder::create(ctx.clone(), HashMap::<String, bool>::new(), plan).build()?;
         let actual_pipeline = format!("{:?}", pipeline);
         assert_eq!(test.pipeline, actual_pipeline, "{:#?}", test.name);
 

@@ -37,7 +37,9 @@ pub trait AggregateFunction: fmt::Display + Sync + Send + DynClone {
     }
 
     // must be implemented even we implement `accumulate`, because the combinator need this function
-    fn accumulate_scalar(&mut self, _values: &[DataValue]) -> Result<()>;
+    fn accumulate_scalar(&mut self, _values: &[DataValue]) -> Result<()> {
+        Ok(())
+    }
 
     fn accumulate_result(&self) -> Result<Vec<DataValue>>;
     fn merge(&mut self, _states: &[DataValue]) -> Result<()>;

@@ -52,10 +52,12 @@ impl NumbersStream {
             if partitions.is_empty() {
                 return Ok(None);
             }
+            if partitions.len() == 1 && partitions[0].name.is_empty() {
+                return Ok(None);
+            }
 
             let block_size = self.ctx.get_settings().get_max_block_size()?;
             let mut blocks = Vec::with_capacity(partitions.len());
-
             for part in partitions {
                 let names: Vec<_> = part.name.split('-').collect();
                 let begin: u64 = names[1].parse()?;

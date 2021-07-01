@@ -2,14 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Schema;
 use common_arrow::arrow::ipc::writer::IpcWriteOptions;
-use common_arrow::arrow_flight;
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
 use common_arrow::arrow_flight::FlightData;
 use common_arrow::parquet::arrow::ArrowReader;
@@ -18,31 +14,14 @@ use common_arrow::parquet::file::reader::SerializedFileReader;
 use common_arrow::parquet::file::serialized_reader::SliceableCursor;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
-use common_flights::CreateDatabaseAction;
-use common_flights::CreateDatabaseActionResult;
-use common_flights::CreateTableAction;
-use common_flights::CreateTableActionResult;
-use common_flights::DropDatabaseAction;
-use common_flights::DropDatabaseActionResult;
-use common_flights::DropTableAction;
-use common_flights::DropTableActionResult;
-use common_flights::GetDatabaseAction;
-use common_flights::GetDatabaseActionResult;
-use common_flights::GetKVAction;
-use common_flights::GetKVActionResult;
-use common_flights::GetTableAction;
-use common_flights::GetTableActionResult;
-use common_flights::ReadAction;
-use common_flights::ScanPartitionAction;
+use common_flights::RequestFor;
 use common_flights::StoreDoAction;
-use common_flights::StoreDoActionResult;
-use common_flights::UpsertKVAction;
-use common_flights::UpsertKVActionResult;
 use common_infallible::Mutex;
 use common_planners::PlanNode;
 use common_runtime::tokio::sync::mpsc::Sender;
+use common_tracing::tracing::info;
 use futures::Stream;
-use log::info;
+use serde::Serialize;
 use tokio_stream::StreamExt;
 use tonic::Status;
 use tonic::Streaming;
@@ -50,28 +29,37 @@ use tonic::Streaming;
 use crate::data_part::appender::Appender;
 use crate::engine::MemEngine;
 use crate::fs::FileSystem;
-use crate::meta_service::ClientRequest;
-use crate::meta_service::ClientResponse;
-use crate::meta_service::Cmd;
 use crate::meta_service::MetaNode;
-use crate::protobuf::CmdCreateDatabase;
-use crate::protobuf::CmdCreateTable;
-use crate::protobuf::Db;
-use crate::protobuf::Table;
+use crate::user::UserMgr;
+
+pub trait ReplySerializer {
+    type Output;
+    fn serialize<T>(&self, v: T) -> Result<Self::Output, ErrorCode>
+    where T: Serialize;
+}
 
 pub struct ActionHandler {
-    meta: Arc<Mutex<MemEngine>>,
+    pub(crate) meta: Arc<Mutex<MemEngine>>,
     /// The raft-based meta data entry.
     /// In our design meta serves for both the distributed file system and the catalog storage such as db,tabel etc.
     /// Thus in case the `fs` is a Dfs impl, `meta_node` is just a reference to the `Dfs.meta_node`.
     /// TODO(xp): turn on dead_code warning when we finished action handler unit test.
-    #[allow(dead_code)]
-    meta_node: Arc<MetaNode>,
+    pub(crate) meta_node: Arc<MetaNode>,
     fs: Arc<dyn FileSystem>,
+    #[allow(dead_code)]
+    user_mgr: UserMgr,
 }
 
+// TODO did this already defined somewhere?
 type DoGetStream =
     Pin<Box<dyn Stream<Item = Result<FlightData, tonic::Status>> + Send + Sync + 'static>>;
+
+#[async_trait::async_trait]
+pub trait RequestHandler<T>: Sync + Send
+where T: RequestFor
+{
+    async fn handle(&self, req: T) -> common_exception::Result<T::Reply>;
+}
 
 impl ActionHandler {
     pub fn create(fs: Arc<dyn FileSystem>, meta_node: Arc<MetaNode>) -> Self {
@@ -79,6 +67,7 @@ impl ActionHandler {
             meta: MemEngine::create(),
             meta_node,
             fs,
+            user_mgr: UserMgr::new(),
         }
     }
 
@@ -104,26 +93,46 @@ impl ActionHandler {
         .map_err(|e| Status::internal(format!("{:?}", e)))
     }
 
-    pub async fn execute(&self, action: StoreDoAction) -> Result<StoreDoActionResult, Status> {
-        match action {
-            StoreDoAction::ReadPlan(_) => Err(Status::internal("Store read plan unimplemented")),
+    pub async fn execute<S, R>(&self, action: StoreDoAction, s: S) -> common_exception::Result<R>
+    where S: ReplySerializer<Output = R> {
+        // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one by one
+        //
+        // Technically we can eliminate these kind of duplications by using proc-macros, or eliminate
+        // parts of them by introducing another func like this:
+        //#  async fn invoke<S, O, A, R>(&self, a: A, s: S) -> common_exception::Result<O>
+        //#      where
+        //#          A: Serialize + RequestFor<Reply = R>,
+        //#          S: ReplySerializer<Output = O>,
+        //#          Self: RequestHandler<A>,
+        //#          R: Serialize,
+        //#          <S as ReplySerializer>::Error: Into<ErrorCode>,
+        //#  {
+        //#      let r = self.handle(a).await?;
+        //#      let v = s.serialize(r).map_err(Into::into)?;
+        //#      Ok(v)
+        //#  }
+        //
+        // But, that may be too much, IDEs like "clion" will be confused (and unable to jump around)
+        //
+        // New suggestions/ideas are welcome.
 
+        match action {
             // database
-            StoreDoAction::CreateDatabase(a) => self.create_db(a).await,
-            StoreDoAction::GetDatabase(a) => self.get_db(a).await,
-            StoreDoAction::DropDatabase(act) => self.drop_db(act).await,
+            StoreDoAction::CreateDatabase(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::GetDatabase(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::DropDatabase(a) => s.serialize(self.handle(a).await?),
 
             // table
-            StoreDoAction::CreateTable(a) => self.create_table(a).await,
-            StoreDoAction::DropTable(act) => self.drop_table(act).await,
-            StoreDoAction::GetTable(a) => self.get_table(a).await,
+            StoreDoAction::CreateTable(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::DropTable(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::GetTable(a) => s.serialize(self.handle(a).await?),
 
             // part
-            StoreDoAction::ScanPartition(act) => self.scan_partitions(&act),
+            StoreDoAction::ReadPlan(a) => s.serialize(self.handle(a).await?),
 
             // general-purpose kv
-            StoreDoAction::UpsertKV(a) => self.upsert_kv(a).await,
-            StoreDoAction::GetKV(a) => self.get_kv(a).await,
+            StoreDoAction::UpsertKV(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::GetKV(a) => s.serialize(self.handle(a).await?),
         }
     }
 
@@ -257,7 +266,7 @@ impl ActionHandler {
         db_name: String,
         table_name: String,
         parts: Streaming<FlightData>,
-    ) -> anyhow::Result<common_flights::AppendResult> {
+    ) -> common_exception::Result<AppendResult> {
         {
             let mut meta = self.meta.lock();
             let _tbl_meta = meta.get_table(db_name.clone(), table_name.clone())?;
@@ -281,34 +290,24 @@ impl ActionHandler {
         Ok(res)
     }
 
-    fn scan_partitions(&self, cmd: &ScanPartitionAction) -> Result<StoreDoActionResult, Status> {
-        let schema = &cmd.scan_plan.schema_name;
-        let splits: Vec<&str> = schema.split('/').collect();
-        // TODO error handling
-        println!("schema {}, splits {:?}", schema, splits);
-        let db_name = splits[0];
-        let tbl_name = splits[1];
-
-        let meta = self.meta.lock();
-        Ok(StoreDoActionResult::ScanPartition(
-            meta.get_data_parts(db_name, tbl_name),
-        ))
-    }
-
-    pub async fn read_partition(&self, action: ReadAction) -> anyhow::Result<DoGetStream> {
+    pub async fn read_partition(
+        &self,
+        action: ReadAction,
+    ) -> common_exception::Result<DoGetStream> {
         log::info!("entering read");
         let part_file = action.part.name;
 
         let plan = if let PlanNode::ReadSource(read_source_plan) = action.push_down {
             read_source_plan
         } else {
-            anyhow::bail!("invalid PlanNode passed in")
+            return Err(ErrorCode::IllegalScanPlan("invalid PlanNode passed in"));
         };
 
         let content = self.fs.read_all(&part_file).await?;
         let cursor = SliceableCursor::new(content);
 
-        let file_reader = SerializedFileReader::new(cursor)?;
+        let file_reader = SerializedFileReader::new(cursor)
+            .map_err(|pe| ErrorCode::ReadFileError(format!("parquet error: {}", pe.to_string())))?;
         let mut arrow_reader = ParquetFileArrowReader::new(Arc::new(file_reader));
 
         // before push_down is passed in, we returns all the columns
@@ -318,7 +317,9 @@ impl ActionHandler {
         // TODO config
         let batch_size = 2048;
 
-        let batch_reader = arrow_reader.get_record_reader_by_columns(projection, batch_size)?;
+        let batch_reader = arrow_reader
+            .get_record_reader_by_columns(projection, batch_size)
+            .map_err(|pe| ErrorCode::ReadFileError(format!("parquet error: {}", pe.to_string())))?;
 
         // For simplicity, we do the conversion in-memory, to be optimized later
         // TODO consider using `parquet_table` and `stream_parquet`
@@ -333,46 +334,6 @@ impl ActionHandler {
                 })
                 .collect::<Vec<_>>();
         let stream = futures::stream::iter(flights);
-
-        // This is not gonna work, cause `ParquetFileArrowReader` and `ParquetFileArrowReader` are neither Send nor Sync
-        //
-        // # let stream = futures::stream::iter(reader.into_iter());
-        // # let stream =
-        // #     stream.map(move |batch| flight_data_from_arrow_batch(&batch.unwrap(), &write_opt).1);
-        // # let stream = stream.map(|v| Ok(v));
-
         Ok(Box::pin(stream))
-    }
-
-    async fn upsert_kv(&self, act: UpsertKVAction) -> Result<StoreDoActionResult, Status> {
-        let cr = ClientRequest {
-            txid: None,
-            cmd: Cmd::UpsertKV {
-                key: act.key,
-                seq: act.seq,
-                value: act.value,
-            },
-        };
-        // TODO(xp): raftmeta should use ErrorCode instead of anyhow::Error
-        let rst = self
-            .meta_node
-            .write(cr)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        match rst {
-            ClientResponse::KV { prev, result } => {
-                Ok(StoreDoActionResult::UpsertKV(UpsertKVActionResult {
-                    prev,
-                    result,
-                }))
-            }
-            _ => Err(Status::internal("not a KV result")),
-        }
-    }
-
-    async fn get_kv(&self, act: GetKVAction) -> Result<StoreDoActionResult, Status> {
-        let result = self.meta_node.get_kv(&act.key).await;
-        Ok(StoreDoActionResult::GetKV(GetKVActionResult { result }))
     }
 }

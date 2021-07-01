@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::sync::Arc;
 use std::time::Instant;
@@ -21,6 +22,7 @@ use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::ExpressionExecutor;
 
 pub struct FilterTransform {
+    exists_map: HashMap<String, bool>,
     input: Arc<dyn Processor>,
     executor: Arc<ExpressionExecutor>,
     predicate: Expression,
@@ -28,7 +30,12 @@ pub struct FilterTransform {
 }
 
 impl FilterTransform {
-    pub fn try_create(schema: DataSchemaRef, predicate: Expression, having: bool) -> Result<Self> {
+    pub fn try_create(
+        exists_map: HashMap<String, bool>,
+        schema: DataSchemaRef,
+        predicate: Expression,
+        having: bool,
+    ) -> Result<Self> {
         let mut fields = schema.fields().clone();
         fields.push(predicate.to_data_field(&schema)?);
 
@@ -42,6 +49,7 @@ impl FilterTransform {
         executor.validate()?;
 
         Ok(FilterTransform {
+            exists_map,
             input: Arc::new(EmptyProcessor::create()),
             executor: Arc::new(executor),
             predicate,
@@ -76,8 +84,10 @@ impl Processor for FilterTransform {
         let input_stream = self.input.execute().await?;
         let executor = self.executor.clone();
         let column_name = self.predicate.column_name();
+        let map = self.exists_map.clone();
 
         let execute_fn = |executor: Arc<ExpressionExecutor>,
+                          exists_map: HashMap<String, bool>,
                           column_name: &str,
                           block: Result<DataBlock>|
          -> Result<DataBlock> {
@@ -85,7 +95,7 @@ impl Processor for FilterTransform {
             let start = Instant::now();
 
             let block = block?;
-            let filter_block = executor.execute(&block)?;
+            let filter_block = executor.execute(&block, Some(&exists_map))?;
             let filter_array = filter_block.try_column_by_name(column_name)?.to_array()?;
             // Downcast to boolean array
             let filter_array = filter_array.bool()?.downcast_ref();
@@ -97,9 +107,8 @@ impl Processor for FilterTransform {
             tracing::debug!("Filter cost: {:?}", delta);
             batch.try_into()
         };
-
         let stream = input_stream.filter_map(move |v| {
-            execute_fn(executor.clone(), &column_name, v)
+            execute_fn(executor.clone(), map.clone(), &column_name, v)
                 .map(Some)
                 .transpose()
         });

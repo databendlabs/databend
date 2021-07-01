@@ -144,10 +144,14 @@ nav:
           - MIN: sqlstatement/aggregate-functions/aggregate-min.md
           - MAX: sqlstatement/aggregate-functions/aggregate-max.md
           - SUM: sqlstatement/aggregate-functions/aggregate-sum.md
+          - DISTINCT: sqlstatement/aggregate-functions/aggregate-combinator.md
           - argMin: sqlstatement/aggregate-functions/aggregate-argmin.md
           - argMax: sqlstatement/aggregate-functions/aggregate-argmax.md
-          - countDistinct: sqlstatement/aggregate-functions/aggregate-count-distinct.md
-          - combinators: sqlstatement/aggregate-functions/aggregate-combinator.md
+          - avgIf: sqlstatement/aggregate-functions/aggregate-avg-if.md
+          - countIf: sqlstatement/aggregate-functions/aggregate-count-if.md
+          - minIf: sqlstatement/aggregate-functions/aggregate-min-if.md
+          - maxIf: sqlstatement/aggregate-functions/aggregate-max-if.md
+          - sumIf: sqlstatement/aggregate-functions/aggregate-sum-if.md
       - Hash Functions:
           - SIPHASH: sqlstatement/hash-functions/siphash.md
       - Information Functions:

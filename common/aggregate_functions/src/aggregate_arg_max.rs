@@ -55,6 +55,10 @@ impl AggregateFunction for AggregateArgMaxFunction {
     }
 
     fn accumulate(&mut self, columns: &[DataColumn], _input_rows: usize) -> Result<()> {
+        if columns[0].is_empty() {
+            return Ok(());
+        }
+
         let value = match &columns[1] {
             DataColumn::Constant(value, _) => Ok(DataValue::Struct(vec![
                 DataValue::UInt64(Some(0)),

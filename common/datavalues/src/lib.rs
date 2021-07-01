@@ -11,6 +11,7 @@ mod macros;
 
 #[allow(dead_code)]
 mod bit_util;
+mod data_array_filter;
 mod data_df_type;
 mod data_field;
 mod data_group_value;
@@ -32,6 +33,7 @@ pub mod columns;
 pub mod prelude;
 pub mod series;
 
+pub use data_array_filter::*;
 pub use data_df_type::*;
 pub use data_field::DataField;
 pub use data_group_value::DataGroupValue;

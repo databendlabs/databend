@@ -30,6 +30,7 @@ pub use crate::arrays::Utf8ArrayBuilder;
 // columns
 pub use crate::columns::DataColumn;
 pub use crate::columns::DataColumnCommon;
+pub use crate::data_array_filter::*;
 // series
 pub use crate::series::IntoSeries;
 pub use crate::series::Series;

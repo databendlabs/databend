@@ -14,8 +14,8 @@ use common_tracing::tracing;
 use crate::fs::FileSystem;
 use crate::fs::ListResult;
 use crate::localfs::LocalFS;
-use crate::meta_service::ClientRequest;
 use crate::meta_service::Cmd;
+use crate::meta_service::LogEntry;
 use crate::meta_service::MetaNode;
 
 /// DFS is a distributed file system impl.
@@ -52,7 +52,7 @@ impl FileSystem for Dfs {
 
         // update meta, other store nodes will be informed about this change and then pull the data to complete replication.
 
-        let req = ClientRequest {
+        let req = LogEntry {
             txid: None,
             cmd: Cmd::AddFile {
                 key: path.to_string(),

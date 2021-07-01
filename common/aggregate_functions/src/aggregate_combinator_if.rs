@@ -5,6 +5,7 @@
 use std::any::Any;
 use std::fmt;
 
+use common_arrow::arrow;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -78,14 +79,53 @@ impl AggregateFunction for AggregateIfCombinator {
         self
     }
 
-    fn accumulate_scalar(&mut self, values: &[DataValue]) -> Result<()> {
-        if let DataValue::Boolean(Some(flag)) = values[self.argument_len - 1] {
-            if flag {
-                return self
-                    .nested
-                    .accumulate_scalar(&values[0..self.argument_len - 1]);
+    fn accumulate(&mut self, columns: &[DataColumn], _input_rows: usize) -> Result<()> {
+        if columns.is_empty() {
+            return Ok(());
+        };
+
+        let boolean_array = columns[self.argument_len - 1].to_array()?;
+        let boolean_array = boolean_array.bool()?;
+
+        let arrow_filter_array = boolean_array.downcast_ref();
+
+        let mut column_array = Vec::with_capacity(self.argument_len - 1);
+        let row_size = match columns.len() - 1 {
+            0 => {
+                // if it has no args, only return the row_count
+                if boolean_array.null_count() > 0 {
+                    // this greatly simplifies subsequent filtering code
+                    // now we only have a boolean mask to deal with
+                    arrow::compute::prep_null_mask_filter(arrow_filter_array)
+                        .values()
+                        .count_set_bits()
+                } else {
+                    arrow_filter_array.values().count_set_bits()
+                }
             }
-        }
+            1 => {
+                // single array handle
+                let array = columns[0].to_array()?;
+                let data =
+                    arrow::compute::filter(array.get_array_ref().as_ref(), arrow_filter_array)?;
+                column_array.push(DataColumn::from(data));
+                column_array[0].len()
+            }
+            _ => {
+                // multi array handle
+                let mut args_array = Vec::with_capacity(self.argument_len - 1);
+                for column in columns.iter().take(self.argument_len - 1) {
+                    let array = column.to_array()?;
+                    args_array.push(array);
+                }
+                let data = DataArrayFilter::filter_batch_array(args_array, &boolean_array)?;
+                data.into_iter()
+                    .map(DataColumn::from)
+                    .for_each(|column| column_array.push(column));
+                column_array[0].len()
+            }
+        };
+        self.nested.accumulate(column_array.as_slice(), row_size)?;
         Ok(())
     }
 
