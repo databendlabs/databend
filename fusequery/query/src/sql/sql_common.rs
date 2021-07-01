@@ -30,7 +30,7 @@ impl SQLCommon {
             SQLDataType::Real | SQLDataType::Double => Ok(DataType::Float64),
             SQLDataType::Boolean => Ok(DataType::Boolean),
             SQLDataType::Date => Ok(DataType::Date32),
-            SQLDataType::Time => Ok(DataType::Time64(TimeUnit::Millisecond)),
+            SQLDataType::Time => Ok(DataType::Timestamp(TimeUnit::Millisecond, None)),
             SQLDataType::Timestamp => Ok(DataType::Date64),
 
             _ => Result::Err(ErrorCode::IllegalDataType(format!(

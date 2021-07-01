@@ -6,17 +6,146 @@ use std::cmp::Ordering;
 
 use common_arrow::arrow::array::build_compare;
 use common_arrow::arrow::array::make_array;
+use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::DynComparator;
 use common_arrow::arrow::array::MutableArrayData;
+use common_arrow::arrow::compute;
 use common_arrow::arrow::compute::SortOptions;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-pub struct DataArrayMerge;
+use crate::prelude::*;
+pub struct DataColumnCommon;
+
+impl DataColumnCommon {
+    pub fn concat(columns: &[DataColumn]) -> Result<DataColumn> {
+        let arrays = columns
+            .iter()
+            .map(|s| s.get_array_ref())
+            .collect::<Result<Vec<_>>>()?;
+
+        let dyn_arrays: Vec<&dyn Array> = arrays.iter().map(|arr| arr.as_ref()).collect();
+
+        let array = compute::concat(&dyn_arrays)?;
+        Ok(array.into())
+    }
+
+    pub fn merge_columns(
+        lhs: &DataColumn,
+        rhs: &DataColumn,
+        indices: &[bool],
+    ) -> Result<DataColumn> {
+        let lhs = lhs.to_array()?;
+        let rhs = rhs.to_array()?;
+
+        let result =
+            DataArrayMerge::merge_array(&lhs.get_array_ref(), &rhs.get_array_ref(), indices)?;
+        Ok(result.into())
+    }
+
+    pub fn merge_indices(
+        lhs: &[DataColumn],
+        rhs: &[DataColumn],
+        options: &[SortOptions],
+        limit: Option<usize>,
+    ) -> Result<Vec<bool>> {
+        let lhs: Vec<ArrayRef> = lhs
+            .iter()
+            .map(|s| s.get_array_ref())
+            .collect::<Result<Vec<_>>>()?;
+        let rhs: Vec<ArrayRef> = rhs
+            .iter()
+            .map(|s| s.get_array_ref())
+            .collect::<Result<Vec<_>>>()?;
+
+        DataArrayMerge::merge_indices(&lhs, &rhs, options, limit)
+    }
+}
+
+impl DataColumn {
+    #[inline]
+    pub fn concat_row_to_one_key(&self, row: usize, vec: &mut Vec<u8>) -> Result<()> {
+        let (col, row) = match self {
+            DataColumn::Array(array) => (Ok(array.clone()), row),
+            DataColumn::Constant(v, _) => (v.to_series_with_size(1), 0),
+        };
+        let col = col?;
+
+        match col.data_type() {
+            DataType::Boolean => {
+                let array = col.bool()?.downcast_ref();
+                vec.extend_from_slice(&[array.value(row) as u8]);
+            }
+            DataType::Float32 => {
+                let array = col.f32()?.downcast_ref();
+                vec.extend_from_slice(&array.value(row).to_le_bytes());
+            }
+            DataType::Float64 => {
+                let array = col.f64()?.downcast_ref();
+                vec.extend_from_slice(&array.value(row).to_le_bytes());
+            }
+            DataType::UInt8 => {
+                let array = col.u8()?.downcast_ref();
+                vec.extend_from_slice(&array.value(row).to_le_bytes());
+            }
+            DataType::UInt16 => {
+                let array = col.u16()?.downcast_ref();
+                vec.extend_from_slice(&array.value(row).to_le_bytes());
+            }
+            DataType::UInt32 => {
+                let array = col.u32()?.downcast_ref();
+                vec.extend_from_slice(&array.value(row).to_le_bytes());
+            }
+            DataType::UInt64 => {
+                let array = col.u64()?.downcast_ref();
+                vec.extend_from_slice(&array.value(row).to_le_bytes());
+            }
+            DataType::Int8 => {
+                let array = col.i8()?.downcast_ref();
+                vec.extend_from_slice(&array.value(row).to_le_bytes());
+            }
+            DataType::Int16 => {
+                let array = col.i16()?.downcast_ref();
+                vec.extend(array.value(row).to_le_bytes().iter());
+            }
+            DataType::Int32 => {
+                let array = col.i32()?.downcast_ref();
+                vec.extend_from_slice(&array.value(row).to_le_bytes());
+            }
+            DataType::Int64 => {
+                let array = col.i64()?.downcast_ref();
+                vec.extend_from_slice(&array.value(row).to_le_bytes());
+            }
+            DataType::Utf8 => {
+                let array = col.utf8()?.downcast_ref();
+                let value = array.value(row);
+                // store the size
+                vec.extend_from_slice(&value.len().to_le_bytes());
+                // store the string value
+                vec.extend_from_slice(value.as_bytes());
+            }
+            DataType::Date32 => {
+                let array = col.date32()?.downcast_ref();
+                vec.extend_from_slice(&array.value(row).to_le_bytes());
+            }
+
+            _ => {
+                // This is internal because we should have caught this before.
+                return Result::Err(ErrorCode::BadDataValueType(format!(
+                    "Unsupported the col type creating key {}",
+                    col.data_type()
+                )));
+            }
+        }
+        Ok(())
+    }
+}
+
+struct DataArrayMerge;
 
 impl DataArrayMerge {
-    pub fn merge_array(lhs: &ArrayRef, rhs: &ArrayRef, indices: &[bool]) -> Result<ArrayRef> {
+    fn merge_array(lhs: &ArrayRef, rhs: &ArrayRef, indices: &[bool]) -> Result<ArrayRef> {
         if lhs.data_type() != rhs.data_type() {
             return Result::Err(ErrorCode::BadDataValueType(
                 "It is impossible to merge arrays of different data types.",

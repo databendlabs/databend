@@ -2,9 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
@@ -17,9 +15,9 @@ fn test_cast_function() -> Result<()> {
         name: &'static str,
         display: &'static str,
         nullable: bool,
-        columns: Vec<DataColumnarValue>,
+        columns: Vec<DataColumn>,
         cast_type: DataType,
-        expect: DataArrayRef,
+        expect: Series,
         error: &'static str,
         func: Box<dyn Function>,
     }
@@ -29,20 +27,20 @@ fn test_cast_function() -> Result<()> {
             name: "cast-int64-to-int8-passed",
             display: "CAST",
             nullable: false,
-            columns: vec![Arc::new(Int64Array::from(vec![4, 3, 2, 4])).into()],
+            columns: vec![Series::new(vec![4i64, 3, 2, 4]).into()],
             func: CastFunction::create(DataType::Int8),
             cast_type: DataType::Int8,
-            expect: Arc::new(Int8Array::from(vec![4, 3, 2, 4])),
+            expect: Series::new(vec![4i32, 3, 2, 4]),
             error: "",
         },
         Test {
             name: "cast-string-to-date32-passed",
             display: "CAST",
             nullable: false,
-            columns: vec![Arc::new(StringArray::from(vec!["20210305", "20211024"])).into()],
+            columns: vec![Series::new(vec!["20210305", "20211024"]).into()],
             func: CastFunction::create(DataType::Int32),
             cast_type: DataType::Date32,
-            expect: Arc::new(Int32Array::from(vec![20210305, 20211024])),
+            expect: Series::new(vec![20210305i32, 20211024]),
             error: "",
         },
     ];
@@ -70,7 +68,9 @@ fn test_cast_function() -> Result<()> {
         let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
-        assert_eq!(v.to_array()?.as_ref(), t.expect.as_ref());
+
+        let c: DataColumn = t.expect.into();
+        assert_eq!(v, &c);
     }
     Ok(())
 }

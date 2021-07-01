@@ -6,12 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use common_datavalues::StringArray;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -108,10 +103,10 @@ impl Table for SettingsTable {
         let default_values: Vec<&str> = default_values.iter().map(|x| x.as_str()).collect();
         let descs: Vec<&str> = descs.iter().map(|x| x.as_str()).collect();
         let block = DataBlock::create_by_array(self.schema.clone(), vec![
-            Arc::new(StringArray::from(names)),
-            Arc::new(StringArray::from(values)),
-            Arc::new(StringArray::from(default_values)),
-            Arc::new(StringArray::from(descs)),
+            Series::new(names),
+            Series::new(values),
+            Series::new(default_values),
+            Series::new(descs),
         ]);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),

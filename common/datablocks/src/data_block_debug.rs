@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_datavalues::data_array_to_string;
 use common_exception::Result;
 use prettytable::format;
 use prettytable::Cell;
@@ -24,7 +23,7 @@ pub fn assert_blocks_eq(expect: Vec<&str>, blocks: &[DataBlock]) {
 /// ['a', 'b'] not equals ['b', 'a']
 pub fn assert_blocks_eq_with_name(test_name: &str, expect: Vec<&str>, blocks: &[DataBlock]) {
     let expected_lines: Vec<String> = expect.iter().map(|&s| s.into()).collect();
-    let formatted = pretty_format_blocks(&blocks).unwrap();
+    let formatted = pretty_format_blocks(blocks).unwrap();
     let actual_lines: Vec<&str> = formatted.trim().lines().collect();
 
     assert_eq!(
@@ -50,7 +49,7 @@ pub fn assert_blocks_sorted_eq_with_name(test_name: &str, expect: Vec<&str>, blo
         expected_lines.as_mut_slice()[2..num_lines - 1].sort_unstable()
     }
 
-    let formatted = pretty_format_blocks(&blocks).unwrap();
+    let formatted = pretty_format_blocks(blocks).unwrap();
     let mut actual_lines: Vec<&str> = formatted.trim().lines().collect();
 
     // sort except for header + footer
@@ -79,7 +78,7 @@ fn create_table(results: &[DataBlock]) -> Result<Table> {
 
     let mut header = Vec::new();
     for field in schema.fields() {
-        header.push(Cell::new(&field.name()));
+        header.push(Cell::new(field.name()));
     }
     table.set_titles(Row::new(header));
 
@@ -87,8 +86,9 @@ fn create_table(results: &[DataBlock]) -> Result<Table> {
         for row in 0..batch.num_rows() {
             let mut cells = Vec::new();
             for col in 0..batch.num_columns() {
-                let array = batch.column(col).to_array()?;
-                cells.push(Cell::new(&data_array_to_string(&array, row)?));
+                let series = batch.column(col).to_array()?;
+                let str = format!("{}", series.try_get(row)?);
+                cells.push(Cell::new(&str));
             }
             table.add_row(Row::new(cells));
         }

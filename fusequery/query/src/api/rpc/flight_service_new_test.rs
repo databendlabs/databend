@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::convert::TryInto;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Schema;
 use common_arrow::arrow::ipc::convert;
 use common_arrow::arrow_flight::flight_descriptor::DescriptorType;
 use common_arrow::arrow_flight::flight_service_server::FlightService;
@@ -13,8 +13,7 @@ use common_arrow::arrow_flight::Empty;
 use common_arrow::arrow_flight::FlightData;
 use common_arrow::arrow_flight::FlightDescriptor;
 use common_arrow::arrow_flight::Ticket;
-use common_datavalues::DataField;
-use common_datavalues::DataType;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_runtime::tokio;
@@ -167,7 +166,7 @@ async fn test_do_get_schema() -> Result<()> {
             DispatcherRequest::GetSchema(stream_id, sender) => {
                 // To avoid deadlock, we first return the result
                 let send_result = sender
-                    .send(Ok(Arc::new(Schema::new(vec![DataField::new(
+                    .send(Ok(Arc::new(DataSchema::new(vec![DataField::new(
                         "field",
                         DataType::Int8,
                         true,
@@ -198,11 +197,13 @@ async fn test_do_get_schema() -> Result<()> {
         .expect("Receive unexpect prepare stage info");
     assert!(response.is_ok());
 
-    let schema = convert::schema_from_bytes(&response.unwrap().into_inner().schema);
-    assert!(schema.is_ok());
+    let arrow_schema = convert::schema_from_bytes(&response.unwrap().into_inner().schema);
+    assert!(arrow_schema.is_ok());
+
+    let schema: DataSchema = arrow_schema.unwrap().try_into().unwrap();
     assert_eq!(
-        schema.unwrap(),
-        Schema::new(vec![DataField::new("field", DataType::Int8, true)])
+        schema,
+        DataSchema::new(vec![DataField::new("field", DataType::Int8, true)])
     );
 
     Ok(())

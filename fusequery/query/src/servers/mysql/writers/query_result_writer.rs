@@ -2,11 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_arrow::arrow::datatypes::DataType;
 use common_datablocks::DataBlock;
-use common_datavalues::data_array_to_string;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
 use common_exception::exception::ABORT_QUERY;
 use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
@@ -88,7 +87,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                         let mut row = Vec::with_capacity(columns_size);
                         for column_index in 0..columns_size {
                             let column = block.column(column_index).to_array()?;
-                            row.push(data_array_to_string(&column, row_index)?);
+                            row.push(format!("{}", column.try_get(row_index)?));
                         }
                         row_writer.write_row(row)?;
                     }

@@ -144,7 +144,7 @@ impl MemEngine {
             let name2id_removed = db.table_name_to_id.remove_entry(tbl_name);
             let id_removed = name2id_removed
                 .as_ref()
-                .and_then(|(_, id)| db.tables.remove(&id));
+                .and_then(|(_, id)| db.tables.remove(id));
             (name2id_removed, id_removed)
         });
         match (r, if_exists) {
@@ -178,7 +178,7 @@ impl MemEngine {
             .get(&table_name)
             .ok_or_else(|| ErrorCode::UnknownTable(format!("table not found: {:}", table_name)))?;
 
-        let table = db.tables.get(&table_id).unwrap();
+        let table = db.tables.get(table_id).unwrap();
         Ok(table.clone())
     }
 

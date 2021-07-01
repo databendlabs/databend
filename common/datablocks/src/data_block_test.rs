@@ -1,20 +1,16 @@
+use common_datavalues::prelude::*;
+
+use crate::DataBlock;
+
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
 fn test_data_block() -> anyhow::Result<()> {
-    use std::sync::Arc;
-
-    use common_datavalues::*;
-
-    use crate::DataBlock;
-
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
 
-    let block = DataBlock::create_by_array(schema.clone(), vec![Arc::new(Int64Array::from(vec![
-        1, 2, 3,
-    ]))]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
     assert_eq!(&schema, block.schema());
 
     assert_eq!(3, block.num_rows());

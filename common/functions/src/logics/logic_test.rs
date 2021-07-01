@@ -2,18 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_datavalues::prelude::*;
 use common_exception::Result;
+use pretty_assertions::assert_eq;
+
+use crate::logics::*;
+use crate::*;
 
 #[test]
 fn test_logic_function() -> Result<()> {
-    use std::sync::Arc;
-
-    use common_datavalues::*;
-    use pretty_assertions::assert_eq;
-
-    use crate::logics::*;
-    use crate::*;
-
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
@@ -21,8 +18,8 @@ fn test_logic_function() -> Result<()> {
         display: &'static str,
         nullable: bool,
         arg_names: Vec<&'static str>,
-        columns: Vec<DataColumnarValue>,
-        expect: DataArrayRef,
+        columns: Vec<DataColumn>,
+        expect: DataColumn,
         error: &'static str,
         func: Box<dyn Function>,
     }
@@ -41,10 +38,10 @@ fn test_logic_function() -> Result<()> {
             func: LogicAndFunction::try_create_func("".clone())?,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(BooleanArray::from(vec![true, true, true, false])).into(),
-                Arc::new(BooleanArray::from(vec![true, false, true, true])).into(),
+                Series::new(vec![true, true, true, false]).into(),
+                Series::new(vec![true, false, true, true]).into(),
             ],
-            expect: Arc::new(BooleanArray::from(vec![true, false, true, false])),
+            expect: Series::new(vec![true, false, true, false]).into(),
             error: "",
         },
         Test {
@@ -55,10 +52,10 @@ fn test_logic_function() -> Result<()> {
             func: LogicOrFunction::try_create_func("".clone())?,
             arg_names: vec!["a", "b"],
             columns: vec![
-                Arc::new(BooleanArray::from(vec![true, true, true, false])).into(),
-                Arc::new(BooleanArray::from(vec![true, false, true, true])).into(),
+                Series::new(vec![true, true, true, false]).into(),
+                Series::new(vec![true, false, true, true]).into(),
             ],
-            expect: Arc::new(BooleanArray::from(vec![true, true, true, true])),
+            expect: Series::new(vec![true, true, true, true]).into(),
             error: "",
         },
         Test {
@@ -68,8 +65,8 @@ fn test_logic_function() -> Result<()> {
             nullable: false,
             func: LogicNotFunction::try_create_func("".clone())?,
             arg_names: vec!["a"],
-            columns: vec![Arc::new(BooleanArray::from(vec![true, false])).into()],
-            expect: Arc::new(BooleanArray::from(vec![false, true])),
+            columns: vec![Series::new(vec![true, false]).into()],
+            expect: Series::new(vec![false, true]).into(),
             error: "",
         },
     ];
@@ -101,7 +98,7 @@ fn test_logic_function() -> Result<()> {
         let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
-        assert_eq!(v.to_array()?.as_ref(), t.expect.as_ref());
+        assert_eq!(v, &t.expect);
     }
     Ok(())
 }

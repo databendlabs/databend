@@ -8,11 +8,9 @@ use common_exception::Result;
 use crate::DataValue;
 use crate::DataValueAggregateOperator;
 
-pub struct DataValueAggregate;
-
-impl DataValueAggregate {
+impl DataValue {
     #[inline]
-    pub fn data_value_aggregate_op(
+    pub fn agg(
         op: DataValueAggregateOperator,
         left: DataValue,
         right: DataValue,

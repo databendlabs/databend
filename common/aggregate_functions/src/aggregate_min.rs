@@ -3,11 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
-use std::convert::TryFrom;
 use std::fmt;
 
-use common_datavalues::*;
-use common_exception::ErrorCode;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_unary_arguments;
@@ -29,7 +27,7 @@ impl AggregateMinFunction {
 
         Ok(Box::new(AggregateMinFunction {
             display_name: display_name.to_string(),
-            state: DataValue::try_from(arguments[0].data_type())?,
+            state: DataValue::from(arguments[0].data_type()),
             arguments,
         }))
     }
@@ -52,24 +50,15 @@ impl AggregateFunction for AggregateMinFunction {
         self
     }
 
-    fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
-        let value = Self::min_batch(columns[0].clone())?;
+    fn accumulate(&mut self, columns: &[DataColumn], _input_rows: usize) -> Result<()> {
+        let value = Self::min_batch(&columns[0])?;
 
-        self.state = DataValueAggregate::data_value_aggregate_op(
-            DataValueAggregateOperator::Min,
-            self.state.clone(),
-            value,
-        )?;
-
+        self.state = DataValue::agg(Min, self.state.clone(), value)?;
         Ok(())
     }
 
     fn accumulate_scalar(&mut self, values: &[DataValue]) -> Result<()> {
-        self.state = DataValueAggregate::data_value_aggregate_op(
-            DataValueAggregateOperator::Min,
-            self.state.clone(),
-            values[0].clone(),
-        )?;
+        self.state = DataValue::agg(Min, self.state.clone(), values[0].clone())?;
 
         Ok(())
     }
@@ -79,12 +68,8 @@ impl AggregateFunction for AggregateMinFunction {
     }
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        let val = states[0].clone();
-        self.state = DataValueAggregate::data_value_aggregate_op(
-            DataValueAggregateOperator::Min,
-            self.state.clone(),
-            val,
-        )?;
+        let value = states[0].clone();
+        self.state = DataValue::agg(Min, self.state.clone(), value)?;
         Ok(())
     }
 
@@ -100,20 +85,13 @@ impl fmt::Display for AggregateMinFunction {
 }
 
 impl AggregateMinFunction {
-    pub fn min_batch(column: DataColumnarValue) -> Result<DataValue> {
+    pub fn min_batch(column: &DataColumn) -> Result<DataValue> {
         if column.is_empty() {
-            return DataValue::try_from(&column.data_type());
+            return Ok(DataValue::from(&column.data_type()));
         }
         match column {
-            DataColumnarValue::Constant(value, _) => Ok(value),
-            DataColumnarValue::Array(array) => {
-                if let Ok(v) = dispatch_primitive_array! { typed_array_op_to_data_value, array, min}
-                {
-                    Ok(v)
-                } else {
-                    dispatch_string_array! {typed_string_array_op_to_data_value, array, min_string}
-                }
-            }
+            DataColumn::Constant(value, _) => Ok(value.clone()),
+            DataColumn::Array(array) => array.min(),
         }
     }
 }

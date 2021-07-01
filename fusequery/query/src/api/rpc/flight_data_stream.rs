@@ -2,12 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_arrow::arrow::datatypes::SchemaRef;
+use std::sync::Arc;
+
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
 use common_arrow::arrow_flight::FlightData;
 use common_datablocks::DataBlock;
-use common_datavalues::DataColumnarValue;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_runtime::tokio::sync::mpsc::Receiver;
 use tokio_stream::wrappers::ReceiverStream;
@@ -21,7 +22,7 @@ pub struct FlightDataStream();
 impl FlightDataStream {
     #[inline]
     pub fn from_remote(
-        schema: SchemaRef,
+        schema: DataSchemaRef,
         inner: Streaming<FlightData>,
     ) -> impl Stream<Item = Result<DataBlock, ErrorCode>> {
         inner.map(move |flight_data| -> Result<DataBlock, ErrorCode> {
@@ -32,16 +33,18 @@ impl FlightDataStream {
                         let columns = record_batch
                             .columns()
                             .iter()
-                            .map(|column| DataColumnarValue::Array(column.clone()))
+                            .map(|column| DataColumn::Array(column.clone().into_series()))
                             .collect::<Vec<_>>();
 
-                        DataBlock::create(record_batch.schema(), columns)
+                        DataBlock::create(
+                            Arc::new(DataSchema::from(record_batch.schema())),
+                            columns,
+                        )
                     }
 
-                    Ok(
-                        flight_data_to_arrow_batch(&flight_data, schema.clone(), &[])
-                            .map(create_data_block)?,
-                    )
+                    let arrow_schema = Arc::new(schema.to_arrow());
+                    Ok(flight_data_to_arrow_batch(&flight_data, arrow_schema, &[])
+                        .map(create_data_block)?)
                 }
             }
         })
@@ -51,7 +54,7 @@ impl FlightDataStream {
     #[inline]
     #[allow(dead_code)]
     pub fn from_receiver(
-        schema: SchemaRef,
+        schema_ref: DataSchemaRef,
         inner: Receiver<Result<FlightData, ErrorCode>>,
     ) -> impl Stream<Item = Result<DataBlock, ErrorCode>> {
         ReceiverStream::new(inner).map(move |flight_data| match flight_data {
@@ -61,14 +64,15 @@ impl FlightDataStream {
                     let columns = record_batch
                         .columns()
                         .iter()
-                        .map(|column| DataColumnarValue::Array(column.clone()))
+                        .map(|column| DataColumn::Array(column.clone().into_series()))
                         .collect::<Vec<_>>();
 
-                    DataBlock::create(record_batch.schema(), columns)
+                    let schema = DataSchema::from(record_batch.schema());
+                    DataBlock::create(Arc::new(schema), columns)
                 }
 
                 Ok(
-                    flight_data_to_arrow_batch(&flight_data, schema.clone(), &[])
+                    flight_data_to_arrow_batch(&flight_data, Arc::new(schema_ref.to_arrow()), &[])
                         .map(create_data_block)?,
                 )
             }

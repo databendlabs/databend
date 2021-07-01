@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use common_datavalues::DataColumnarValue;
+use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -38,8 +38,8 @@ impl Function for UdfExampleFunction {
         Ok(false)
     }
 
-    fn eval(&self, _columns: &[DataColumnarValue], input_rows: usize) -> Result<DataColumnarValue> {
-        Ok(DataColumnarValue::Constant(
+    fn eval(&self, _columns: &[DataColumn], input_rows: usize) -> Result<DataColumn> {
+        Ok(DataColumn::Constant(
             DataValue::Boolean(Some(true)),
             input_rows,
         ))
