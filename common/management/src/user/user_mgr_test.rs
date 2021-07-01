@@ -18,7 +18,7 @@ use sha2::Digest;
 use crate::user::user_info::NewUser;
 use crate::user::user_info::UserInfo;
 use crate::user::user_mgr::USER_API_KEY_PREFIX;
-use crate::user::UserMgrImpl;
+use crate::user::UserMgr;
 // and mock!
 mock! {
     pub KV {}
@@ -94,7 +94,7 @@ mod add {
                         result: None,
                     })
                 });
-            let mut user_mgr = UserMgrImpl::new(api);
+            let mut user_mgr = UserMgr::new(api);
             let res = user_mgr
                 .add_user(test_user_name, test_password, test_salt)
                 .await;
@@ -122,7 +122,7 @@ mod add {
                         result: None,
                     })
                 });
-            let mut user_mgr = UserMgrImpl::new(api);
+            let mut user_mgr = UserMgr::new(api);
             let res = user_mgr
                 .add_user(test_user_name, test_password, test_salt)
                 .await;
@@ -149,7 +149,7 @@ mod add {
                         result: None,
                     })
                 });
-            let mut user_mgr = UserMgrImpl::new(api);
+            let mut user_mgr = UserMgr::new(api);
             let res = user_mgr
                 .add_user(test_user_name, test_password, test_salt)
                 .await;
@@ -184,7 +184,7 @@ mod get {
                     result: Some((1, value)),
                 })
             });
-        let mut user_mgr = UserMgrImpl::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, Some(1)).await;
         assert!(res.is_ok());
         assert!(res.unwrap().is_some());
@@ -210,7 +210,7 @@ mod get {
                     result: Some((100, value)),
                 })
             });
-        let mut user_mgr = UserMgrImpl::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, None).await;
         assert!(res.is_ok());
         assert!(res.unwrap().is_some());
@@ -227,7 +227,7 @@ mod get {
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
             .return_once(move |_k| Ok(GetKVActionResult { result: None }));
-        let mut user_mgr = UserMgrImpl::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, None).await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
@@ -248,7 +248,7 @@ mod get {
                     result: Some((1, vec![])),
                 })
             });
-        let mut user_mgr = UserMgrImpl::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, Some(2)).await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
@@ -269,7 +269,7 @@ mod get {
                     result: Some((1, vec![1])),
                 })
             });
-        let mut user_mgr = UserMgrImpl::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, None).await;
         assert_eq!(
             res.unwrap_err().code(),
@@ -320,7 +320,7 @@ mod get_users {
             //.withf(|args| args.0 == keys.clone())
             .times(1)
             .return_once(move |_: &[String]| Ok(MGetKVActionResult { result: res }));
-        let mut user_mgr = UserMgrImpl::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_users(&names).await?;
         assert_eq!(res, user_infos);
 
@@ -338,7 +338,7 @@ mod get_users {
                 .times(1)
                 .return_once(move |_: &[String]| Ok(MGetKVActionResult { result: res }));
         }
-        let mut user_mgr = UserMgrImpl::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_users(&names).await;
         assert_eq!(
             res.unwrap_err().code(),
@@ -383,7 +383,7 @@ mod get_all_users {
                 .times(1)
                 .return_once(|_p| Ok(res));
         }
-        let mut user_mgr = UserMgrImpl::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_all_users().await?;
         assert_eq!(res, user_infos);
 
@@ -402,7 +402,7 @@ mod get_all_users {
                 .times(1)
                 .return_once(|_p| Ok(res));
         }
-        let mut user_mgr = UserMgrImpl::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_all_users().await;
         assert_eq!(
             res.unwrap_err().code(),
@@ -427,7 +427,7 @@ mod drop {
             )
             .times(1)
             .returning(|_k, _seq| Ok(Some((1, vec![]))));
-        let mut user_mgr = UserMgrImpl::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.drop_user("test", None).await;
         assert!(res.is_ok());
 
@@ -445,7 +445,7 @@ mod drop {
             )
             .times(1)
             .returning(|_k, _seq| Ok(None));
-        let mut user_mgr = UserMgrImpl::new(v);
+        let mut user_mgr = UserMgr::new(v);
         let res = user_mgr.drop_user("test", None).await;
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
         Ok(())
@@ -500,7 +500,7 @@ mod update {
             .times(1)
             .return_once(|_, _, _| Ok(Some((0, vec![]))));
 
-        let mut user_mgr = UserMgrImpl::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
 
         let res = user_mgr
             .update_user(test_name, Some(new_pass), new_salt, test_seq)
@@ -535,7 +535,7 @@ mod update {
             .times(1)
             .return_once(|_, _, _| Ok(Some((0, vec![]))));
 
-        let mut user_mgr = UserMgrImpl::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
 
         let res = user_mgr
             .update_user(test_name, Some(new_pass), Some(new_salt), test_seq)
@@ -549,7 +549,7 @@ mod update {
         // mock kv expects nothing
         let test_name = "name";
         let kv = MockKV::new();
-        let mut user_mgr = UserMgrImpl::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
 
         let new_password: Option<&str> = None;
         let new_salt: Option<&str> = None;
@@ -574,7 +574,7 @@ mod update {
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
             .return_once(move |_k| Ok(GetKVActionResult { result: None }));
-        let mut user_mgr = UserMgrImpl::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
 
         let new_salt: Option<&str> = None;
         let res = user_mgr
@@ -605,7 +605,7 @@ mod update {
             .times(1)
             .returning(|_u, _s, _salt| Ok(None));
 
-        let mut user_mgr = UserMgrImpl::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
 
         let res = user_mgr
             .update_user(test_name, Some("new_pass"), Some("new_salt"), test_seq)

@@ -13,20 +13,20 @@ use crate::user::user_info::NewUser;
 use crate::user::user_info::UserInfo;
 pub static USER_API_KEY_PREFIX: &str = "__fd_users/";
 
-pub struct UserMgrImpl<KV> {
+pub struct UserMgr<KV> {
     kv_api: KV,
 }
 
-impl<T> UserMgrImpl<T>
+impl<T> UserMgr<T>
 where T: KVApi
 {
     #[allow(dead_code)]
     pub fn new(kv_api: T) -> Self {
-        UserMgrImpl { kv_api }
+        UserMgr { kv_api }
     }
 }
 
-impl<T: KVApi> UserMgrImpl<T> {
+impl<T: KVApi> UserMgr<T> {
     async fn upsert_user(
         &mut self,
         username: impl AsRef<str>,
@@ -49,7 +49,7 @@ impl<T: KVApi> UserMgrImpl<T> {
     }
 }
 
-impl<T: KVApi> UserMgrImpl<T> {
+impl<T: KVApi> UserMgr<T> {
     #[allow(dead_code)]
     pub async fn add_user(
         &mut self,

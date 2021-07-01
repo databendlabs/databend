@@ -6,7 +6,7 @@
 mod user_info;
 mod user_mgr;
 
-pub use user_mgr::UserMgrImpl;
+pub use user_mgr::UserMgr;
 
 #[cfg(test)]
 mod user_mgr_test;
