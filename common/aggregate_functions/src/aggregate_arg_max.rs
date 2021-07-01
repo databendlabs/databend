@@ -59,6 +59,9 @@ impl AggregateFunction for AggregateArgMaxFunction {
     }
 
     fn accumulate(&mut self, columns: &[DataColumnarValue], _input_rows: usize) -> Result<()> {
+        if columns[0].is_empty() {
+            return Ok(());
+        }
         if let DataValue::Struct(max_arg_val) = Self::arg_max_batch(columns[1].clone())? {
             if max_arg_val[0].is_null() {
                 return Ok(());

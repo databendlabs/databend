@@ -100,6 +100,9 @@ impl fmt::Display for AggregateMaxFunction {
 
 impl AggregateMaxFunction {
     pub fn max_batch(column: DataColumnarValue) -> Result<DataValue> {
+        if column.is_empty() {
+            return DataValue::try_from(&column.data_type());
+        }
         match column {
             DataColumnarValue::Constant(value, _) => Ok(value),
             DataColumnarValue::Array(array) => {

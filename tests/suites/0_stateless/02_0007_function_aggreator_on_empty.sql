@@ -29,3 +29,14 @@ select countDistinct(number) from numbers (10) where 1 = 2 group by number % 2;
 select count(distinct number) from numbers (10) where 1 = 2 group by number % 2;
 select countIf(number, number > 100) from numbers (10) group by number % 2;
 select countIf(number, number > 0) from numbers (10) where 1 = 2 group by number % 2;
+
+-- constant related
+select min(1) from numbers_mt (10) where 1=2;
+select max(1) from numbers_mt (10) where 1=2;
+select avg(1) from numbers_mt (10) where 1=2;
+select argmin(number, 1) from numbers_mt (10) where 1=2;
+select argmin(1, number) from numbers_mt (10) where 1=2;
+select argmin(1, 1) from numbers_mt (10) where 1=2;
+select argmax(number, 1) from numbers_mt (10) where 1=2;
+select argmax(1, number) from numbers_mt (10) where 1=2;
+select argmax(1, 1) from numbers_mt (10) where 1=2;
