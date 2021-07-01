@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0.
 //
 
-use common_flights::ReadPlanAction;
-use common_flights::ReadPlanResult;
+use common_flights::storage_api_impl::ReadPlanAction;
+use common_flights::storage_api_impl::ReadPlanResult;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;

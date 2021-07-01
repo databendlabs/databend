@@ -7,12 +7,12 @@ use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
-use common_store_api::CreateDatabaseActionResult;
-use common_store_api::CreateTableActionResult;
-use common_store_api::DropDatabaseActionResult;
-use common_store_api::DropTableActionResult;
-use common_store_api::GetDatabaseActionResult;
-use common_store_api::GetTableActionResult;
+pub use common_store_api::CreateDatabaseActionResult;
+pub use common_store_api::CreateTableActionResult;
+pub use common_store_api::DropDatabaseActionResult;
+pub use common_store_api::DropTableActionResult;
+pub use common_store_api::GetDatabaseActionResult;
+pub use common_store_api::GetTableActionResult;
 use common_store_api::MetaApi;
 
 use crate::action_declare;

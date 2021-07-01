@@ -186,8 +186,8 @@ impl FlightService for StoreFlightImpl {
         let _claim = self.check_token(request.metadata())?;
         let meta = request.metadata();
 
-        let (db_name, tbl_name) =
-            common_flights::get_do_put_meta(meta).map_err(|e| Status::internal(e.to_string()))?;
+        let (db_name, tbl_name) = common_flights::storage_api_impl::get_do_put_meta(meta)
+            .map_err(|e| Status::internal(e.to_string()))?;
 
         let append_res = self
             .action_handler

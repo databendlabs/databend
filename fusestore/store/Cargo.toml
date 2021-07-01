@@ -28,7 +28,6 @@ common-metatypes = {path = "../../common/metatypes"}
 common-planners = {path = "../../common/planners"}
 common-runtime = {path = "../../common/runtime"}
 common-tracing = {path = "../../common/tracing"}
-common-store-api= {path = "../../common/store-api"}
 
 
 # Github dependencies

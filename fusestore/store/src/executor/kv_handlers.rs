@@ -4,22 +4,20 @@
 //
 
 use common_exception::ErrorCode;
-use common_flights::DeleteKVReply;
-use common_flights::DeleteKVReq;
-use common_flights::GetKVAction;
-use common_flights::MGetKVAction;
-use common_flights::MGetKVActionResult;
-use common_flights::PrefixListReq;
-use common_flights::UpdateByKeyReply;
-use common_flights::UpdateKVReq;
-use common_flights::UpsertKVAction;
-//TODO
-// Do not import form common_store_api directly
-// we should depends on the comm_flights only, as we are implementing the services requested by
-// common_flights, the common_flights component are free to wrap the store_api's parameter / result
-use common_store_api::kv_api::PrefixListReply;
-use common_store_api::GetKVActionResult;
-use common_store_api::UpsertKVActionResult;
+use common_flights::kv_api_impl::DeleteKVReply;
+use common_flights::kv_api_impl::DeleteKVReq;
+use common_flights::kv_api_impl::GetKVAction;
+use common_flights::kv_api_impl::GetKVActionResult;
+use common_flights::kv_api_impl::MGetKVAction;
+use common_flights::kv_api_impl::MGetKVActionResult;
+use common_flights::kv_api_impl::PrefixListReply;
+use common_flights::kv_api_impl::PrefixListReq;
+use common_flights::kv_api_impl::UpdateByKeyReply;
+use common_flights::kv_api_impl::UpdateKVReq;
+use common_flights::kv_api_impl::UpsertKVAction;
+use common_flights::kv_api_impl::UpsertKVActionResult;
+use Cmd::DeleteByKeyKV;
+use Cmd::UpdateByKeyKV;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
@@ -80,7 +78,7 @@ impl RequestHandler<DeleteKVReq> for ActionHandler {
     async fn handle(&self, act: DeleteKVReq) -> common_exception::Result<DeleteKVReply> {
         let cr = LogEntry {
             txid: None,
-            cmd: Cmd::DeleteByKeyKV {
+            cmd: DeleteByKeyKV {
                 key: act.key,
                 seq: act.seq,
             },
@@ -104,7 +102,7 @@ impl RequestHandler<UpdateKVReq> for ActionHandler {
     async fn handle(&self, act: UpdateKVReq) -> common_exception::Result<UpdateByKeyReply> {
         let cr = LogEntry {
             txid: None,
-            cmd: Cmd::UpdateByKeyKV {
+            cmd: UpdateByKeyKV {
                 key: act.key,
                 seq: act.seq,
                 value: act.value,
