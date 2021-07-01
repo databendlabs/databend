@@ -1,4 +1,3 @@
-
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
 use common_datavalues::DataField;

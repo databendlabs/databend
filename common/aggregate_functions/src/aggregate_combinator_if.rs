@@ -118,7 +118,7 @@ impl AggregateFunction for AggregateIfCombinator {
                     let array = column.to_array()?;
                     args_array.push(array);
                 }
-                let data = DataArrayFilter::filter_batch_array(args_array, &boolean_array)?;
+                let data = DataArrayFilter::filter_batch_array(args_array, boolean_array)?;
                 data.into_iter()
                     .map(DataColumn::from)
                     .for_each(|column| column_array.push(column));

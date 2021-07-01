@@ -1,4 +1,3 @@
-
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeListArray;

@@ -35,7 +35,7 @@ impl DataBlock {
             .collect::<Result<Vec<_>>>()?;
 
         let indices = compute::lexsort_to_indices(&order_columns, limit)?;
-        DataBlock::block_take_by_indices(&block, indices.values())
+        DataBlock::block_take_by_indices(block, indices.values())
     }
 
     pub fn merge_sort_block(
@@ -87,7 +87,7 @@ impl DataBlock {
             .columns()
             .iter()
             .zip(rhs.columns().iter())
-            .map(|(a, b)| DataColumnCommon::merge_columns(a, b, &indices))
+            .map(|(a, b)| DataColumnCommon::merge_columns(a, b, indices))
             .collect::<Result<Vec<_>>>()?;
 
         Ok(DataBlock::create(lhs.schema().clone(), arrays))

@@ -135,27 +135,27 @@ where
     DataArray<T>: IntoSeries,
 {
     fn subtract(&self, rhs: &Series) -> Result<Series> {
-        let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
+        let rhs = unsafe { self.unpack_array_matching_physical_type(rhs)? };
         let out = (self - rhs)?;
         Ok(out.into_series())
     }
     fn add_to(&self, rhs: &Series) -> Result<Series> {
-        let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
+        let rhs = unsafe { self.unpack_array_matching_physical_type(rhs)? };
         let out = (self + rhs)?;
         Ok(out.into_series())
     }
     fn multiply(&self, rhs: &Series) -> Result<Series> {
-        let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
+        let rhs = unsafe { self.unpack_array_matching_physical_type(rhs)? };
         let out = (self * rhs)?;
         Ok(out.into_series())
     }
     fn divide(&self, rhs: &Series) -> Result<Series> {
-        let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
+        let rhs = unsafe { self.unpack_array_matching_physical_type(rhs)? };
         let out = (self / rhs)?;
         Ok(out.into_series())
     }
     fn remainder(&self, rhs: &Series) -> Result<Series> {
-        let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
+        let rhs = unsafe { self.unpack_array_matching_physical_type(rhs)? };
         let out = (self % rhs)?;
         Ok(out.into_series())
     }
@@ -168,7 +168,7 @@ where
 
 impl NumOpsDispatch for DFUtf8Array {
     fn add_to(&self, rhs: &Series) -> Result<Series> {
-        let rhs = unsafe { self.unpack_array_matching_physical_type(&rhs)? };
+        let rhs = unsafe { self.unpack_array_matching_physical_type(rhs)? };
         let out = (self + rhs)?;
         Ok(out.into_series())
     }
@@ -179,7 +179,7 @@ impl NumOpsDispatch for DFBinaryArray {}
 impl NumOpsDispatch for DFNullArray {}
 impl NumOpsDispatch for DFStructArray {}
 
-fn coerce_lhs_rhs<'a>(
+fn coerce_lhs_rhs(
     op: &DataValueArithmeticOperator,
     lhs: &Series,
     rhs: &Series,
@@ -199,7 +199,7 @@ fn coerce_lhs_rhs<'a>(
     Ok((left, right))
 }
 
-fn coerce_to_signed<'a>(lhs: &Series) -> Result<Series> {
+fn coerce_to_signed(lhs: &Series) -> Result<Series> {
     let dtype = numerical_signed_coercion(&lhs.data_type())?;
 
     let mut left = lhs.clone();

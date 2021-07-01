@@ -12,14 +12,14 @@ use common_arrow::parquet::arrow::ArrowReader;
 use common_arrow::parquet::arrow::ParquetFileArrowReader;
 use common_arrow::parquet::file::reader::SerializedFileReader;
 use common_arrow::parquet::file::serialized_reader::SliceableCursor;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_flights::RequestFor;
 use common_flights::StoreDoAction;
 use common_infallible::Mutex;
 use common_planners::PlanNode;
 use common_runtime::tokio::sync::mpsc::Sender;
-use common_tracing::tracing::info;
+use common_store_api::AppendResult;
+use common_store_api::ReadAction;
 use futures::Stream;
 use serde::Serialize;
 use tokio_stream::StreamExt;
@@ -134,131 +134,6 @@ impl ActionHandler {
             StoreDoAction::UpsertKV(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::GetKV(a) => s.serialize(self.handle(a).await?),
         }
-    }
-
-    async fn create_db(&self, act: CreateDatabaseAction) -> Result<StoreDoActionResult, Status> {
-        let plan = act.plan;
-        let mut meta = self.meta.lock();
-
-        let cmd = CmdCreateDatabase {
-            db_name: plan.db,
-            db: Some(Db {
-                // meta fills it
-                db_id: -1,
-                ver: -1,
-                table_name_to_id: HashMap::new(),
-                tables: HashMap::new(),
-            }),
-        };
-
-        let database_id = meta
-            .create_database(cmd, plan.if_not_exists)
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        Ok(StoreDoActionResult::CreateDatabase(
-            CreateDatabaseActionResult { database_id },
-        ))
-    }
-
-    async fn get_db(&self, act: GetDatabaseAction) -> Result<StoreDoActionResult, Status> {
-        // TODO(xp): create/drop/get database should base on MetaNode
-        let db_name = &act.db;
-        let meta = self.meta.lock();
-
-        let db = meta.dbs.get(db_name);
-
-        match db {
-            Some(db) => {
-                let rst = GetDatabaseActionResult {
-                    database_id: db.db_id,
-                    db: db_name.clone(),
-                };
-                Ok(StoreDoActionResult::GetDatabase(rst))
-            }
-            None => {
-                let e = ErrorCode::UnknownDatabase(db_name.to_string());
-                Err(e.into())
-            }
-        }
-    }
-
-    async fn create_table(&self, act: CreateTableAction) -> Result<StoreDoActionResult, Status> {
-        let plan = act.plan;
-        let db_name = plan.db;
-        let table_name = plan.table;
-
-        info!("create table: {:}: {:?}", db_name, table_name);
-
-        let mut meta = self.meta.lock();
-
-        let options = common_arrow::arrow::ipc::writer::IpcWriteOptions::default();
-        let arrow_schema = plan.schema.to_arrow();
-        let flight_data =
-            arrow_flight::utils::flight_data_from_arrow_schema(&arrow_schema, &options);
-
-        let table = Table {
-            // the storage engine fills the id.
-            table_id: -1,
-            ver: -1,
-            schema: flight_data.data_header,
-            options: plan.options,
-
-            // TODO
-            placement_policy: vec![],
-        };
-
-        let cmd = CmdCreateTable {
-            db_name,
-            table_name,
-            table: Some(table),
-        };
-
-        let table_id = meta.create_table(cmd, plan.if_not_exists)?;
-
-        Ok(StoreDoActionResult::CreateTable(CreateTableActionResult {
-            table_id,
-        }))
-    }
-
-    async fn get_table(&self, act: GetTableAction) -> Result<StoreDoActionResult, Status> {
-        let db_name = act.db;
-        let table_name = act.table;
-
-        info!("create table: {:}: {:?}", db_name, table_name);
-
-        let mut meta = self.meta.lock();
-
-        let table = meta.get_table(db_name.clone(), table_name.clone())?;
-
-        let schema = Schema::try_from(&FlightData {
-            data_header: table.schema,
-            ..Default::default()
-        })
-        .map(|sc| DataSchema::from(sc))
-        .map_err(|e| Status::internal(format!("invalid schema: {:}", e.to_string())))?;
-
-        let rst = StoreDoActionResult::GetTable(GetTableActionResult {
-            table_id: table.table_id,
-            db: db_name,
-            name: table_name,
-            schema: Arc::new(schema),
-        });
-
-        Ok(rst)
-    }
-
-    async fn drop_db(&self, act: DropDatabaseAction) -> Result<StoreDoActionResult, Status> {
-        let mut meta = self.meta.lock();
-        let _ = meta.drop_database(&act.plan.db, act.plan.if_exists)?;
-        Ok(StoreDoActionResult::DropDatabase(
-            DropDatabaseActionResult {},
-        ))
-    }
-
-    async fn drop_table(&self, act: DropTableAction) -> Result<StoreDoActionResult, Status> {
-        let mut meta = self.meta.lock();
-        let _ = meta.drop_table(&act.plan.db, &act.plan.table, act.plan.if_exists)?;
-        Ok(StoreDoActionResult::DropTable(DropTableActionResult {}))
     }
 
     pub(crate) async fn do_put(

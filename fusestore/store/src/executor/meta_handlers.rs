@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Schema;
+use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow_flight;
 use common_arrow::arrow_flight::FlightData;
 use common_exception::ErrorCode;
@@ -114,7 +114,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
 
         let options = common_arrow::arrow::ipc::writer::IpcWriteOptions::default();
         let flight_data =
-            arrow_flight::utils::flight_data_from_arrow_schema(&plan.schema, &options);
+            arrow_flight::utils::flight_data_from_arrow_schema(&plan.schema.to_arrow(), &options);
 
         let table = Table {
             // the storage engine fills the id.
@@ -163,7 +163,7 @@ impl RequestHandler<GetTableAction> for ActionHandler {
 
         let table = meta.get_table(db_name.clone(), table_name.clone())?;
 
-        let schema = Schema::try_from(&FlightData {
+        let arrow_schema = ArrowSchema::try_from(&FlightData {
             data_header: table.schema,
             ..Default::default()
         })
@@ -173,7 +173,7 @@ impl RequestHandler<GetTableAction> for ActionHandler {
             table_id: table.table_id,
             db: db_name,
             name: table_name,
-            schema: Arc::new(schema),
+            schema: Arc::new(arrow_schema.into()),
         };
 
         Ok(rst)

@@ -80,7 +80,7 @@ impl AggregateFunction for AggregateArgMinFunction {
                 let old_min_arg = old_min_arg_val[0].clone();
                 let old_min_val = old_min_arg_val[1].clone();
 
-                let new_min_val = DataValue::agg(Min, old_min_val.clone(), min_val.clone())?;
+                let new_min_val = DataValue::agg(Min, old_min_val.clone(), min_val)?;
 
                 self.state = DataValue::Struct(vec![
                     if new_min_val == old_min_val {

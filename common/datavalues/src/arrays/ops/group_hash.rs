@@ -47,8 +47,7 @@ impl GroupHash for DFUtf8Array {
             let mut hasher = DefaultHasher::new();
             hasher.write(v.as_bytes());
 
-            let c = hasher.finish();
-            c
+            hasher.finish()
         }))
     }
 }

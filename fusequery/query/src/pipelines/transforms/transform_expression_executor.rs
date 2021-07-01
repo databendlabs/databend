@@ -78,9 +78,8 @@ impl ExpressionExecutor {
         let rows = block.num_rows();
         if let Some(map) = exists_res {
             for (name, b) in map {
-                let b =
-                    DataColumnarValue::Constant(DataValue::Boolean(Some(*b)), rows).to_array()?;
-                column_map.insert(name.to_string(), DataColumnarValue::Array(b));
+                let b = DataColumn::Constant(DataValue::Boolean(Some(*b)), rows).to_array()?;
+                column_map.insert(name.to_string(), DataColumn::Array(b));
             }
         }
 

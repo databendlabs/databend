@@ -23,7 +23,7 @@ pub fn assert_blocks_eq(expect: Vec<&str>, blocks: &[DataBlock]) {
 /// ['a', 'b'] not equals ['b', 'a']
 pub fn assert_blocks_eq_with_name(test_name: &str, expect: Vec<&str>, blocks: &[DataBlock]) {
     let expected_lines: Vec<String> = expect.iter().map(|&s| s.into()).collect();
-    let formatted = pretty_format_blocks(&blocks).unwrap();
+    let formatted = pretty_format_blocks(blocks).unwrap();
     let actual_lines: Vec<&str> = formatted.trim().lines().collect();
 
     assert_eq!(
@@ -49,7 +49,7 @@ pub fn assert_blocks_sorted_eq_with_name(test_name: &str, expect: Vec<&str>, blo
         expected_lines.as_mut_slice()[2..num_lines - 1].sort_unstable()
     }
 
-    let formatted = pretty_format_blocks(&blocks).unwrap();
+    let formatted = pretty_format_blocks(blocks).unwrap();
     let mut actual_lines: Vec<&str> = formatted.trim().lines().collect();
 
     // sort except for header + footer
@@ -78,7 +78,7 @@ fn create_table(results: &[DataBlock]) -> Result<Table> {
 
     let mut header = Vec::new();
     for field in schema.fields() {
-        header.push(Cell::new(&field.name()));
+        header.push(Cell::new(field.name()));
     }
     table.set_titles(Row::new(header));
 

@@ -72,7 +72,7 @@ impl AggregateFunction for AggregateAvgFunction {
     fn accumulate_scalar(&mut self, scalar_values: &[DataValue]) -> Result<()> {
         if let DataValue::Struct(values) = self.state.clone() {
             let sum = (&scalar_values[0] + &values[0])?;
-            let count = DataValue::UInt64(Some(1 as u64));
+            let count = DataValue::UInt64(Some(1_u64));
             let count = (&count + &values[1])?;
 
             self.state = DataValue::Struct(vec![sum, count]);

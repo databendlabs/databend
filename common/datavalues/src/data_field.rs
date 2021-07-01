@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-
 use common_arrow::arrow::datatypes::Field as ArrowField;
 
 use crate::DataType;

@@ -70,11 +70,10 @@ where T: DFPrimitiveType
 {
     fn full(value: T::Native, length: usize) -> Self
     where T::Native: Copy {
-        let ca = (0..length)
+        (0..length)
             .map(|_| value)
             .collect::<NoNull<DataArray<T>>>()
-            .into_inner();
-        ca
+            .into_inner()
     }
 }
 
@@ -82,21 +81,18 @@ impl<T> ArrayFullNull for DataArray<T>
 where T: DFPrimitiveType
 {
     fn full_null(length: usize) -> Self {
-        let ca = (0..length).map(|_| None).collect::<Self>();
-        ca
+        (0..length).map(|_| None).collect::<Self>()
     }
 }
 impl ArrayFull<bool> for DFBooleanArray {
     fn full(value: bool, length: usize) -> Self {
-        let ca = (0..length).map(|_| value).collect::<DFBooleanArray>();
-        ca
+        (0..length).map(|_| value).collect::<DFBooleanArray>()
     }
 }
 
 impl ArrayFullNull for DFBooleanArray {
     fn full_null(length: usize) -> Self {
-        let ca = (0..length).map(|_| None).collect::<Self>();
-        ca
+        (0..length).map(|_| None).collect::<Self>()
     }
 }
 
@@ -113,10 +109,9 @@ impl<'a> ArrayFull<&'a str> for DFUtf8Array {
 
 impl ArrayFullNull for DFUtf8Array {
     fn full_null(length: usize) -> Self {
-        let ca = (0..length)
+        (0..length)
             .map::<Option<String>, _>(|_| None)
-            .collect::<Self>();
-        ca
+            .collect::<Self>()
     }
 }
 

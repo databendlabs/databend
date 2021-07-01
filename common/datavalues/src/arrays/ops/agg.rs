@@ -103,7 +103,7 @@ where
 
         Ok(match value {
             Some((index, value)) => DataValue::Struct(vec![(index as u64).into(), value.into()]),
-            None => DataValue::Struct(vec![(0 as u64).into(), DataValue::from(self.data_type())]),
+            None => DataValue::Struct(vec![(0_u64).into(), DataValue::from(self.data_type())]),
         })
     }
 
@@ -121,7 +121,7 @@ where
 
         Ok(match value {
             Some((index, value)) => DataValue::Struct(vec![(index as u64).into(), value.into()]),
-            None => DataValue::Struct(vec![(0 as u64).into(), DataValue::from(self.data_type())]),
+            None => DataValue::Struct(vec![(0_u64).into(), DataValue::from(self.data_type())]),
         })
     }
 }
@@ -173,7 +173,7 @@ impl ArrayAgg for DFBooleanArray {
 
         Ok(match value {
             Some((index, value)) => DataValue::Struct(vec![(index as u64).into(), value.into()]),
-            None => DataValue::Struct(vec![(0 as u64).into(), DataValue::Boolean(None)]),
+            None => DataValue::Struct(vec![(0_u64).into(), DataValue::Boolean(None)]),
         })
     }
 
@@ -197,7 +197,7 @@ impl ArrayAgg for DFBooleanArray {
 
         Ok(match value {
             Some((index, value)) => DataValue::Struct(vec![(index as u64).into(), value.into()]),
-            None => DataValue::Struct(vec![(0 as u64).into(), DataValue::Boolean(None)]),
+            None => DataValue::Struct(vec![(0_u64).into(), DataValue::Boolean(None)]),
         })
     }
 }
@@ -243,7 +243,7 @@ impl ArrayAgg for DFUtf8Array {
         if let Some(Some(v)) = d {
             return Ok(DataValue::Utf8(Some(v.to_string())));
         }
-        return Ok(DataValue::Utf8(None));
+        Ok(DataValue::Utf8(None))
     }
 
     fn max(&self) -> Result<DataValue> {
@@ -266,13 +266,13 @@ impl ArrayAgg for DFUtf8Array {
         if let Some(Some(v)) = d {
             return Ok(DataValue::Utf8(Some(v.to_string())));
         }
-        return Ok(DataValue::Utf8(None));
+        Ok(DataValue::Utf8(None))
     }
 
     fn arg_max(&self) -> Result<DataValue> {
         if self.all_is_null() {
             return Ok(DataValue::Struct(vec![
-                (0 as u64).into(),
+                (0_u64).into(),
                 DataValue::Utf8(None),
             ]));
         }
@@ -291,14 +291,14 @@ impl ArrayAgg for DFUtf8Array {
 
         Ok(match value {
             Some((index, value)) => DataValue::Struct(vec![(index as u64).into(), value.into()]),
-            None => DataValue::Struct(vec![(0 as u64).into(), DataValue::Utf8(None)]),
+            None => DataValue::Struct(vec![(0_u64).into(), DataValue::Utf8(None)]),
         })
     }
 
     fn arg_min(&self) -> Result<DataValue> {
         if self.all_is_null() {
             return Ok(DataValue::Struct(vec![
-                (0 as u64).into(),
+                (0_u64).into(),
                 DataValue::Utf8(None),
             ]));
         }
@@ -309,7 +309,7 @@ impl ArrayAgg for DFUtf8Array {
 
         Ok(match value {
             Some((index, value)) => DataValue::Struct(vec![(index as u64).into(), value.into()]),
-            None => DataValue::Struct(vec![(0 as u64).into(), DataValue::Utf8(None)]),
+            None => DataValue::Struct(vec![(0_u64).into(), DataValue::Utf8(None)]),
         })
     }
 }

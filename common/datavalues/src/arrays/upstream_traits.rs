@@ -45,7 +45,7 @@ where T: DFPrimitiveType
             _ => {
                 // 2021-02-07: ~1.5% slower than builder. Will still use this as it is more idiomatic and will
                 // likely improve over time.
-                PrimitiveArray::from_iter(iter)
+                iter.collect()
             }
         };
         let array = Arc::new(arr) as ArrayRef;
@@ -78,7 +78,7 @@ impl FromIterator<Option<bool>> for DFBooleanArray {
 impl FromIterator<bool> for DFBooleanArray {
     fn from_iter<I: IntoIterator<Item = bool>>(iter: I) -> Self {
         // 2021-02-07: this was ~70% faster than with the builder, even with the extra Option<T> added.
-        let arr = BooleanArray::from_iter(iter.into_iter().map(Some));
+        let arr: BooleanArray = iter.into_iter().map(Some).collect();
 
         let array = Arc::new(arr) as ArrayRef;
         array.into()
@@ -217,7 +217,7 @@ where Ptr: Borrow<Series>
         }
 
         // now the first non None
-        builder.append_series(&v);
+        builder.append_series(v);
 
         // now we have added all Nones, we can consume the rest of the iterator.
         for opt_s in it {

@@ -129,6 +129,8 @@ where T: DFDataType
         format!("DataArray<{:?}>", T::data_type())
     }
 
+    /// # Safety
+    /// Note this doesn't do any bound checking, for performance reason.
     #[inline]
     pub unsafe fn try_get(&self, index: usize) -> Result<DataValue> {
         let arr = &*self.array;

@@ -14,6 +14,8 @@ use crate::utils::get_iter_capacity;
 use crate::*;
 
 pub trait ArrayScatter {
+    /// # Safety
+    /// Note this doesn't do any bound checking, for performance reason.
     unsafe fn scatter_unchecked(
         &self,
         _indices: &mut dyn Iterator<Item = u64>,

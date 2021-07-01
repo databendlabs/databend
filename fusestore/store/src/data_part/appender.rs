@@ -15,7 +15,7 @@ use common_arrow::arrow_flight::FlightData;
 use common_arrow::parquet::arrow::ArrowWriter;
 use common_arrow::parquet::file::writer::InMemoryWriteableCursor;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
+use common_store_api::AppendResult;
 use futures::StreamExt;
 use uuid::Uuid;
 
@@ -37,10 +37,13 @@ impl Appender {
     /// - first element of the incoming stream is a properly serialized schema
     pub async fn append_data(&self, path: String, mut stream: InputData) -> Result<AppendResult> {
         if let Some(flight_data) = stream.next().await {
-            let arrow_schem = Arc::new(ArrowSchema::try_from(&flight_data)?);
-            let mut result = common_flights::AppendResult::default();
+            let arrow_schema = ArrowSchema::try_from(&flight_data)?;
+            let arrow_schema_ref = Arc::new(arrow_schema);
+
+            let mut result = AppendResult::default();
             while let Some(flight_data) = stream.next().await {
-                let batch = flight_data_to_arrow_batch(&flight_data, arrow_schem.clone(), &[])?;
+                let batch =
+                    flight_data_to_arrow_batch(&flight_data, arrow_schema_ref.clone(), &[])?;
                 let block = DataBlock::try_from(batch)?;
                 let (rows, cols, wire_bytes) =
                     (block.num_rows(), block.num_columns(), block.memory_size());

@@ -30,7 +30,7 @@ macro_rules! impl_compare {
     }};
 }
 
-fn coerce_cmp_lhs_rhs<'a>(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
+fn coerce_cmp_lhs_rhs(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
     if lhs.data_type() == rhs.data_type()
         && (lhs.data_type() == DataType::Utf8 || lhs.data_type() == DataType::Boolean)
     {

@@ -34,8 +34,8 @@ impl DataBlock {
         for index in 0..scatter_size {
             let mut block_columns = vec![];
 
-            for column_index in 0..columns_size {
-                block_columns.push(scattered_columns[column_index][index].clone());
+            for item in scattered_columns.iter() {
+                block_columns.push(item[index].clone())
             }
             scattered_blocks.push(DataBlock::create(block.schema().clone(), block_columns));
         }

@@ -33,7 +33,7 @@ impl From<&NewUser<'_>> for UserInfo {
         UserInfo {
             name: new_user.name.to_string(),
             password_sha256: sha2::Sha256::digest(new_user.password.as_bytes()).into(),
-            salt_sha256: sha2::Sha256::digest(&new_user.salt.as_bytes()).into(),
+            salt_sha256: sha2::Sha256::digest(new_user.salt.as_bytes()).into(),
         }
     }
 }

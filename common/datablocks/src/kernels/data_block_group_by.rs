@@ -46,7 +46,7 @@ impl DataBlock {
         let mut group_columns = Vec::with_capacity(column_names.len());
         {
             for col in column_names {
-                group_columns.push(block.try_column_by_name(&col)?);
+                group_columns.push(block.try_column_by_name(col)?);
             }
         }
 
@@ -96,7 +96,7 @@ impl DataBlock {
 
         let mut group_blocks = GroupBlocksTable::default();
         for (group_key, (group_indices, group_keys)) in group_indices {
-            let take_block = DataBlock::block_take_by_indices(&block, &group_indices)?;
+            let take_block = DataBlock::block_take_by_indices(block, &group_indices)?;
             group_blocks.push((group_key, group_keys, take_block));
         }
 

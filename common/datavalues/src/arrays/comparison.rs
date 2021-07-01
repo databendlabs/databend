@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt::Debug;
-use std::ops::Not;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;

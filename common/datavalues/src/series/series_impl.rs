@@ -49,6 +49,9 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn get_array_memory_size(&self) -> usize;
     fn get_array_ref(&self) -> ArrayRef;
     fn slice(&self, offset: usize, length: usize) -> Series;
+
+    /// # Safety
+    /// Note this doesn't do any bound checking, for performance reason.
     unsafe fn equal_element(&self, idx_self: usize, idx_other: usize, other: &Series) -> bool;
 
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series>;
@@ -197,6 +200,8 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     unsafe fn take_iter_unchecked(&self, _iter: &mut dyn Iterator<Item = usize>) -> Result<Series>;
 
     /// scatter the arrays by indices, the size of indices must be equal to the size of array
+    /// # Safety
+    /// Note this doesn't do any bound checking, for performance reason.
     unsafe fn scatter_unchecked(
         &self,
         indices: &mut dyn Iterator<Item = u64>,

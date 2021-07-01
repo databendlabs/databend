@@ -76,7 +76,7 @@ where
 {
     fn cast<N>(&self) -> Result<DataArray<N>>
     where N: DFDataType {
-        cast_ca(&self)
+        cast_ca(self)
     }
 
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {

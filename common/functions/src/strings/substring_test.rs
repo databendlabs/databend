@@ -37,8 +37,8 @@ fn test_substring_function() -> Result<()> {
             arg_names: vec!["a", "b", "c"],
             columns: vec![
                 Series::new(vec!["abcde"]).into(),
-                Series::new(vec![2 as i64]).into(),
-                Series::new(vec![3 as u64]).into(),
+                Series::new(vec![2_i64]).into(),
+                Series::new(vec![3_u64]).into(),
             ],
             func: SubstringFunction::try_create("substring")?,
             expect: Series::new(vec!["bcd"]).into(),
@@ -51,8 +51,8 @@ fn test_substring_function() -> Result<()> {
             arg_names: vec!["a", "b", "c"],
             columns: vec![
                 Series::new(vec!["abcde"]).into(),
-                Series::new(vec![1 as i64]).into(),
-                Series::new(vec![3 as u64]).into(),
+                Series::new(vec![1_i64]).into(),
+                Series::new(vec![3_u64]).into(),
             ],
             func: SubstringFunction::try_create("substring")?,
             expect: Series::new(vec!["abc"]).into(),
@@ -65,7 +65,7 @@ fn test_substring_function() -> Result<()> {
             arg_names: vec!["a", "b"],
             columns: vec![
                 Series::new(vec!["abcde"]).into(),
-                Series::new(vec![2 as i64]).into(),
+                Series::new(vec![2_i64]).into(),
             ],
 
             func: SubstringFunction::try_create("substring")?,
@@ -79,8 +79,8 @@ fn test_substring_function() -> Result<()> {
             arg_names: vec!["a", "b", "c"],
             columns: vec![
                 Series::new(vec!["1234567890"]).into(),
-                Series::new(vec![-3 as i64]).into(),
-                Series::new(vec![3 as u64]).into(),
+                Series::new(vec![-3_i64]).into(),
+                Series::new(vec![3_u64]).into(),
             ],
 
             func: SubstringFunction::try_create("substring")?,

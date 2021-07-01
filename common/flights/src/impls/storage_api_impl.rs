@@ -1,189 +1,121 @@
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
+//
 
-use std::convert::TryInto;
-use std::time::Duration;
+use std::convert::TryFrom;
 
-use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
-use common_arrow::arrow_flight::Action;
-use common_arrow::arrow_flight::BasicAuth;
-use common_arrow::arrow_flight::HandshakeRequest;
+use common_arrow::arrow::datatypes::SchemaRef as ArrowSchemaRef;
+use common_arrow::arrow::ipc::writer::IpcWriteOptions;
+use common_arrow::arrow::record_batch::RecordBatch;
+use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
+use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
+use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
+use common_arrow::arrow_flight::Ticket;
+use common_datablocks::DataBlock;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
-use futures::stream;
+use common_planners::ScanPlan;
+use common_runtime::tokio;
+use common_store_api::AppendResult;
+use common_store_api::BlockStream;
+use common_store_api::ReadAction;
+use common_store_api::ReadPlanResult;
+use common_store_api::StorageApi;
+use common_streams::SendableDataBlockStream;
+use futures::SinkExt;
 use futures::StreamExt;
-use log::info;
-use prost::Message;
-use serde::de::DeserializeOwned;
-use tonic::metadata::MetadataValue;
-use tonic::transport::Channel;
 use tonic::Request;
 
-use crate::flight_result_to_str;
-use crate::store_do_action::RequestFor;
-use crate::ConnectionFactory;
-use crate::StoreDoAction;
+use crate::impls::storage_api_impl_utils;
+use crate::ReadPlanAction;
+use crate::StoreClient;
+use crate::StoreDoGet;
 
-#[derive(Clone)]
-pub struct StoreClient {
-    token: Vec<u8>,
-    pub(crate) timeout: Duration,
-    pub(crate) client: FlightServiceClient<tonic::transport::channel::Channel>,
-}
-
-static AUTH_TOKEN_KEY: &str = "auth-token-bin";
-
-impl StoreClient {
-    pub async fn try_create(addr: &str, username: &str, password: &str) -> anyhow::Result<Self> {
-        // TODO configuration
-        let timeout = Duration::from_secs(60);
-
-        let channel = ConnectionFactory::create_flight_channel(addr, Some(timeout)).await?;
-
-        let mut client = FlightServiceClient::new(channel.clone());
-        let token = StoreClient::handshake(&mut client, timeout, username, password).await?;
-
-        let client = {
-            let token = token.clone();
-            FlightServiceClient::with_interceptor(channel, move |mut req: Request<()>| {
-                let metadata = req.metadata_mut();
-                metadata.insert_bin(AUTH_TOKEN_KEY, MetadataValue::from_bytes(&token));
-                Ok(req)
-            })
-        };
-
-        let rx = Self {
-            token,
-            timeout,
-            client,
-        };
-        Ok(rx)
+#[async_trait::async_trait]
+impl StorageApi for StoreClient {
+    async fn read_plan(
+        &mut self,
+        db_name: String,
+        tbl_name: String,
+        scan_plan: &ScanPlan,
+    ) -> common_exception::Result<ReadPlanResult> {
+        let mut plan = scan_plan.clone();
+        plan.schema_name = format!("{}/{}", db_name, tbl_name);
+        let plan = ReadPlanAction { scan_plan: plan };
+        self.do_action(plan).await
     }
 
-    pub fn set_timeout(&mut self, timeout: Duration) {
-        self.timeout = timeout;
-    }
-
-    /// Handshake.
-    async fn handshake(
-        client: &mut FlightServiceClient<Channel>,
-        timeout: Duration,
-        username: &str,
-        password: &str,
-    ) -> anyhow::Result<Vec<u8>> {
-        let auth = BasicAuth {
-            username: username.to_string(),
-            password: password.to_string(),
-        };
-        let mut payload = vec![];
-        auth.encode(&mut payload)?;
-
-        let mut req = Request::new(stream::once(async {
-            HandshakeRequest {
-                payload,
-                ..HandshakeRequest::default()
-            }
-        }));
-        req.set_timeout(timeout);
-
-        let rx = client.handshake(req).await?;
-        let mut rx = rx.into_inner();
-
-        let resp = rx.next().await.expect("Must respond from handshake")?;
-        let token = resp.payload;
-        Ok(token)
-    }
-
-    pub(crate) async fn do_action<T, R>(&mut self, v: T) -> common_exception::Result<R>
-    where
-        T: RequestFor<Reply = R>,
-        T: Into<StoreDoAction>,
-        R: DeserializeOwned,
-    {
-        let act: StoreDoAction = v.into();
-        let mut req: Request<Action> = (&act).try_into()?;
+    async fn read_partition(
+        &mut self,
+        schema: DataSchemaRef,
+        read_action: &ReadAction,
+    ) -> common_exception::Result<SendableDataBlockStream> {
+        let cmd = StoreDoGet::Read(read_action.clone());
+        let mut req = tonic::Request::<Ticket>::from(&cmd);
         req.set_timeout(self.timeout);
-
-        let mut stream = self.client.do_action(req).await?.into_inner();
-        match stream.message().await? {
-            None => Err(ErrorCode::EmptyData(format!(
-                "Can not receive data from store flight server, action: {:?}",
-                act
-            ))),
-            Some(resp) => {
-                info!("do_action: resp: {:}", flight_result_to_str(&resp));
-                let v = serde_json::from_slice::<R>(&resp.body)?;
-                Ok(v)
-            }
-        }
+        let res = self.client.do_get(req).await?.into_inner();
+        let arrow_schema: ArrowSchemaRef = Arc::new(schema.to_arrow());
+        let res_stream = res.map(move |item| {
+            item.map_err(|status| ErrorCode::TokioError(status.to_string()))
+                .and_then(|item| {
+                    flight_data_to_arrow_batch(&item, arrow_schema.clone(), &[])
+                        .map_err(ErrorCode::from)
+                })
+                .and_then(DataBlock::try_from)
+        });
+        Ok(Box::pin(res_stream))
     }
 
-    //    pub async fn add_user(
-    //        &mut self,
-    //        username: impl Into<String>,
-    //        password: impl Into<String>,
-    //        salt: impl Into<String>,
-    //    ) -> common_exception::Result<AddUserActionResult> {
-    //        let action = StoreDoAction::AddUser(AddUserAction {
-    //            username: username.into(),
-    //            password: password.into(),
-    //            salt: salt.into(),
-    //        });
-    //        let rst = self.do_action(&action).await?;
-    //        match_action_res!(StoreDoActionResult::AddUser, rst)
-    //    }
-    //
-    //    pub async fn drop_user(
-    //        &mut self,
-    //        username: impl Into<String>,
-    //    ) -> common_exception::Result<DropUserActionResult> {
-    //        let action = StoreDoAction::DropUser(DropUserAction {
-    //            username: username.into(),
-    //        });
-    //        let rst = self.do_action(&action).await?;
-    //        match_action_res!(StoreDoActionResult::DropUser, rst)
-    //    }
-    //
-    //    pub async fn update_user(
-    //        &mut self,
-    //        username: impl Into<String>,
-    //        new_password: Option<impl Into<String>>,
-    //        new_salt: Option<impl Into<String>>,
-    //    ) -> common_exception::Result<UpdateUserActionResult> {
-    //        let action = StoreDoAction::UpdateUser(UpdateUserAction {
-    //            username: username.into(),
-    //            new_password: new_password.map(Into::into),
-    //            new_salt: new_salt.map(Into::into),
-    //        });
-    //        let rst = self.do_action(&action).await?;
-    //        match_action_res!(StoreDoActionResult::UpdateUser, rst)
-    //    }
-    //
-    //    pub async fn get_all_users(&mut self) -> common_exception::Result<GetAllUsersActionResult> {
-    //        let action = StoreDoAction::GetAllUsersInfo(GetAllUsersAction {});
-    //        let rst = self.do_action(&action).await?;
-    //        match_action_res!(StoreDoActionResult::GetAllUsersInfo, rst)
-    //    }
-    //
-    //    pub async fn get_users(
-    //        &mut self,
-    //        usernames: &[impl AsRef<str>],
-    //    ) -> common_exception::Result<GetUsersActionResult> {
-    //        let action = StoreDoAction::GetUsersInfo(GetUsersAction {
-    //            usernames: usernames.iter().map(|n| n.as_ref().to_string()).collect(),
-    //        });
-    //        let rst = self.do_action(&action).await?;
-    //        match_action_res!(StoreDoActionResult::GetUsersInfo, rst)
-    //    }
-    //
-    //    pub async fn get_user(
-    //        &mut self,
-    //        username: impl AsRef<str>,
-    //    ) -> common_exception::Result<GetUserActionResult> {
-    //        let action = StoreDoAction::GetUserInfo(GetUserAction {
-    //            username: username.as_ref().to_string(),
-    //        });
-    //        let rst = self.do_action(&action).await?;
-    //        match_action_res!(StoreDoActionResult::GetUserInfo, rst)
-    //    }
+    async fn append_data(
+        &mut self,
+        db_name: String,
+        tbl_name: String,
+        scheme_ref: DataSchemaRef,
+        mut block_stream: BlockStream,
+    ) -> common_exception::Result<AppendResult> {
+        let ipc_write_opt = IpcWriteOptions::default();
+        let arrow_schema: ArrowSchemaRef = Arc::new(scheme_ref.to_arrow());
+        let flight_schema = flight_data_from_arrow_schema(arrow_schema.as_ref(), &ipc_write_opt);
+        let (mut tx, flight_stream) = futures::channel::mpsc::channel(100);
+
+        tx.send(flight_schema)
+            .await
+            .map_err(|send_err| ErrorCode::BrokenChannel(send_err.to_string()))?;
+
+        tokio::spawn(async move {
+            while let Some(block) = block_stream.next().await {
+                log::info!("next data block");
+                match RecordBatch::try_from(block) {
+                    Ok(batch) => {
+                        if let Err(_e) = tx
+                            .send(flight_data_from_arrow_batch(&batch, &ipc_write_opt).1)
+                            .await
+                        {
+                            log::error!("failed to send flight-data to downstream, breaking out");
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "failed to convert DataBlock to RecordBatch , breaking out, {:?}",
+                            e
+                        );
+                        break;
+                    }
+                }
+            }
+        });
+
+        let mut req = Request::new(flight_stream);
+        let meta = req.metadata_mut();
+        storage_api_impl_utils::set_do_put_meta(meta, &db_name, &tbl_name);
+
+        let res = self.client.do_put(req).await?;
+
+        use anyhow::Context;
+        let put_result = res.into_inner().next().await.context("empty response")??;
+        let vec = serde_json::from_slice(&put_result.app_metadata)?;
+        Ok(vec)
+    }
 }

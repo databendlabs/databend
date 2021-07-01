@@ -1,4 +1,3 @@
-
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 

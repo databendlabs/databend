@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::ops::Not;
-
 use common_arrow::arrow::compute;
 use common_exception::Result;
 
@@ -35,21 +33,5 @@ impl DFBooleanArray {
     pub fn all_false(&self) -> bool {
         let mut values = self.downcast_iter();
         values.all(|f| !f.unwrap_or(true))
-    }
-}
-
-impl Not for &DFBooleanArray {
-    type Output = Result<DFBooleanArray>;
-
-    fn not(self) -> Self::Output {
-        (&self).not()
-    }
-}
-
-impl Not for DFBooleanArray {
-    type Output = Result<DFBooleanArray>;
-
-    fn not(self) -> Self::Output {
-        (&self).not()
     }
 }

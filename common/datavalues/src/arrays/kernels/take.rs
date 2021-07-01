@@ -15,6 +15,8 @@ use crate::arrays::IntoTakeRandom;
 use crate::arrays::*;
 use crate::*;
 
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
 /// Take kernel for single chunk without nulls and arrow array as index.
 pub unsafe fn take_no_null_primitive<T: DFNumericType>(
     arr: &PrimitiveArray<T>,
@@ -38,6 +40,8 @@ pub unsafe fn take_no_null_primitive<T: DFNumericType>(
     Arc::new(arr)
 }
 
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
 /// Take kernel for single chunk without nulls and an iterator as index.
 pub unsafe fn take_no_null_primitive_iter_unchecked<
     T: DFNumericType,
@@ -77,6 +81,8 @@ pub fn take_no_null_primitive_iter<T: DFNumericType, I: IntoIterator<Item = usiz
     Arc::new(arr)
 }
 
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
 /// Take kernel for a single chunk with null values and an iterator as index.
 pub unsafe fn take_primitive_iter_unchecked<T: DFNumericType, I: IntoIterator<Item = usize>>(
     arr: &PrimitiveArray<T>,
@@ -117,6 +123,8 @@ pub fn take_primitive_iter<T: DFNumericType, I: IntoIterator<Item = usize>>(
     Arc::new(arr)
 }
 
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
 /// Take kernel for a single chunk without nulls and an iterator that can produce None values.
 /// This is used in join operations.
 pub unsafe fn take_no_null_primitive_opt_iter_unchecked<
@@ -136,6 +144,8 @@ pub unsafe fn take_no_null_primitive_opt_iter_unchecked<
     Arc::new(arr)
 }
 
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
 /// Take kernel for a single chunk and an iterator that can produce None values.
 /// This is used in join operations.
 pub unsafe fn take_primitive_opt_iter_unchecked<
@@ -195,6 +205,8 @@ pub fn take_no_null_bool_iter<I: IntoIterator<Item = usize>>(
     Arc::new(iter.collect())
 }
 
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
 /// Take kernel for single chunk without nulls and an iterator as index.
 pub unsafe fn take_no_null_bool_iter_unchecked<I: IntoIterator<Item = usize>>(
     arr: &BooleanArray,
@@ -224,6 +236,8 @@ pub fn take_bool_iter<I: IntoIterator<Item = usize>>(
     Arc::new(iter.collect())
 }
 
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
 /// Take kernel for single chunk and an iterator as index.
 pub unsafe fn take_bool_iter_unchecked<I: IntoIterator<Item = usize>>(
     arr: &BooleanArray,
@@ -240,6 +254,8 @@ pub unsafe fn take_bool_iter_unchecked<I: IntoIterator<Item = usize>>(
     Arc::new(iter.collect())
 }
 
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
 /// Take kernel for single chunk and an iterator as index.
 pub unsafe fn take_bool_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>>(
     arr: &BooleanArray,
@@ -258,6 +274,8 @@ pub unsafe fn take_bool_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>
     Arc::new(iter.collect())
 }
 
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
 /// Take kernel for single chunk without null values and an iterator as index that may produce None values.
 pub unsafe fn take_no_null_bool_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>>(
     arr: &BooleanArray,
@@ -270,6 +288,8 @@ pub unsafe fn take_no_null_bool_opt_iter_unchecked<I: IntoIterator<Item = Option
     Arc::new(iter.collect())
 }
 
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
 pub unsafe fn take_no_null_utf8_iter_unchecked<I: IntoIterator<Item = usize>>(
     arr: &StringArray,
     indices: I,
@@ -281,6 +301,8 @@ pub unsafe fn take_no_null_utf8_iter_unchecked<I: IntoIterator<Item = usize>>(
     Arc::new(iter.collect())
 }
 
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
 pub unsafe fn take_utf8_iter_unchecked<I: IntoIterator<Item = usize>>(
     arr: &StringArray,
     indices: I,
@@ -296,6 +318,8 @@ pub unsafe fn take_utf8_iter_unchecked<I: IntoIterator<Item = usize>>(
     Arc::new(iter.collect())
 }
 
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
 pub unsafe fn take_no_null_utf8_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>>(
     arr: &StringArray,
     indices: I,
@@ -307,6 +331,8 @@ pub unsafe fn take_no_null_utf8_opt_iter_unchecked<I: IntoIterator<Item = Option
     Arc::new(iter.collect())
 }
 
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
 pub unsafe fn take_utf8_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>>(
     arr: &StringArray,
     indices: I,
@@ -348,6 +374,8 @@ pub fn take_utf8_iter<I: IntoIterator<Item = usize>>(
     Arc::new(iter.collect())
 }
 
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
 pub unsafe fn take_utf8(arr: &StringArray, indices: &UInt32Array) -> Arc<StringArray> {
     let data_len = indices.len();
 

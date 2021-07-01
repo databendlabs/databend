@@ -134,6 +134,8 @@ impl DataColumn {
         }
     }
 
+    /// # Safety
+    /// Note this doesn't do any bound checking, for performance reason.
     #[inline]
     pub unsafe fn scatter_unchecked(
         &self,
@@ -147,7 +149,7 @@ impl DataColumn {
             }
             DataColumn::Constant(scalar, _) => {
                 let mut vs = vec![0; scatter_size];
-                indices.for_each(|d| vs[d as usize] = vs[d as usize] + 1);
+                indices.for_each(|d| vs[d as usize] += 1);
 
                 Ok(vs
                     .iter()

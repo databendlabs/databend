@@ -1,6 +1,6 @@
 mod arithmetic;
 mod date_wrap;
-mod series;
+mod series_impl;
 mod wrap;
 
 #[cfg(test)]
@@ -10,5 +10,5 @@ mod comparison;
 pub use arithmetic::*;
 pub use comparison::*;
 pub use date_wrap::*;
-pub use series::*;
+pub use series_impl::*;
 pub use wrap::SeriesWrap;

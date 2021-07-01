@@ -1,4 +1,3 @@
-
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::LargeListArray;
@@ -275,16 +274,12 @@ impl<'a> TakeRandom for ListTakeRandom<'a> {
     #[inline]
     fn get(&self, index: usize) -> Option<Self::Item> {
         let v = take_random_get!(self, index);
-        v.map(|v| {
-            let s = v.into_series();
-            s
-        })
+        v.map(|v| v.into_series())
     }
 
     #[inline]
     unsafe fn get_unchecked(&self, index: usize) -> Self::Item {
         let v = self.arr.value_unchecked(index);
-        let s = v.into_series();
-        s
+        v.into_series()
     }
 }

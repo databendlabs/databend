@@ -93,14 +93,11 @@ impl DFListArray {
         unsafe { &*(arr as *const dyn Array as *const LargeListArray) }
     }
 
-    pub fn downcast_iter<'a>(&self) -> impl Iterator<Item = Option<Series>> + DoubleEndedIterator {
+    pub fn downcast_iter(&self) -> impl Iterator<Item = Option<Series>> + DoubleEndedIterator {
         let arr = &*self.array;
         let arr = unsafe { &*(arr as *const dyn Array as *const LargeListArray) };
 
-        arr.iter().map(|a| match a {
-            Some(a) => Some(a.into_series()),
-            None => None,
-        })
+        arr.iter().map(|a| a.map(|a| a.into_series()))
     }
 
     pub fn from_arrow_array(array: LargeListArray) -> Self {
