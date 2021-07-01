@@ -5,6 +5,9 @@
 use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
 
 use common_aggregate_functions::AggregateFunction;
 use common_aggregate_functions::AggregateFunctionFactory;
@@ -99,7 +102,13 @@ impl Expression {
     pub fn column_name(&self) -> String {
         match self {
             Expression::Alias(name, _expr) => name.clone(),
-            Expression::InList { expr, list: _, negated: _ } => expr.column_name(),
+            Expression::InList { expr, list: _, negated: _ } => {
+                let mut hasher = DefaultHasher::new();
+                let name = format!("{:?}", self);
+                name.hash(&mut hasher);
+                let hsh = hasher.finish();
+                format!("InList_{}", hsh)
+            }
             Expression::ScalarFunction { op, .. } => {
                 match OP_SET.get(&op.to_lowercase().as_ref()) {
                     Some(_) => format!("{}()", op),
