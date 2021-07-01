@@ -47,6 +47,8 @@ pub struct ActionAlias {
 #[derive(Debug, Clone)]
 pub struct ActionInList {
     pub name: String,
+    pub expr_name: String,
+    pub list: Vec<DataValue>,
     pub negated: bool,
 }
 

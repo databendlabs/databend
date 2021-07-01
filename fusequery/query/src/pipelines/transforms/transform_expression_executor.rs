@@ -63,6 +63,13 @@ impl ExpressionExecutor {
             self.chain.actions
         );
 
+        println!(
+            "({:#}) execute, actions: {:?}",
+            self.description,
+            self.chain.actions
+        );
+
+
         let mut column_map: HashMap<String, DataColumnarValue> = HashMap::new();
 
         // a + 1 as b, a + 1 as c
@@ -92,6 +99,9 @@ impl ExpressionExecutor {
                     alias_map.insert(alias.arg_name.clone(), vec![alias.name.clone()]);
                 }
             }
+            println!("action={:?}", action);
+            println!("column_map={:?}", column_map);
+            println!("action name={:?}", action.column_name());
 
             if column_map.contains_key(action.column_name()) {
                 continue;
@@ -131,6 +141,11 @@ impl ExpressionExecutor {
                             "Exist subquery must be prepared before the main query's execution",
                         ));
                     }
+                }
+                ExpressionAction::InList(inlist) => {
+                    println!("inlist={:?}", inlist); 
+                    println!("rows={:?}", rows); 
+                    println!("datablock={:?}", block); 
                 }
                 _ => {}
             }

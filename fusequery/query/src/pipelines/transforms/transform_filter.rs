@@ -102,6 +102,7 @@ impl Processor for FilterTransform {
             let filter_block = executor.execute(&block, Some(&exists_map))?;
             let filter_array = filter_block.try_column_by_name(column_name)?.to_array()?;
             // Downcast to boolean array
+            println!("{:?}", filter_array);
             let filter_array = datavalues::downcast_array!(filter_array, BooleanArray)?;
 
             // Convert to arrow record_batch
