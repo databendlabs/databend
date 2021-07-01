@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use core::fmt;
-use std::convert::TryFrom;
-use std::convert::TryInto;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;

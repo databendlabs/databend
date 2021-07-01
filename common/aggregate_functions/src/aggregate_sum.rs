@@ -106,10 +106,9 @@ impl AggregateSumFunction {
 
     pub fn sum_batch(column: &DataColumn) -> Result<DataValue> {
         match column {
-            DataColumn::Constant(value, size) => value.arithmetic(
-                DataValueArithmeticOperator::Mul,
-                &DataValue::UInt64(Some(*size as u64)),
-            ),
+            DataColumn::Constant(value, size) => {
+                DataValue::arithmetic(Mul, value.clone(), DataValue::UInt64(Some(*size as u64)))
+            }
             DataColumn::Array(array) => array.sum(),
         }
     }

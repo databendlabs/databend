@@ -185,6 +185,10 @@ macro_rules! impl_dyn_arrays {
                 cast_and_apply!(self, vec_hash, hasher)
             }
 
+            fn group_hash(&self) -> Result<DFUInt64Array> {
+                cast_and_apply!(self, group_hash,)
+            }
+
             fn subtract(&self, rhs: &Series) -> Result<Series> {
                 try_physical_dispatch!(self, subtract, rhs)
             }
@@ -236,7 +240,7 @@ macro_rules! impl_dyn_arrays {
             /// scatter the arrays by indices, the size of indices must be equal to the size of array
             unsafe fn scatter_unchecked(
                 &self,
-                indices: &mut dyn Iterator<Item = u32>,
+                indices: &mut dyn Iterator<Item = u64>,
                 scattered_size: usize,
             ) -> Result<Vec<Series>> {
                 try_physical_dispatch_vec!(self, scatter_unchecked, indices, scattered_size)

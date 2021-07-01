@@ -198,3 +198,86 @@ macro_rules! try_build_array {
         Ok(builder.finish().into_series())
     }};
 }
+
+macro_rules! typed_data_value_min_max {
+    ($VALUE:expr, $DELTA:expr, $SCALAR:ident, $OP:ident) => {{
+        Result::Ok(DataValue::$SCALAR(match ($VALUE, $DELTA) {
+            (None, None) => None,
+            (Some(a), None) => Some(a.clone()),
+            (None, Some(b)) => Some(b.clone()),
+            (Some(a), Some(b)) => Some((*a).$OP(*b)),
+        }))
+    }};
+}
+
+// returns the sum of two data values, including coercion into $TYPE.
+macro_rules! typed_data_value_add {
+    ($OLD_VALUE:expr, $DELTA:expr, $SCALAR:ident, $TYPE:ident) => {{
+        Result::Ok(DataValue::$SCALAR(match ($OLD_VALUE, $DELTA) {
+            (None, None) => None,
+            (Some(a), None) => Some(a.clone() as $TYPE),
+            (None, Some(b)) => Some(b.clone() as $TYPE),
+            (Some(a), Some(b)) => Some((*a as $TYPE) + (*b as $TYPE)),
+        }))
+    }};
+}
+
+// returns the sub of two data values, including coercion into $TYPE.
+macro_rules! typed_data_value_sub {
+    ($OLD_VALUE:expr, $DELTA:expr, $SCALAR:ident, $TYPE:ident) => {{
+        Result::Ok(DataValue::$SCALAR(match ($OLD_VALUE, $DELTA) {
+            (None, None) => None,
+            (Some(a), None) => Some(a.clone() as $TYPE),
+            (None, Some(b)) => Some(b.clone() as $TYPE),
+            (Some(a), Some(b)) => Some((*a as $TYPE) - (*b as $TYPE)),
+        }))
+    }};
+}
+
+// returns the mul of two data values, including coercion into $TYPE.
+macro_rules! typed_data_value_mul {
+    ($OLD_VALUE:expr, $DELTA:expr, $SCALAR:ident, $TYPE:ident) => {{
+        Result::Ok(DataValue::$SCALAR(match ($OLD_VALUE, $DELTA) {
+            (None, None) => None,
+            (Some(a), None) => Some(a.clone() as $TYPE),
+            (None, Some(b)) => Some(b.clone() as $TYPE),
+            (Some(a), Some(b)) => Some((*a as $TYPE) * (*b as $TYPE)),
+        }))
+    }};
+}
+
+// returns the div of two data values, including coercion into $TYPE.
+macro_rules! typed_data_value_div {
+    ($OLD_VALUE:expr, $DELTA:expr, $SCALAR:ident, $TYPE:ident) => {{
+        Result::Ok(DataValue::$SCALAR(match ($OLD_VALUE, $DELTA) {
+            (None, None) => None,
+            (Some(a), None) => Some(a.clone() as f64),
+            (None, Some(b)) => Some(b.clone() as f64),
+            (Some(a), Some(b)) => Some((*a as f64) / (*b as f64)),
+        }))
+    }};
+}
+
+// returns the modulo of two data values, including coercion into $TYPE.
+macro_rules! typed_data_value_modulo {
+    ($OLD_VALUE:expr, $DELTA:expr, $SCALAR:ident, $TYPE:ident) => {{
+        Result::Ok(DataValue::$SCALAR(match ($OLD_VALUE, $DELTA) {
+            (None, None) => None,
+            (Some(a), None) => Some(a.clone() as $TYPE),
+            (None, Some(b)) => Some(b.clone() as $TYPE),
+            (Some(a), Some(b)) => Some((*a as $TYPE) % (*b as $TYPE)),
+        }))
+    }};
+}
+
+// min/max of two functions string values.
+macro_rules! typed_data_value_min_max_string {
+    ($VALUE:expr, $DELTA:expr, $SCALAR:ident, $OP:ident) => {{
+        Result::Ok(DataValue::$SCALAR(match ($VALUE, $DELTA) {
+            (None, None) => None,
+            (Some(a), None) => Some(a.clone()),
+            (None, Some(b)) => Some(b.clone()),
+            (Some(a), Some(b)) => Some((a).$OP(b).clone()),
+        }))
+    }};
+}

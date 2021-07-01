@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::SchemaRef as ArrowSchemaRef;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::FlightData;
 use common_datavalues::DataSchemaRef;

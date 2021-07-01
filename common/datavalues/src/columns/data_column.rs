@@ -137,7 +137,7 @@ impl DataColumn {
     #[inline]
     pub unsafe fn scatter_unchecked(
         &self,
-        indices: &mut dyn Iterator<Item = u32>,
+        indices: &mut dyn Iterator<Item = u64>,
         scatter_size: usize,
     ) -> Result<Vec<DataColumn>> {
         match self {

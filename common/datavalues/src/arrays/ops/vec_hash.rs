@@ -15,10 +15,6 @@ use crate::DFStructArray;
 use crate::DFUInt64Array;
 use crate::DFUtf8Array;
 
-// Read more:
-//  https://www.cockroachlabs.com/blog/vectorized-hash-joiner/
-//  http://myeyesareblind.com/2017/02/06/Combine-hash-values/
-
 pub trait VecHash {
     /// Compute the hash for all values in the array.
     fn vec_hash(&self, _hasher: DFHasher) -> DFUInt64Array {

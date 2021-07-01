@@ -52,14 +52,13 @@ impl AggregateFunction for AggregateMaxFunction {
 
     fn accumulate(&mut self, columns: &[DataColumn], _input_rows: usize) -> Result<()> {
         let value = Self::max_batch(&columns[0])?;
-
-        self.state = self.state.max(&value)?;
+        self.state = DataValue::agg(Max, self.state.clone(), value)?;
 
         Ok(())
     }
 
     fn accumulate_scalar(&mut self, values: &[DataValue]) -> Result<()> {
-        self.state = self.state.max(&values[0])?;
+        self.state = DataValue::agg(Max, self.state.clone(), values[0].clone())?;
 
         Ok(())
     }
@@ -70,7 +69,7 @@ impl AggregateFunction for AggregateMaxFunction {
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
         let value = states[0].clone();
-        self.state = self.state.max(&value)?;
+        self.state = DataValue::agg(Max, self.state.clone(), value)?;
 
         Ok(())
     }

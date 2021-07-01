@@ -76,7 +76,7 @@ impl AggregateFunction for AggregateArgMaxFunction {
                 let old_max_arg = old_max_arg_val[0].clone();
                 let old_max_val = old_max_arg_val[1].clone();
 
-                let new_max_val = old_max_val.max(&max_val)?;
+                let new_max_val = DataValue::agg(Max, old_max_val.clone(), max_val)?;
 
                 self.state = DataValue::Struct(vec![
                     if new_max_val == old_max_val {
@@ -95,7 +95,7 @@ impl AggregateFunction for AggregateArgMaxFunction {
         if let DataValue::Struct(old_max_arg_val) = self.state.clone() {
             let old_max_arg = old_max_arg_val[0].clone();
             let old_max_val = old_max_arg_val[1].clone();
-            let new_max_val = old_max_val.max(&values[1])?;
+            let new_max_val = DataValue::agg(Max, old_max_val.clone(), values[1].clone())?;
 
             self.state = DataValue::Struct(vec![
                 if new_max_val == old_max_val {
@@ -118,7 +118,7 @@ impl AggregateFunction for AggregateArgMaxFunction {
         if let (DataValue::Struct(new_states), DataValue::Struct(old_states)) =
             (arg_val, self.state.clone())
         {
-            let new_max_val = new_states[1].max(&old_states[1])?;
+            let new_max_val = DataValue::agg(Max, new_states[1].clone(), old_states[1].clone())?;
             self.state = DataValue::Struct(vec![
                 if new_max_val == old_states[1] {
                     old_states[0].clone()

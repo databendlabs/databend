@@ -44,7 +44,7 @@ pub trait ArrayTake {
 /// Traverse and collect every nth element
 pub trait ArrayTakeEvery<T> {
     /// Traverse and collect every nth element in a new array.
-    fn take_every(&self, n: usize) -> DataArray<T> {
+    fn take_every(&self, _n: usize) -> DataArray<T> {
         unimplemented!()
     }
 }
@@ -66,26 +66,6 @@ macro_rules! take_opt_iter_n_arrays {
     }};
 }
 
-macro_rules! take_iter_n_arrays_unchecked {
-    ($ca:expr, $indices:expr) => {{
-        let taker = $ca.take_rand();
-        $indices
-            .into_iter()
-            .map(|idx| taker.get_unchecked(idx))
-            .collect()
-    }};
-}
-
-macro_rules! take_opt_iter_n_arrays_unchecked {
-    ($ca:expr, $indices:expr) => {{
-        let taker = $ca.take_rand();
-        $indices
-            .into_iter()
-            .map(|opt_idx| opt_idx.map(|idx| taker.get_unchecked(idx)))
-            .collect()
-    }};
-}
-
 /// Fast access by index.
 impl<T> ArrayTake for DataArray<T>
 where T: DFNumericType
@@ -96,7 +76,7 @@ where T: DFNumericType
         I: Iterator<Item = usize>,
         INulls: Iterator<Item = Option<usize>>,
     {
-        let mut primitive_array = self.downcast_ref();
+        let primitive_array = self.downcast_ref();
         match indices {
             TakeIdx::Array(array) => {
                 if self.is_empty() {
@@ -145,7 +125,7 @@ where T: DFNumericType
         I: Iterator<Item = usize>,
         INulls: Iterator<Item = Option<usize>>,
     {
-        let mut primitive_array = self.downcast_ref();
+        let primitive_array = self.downcast_ref();
         match indices {
             TakeIdx::Array(array) => {
                 if self.is_empty() {
@@ -178,7 +158,7 @@ impl ArrayTake for DFBooleanArray {
         I: Iterator<Item = usize>,
         INulls: Iterator<Item = Option<usize>>,
     {
-        let mut boolean_array = self.downcast_ref();
+        let boolean_array = self.downcast_ref();
         match indices {
             TakeIdx::Array(array) => {
                 if self.is_empty() {
@@ -216,7 +196,7 @@ impl ArrayTake for DFBooleanArray {
         I: Iterator<Item = usize>,
         INulls: Iterator<Item = Option<usize>>,
     {
-        let mut boolean_array = self.downcast_ref();
+        let boolean_array = self.downcast_ref();
         match indices {
             TakeIdx::Array(array) => {
                 if self.is_empty() {
@@ -333,7 +313,7 @@ impl ArrayTake for DFListArray {
                 if self.is_empty() {
                     return Ok(Self::full_null(iter.size_hint().0));
                 }
-                let mut ca: DFListArray = take_iter_n_arrays!(self, iter);
+                let ca: DFListArray = take_iter_n_arrays!(self, iter);
                 Ok(ca)
             }
             TakeIdx::IterNulls(iter) => {
@@ -341,7 +321,7 @@ impl ArrayTake for DFListArray {
                     return Ok(Self::full_null(iter.size_hint().0));
                 }
 
-                let mut ca: DFListArray = take_opt_iter_n_arrays!(self, iter);
+                let ca: DFListArray = take_opt_iter_n_arrays!(self, iter);
                 Ok(ca)
             }
         }

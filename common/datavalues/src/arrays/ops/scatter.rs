@@ -16,7 +16,7 @@ use crate::*;
 pub trait ArrayScatter {
     unsafe fn scatter_unchecked(
         &self,
-        _indices: &mut dyn Iterator<Item = u32>,
+        _indices: &mut dyn Iterator<Item = u64>,
         _scattered_size: usize,
     ) -> Result<Vec<Self>>
     where
@@ -31,7 +31,7 @@ where T: DFNumericType
 {
     unsafe fn scatter_unchecked(
         &self,
-        indices: &mut dyn Iterator<Item = u32>,
+        indices: &mut dyn Iterator<Item = u64>,
         scattered_size: usize,
     ) -> Result<Vec<Self>>
     where
@@ -71,7 +71,7 @@ where T: DFNumericType
 impl ArrayScatter for DFUtf8Array {
     unsafe fn scatter_unchecked(
         &self,
-        indices: &mut dyn Iterator<Item = u32>,
+        indices: &mut dyn Iterator<Item = u64>,
         scattered_size: usize,
     ) -> Result<Vec<Self>>
     where
@@ -114,7 +114,7 @@ impl ArrayScatter for DFUtf8Array {
 impl ArrayScatter for DFBooleanArray {
     unsafe fn scatter_unchecked(
         &self,
-        indices: &mut dyn Iterator<Item = u32>,
+        indices: &mut dyn Iterator<Item = u64>,
         scattered_size: usize,
     ) -> Result<Vec<Self>>
     where
@@ -154,7 +154,7 @@ impl ArrayScatter for DFBooleanArray {
 impl ArrayScatter for DFListArray {
     unsafe fn scatter_unchecked(
         &self,
-        indices: &mut dyn Iterator<Item = u32>,
+        indices: &mut dyn Iterator<Item = u64>,
         scattered_size: usize,
     ) -> Result<Vec<Self>>
     where

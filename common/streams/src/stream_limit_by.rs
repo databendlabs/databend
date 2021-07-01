@@ -8,9 +8,8 @@ use std::task::Context;
 use std::task::Poll;
 
 use common_arrow::arrow;
+use common_arrow::arrow::array::BooleanArray;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
-use common_datavalues::DFBooleanArray;
 use common_exception::Result;
 use futures::Stream;
 use futures::StreamExt;
@@ -21,6 +20,7 @@ pub struct LimitByStream {
     input: SendableDataBlockStream,
     limit: usize,
     limit_by_columns_name: Vec<String>,
+    keys_count: HashMap<Vec<u8>, usize>,
 }
 
 impl LimitByStream {
@@ -33,6 +33,7 @@ impl LimitByStream {
             input,
             limit,
             limit_by_columns_name,
+            keys_count: HashMap::new(),
         })
     }
 
@@ -40,17 +41,17 @@ impl LimitByStream {
         // TODO: use BitVec here.
         let mut filter_vec = vec![false; block.num_rows()];
         let group_indices = DataBlock::group_by_get_indices(&block, &self.limit_by_columns_name)?;
-        for (_, rows) in group_indices {
-            let mut cnt = 0;
+        for (limit_by_key, (rows, _)) in group_indices {
             for row in rows {
-                cnt += 1;
-                filter_vec[row as usize] = cnt <= self.limit;
+                let count = self.keys_count.entry(limit_by_key.clone()).or_default();
+                *count += 1;
+                filter_vec[row as usize] = *count <= self.limit;
             }
         }
 
-        let filter_array = DFBooleanArray::new_from_slice(&filter_vec);
+        let filter_array = BooleanArray::from(filter_vec);
         let batch = block.clone().try_into()?;
-        let batch = arrow::compute::filter_record_batch(&batch, filter_array.downcast_ref())?;
+        let batch = arrow::compute::filter_record_batch(&batch, &filter_array)?;
         Some(batch.try_into()).transpose()
     }
 }

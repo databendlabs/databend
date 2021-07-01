@@ -56,6 +56,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn try_get(&self, index: usize) -> Result<DataValue>;
 
     fn vec_hash(&self, hasher: DFHasher) -> DFUInt64Array;
+    fn group_hash(&self) -> Result<DFUInt64Array>;
 
     fn subtract(&self, rhs: &Series) -> Result<Series>;
     fn add_to(&self, rhs: &Series) -> Result<Series>;
@@ -198,7 +199,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     /// scatter the arrays by indices, the size of indices must be equal to the size of array
     unsafe fn scatter_unchecked(
         &self,
-        indices: &mut dyn Iterator<Item = u32>,
+        indices: &mut dyn Iterator<Item = u64>,
         scattered_size: usize,
     ) -> Result<Vec<Series>>;
 }

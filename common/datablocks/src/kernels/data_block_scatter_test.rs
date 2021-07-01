@@ -18,7 +18,7 @@ fn test_data_block_scatter() -> anyhow::Result<()> {
         Series::new(vec![1.0f64, 2., 3.]).into(),
     ]);
 
-    let indices = DataColumn::Array(Series::new([0u32, 1, 0]));
+    let indices = DataColumn::Array(Series::new([0u64, 1, 0]));
     let scattered = DataBlock::scatter_block(&raw, &indices, 2)?;
     assert_eq!(scattered.len(), 2);
     assert_eq!(raw.schema(), scattered[0].schema());

@@ -14,7 +14,7 @@ impl DataBlock {
         scatter_size: usize,
     ) -> Result<Vec<DataBlock>> {
         let array = indices.to_array()?;
-        let array = array.u32()?;
+        let array = array.u64()?;
 
         let columns_size = block.num_columns();
         let mut scattered_columns = Vec::with_capacity(scatter_size);

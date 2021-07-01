@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_arrow::arrow::datatypes::SchemaRef as ArrowSchemaRef;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::Ticket;

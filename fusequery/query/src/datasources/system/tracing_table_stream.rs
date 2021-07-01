@@ -5,7 +5,6 @@
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
-use std::sync::Arc;
 use std::task::Poll;
 
 use common_datablocks::DataBlock;

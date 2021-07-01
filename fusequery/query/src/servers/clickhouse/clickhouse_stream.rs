@@ -8,7 +8,6 @@ use std::task::Poll;
 
 use anyhow::anyhow;
 use clickhouse_srv::types::Block as ClickHouseBlock;
-use common_arrow::arrow::array::*;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;

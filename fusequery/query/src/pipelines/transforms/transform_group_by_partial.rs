@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
-use std::collections::hash_map::RawEntryMut;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -11,9 +10,7 @@ use std::time::Instant;
 use common_aggregate_functions::AggregateFunction;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BinaryBuilder;
-use common_arrow::arrow::array::StringBuilder;
 use common_datablocks::DataBlock;
-use common_datablocks::IdxHash;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -29,7 +26,7 @@ use crate::pipelines::processors::Processor;
 // Table for <group_key, ((function, column_name, args), keys) >
 type GroupFuncTable = RwLock<
     HashMap<
-        IdxHash,
+        Vec<u8>,
         (
             Vec<(Box<dyn AggregateFunction>, String, Vec<String>)>,
             Vec<DataValue>,
@@ -131,39 +128,15 @@ impl Processor for GroupByPartialTransform {
 
             // 1.1 and 1.2.
             let group_blocks = DataBlock::group_by(&block, &cols)?;
-            let group_series = cols
-                .iter()
-                .map(|c| block.try_column_by_name(c).and_then(|col| col.to_array()))
-                .collect::<Result<Vec<_>>>()?;
-
             // 1.3 Apply take blocks to aggregate function by group_key.
             {
-                for (hash, take_block) in group_blocks {
+                for (group_key, group_keys, take_block) in group_blocks {
                     let rows = take_block.num_rows();
 
                     let mut groups = self.groups.write();
-
-                    let entry = groups
-                        .raw_entry_mut()
-                        .from_hash(hash.hash, |idx_hash| idx_hash.keys == hash.keys);
-
-                    match entry {
-                        RawEntryMut::Occupied(mut entry) => {
-                            let values = entry.get_mut();
-                            for func in values.0.iter_mut() {
-                                let arg_columns = func
-                                    .2
-                                    .iter()
-                                    .map(|arg| {
-                                        take_block.try_column_by_name(arg).map(|c| c.clone())
-                                    })
-                                    .collect::<Result<Vec<DataColumn>>>()?;
-
-                                func.0.accumulate(&arg_columns, rows)?
-                            }
-                        }
-
-                        RawEntryMut::Vacant(entry) => {
+                    match groups.get_mut(&group_key) {
+                        // New group.
+                        None => {
                             let mut aggr_funcs = vec![];
                             for expr in &self.aggr_exprs {
                                 let mut func =
@@ -180,8 +153,21 @@ impl Processor for GroupByPartialTransform {
                                 aggr_funcs.push((func, name, args));
                             }
 
-                            let group_keys = vec![];
-                            entry.insert_hashed_nocheck(hash.hash, hash, (aggr_funcs, group_keys));
+                            groups.insert(group_key.clone(), (aggr_funcs, group_keys));
+                        }
+                        // Accumulate result against the take block by indices.
+                        Some((aggr_funcs, _)) => {
+                            for func in aggr_funcs {
+                                let arg_columns = func
+                                    .2
+                                    .iter()
+                                    .map(|arg| {
+                                        take_block.try_column_by_name(arg).map(|c| c.clone())
+                                    })
+                                    .collect::<Result<Vec<DataColumn>>>()?;
+
+                                func.0.accumulate(&arg_columns, rows)?
+                            }
                         }
                     }
                 }
@@ -203,7 +189,7 @@ impl Processor for GroupByPartialTransform {
 
         // Builders.
         let mut builders: Vec<Utf8ArrayBuilder> = (0..1 + aggr_len)
-            .map(|_| Utf8ArrayBuilder::new(groups.len(), groups.len() * 8))
+            .map(|_| Utf8ArrayBuilder::new(groups.len(), groups.len() * 4))
             .collect();
 
         let mut group_key_builder = BinaryBuilder::new(groups.len());
@@ -218,16 +204,15 @@ impl Processor for GroupByPartialTransform {
             let key_ser = serde_json::to_string(&DataValue::Struct(values.clone()))?;
             builders[aggr_len].append_value(key_ser.as_str());
 
-            group_key_builder.append_value(&key.keys)?;
+            group_key_builder.append_value(key)?;
         }
 
         let mut columns: Vec<Series> = Vec::with_capacity(self.schema.fields().len());
         for mut builder in builders {
-            columns.push(builder.finish().into_series().into());
+            columns.push(builder.finish().into_series());
         }
-
-        let keys = Arc::new(group_key_builder.finish()) as ArrayRef;
-        columns.push(keys.into_series().into());
+        let array = Arc::new(group_key_builder.finish()) as ArrayRef;
+        columns.push(array.into_series());
 
         let block = DataBlock::create_by_array(self.schema.clone(), columns);
         Ok(Box::pin(DataBlockStream::create(

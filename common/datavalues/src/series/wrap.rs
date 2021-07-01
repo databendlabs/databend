@@ -103,6 +103,10 @@ macro_rules! impl_dyn_array {
                 self.0.vec_hash(hasher)
             }
 
+            fn group_hash(&self) -> Result<DFUInt64Array> {
+                self.0.group_hash()
+            }
+
             fn subtract(&self, rhs: &Series) -> Result<Series> {
                 NumOpsDispatch::subtract(&self.0, rhs)
             }
@@ -323,7 +327,7 @@ macro_rules! impl_dyn_array {
             /// scatter the arrays by indices, the size of indices must be equal to the size of array
             unsafe fn scatter_unchecked(
                 &self,
-                indices: &mut dyn Iterator<Item = u32>,
+                indices: &mut dyn Iterator<Item = u64>,
                 scattered_size: usize,
             ) -> Result<Vec<Series>> {
                 let results = ArrayScatter::scatter_unchecked(&self.0, indices, scattered_size)?;

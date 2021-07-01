@@ -2,10 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::convert::TryFrom;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::SchemaRef;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
 use common_arrow::arrow_flight::FlightData;

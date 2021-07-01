@@ -7,8 +7,6 @@ use core::fmt;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::datatypes::IntervalUnit;
 use common_arrow::arrow::datatypes::TimeUnit;
-use common_exception::ErrorCode;
-use common_exception::Result;
 
 use crate::DataField;
 

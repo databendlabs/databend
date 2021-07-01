@@ -16,6 +16,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::data_df_type::*;
+use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::series::SeriesTrait;
 use crate::vec::AlignedVec;
@@ -180,10 +181,42 @@ where T: DFDataType
                 downcast_and_pack!(IntervalDayTimeArray, IntervalDayTime)
             }
 
-            DataType::List(_) => {
-                todo!();
+            DataType::Binary => {
+                downcast_and_pack!(BinaryArray, Binary)
             }
-            _ => unimplemented!(),
+
+            DataType::List(fs) => {
+                let list_array = &*(arr as *const dyn Array as *const ListArray);
+                let value = match list_array.is_null(index) {
+                    true => None,
+                    false => {
+                        let nested_array = list_array.value(index);
+                        let series = nested_array.into_series();
+                        let scalar_vec = (0..series.len())
+                            .map(|i| series.try_get(i))
+                            .collect::<Result<Vec<_>>>()?;
+
+                        Some(scalar_vec)
+                    }
+                };
+                Ok(DataValue::List(value, fs.data_type().clone()))
+            }
+
+            DataType::Struct(_) => {
+                let struct_array = &*(arr as *const dyn Array as *const StructArray);
+                let nested_array = struct_array.column(index);
+                let series = nested_array.clone().into_series();
+
+                let scalar_vec = (0..nested_array.len())
+                    .map(|i| series.try_get(i))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(DataValue::Struct(scalar_vec))
+            }
+
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
+                "DataValue Error: Can't create a functions of array of type \"{:?}\"",
+                other
+            ))),
         }
     }
 }

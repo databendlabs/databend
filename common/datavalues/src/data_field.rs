@@ -2,12 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::convert::TryFrom;
-use std::convert::TryInto;
 
 use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_exception::ErrorCode;
-use common_exception::Result;
 
 use crate::DataType;
 #[derive(

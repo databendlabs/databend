@@ -9,6 +9,9 @@ use std::hash::Hasher;
 use ahash::AHasher;
 use ahash::RandomState as AhashRandomState;
 
+/// TODO:
+/// This is very slow because it involves lots of copy to keep the origin state
+/// We should have our custom none-state hashe functions
 #[derive(Clone, Debug)]
 pub enum DFHasher {
     SipHasher(DefaultHasher),

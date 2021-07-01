@@ -2,20 +2,20 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::mem;
 use std::mem::ManuallyDrop;
+use std::mem::{self};
 use std::ptr::NonNull;
 use std::task::Context;
 use std::task::Poll;
 use std::usize;
 
 use common_arrow::arrow::array::ArrayData;
+use common_arrow::arrow::array::ArrayRef;
+use common_arrow::arrow::array::UInt64Array;
 use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::datatypes::DataType;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_datavalues::AlignedVec;
-use common_datavalues::DFUInt64Array;
 use common_exception::Result;
 use common_streams::ProgressStream;
 use futures::stream::Stream;
@@ -91,15 +91,36 @@ impl NumbersStream {
         Ok(if current.begin == current.end {
             None
         } else {
-            let mut av = AlignedVec::with_capacity_aligned((current.end - current.begin) as usize);
+            let v = (current.begin..current.end).collect::<Vec<u64>>();
+            let mut me = ManuallyDrop::new(v);
+            let byte_size = mem::size_of::<u64>();
+
             unsafe {
-                for val in current.begin..current.end {
-                    av.push(val);
-                }
+                let buffer = Buffer::from_raw_parts(
+                    NonNull::new(me.as_mut_ptr() as *mut u8).unwrap(),
+                    me.len() * byte_size,
+                    me.capacity() * byte_size,
+                );
+
+                let arr_data = ArrayData::builder(ArrowDataType::UInt64)
+                    .len(me.len())
+                    .offset(0)
+                    .add_buffer(buffer)
+                    .build();
+
+                let array = Arc::new(UInt64Array::from(arr_data)) as ArrayRef;
+                let block =
+                    DataBlock::create_by_array(self.schema.clone(), vec![array.into_series()]);
+                Some(block)
             }
-            let series = DFUInt64Array::new_from_aligned_vec(av).into_series();
-            let block = DataBlock::create_by_array(self.schema.clone(), vec![series]);
-            Some(block)
+
+            // let mut av = AlignedVec::with_capacity_aligned((current.end - current.begin) as usize);
+            // for val in current.begin..current.end {
+            //     av.push(val);
+            // }
+            // let series = DFUInt64Array::new_from_aligned_vec(av).into_series();
+            // let block = DataBlock::create_by_array(self.schema.clone(), vec![series]);
+            // Some(block)
         })
     }
 }

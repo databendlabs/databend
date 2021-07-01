@@ -3,11 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
-use std::convert::TryFrom;
 use std::fmt;
 
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::aggregator_common::assert_unary_arguments;
@@ -55,12 +53,12 @@ impl AggregateFunction for AggregateMinFunction {
     fn accumulate(&mut self, columns: &[DataColumn], _input_rows: usize) -> Result<()> {
         let value = Self::min_batch(&columns[0])?;
 
-        self.state = self.state.min(&value)?;
+        self.state = DataValue::agg(Min, self.state.clone(), value)?;
         Ok(())
     }
 
     fn accumulate_scalar(&mut self, values: &[DataValue]) -> Result<()> {
-        self.state = self.state.min(&values[0])?;
+        self.state = DataValue::agg(Min, self.state.clone(), values[0].clone())?;
 
         Ok(())
     }
@@ -71,7 +69,7 @@ impl AggregateFunction for AggregateMinFunction {
 
     fn merge(&mut self, states: &[DataValue]) -> Result<()> {
         let value = states[0].clone();
-        self.state = self.state.min(&value)?;
+        self.state = DataValue::agg(Min, self.state.clone(), value)?;
         Ok(())
     }
 

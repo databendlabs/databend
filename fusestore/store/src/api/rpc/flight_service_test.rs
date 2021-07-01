@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_arrow::arrow::array::ArrayRef;
 use common_datablocks::DataBlock;
 use common_flights::GetTableActionResult;
 use common_flights::StoreClient;

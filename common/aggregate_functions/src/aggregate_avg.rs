@@ -53,10 +53,9 @@ impl AggregateFunction for AggregateAvgFunction {
     fn accumulate(&mut self, columns: &[DataColumn], input_rows: usize) -> Result<()> {
         if let DataValue::Struct(values) = self.state.clone() {
             let sum = match &columns[0] {
-                DataColumn::Constant(value, size) => value.arithmetic(
-                    DataValueArithmeticOperator::Mul,
-                    &DataValue::UInt64(Some(*size as u64)),
-                ),
+                DataColumn::Constant(value, size) => {
+                    DataValue::arithmetic(Mul, value.clone(), DataValue::UInt64(Some(*size as u64)))
+                }
                 DataColumn::Array(array) => array.sum(),
             }?;
 

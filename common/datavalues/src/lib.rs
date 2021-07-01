@@ -9,6 +9,7 @@
 #[macro_use]
 mod macros;
 
+#[allow(dead_code)]
 mod bit_util;
 mod data_df_type;
 mod data_field;
@@ -18,8 +19,11 @@ mod data_schema;
 mod data_type;
 mod data_type_coercion;
 mod data_value;
+mod data_value_aggregate;
+mod data_value_arithmetic;
 mod data_value_operator;
 mod data_value_ops;
+#[allow(dead_code)]
 mod utils;
 mod vec;
 
@@ -40,5 +44,6 @@ pub use data_type::*;
 pub use data_type_coercion::*;
 pub use data_value::DataValue;
 pub use data_value::DataValueRef;
+pub use data_value_arithmetic::*;
 pub use data_value_operator::*;
 pub use vec::*;

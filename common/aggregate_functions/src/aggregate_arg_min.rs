@@ -76,7 +76,7 @@ impl AggregateFunction for AggregateArgMinFunction {
                 let old_min_arg = old_min_arg_val[0].clone();
                 let old_min_val = old_min_arg_val[1].clone();
 
-                let new_min_val = old_min_val.min(&min_val)?;
+                let new_min_val = DataValue::agg(Min, old_min_val.clone(), min_val.clone())?;
 
                 self.state = DataValue::Struct(vec![
                     if new_min_val == old_min_val {
@@ -95,7 +95,8 @@ impl AggregateFunction for AggregateArgMinFunction {
         if let DataValue::Struct(old_min_arg_val) = self.state.clone() {
             let old_min_arg = old_min_arg_val[0].clone();
             let old_min_val = old_min_arg_val[1].clone();
-            let new_min_val = old_min_val.min(&values[1])?;
+
+            let new_min_val = DataValue::agg(Min, old_min_val.clone(), values[1].clone())?;
 
             self.state = DataValue::Struct(vec![
                 if new_min_val == old_min_val {
@@ -118,7 +119,7 @@ impl AggregateFunction for AggregateArgMinFunction {
         if let (DataValue::Struct(new_states), DataValue::Struct(old_states)) =
             (arg_val, self.state.clone())
         {
-            let new_min_val = new_states[1].min(&old_states[1])?;
+            let new_min_val = DataValue::agg(Min, new_states[1].clone(), old_states[1].clone())?;
 
             self.state = DataValue::Struct(vec![
                 if new_min_val == old_states[1] {

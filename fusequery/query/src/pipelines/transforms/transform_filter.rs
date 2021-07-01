@@ -9,9 +9,7 @@ use std::time::Instant;
 
 use common_arrow::arrow;
 use common_datablocks::DataBlock;
-use common_datavalues as datavalues;
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
