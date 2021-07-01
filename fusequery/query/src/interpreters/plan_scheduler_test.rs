@@ -391,10 +391,7 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
                 _ => assert!(false, "test_scheduler_plan_with_convergent_and_expansive_stage must be have Remote plan!"),
             }
         }
-        _ => assert!(
-            false,
-            "test_scheduler_plan_with_convergent_and_expansive_stage must be have Select plan!"
-        ),
+        _ => assert!(false, "test_scheduler_plan_with_convergent_and_expansive_stage must be have Select plan!"),
     };
 
     Ok(())

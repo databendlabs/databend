@@ -90,10 +90,6 @@ impl FuseQueryContext {
         unimplemented!();
     }
 
-    pub fn with_id(&self, _uuid: &str) -> Result<FuseQueryContextRef> {
-        unimplemented!();
-    }
-
     /// ctx.reset will reset the necessary variables in the session
     pub fn reset(&self) -> Result<()> {
         unimplemented!()

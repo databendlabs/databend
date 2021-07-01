@@ -25,6 +25,10 @@ pub fn try_create_context() -> Result<FuseQueryContextRef> {
     SessionManager::from_conf(config, cluster)?
         .create_session("TestSession")?
         .try_create_context()
+        .and_then(|context| {
+            context.get_settings().set_max_threads(8)?;
+            Ok(context)
+        })
 }
 
 #[derive(Clone)]
@@ -65,5 +69,9 @@ pub fn try_create_cluster_context(nodes: &[ClusterNode]) -> Result<FuseQueryCont
     SessionManager::from_conf(config, cluster)?
         .create_session("TestClusterSession")?
         .try_create_context()
+        .and_then(|context| {
+            context.get_settings().set_max_threads(8)?;
+            Ok(context)
+        })
 }
 
