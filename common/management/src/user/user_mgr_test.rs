@@ -15,10 +15,11 @@ use mockall::predicate::*;
 use mockall::*;
 use sha2::Digest;
 
+use super::user_mgr::USER_API_KEY_PREFIX;
 use crate::user::user_info::NewUser;
 use crate::user::user_info::UserInfo;
-use crate::user::user_mgr::USER_API_KEY_PREFIX;
-use crate::user::UserMgr;
+use crate::UserMgr;
+
 // and mock!
 mock! {
     pub KV {}
@@ -595,7 +596,6 @@ mod update {
         let test_key = test_key.clone();
 
         // upsert should be called
-        // and ErrorCode::UnknownKey should be translated to ErrorCode:UnknownUser
         kv.expect_update_kv()
             .with(
                 predicate::function(move |v| v == test_key.as_str()),

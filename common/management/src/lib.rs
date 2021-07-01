@@ -4,3 +4,6 @@
 //
 
 mod user;
+
+pub use user::user_info::UserInfo;
+pub use user::user_mgr::UserMgr;

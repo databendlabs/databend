@@ -27,29 +27,6 @@ where T: KVApi
 }
 
 impl<T: KVApi> UserMgr<T> {
-    async fn upsert_user(
-        &mut self,
-        username: impl AsRef<str>,
-        password: impl AsRef<str>,
-        salt: impl AsRef<str>,
-        seq: Option<u64>,
-    ) -> common_exception::Result<UpsertKVActionResult> {
-        let new_user = NewUser::new(username.as_ref(), password.as_ref(), salt.as_ref());
-        self.upsert_user_info(&(&new_user).into(), seq).await
-    }
-
-    async fn upsert_user_info(
-        &mut self,
-        user_info: &UserInfo,
-        seq: Option<u64>,
-    ) -> common_exception::Result<UpsertKVActionResult> {
-        let value = serde_json::to_vec(user_info)?;
-        let key = prepend(&user_info.name);
-        self.kv_api.upsert_kv(&key, seq, value).await
-    }
-}
-
-impl<T: KVApi> UserMgr<T> {
     #[allow(dead_code)]
     pub async fn add_user(
         &mut self,
@@ -198,6 +175,29 @@ impl<T: KVApi> UserMgr<T> {
             }
         }
         Ok(r)
+    }
+}
+
+impl<T: KVApi> UserMgr<T> {
+    async fn upsert_user(
+        &mut self,
+        username: impl AsRef<str>,
+        password: impl AsRef<str>,
+        salt: impl AsRef<str>,
+        seq: Option<u64>,
+    ) -> common_exception::Result<UpsertKVActionResult> {
+        let new_user = NewUser::new(username.as_ref(), password.as_ref(), salt.as_ref());
+        self.upsert_user_info(&(&new_user).into(), seq).await
+    }
+
+    async fn upsert_user_info(
+        &mut self,
+        user_info: &UserInfo,
+        seq: Option<u64>,
+    ) -> common_exception::Result<UpsertKVActionResult> {
+        let value = serde_json::to_vec(user_info)?;
+        let key = prepend(&user_info.name);
+        self.kv_api.upsert_kv(&key, seq, value).await
     }
 }
 

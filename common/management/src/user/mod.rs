@@ -3,10 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0.
 //
 
-mod user_info;
-mod user_mgr;
-
-pub use user_mgr::UserMgr;
+pub(crate) mod user_info;
+pub(crate) mod user_mgr;
 
 #[cfg(test)]
 mod user_mgr_test;
