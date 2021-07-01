@@ -457,7 +457,9 @@ async fn test_flight_generic_kv() -> anyhow::Result<()> {
 
     let res = client.prefix_list_kv("__users/").await?;
     assert_eq!(
-        res.iter().map(|i| i.1.clone()).collect::<Vec<_>>(),
+        res.iter()
+            .map(|(_key, (_s, val))| val.clone())
+            .collect::<Vec<_>>(),
         values
             .iter()
             .map(|v| v.as_bytes().to_vec())

@@ -366,11 +366,11 @@ impl StateMachine {
             .collect()
     }
 
-    pub fn prefix_list_kv(&self, prefix: &str) -> Vec<SeqValue> {
+    pub fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqValue)> {
         self.kv
             .range(prefix.to_string()..)
             .take_while(|(k, _)| k.starts_with(prefix))
-            .map(|v| v.1.clone())
+            .map(|v| (v.0.clone(), v.1.clone()))
             .collect()
     }
 }

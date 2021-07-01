@@ -944,7 +944,7 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn prefix_list_kv(&self, prefix: &str) -> Vec<SeqValue> {
+    pub async fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqValue)> {
         // inconsistent get: from local state machine
         let sm = self.sto.sm.read().await;
         sm.prefix_list_kv(prefix)

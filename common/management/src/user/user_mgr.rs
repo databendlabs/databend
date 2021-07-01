@@ -85,14 +85,15 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
         let values = self.kv_api.prefix_list_kv(USER_API_KEY_PREFIX).await?;
         let mut r = vec![];
         for v in values {
-            let u = serde_json::from_slice::<UserInfo>(&v.1);
+            let (_key, (s, val)) = v;
+            let u = serde_json::from_slice::<UserInfo>(&val);
             let val = match u {
                 Err(e) => {
                     return Err(ErrorCode::IllegalUserInfoFormat(e.to_string()));
                 }
                 Ok(v) => v,
             };
-            r.push((v.0, val));
+            r.push((s, val));
         }
         Ok(r)
     }

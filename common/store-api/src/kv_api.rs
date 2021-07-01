@@ -24,7 +24,7 @@ pub struct MGetKVActionResult {
     pub result: Vec<Option<SeqValue>>,
 }
 
-pub type PrefixListReply = Vec<SeqValue>;
+pub type PrefixListReply = Vec<(String, SeqValue)>;
 
 #[async_trait]
 pub trait KVApi {

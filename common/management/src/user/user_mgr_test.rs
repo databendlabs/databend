@@ -356,7 +356,7 @@ mod get_all_users {
     use crate::user::utils::prepend;
 
     type UserInfos = Vec<(u64, UserInfo)>;
-    fn prepare() -> common_exception::Result<(Vec<SeqValue>, UserInfos)> {
+    fn prepare() -> common_exception::Result<(Vec<(String, SeqValue)>, UserInfos)> {
         let mut names = vec![];
         let mut keys = vec![];
         let mut res = vec![];
@@ -367,7 +367,7 @@ mod get_all_users {
             keys.push(prepend(&name));
             let new_user = NewUser::new(&name, "pass", "salt");
             let user_info = UserInfo::from(new_user);
-            res.push((i, serde_json::to_vec(&user_info)?));
+            res.push(("fake_key".to_string(), (i, serde_json::to_vec(&user_info)?)));
             user_infos.push((i, user_info));
         }
         Ok((res, user_infos))
@@ -393,7 +393,13 @@ mod get_all_users {
     #[tokio::test]
     async fn test_get_all_users_invalid_user_info_encoding() -> common_exception::Result<()> {
         let (mut res, _user_infos) = prepare()?;
-        res.insert(8, (0, "some arbitrary str".as_bytes().to_vec()));
+        res.insert(
+            8,
+            (
+                "fake_key".to_string(),
+                (0, "some arbitrary str".as_bytes().to_vec()),
+            ),
+        );
 
         let mut kv = MockKV::new();
         {
