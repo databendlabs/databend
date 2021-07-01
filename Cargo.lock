@@ -4463,9 +4463,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d404aefa651a24a7f2a1190fec9fb6380ba84ac511a6fefad79eb0e63d39a97d"
+checksum = "41c72bb3368a39bb153f226d8dd426ee33d54bc31f44037c078391b4a0b8dc04"
 dependencies = [
  "cfg-if 1.0.0",
  "core-foundation-sys",
@@ -5163,9 +5163,9 @@ checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "vergen"
-version = "5.1.9"
+version = "5.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f989a8a6dca13ecebbd7b892b69069f4321d19999f1a7e15a308f05ef4f5dbcd"
+checksum = "5f710158a7c9449f400cf734e97cb417a09a7b5f0cf54b133718b6b2951c9f79"
 dependencies = [
  "anyhow",
  "cfg-if 1.0.0",
