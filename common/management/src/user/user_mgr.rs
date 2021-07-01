@@ -75,10 +75,7 @@ impl<T: KVApi> UserMgr<T> {
         }
         let partial_update = new_salt.is_none() || new_password.is_none();
         let user_info = if partial_update {
-            let user_val_seq = self
-                .get_user(username.as_ref(), seq)
-                .await?
-                .ok_or_else(|| ErrorCode::UnknownUser(""))?;
+            let user_val_seq = self.get_user(username.as_ref(), seq).await?;
             let user_info = user_val_seq.1;
             UserInfo {
                 password_sha256: new_password.map_or(user_info.password_sha256, |v| {
@@ -115,7 +112,7 @@ impl<T: KVApi> UserMgr<T> {
         &mut self,
         username: impl AsRef<str>,
         seq: Option<u64>,
-    ) -> Result<Option<(u64, UserInfo)>> {
+    ) -> Result<(u64, UserInfo)> {
         let key = prepend(username.as_ref());
         let value = self.kv_api.get_kv(&key).await?;
         let res = value.result;
@@ -123,7 +120,7 @@ impl<T: KVApi> UserMgr<T> {
             let user_info = serde_json::from_slice(val);
             let user_info =
                 user_info.map_err(|e| ErrorCode::IllegalUserInfoFormat(e.to_string()))?;
-            Ok(Some((s, user_info)))
+            Ok((s, user_info))
         };
         match res {
             Some((s, val)) if seq.is_none() => f(s, val.as_slice()),

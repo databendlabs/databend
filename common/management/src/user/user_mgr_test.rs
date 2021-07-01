@@ -188,7 +188,6 @@ mod get {
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, Some(1)).await;
         assert!(res.is_ok());
-        assert!(res.unwrap().is_some());
 
         Ok(())
     }
@@ -214,7 +213,6 @@ mod get {
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, None).await;
         assert!(res.is_ok());
-        assert!(res.unwrap().is_some());
         Ok(())
     }
 
