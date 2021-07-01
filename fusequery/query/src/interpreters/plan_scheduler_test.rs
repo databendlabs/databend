@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datavalues::DataValue;
@@ -10,9 +9,6 @@ use common_exception::Result;
 use common_planners::*;
 use common_runtime::tokio;
 
-use crate::clusters::Cluster;
-use crate::clusters::ClusterRef;
-use crate::configs::Config;
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::sessions::FuseQueryContextRef;
 use crate::tests::try_create_cluster_context;

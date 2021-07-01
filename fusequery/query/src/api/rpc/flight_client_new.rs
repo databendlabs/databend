@@ -44,7 +44,7 @@ impl FlightClient {
     }
 
     pub async fn prepare_query_stage(&mut self, action: ShuffleAction, timeout: u64) -> Result<()> {
-        let action = FlightAction::PrepareQueryStage(action);
+        let action = FlightAction::PrepareShuffleAction(action);
         self.do_action(action, timeout).await?;
         Ok(())
     }

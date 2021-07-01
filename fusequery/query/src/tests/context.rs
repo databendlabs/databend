@@ -11,13 +11,12 @@ use common_runtime::tokio::runtime::Runtime;
 
 use crate::clusters::Cluster;
 use crate::configs::Config;
-use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionManager;
 
 pub fn try_create_context() -> Result<FuseQueryContextRef> {
     let mut config = Config::default();
-    let mut cluster = Cluster::empty();
+    let cluster = Cluster::empty();
 
     // Setup log dir to the tests directory.
     config.log_dir = env::current_dir()?
@@ -52,8 +51,8 @@ impl ClusterNode {
 }
 
 pub fn try_create_cluster_context(nodes: &[ClusterNode]) -> Result<FuseQueryContextRef> {
-    let mut config = Config::default();
-    let mut cluster = Cluster::empty();
+    let config = Config::default();
+    let cluster = Cluster::empty();
 
     for node in nodes {
         let node = node.clone();

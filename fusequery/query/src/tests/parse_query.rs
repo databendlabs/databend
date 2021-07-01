@@ -1,7 +1,6 @@
 use common_exception::Result;
 use common_planners::PlanNode;
 
-use crate::sessions::FuseQueryContextRef;
 use crate::sql::PlanParser;
 use crate::tests::try_create_context;
 

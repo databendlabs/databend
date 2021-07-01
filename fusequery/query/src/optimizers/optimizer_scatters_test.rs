@@ -5,8 +5,6 @@
 use common_exception::Result;
 use common_runtime::tokio;
 
-use crate::clusters::Cluster;
-use crate::configs::Config;
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::Optimizer;
 use crate::sql::PlanParser;

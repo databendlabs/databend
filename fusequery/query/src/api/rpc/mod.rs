@@ -4,9 +4,15 @@
 
 #[cfg(test)]
 mod flight_dispatcher_test;
-//
-// #[cfg(test)]
-// mod flight_service_new_test;
+
+#[cfg(test)]
+mod flight_service_test;
+
+#[cfg(test)]
+mod flight_actions_test;
+
+#[cfg(test)]
+mod flight_tickets_test;
 
 pub use flight_actions::ShuffleAction;
 pub use flight_client_new::FlightClient;

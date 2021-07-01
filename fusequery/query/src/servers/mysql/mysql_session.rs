@@ -23,7 +23,7 @@ impl MySQLConnection {
         let host = blocking_stream.peer_addr().ok();
         let blocking_stream_ref = blocking_stream.try_clone()?;
         session.attach(host, move || {
-            blocking_stream_ref.shutdown(Shutdown::Both);
+            blocking_stream_ref.shutdown(Shutdown::Both)?;
         });
 
         std::thread::spawn(move || {

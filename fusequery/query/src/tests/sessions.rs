@@ -9,7 +9,7 @@ use crate::sessions::SessionManagerRef;
 
 pub fn try_create_sessions() -> Result<SessionManagerRef> {
     let mut config = Config::default();
-    let mut cluster = Cluster::empty();
+    let cluster = Cluster::empty();
 
     // Setup log dir to the tests directory.
     config.log_dir = env::current_dir()?

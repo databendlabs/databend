@@ -129,7 +129,7 @@ impl FlightService for FuseQueryFlightService {
 
         let do_flight_action = || -> common_exception::Result<FlightResult> {
             match flight_action {
-                FlightAction::PrepareQueryStage(action) => {
+                FlightAction::PrepareShuffleAction(action) => {
                     let session_id = action.query_id.clone();
                     let is_aborted = self.dispatcher.is_aborted();
                     let session = self.sessions.create_rpc_session(session_id, is_aborted)?;
@@ -152,7 +152,7 @@ impl FlightService for FuseQueryFlightService {
         Result::Ok(RawResponse::new(
             Box::pin(tokio_stream::iter(vec![
                 Ok(ActionType {
-                    r#type: "PrepareQueryStage".to_string(),
+                    r#type: "PrepareShuffleAction".to_string(),
                     description: "Prepare a query stage that can be sent to the remote after receiving data from remote".to_string(),
                 })
             ])) as FlightStream<ActionType>

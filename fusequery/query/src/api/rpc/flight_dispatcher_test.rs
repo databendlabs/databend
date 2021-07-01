@@ -2,29 +2,18 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::time::Duration;
-
-use common_datablocks::{assert_blocks_eq, DataBlock};
+use common_datablocks::{assert_blocks_eq};
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
-use common_planners::PlanBuilder;
-use common_planners::PlanNode;
 use common_runtime::tokio;
-use common_runtime::tokio::sync::mpsc::channel;
-use common_runtime::tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
-use crate::api::rpc::flight_data_stream::FlightDataStream;
 use crate::api::rpc::FuseQueryFlightDispatcher;
 use crate::api::ShuffleAction;
-use crate::clusters::Cluster;
-use crate::configs::Config;
-use crate::sessions::SessionManager;
 use crate::tests::parse_query;
 use crate::tests::try_create_sessions;
-use futures::Future;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_stream_with_non_exists_stream() -> Result<()> {
@@ -50,7 +39,7 @@ async fn test_get_stream_with_non_exists_stream() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
     if let (Some(query_id), Some(stage_id), Some(stream_id)) = generate_uuids(3) {
         let flight_dispatcher = FuseQueryFlightDispatcher::create();

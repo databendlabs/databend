@@ -45,7 +45,7 @@ impl TryInto<Vec<u8>> for ShuffleAction {
 }
 
 pub enum FlightAction {
-    PrepareQueryStage(ShuffleAction),
+    PrepareShuffleAction(ShuffleAction),
 }
 
 impl TryInto<FlightAction> for Action {
@@ -53,7 +53,7 @@ impl TryInto<FlightAction> for Action {
 
     fn try_into(self) -> Result<FlightAction, Self::Error> {
         match self.r#type.as_str() {
-            "PrepareQueryStage" => Ok(FlightAction::PrepareQueryStage(self.body.try_into()?)),
+            "PrepareShuffleAction" => Ok(FlightAction::PrepareShuffleAction(self.body.try_into()?)),
             action_type => Err(Status::unimplemented(format!(
                 "UnImplement action {}",
                 action_type
@@ -67,8 +67,8 @@ impl TryInto<Action> for FlightAction {
 
     fn try_into(self) -> Result<Action, Self::Error> {
         match self {
-            FlightAction::PrepareQueryStage(shuffle_action) => Ok(Action {
-                r#type: String::from("PrepareQueryStage"),
+            FlightAction::PrepareShuffleAction(shuffle_action) => Ok(Action {
+                r#type: String::from("PrepareShuffleAction"),
                 body: shuffle_action.try_into()?,
             }),
         }
