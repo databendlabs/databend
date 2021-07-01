@@ -1,4 +1,6 @@
-//! Implementations of the ArrayApply Trait.
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
 use std::borrow::Cow;
 use std::sync::Arc;
 

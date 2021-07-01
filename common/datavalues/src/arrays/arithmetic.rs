@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 //! Implementations of arithmetic operations on DataArray's.
 use std::ops::Add;
 use std::ops::Div;

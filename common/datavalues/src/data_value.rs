@@ -375,10 +375,10 @@ impl From<DataType> for DataValue {
 impl fmt::Display for DataValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.is_null() {
-            return write!(f, "null");
+            return write!(f, "NULL");
         }
         match self {
-            DataValue::Null => write!(f, "null"),
+            DataValue::Null => write!(f, "NULL"),
             DataValue::Boolean(v) => format_data_value_with_option!(f, v),
             DataValue::Float32(v) => format_data_value_with_option!(f, v),
             DataValue::Float64(v) => format_data_value_with_option!(f, v),
@@ -391,7 +391,7 @@ impl fmt::Display for DataValue {
             DataValue::UInt32(v) => format_data_value_with_option!(f, v),
             DataValue::UInt64(v) => format_data_value_with_option!(f, v),
             DataValue::Utf8(v) => format_data_value_with_option!(f, v),
-            DataValue::Binary(None) => write!(f, "null"),
+            DataValue::Binary(None) => write!(f, "NULL"),
             DataValue::Binary(Some(v)) => {
                 for c in v {
                     write!(f, "{:02x}", c)?;
@@ -406,7 +406,7 @@ impl fmt::Display for DataValue {
             DataValue::TimestampNanosecond(v) => format_data_value_with_option!(f, v),
             DataValue::IntervalDayTime(v) => format_data_value_with_option!(f, v),
             DataValue::IntervalYearMonth(v) => format_data_value_with_option!(f, v),
-            DataValue::List(None, ..) => write!(f, "null"),
+            DataValue::List(None, ..) => write!(f, "NULL"),
             DataValue::List(Some(v), ..) => {
                 write!(
                     f,
@@ -425,10 +425,10 @@ impl fmt::Display for DataValue {
 impl fmt::Debug for DataValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_null() {
-            return write!(f, "null");
+            return write!(f, "NULL");
         }
         match self {
-            DataValue::Null => write!(f, "null"),
+            DataValue::Null => write!(f, "NULL"),
             DataValue::Boolean(v) => format_data_value_with_option!(f, v),
             DataValue::Int8(v) => format_data_value_with_option!(f, v),
             DataValue::Int16(v) => format_data_value_with_option!(f, v),

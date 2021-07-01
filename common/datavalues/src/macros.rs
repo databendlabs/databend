@@ -1,6 +1,6 @@
-// // Copyright 2020-2021 The Datafuse Authors.
-// //
-// // SPDX-License-Identifier: Apache-2.0.
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
 
 #[macro_export]
 macro_rules! match_data_type_apply_macro_ca {
@@ -76,7 +76,7 @@ macro_rules! format_data_value_with_option {
     ($F:expr, $EXPR:expr) => {{
         match $EXPR {
             Some(e) => write!($F, "{}", e),
-            None => write!($F, "null"),
+            None => write!($F, "NULL"),
         }
     }};
 }

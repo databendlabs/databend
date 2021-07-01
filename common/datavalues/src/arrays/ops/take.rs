@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 //! Traits to provide fast Random access to DataArrays data.
 //! This prevents downcasting every iteration.
 //! IntoTakeRandom provides structs that implement the TakeRandom trait.
