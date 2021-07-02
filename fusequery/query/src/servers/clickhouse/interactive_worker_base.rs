@@ -15,7 +15,6 @@ use tokio_stream::wrappers::IntervalStream;
 
 use crate::interpreters::InterpreterFactory;
 use crate::servers::clickhouse::writers::QueryWriter;
-use crate::servers::clickhouse::ClickHouseStream;
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::PlanParser;
 

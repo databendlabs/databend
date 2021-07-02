@@ -18,7 +18,6 @@ use crate::interpreters::InterpreterFactory;
 use crate::servers::clickhouse::clickhouse_handler;
 use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;
 use crate::servers::clickhouse::writers::QueryWriter;
-use crate::servers::clickhouse::ClickHouseStream;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;

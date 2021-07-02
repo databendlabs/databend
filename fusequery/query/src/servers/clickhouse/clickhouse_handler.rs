@@ -32,7 +32,6 @@ use crate::configs::Config;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::clickhouse::clickhouse_session::ClickHouseConnection;
 use crate::servers::clickhouse::interactive_worker::InteractiveWorker;
-use crate::servers::clickhouse::ClickHouseStream;
 use crate::servers::AbortableServer;
 use crate::servers::AbortableService;
 use crate::servers::Elapsed;
