@@ -638,21 +638,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-aggregate-functions"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "common-arrow",
- "common-datavalues",
- "common-exception",
- "common-infallible",
- "dyn-clone",
- "indexmap",
- "lazy_static",
- "pretty_assertions",
-]
-
-[[package]]
 name = "common-arrow"
 version = "0.1.0"
 dependencies = [
@@ -793,7 +778,6 @@ name = "common-planners"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "common-aggregate-functions",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -1550,7 +1534,6 @@ dependencies = [
  "async-trait",
  "clickhouse-rs",
  "clickhouse-srv",
- "common-aggregate-functions",
  "common-arrow",
  "common-building",
  "common-datablocks",

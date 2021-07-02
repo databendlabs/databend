@@ -6,11 +6,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use common_aggregate_functions::AggregateFunctionFactory;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::aggregates::AggregateFunctionFactory;
 use common_planners::expand_aggregate_arg_exprs;
 use common_planners::expand_wildcard;
 use common_planners::expr_as_column_expr;
