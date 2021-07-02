@@ -22,6 +22,7 @@ snmalloc-alloc = ["snmalloc-rs"]
 # Github dependencies
 
 # Crates.io dependencies
+cfg-if = "1.0.0"
 tcmalloc= { version = "0.3", optional = true }
 jemallocator = { version = "0.3", optional = true }
 snmalloc-rs = { version = "0.2", optional = true }
