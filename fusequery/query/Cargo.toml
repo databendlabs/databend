@@ -16,12 +16,14 @@ name = "fuse-benchmark"
 path = "src/bin/fuse-benchmark.rs"
 
 [features]
-default = ["simd"]
+default = ["simd", "allocator"]
 simd = ["common-arrow/simd"]
+allocator = ["common-allocators/snmalloc-alloc"]
 
 [dependencies]
 # Workspace dependencies
 common-arrow = {path = "../../common/arrow"}
+common-allocators = {path = "../../common/allocators"}
 common-datablocks = {path = "../../common/datablocks"}
 common-datavalues = {path = "../../common/datavalues"}
 common-exception = {path = "../../common/exception"}

@@ -12,5 +12,8 @@ ignore:
   - "*/ext/*"
   - "*/exception/*"
   - "*/tests/*"
+  - "*/arrow/*"
+  - "*/allocators/*"
+  - "*/building/*"
   - "*/profiling/*"
   - "*/api/http/debug/*"

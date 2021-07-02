@@ -22,7 +22,7 @@ title: Performance
 | SELECT sum(number) / count(number) FROM numbers_mt(100000000000) | 3.90 s.<br />(25.62 billion rows/s., 205.13 GB/s.)  | **×2.5 slow, (9.70 s.)** <br /> (10.31 billion rows/s., 82.52 GB/s.) |
 | SELECT sum(number) / count(number), max(number), min(number) FROM numbers_mt(100000000000) | 8.28 s.<br />(12.07 billion rows/s., 96.66 GB/s.)   | **×4.0 slow, (32.87 s.)** <br /> (3.04 billion rows/s., 24.34 GB/s.) |
 | SELECT number FROM numbers_mt(10000000000) ORDER BY number DESC LIMIT 100 | 4.80 s.<br />(2.08 billion rows/s., 16.67 GB/s.)    | **×2.9 slow, (13.95 s.)** <br /> (716.62 million rows/s., 5.73 GB/s.) |
-| SELECT max(number), sum(number) FROM numbers_mt(1000000000) GROUP BY sipHash64(number % 3), sipHash64(number % 4), sipHash64(number % 5) | 37.07 s.<br />(31.18 million rows/s., 249.68 MB/s.) | **×4 fast, (9.17 s.)** <br /> (109.02 million rows/s., 872.20 MB/s.) |
+| SELECT max(number), sum(number) FROM numbers_mt(1000000000) GROUP BY sipHash64(number % 3), sipHash64(number % 4) | 14.84 s.<br />(67.38 million rows/s., 539.51 MB/s.) | **×1.5 fast, (10.24 s.)** <br /> (97.65 million rows/s., 781.23 MB/s.) |
 
 !!! note "Notes"
     ClickHouse system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/bba7ec2c23da8017eced7118b59fc7d5) 
