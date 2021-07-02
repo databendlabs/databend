@@ -19,5 +19,5 @@ sha2 = "0.9.5"
 
 [dev-dependencies]
 tokio = { version = "1.7.1", features = ["macros", "rt","rt-multi-thread", "sync"] }
-mockall = "0.10.0"
+mockall = "0.10.1"
 common-metatypes = {path = "../metatypes"}
