@@ -30,7 +30,7 @@ impl Test {
         let statistics = Statistics {
             read_rows: total,
             read_bytes: total * 8,
-            true,
+            is_exact: true,
         };
 
         Ok(PlanNode::ReadSource(ReadDataSourcePlan {
