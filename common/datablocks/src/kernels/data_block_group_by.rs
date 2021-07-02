@@ -54,7 +54,8 @@ impl DataBlock {
             }
         }
 
-        // 2. Make group with indices.
+        // 2. Build serialized keys
+        let mut group_keys = Vec::with_capacity(block.num_rows());
         {
             let mut group_key_len = 0;
             for col in &group_columns {
@@ -66,21 +67,25 @@ impl DataBlock {
                 }
             }
 
-            let mut group_key = Vec::with_capacity(group_key_len);
-            for row in 0..block.num_rows() {
-                group_key.clear();
+            for _i in 0..block.num_rows() {
+                group_keys.push(Vec::with_capacity(group_key_len));
+            }
 
-                for col in &group_columns {
-                    DataColumn::concat_row_to_one_key(col, row, &mut group_key)?;
-                }
+            for col in &group_columns {
+                DataColumn::serialize(col, &mut group_keys)?;
+            }
+        }
 
-                match group_indices.get_mut(&group_key) {
+        // 2. Make group with indices.
+        {
+            for (row, group_key) in group_keys.iter().enumerate().take(block.num_rows()) {
+                match group_indices.get_mut(group_key) {
                     None => {
-                        let mut group_keys = Vec::with_capacity(group_key.len());
+                        let mut group_values = Vec::with_capacity(group_columns.len());
                         for col in &group_columns {
-                            group_keys.push(col.try_get(row)?);
+                            group_values.push(col.try_get(row)?);
                         }
-                        group_indices.insert(group_key.clone(), (vec![row as u32], group_keys));
+                        group_indices.insert(group_key.clone(), (vec![row as u32], group_values));
                     }
                     Some((v, _)) => {
                         v.push(row as u32);
