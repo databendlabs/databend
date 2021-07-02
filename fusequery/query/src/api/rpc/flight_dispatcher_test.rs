@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_datablocks::{assert_blocks_eq};
+use common_datablocks::assert_blocks_eq;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
@@ -19,11 +19,7 @@ use crate::tests::try_create_sessions;
 async fn test_get_stream_with_non_exists_stream() -> Result<()> {
     let dispatcher = FuseQueryFlightDispatcher::create();
 
-    let get_stream = dispatcher.get_stream(
-        "query_id",
-        "stage_id",
-        "stream_id",
-    );
+    let get_stream = dispatcher.get_stream("query_id", "stage_id", "stream_id");
 
     match get_stream {
         Ok(_) => assert!(

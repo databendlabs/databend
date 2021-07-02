@@ -19,6 +19,7 @@ use fuse_query::servers::ClickHouseHandler;
 use fuse_query::servers::MySQLHandler;
 use fuse_query::sessions::SessionManager;
 use log::info;
+use num::ToPrimitive;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -71,19 +72,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ClickHouse handler.
     {
-        let handler =
-            ClickHouseHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
-
-        tokio::spawn(async move {
-            handler.start().await.expect("ClickHouse handler error");
-        });
+        let addr = (conf.clickhouse_handler_host.clone(), conf.clickhouse_handler_port);
+        let srv = ClickHouseHandler::create(session_manager.clone());
+        let listening = srv.start(addr).await?;
+        services.push(srv);
 
         info!(
-            "ClickHouse handler listening on {}:{}, Usage: clickhouse-client --host {} --port {}",
-            conf.clickhouse_handler_host,
-            conf.clickhouse_handler_port,
-            conf.clickhouse_handler_host,
-            conf.clickhouse_handler_port
+            "ClickHouse handler listening on {}, Usage: clickhouse-client --host {} --port {}",
+            listening,
+            listening.ip(),
+            listening.port(),
         );
     }
 

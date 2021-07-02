@@ -24,13 +24,11 @@ pub fn try_create_context() -> Result<FuseQueryContextRef> {
         .display()
         .to_string();
 
-    SessionManager::from_conf(config, cluster)?
-        .create_session("TestSession")?
-        .try_create_context()
-        .and_then(|context| {
-            context.get_settings().set_max_threads(8)?;
-            Ok(context)
-        })
+    let sessions = SessionManager::from_conf(config, cluster)?;
+    let test_session = sessions.create_session("TestSession")?;
+    let test_context = test_session.create_context();
+    test_context.get_settings().set_max_threads(8)?;
+    Ok(test_context)
 }
 
 #[derive(Clone)]
@@ -67,11 +65,9 @@ pub fn try_create_cluster_context(nodes: &[ClusterNode]) -> Result<FuseQueryCont
         .unwrap()?;
     }
 
-    SessionManager::from_conf(config, cluster)?
-        .create_session("TestClusterSession")?
-        .try_create_context()
-        .and_then(|context| {
-            context.get_settings().set_max_threads(8)?;
-            Ok(context)
-        })
+    let sessions = SessionManager::from_conf(config, cluster)?;
+    let test_session = sessions.create_session("TestSession")?;
+    let test_context = test_session.create_context();
+    test_context.get_settings().set_max_threads(8)?;
+    Ok(test_context)
 }

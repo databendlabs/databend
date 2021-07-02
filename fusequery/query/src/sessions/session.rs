@@ -73,14 +73,14 @@ impl Session {
         }
     }
 
-    pub fn try_create_context(self: &Arc<Self>) -> Result<FuseQueryContextRef> {
+    pub fn create_context(self: &Arc<Self>) -> FuseQueryContextRef {
         // let inner = self.mutable_status.lock();
 
         // TODO: take inner context shared.
         FuseQueryContext::from_shared(FuseQueryContextShared::try_create(
             self.config.clone(),
             self.clone(),
-        )?)
+        ))
     }
 
     pub fn attach<F: FnOnce() + Send + 'static>(

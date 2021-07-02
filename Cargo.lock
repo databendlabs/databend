@@ -588,8 +588,7 @@ dependencies = [
 [[package]]
 name = "clickhouse-srv"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce0243739eb320a5f00dfe321b999617c422dac2f8a1026c67da2c93dd47134d"
+source = "git+https://github.com/zhang2014/clickhouse-srv?branch=support_abort#e61769bf56d237cacc779c4085307965f8098594"
 dependencies = [
  "async-trait",
  "byteorder",

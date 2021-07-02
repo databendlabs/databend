@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::FlightData;
+use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -21,7 +22,6 @@ use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionRef;
-use common_datablocks::DataBlock;
 
 struct StreamInfo {
     schema: DataSchemaRef,
@@ -53,7 +53,12 @@ impl FuseQueryFlightDispatcher {
         self.abort.load(Ordering::Relaxed)
     }
 
-    pub fn get_stream(&self, query_id: &str, stage_id: &str, stream: &str) -> Result<mpsc::Receiver<Result<DataBlock>>> {
+    pub fn get_stream(
+        &self,
+        query_id: &str,
+        stage_id: &str,
+        stream: &str,
+    ) -> Result<mpsc::Receiver<Result<DataBlock>>> {
         let stage_name = format!("{}/{}", query_id, stage_id);
         if let Some(notify) = self.stages_notify.write().remove(&stage_name) {
             notify.notify_waiters();
@@ -88,7 +93,7 @@ impl FuseQueryFlightDispatcher {
     }
 
     fn run_action(&self, session: SessionRef, action: &ShuffleAction) -> Result<()> {
-        let query_context = session.try_create_context()?;
+        let query_context = session.create_context();
         let action_context = FuseQueryContext::new(query_context.clone());
         let pipeline =
             PipelineBuilder::create(action_context.clone(), HashMap::new(), action.plan.clone())
@@ -137,7 +142,7 @@ impl FuseQueryFlightDispatcher {
         action: &ShuffleAction,
         scatter: FlightScatterByHash,
     ) -> Result<()> {
-        let query_context = session.try_create_context()?;
+        let query_context = session.create_context();
         let action_context = FuseQueryContext::new(query_context.clone());
         let pipeline =
             PipelineBuilder::create(action_context.clone(), HashMap::new(), action.plan.clone())
@@ -166,7 +171,6 @@ impl FuseQueryFlightDispatcher {
 
         let stage_name = format!("{}/{}", action.query_id, action.stage_id);
         let stages_notify = self.stages_notify.clone();
-
 
         query_context.execute_task(async move {
             wait_start(stage_name, stages_notify).await;

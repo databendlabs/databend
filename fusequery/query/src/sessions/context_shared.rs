@@ -33,8 +33,8 @@ pub struct FuseQueryContextShared {
 }
 
 impl FuseQueryContextShared {
-    pub fn try_create(conf: Config, session: Arc<Session>) -> Result<Arc<FuseQueryContextShared>> {
-        Ok(Arc::new(FuseQueryContextShared {
+    pub fn try_create(conf: Config, session: Arc<Session>) -> Arc<FuseQueryContextShared> {
+        Arc::new(FuseQueryContextShared {
             conf,
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             progress: Arc::new(Progress::create()),
@@ -42,7 +42,7 @@ impl FuseQueryContextShared {
             runtime: Arc::new(RwLock::new(None)),
             cluster_cache: Arc::new(RwLock::new(None)),
             sources_abort_handle: Arc::new(RwLock::new(Vec::new())),
-        }))
+        })
     }
 
     pub fn try_get_cluster(&self) -> Result<ClusterRef> {

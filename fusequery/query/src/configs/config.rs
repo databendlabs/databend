@@ -106,7 +106,7 @@ pub struct Config {
     env = CLICKHOUSE_HANDLER_PORT,
     default_value = "9000"
     )]
-    pub clickhouse_handler_port: u64,
+    pub clickhouse_handler_port: u16,
 
     #[structopt(
     long,
@@ -291,7 +291,7 @@ impl Config {
         env_helper!(
             mut_config,
             clickhouse_handler_port,
-            u64,
+            u16,
             CLICKHOUSE_HANDLER_PORT
         );
         env_helper!(

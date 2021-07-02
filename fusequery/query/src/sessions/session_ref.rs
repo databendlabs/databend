@@ -36,8 +36,8 @@ impl SessionRef {
         self.session.get_id()
     }
 
-    pub fn try_create_context(&self) -> Result<FuseQueryContextRef> {
-        self.session.try_create_context()
+    pub fn create_context(&self) -> FuseQueryContextRef {
+        self.session.create_context()
     }
 
     pub fn is_aborting(&self) -> bool {

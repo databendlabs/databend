@@ -74,8 +74,8 @@ impl FuseQueryContext {
         })
     }
 
-    pub fn from_shared(shared: Arc<FuseQueryContextShared>) -> Result<FuseQueryContextRef> {
-        Ok(Arc::new(FuseQueryContext {
+    pub fn from_shared(shared: Arc<FuseQueryContextShared>) -> FuseQueryContextRef {
+        Arc::new(FuseQueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             version: format!(
@@ -83,7 +83,7 @@ impl FuseQueryContext {
                 *crate::configs::config::FUSE_COMMIT_VERSION
             ),
             shared,
-        }))
+        })
     }
 
     pub fn with_cluster(&self, _cluster: ClusterRef) -> Result<FuseQueryContextRef> {

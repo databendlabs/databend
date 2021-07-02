@@ -21,27 +21,28 @@ simd = ["common-arrow/simd"]
 
 [dependencies]
 # Workspace dependencies
-common-arrow = {path = "../../common/arrow"}
-common-datablocks = {path = "../../common/datablocks"}
-common-datavalues = {path = "../../common/datavalues"}
-common-exception = {path = "../../common/exception"}
-common-flights = {path = "../../common/flights"}
-common-functions = {path = "../../common/functions"}
-common-aggregate-functions = {path = "../../common/aggregate_functions" }
-common-infallible = {path = "../../common/infallible"}
-common-planners = {path = "../../common/planners"}
-common-progress = {path = "../../common/progress"}
-common-runtime = {path = "../../common/runtime"}
-common-streams = {path = "../../common/streams"}
-common-tracing = {path = "../../common/tracing"}
-common-profling = {path = "../../common/profiling"}
-common-store-api = {path = "../../common/store-api"}
-common-management = {path = "../../common/management"}
+common-arrow = { path = "../../common/arrow" }
+common-datablocks = { path = "../../common/datablocks" }
+common-datavalues = { path = "../../common/datavalues" }
+common-exception = { path = "../../common/exception" }
+common-flights = { path = "../../common/flights" }
+common-functions = { path = "../../common/functions" }
+common-aggregate-functions = { path = "../../common/aggregate_functions" }
+common-infallible = { path = "../../common/infallible" }
+common-planners = { path = "../../common/planners" }
+common-progress = { path = "../../common/progress" }
+common-runtime = { path = "../../common/runtime" }
+common-streams = { path = "../../common/streams" }
+common-tracing = { path = "../../common/tracing" }
+common-profling = { path = "../../common/profiling" }
+common-store-api = { path = "../../common/store-api" }
+common-management = { path = "../../common/management" }
 
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "5a7ae3d" }
-clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9"}
-sqlparser =  { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "56e50dc"}
+clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "56e50dc" }
+clickhouse-srv = { git = "https://github.com/zhang2014/clickhouse-srv", branch = "support_abort" }
 
 
 # Crates.io dependencies
@@ -51,7 +52,6 @@ async-trait = "0.1"
 crossbeam = "0.8"
 quantiles = "0.7.1"
 ctrlc = { version = "3.1.9", features = ["termination"] }
-clickhouse-srv = "0.2.1"
 crossbeam-queue = "0.3.2"
 env_logger = "0.8"
 futures = "0.3"

@@ -1,12 +1,14 @@
-use common_exception::Result;
-use crate::api::ShuffleAction;
-use common_datavalues::DataValue;
-use common_planners::Expression;
-use crate::api::rpc::flight_actions::FlightAction;
 use std::convert::TryInto;
-use crate::tests::parse_query;
-use common_runtime::tokio;
+
 use common_arrow::arrow_flight::Action;
+use common_datavalues::DataValue;
+use common_exception::Result;
+use common_planners::Expression;
+use common_runtime::tokio;
+
+use crate::api::rpc::flight_actions::FlightAction;
+use crate::api::ShuffleAction;
+use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_shuffle_action_try_into() -> Result<()> {
@@ -27,7 +29,10 @@ async fn test_shuffle_action_try_into() -> Result<()> {
             assert_eq!(action.stage_id, "stage_id");
             assert_eq!(action.plan, parse_query("SELECT number FROM numbers(5)")?);
             assert_eq!(action.sinks, vec![String::from("stream_id")]);
-            assert_eq!(action.scatters_expression, Expression::Literal(DataValue::UInt64(Some(1))));
+            assert_eq!(
+                action.scatters_expression,
+                Expression::Literal(DataValue::UInt64(Some(1)))
+            );
         }
     }
 

@@ -49,7 +49,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         }
 
         self.base
-            .do_prepare(query, writer, self.session.try_create_context()?)
+            .do_prepare(query, writer, self.session.create_context())
     }
 
     fn on_execute(
@@ -70,13 +70,11 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         }
 
         self.base
-            .do_execute(id, param, writer, self.session.try_create_context()?)
+            .do_execute(id, param, writer, self.session.create_context())
     }
 
     fn on_close(&mut self, id: u32) {
-        if let Ok(context) = self.session.try_create_context() {
-            self.base.do_close(id, context);
-        }
+        self.base.do_close(id, self.session.create_context());
     }
 
     fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> Result<()> {
@@ -92,7 +90,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         }
 
         let start = Instant::now();
-        let context = self.session.try_create_context()?;
+        let context = self.session.create_context();
 
         DFQueryResultWriter::create(writer).write(self.base.do_query(query, context))?;
 
@@ -116,7 +114,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             ));
         }
 
-        let context = self.session.try_create_context()?;
+        let context = self.session.create_context();
         DFInitResultWriter::create(writer).write(self.base.do_init(database_name, context))
     }
 }
