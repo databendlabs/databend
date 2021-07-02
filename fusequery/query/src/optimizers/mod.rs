@@ -9,6 +9,8 @@ mod optimizer_projection_push_down_test;
 #[cfg(test)]
 mod optimizer_scatters_test;
 #[cfg(test)]
+mod optimizer_statistics_exact_test;
+#[cfg(test)]
 mod optimizer_test;
 
 mod optimizer;
