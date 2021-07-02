@@ -14,6 +14,7 @@ impl HashesFunction {
     pub fn register(map: FactoryFuncRef) -> Result<()> {
         let mut map = map.write();
         map.insert("siphash", SipHashFunction::try_create);
+        map.insert("siphash64", SipHashFunction::try_create);
         Ok(())
     }
 }
