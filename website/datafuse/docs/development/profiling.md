@@ -35,3 +35,8 @@ Showing top 10 nodes out of 204
          0     0%   100%        701 13.99%  <ahash::fallback_hash::AHasher as core::hash::Hasher>::write
          0     0%   100%         26  0.52%  <ahash::random_state::RandomState as core::hash::BuildHasher>::build_hash
 ```
+
+Or
+```
+go tool pprof -http=0.0.0.0:8081 /home/bohu/pprof/pprof.cpu.007.pb.gz
+```

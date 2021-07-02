@@ -7,12 +7,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_aggregate_functions::AggregateFunction;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BinaryBuilder;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_functions::aggregates::AggregateFunction;
 use common_infallible::RwLock;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
