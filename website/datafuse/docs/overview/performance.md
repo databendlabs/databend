@@ -11,18 +11,18 @@ title: Performance
     * Build with Link-time Optimization and Using CPU Specific Instructions
     * ClickHouse server version 21.4.6 revision 54447
 
-| Query                                                        | FuseQuery (v0.4.1)                                  | ClickHouse (v21.4.6)                                         |
+| Query                                                        | FuseQuery (v0.4.39-nightly)                                  | ClickHouse (v21.4.6)                                         |
 | ------------------------------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------ |
-| SELECT avg(number) FROM numbers_mt(100000000000)             | 3.87 s.<br /> (25.83 billion rows/s., 206.79 GB/s.) | **×1.6 slow, (6.04 s.)** <br /> (16.57 billion rows/s., 132.52 GB/s.) |
-| SELECT sum(number) FROM numbers_mt(100000000000)             | 4.86 s.<br />(20.57 billion rows/s., 164.70 GB/s.)  | **×1.2 slow, (5.90 s.)** <br />(16.95 billion rows/s., 135.62 GB/s.) |
-| SELECT min(number) FROM numbers_mt(100000000000)             | 5.61 s.<br />(17.82 billion rows/s., 142.65 GB/s.)  | **×2.3 slow, (13.05 s.)** <br /> (7.66 billion rows/s., 61.26 GB/s.) |
-| SELECT max(number) FROM numbers_mt(100000000000)             | 5.61 s.<br />(17.82 billion rows/s., 142.67 GB/s.)  | **×2.5 slow, (14.07 s.)** <br /> (7.11 billion rows/s., 56.86 GB/s.) |
-| SELECT count(number) FROM numbers_mt(100000000000)           | 3.12 s.<br />(32.03 billion rows/s., 256.48 GB/s.)  | **×1.2 slow, (3.71 s.)** <br /> (26.93 billion rows/s., 215.43 GB/s.) |
-| SELECT sum(number+number+number) FROM numbers_mt(100000000000) | 17.85 s.<br />(5.60 billion rows/s., 44.85 GB/s.)   | **×16.9 slow, (233.71 s.)** <br /> (427.87 million rows/s., 3.42 GB/s.) |
-| SELECT sum(number) / count(number) FROM numbers_mt(100000000000) | 4.02 s.<br />(24.86 billion rows/s., 199.10 GB/s.)  | **×2.4 slow, (9.70 s.)** <br /> (10.31 billion rows/s., 82.52 GB/s.) |
-| SELECT sum(number) / count(number), max(number), min(number) FROM numbers_mt(100000000000) | 9.60 s.<br />(10.41 billion rows/s., 83.38 GB/s.)   | **×3.4 slow, (32.87 s.)** <br /> (3.04 billion rows/s., 24.34 GB/s.) |
-| SELECT number FROM numbers_mt(10000000000) ORDER BY number DESC LIMIT 1000 | 5.34 s.<br />(1.87 billion rows/s., 14.99 GB/s.)    | **×2.6 slow, (13.95 s.)** <br /> (716.62 million rows/s., 5.73 GB/s.) |
-| SELECT max(number),sum(number) FROM numbers_mt(1000000000) GROUP BY number % 3, number % 4, number % 5 | 9.03 s.<br />(110.71 million rows/s., 886.50 MB/s.) | **×3.5 fast, (2.60 s.)** <br /> (385.28 million rows/s., 3.08 GB/s.) |
+| SELECT avg(number) FROM numbers_mt(100000000000)             | 4.35 s.<br /> (22.97 billion rows/s., 183.91 GB/s.) | **×1.4 slow, (6.04 s.)** <br /> (16.57 billion rows/s., 132.52 GB/s.) |
+| SELECT sum(number) FROM numbers_mt(100000000000)             | 4.20 s.<br />(23.79 billion rows/s., 190.50 GB/s.)  | **×1.4 slow, (5.90 s.)** <br />(16.95 billion rows/s., 135.62 GB/s.) |
+| SELECT min(number) FROM numbers_mt(100000000000)             | 4.92 s.<br />(20.31 billion rows/s., 162.64 GB/s.)  | **×2.7 slow, (13.05 s.)** <br /> (7.66 billion rows/s., 61.26 GB/s.) |
+| SELECT max(number) FROM numbers_mt(100000000000)             | 4.77 s.<br />(20.95 billion rows/s., 167.78 GB/s.)  | **×3.0 slow, (14.07 s.)** <br /> (7.11 billion rows/s., 56.86 GB/s.) |
+| SELECT count(number) FROM numbers_mt(100000000000)           | 2.91 s.<br />(34.33 billion rows/s., 274.90 GB/s.)  | **×1.3 slow, (3.71 s.)** <br /> (26.93 billion rows/s., 215.43 GB/s.) |
+| SELECT sum(number+number+number) FROM numbers_mt(100000000000) | 19.83 s.<br />(5.04 billion rows/s., 40.37 GB/s.)   | **×12.1 slow, (233.71 s.)** <br /> (427.87 million rows/s., 3.42 GB/s.) |
+| SELECT sum(number) / count(number) FROM numbers_mt(100000000000) | 3.90 s.<br />(25.62 billion rows/s., 205.13 GB/s.)  | **×2.5 slow, (9.70 s.)** <br /> (10.31 billion rows/s., 82.52 GB/s.) |
+| SELECT sum(number) / count(number), max(number), min(number) FROM numbers_mt(100000000000) | 8.28 s.<br />(12.07 billion rows/s., 96.66 GB/s.)   | **×4.0 slow, (32.87 s.)** <br /> (3.04 billion rows/s., 24.34 GB/s.) |
+| SELECT number FROM numbers_mt(10000000000) ORDER BY number DESC LIMIT 100 | 4.80 s.<br />(2.08 billion rows/s., 16.67 GB/s.)    | **×2.9 slow, (13.95 s.)** <br /> (716.62 million rows/s., 5.73 GB/s.) |
+| SELECT max(number), sum(number) FROM numbers_mt(1000000000) GROUP BY sipHash64(number % 3), sipHash64(number % 4), sipHash64(number % 5) | 37.07 s.<br />(31.18 million rows/s., 249.68 MB/s.) | **×4 fast, (9.17 s.)** <br /> (109.02 million rows/s., 872.20 MB/s.) |
 
 !!! note "Notes"
     ClickHouse system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/bba7ec2c23da8017eced7118b59fc7d5) 
