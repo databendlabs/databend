@@ -39,7 +39,7 @@ impl From<&NewUser> for UserInfo {
         UserInfo {
             name: new_user.name.clone(),
             password_sha256: sha2::Sha256::digest(new_user.password.as_bytes()).into(),
-            salt_sha256: sha2::Sha256::digest(&new_user.salt.as_bytes()).into(),
+            salt_sha256: sha2::Sha256::digest(new_user.salt.as_bytes()).into(),
         }
     }
 }
