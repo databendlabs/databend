@@ -60,10 +60,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // MySQL handler.
     {
+        let addr = (conf.mysql_handler_host.clone(), conf.mysql_handler_port);
         let handler = MySQLHandler::create(session_manager.clone());
-        let listening = handler
-            .start((conf.mysql_handler_host.clone(), conf.mysql_handler_port))
-            .await?;
+        let listening = handler.start(addr).await?;
         services.push(handler);
 
         info!(
@@ -93,27 +92,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let addr = conf.metric_api_address.parse::<std::net::SocketAddr>()?;
         let srv = MetricService::create();
-        let addr = srv.start((addr.ip().to_string(), addr.port())).await?;
+        let listening = srv.start((addr.ip().to_string(), addr.port())).await?;
         services.push(srv);
-        info!("Metric API server listening on {}", addr);
+        info!("Metric API server listening on {}", listening);
     }
 
     // HTTP API service.
     {
         let addr = conf.http_api_address.parse::<std::net::SocketAddr>()?;
         let srv = HttpService::create(conf.clone(), cluster.clone());
-        let addr = srv.start((addr.ip().to_string(), addr.port())).await?;
+        let listening = srv.start((addr.ip().to_string(), addr.port())).await?;
         services.push(srv);
-        info!("HTTP API server listening on {}", addr);
+        info!("HTTP API server listening on {}", listening);
     }
 
     // RPC API service.
     {
         let addr = conf.flight_api_address.parse::<std::net::SocketAddr>()?;
         let srv = RpcService::create(session_manager.clone());
-        let addr = srv.start((addr.ip().to_string(), addr.port())).await?;
+        let listening = srv.start((addr.ip().to_string(), addr.port())).await?;
         services.push(srv);
-        info!("RPC API server listening on {}", addr);
+        info!("RPC API server listening on {}", listening);
     }
 
     // Ctrl + C 100 times in five seconds

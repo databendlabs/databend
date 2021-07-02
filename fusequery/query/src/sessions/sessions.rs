@@ -32,8 +32,6 @@ pub struct SessionManager {
 
     max_sessions: usize,
     active_sessions: RwLock<HashMap<String, Arc<Session>>>,
-    // TODO: remove queries_context.
-    queries_context: RwLock<HashMap<String, FuseQueryContextRef>>,
 }
 
 pub type SessionManagerRef = Arc<SessionManager>;
@@ -47,7 +45,6 @@ impl SessionManager {
 
             max_sessions: max_mysql_sessions as usize,
             active_sessions: RwLock::new(HashMap::with_capacity(max_mysql_sessions as usize)),
-            queries_context: RwLock::new(HashMap::with_capacity(max_mysql_sessions as usize)),
         }))
     }
 
@@ -60,7 +57,6 @@ impl SessionManager {
 
             max_sessions: max_mysql_sessions,
             active_sessions: RwLock::new(HashMap::with_capacity(max_mysql_sessions)),
-            queries_context: RwLock::new(HashMap::with_capacity(max_mysql_sessions)),
         }))
     }
 
@@ -120,23 +116,6 @@ impl SessionManager {
         counter!(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
 
         self.active_sessions.write().remove(session_id);
-    }
-
-    pub fn try_create_context(&self) -> Result<FuseQueryContextRef> {
-        counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
-
-        let ctx = FuseQueryContext::try_create(self.conf.clone())?;
-        self.queries_context
-            .write()
-            .insert(ctx.get_id(), ctx.clone());
-        Ok(ctx)
-    }
-
-    pub fn try_remove_context(&self, ctx: FuseQueryContextRef) -> Result<()> {
-        counter!(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
-
-        self.queries_context.write().remove(&*ctx.get_id());
-        Ok(())
     }
 }
 

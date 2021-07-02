@@ -86,15 +86,6 @@ impl FuseQueryContext {
         })
     }
 
-    pub fn with_cluster(&self, _cluster: ClusterRef) -> Result<FuseQueryContextRef> {
-        unimplemented!();
-    }
-
-    /// ctx.reset will reset the necessary variables in the session
-    pub fn reset(&self) -> Result<()> {
-        unimplemented!()
-    }
-
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
     pub fn execute_task<T>(&self, task: T) -> Result<JoinHandle<T::Output>>

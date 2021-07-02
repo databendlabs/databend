@@ -20,12 +20,9 @@ async fn test_metrics_server() -> Result<()> {
     let service = MetricService::create();
     let address = service.start(("127.0.0.1".to_string(), 0)).await?;
 
-    assert_eq!(do_get(address).await?, "");
+    assert_eq!(do_get(address).await?.find("metrics_test 1"), None);
     counter!(METRIC_TEST, 1);
-    assert_eq!(
-        do_get(address).await?,
-        "# TYPE metrics_test counter\nmetrics_test 1\n\n"
-    );
+    assert!(do_get(address).await?.find("metrics_test 1").is_some());
     Ok(())
 }
 
