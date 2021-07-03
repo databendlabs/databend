@@ -324,7 +324,7 @@ impl DataValue {
             DataValue::UInt32(Some(v)) => Ok(*v as i64),
             DataValue::UInt64(Some(v)) => Ok(*v as i64),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected type:{:?} to get u64 number",
+                "Unexpected type:{:?} to get i64 number",
                 other.data_type()
             ))),
         }
