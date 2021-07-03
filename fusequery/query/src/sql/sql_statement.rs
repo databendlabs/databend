@@ -26,6 +26,9 @@ pub struct DfShowDatabases;
 pub struct DfShowSettings;
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct DfShowProcessList;
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DfExplain {
     pub typ: ExplainType,
     pub statement: Box<SQLStatement>,
@@ -86,6 +89,9 @@ pub enum DfStatement {
 
     // Settings.
     ShowSettings(DfShowSettings),
+
+    // ProcessList
+    ShowProcessList(DfShowProcessList),
 }
 
 /// Comment hints from SQL.

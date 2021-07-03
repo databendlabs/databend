@@ -24,7 +24,7 @@ use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
-use crate::sql::DfCreateDatabase;
+use crate::sql::{DfCreateDatabase, DfShowProcessList};
 use crate::sql::DfCreateTable;
 use crate::sql::DfDropDatabase;
 use crate::sql::DfDropTable;
@@ -146,6 +146,8 @@ impl<'a> DfParser<'a> {
                             Ok(DfStatement::ShowDatabases(DfShowDatabases))
                         } else if self.consume_token("SETTINGS") {
                             Ok(DfStatement::ShowSettings(DfShowSettings))
+                        } else if self.consume_token("PROCESSLIST") {
+                            Ok(DfStatement::ShowProcessList(DfShowProcessList))
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
