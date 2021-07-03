@@ -68,7 +68,7 @@ impl Rem for &Series {
     type Output = Result<Series>;
 
     fn rem(self, rhs: Self) -> Self::Output {
-        // apply rem with the largeste types
+        // apply rem with the largest types
         let dtype = numerical_arithmetic_coercion(
             &DataValueArithmeticOperator::Modulo,
             &self.data_type(),

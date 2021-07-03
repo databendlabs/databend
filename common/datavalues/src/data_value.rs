@@ -305,7 +305,7 @@ impl DataValue {
             DataValue::UInt8(Some(v)) => Ok(*v as u64),
             DataValue::UInt16(Some(v)) => Ok(*v as u64),
             DataValue::UInt32(Some(v)) => Ok(*v as u64),
-            DataValue::UInt64(Some(v)) => Ok(*v as u64),
+            DataValue::UInt64(Some(v)) => Ok(*v),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unexpected type:{:?} to get u64 number",
                 other.data_type()
@@ -318,7 +318,7 @@ impl DataValue {
             DataValue::Int8(Some(v)) => Ok(*v as i64),
             DataValue::Int16(Some(v)) => Ok(*v as i64),
             DataValue::Int32(Some(v)) => Ok(*v as i64),
-            DataValue::Int64(Some(v)) => Ok(*v as i64),
+            DataValue::Int64(Some(v)) => Ok(*v),
             DataValue::UInt8(Some(v)) => Ok(*v as i64),
             DataValue::UInt16(Some(v)) => Ok(*v as i64),
             DataValue::UInt32(Some(v)) => Ok(*v as i64),
