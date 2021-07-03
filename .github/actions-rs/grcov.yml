@@ -16,4 +16,5 @@ ignore:
   - "*/allocators/*"
   - "*/building/*"
   - "*/profiling/*"
+  - "*/tracing/*"
   - "*/api/http/debug/*"
