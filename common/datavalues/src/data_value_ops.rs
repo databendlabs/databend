@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::u8;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 
