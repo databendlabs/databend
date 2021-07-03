@@ -22,8 +22,6 @@ use crate::servers::AbortableService;
 use crate::servers::Elapsed;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
-use crate::sessions::FuseQueryContext;
-use crate::sessions::FuseQueryContextRef;
 
 pub struct SessionManager {
     conf: Config,

@@ -8,7 +8,6 @@ mod clickhouse_session;
 mod interactive_worker;
 mod interactive_worker_base;
 
-mod interval_stream;
 mod writers;
 
-pub use self::clickhouse_handler::ClickHouseHandler;
+pub use clickhouse_handler::ClickHouseHandler;

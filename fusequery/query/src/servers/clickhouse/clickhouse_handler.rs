@@ -3,42 +3,22 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::Instant;
 
-use clickhouse_srv::connection::Connection;
-use clickhouse_srv::errors::ServerError;
-use clickhouse_srv::types::Block as ClickHouseBlock;
-use clickhouse_srv::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_runtime::tokio;
-use common_runtime::tokio::net::TcpListener;
 use common_runtime::tokio::net::TcpStream;
-use common_runtime::tokio::sync::mpsc;
-use common_runtime::tokio::time;
 use futures::Future;
 use futures::StreamExt;
-use log::error;
-use metrics::histogram;
-use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::wrappers::TcpListenerStream;
 
-use crate::clusters::ClusterRef;
-use crate::configs::Config;
-use crate::interpreters::InterpreterFactory;
 use crate::servers::clickhouse::clickhouse_session::ClickHouseConnection;
-use crate::servers::clickhouse::interactive_worker::InteractiveWorker;
 use crate::servers::AbortableServer;
 use crate::servers::AbortableService;
 use crate::servers::Elapsed;
-use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionManagerRef;
-use crate::sql::PlanParser;
 
 pub struct ClickHouseHandler {
     sessions: SessionManagerRef,

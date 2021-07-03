@@ -5,8 +5,6 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use common_exception::Result;
-
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::Session;
 use crate::sessions::SessionManagerRef;

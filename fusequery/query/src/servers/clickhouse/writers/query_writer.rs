@@ -6,7 +6,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_runtime::tokio::macros::support::Future;
 use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 
@@ -28,7 +27,7 @@ impl<'a> QueryWriter<'a> {
         }
     }
 
-    pub async fn write(&mut self, mut receiver: Result<Receiver<BlockItem>>) -> CHResult<()> {
+    pub async fn write(&mut self, receiver: Result<Receiver<BlockItem>>) -> CHResult<()> {
         match receiver {
             Err(error) => self.write_error(error).await.map_err(to_clickhouse_err),
             Ok(receiver) => {

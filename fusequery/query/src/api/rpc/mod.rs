@@ -15,13 +15,13 @@ mod flight_actions_test;
 mod flight_tickets_test;
 
 pub use flight_actions::ShuffleAction;
-pub use flight_client_new::FlightClient;
+pub use flight_client::FlightClient;
 pub use flight_dispatcher::FuseQueryFlightDispatcher;
 pub use flight_service::FuseQueryFlightService;
 pub use flight_tickets::FlightTicket;
 
 mod flight_actions;
-mod flight_client_new;
+mod flight_client;
 mod flight_data_stream;
 mod flight_dispatcher;
 mod flight_scatter;

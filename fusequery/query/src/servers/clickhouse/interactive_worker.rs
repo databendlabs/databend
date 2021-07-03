@@ -2,25 +2,13 @@ use std::time::Instant;
 
 use metrics::histogram;
 use clickhouse_srv::connection::Connection;
-use clickhouse_srv::errors::ServerError;
 use clickhouse_srv::CHContext;
 use clickhouse_srv::ClickHouseSession;
 use common_datavalues::prelude::Arc;
-use common_exception::ErrorCode;
-use common_runtime::tokio::sync::mpsc;
-use common_runtime::tokio::time::interval;
-use common_runtime::tokio::time::Duration;
-use futures::StreamExt;
-use tokio_stream::wrappers::IntervalStream;
 
-use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterFactory;
-use crate::servers::clickhouse::clickhouse_handler;
 use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;
 use crate::servers::clickhouse::writers::QueryWriter;
-use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionRef;
-use crate::sql::PlanParser;
 
 pub struct InteractiveWorker {
     session: SessionRef,
