@@ -28,7 +28,7 @@ use tonic::Streaming;
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::flight_dispatcher::FuseQueryFlightDispatcher;
-use crate::api::rpc::flight_stream::FlightDataStream;
+use crate::api::rpc::flight_service_stream::FlightDataStream;
 use crate::api::rpc::flight_tickets::FlightTicket;
 use crate::sessions::SessionManagerRef;
 

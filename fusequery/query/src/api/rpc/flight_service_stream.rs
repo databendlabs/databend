@@ -49,15 +49,3 @@ impl Stream for FlightDataStream {
         })
     }
 }
-
-// impl<T> AsRef<Receiver<T>> for FlightDataStream {
-//     fn as_ref(&self) -> &Receiver<T> {
-//         &self.inner
-//     }
-// }
-//
-// impl<T> AsMut<Receiver<T>> for FlightDataStream {
-//     fn as_mut(&mut self) -> &mut Receiver<T> {
-//         &mut self.inner
-//     }
-// }

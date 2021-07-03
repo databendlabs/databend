@@ -49,11 +49,10 @@ const NUM_CPUS: &str = "FUSE_QUERY_NUM_CPUS";
 
 const MYSQL_HANDLER_HOST: &str = "FUSE_QUERY_MYSQL_HANDLER_HOST";
 const MYSQL_HANDLER_PORT: &str = "FUSE_QUERY_MYSQL_HANDLER_PORT";
-const MYSQL_HANDLER_THREAD_NUM: &str = "FUSE_QUERY_MYSQL_HANDLER_THREAD_NUM";
+const MAX_ACTIVE_SESSIONS: &str = "FUSE_QUERY_MAX_ACTIVE_SESSIONS";
 
 const CLICKHOUSE_HANDLER_HOST: &str = "FUSE_QUERY_CLICKHOUSE_HANDLER_HOST";
 const CLICKHOUSE_HANDLER_PORT: &str = "FUSE_QUERY_CLICKHOUSE_HANDLER_PORT";
-const CLICKHOUSE_HANDLER_THREAD_NUM: &str = "FUSE_QUERY_CLICKHOUSE_HANDLER_THREAD_NUM";
 
 const FLIGHT_API_ADDRESS: &str = "FUSE_QUERY_FLIGHT_API_ADDRESS";
 const HTTP_API_ADDRESS: &str = "FUSE_QUERY_HTTP_API_ADDRESS";
@@ -89,10 +88,10 @@ pub struct Config {
 
     #[structopt(
     long,
-    env = MYSQL_HANDLER_THREAD_NUM,
+    env = MAX_ACTIVE_SESSIONS,
     default_value = "256"
     )]
-    pub mysql_handler_thread_num: u64,
+    pub max_active_sessions: u64,
 
     #[structopt(
     long,
@@ -107,13 +106,6 @@ pub struct Config {
     default_value = "9000"
     )]
     pub clickhouse_handler_port: u16,
-
-    #[structopt(
-    long,
-    env = CLICKHOUSE_HANDLER_THREAD_NUM,
-    default_value = "256"
-    )]
-    pub clickhouse_handler_thread_num: u64,
 
     #[structopt(
     long,
@@ -224,10 +216,9 @@ impl Config {
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
-            mysql_handler_thread_num: 256,
+            max_active_sessions: 256,
             clickhouse_handler_host: "127.0.0.1".to_string(),
             clickhouse_handler_port: 9000,
-            clickhouse_handler_thread_num: 256,
             flight_api_address: "127.0.0.1:9090".to_string(),
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
@@ -278,9 +269,9 @@ impl Config {
         env_helper!(mut_config, mysql_handler_port, u16, MYSQL_HANDLER_PORT);
         env_helper!(
             mut_config,
-            mysql_handler_thread_num,
+            max_active_sessions,
             u64,
-            MYSQL_HANDLER_THREAD_NUM
+            MAX_ACTIVE_SESSIONS
         );
         env_helper!(
             mut_config,
@@ -293,12 +284,6 @@ impl Config {
             clickhouse_handler_port,
             u16,
             CLICKHOUSE_HANDLER_PORT
-        );
-        env_helper!(
-            mut_config,
-            clickhouse_handler_thread_num,
-            u64,
-            CLICKHOUSE_HANDLER_THREAD_NUM
         );
         env_helper!(mut_config, flight_api_address, String, FLIGHT_API_ADDRESS);
         env_helper!(mut_config, http_api_address, String, HTTP_API_ADDRESS);

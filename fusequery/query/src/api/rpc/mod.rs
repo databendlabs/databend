@@ -22,9 +22,9 @@ pub use flight_tickets::FlightTicket;
 
 mod flight_actions;
 mod flight_client;
-mod flight_data_stream;
+mod flight_client_stream;
 mod flight_dispatcher;
 mod flight_scatter;
 mod flight_service;
-mod flight_stream;
+mod flight_service_stream;
 mod flight_tickets;

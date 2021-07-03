@@ -14,6 +14,7 @@ use backtrace::Backtrace;
 use thiserror::Error;
 use tonic::Code;
 use tonic::Status;
+use std::string::FromUtf8Error;
 
 pub static ABORT_SESSION: u16 = 42;
 pub static ABORT_QUERY: u16 = 43;
@@ -149,6 +150,7 @@ build_exceptions! {
     AbortedQuery(ABORT_QUERY),
     NotFoundSession(44),
     CannotListenerPort(45),
+    BadBytes(46),
 
 
     // uncategorized
@@ -316,6 +318,12 @@ impl From<std::io::Error> for ErrorCode {
 impl From<std::net::AddrParseError> for ErrorCode {
     fn from(error: AddrParseError) -> Self {
         ErrorCode::BadAddressFormat(format!("Bad address format, cause: {}", error))
+    }
+}
+
+impl From<FromUtf8Error> for ErrorCode {
+    fn from(error: FromUtf8Error) -> Self {
+        ErrorCode::BadBytes(format!("Bad bytes, cannot parse bytes with UTF8, cause: {}", error))
     }
 }
 

@@ -21,10 +21,9 @@ fn test_config() -> Result<()> {
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
-            mysql_handler_thread_num: 256,
+            max_active_sessions: 256,
             clickhouse_handler_host: "127.0.0.1".to_string(),
             clickhouse_handler_port: 9000,
-            clickhouse_handler_thread_num: 256,
             flight_api_address: "127.0.0.1:9090".to_string(),
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
@@ -92,10 +91,9 @@ fn test_config() -> Result<()> {
         assert_eq!("DEBUG", configured.log_level);
         assert_eq!("0.0.0.0", configured.mysql_handler_host);
         assert_eq!(3306, configured.mysql_handler_port);
-        assert_eq!(255, configured.mysql_handler_thread_num);
+        assert_eq!(255, configured.max_active_sessions);
         assert_eq!("1.2.3.4", configured.clickhouse_handler_host);
         assert_eq!(9000, configured.clickhouse_handler_port);
-        assert_eq!(255, configured.clickhouse_handler_thread_num);
 
         assert_eq!("1.2.3.4:9091", configured.flight_api_address);
         assert_eq!("1.2.3.4:8081", configured.http_api_address);

@@ -47,14 +47,14 @@ impl SessionManager {
     }
 
     pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
-        let max_mysql_sessions = conf.mysql_handler_thread_num as usize;
+        let max_active_sessions = conf.max_active_sessions as usize;
         Ok(Arc::new(SessionManager {
             conf,
             cluster,
             datasource: Arc::new(DataSource::try_create()?),
 
-            max_sessions: max_mysql_sessions,
-            active_sessions: RwLock::new(HashMap::with_capacity(max_mysql_sessions)),
+            max_sessions: max_active_sessions,
+            active_sessions: RwLock::new(HashMap::with_capacity(max_active_sessions)),
         }))
     }
 
