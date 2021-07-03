@@ -75,10 +75,9 @@ fn test_config() -> Result<()> {
         std::env::set_var("FUSE_QUERY_LOG_LEVEL", "DEBUG");
         std::env::set_var("FUSE_QUERY_MYSQL_HANDLER_HOST", "0.0.0.0");
         std::env::set_var("FUSE_QUERY_MYSQL_HANDLER_PORT", "3306");
-        std::env::set_var("FUSE_QUERY_MYSQL_HANDLER_THREAD_NUM", "255");
+        std::env::set_var("FUSE_QUERY_MAX_ACTIVE_SESSIONS", "255");
         std::env::set_var("FUSE_QUERY_CLICKHOUSE_HANDLER_HOST", "1.2.3.4");
         std::env::set_var("FUSE_QUERY_CLICKHOUSE_HANDLER_PORT", "9000");
-        std::env::set_var("FUSE_QUERY_CLICKHOUSE_HANDLER_THREAD_NUM", "255");
         std::env::set_var("FUSE_QUERY_FLIGHT_API_ADDRESS", "1.2.3.4:9091");
         std::env::set_var("FUSE_QUERY_HTTP_API_ADDRESS", "1.2.3.4:8081");
         std::env::set_var("FUSE_QUERY_METRIC_API_ADDRESS", "1.2.3.4:7071");

@@ -588,7 +588,7 @@ dependencies = [
 [[package]]
 name = "clickhouse-srv"
 version = "0.2.1"
-source = "git+https://github.com/zhang2014/clickhouse-srv?branch=support_abort#e61769bf56d237cacc779c4085307965f8098594"
+source = "git+https://github.com/zhang2014/clickhouse-srv?branch=support_abort#504650aef3c5a2b3ea25aa8e77587be17f304c53"
 dependencies = [
  "async-trait",
  "byteorder",

@@ -39,8 +39,8 @@ impl ClickHouseHandler {
     fn listener_loop(&self, stream: TcpListenerStream, r: Arc<Runtime>) -> impl Future<Output=()> {
         let sessions = self.sessions.clone();
         stream.for_each(move |accept_socket| {
-            let sessions = sessions.clone();
             let executor = r.clone();
+            let sessions = sessions.clone();
             async move {
                 match accept_socket {
                     Err(error) => log::error!("Broken session connection: {}", error),
@@ -51,6 +51,7 @@ impl ClickHouseHandler {
     }
 
     fn reject_connection(stream: TcpStream, executor: Arc<Runtime>, error: ErrorCode) {
+
         executor.spawn(async move {
             if let Err(error) = RejectCHConnection::reject(stream, error).await {
                 log::error!("Unexpected error occurred during reject connection: {:?}", error);

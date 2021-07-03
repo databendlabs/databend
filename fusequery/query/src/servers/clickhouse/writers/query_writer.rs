@@ -95,6 +95,7 @@ impl<'a> QueryWriter<'a> {
                     let header = DataBlock::empty_with_schema(schema.clone());
 
                     self.write_block(header).await?;
+                    self.write_block(block).await?;
                     return self.write_tail_data(receiver).await;
                 }
             }

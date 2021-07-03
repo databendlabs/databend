@@ -3,81 +3,59 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_exception::{Result, ErrorCode};
-use common_runtime::tokio::io::AsyncReadExt;
-use common_runtime::tokio::io::AsyncWriteExt;
 use common_runtime::tokio::net::TcpStream;
-use prost::bytes::BytesMut;
+use std::time::Instant;
+use clickhouse_srv::connection::Connection;
+use clickhouse_srv::{ClickHouseSession, CHContext, QueryState};
+use std::sync::Arc;
+use clickhouse_srv::protocols::Packet;
+use clickhouse_srv::errors::{Error, ServerError};
+use clickhouse_srv::error_codes::NO_FREE_CONNECTION;
+use clickhouse_srv::errors::Result as CHResult;
 
 pub struct RejectCHConnection;
 
 impl RejectCHConnection {
-    pub async fn reject(mut stream: TcpStream, error: ErrorCode) -> Result<()> {
-        RejectCHConnection::receive_hello(&mut stream).await?;
-        let exception_name = String::from("NO_FREE_CONNECTION");
-        RejectCHConnection::write_var_uint(&mut stream, 2).await?;
-        stream.write_u32(203).await?;
-        RejectCHConnection::write_binary_string(&mut stream, exception_name).await?;
-        RejectCHConnection::write_binary_string(&mut stream, error.message()).await?;
-        RejectCHConnection::write_binary_string(&mut stream, String::from("")).await?;
-        stream.write_u8(false as u8).await?;
-        Ok(())
-    }
+    pub async fn reject(stream: TcpStream, error: ErrorCode) -> Result<()> {
+        let instant = Instant::now();
+        let mut ctx = CHContext::new(QueryState::default());
 
-    async fn receive_hello(stream: &mut TcpStream) -> Result<()> {
-        RejectCHConnection::read_var_uint(stream).await?;
-        RejectCHConnection::read_binary_string(stream).await?;
-        RejectCHConnection::read_var_uint(stream).await?;
-        RejectCHConnection::read_var_uint(stream).await?;
-        RejectCHConnection::read_var_uint(stream).await?;
-        RejectCHConnection::read_binary_string(stream).await?;
-        RejectCHConnection::read_binary_string(stream).await?;
-        RejectCHConnection::read_binary_string(stream).await?;
-        Ok(())
-    }
+        let dummy_session = DummyCHSession::create();
+        match Connection::new(stream, dummy_session, String::from("UTC")) {
+            Err(_) => Err(ErrorCode::LogicalError("Cannot create connection")),
+            Ok(mut connection) => {
+                match connection.read_packet(&mut ctx).await {
+                    Ok(Some(Packet::Hello(packet))) => {
+                        println!("receive packet: {:?}, {:?}", packet, instant.elapsed());
+                        let server_error = Error::Server(ServerError {
+                            code: NO_FREE_CONNECTION,
+                            name: String::from("NO_FREE_CONNECTION"),
+                            message: error.message(),
+                            stack_trace: String::from(""),
+                        });
+                        let _ = connection.write_error(&server_error).await;
+                    }
+                    _ => { /* do nothing */ }
+                };
 
-    async fn read_var_uint(stream: &mut TcpStream) -> Result<u64> {
-        let mut x = 0_u64;
-        for index in 0..8 {
-            let byte = stream.read_u8().await? as u64;
-            x |= (byte & 0x7F) << (7 * index);
-            if (byte & 0x80) == 0 {
-                break;
+                Ok(())
             }
         }
-
-        Ok(x)
-    }
-
-    async fn read_binary_string(stream: &mut TcpStream) -> Result<String> {
-        let length = RejectCHConnection::read_var_uint(stream).await?;
-        let mut binary_buffer = BytesMut::with_capacity(length as usize);
-        stream.read_buf(&mut binary_buffer).await?;
-        Ok(String::from_utf8(binary_buffer.to_vec())?)
-    }
-
-    async fn write_var_uint(stream: &mut TcpStream, value: u64) -> Result<()> {
-        let mut value = value;
-        for _index in 0..8 {
-            let byte = match value {
-                value if value > 0x7F => (value & 0x7F) | 0x80,
-                value => value & 0x7F
-            };
-
-            stream.write_u8(byte as u8).await?;
-            value >>= 7;
-
-            if value == 0 {
-                break;
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn write_binary_string(stream: &mut TcpStream, value: String) -> Result<()> {
-        let bytes = value.as_bytes();
-        RejectCHConnection::write_var_uint(stream, bytes.len() as u64).await?;
-        stream.write_all(bytes).await?;
-        Ok(())
     }
 }
+
+struct DummyCHSession;
+
+impl DummyCHSession {
+    pub fn create() -> Arc<dyn ClickHouseSession> {
+        Arc::new(DummyCHSession {})
+    }
+}
+
+#[async_trait::async_trait]
+impl ClickHouseSession for DummyCHSession {
+    async fn execute_query(&self, _: &mut CHContext, _: &mut Connection) -> CHResult<()> {
+        unimplemented!()
+    }
+}
+

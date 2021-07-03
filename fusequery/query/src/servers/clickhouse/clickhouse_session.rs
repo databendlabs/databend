@@ -4,7 +4,7 @@ use clickhouse_srv::ClickHouseServer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_runtime::tokio;
+use common_runtime::{Runtime};
 use common_runtime::tokio::net::TcpStream;
 
 use crate::servers::clickhouse::interactive_worker::InteractiveWorker;
@@ -17,11 +17,17 @@ impl ClickHouseConnection {
         let blocking_stream = Self::convert_stream(stream)?;
         ClickHouseConnection::attach_session(&session, &blocking_stream)?;
         let non_blocking_stream = TcpStream::from_std(blocking_stream)?;
+        let query_executor = Runtime::with_worker_threads(1)?;
 
-        tokio::spawn(async move {
-            let interactive_worker = InteractiveWorker::create(session);
-            ClickHouseServer::run_on_stream(interactive_worker, non_blocking_stream)
+        std::thread::spawn(move || {
+            let join_handle = query_executor.spawn(async move {
+                let interactive_worker = InteractiveWorker::create(session);
+                ClickHouseServer::run_on_stream(interactive_worker, non_blocking_stream).await
+            });
+
+            let _ = futures::executor::block_on(join_handle);
         });
+
 
         Ok(())
     }
