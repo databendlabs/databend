@@ -2,13 +2,18 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::{Result, ErrorCode};
+use std::time::Duration;
+
+use clickhouse_rs::types::Complex;
+use clickhouse_rs::Block;
+use clickhouse_rs::ClientHandle;
+use clickhouse_rs::Pool;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_runtime::tokio;
+
 use crate::servers::ClickHouseHandler;
 use crate::sessions::SessionManager;
-use common_runtime::tokio;
-use clickhouse_rs::{Pool, ClientHandle, Block};
-use clickhouse_rs::types::Complex;
-use std::time::Duration;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_clickhouse_handler_query() -> Result<()> {
@@ -54,14 +59,36 @@ async fn test_reject_clickhouse_connection() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_abort_clickhouse_server() -> Result<()> {
+    let sessions = SessionManager::try_create(3)?;
+    let handler = ClickHouseHandler::create(sessions);
+    let listening = handler.start(("0.0.0.0".to_string(), 0_u16)).await?;
+
+    // Accepted connection
+    let _handler = create_conn(listening.port()).await?;
+
+    handler.abort(false)?;
+
+    // Rejected connection
+    match create_conn(listening.port()).await {
+        Ok(_) => assert!(false, "Create clickhouse connection must be reject."),
+        Err(error) => {
+            let message = error.message();
+            assert!(message.find("ConnectionRefused").is_some());
+        }
+    }
+
+    Ok(())
+}
+
 fn get_u64_data(block: Block<Complex>) -> Result<Option<u64>> {
     match block.get(0, "c") {
         Ok(value) => Ok(value),
-        Err(error) => {
-            Err(ErrorCode::UnknownException(format!(
-                "Cannot get data {:?}", error
-            )))
-        }
+        Err(error) => Err(ErrorCode::UnknownException(format!(
+            "Cannot get data {:?}",
+            error
+        ))),
     }
 }
 
@@ -69,11 +96,10 @@ async fn query(handler: &mut ClientHandle, query: &str) -> Result<Block<Complex>
     let query_result = handler.query(query);
     match query_result.fetch_all().await {
         Ok(block) => Ok(block),
-        Err(error) => {
-            Err(ErrorCode::UnknownException(format!(
-                "Error query: {:?}", error
-            )))
-        }
+        Err(error) => Err(ErrorCode::UnknownException(format!(
+            "Error query: {:?}",
+            error
+        ))),
     }
 }
 
@@ -82,10 +108,9 @@ async fn create_conn(port: u16) -> Result<ClientHandle> {
     let get_handle = Pool::new(url).get_handle();
     match get_handle.await {
         Ok(client_handle) => Ok(client_handle),
-        Err(error) => {
-            Err(ErrorCode::UnknownException(format!(
-                "Reject connection, cause:{:?}", error
-            )))
-        }
+        Err(error) => Err(ErrorCode::UnknownException(format!(
+            "Reject connection, cause:{:?}",
+            error
+        ))),
     }
 }

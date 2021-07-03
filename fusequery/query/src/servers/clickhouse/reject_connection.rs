@@ -2,16 +2,21 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::{Result, ErrorCode};
-use common_runtime::tokio::net::TcpStream;
-use std::time::Instant;
-use clickhouse_srv::connection::Connection;
-use clickhouse_srv::{ClickHouseSession, CHContext, QueryState};
 use std::sync::Arc;
-use clickhouse_srv::protocols::Packet;
-use clickhouse_srv::errors::{Error, ServerError};
+use std::time::Instant;
+
+use clickhouse_srv::connection::Connection;
 use clickhouse_srv::error_codes::NO_FREE_CONNECTION;
+use clickhouse_srv::errors::Error;
 use clickhouse_srv::errors::Result as CHResult;
+use clickhouse_srv::errors::ServerError;
+use clickhouse_srv::protocols::Packet;
+use clickhouse_srv::CHContext;
+use clickhouse_srv::ClickHouseSession;
+use clickhouse_srv::QueryState;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_runtime::tokio::net::TcpStream;
 
 pub struct RejectCHConnection;
 
@@ -58,4 +63,3 @@ impl ClickHouseSession for DummyCHSession {
         unimplemented!()
     }
 }
-

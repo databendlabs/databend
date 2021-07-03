@@ -267,12 +267,7 @@ impl Config {
         env_helper!(mut_config, num_cpus, u64, NUM_CPUS);
         env_helper!(mut_config, mysql_handler_host, String, MYSQL_HANDLER_HOST);
         env_helper!(mut_config, mysql_handler_port, u16, MYSQL_HANDLER_PORT);
-        env_helper!(
-            mut_config,
-            max_active_sessions,
-            u64,
-            MAX_ACTIVE_SESSIONS
-        );
+        env_helper!(mut_config, max_active_sessions, u64, MAX_ACTIVE_SESSIONS);
         env_helper!(
             mut_config,
             clickhouse_handler_host,

@@ -6,8 +6,12 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use common_arrow::arrow_flight::flight_service_server::FlightService;
+use common_arrow::arrow_flight::Action;
+use common_arrow::arrow_flight::Ticket;
 use common_datavalues::DataValue;
-use common_exception::{Result, ErrorCode};
+use common_exception::exception::ABORT_SESSION;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_planners::Expression;
 use common_runtime::tokio;
 use tonic::Request;
@@ -20,8 +24,6 @@ use crate::api::FlightTicket;
 use crate::api::ShuffleAction;
 use crate::tests::parse_query;
 use crate::tests::try_create_sessions;
-use common_arrow::arrow_flight::{Action, Ticket};
-use common_exception::exception::ABORT_SESSION;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_shared_session() -> Result<()> {
@@ -120,7 +122,10 @@ async fn test_do_flight_action_with_abort_and_new_session() -> Result<()> {
     let stage_id = "stage_id_1";
     let request = do_action_request(query_id, stage_id);
     match service.do_action(request?).await {
-        Ok(_) => assert!(false, "Aborted rpc service must be cannot create new session"),
+        Ok(_) => assert!(
+            false,
+            "Aborted rpc service must be cannot create new session"
+        ),
         Err(error) => {
             let error_code = ErrorCode::from(error);
             assert_eq!(error_code.code(), ABORT_SESSION);

@@ -4,8 +4,8 @@ use clickhouse_srv::ClickHouseServer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_runtime::{Runtime};
 use common_runtime::tokio::net::TcpStream;
+use common_runtime::Runtime;
 
 use crate::servers::clickhouse::interactive_worker::InteractiveWorker;
 use crate::sessions::SessionRef;
@@ -27,7 +27,6 @@ impl ClickHouseConnection {
 
             let _ = futures::executor::block_on(join_handle);
         });
-
 
         Ok(())
     }

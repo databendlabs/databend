@@ -1,10 +1,10 @@
 use std::time::Instant;
 
-use metrics::histogram;
 use clickhouse_srv::connection::Connection;
 use clickhouse_srv::CHContext;
 use clickhouse_srv::ClickHouseSession;
 use common_datavalues::prelude::Arc;
+use metrics::histogram;
 
 use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;
 use crate::servers::clickhouse::writers::QueryWriter;

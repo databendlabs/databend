@@ -8,13 +8,13 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::net::AddrParseError;
+use std::string::FromUtf8Error;
 use std::sync::Arc;
 
 use backtrace::Backtrace;
 use thiserror::Error;
 use tonic::Code;
 use tonic::Status;
-use std::string::FromUtf8Error;
 
 pub static ABORT_SESSION: u16 = 42;
 pub static ABORT_QUERY: u16 = 43;
@@ -323,7 +323,10 @@ impl From<std::net::AddrParseError> for ErrorCode {
 
 impl From<FromUtf8Error> for ErrorCode {
     fn from(error: FromUtf8Error) -> Self {
-        ErrorCode::BadBytes(format!("Bad bytes, cannot parse bytes with UTF8, cause: {}", error))
+        ErrorCode::BadBytes(format!(
+            "Bad bytes, cannot parse bytes with UTF8, cause: {}",
+            error
+        ))
     }
 }
 

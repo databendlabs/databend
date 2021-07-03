@@ -142,8 +142,7 @@ impl FlightService for FuseQueryFlightService {
 
         let action_result = do_flight_action()?;
         Ok(RawResponse::new(
-            Box::pin(tokio_stream::once(Ok(action_result)))
-                as FlightStream<FlightResult>,
+            Box::pin(tokio_stream::once(Ok(action_result))) as FlightStream<FlightResult>,
         ))
     }
 

@@ -75,7 +75,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ClickHouse handler.
     {
-        let addr = (conf.clickhouse_handler_host.clone(), conf.clickhouse_handler_port);
+        let addr = (
+            conf.clickhouse_handler_host.clone(),
+            conf.clickhouse_handler_port,
+        );
         let srv = ClickHouseHandler::create(session_manager.clone());
         let listening = srv.start(addr).await?;
         services.push(srv);
