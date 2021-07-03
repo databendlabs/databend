@@ -697,6 +697,7 @@ dependencies = [
  "ordered-float 2.5.1",
  "paste",
  "pretty_assertions",
+ "prettytable-rs",
  "serde",
  "unsafe_unwrap",
 ]

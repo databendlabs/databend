@@ -211,6 +211,9 @@ pub fn numerical_arithmetic_coercion(
         }
 
         DataValueArithmeticOperator::Modulo => {
+            if has_float {
+                return Ok(DataType::Float64);
+            }
             // From clickhouse: NumberTraits.h
             // If modulo of division can yield negative number, we need larger type to accommodate it.
             // Example: toInt32(-199) % toUInt8(200) will return -199 that does not fit in Int8, only in Int16.
@@ -221,11 +224,7 @@ pub fn numerical_arithmetic_coercion(
             } else {
                 right_size
             };
-            let type0 = construct_numeric_type(result_is_signed, false, size_of_result)?;
-            if has_float {
-                return Ok(DataType::Float64);
-            }
-            return Ok(type0);
+            construct_numeric_type(result_is_signed, false, size_of_result)
         }
         DataValueArithmeticOperator::Minus => {
             construct_numeric_type(true, has_float, next_size(max_size))

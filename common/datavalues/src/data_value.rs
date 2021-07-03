@@ -296,30 +296,36 @@ impl DataValue {
         Ok(array.into_series())
     }
 
-    // turn unsigned number to u64
     pub fn as_u64(&self) -> Result<u64> {
         match self {
+            DataValue::Int8(Some(v)) => Ok(*v as u64),
+            DataValue::Int16(Some(v)) => Ok(*v as u64),
+            DataValue::Int32(Some(v)) => Ok(*v as u64),
+            DataValue::Int64(Some(v)) => Ok(*v as u64),
             DataValue::UInt8(Some(v)) => Ok(*v as u64),
             DataValue::UInt16(Some(v)) => Ok(*v as u64),
             DataValue::UInt32(Some(v)) => Ok(*v as u64),
             DataValue::UInt64(Some(v)) => Ok(*v as u64),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected type:{} to get u64 number",
-                other
+                "Unexpected type:{:?} to get u64 number",
+                other.data_type()
             ))),
         }
     }
 
-    // turn unsigned number to i64
     pub fn as_i64(&self) -> Result<i64> {
         match self {
             DataValue::Int8(Some(v)) => Ok(*v as i64),
             DataValue::Int16(Some(v)) => Ok(*v as i64),
             DataValue::Int32(Some(v)) => Ok(*v as i64),
             DataValue::Int64(Some(v)) => Ok(*v as i64),
+            DataValue::UInt8(Some(v)) => Ok(*v as i64),
+            DataValue::UInt16(Some(v)) => Ok(*v as i64),
+            DataValue::UInt32(Some(v)) => Ok(*v as i64),
+            DataValue::UInt64(Some(v)) => Ok(*v as i64),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected type:{} to get u64 number",
-                other
+                "Unexpected type:{:?} to get u64 number",
+                other.data_type()
             ))),
         }
     }

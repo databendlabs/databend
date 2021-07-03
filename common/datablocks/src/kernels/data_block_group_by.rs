@@ -8,6 +8,7 @@ use common_datavalues::prelude::DataColumn;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
+use crate::pretty_format_blocks;
 use crate::DataBlock;
 
 // Table for <group_key, (indices, keys) >
@@ -44,6 +45,8 @@ impl DataBlock {
         block: &DataBlock,
         column_names: &[String],
     ) -> Result<GroupIndicesTable> {
+        println!("{:?}", pretty_format_blocks(&[block.clone()])?);
+
         let mut group_indices = GroupIndicesTable::default();
 
         // 1. Get group by columns.
@@ -102,7 +105,6 @@ impl DataBlock {
     /// group_by_get_indices and make blocks.
     pub fn group_by(block: &DataBlock, column_names: &[String]) -> Result<GroupBlocksTable> {
         let group_indices = Self::group_by_get_indices(block, column_names)?;
-
         let mut group_blocks = GroupBlocksTable::default();
         for (group_key, (group_indices, group_keys)) in group_indices {
             let take_block = DataBlock::block_take_by_indices(block, &group_indices)?;

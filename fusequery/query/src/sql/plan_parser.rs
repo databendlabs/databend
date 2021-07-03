@@ -1011,10 +1011,11 @@ impl PlanParser {
                     .map(|limit_expr| {
                         self.sql_to_rex(limit_expr, &input.schema(), select)
                             .and_then(|limit_expr| match limit_expr {
-                                Expression::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
-                                _ => Err(ErrorCode::SyntaxException(
-                                    "Unexpected expression for LIMIT clause",
-                                )),
+                                Expression::Literal(v) => Ok(v.as_u64()? as usize),
+                                _ => Err(ErrorCode::SyntaxException(format!(
+                                    "Unexpected expression for LIMIT clause: {:?}",
+                                    limit_expr
+                                ))),
                             })
                     })
                     .transpose()?;
@@ -1025,10 +1026,11 @@ impl PlanParser {
                         let offset_expr = &offset.value;
                         self.sql_to_rex(offset_expr, &input.schema(), select)
                             .and_then(|offset_expr| match offset_expr {
-                                Expression::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
-                                _ => Err(ErrorCode::SyntaxException(
-                                    "Unexpected expression for OFFSET clause",
-                                )),
+                                Expression::Literal(v) => Ok(v.as_u64()? as usize),
+                                _ => Err(ErrorCode::SyntaxException(format!(
+                                    "Unexpected expression for OFFSET clause: {:?}",
+                                    offset_expr,
+                                ))),
                             })
                     })
                     .transpose()?

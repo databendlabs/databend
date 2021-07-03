@@ -14,7 +14,7 @@ fn test_filter_alias_push_down_optimizer() -> Result<()> {
     struct Test {
         name: &'static str,
         query: &'static str,
-        expect: &'static str
+        expect: &'static str,
     }
 
     let tests = vec![
@@ -40,18 +40,18 @@ fn test_filter_alias_push_down_optimizer() -> Result<()> {
             query: "select (number+1) as c1, (number%3+1) as c2 from numbers_mt(10000) having c1 > 10",
             expect: "\
             Having: (c1 > 10)\
-            \n  Projection: (number + 1) as c1:UInt64, ((number % 3) + 1) as c2:UInt64\
-            \n    Expression: (number + 1) as c1:UInt64, ((number % 3) + 1) as c2:UInt64 (Before Projection)\
+            \n  Projection: (number + 1) as c1:UInt64, ((number % 3) + 1) as c2:UInt16\
+            \n    Expression: (number + 1) as c1:UInt64, ((number % 3) + 1) as c2:UInt16 (Before Projection)\
             \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]",
         },
         Test {
             name:"order-by-alias-push-down-now-work",
             query: "select (number+1) as c1, (number%3+1) as c2 from numbers_mt(10) order by c2",
             expect: "\
-            Projection: (number + 1) as c1:UInt64, ((number % 3) + 1) as c2:UInt64\
+            Projection: (number + 1) as c1:UInt64, ((number % 3) + 1) as c2:UInt16\
             \n  Sort: c2:UInt64\
             \n    Expression: c2:UInt64 (Before OrderBy)\
-            \n      Expression: (number + 1) as c1:UInt64, ((number % 3) + 1) as c2:UInt64 (Before Projection)\
+            \n      Expression: (number + 1) as c1:UInt64, ((number % 3) + 1) as c2:UInt16 (Before Projection)\
             \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
         },
     ];

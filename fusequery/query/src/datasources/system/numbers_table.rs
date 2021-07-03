@@ -78,15 +78,16 @@ impl Table for NumbersTable {
     ) -> Result<ReadDataSourcePlan> {
         let mut total = None;
         let ScanPlan { table_args, .. } = scan.clone();
-        if let Some(args) = table_args {
-            if let Expression::Literal(v) = args {
-                total = Some(v.as_u64()?);
-            }
+        if let Some(Expression::Literal(v)) = table_args {
+            total = Some(v.as_u64()?);
         }
-        let total = total.ok_or(ErrorCode::BadArguments(format!(
-            "Must have one number argument for table: system.{}",
-            self.name()
-        )))?;
+
+        let total = total.ok_or_else(|| {
+            ErrorCode::BadArguments(format!(
+                "Must have one number argument for table: system.{}",
+                self.name()
+            ))
+        })?;
 
         let statistics = Statistics {
             read_rows: total as usize,

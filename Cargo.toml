@@ -35,7 +35,7 @@ members = [
 ]
 
 [profile.release]
-#debug = true
+debug = true
 
 [profile.bench]
 debug = true

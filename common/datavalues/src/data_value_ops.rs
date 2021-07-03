@@ -24,16 +24,16 @@ impl DataValue {
                     } else {
                         return Ok(DataValue::UInt64(Some(n as u64)));
                     }
+                }
+
+                if n >= i8::MIN as i64 {
+                    Ok(DataValue::Int8(Some(n as i8)))
+                } else if n >= u16::MIN as i64 {
+                    Ok(DataValue::Int16(Some(n as i16)))
+                } else if n >= u32::MIN as i64 {
+                    Ok(DataValue::Int32(Some(n as i32)))
                 } else {
-                    if n >= i8::MIN as i64 {
-                        return Ok(DataValue::Int8(Some(n as i8)));
-                    } else if n >= u16::MIN as i64 {
-                        return Ok(DataValue::Int16(Some(n as i16)));
-                    } else if n >= u32::MIN as i64 {
-                        return Ok(DataValue::Int32(Some(n as i32)));
-                    } else {
-                        return Ok(DataValue::Int64(Some(n as i64)));
-                    }
+                    Ok(DataValue::Int64(Some(n as i64)))
                 }
             }
             Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?))),
