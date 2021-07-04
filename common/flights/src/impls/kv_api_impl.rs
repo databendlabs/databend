@@ -5,6 +5,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
 pub use common_store_api::kv_api::MGetKVActionResult;
 pub use common_store_api::kv_api::PrefixListReply;
@@ -22,7 +23,7 @@ impl KVApi for StoreClient {
     async fn upsert_kv(
         &mut self,
         key: &str,
-        seq: Option<u64>,
+        seq: MatchSeq,
         value: Vec<u8>,
     ) -> Result<UpsertKVActionResult> {
         self.do_action(UpsertKVAction {
@@ -49,31 +50,6 @@ impl KVApi for StoreClient {
             (_, None) => Ok(None),
             _ => Err(ErrorCode::LogicalError(format!(
                 "unexpected response from kv service(delete): {:?}",
-                &res
-            ))),
-        }
-    }
-
-    async fn update_kv(
-        &mut self,
-        key: &str,
-        seq: Option<u64>,
-        value: Vec<u8>,
-    ) -> common_exception::Result<Option<SeqValue>> {
-        let res = self
-            .do_action(UpdateKVReq {
-                key: key.to_string(),
-                seq,
-                value,
-            })
-            .await?;
-
-        match (&res.prev, &res.result) {
-            (prev @ Some(_), Some(_)) => Ok(prev.clone()),
-            // key not exist or seq not match
-            (_, None) => Ok(None),
-            _ => Err(ErrorCode::LogicalError(format!(
-                "unexpected response from kv service(update): {:?}",
                 &res
             ))),
         }
@@ -161,27 +137,11 @@ pub struct DeleteKVReply {
 
 action_declare!(DeleteKVReq, DeleteKVReply, StoreDoAction::DeleteKV);
 
-// - update by key
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct UpdateKVReq {
-    pub key: String,
-    pub seq: Option<u64>,
-    pub value: Vec<u8>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct UpdateByKeyReply {
-    pub prev: Option<SeqValue>,
-    pub result: Option<SeqValue>,
-}
-
-action_declare!(UpdateKVReq, UpdateByKeyReply, StoreDoAction::UpdateKV);
-
 // === general-kv: upsert ===
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct UpsertKVAction {
     pub key: String,
-    pub seq: Option<u64>,
+    pub seq: MatchSeq,
     pub value: Vec<u8>,
 }
 

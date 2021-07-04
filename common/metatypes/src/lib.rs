@@ -13,6 +13,24 @@ use serde::Serialize;
 /// Value with a corresponding sequence number
 pub type SeqValue = (u64, Vec<u8>);
 
+/// Describes what `seq` an operation must match to take effect.
+/// Every value written to meta data has a unique `seq` bound.
+/// Any conditioned or non-conditioned write operation can be done through the corresponding MatchSeq.
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
+pub enum MatchSeq {
+    /// Any value is acceptable, i.e. does not check seq at all.
+    Any,
+
+    /// To match an exact value of seq.
+    /// E.g., CAS updates the exact version of some value,
+    /// and put-if-absent adds a value only when seq is 0.
+    Exact(u64),
+
+    /// To match a seq that is greater-or-equal some value.
+    /// E.g., GE(1) perform an update on any existent value.
+    GE(u64),
+}
+
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Database {
     pub database_id: u64,

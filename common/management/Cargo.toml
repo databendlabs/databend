@@ -10,6 +10,7 @@ edition = "2018"
 
 [dependencies]
 common-exception= {path = "../exception"}
+common-metatypes= {path = "../metatypes"}
 common-store-api= {path = "../store-api"}
 
 async-trait = "0.1"

@@ -6,8 +6,8 @@
 use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_metatypes::MatchSeq;
 use common_store_api::KVApi;
-use common_store_api::UpsertKVActionResult;
 use sha2::Digest;
 
 use crate::user::user_api::UserInfo;
@@ -43,7 +43,13 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
         V: AsRef<str> + Send,
         W: AsRef<str> + Send,
     {
-        let res = self.upsert_user(username, password, salt, Some(0)).await?;
+        let new_user = NewUser::new(username.as_ref(), password.as_ref(), salt.as_ref());
+        let ui: UserInfo = new_user.into();
+        let value = serde_json::to_vec(&ui)?;
+        let key = utils::prepend(&ui.name);
+        let seq = MatchSeq::Exact(0);
+        let res = self.kv_api.upsert_kv(&key, seq, value).await?;
+
         match (res.prev, res.result) {
             (None, Some((s, _))) => Ok(s), // do we need to check the seq returned?
             (Some((s, _)), None) => Err(ErrorCode::UserAlreadyExists(format!(
@@ -159,8 +165,12 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
 
         let value = serde_json::to_vec(&user_info)?;
         let key = utils::prepend(&user_info.name);
-        let res = self.kv_api.update_kv(&key, seq, value).await?;
-        match res {
+        let match_seq = match seq {
+            None => MatchSeq::GE(1),
+            Some(s) => MatchSeq::Exact(s),
+        };
+        let res = self.kv_api.upsert_kv(&key, match_seq, value).await?;
+        match res.result {
             Some((s, _)) => Ok(Some(s)),
             None => Err(ErrorCode::UnknownUser(format!(
                 "unknown user, or seq not match {}",
@@ -184,28 +194,5 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
                 username.as_ref()
             )))
         }
-    }
-}
-
-impl<T: KVApi> UserMgr<T> {
-    async fn upsert_user(
-        &mut self,
-        username: impl AsRef<str>,
-        password: impl AsRef<str>,
-        salt: impl AsRef<str>,
-        seq: Option<u64>,
-    ) -> common_exception::Result<UpsertKVActionResult> {
-        let new_user = NewUser::new(username.as_ref(), password.as_ref(), salt.as_ref());
-        self.upsert_user_info(&(&new_user).into(), seq).await
-    }
-
-    async fn upsert_user_info(
-        &mut self,
-        user_info: &UserInfo,
-        seq: Option<u64>,
-    ) -> common_exception::Result<UpsertKVActionResult> {
-        let value = serde_json::to_vec(user_info)?;
-        let key = utils::prepend(&user_info.name);
-        self.kv_api.upsert_kv(&key, seq, value).await
     }
 }
