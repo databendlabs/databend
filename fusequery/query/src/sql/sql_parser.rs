@@ -30,6 +30,7 @@ use crate::sql::DfDropDatabase;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
 use crate::sql::DfHint;
+use crate::sql::DfShowCreateTable;
 use crate::sql::DfShowDatabases;
 use crate::sql::DfShowSettings;
 use crate::sql::DfShowTables;
@@ -146,6 +147,8 @@ impl<'a> DfParser<'a> {
                             Ok(DfStatement::ShowDatabases(DfShowDatabases))
                         } else if self.consume_token("SETTINGS") {
                             Ok(DfStatement::ShowSettings(DfShowSettings))
+                        } else if self.consume_token("CREATE") {
+                            self.parse_show_create()
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
@@ -439,6 +442,21 @@ impl<'a> DfParser<'a> {
                 "Engine must one of Parquet, JSONEachRaw, Null or CSV",
                 unexpected,
             ),
+        }
+    }
+
+    fn parse_show_create(&mut self) -> Result<DfStatement, ParserError> {
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::TABLE => {
+                    let table_name = self.parser.parse_object_name()?;
+
+                    let show_create_table = DfShowCreateTable { name: table_name };
+                    Ok(DfStatement::ShowCreateTable(show_create_table))
+                }
+                _ => self.expected("show create statement", Token::Word(w)),
+            },
+            unexpected => self.expected("show create statement", unexpected),
         }
     }
 

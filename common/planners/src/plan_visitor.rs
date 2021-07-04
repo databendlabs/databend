@@ -23,6 +23,7 @@ use crate::RemotePlan;
 use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
+use crate::ShowCreateTablePlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::UseDatabasePlan;
@@ -94,6 +95,7 @@ pub trait PlanVisitor<'plan> {
             PlanNode::Having(plan) => self.visit_having(plan),
             PlanNode::Expression(plan) => self.visit_expression(plan),
             PlanNode::InsertInto(plan) => self.visit_insert_into(plan),
+            PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
         }
     }
 
@@ -165,4 +167,6 @@ pub trait PlanVisitor<'plan> {
 
     fn visit_set_variable(&mut self, _: &'plan SettingPlan) {}
     fn visit_insert_into(&mut self, _: &'plan InsertIntoPlan) {}
+
+    fn visit_show_create_table(&mut self, _: &'plan ShowCreateTablePlan) {}
 }
