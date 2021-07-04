@@ -7,7 +7,7 @@ mod tests {
     use std::mem::size_of;
     use std::sync::Arc;
 
-    use common_datavalues::prelude::*;
+    use common_datavalues::*;
     use common_exception::Result;
     use common_planners::*;
     use pretty_assertions::assert_eq;
@@ -16,7 +16,7 @@ mod tests {
     use crate::optimizers::*;
 
     #[test]
-    fn test_constant_folding_optimizer() -> Result<()> {
+    fn test_statistics_exact_optimizer() -> Result<()> {
         let ctx = crate::tests::try_create_context()?;
 
         let total = ctx.get_settings().get_max_block_size()? as u64;
@@ -43,23 +43,31 @@ mod tests {
             remote: false,
         });
 
-        let filter_plan = PlanBuilder::from(&source_plan)
-            .filter(col("a").gt(lit(6)).eq(lit(true)))?
+        let aggr_expr = Expression::AggregateFunction {
+            op: "count".to_string(),
+            distinct: false,
+            args: vec![Expression::Literal(DataValue::UInt64(Some(0)))],
+        };
+
+        let plan = PlanBuilder::from(&source_plan)
+            .expression(
+                &[Expression::Literal(DataValue::UInt64(Some(0)))],
+                "Before GroupBy",
+            )?
+            .aggregate_partial(&[aggr_expr.clone()], &[])?
+            .aggregate_final(source_plan.schema(), &[aggr_expr], &[])?
+            .project(&[Expression::Column("count(0)".to_string())])?
             .build()?;
 
-        let plan = PlanNode::Projection(ProjectionPlan {
-            expr: vec![col("a")],
-            schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
-            input: Arc::from(filter_plan),
-        });
-
-        let mut constant_folding = ConstantFoldingOptimizer::create(ctx);
-        let optimized = constant_folding.optimize(&plan)?;
+        let mut statistics_exact = StatisticsExactOptimizer::create(ctx);
+        let optimized = statistics_exact.optimize(&plan)?;
 
         let expect = "\
-        Projection: a:Utf8\
-        \n  Filter: (a > 6)\
-        \n    ReadDataSource: scan partitions: [8], scan schema: [a:Utf8, b:Utf8, c:Utf8], statistics: [read_rows: 10000, read_bytes: 80000]";
+        Projection: count(0):UInt64\
+        \n  AggregatorFinal: groupBy=[[]], aggr=[[count(0)]]\
+        \n    Projection: {\"Struct\":[{\"UInt64\":10000}]} as count(0):Utf8\
+        \n      Expression: {\"Struct\":[{\"UInt64\":10000}]}:Utf8 (Exact Statistics)\
+        \n        ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]";
         let actual = format!("{:?}", optimized);
         assert_eq!(expect, actual);
         Ok(())

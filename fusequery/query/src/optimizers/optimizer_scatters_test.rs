@@ -27,7 +27,7 @@ async fn test_scatter_optimizer() -> Result<()> {
             expect: "\
             Projection: 1:UInt8\
             \n  Expression: 1:UInt8 (Before Projection)\
-            \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
+            \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
         },
         Test {
             name: "Small local table query",

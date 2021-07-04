@@ -89,10 +89,8 @@ impl Table for NumbersTable {
             ))
         })?;
 
-        let statistics = Statistics {
-            read_rows: total as usize,
-            read_bytes: ((total) * size_of::<u64>() as u64) as usize,
-        };
+        let statistics =
+            Statistics::new_exact(total as usize, ((total) * size_of::<u64>() as u64) as usize);
         ctx.try_set_statistics(&statistics)?;
         ctx.add_total_rows_approx(statistics.read_rows);
 

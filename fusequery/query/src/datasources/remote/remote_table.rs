@@ -152,6 +152,7 @@ impl RemoteTable {
         let mut statistics = Statistics {
             read_rows: 0,
             read_bytes: 0,
+            is_exact: false,
         };
 
         if let Some(parts) = res {
@@ -162,6 +163,7 @@ impl RemoteTable {
                 });
                 statistics.read_rows += part.stats.read_rows;
                 statistics.read_bytes += part.stats.read_bytes;
+                statistics.is_exact &= part.stats.is_exact;
             }
         }
 
