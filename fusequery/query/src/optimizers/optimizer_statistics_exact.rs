@@ -37,11 +37,13 @@ impl<'plan> PlanRewriter<'plan> for StatisticsExactImpl<'_> {
                 [Expression::AggregateFunction {
                     ref op,
                     distinct: false,
-                    ..
+                    ref args,
                 }],
                 PlanNode::Expression(ExpressionPlan { input, .. }),
-            ) if op == "count" => match input.as_ref() {
-                PlanNode::ReadSource(read_source_plan) if read_source_plan.statistics.is_exact => {
+            ) if op == "count" && args.len() == 1 => match (&args[0], input.as_ref()) {
+                (Expression::Literal(_), PlanNode::ReadSource(read_source_plan))
+                    if read_source_plan.statistics.is_exact =>
+                {
                     let db_name = "system";
                     let table_name = "one";
 
