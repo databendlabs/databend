@@ -33,6 +33,7 @@ use crate::RemotePlan;
 use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
+use crate::ShowCreateTablePlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::UseDatabasePlan;
@@ -82,6 +83,7 @@ pub trait PlanRewriter<'plan> {
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
             PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
             PlanNode::InsertInto(plan) => self.rewrite_insert_into(plan),
+            PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
         }
     }
 
@@ -224,6 +226,10 @@ pub trait PlanRewriter<'plan> {
 
     fn rewrite_insert_into(&mut self, plan: &'plan InsertIntoPlan) -> Result<PlanNode> {
         Ok(PlanNode::InsertInto(plan.clone()))
+    }
+
+    fn rewrite_show_create_table(&mut self, plan: &'plan ShowCreateTablePlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowCreateTable(plan.clone()))
     }
 }
 

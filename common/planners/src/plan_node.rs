@@ -28,6 +28,7 @@ use crate::RemotePlan;
 use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
+use crate::ShowCreateTablePlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::UseDatabasePlan;
@@ -57,6 +58,7 @@ pub enum PlanNode {
     UseDatabase(UseDatabasePlan),
     SetVariable(SettingPlan),
     InsertInto(InsertIntoPlan),
+    ShowCreateTable(ShowCreateTablePlan),
 }
 
 impl PlanNode {
@@ -86,6 +88,7 @@ impl PlanNode {
             PlanNode::Sort(v) => v.schema(),
             PlanNode::UseDatabase(v) => v.schema(),
             PlanNode::InsertInto(v) => v.schema(),
+            PlanNode::ShowCreateTable(v) => v.schema(),
         }
     }
 
@@ -114,6 +117,7 @@ impl PlanNode {
             PlanNode::Sort(_) => "SortPlan",
             PlanNode::UseDatabase(_) => "UseDatabasePlan",
             PlanNode::InsertInto(_) => "InsertIntoPlan",
+            PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
         }
     }
 

@@ -102,7 +102,6 @@ impl DataBlock {
     /// group_by_get_indices and make blocks.
     pub fn group_by(block: &DataBlock, column_names: &[String]) -> Result<GroupBlocksTable> {
         let group_indices = Self::group_by_get_indices(block, column_names)?;
-
         let mut group_blocks = GroupBlocksTable::default();
         for (group_key, (group_indices, group_keys)) in group_indices {
             let take_block = DataBlock::block_take_by_indices(block, &group_indices)?;

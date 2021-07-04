@@ -7,7 +7,6 @@ use std::fmt;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute;
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::Function;
@@ -40,22 +39,8 @@ impl Function for SubstringFunction {
 
     fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
         // TODO: make this function support column value as arguments rather than literal
-        let mut from = match columns[1].data_type() {
-            DataType::UInt64 => Ok(columns[1]
-                .to_minimal_array()?
-                .u64()?
-                .downcast_ref()
-                .value(0) as i64),
-            DataType::Int64 => Ok(columns[1]
-                .to_minimal_array()?
-                .i64()?
-                .downcast_ref()
-                .value(0) as i64),
-            other => Err(ErrorCode::BadArguments(format!(
-                "Unsupport datatype {:?} as argument",
-                other
-            ))),
-        }?;
+        let from_value = columns[1].try_get(0)?;
+        let mut from = from_value.as_i64()?;
 
         if from >= 1 {
             from -= 1;
@@ -63,34 +48,7 @@ impl Function for SubstringFunction {
 
         let mut end = None;
         if columns.len() >= 3 {
-            match columns[2].data_type() {
-                DataType::UInt64 => {
-                    end = Some(
-                        columns[2]
-                            .to_minimal_array()?
-                            .u64()?
-                            .downcast_ref()
-                            .value(0),
-                    );
-                }
-
-                DataType::Int64 => {
-                    end = Some(
-                        columns[2]
-                            .to_minimal_array()?
-                            .i16()?
-                            .downcast_ref()
-                            .value(0) as u64,
-                    );
-                }
-
-                other => {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Unsupport datatype {:?} as argument",
-                        other
-                    )))
-                }
-            }
+            end = Some(columns[2].try_get(0)?.as_u64()?);
         }
 
         // todo, move these to datavalues

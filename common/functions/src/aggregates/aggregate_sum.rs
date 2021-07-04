@@ -86,7 +86,7 @@ impl fmt::Display for AggregateSumFunction {
 }
 
 impl AggregateSumFunction {
-    fn sum_return_type(arg_type: &DataType) -> Result<DataType> {
+    pub fn sum_return_type(arg_type: &DataType) -> Result<DataType> {
         match arg_type {
             DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => {
                 Ok(DataType::Int64)

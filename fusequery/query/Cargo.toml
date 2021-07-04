@@ -16,7 +16,7 @@ name = "fuse-benchmark"
 path = "src/bin/fuse-benchmark.rs"
 
 [features]
-default = ["simd", "allocator"]
+default = ["simd"]
 simd = ["common-arrow/simd"]
 allocator = ["common-allocators/snmalloc-alloc"]
 
@@ -42,7 +42,7 @@ common-management = { path = "../../common/management" }
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "5a7ae3d" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "56e50dc" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "b6e44b95" }
 clickhouse-srv = { git = "https://github.com/zhang2014/clickhouse-srv", branch = "support_abort" }
 
 

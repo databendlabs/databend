@@ -33,6 +33,7 @@ use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_planners::SettingPlan;
+use common_planners::ShowCreateTablePlan;
 use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
 use common_tracing::tracing;
@@ -56,6 +57,7 @@ use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
 use crate::sql::DfHint;
 use crate::sql::DfParser;
+use crate::sql::DfShowCreateTable;
 use crate::sql::DfStatement;
 use crate::sql::SQLCommon;
 
@@ -107,6 +109,7 @@ impl PlanParser {
             DfStatement::CreateTable(v) => self.sql_create_table_to_plan(v),
             DfStatement::DropTable(v) => self.sql_drop_table_to_plan(v),
             DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(v),
+            DfStatement::ShowCreateTable(v) => self.sql_show_create_table_to_plan(v),
 
             // TODO: support like and other filters in show queries
             DfStatement::ShowTables(_) => self.build_from_sql(
@@ -235,6 +238,36 @@ impl PlanParser {
             schema,
             engine: create.engine,
             options,
+        }))
+    }
+
+    #[tracing::instrument(level = "info", skip(self, show_create), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_show_create_table_to_plan(
+        &self,
+        show_create: &DfShowCreateTable,
+    ) -> Result<PlanNode> {
+        let mut db = self.ctx.get_current_database();
+        if show_create.name.0.is_empty() {
+            return Result::Err(ErrorCode::SyntaxException(
+                "Show create table name is empty",
+            ));
+        }
+        let mut table = show_create.name.0[0].value.clone();
+        if show_create.name.0.len() > 1 {
+            db = table;
+            table = show_create.name.0[1].value.clone();
+        }
+
+        let fields = vec![
+            DataField::new("Table", DataType::Utf8, false),
+            DataField::new("Create Table", DataType::Utf8, false),
+        ];
+
+        let schema = DataSchemaRefExt::create(fields);
+        Ok(PlanNode::ShowCreateTable(ShowCreateTablePlan {
+            db,
+            table,
+            schema,
         }))
     }
 
@@ -1013,10 +1046,11 @@ impl PlanParser {
                     .map(|limit_expr| {
                         self.sql_to_rex(limit_expr, &input.schema(), select)
                             .and_then(|limit_expr| match limit_expr {
-                                Expression::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
-                                _ => Err(ErrorCode::SyntaxException(
-                                    "Unexpected expression for LIMIT clause",
-                                )),
+                                Expression::Literal(v) => Ok(v.as_u64()? as usize),
+                                _ => Err(ErrorCode::SyntaxException(format!(
+                                    "Unexpected expression for LIMIT clause: {:?}",
+                                    limit_expr
+                                ))),
                             })
                     })
                     .transpose()?;
@@ -1027,10 +1061,11 @@ impl PlanParser {
                         let offset_expr = &offset.value;
                         self.sql_to_rex(offset_expr, &input.schema(), select)
                             .and_then(|offset_expr| match offset_expr {
-                                Expression::Literal(DataValue::UInt64(Some(n))) => Ok(n as usize),
-                                _ => Err(ErrorCode::SyntaxException(
-                                    "Unexpected expression for OFFSET clause",
-                                )),
+                                Expression::Literal(v) => Ok(v.as_u64()? as usize),
+                                _ => Err(ErrorCode::SyntaxException(format!(
+                                    "Unexpected expression for OFFSET clause: {:?}",
+                                    offset_expr,
+                                ))),
                             })
                     })
                     .transpose()?

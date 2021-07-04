@@ -15,6 +15,9 @@ mod take_random;
 mod take_single;
 mod vec_hash;
 
+#[cfg(test)]
+mod cast_test;
+
 pub use agg::*;
 pub use apply::*;
 pub use boolean::*;
