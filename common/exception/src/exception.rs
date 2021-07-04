@@ -190,6 +190,7 @@ build_exceptions! {
     // user-api error codes
     UnknownUser(3000),
     UserAlreadyExists(3001),
+    IllegalUserInfoFormat(3002),
 
     // meta-api error codes
     DatabaseAlreadyExists(4001),
@@ -203,6 +204,9 @@ build_exceptions! {
     IllegalScanPlan(5000),
     ReadFileError(5001),
     BrokenChannel(5002),
+
+    // kv-api error codes
+    UnknownKey(6000),
 
 }
 

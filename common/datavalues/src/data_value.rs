@@ -12,31 +12,18 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::datatypes::*;
+use common_arrow::arrow::datatypes::Field as ArrowField;
+use common_arrow::arrow::datatypes::IntervalUnit;
+use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::data_array_cast;
-use crate::BinaryArray;
-use crate::BooleanArray;
-use crate::DataArrayRef;
+use crate::series::IntoSeries;
+use crate::series::Series;
 use crate::DataField;
 use crate::DataType;
-use crate::Float32Array;
-use crate::Float64Array;
-use crate::Int16Array;
-use crate::Int32Array;
-use crate::Int64Array;
-use crate::Int8Array;
-use crate::NullArray;
-use crate::StringArray;
-use crate::StructArray;
-use crate::UInt16Array;
-use crate::UInt32Array;
-use crate::UInt64Array;
-use crate::UInt8Array;
 
 /// A specific value of a data type.
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
@@ -101,6 +88,7 @@ impl DataValue {
                 | DataValue::Utf8(None)
                 | DataValue::Date32(None)
                 | DataValue::Date64(None)
+                | DataValue::Null
                 | DataValue::TimestampMillisecond(None)
                 | DataValue::TimestampMicrosecond(None)
                 | DataValue::TimestampNanosecond(None)
@@ -123,7 +111,6 @@ impl DataValue {
             DataValue::Float32(_) => DataType::Float32,
             DataValue::Float64(_) => DataType::Float64,
             DataValue::Utf8(_) => DataType::Utf8,
-            DataValue::Binary(_) => DataType::Binary,
             DataValue::Date32(_) => DataType::Date32,
             DataValue::Date64(_) => DataType::Date64,
             DataValue::TimestampSecond(_) => DataType::Timestamp(TimeUnit::Second, None),
@@ -146,81 +133,82 @@ impl DataValue {
                     .collect::<Vec<_>>();
                 DataType::Struct(fields)
             }
+            DataValue::Binary(_) => DataType::Binary,
         }
     }
 
-    pub fn to_array(&self) -> Result<DataArrayRef> {
-        self.to_array_with_size(1)
+    pub fn to_array(&self) -> Result<Series> {
+        self.to_series_with_size(1)
     }
 
-    pub fn to_array_with_size(&self, size: usize) -> Result<DataArrayRef> {
+    pub fn to_arrow_array_with_size(&self, size: usize) -> Result<ArrayRef> {
         match self {
             DataValue::Null => Ok(Arc::new(NullArray::new(size))),
             DataValue::Boolean(e) => match e {
-                Some(v) => Ok(Arc::new(BooleanArray::from(vec![*v; size])) as DataArrayRef),
-                None => Ok(new_null_array(&DataType::Boolean, size)),
+                Some(v) => Ok(Arc::new(BooleanArray::from(vec![*v; size])) as ArrayRef),
+                None => Ok(new_null_array_by_type(&DataType::Boolean, size)),
             },
             DataValue::Int8(e) => match e {
-                Some(v) => Ok(Arc::new(Int8Array::from(vec![*v; size])) as DataArrayRef),
-                None => Ok(new_null_array(&DataType::Int8, size)),
+                Some(v) => Ok(Arc::new(Int8Array::from(vec![*v; size])) as ArrayRef),
+                None => Ok(new_null_array_by_type(&DataType::Int8, size)),
             },
             DataValue::Int16(e) => match e {
-                Some(v) => Ok(Arc::new(Int16Array::from(vec![*v; size])) as DataArrayRef),
-                None => Ok(new_null_array(&DataType::Int16, size)),
+                Some(v) => Ok(Arc::new(Int16Array::from(vec![*v; size])) as ArrayRef),
+                None => Ok(new_null_array_by_type(&DataType::Int16, size)),
             },
             DataValue::Int32(e) => match e {
-                Some(v) => Ok(Arc::new(Int32Array::from(vec![*v; size])) as DataArrayRef),
-                None => Ok(new_null_array(&DataType::Int32, size)),
+                Some(v) => Ok(Arc::new(Int32Array::from(vec![*v; size])) as ArrayRef),
+                None => Ok(new_null_array_by_type(&DataType::Int32, size)),
             },
             DataValue::Int64(e) => match e {
-                Some(v) => Ok(Arc::new(Int64Array::from(vec![*v; size])) as DataArrayRef),
-                None => Ok(new_null_array(&DataType::Int64, size)),
+                Some(v) => Ok(Arc::new(Int64Array::from(vec![*v; size])) as ArrayRef),
+                None => Ok(new_null_array_by_type(&DataType::Int64, size)),
             },
             DataValue::UInt8(e) => match e {
-                Some(v) => Ok(Arc::new(UInt8Array::from(vec![*v; size])) as DataArrayRef),
-                None => Ok(new_null_array(&DataType::UInt8, size)),
+                Some(v) => Ok(Arc::new(UInt8Array::from(vec![*v; size])) as ArrayRef),
+                None => Ok(new_null_array_by_type(&DataType::UInt8, size)),
             },
             DataValue::UInt16(e) => match e {
-                Some(v) => Ok(Arc::new(UInt16Array::from(vec![*v; size])) as DataArrayRef),
-                None => Ok(new_null_array(&DataType::UInt16, size)),
+                Some(v) => Ok(Arc::new(UInt16Array::from(vec![*v; size])) as ArrayRef),
+                None => Ok(new_null_array_by_type(&DataType::UInt16, size)),
             },
             DataValue::UInt32(e) => match e {
-                Some(v) => Ok(Arc::new(UInt32Array::from(vec![*v; size])) as DataArrayRef),
-                None => Ok(new_null_array(&DataType::UInt32, size)),
+                Some(v) => Ok(Arc::new(UInt32Array::from(vec![*v; size])) as ArrayRef),
+                None => Ok(new_null_array_by_type(&DataType::UInt32, size)),
             },
             DataValue::UInt64(e) => match e {
-                Some(v) => Ok(Arc::new(UInt64Array::from(vec![*v; size])) as DataArrayRef),
-                None => Ok(new_null_array(&DataType::UInt64, size)),
+                Some(v) => Ok(Arc::new(UInt64Array::from(vec![*v; size])) as ArrayRef),
+                None => Ok(new_null_array_by_type(&DataType::UInt64, size)),
             },
             DataValue::Float32(e) => match e {
-                Some(v) => Ok(Arc::new(Float32Array::from(vec![*v; size])) as DataArrayRef),
-                None => Ok(new_null_array(&DataType::Float32, size)),
+                Some(v) => Ok(Arc::new(Float32Array::from(vec![*v; size])) as ArrayRef),
+                None => Ok(new_null_array_by_type(&DataType::Float32, size)),
             },
             DataValue::Float64(e) => match e {
-                Some(v) => Ok(Arc::new(Float64Array::from(vec![*v; size])) as DataArrayRef),
-                None => Ok(new_null_array(&DataType::Float64, size)),
+                Some(v) => Ok(Arc::new(Float64Array::from(vec![*v; size])) as ArrayRef),
+                None => Ok(new_null_array_by_type(&DataType::Float64, size)),
             },
             DataValue::Utf8(e) => match e {
                 Some(v) => Ok(Arc::new(StringArray::from(vec![v.deref(); size]))),
-                None => Ok(new_null_array(&DataType::Utf8, size)),
+                None => Ok(new_null_array_by_type(&DataType::Utf8, size)),
             },
             DataValue::Binary(e) => match e {
                 Some(v) => Ok(Arc::new(BinaryArray::from(vec![v.deref(); size]))),
-                None => Ok(new_null_array(&DataType::Binary, size)),
+                None => Ok(new_null_array_by_type(&DataType::Binary, size)),
             },
             DataValue::Date32(e) => match e {
                 Some(value) => Ok(Arc::new(Date32Array::from_value(*value, size))),
-                None => Ok(new_null_array(&DataType::Date32, size)),
+                None => Ok(new_null_array_by_type(&DataType::Date32, size)),
             },
             DataValue::Date64(e) => match e {
                 Some(value) => Ok(Arc::new(Date64Array::from_value(*value, size))),
-                None => Ok(new_null_array(&DataType::Date64, size)),
+                None => Ok(new_null_array_by_type(&DataType::Date64, size)),
             },
             DataValue::TimestampSecond(e) => match e {
                 Some(value) => Ok(Arc::new(TimestampSecondArray::from_iter_values(
                     repeat(*value).take(size),
                 ))),
-                None => Ok(new_null_array(
+                None => Ok(new_null_array_by_type(
                     &DataType::Timestamp(TimeUnit::Second, None),
                     size,
                 )),
@@ -229,7 +217,7 @@ impl DataValue {
                 Some(value) => Ok(Arc::new(TimestampMillisecondArray::from_iter_values(
                     repeat(*value).take(size),
                 ))),
-                None => Ok(new_null_array(
+                None => Ok(new_null_array_by_type(
                     &DataType::Timestamp(TimeUnit::Millisecond, None),
                     size,
                 )),
@@ -238,28 +226,28 @@ impl DataValue {
                 Some(value) => Ok(Arc::new(TimestampMicrosecondArray::from_value(
                     *value, size,
                 ))),
-                None => Ok(new_null_array(
+                None => Ok(new_null_array_by_type(
                     &DataType::Timestamp(TimeUnit::Microsecond, None),
                     size,
                 )),
             },
             DataValue::TimestampNanosecond(e) => match e {
                 Some(value) => Ok(Arc::new(TimestampNanosecondArray::from_value(*value, size))),
-                None => Ok(new_null_array(
+                None => Ok(new_null_array_by_type(
                     &DataType::Timestamp(TimeUnit::Nanosecond, None),
                     size,
                 )),
             },
             DataValue::IntervalDayTime(e) => match e {
                 Some(value) => Ok(Arc::new(IntervalDayTimeArray::from_value(*value, size))),
-                None => Ok(new_null_array(
+                None => Ok(new_null_array_by_type(
                     &DataType::Interval(IntervalUnit::DayTime),
                     size,
                 )),
             },
             DataValue::IntervalYearMonth(e) => match e {
                 Some(value) => Ok(Arc::new(IntervalYearMonthArray::from_value(*value, size))),
-                None => Ok(new_null_array(
+                None => Ok(new_null_array_by_type(
                     &DataType::Interval(IntervalUnit::YearMonth),
                     size,
                 )),
@@ -288,14 +276,14 @@ impl DataValue {
             DataValue::Struct(v) => {
                 let mut array = vec![];
                 for (i, x) in v.iter().enumerate() {
-                    let val_array = x.to_array_with_size(1)?;
+                    let val_array = x.to_arrow_array_with_size(1)?;
                     array.push((
-                        DataField::new(
+                        ArrowField::new(
                             format!("item_{}", i).as_str(),
                             val_array.data_type().clone(),
                             false,
                         ),
-                        val_array as DataArrayRef,
+                        val_array as ArrayRef,
                     ));
                 }
                 Ok(Arc::new(StructArray::from(array)))
@@ -303,11 +291,49 @@ impl DataValue {
         }
     }
 
-    pub fn cast(&self, to_type: &DataType) -> Result<Self> {
-        let array = self.to_array_with_size(1)?;
-        let cast_array = data_array_cast(&array, to_type)?;
-        Self::try_from_array(&cast_array, 0)
+    pub fn to_series_with_size(&self, size: usize) -> Result<Series> {
+        let array = self.to_arrow_array_with_size(size)?;
+        Ok(array.into_series())
     }
+
+    pub fn as_u64(&self) -> Result<u64> {
+        match self {
+            DataValue::Int8(Some(v)) => Ok(*v as u64),
+            DataValue::Int16(Some(v)) => Ok(*v as u64),
+            DataValue::Int32(Some(v)) => Ok(*v as u64),
+            DataValue::Int64(Some(v)) => Ok(*v as u64),
+            DataValue::UInt8(Some(v)) => Ok(*v as u64),
+            DataValue::UInt16(Some(v)) => Ok(*v as u64),
+            DataValue::UInt32(Some(v)) => Ok(*v as u64),
+            DataValue::UInt64(Some(v)) => Ok(*v),
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
+                "Unexpected type:{:?} to get u64 number",
+                other.data_type()
+            ))),
+        }
+    }
+
+    pub fn as_i64(&self) -> Result<i64> {
+        match self {
+            DataValue::Int8(Some(v)) => Ok(*v as i64),
+            DataValue::Int16(Some(v)) => Ok(*v as i64),
+            DataValue::Int32(Some(v)) => Ok(*v as i64),
+            DataValue::Int64(Some(v)) => Ok(*v),
+            DataValue::UInt8(Some(v)) => Ok(*v as i64),
+            DataValue::UInt16(Some(v)) => Ok(*v as i64),
+            DataValue::UInt32(Some(v)) => Ok(*v as i64),
+            DataValue::UInt64(Some(v)) => Ok(*v as i64),
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
+                "Unexpected type:{:?} to get i64 number",
+                other.data_type()
+            ))),
+        }
+    }
+}
+
+#[inline]
+fn new_null_array_by_type(data_type: &DataType, length: usize) -> ArrayRef {
+    new_null_array(&data_type.to_arrow(), length)
 }
 
 typed_cast_from_data_value_to_std!(Int8, i8);
@@ -322,47 +348,71 @@ typed_cast_from_data_value_to_std!(Float32, f32);
 typed_cast_from_data_value_to_std!(Float64, f64);
 typed_cast_from_data_value_to_std!(Boolean, bool);
 
-impl TryFrom<&DataType> for DataValue {
-    type Error = ErrorCode;
+std_to_data_value!(Int8, i8);
+std_to_data_value!(Int16, i16);
+std_to_data_value!(Int32, i32);
+std_to_data_value!(Int64, i64);
+std_to_data_value!(UInt8, u8);
+std_to_data_value!(UInt16, u16);
+std_to_data_value!(UInt32, u32);
+std_to_data_value!(UInt64, u64);
+std_to_data_value!(Float32, f32);
+std_to_data_value!(Float64, f64);
+std_to_data_value!(Boolean, bool);
 
-    fn try_from(data_type: &DataType) -> Result<Self> {
+impl From<&str> for DataValue {
+    fn from(x: &str) -> Self {
+        DataValue::Utf8(Some(x.to_string()))
+    }
+}
+
+impl From<String> for DataValue {
+    fn from(x: String) -> Self {
+        DataValue::Utf8(Some(x))
+    }
+}
+
+impl From<&DataType> for DataValue {
+    fn from(data_type: &DataType) -> Self {
         match data_type {
-            DataType::Null => Ok(DataValue::Null),
-            DataType::Boolean => Ok(DataValue::Boolean(None)),
-            DataType::Int8 => Ok(DataValue::Int8(None)),
-            DataType::Int16 => Ok(DataValue::Int16(None)),
-            DataType::Int32 => Ok(DataValue::Int32(None)),
-            DataType::Int64 => Ok(DataValue::Int64(None)),
-            DataType::UInt8 => Ok(DataValue::UInt8(None)),
-            DataType::UInt16 => Ok(DataValue::UInt16(None)),
-            DataType::UInt32 => Ok(DataValue::UInt32(None)),
-            DataType::UInt64 => Ok(DataValue::UInt64(None)),
-            DataType::Float32 => Ok(DataValue::Float32(None)),
-            DataType::Float64 => Ok(DataValue::Float64(None)),
-            DataType::Utf8 => Ok(DataValue::Utf8(None)),
-
-            DataType::Timestamp(TimeUnit::Second, _) => Ok(DataValue::TimestampSecond(None)),
-            DataType::Timestamp(TimeUnit::Millisecond, _) => {
-                Ok(DataValue::TimestampMillisecond(None))
-            }
-            DataType::Timestamp(TimeUnit::Microsecond, _) => {
-                Ok(DataValue::TimestampMicrosecond(None))
-            }
-            DataType::Timestamp(TimeUnit::Nanosecond, _) => {
-                Ok(DataValue::TimestampNanosecond(None))
-            }
-            _ => Result::Err(ErrorCode::BadDataValueType(format!(
-                "DataValue Error: Unsupported try_from() for data type: {:?}",
-                data_type
-            ))),
+            DataType::Null => DataValue::Null,
+            DataType::Boolean => DataValue::Boolean(None),
+            DataType::Int8 => DataValue::Int8(None),
+            DataType::Int16 => DataValue::Int16(None),
+            DataType::Int32 => DataValue::Int32(None),
+            DataType::Int64 => DataValue::Int64(None),
+            DataType::UInt8 => DataValue::UInt8(None),
+            DataType::UInt16 => DataValue::UInt16(None),
+            DataType::UInt32 => DataValue::UInt32(None),
+            DataType::UInt64 => DataValue::UInt64(None),
+            DataType::Float32 => DataValue::Float32(None),
+            DataType::Float64 => DataValue::Float64(None),
+            DataType::Utf8 => DataValue::Utf8(None),
+            DataType::Date32 => DataValue::UInt32(None),
+            DataType::Date64 => DataValue::UInt64(None),
+            DataType::Timestamp(_, _) => DataValue::UInt64(None),
+            DataType::Interval(IntervalUnit::YearMonth) => DataValue::UInt32(None),
+            DataType::Interval(IntervalUnit::DayTime) => DataValue::UInt64(None),
+            DataType::List(f) => DataValue::List(None, f.data_type().clone()),
+            DataType::Struct(_) => DataValue::Struct(vec![]),
+            DataType::Binary => DataValue::Binary(None),
         }
+    }
+}
+
+impl From<DataType> for DataValue {
+    fn from(data_type: DataType) -> Self {
+        DataValue::from(&data_type)
     }
 }
 
 impl fmt::Display for DataValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.is_null() {
+            return write!(f, "NULL");
+        }
         match self {
-            DataValue::Null => write!(f, "Null"),
+            DataValue::Null => write!(f, "NULL"),
             DataValue::Boolean(v) => format_data_value_with_option!(f, v),
             DataValue::Float32(v) => format_data_value_with_option!(f, v),
             DataValue::Float64(v) => format_data_value_with_option!(f, v),
@@ -376,14 +426,12 @@ impl fmt::Display for DataValue {
             DataValue::UInt64(v) => format_data_value_with_option!(f, v),
             DataValue::Utf8(v) => format_data_value_with_option!(f, v),
             DataValue::Binary(None) => write!(f, "NULL"),
-            DataValue::Binary(Some(v)) => write!(
-                f,
-                "{}",
-                v.iter()
-                    .map(|v| format!("{}", v))
-                    .collect::<Vec<_>>()
-                    .join(",")
-            ),
+            DataValue::Binary(Some(v)) => {
+                for c in v {
+                    write!(f, "{:02x}", c)?;
+                }
+                Ok(())
+            }
             DataValue::Date32(v) => format_data_value_with_option!(f, v),
             DataValue::Date64(v) => format_data_value_with_option!(f, v),
             DataValue::TimestampSecond(v) => format_data_value_with_option!(f, v),
@@ -410,8 +458,11 @@ impl fmt::Display for DataValue {
 
 impl fmt::Debug for DataValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_null() {
+            return write!(f, "NULL");
+        }
         match self {
-            DataValue::Null => write!(f, "Null"),
+            DataValue::Null => write!(f, "NULL"),
             DataValue::Boolean(v) => format_data_value_with_option!(f, v),
             DataValue::Int8(v) => format_data_value_with_option!(f, v),
             DataValue::Int16(v) => format_data_value_with_option!(f, v),

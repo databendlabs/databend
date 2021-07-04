@@ -1,4 +1,6 @@
-# Datafuse includes some code from [arrow/datafusion](https://github.com/apache/arrow/tree/master/rust/datafusion)
+# Datafuse includes some code from
+- [arrow/datafusion](https://github.com/apache/arrow/tree/master/rust/datafusion)
+- [pola-rs/polars](https://github.com/pola-rs/polars)
 
 We include the text of the original license below:
 

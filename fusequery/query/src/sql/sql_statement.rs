@@ -32,6 +32,11 @@ pub struct DfExplain {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct DfShowCreateTable {
+    pub name: ObjectName,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DfCreateTable {
     pub if_not_exists: bool,
     /// Table name
@@ -81,6 +86,7 @@ pub enum DfStatement {
 
     // Tables.
     ShowTables(DfShowTables),
+    ShowCreateTable(DfShowCreateTable),
     CreateTable(DfCreateTable),
     DropTable(DfDropTable),
 

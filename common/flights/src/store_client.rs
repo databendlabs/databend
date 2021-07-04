@@ -21,8 +21,8 @@ use tonic::Request;
 
 use crate::flight_result_to_str;
 use crate::store_do_action::RequestFor;
+use crate::store_do_action::StoreDoAction;
 use crate::ConnectionFactory;
-use crate::StoreDoAction;
 
 #[derive(Clone)]
 pub struct StoreClient {
@@ -117,73 +117,4 @@ impl StoreClient {
             }
         }
     }
-
-    //    pub async fn add_user(
-    //        &mut self,
-    //        username: impl Into<String>,
-    //        password: impl Into<String>,
-    //        salt: impl Into<String>,
-    //    ) -> common_exception::Result<AddUserActionResult> {
-    //        let action = StoreDoAction::AddUser(AddUserAction {
-    //            username: username.into(),
-    //            password: password.into(),
-    //            salt: salt.into(),
-    //        });
-    //        let rst = self.do_action(&action).await?;
-    //        match_action_res!(StoreDoActionResult::AddUser, rst)
-    //    }
-    //
-    //    pub async fn drop_user(
-    //        &mut self,
-    //        username: impl Into<String>,
-    //    ) -> common_exception::Result<DropUserActionResult> {
-    //        let action = StoreDoAction::DropUser(DropUserAction {
-    //            username: username.into(),
-    //        });
-    //        let rst = self.do_action(&action).await?;
-    //        match_action_res!(StoreDoActionResult::DropUser, rst)
-    //    }
-    //
-    //    pub async fn update_user(
-    //        &mut self,
-    //        username: impl Into<String>,
-    //        new_password: Option<impl Into<String>>,
-    //        new_salt: Option<impl Into<String>>,
-    //    ) -> common_exception::Result<UpdateUserActionResult> {
-    //        let action = StoreDoAction::UpdateUser(UpdateUserAction {
-    //            username: username.into(),
-    //            new_password: new_password.map(Into::into),
-    //            new_salt: new_salt.map(Into::into),
-    //        });
-    //        let rst = self.do_action(&action).await?;
-    //        match_action_res!(StoreDoActionResult::UpdateUser, rst)
-    //    }
-    //
-    //    pub async fn get_all_users(&mut self) -> common_exception::Result<GetAllUsersActionResult> {
-    //        let action = StoreDoAction::GetAllUsersInfo(GetAllUsersAction {});
-    //        let rst = self.do_action(&action).await?;
-    //        match_action_res!(StoreDoActionResult::GetAllUsersInfo, rst)
-    //    }
-    //
-    //    pub async fn get_users(
-    //        &mut self,
-    //        usernames: &[impl AsRef<str>],
-    //    ) -> common_exception::Result<GetUsersActionResult> {
-    //        let action = StoreDoAction::GetUsersInfo(GetUsersAction {
-    //            usernames: usernames.iter().map(|n| n.as_ref().to_string()).collect(),
-    //        });
-    //        let rst = self.do_action(&action).await?;
-    //        match_action_res!(StoreDoActionResult::GetUsersInfo, rst)
-    //    }
-    //
-    //    pub async fn get_user(
-    //        &mut self,
-    //        username: impl AsRef<str>,
-    //    ) -> common_exception::Result<GetUserActionResult> {
-    //        let action = StoreDoAction::GetUserInfo(GetUserAction {
-    //            username: username.as_ref().to_string(),
-    //        });
-    //        let rst = self.do_action(&action).await?;
-    //        match_action_res!(StoreDoActionResult::GetUserInfo, rst)
-    //    }
 }

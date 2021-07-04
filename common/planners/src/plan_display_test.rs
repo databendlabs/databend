@@ -30,7 +30,7 @@ fn test_plan_display_indent() -> anyhow::Result<()> {
     });
 
     assert_eq!(
-        "Create table foo.bar Field { name: \"a\", data_type: Int64, nullable: false, dict_id: 0, dict_is_ordered: false, metadata: None }, engine: JSON, if_not_exists:true, option: {\"opt_foo\": \"opt_bar\"}",
+        "Create table foo.bar DataField { name: \"a\", data_type: Int64, nullable: false }, engine: JSON, if_not_exists:true, option: {\"opt_foo\": \"opt_bar\"}",
         format!("{}", plan_create.display_indent())
     );
 

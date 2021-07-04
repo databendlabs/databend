@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 
 use crate::test::Test;

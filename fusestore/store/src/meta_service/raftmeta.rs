@@ -933,6 +933,23 @@ impl MetaNode {
         sm.get_kv(key)
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn mget_kv(
+        &self,
+        keys: &[impl AsRef<str> + std::fmt::Debug],
+    ) -> Vec<Option<SeqValue>> {
+        // inconsistent get: from local state machine
+        let sm = self.sto.sm.read().await;
+        sm.mget_kv(keys)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqValue)> {
+        // inconsistent get: from local state machine
+        let sm = self.sto.sm.read().await;
+        sm.prefix_list_kv(prefix)
+    }
+
     /// Submit a write request to the known leader. Returns the response after applying the request.
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn write(&self, req: LogEntry) -> common_exception::Result<AppliedState> {

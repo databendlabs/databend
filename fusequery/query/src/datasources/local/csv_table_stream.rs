@@ -4,6 +4,7 @@
 
 use std::convert::TryInto;
 use std::fs::File;
+use std::sync::Arc;
 use std::task::Poll;
 
 use common_arrow::arrow::csv;
@@ -44,15 +45,9 @@ impl CsvTableStream {
         let block_size = end - begin;
 
         let file = File::open(self.file.clone())?;
-        let mut reader: csv::Reader<File> = csv::Reader::new(
-            file,
-            self.schema.clone(),
-            false,
-            None,
-            block_size,
-            bounds,
-            None,
-        );
+        let arrow_schema = Arc::new(self.schema.to_arrow());
+        let mut reader: csv::Reader<File> =
+            csv::Reader::new(file, arrow_schema, false, None, block_size, bounds, None);
 
         reader
             .next()

@@ -21,6 +21,7 @@ impl SQLCommon {
         match sql_type {
             SQLDataType::BigInt => Ok(DataType::Int64),
             SQLDataType::Int => Ok(DataType::Int32),
+            SQLDataType::TinyInt => Ok(DataType::Int8),
             SQLDataType::SmallInt => Ok(DataType::Int16),
             SQLDataType::Char(_) => Ok(DataType::Utf8),
             SQLDataType::Varchar(_) => Ok(DataType::Utf8),
@@ -30,7 +31,7 @@ impl SQLCommon {
             SQLDataType::Real | SQLDataType::Double => Ok(DataType::Float64),
             SQLDataType::Boolean => Ok(DataType::Boolean),
             SQLDataType::Date => Ok(DataType::Date32),
-            SQLDataType::Time => Ok(DataType::Time64(TimeUnit::Millisecond)),
+            SQLDataType::Time => Ok(DataType::Timestamp(TimeUnit::Millisecond, None)),
             SQLDataType::Timestamp => Ok(DataType::Date64),
 
             _ => Result::Err(ErrorCode::IllegalDataType(format!(

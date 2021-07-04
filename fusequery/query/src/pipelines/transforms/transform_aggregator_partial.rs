@@ -6,13 +6,10 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_aggregate_functions::AggregateFunction;
 use common_datablocks::DataBlock;
-use common_datavalues::DataArrayRef;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
-use common_datavalues::StringArray;
+use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_functions::aggregates::AggregateFunction;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -97,12 +94,12 @@ impl Processor for AggregatorPartialTransform {
         let delta = start.elapsed();
         tracing::debug!("Aggregator partial cost: {:?}", delta);
 
-        let mut columns: Vec<DataArrayRef> = vec![];
+        let mut columns: Vec<Series> = vec![];
         for func in funcs.iter() {
             // Column.
             let states = DataValue::Struct(func.accumulate_result()?);
             let ser = serde_json::to_string(&states)?;
-            let col = Arc::new(StringArray::from(vec![ser.as_str()]));
+            let col = Series::new(vec![ser.as_str()]);
             columns.push(col);
         }
 

@@ -6,15 +6,15 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
-use common_aggregate_functions::AggregateFunction;
-use common_aggregate_functions::AggregateFunctionFactory;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::FunctionFactory;
+use common_functions::aggregates::AggregateFunction;
+use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::scalars::FunctionFactory;
 use lazy_static::lazy_static;
 
 use crate::PlanNode;
@@ -109,8 +109,8 @@ impl Expression {
 
     pub fn to_data_field(&self, input_schema: &DataSchemaRef) -> Result<DataField> {
         let name = self.column_name();
-        self.to_data_type(&input_schema).and_then(|return_type| {
-            self.nullable(&input_schema)
+        self.to_data_type(input_schema).and_then(|return_type| {
+            self.nullable(input_schema)
                 .map(|nullable| DataField::new(&name, return_type, nullable))
         })
     }

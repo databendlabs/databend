@@ -4,7 +4,7 @@
 
 use std::env;
 
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 use common_runtime::tokio;
@@ -73,7 +73,7 @@ async fn test_csv_table() -> Result<()> {
 async fn test_csv_table_parse_error() -> Result<()> {
     use std::env;
 
-    use common_datavalues::*;
+    use common_datavalues::prelude::*;
     use common_planners::*;
     use futures::TryStreamExt;
     use pretty_assertions::assert_eq;

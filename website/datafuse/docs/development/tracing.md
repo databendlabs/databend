@@ -82,36 +82,36 @@ Jun 10 16:40:36.139  INFO ThreadId(16) sql_statement_to_plan: fuse_query::sql::p
 Jun 10 16:40:36.139  INFO ThreadId(16) sql_statement_to_plan: fuse_query::sql::plan_parser: close time.busy=3.57ms time.idle=453µs
 Jun 10 16:40:36.140  INFO ThreadId(309) execute{ctx.id="1c651744-3e73-4b94-9df0-dc031b73c626"}: fuse_query::interpreters::interpreter_select: new
 Jun 10 16:40:36.141  INFO ThreadId(309) execute{ctx.id="1c651744-3e73-4b94-9df0-dc031b73c626"}: fuse_query::interpreters::interpreter_select: enter
-Jun 10 16:40:36.141 DEBUG ThreadId(309) execute{ctx.id="1c651744-3e73-4b94-9df0-dc031b73c626"}: fuse_query::optimizers::optimizer: Before ProjectionPushDown 
+Jun 10 16:40:36.141 DEBUG ThreadId(309) execute{ctx.id="1c651744-3e73-4b94-9df0-dc031b73c626"}: fuse_query::optimizers::optimizer: Before ProjectionPushDown
 Projection: (sum((number + 1)) + 1):UInt64
   Expression: (sum((number + 1)) + 1):UInt64 (Before Projection)
     AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]
       AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]
-        Expression: (number % 3):UInt64, (number + 1):UInt64 (Before GroupBy)
+        Expression: (number % 3):UInt8, (number + 1):UInt64 (Before GroupBy)
           Filter: (number > 0)
             ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]
-Jun 10 16:40:36.142 DEBUG ThreadId(309) execute{ctx.id="1c651744-3e73-4b94-9df0-dc031b73c626"}: fuse_query::optimizers::optimizer: After ProjectionPushDown 
+Jun 10 16:40:36.142 DEBUG ThreadId(309) execute{ctx.id="1c651744-3e73-4b94-9df0-dc031b73c626"}: fuse_query::optimizers::optimizer: After ProjectionPushDown
 Projection: (sum((number + 1)) + 1):UInt64
   Expression: (sum((number + 1)) + 1):UInt64 (Before Projection)
     AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]
       AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]
-        Expression: (number % 3):UInt64, (number + 1):UInt64 (Before GroupBy)
+        Expression: (number % 3):UInt8, (number + 1):UInt64 (Before GroupBy)
           Filter: (number > 0)
             ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]
-Jun 10 16:40:36.142 DEBUG ThreadId(309) execute{ctx.id="1c651744-3e73-4b94-9df0-dc031b73c626"}: fuse_query::optimizers::optimizer: Before Scatters 
+Jun 10 16:40:36.142 DEBUG ThreadId(309) execute{ctx.id="1c651744-3e73-4b94-9df0-dc031b73c626"}: fuse_query::optimizers::optimizer: Before Scatters
 Projection: (sum((number + 1)) + 1):UInt64
   Expression: (sum((number + 1)) + 1):UInt64 (Before Projection)
     AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]
       AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]
-        Expression: (number % 3):UInt64, (number + 1):UInt64 (Before GroupBy)
+        Expression: (number % 3):UInt8, (number + 1):UInt64 (Before GroupBy)
           Filter: (number > 0)
             ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]
-Jun 10 16:40:36.143 DEBUG ThreadId(309) execute{ctx.id="1c651744-3e73-4b94-9df0-dc031b73c626"}: fuse_query::optimizers::optimizer: After Scatters 
+Jun 10 16:40:36.143 DEBUG ThreadId(309) execute{ctx.id="1c651744-3e73-4b94-9df0-dc031b73c626"}: fuse_query::optimizers::optimizer: After Scatters
 Projection: (sum((number + 1)) + 1):UInt64
   Expression: (sum((number + 1)) + 1):UInt64 (Before Projection)
     AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]
       AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]
-        Expression: (number % 3):UInt64, (number + 1):UInt64 (Before GroupBy)
+        Expression: (number % 3):UInt8, (number + 1):UInt64 (Before GroupBy)
           Filter: (number > 0)
             ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]
 Jun 10 16:40:36.143  INFO ThreadId(309) execute{ctx.id="1c651744-3e73-4b94-9df0-dc031b73c626"}:reschedule: fuse_query::interpreters::plan_scheduler: new
@@ -125,7 +125,7 @@ Projection: (sum((number + 1)) + 1):UInt64
   Expression: (sum((number + 1)) + 1):UInt64 (Before Projection)
     AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]
       AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]
-        Expression: (number % 3):UInt64, (number + 1):UInt64 (Before GroupBy)
+        Expression: (number % 3):UInt8, (number + 1):UInt64 (Before GroupBy)
           Filter: (number > 0)
             ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]
 Jun 10 16:40:36.145 DEBUG ThreadId(309) execute{ctx.id="1c651744-3e73-4b94-9df0-dc031b73c626"}:build: fuse_query::pipelines::processors::pipeline_builder: Pipeline:

@@ -44,13 +44,13 @@ fn test_plan_parser() -> Result<()> {
         Test {
             name: "create-table-passed",
             sql: "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' ",
-            expect: "Create table default.t Field { name: \"c1\", data_type: Int32, nullable: false, dict_id: 0, dict_is_ordered: false, metadata: None }, Field { name: \"c2\", data_type: Int64, nullable: false, dict_id: 0, dict_is_ordered: false, metadata: None }, Field { name: \"c3\", data_type: Utf8, nullable: false, dict_id: 0, dict_is_ordered: false, metadata: None }, engine: Parquet, if_not_exists:false, option: {\"location\": \"foo.parquet\"}",
+            expect: "Create table default.t DataField { name: \"c1\", data_type: Int32, nullable: false }, DataField { name: \"c2\", data_type: Int64, nullable: false }, DataField { name: \"c3\", data_type: Utf8, nullable: false }, engine: Parquet, if_not_exists:false, option: {\"location\": \"foo.parquet\"}",
             error: "",
         },
         Test {
             name: "create-table-if-not-exists-passed",
             sql: "CREATE TABLE IF NOT EXISTS t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' ",
-            expect: "Create table default.t Field { name: \"c1\", data_type: Int32, nullable: false, dict_id: 0, dict_is_ordered: false, metadata: None }, Field { name: \"c2\", data_type: Int64, nullable: false, dict_id: 0, dict_is_ordered: false, metadata: None }, Field { name: \"c3\", data_type: Utf8, nullable: false, dict_id: 0, dict_is_ordered: false, metadata: None }, engine: Parquet, if_not_exists:true, option: {\"location\": \"foo.parquet\"}",
+            expect: "Create table default.t DataField { name: \"c1\", data_type: Int32, nullable: false }, DataField { name: \"c2\", data_type: Int64, nullable: false }, DataField { name: \"c3\", data_type: Utf8, nullable: false }, engine: Parquet, if_not_exists:true, option: {\"location\": \"foo.parquet\"}",
             error: "",
         },
         Test {
@@ -140,13 +140,13 @@ fn test_plan_parser() -> Result<()> {
             sql: "select sum(number+1)+2, number%3 as id from numbers(10) where number>1 group by id having id>1 order by id desc limit 3",
             expect: "\
             Limit: 3\
-            \n  Projection: (sum((number + 1)) + 2):UInt64, (number % 3) as id:UInt64\
-            \n    Sort: (number % 3):UInt64\
+            \n  Projection: (sum((number + 1)) + 2):UInt64, (number % 3) as id:UInt8\
+            \n    Sort: (number % 3):UInt8\
             \n      Having: ((number % 3) > 1)\
-            \n        Expression: (sum((number + 1)) + 2):UInt64, (number % 3):UInt64 (Before OrderBy)\
+            \n        Expression: (sum((number + 1)) + 2):UInt64, (number % 3):UInt8 (Before OrderBy)\
             \n          AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]\
             \n            AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]\
-            \n              Expression: (number % 3):UInt64, (number + 1):UInt64 (Before GroupBy)\
+            \n              Expression: (number % 3):UInt8, (number + 1):UInt64 (Before GroupBy)\
             \n                Filter: (number > 1)\
             \n                  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
             error: ""

@@ -2,13 +2,13 @@
 
 members = [
     # Common
+    "common/allocators",
     "common/arrow",
     "common/building",
     "common/datablocks",
     "common/datavalues",
     "common/flights",
     "common/functions",
-    "common/aggregate_functions",
     "common/metatypes",
     "common/infallible",
     "common/planners",

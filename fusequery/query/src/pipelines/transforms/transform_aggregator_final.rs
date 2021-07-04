@@ -6,11 +6,11 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_aggregate_functions::AggregateFunction;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_functions::aggregates::AggregateFunction;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -73,8 +73,7 @@ impl Processor for AggregatorFinalTransform {
         while let Some(block) = stream.next().await {
             let block = block?;
             for (i, func) in funcs.iter_mut().enumerate() {
-                if let DataValue::Utf8(Some(col)) = DataValue::try_from_column(block.column(i), 0)?
-                {
+                if let DataValue::Utf8(Some(col)) = block.column(i).try_get(0)? {
                     let val: DataValue = serde_json::from_str(&col)?;
                     if let DataValue::Struct(states) = val {
                         func.merge(&states)?;
@@ -88,7 +87,7 @@ impl Processor for AggregatorFinalTransform {
         let mut final_result = Vec::with_capacity(funcs.len());
         for func in &funcs {
             let merge_result = func.merge_result()?;
-            final_result.push(merge_result.to_array_with_size(1)?);
+            final_result.push(merge_result.to_series_with_size(1)?);
         }
 
         let mut blocks = vec![];

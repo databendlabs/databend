@@ -10,7 +10,6 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -77,23 +76,18 @@ impl Table for NumbersTable {
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
-        let mut total = ctx.get_settings().get_max_block_size()? as u64;
-
+        let mut total = None;
         let ScanPlan { table_args, .. } = scan.clone();
-        if let Some(args) = table_args {
-            if let Expression::Literal(DataValue::UInt64(Some(v))) = args {
-                total = v;
-            }
-
-            if let Expression::Literal(DataValue::Int64(Some(v))) = args {
-                total = v as u64;
-            }
-        } else {
-            return Result::Err(ErrorCode::BadArguments(format!(
-                "Must have one argument for table: system.{}",
-                self.name()
-            )));
+        if let Some(Expression::Literal(v)) = table_args {
+            total = Some(v.as_u64()?);
         }
+
+        let total = total.ok_or_else(|| {
+            ErrorCode::BadArguments(format!(
+                "Must have one number argument for table: system.{}",
+                self.name()
+            ))
+        })?;
 
         let statistics =
             Statistics::new_exact(total as usize, ((total) * size_of::<u64>() as u64) as usize);

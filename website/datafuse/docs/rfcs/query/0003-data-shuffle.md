@@ -44,11 +44,11 @@ mysql> EXPLAIN SELECT number % 3 AS key, SUM(number) AS value FROM numbers(1000)
 | explain                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 +----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Limit: 10
-  Projection: (number % 3) as key:UInt64, SUM(number) as value:UInt64
-    Sort: (number % 3):UInt64
+  Projection: (number % 3) as key:UInt8, SUM(number) as value:UInt64
+    Sort: (number % 3):UInt8,
       AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[SUM(number)]]
         AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[SUM(number)]]
-          Expression: (number % 3):UInt64, number:UInt64 (Before GroupBy)
+          Expression: (number % 3):UInt8, number:UInt64 (Before GroupBy)
             Filter: ((number > 10) AND (number < 990))
               ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000] |
 +----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -125,11 +125,11 @@ mysql> EXPLAIN SELECT argMin(user, salary)  FROM (SELECT sum(number) AS salary, 
   AggregatorFinal: groupBy=[[]], aggr=[[argMin(user, salary)]]
     RedistributeStage[expr: 0]    <-- execute in all nodes of the cluster
       AggregatorPartial: groupBy=[[]], aggr=[[argMin(user, salary)]]
-        Projection: sum(number) as salary:UInt64, (number % 3) as user:UInt64
+        Projection: sum(number) as salary:UInt64, (number % 3) as user:UInt8
   AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[sum(number)]]
     RedistributeStage[expr: sipHash(_group_by_key)]   <-- execute in all nodes of the cluster
       AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[sum(number)]]
-        Expression: (number % 3):UInt64, number:UInt64 (Before GroupBy)
+        Expression: (number % 3):UInt8, number:UInt64 (Before GroupBy)
           RedistributeStage[expr: blockNumber()]    <-- execute in local node
             ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 1000000000, read_bytes: 8000000000] |
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+

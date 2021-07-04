@@ -33,6 +33,7 @@ use crate::RemotePlan;
 use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
+use crate::ShowCreateTablePlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::UseDatabasePlan;
@@ -82,6 +83,7 @@ pub trait PlanRewriter<'plan> {
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
             PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
             PlanNode::InsertInto(plan) => self.rewrite_insert_into(plan),
+            PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
         }
     }
 
@@ -225,6 +227,10 @@ pub trait PlanRewriter<'plan> {
     fn rewrite_insert_into(&mut self, plan: &'plan InsertIntoPlan) -> Result<PlanNode> {
         Ok(PlanNode::InsertInto(plan.clone()))
     }
+
+    fn rewrite_show_create_table(&mut self, plan: &'plan ShowCreateTablePlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowCreateTable(plan.clone()))
+    }
 }
 
 pub struct RewriteHelper {}
@@ -244,7 +250,7 @@ impl RewriteHelper {
     /// SELECT (x+1) as y, (x+1)*(x+1) FROM ..
     pub fn rewrite_projection_aliases(exprs: &[Expression]) -> Result<Vec<Expression>> {
         let mut mp = HashMap::new();
-        RewriteHelper::alias_exprs_to_map(&exprs, &mut mp)?;
+        RewriteHelper::alias_exprs_to_map(exprs, &mut mp)?;
 
         let mut data = QueryAliasData {
             aliases: mp,
@@ -414,7 +420,7 @@ impl RewriteHelper {
                 return Ok(expr.clone());
             }
         }
-        Ok(Self::rebuild_from_exprs(&expr, &expressions))
+        Ok(Self::rebuild_from_exprs(expr, &expressions))
     }
 
     /// replaces expressions columns by its name on the projection.
