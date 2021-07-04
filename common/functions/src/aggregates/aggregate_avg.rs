@@ -10,6 +10,7 @@ use common_exception::Result;
 
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
+use crate::aggregates::AggregateSumFunction;
 
 #[derive(Clone)]
 pub struct AggregateAvgFunction {
@@ -25,9 +26,11 @@ impl AggregateAvgFunction {
     ) -> Result<Box<dyn AggregateFunction>> {
         assert_unary_arguments(display_name, arguments.len())?;
 
+        let sum_type = AggregateSumFunction::sum_return_type(arguments[0].data_type())?;
+
         Ok(Box::new(AggregateAvgFunction {
             display_name: display_name.to_string(),
-            state: DataValue::Struct(vec![DataValue::Null, DataValue::UInt64(Some(0))]),
+            state: DataValue::Struct(vec![DataValue::from(&sum_type), DataValue::UInt64(Some(0))]),
             arguments,
         }))
     }

@@ -21,6 +21,7 @@ impl SQLCommon {
         match sql_type {
             SQLDataType::BigInt => Ok(DataType::Int64),
             SQLDataType::Int => Ok(DataType::Int32),
+            SQLDataType::TinyInt => Ok(DataType::Int8),
             SQLDataType::SmallInt => Ok(DataType::Int16),
             SQLDataType::Char(_) => Ok(DataType::Utf8),
             SQLDataType::Varchar(_) => Ok(DataType::Utf8),
