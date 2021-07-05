@@ -40,7 +40,7 @@ pub struct GetTableActionResult {
 }
 
 #[async_trait::async_trait]
-pub trait MetaApi: Sync + Send {
+pub trait MetaApi {
     async fn create_database(
         &mut self,
         plan: CreateDatabasePlan,
