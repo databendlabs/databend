@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_metatypes::Database;
+use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
 use common_runtime::tokio;
 use pretty_assertions::assert_eq;
@@ -229,7 +230,7 @@ fn test_state_machine_apply_non_dup_generic_kv() -> anyhow::Result<()> {
     struct T {
         // input:
         key: String,
-        seq: Option<u64>,
+        seq: MatchSeq,
         value: Vec<u8>,
         // want:
         prev: Option<SeqValue>,
@@ -238,7 +239,7 @@ fn test_state_machine_apply_non_dup_generic_kv() -> anyhow::Result<()> {
 
     fn case(
         name: &'static str,
-        seq: Option<u64>,
+        seq: MatchSeq,
         value: &'static str,
         prev: Option<(u64, &'static str)>,
         result: Option<(u64, &'static str)>,
@@ -263,12 +264,12 @@ fn test_state_machine_apply_non_dup_generic_kv() -> anyhow::Result<()> {
     }
 
     let cases: Vec<T> = vec![
-        case("foo", Some(5), "b", None, None),
-        case("foo", None, "a", None, Some((1, "a"))),
-        case("foo", None, "b", Some((1, "a")), Some((2, "b"))),
-        case("foo", Some(5), "b", Some((2, "b")), None),
-        case("bar", Some(0), "x", None, Some((3, "x"))),
-        case("bar", Some(0), "y", Some((3, "x")), None),
+        case("foo", MatchSeq::Exact(5), "b", None, None),
+        case("foo", MatchSeq::Any, "a", None, Some((1, "a"))),
+        case("foo", MatchSeq::Any, "b", Some((1, "a")), Some((2, "b"))),
+        case("foo", MatchSeq::Exact(5), "b", Some((2, "b")), None),
+        case("bar", MatchSeq::Exact(0), "x", None, Some((3, "x"))),
+        case("bar", MatchSeq::Exact(0), "y", Some((3, "x")), None),
     ];
 
     for (i, c) in cases.iter().enumerate() {
@@ -280,7 +281,7 @@ fn test_state_machine_apply_non_dup_generic_kv() -> anyhow::Result<()> {
             txid: None,
             cmd: Cmd::UpsertKV {
                 key: c.key.clone(),
-                seq: c.seq,
+                seq: c.seq.clone(),
                 value: c.value.clone(),
             },
         })?;

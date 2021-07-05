@@ -10,6 +10,7 @@ use std::fmt::Formatter;
 
 use common_exception::prelude::ErrorCode;
 use common_metatypes::Database;
+use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
 use common_metatypes::Table;
 use common_tracing::tracing;
@@ -264,44 +265,19 @@ impl StateMachine {
                 tracing::debug!("applied DeleteByKeyKV: {}={:?}", key, seq);
                 Ok((prev, None).into())
             }
-
-            Cmd::UpdateByKeyKV {
-                ref key,
-                ref seq,
-                ref value,
-            } => {
-                let prev = self.kv.get(key).cloned();
-                let seq_matched = match prev {
-                    Some((s, _)) if seq.is_some() && seq.unwrap() == s => true,
-                    Some(_) if seq.is_none() => true,
-                    _ => false,
-                };
-                if !seq_matched {
-                    return Ok((prev, None).into());
-                }
-
-                let new_seq = self.incr_seq(SEQ_GENERIC_KV);
-                let record_value = (new_seq, value.clone());
-                self.kv.insert(key.clone(), record_value.clone());
-                tracing::debug!("applied UpdateByKeyKV: {}={:?}", key, seq);
-                Ok((prev, Some(record_value)).into())
-            }
         }
     }
 
-    fn match_seq(prev: &Option<SeqValue>, seq: &Option<u64>) -> bool {
-        if let Some(seq) = seq {
-            if *seq == 0 {
-                prev.is_none()
-            } else {
-                match prev {
-                    Some(ref p) => *seq == (*p).0,
-                    None => false,
-                }
-            }
-        } else {
-            // If seq is None, always override it.
-            true
+    fn match_seq(prev: &Option<SeqValue>, seq: &MatchSeq) -> bool {
+        let prev_seq = match prev {
+            None => 0u64,
+            Some((s, _)) => *s,
+        };
+
+        match seq {
+            MatchSeq::Any => true,
+            MatchSeq::Exact(s) => prev_seq == *s,
+            MatchSeq::GE(s) => prev_seq >= *s,
         }
     }
 
