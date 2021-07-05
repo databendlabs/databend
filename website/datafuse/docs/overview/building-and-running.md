@@ -55,7 +55,7 @@ This document describes how to build and run [FuseQuery](https://github.com/data
         numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
 
     ```
-    $ clickhouse client
+    $ clickhouse client --host 0.0.0.0 --port 9001
     ```
 
     ```
