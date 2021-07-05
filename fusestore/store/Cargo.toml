@@ -34,7 +34,7 @@ common-tracing = {path = "../../common/tracing"}
 
 # Crates.io dependencies
 anyhow = "1.0.41"
-async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.1" }
+async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.2" }
 async-trait = "0.1"
 env_logger = "0.8"
 futures = "0.3"
