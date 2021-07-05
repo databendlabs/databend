@@ -31,9 +31,15 @@ pub enum MatchSeq {
 
 impl From<Option<u64>> for MatchSeq {
     fn from(s: Option<u64>) -> Self {
+        (&s).into()
+    }
+}
+
+impl From<&Option<u64>> for MatchSeq {
+    fn from(s: &Option<u64>) -> Self {
         match s {
             None => MatchSeq::Any,
-            Some(s) => MatchSeq::Exact(s),
+            Some(s) => MatchSeq::Exact(*s),
         }
     }
 }
@@ -54,38 +60,38 @@ impl Display for MatchSeq {
     }
 }
 
-impl MatchSeq {
-    /// Match against a SeqValue by checking if the seq in SeqValue satisfies the condition.
-    /// On success it returns the value extracted from SeqValue.
-    /// Otherwise it returns an Err() with the unmatched seq in it.
-    pub fn match_seq_value<T>(&self, sv: SeqValue<T>) -> Result<T, SeqError> {
-        self.match_seq(sv.0)?;
-        Ok(sv.1)
-    }
+pub trait MatchSeqExt<T> {
+    /// Match against a some value containing seq by checking if the seq satisfies the condition.
+    fn match_seq(&self, sv: T) -> Result<(), SeqError>;
+}
 
-    pub fn match_seq(&self, seq: u64) -> Result<(), SeqError> {
+impl<U> MatchSeqExt<&Option<SeqValue<U>>> for MatchSeq {
+    fn match_seq(&self, sv: &Option<SeqValue<U>>) -> Result<(), SeqError> {
+        let seq = match sv {
+            Some(sv) => sv.0,
+            None => 0,
+        };
+        self.match_seq(seq)
+    }
+}
+
+impl<U> MatchSeqExt<&SeqValue<U>> for MatchSeq {
+    fn match_seq(&self, sv: &SeqValue<U>) -> Result<(), SeqError> {
+        let seq = sv.0;
+        self.match_seq(seq)
+    }
+}
+
+impl MatchSeqExt<u64> for MatchSeq {
+    fn match_seq(&self, seq: u64) -> Result<(), SeqError> {
         match self {
             MatchSeq::Any => Ok(()),
-            MatchSeq::Exact(s) => {
-                if seq == *s {
-                    Ok(())
-                } else {
-                    Err(SeqError::NotMatch {
-                        want: *self,
-                        got: seq,
-                    })
-                }
-            }
-            MatchSeq::GE(s) => {
-                if seq >= *s {
-                    Ok(())
-                } else {
-                    Err(SeqError::NotMatch {
-                        want: *self,
-                        got: seq,
-                    })
-                }
-            }
+            MatchSeq::Exact(s) if seq == *s => Ok(()),
+            MatchSeq::GE(s) if seq >= *s => Ok(()),
+            _ => Err(SeqError::NotMatch {
+                want: *self,
+                got: seq,
+            }),
         }
     }
 }

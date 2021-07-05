@@ -11,6 +11,7 @@ use std::fmt::Formatter;
 use common_exception::prelude::ErrorCode;
 use common_metatypes::Database;
 use common_metatypes::MatchSeq;
+use common_metatypes::MatchSeqExt;
 use common_metatypes::SeqValue;
 use common_metatypes::Table;
 use common_tracing::tracing;
@@ -237,8 +238,7 @@ impl StateMachine {
                 ref value,
             } => {
                 let prev = self.kv.get(key).cloned();
-                let seq_matched = StateMachine::match_seq(&prev, seq);
-                if !seq_matched {
+                if seq.match_seq(&prev).is_err() {
                     return Ok((prev, None).into());
                 }
 
@@ -252,12 +252,10 @@ impl StateMachine {
 
             Cmd::DeleteByKeyKV { ref key, ref seq } => {
                 let prev = self.kv.get(key).cloned();
-                let seq_matched = match prev {
-                    Some((s, _)) if seq.is_some() && seq.unwrap() == s => true,
-                    Some(_) if seq.is_none() => true,
-                    _ => false,
-                };
-                if !seq_matched {
+
+                let ms: MatchSeq = seq.into();
+                if ms.match_seq(&prev).is_err() {
+                    // TODO: unmatched delete should return prev value as result; add test.
                     return Ok((prev, None).into());
                 }
 
@@ -265,19 +263,6 @@ impl StateMachine {
                 tracing::debug!("applied DeleteByKeyKV: {}={:?}", key, seq);
                 Ok((prev, None).into())
             }
-        }
-    }
-
-    fn match_seq(prev: &Option<SeqValue>, seq: &MatchSeq) -> bool {
-        let prev_seq = match prev {
-            None => 0u64,
-            Some((s, _)) => *s,
-        };
-
-        match seq {
-            MatchSeq::Any => true,
-            MatchSeq::Exact(s) => prev_seq == *s,
-            MatchSeq::GE(s) => prev_seq >= *s,
         }
     }
 
