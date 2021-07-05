@@ -165,7 +165,10 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
         let value = serde_json::to_vec(&user_info)?;
         let key = utils::prepend(&user_info.name);
 
-        let match_seq = seq.into();
+        let match_seq = match seq {
+            None => MatchSeq::GE(1),
+            Some(s) => MatchSeq::Exact(s),
+        };
         let res = self.kv_api.upsert_kv(&key, match_seq, value).await?;
         match res.result {
             Some((s, _)) => Ok(Some(s)),
