@@ -20,6 +20,10 @@ use crate::configs::Config;
 use crate::datasources::DataSource;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
+use std::future::Future;
+use common_runtime::tokio;
+use common_runtime::tokio::sync::mpsc::Receiver;
+use futures::future::Either;
 
 pub struct SessionManager {
     conf: Config,
@@ -27,7 +31,7 @@ pub struct SessionManager {
     datasource: Arc<DataSource>,
 
     max_sessions: usize,
-    active_sessions: RwLock<HashMap<String, Arc<Session>>>,
+    active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
 }
 
 pub type SessionManagerRef = Arc<SessionManager>;
@@ -40,7 +44,7 @@ impl SessionManager {
             datasource: Arc::new(DataSource::try_create()?),
 
             max_sessions: max_mysql_sessions as usize,
-            active_sessions: RwLock::new(HashMap::with_capacity(max_mysql_sessions as usize)),
+            active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_mysql_sessions as usize))),
         }))
     }
 
@@ -52,7 +56,7 @@ impl SessionManager {
             datasource: Arc::new(DataSource::try_create()?),
 
             max_sessions: max_active_sessions,
-            active_sessions: RwLock::new(HashMap::with_capacity(max_active_sessions)),
+            active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
         }))
     }
 
@@ -101,16 +105,36 @@ impl SessionManager {
             }
         };
 
-        Ok(SessionRef::create(
-            String::from("RpcSession"),
-            session,
-            self.clone(),
-        ))
+        Ok(SessionRef::create(String::from("RpcSession"), session, self.clone()))
     }
 
     pub fn destroy_session(self: &Arc<Self>, session_id: &String) {
         counter!(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
 
         self.active_sessions.write().remove(session_id);
+    }
+
+    pub fn shutdown(self: &Arc<Self>, signal: Option<Receiver<()>>) -> impl Future<Output=()> {
+        let active_sessions = self.active_sessions.clone();
+        async move {
+            log::info!("Waiting for current connections to close.");
+            if let Some(mut signal) = signal {
+                for _index in 0..5 {
+                    if active_sessions.read().len() == 0 {
+                        return;
+                    }
+
+                    let interval = Duration::from_secs(1);
+                    let mut signal = Box::pin(signal.recv());
+                    let sleep = Box::pin(tokio::time::sleep(interval));
+                    match futures::future::select(sleep, signal).await {
+                        Either::Right((_, _)) => break,
+                        Either::Left((_, reserve_signal)) => signal = reserve_signal,
+                    };
+                }
+            }
+
+            active_sessions.read().values().for_each(Session::kill);
+        }
     }
 }

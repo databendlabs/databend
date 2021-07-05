@@ -12,6 +12,7 @@ use crate::configs::Config;
 use crate::datasources::DataSource;
 use crate::sessions::Session;
 use crate::sessions::Settings;
+use std::sync::atomic::AtomicUsize;
 
 /// Data that needs to be shared in a query context.
 /// This is very useful, for example, for queries:
@@ -30,6 +31,7 @@ pub struct FuseQueryContextShared {
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
     pub(in crate::sessions) cluster_cache: Arc<RwLock<Option<ClusterRef>>>,
     pub(in crate::sessions) sources_abort_handle: Arc<RwLock<Vec<AbortHandle>>>,
+    pub(in crate::sessions) ref_count: Arc<RwLock<usize>>,
 }
 
 impl FuseQueryContextShared {
@@ -42,6 +44,7 @@ impl FuseQueryContextShared {
             runtime: Arc::new(RwLock::new(None)),
             cluster_cache: Arc::new(RwLock::new(None)),
             sources_abort_handle: Arc::new(RwLock::new(Vec::new())),
+            ref_count: Arc::new(RwLock::new(0))
         })
     }
 
@@ -94,5 +97,12 @@ impl FuseQueryContextShared {
     pub fn add_source_abort_handle(&self, handle: AbortHandle) {
         let mut sources_abort_handle = self.sources_abort_handle.write();
         sources_abort_handle.push(handle);
+    }
+}
+
+impl Session {
+    pub(in crate::sessions) fn destroy_context_shared(&self) {
+        let mut mutable_state = self.mutable_state.lock();
+        mutable_state.context_shared.take();
     }
 }

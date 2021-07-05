@@ -25,6 +25,7 @@ pub trait Server {
 
 pub struct ShutdownHandle {
     shutdown: Arc<AtomicBool>,
+    sessions: SessionManagerRef,
     services: Vec<Box<dyn Server>>,
 }
 
@@ -32,36 +33,37 @@ impl ShutdownHandle {
     pub fn create(sessions: SessionManagerRef) -> ShutdownHandle {
         ShutdownHandle {
             services: vec![],
+            sessions,
             shutdown: Arc::new(AtomicBool::new(false)),
         }
     }
 
-    pub fn shutdown(&mut self) -> impl Future<Output=()> + '_ {
+    pub fn shutdown(&mut self, signal: Option<Receiver<()>>) -> impl Future<Output=()> + '_ {
         let mut shutdown_jobs = vec![];
         for service in &mut self.services {
             shutdown_jobs.push(service.shutdown());
         }
 
         let shutdown = self.shutdown.clone();
+        let sessions = self.sessions.clone();
         let join_all = futures::future::join_all(shutdown_jobs);
         async move {
             if !shutdown.load(Ordering::Relaxed) {
                 join_all.await;
-                // TODO: shutdown sessions
+                sessions.shutdown(signal).await;
                 shutdown.store(true, Ordering::Relaxed);
             }
         }
     }
 
     pub fn wait_for_termination_request(&mut self) -> impl Future<Output=()> + '_ {
-        let shutdown_services = self.shutdown();
         let mut receiver = Self::register_termination_handle();
         async move {
             receiver.recv().await;
 
             log::info!("Received termination signal.");
-            log::info!("Waiting for current connections to close.");
             log::info!("You can press Ctrl + C again to force shutdown.");
+            let shutdown_services = self.shutdown(Some(receiver));
             shutdown_services.await;
         }
     }
@@ -86,7 +88,7 @@ impl ShutdownHandle {
 impl Drop for ShutdownHandle {
     fn drop(&mut self) {
         if !self.shutdown.load(Ordering::Relaxed) {
-            futures::executor::block_on(self.shutdown());
+            futures::executor::block_on(self.shutdown(None));
         }
     }
 }

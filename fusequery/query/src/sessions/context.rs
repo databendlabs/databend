@@ -24,9 +24,8 @@ use crate::datasources::DataSource;
 use crate::datasources::Table;
 use crate::datasources::TableFunction;
 use crate::sessions::context_shared::FuseQueryContextShared;
-use crate::sessions::Settings;
+use crate::sessions::{Settings, Session};
 
-#[derive(Clone)]
 pub struct FuseQueryContext {
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Part>>>,
@@ -63,18 +62,12 @@ impl FuseQueryContext {
     }
 
     pub fn new(other: FuseQueryContextRef) -> FuseQueryContextRef {
-        Arc::new(FuseQueryContext {
-            statistics: Arc::new(RwLock::new(Statistics::default())),
-            partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!(
-                "FuseQuery v-{}",
-                *crate::configs::config::FUSE_COMMIT_VERSION
-            ),
-            shared: other.shared.clone(),
-        })
+        FuseQueryContext::from_shared(other.shared.clone())
     }
 
     pub fn from_shared(shared: Arc<FuseQueryContextShared>) -> FuseQueryContextRef {
+        shared.increment_ref_count();
+
         Arc::new(FuseQueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
@@ -232,5 +225,34 @@ impl FuseQueryContext {
 impl std::fmt::Debug for FuseQueryContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.get_settings())
+    }
+}
+
+impl Drop for FuseQueryContext {
+    fn drop(&mut self) {
+        self.shared.destroy_context_ref()
+    }
+}
+
+impl FuseQueryContextShared {
+    pub(in crate::sessions) fn destroy_context_ref(&self) {
+        if self.decrement_ref_count() {
+            log::info!("Destroy FuseQueryContext");
+            self.session.destroy_context_shared();
+        }
+    }
+
+    pub(in crate::sessions) fn increment_ref_count(&self) {
+        *self.ref_count.write() += 1;
+    }
+
+    pub(in crate::sessions) fn decrement_ref_count(&self) -> bool {
+        let mut ref_count = self.ref_count.write();
+
+        if *ref_count > 0 {
+            *ref_count -= 1;
+        }
+
+        *ref_count == 0
     }
 }
