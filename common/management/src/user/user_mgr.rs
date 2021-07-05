@@ -6,7 +6,9 @@
 use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::ToErrorCode;
 use common_metatypes::MatchSeq;
+use common_metatypes::SeqValue;
 use common_store_api::KVApi;
 use sha2::Digest;
 
@@ -47,8 +49,11 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
         let ui: UserInfo = new_user.into();
         let value = serde_json::to_vec(&ui)?;
         let key = utils::prepend(&ui.name);
-        let seq = MatchSeq::Exact(0);
-        let res = self.kv_api.upsert_kv(&key, seq, value).await?;
+
+        // Only when there are no record, i.e. seq=0
+        let match_seq = MatchSeq::Exact(0);
+
+        let res = self.kv_api.upsert_kv(&key, match_seq, value).await?;
 
         match (res.prev, res.result) {
             (None, Some((s, _))) => Ok(s), // do we need to check the seq returned?
@@ -67,39 +72,37 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
         &mut self,
         username: V,
         seq: Option<u64>,
-    ) -> Result<(u64, UserInfo)> {
+    ) -> Result<SeqValue<UserInfo>> {
         let key = utils::prepend(username.as_ref());
-        let value = self.kv_api.get_kv(&key).await?;
-        let res = value.result;
-        let f = |s, val| {
-            let user_info = serde_json::from_slice(val);
-            let user_info =
-                user_info.map_err(|e| ErrorCode::IllegalUserInfoFormat(e.to_string()))?;
-            Ok((s, user_info))
-        };
-        match res {
-            Some((s, val)) if seq.is_none() => f(s, val.as_slice()),
-            Some((s, val)) if seq.unwrap() == s => f(s, val.as_slice()),
-            _ => Err(ErrorCode::UnknownUser(format!(
-                "unknown user {}",
-                username.as_ref()
-            ))),
-        }
+        let resp = self.kv_api.get_kv(&key).await?;
+
+        let seq_value = resp
+            .result
+            .ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", username.as_ref())))?;
+
+        let curr_seq = seq_value.0;
+
+        let ms: MatchSeq = seq.into();
+        ms.match_seq(curr_seq)
+            .map_err_to_code(ErrorCode::UnknownUser, || {
+                format!("username: {}", username.as_ref(),)
+            })?;
+
+        let user_info = serde_json::from_slice(&seq_value.1)
+            .map_err_to_code(ErrorCode::IllegalUserInfoFormat, || "")?;
+
+        Ok((curr_seq, user_info))
     }
 
-    async fn get_all_users(&mut self) -> Result<Vec<(u64, UserInfo)>> {
+    async fn get_all_users(&mut self) -> Result<Vec<SeqValue<UserInfo>>> {
         let values = self.kv_api.prefix_list_kv(USER_API_KEY_PREFIX).await?;
         let mut r = vec![];
         for v in values {
             let (_key, (s, val)) = v;
-            let u = serde_json::from_slice::<UserInfo>(&val);
-            let val = match u {
-                Err(e) => {
-                    return Err(ErrorCode::IllegalUserInfoFormat(e.to_string()));
-                }
-                Ok(v) => v,
-            };
-            r.push((s, val));
+            let u = serde_json::from_slice::<UserInfo>(&val)
+                .map_err_to_code(ErrorCode::IllegalUserInfoFormat, || "")?;
+
+            r.push((s, u));
         }
         Ok(r)
     }
@@ -107,7 +110,7 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
     async fn get_users<V: AsRef<str> + Sync>(
         &mut self,
         usernames: &[V],
-    ) -> Result<Vec<Option<(u64, UserInfo)>>> {
+    ) -> Result<Vec<Option<SeqValue<UserInfo>>>> {
         let keys = usernames
             .iter()
             .map(utils::prepend)
@@ -117,12 +120,8 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
         for v in values.result {
             match v {
                 Some(v) => {
-                    let u = match serde_json::from_slice::<UserInfo>(&v.1) {
-                        Err(e) => {
-                            return Err(ErrorCode::IllegalUserInfoFormat(e.to_string()));
-                        }
-                        Ok(val) => val,
-                    };
+                    let u = serde_json::from_slice::<UserInfo>(&v.1)
+                        .map_err_to_code(ErrorCode::IllegalUserInfoFormat, || "")?;
                     r.push(Some((v.0, u)));
                 }
                 None => r.push(None),
@@ -165,10 +164,8 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
 
         let value = serde_json::to_vec(&user_info)?;
         let key = utils::prepend(&user_info.name);
-        let match_seq = match seq {
-            None => MatchSeq::GE(1),
-            Some(s) => MatchSeq::Exact(s),
-        };
+
+        let match_seq = seq.into();
         let res = self.kv_api.upsert_kv(&key, match_seq, value).await?;
         match res.result {
             Some((s, _)) => Ok(Some(s)),
