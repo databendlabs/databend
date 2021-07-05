@@ -36,7 +36,7 @@ impl SQLCommon {
 
             //custom types for datafuse
             // Custom(ObjectName([Ident { value: "uint8", quote_style: None }])
-            SQLDataType::Custom(obj) if obj.0.len() > 0 => {
+            SQLDataType::Custom(obj) if !obj.0.is_empty() => {
                 match obj.0[0].value.to_uppercase().as_str() {
                     "UINT8" => Ok(DataType::UInt8),
                     "UINT16" => Ok(DataType::UInt16),
@@ -49,6 +49,7 @@ impl SQLCommon {
                     "INT64" => Ok(DataType::Int64),
                     "FLOAT32" => Ok(DataType::Float32),
                     "FLOAT64" => Ok(DataType::Float64),
+                    "STRING" => Ok(DataType::Utf8),
 
                     _ => Result::Err(ErrorCode::IllegalDataType(format!(
                         "The SQL data type {:?} is not implemented",
