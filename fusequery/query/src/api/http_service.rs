@@ -17,99 +17,61 @@ use common_infallible::Mutex;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::oneshot::Sender;
 use common_runtime::tokio::sync::Notify;
-use futures::FutureExt;
+use futures::{FutureExt, Future};
 
 use crate::api::http::router::Router;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::servers::AbortableServer;
-use crate::servers::AbortableService;
-use crate::servers::Elapsed;
+use crate::servers::Server;
+use common_runtime::tokio::task::JoinHandle;
 
 pub struct HttpService {
     cfg: Config,
     cluster: ClusterRef,
-    aborted: Arc<AtomicBool>,
-    abort_handle: Mutex<Option<Sender<()>>>,
-    aborted_notify: Arc<Notify>,
+    abort_notify: Arc<Notify>,
+    join_handle: Option<JoinHandle<()>>,
 }
 
 impl HttpService {
-    pub fn create(cfg: Config, cluster: ClusterRef) -> AbortableServer {
-        Arc::new(HttpService {
+    pub fn create(cfg: Config, cluster: ClusterRef) -> Box<dyn Server> {
+        Box::new(HttpService {
             cfg,
             cluster,
-            aborted: Arc::new(AtomicBool::new(false)),
-            abort_handle: Mutex::new(None),
-            aborted_notify: Arc::new(Notify::new()),
+            abort_notify: Arc::new(Notify::new()),
+            join_handle: None,
         })
+    }
+
+    fn shutdown_notify(&self) -> impl Future<Output=()> + 'static {
+        let notified = self.abort_notify.clone();
+        async move { notified.notified().await; }
     }
 }
 
+
 #[async_trait::async_trait]
-impl AbortableService<(String, u16), SocketAddr> for HttpService {
-    fn abort(&self, _force: bool) -> Result<()> {
-        if let Some(abort_handle) = self.abort_handle.lock().take() {
-            match abort_handle.send(()) {
-                Ok(_) => { /* do nothing */ }
-                Err(_) => {
-                    return Err(ErrorCode::LogicalError(
-                        "Cannot abort HttpService, cause: cannot send signal to service.",
-                    ))
-                }
+impl Server for HttpService {
+    async fn shutdown(&mut self) {
+        self.abort_notify.notify_waiters();
+
+        if let Some(join_handle) = self.join_handle.take() {
+            if let Err(error) = join_handle.await {
+                log::error!("Unexpected error during shutdown HttpServer. cause {}", error);
             }
         }
-
-        Ok(())
     }
 
-    async fn start(&self, args: (String, u16)) -> Result<SocketAddr> {
+    async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         let router = Router::create(self.cfg.clone(), self.cluster.clone());
         let server = warp::serve(router.router()?);
 
-        let addr = args.to_socket_addrs()?.next().unwrap();
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        *self.abort_handle.lock() = Some(tx);
-        let (socket_address, server) = server
-            .try_bind_with_graceful_shutdown(addr, rx.map(|_| ()))
+        let (listening, server) = server
+            .try_bind_with_graceful_shutdown(listening.clone(), self.shutdown_notify())
             .map_err_to_code(ErrorCode::CannotListenerPort, || {
-                format!("Cannot listener port {}", args.1)
+                format!("Cannot start HTTPService with {}", listening)
             })?;
 
-        let aborted = self.aborted.clone();
-        let aborted_notify = self.aborted_notify.clone();
-        tokio::spawn(async move {
-            server.await;
-            aborted.store(true, Ordering::Relaxed);
-            aborted_notify.notify_waiters();
-        });
-
-        Ok(socket_address)
-    }
-
-    async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed> {
-        let instant = Instant::now();
-
-        match duration {
-            None => {
-                if !self.aborted.load(Ordering::Relaxed) {
-                    self.aborted_notify.notified().await;
-                }
-            }
-            Some(duration) => {
-                if !self.aborted.load(Ordering::Relaxed) {
-                    tokio::time::timeout(duration, self.aborted_notify.notified())
-                        .await
-                        .map_err(|_| {
-                            ErrorCode::Timeout(format!(
-                                "Service did not shutdown in {:?}",
-                                duration
-                            ))
-                        })?;
-                }
-            }
-        };
-
-        Ok(instant.elapsed())
+        self.join_handle = Some(tokio::spawn(server));
+        Ok(listening)
     }
 }

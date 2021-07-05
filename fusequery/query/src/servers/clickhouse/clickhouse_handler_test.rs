@@ -14,13 +14,15 @@ use common_runtime::tokio;
 
 use crate::servers::ClickHouseHandler;
 use crate::sessions::SessionManager;
+use std::net::SocketAddr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_clickhouse_handler_query() -> Result<()> {
     let sessions = SessionManager::try_create(1)?;
-    let handler = ClickHouseHandler::create(sessions);
+    let mut handler = ClickHouseHandler::create(sessions);
 
-    let listening = handler.start(("0.0.0.0".to_string(), 0_u16)).await?;
+    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
+    let listening = handler.start(listening).await?;
     let mut handler = create_conn(listening.port()).await?;
 
     let query_str = "SELECT COUNT() AS c FROM numbers(1000)";
@@ -34,9 +36,10 @@ async fn test_clickhouse_handler_query() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_reject_clickhouse_connection() -> Result<()> {
     let sessions = SessionManager::try_create(1)?;
-    let handler = ClickHouseHandler::create(sessions);
+    let mut handler = ClickHouseHandler::create(sessions);
 
-    let listening = handler.start(("0.0.0.0".to_string(), 0_u16)).await?;
+    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
+    let listening = handler.start(listening).await?;
     {
         // Accepted connection
         let _handler = create_conn(listening.port()).await?;
@@ -62,13 +65,15 @@ async fn test_reject_clickhouse_connection() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_abort_clickhouse_server() -> Result<()> {
     let sessions = SessionManager::try_create(3)?;
-    let handler = ClickHouseHandler::create(sessions);
-    let listening = handler.start(("0.0.0.0".to_string(), 0_u16)).await?;
+    let mut handler = ClickHouseHandler::create(sessions);
+
+    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
+    let listening = handler.start(listening).await?;
 
     // Accepted connection
     let _handler = create_conn(listening.port()).await?;
 
-    handler.abort(false)?;
+    handler.shutdown().await;
 
     // Rejected connection
     match create_conn(listening.port()).await {

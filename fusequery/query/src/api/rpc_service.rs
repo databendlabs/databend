@@ -15,10 +15,9 @@ use tonic::transport::Server;
 
 use crate::api::rpc::FuseQueryFlightDispatcher;
 use crate::api::rpc::FuseQueryFlightService;
-use crate::servers::AbortableServer;
-use crate::servers::AbortableService;
-use crate::servers::Elapsed;
 use crate::sessions::SessionManagerRef;
+use crate::servers::Server as FuseQueryServer;
+use std::future::Future;
 
 pub struct RpcService {
     sessions: SessionManagerRef,
@@ -27,54 +26,44 @@ pub struct RpcService {
 }
 
 impl RpcService {
-    pub fn create(sessions: SessionManagerRef) -> AbortableServer {
-        Arc::new(Self {
+    pub fn create(sessions: SessionManagerRef) -> Box<dyn FuseQueryServer> {
+        Box::new(Self {
             sessions,
             abort_notify: Arc::new(Notify::new()),
             dispatcher: Arc::new(FuseQueryFlightDispatcher::create()),
         })
     }
 
-    async fn listener_tcp(address: (String, u16)) -> Result<(TcpListenerStream, SocketAddr)> {
-        let listener = TcpListener::bind(address).await?;
+    async fn listener_tcp(listening: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
+        let listener = TcpListener::bind(listening).await?;
         let listener_addr = listener.local_addr()?;
         Ok((TcpListenerStream::new(listener), listener_addr))
+    }
+
+    fn shutdown_notify(&self) -> impl Future<Output=()> + 'static {
+        let notified = self.abort_notify.clone();
+        async move { notified.notified().await; }
     }
 }
 
 #[async_trait::async_trait]
-impl AbortableService<(String, u16), SocketAddr> for RpcService {
-    fn abort(&self, force: bool) -> Result<()> {
-        match force {
-            false => self.dispatcher.abort(),
-            true => {
-                self.dispatcher.abort();
-                self.abort_notify.notify_waiters();
-            }
-        };
-
-        Ok(())
+impl FuseQueryServer for RpcService {
+    async fn shutdown(&mut self) {
+        self.dispatcher.abort();
+        // We can't turn off listening on the connection
+        // self.abort_notify.notify_waiters();
     }
 
-    async fn start(&self, addr: (String, u16)) -> Result<SocketAddr> {
+    async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         let sessions = self.sessions.clone();
-        let shutdown_notify = self.abort_notify.clone();
         let flight_dispatcher = self.dispatcher.clone();
         let flight_api_service = FuseQueryFlightService::create(flight_dispatcher, sessions);
 
-        let (listener_stream, socket) = Self::listener_tcp(addr).await?;
+        let (listener_stream, listening) = Self::listener_tcp(listening).await?;
+        let server = Server::builder()
+            .add_service(FlightServiceServer::new(flight_api_service))
+            .serve_with_incoming_shutdown(listener_stream, self.shutdown_notify());
 
-        common_runtime::tokio::spawn(async move {
-            let _ = Server::builder()
-                .add_service(FlightServiceServer::new(flight_api_service))
-                .serve_with_incoming_shutdown(listener_stream, shutdown_notify.notified())
-                .await;
-        });
-
-        Ok(socket)
-    }
-
-    async fn wait_terminal(&self, _duration: Option<Duration>) -> Result<Elapsed> {
-        unimplemented!()
+        Ok(listening)
     }
 }

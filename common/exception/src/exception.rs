@@ -151,6 +151,7 @@ build_exceptions! {
     NotFoundSession(44),
     CannotListenerPort(45),
     BadBytes(46),
+    InitPrometheusFailure(47),
 
 
     // uncategorized

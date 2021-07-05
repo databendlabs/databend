@@ -19,6 +19,7 @@ pub struct SessionRef {
 
 impl SessionRef {
     pub fn create(typ: String, session: Arc<Session>, sessions: SessionManagerRef) -> SessionRef {
+        session.increment_ref_count();
         SessionRef {
             typ,
             session,
@@ -49,8 +50,6 @@ impl SessionRef {
 
 impl Drop for SessionRef {
     fn drop(&mut self) {
-        // TODO destroy session if ref_count = 0
-        // Attempt to destroy session when current reference is destroyed
-        self.sessions.destroy_session(&self.get_id())
+        self.session.destroy_session_ref();
     }
 }

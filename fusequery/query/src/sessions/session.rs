@@ -32,6 +32,7 @@ struct MutableStatus {
     session_settings: Arc<Settings>,
     client_host: Option<SocketAddr>,
     io_shutdown_tx: Option<Sender<()>>,
+    ref_count: usize,
 }
 
 #[derive(Clone)]
@@ -58,6 +59,7 @@ impl Session {
                 session_settings: Settings::try_create()?,
                 client_host: None,
                 io_shutdown_tx: None,
+                ref_count: 0,
             })),
         }))
     }
@@ -83,11 +85,9 @@ impl Session {
         ))
     }
 
-    pub fn attach<F: FnOnce() + Send + 'static>(
-        self: &Arc<Self>,
-        host: Option<SocketAddr>,
-        io_shutdown: F,
-    ) {
+    pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
+        where F: FnOnce() + Send + 'static
+    {
         let (tx, rx) = futures::channel::oneshot::channel();
         let mut inner = self.mutable_status.lock();
         inner.client_host = host;
@@ -120,5 +120,26 @@ impl Session {
 
     pub fn get_datasource(self: &Arc<Self>) -> Arc<DataSource> {
         self.sessions.get_datasource()
+    }
+
+    pub fn destroy_session_ref(self: &Arc<Self>) {
+        if self.decrement_ref_count() {
+            self.sessions.destroy_session(&self.id);
+        }
+    }
+
+    pub fn increment_ref_count(self: &Arc<Self>) {
+        let mut mutable_status = self.mutable_status.lock();
+        mutable_status.ref_count += 1;
+    }
+
+    fn decrement_ref_count(self: &Arc<Self>) -> bool {
+        let mut mutable_status = self.mutable_status.lock();
+
+        if mutable_status.ref_count > 0 {
+            mutable_status.ref_count -= 1;
+        }
+
+        mutable_status.ref_count == 0
     }
 }

@@ -18,104 +18,72 @@ use common_runtime::tokio;
 use common_runtime::tokio::sync::oneshot::Sender;
 use common_runtime::tokio::sync::Notify;
 use futures::future::FutureExt;
-use metrics_exporter_prometheus::PrometheusBuilder;
+use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
 use warp::hyper::Body;
 use warp::reply::Response;
 use warp::Filter;
 use warp::Reply;
 
-use crate::servers::AbortableServer;
-use crate::servers::AbortableService;
-use crate::servers::Elapsed;
+use crate::servers::Server;
+use std::future::Future;
+use common_runtime::tokio::task::JoinHandle;
 
 pub struct MetricService {
-    aborted: Arc<AtomicBool>,
-    abort_handle: Mutex<Option<Sender<()>>>,
-    aborted_notify: Arc<Notify>,
+    abort_notify: Arc<Notify>,
+    join_handle: Option<JoinHandle<()>>,
 }
 
 impl MetricService {
-    pub fn create() -> AbortableServer {
-        Arc::new(MetricService {
-            aborted: Arc::new(AtomicBool::new(false)),
-            abort_handle: Mutex::new(None),
-            aborted_notify: Arc::new(Notify::new()),
+    pub fn create() -> Box<dyn Server> {
+        Box::new(MetricService {
+            abort_notify: Arc::new(Notify::new()),
+            join_handle: None,
         })
+    }
+
+    fn create_prometheus_handle() -> Result<PrometheusHandle> {
+        let builder = PrometheusBuilder::new();
+        let prometheus_recorder = builder.build();
+        let prometheus_handle = prometheus_recorder.handle();
+        match metrics::set_boxed_recorder(Box::new(prometheus_recorder)) {
+            Ok(_) => Ok(prometheus_handle),
+            Err(error) => Err(ErrorCode::InitPrometheusFailure(format!(
+                "Cannot init prometheus recorder. cause: {}", error
+            ))),
+        }
+    }
+
+    fn shutdown_notify(&self) -> impl Future<Output=()> + 'static {
+        let notified = self.abort_notify.clone();
+        async move { notified.notified().await; }
     }
 }
 
 #[async_trait::async_trait]
-impl AbortableService<(String, u16), SocketAddr> for MetricService {
-    fn abort(&self, _force: bool) -> Result<()> {
-        if let Some(abort_handle) = self.abort_handle.lock().take() {
-            match abort_handle.send(()) {
-                Ok(_) => { /* do nothing */ }
-                Err(_) => {
-                    return Err(ErrorCode::LogicalError(
-                        "Cannot abort MetricService, cause: cannot send signal to service.",
-                    ))
-                }
+impl Server for MetricService {
+    async fn shutdown(&mut self) {
+        self.abort_notify.notify_waiters();
+
+        if let Some(join_handle) = self.join_handle.take() {
+            if let Err(error) = join_handle.await {
+                log::error!("Unexpected error during shutdown MetricServer. cause {}", error);
             }
         }
-
-        Ok(())
     }
 
-    async fn start(&self, args: (String, u16)) -> Result<SocketAddr> {
-        let builder = PrometheusBuilder::new();
-        let prometheus_recorder = builder.build();
-        let prometheus_handle = prometheus_recorder.handle();
-        metrics::set_boxed_recorder(Box::new(prometheus_recorder))
-            .map_err_to_code(ErrorCode::UnknownException, || {
-                "Init prometheus recorder error"
-            })?;
+    async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+        let handle = MetricService::create_prometheus_handle()?;
 
-        let server = warp::serve(warp::any().map(move || MetricsReply(prometheus_handle.render())));
-
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        *self.abort_handle.lock() = Some(tx);
-        let addr = args.to_socket_addrs()?.next().unwrap();
-        let (addr, server) = server
-            .try_bind_with_graceful_shutdown(addr, rx.map(|_| ()))
+        let server = warp::serve(warp::any().map(move || MetricsReply(handle.render())));
+        let (listening, server) = server
+            .try_bind_with_graceful_shutdown(listening.clone(), self.shutdown_notify())
             .map_err_to_code(ErrorCode::CannotListenerPort, || {
-                format!("Cannot listener port {}", args.1)
+                format!("Cannot start MetricServer with {}", listening)
             })?;
 
-        let aborted = self.aborted.clone();
-        let aborted_notify = self.aborted_notify.clone();
-        tokio::spawn(async move {
-            server.await;
-            aborted.store(true, Ordering::Relaxed);
-            aborted_notify.notify_waiters();
-        });
+        self.join_handle = Some(tokio::spawn(server));
 
-        Ok(addr)
-    }
-
-    async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed> {
-        let instant = Instant::now();
-
-        match duration {
-            None => {
-                if !self.aborted.load(Ordering::Relaxed) {
-                    self.aborted_notify.notified().await;
-                }
-            }
-            Some(duration) => {
-                if !self.aborted.load(Ordering::Relaxed) {
-                    tokio::time::timeout(duration, self.aborted_notify.notified())
-                        .await
-                        .map_err(|_| {
-                            ErrorCode::Timeout(format!(
-                                "MetricService did not shutdown in {:?}",
-                                duration
-                            ))
-                        })?;
-                }
-            }
-        };
-
-        Ok(instant.elapsed())
+        Ok(listening)
     }
 }
 

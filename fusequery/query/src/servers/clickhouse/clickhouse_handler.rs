@@ -21,39 +21,39 @@ use tokio_stream::wrappers::TcpListenerStream;
 
 use crate::servers::clickhouse::clickhouse_session::ClickHouseConnection;
 use crate::servers::clickhouse::reject_connection::RejectCHConnection;
-use crate::servers::AbortableServer;
-use crate::servers::AbortableService;
-use crate::servers::Elapsed;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionManagerRef;
+use crate::servers::server::{Server, ListeningStream};
+use common_runtime::tokio::task::JoinHandle;
 
 pub struct ClickHouseHandler {
     sessions: SessionManagerRef,
 
-    abort_handle: Arc<AbortHandle>,
-    registration: Mutex<Option<AbortRegistration>>,
+    abort_handle: AbortHandle,
+    abort_registration: Option<AbortRegistration>,
+    join_handle: Option<JoinHandle<()>>,
 }
 
 impl ClickHouseHandler {
-    pub fn create(sessions: SessionManagerRef) -> AbortableServer {
-        let (abort_handle, reg) = AbortHandle::new_pair();
-        Arc::new(ClickHouseHandler {
+    pub fn create(sessions: SessionManagerRef) -> Box<dyn Server> {
+        let (abort_handle, registration) = AbortHandle::new_pair();
+        Box::new(ClickHouseHandler {
             sessions,
-            abort_handle: Arc::new(abort_handle),
-            registration: Mutex::new(Some(reg)),
+            abort_handle: abort_handle,
+            abort_registration: Some(registration),
+            join_handle: None,
         })
     }
 
-    async fn listener_tcp(socket: (String, u16)) -> Result<(TcpListenerStream, SocketAddr)> {
+    async fn listener_tcp(socket: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
         let listener = tokio::net::TcpListener::bind(socket).await?;
         let listener_addr = listener.local_addr()?;
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
 
-    fn listen_loop(&self, stream: TcpListenerStream, r: Arc<Runtime>) -> impl Future<Output=()> {
+    fn listen_loop(&self, stream: ListeningStream, r: Arc<Runtime>) -> impl Future<Output=()> {
         let sessions = self.sessions.clone();
-        let registration = self.registration.lock().take().unwrap();
-        Abortable::new(stream, registration).for_each(move |accept_socket| {
+        stream.for_each(move |accept_socket| {
             let executor = r.clone();
             let sessions = sessions.clone();
             async move {
@@ -89,20 +89,27 @@ impl ClickHouseHandler {
 }
 
 #[async_trait::async_trait]
-impl AbortableService<(String, u16), SocketAddr> for ClickHouseHandler {
-    fn abort(&self, _force: bool) -> Result<()> {
+impl Server for ClickHouseHandler {
+    async fn shutdown(&mut self) {
         self.abort_handle.abort();
-        Ok(())
+
+        if let Some(join_handle) = self.join_handle.take() {
+            if let Err(error) = join_handle.await {
+                log::error!("Unexpected error during shutdown ClickHouseHandler. cause {}", error);
+            }
+        }
     }
 
-    async fn start(&self, socket: (String, u16)) -> Result<SocketAddr> {
-        let rejected_executor = Arc::new(Runtime::with_worker_threads(1)?);
-        let (stream, listener) = Self::listener_tcp(socket).await?;
-        tokio::spawn(self.listen_loop(stream, rejected_executor));
-        Ok(listener)
-    }
-
-    async fn wait_terminal(&self, _: Option<Duration>) -> Result<Elapsed> {
-        todo!()
+    async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+        match self.abort_registration.take() {
+            None => Err(ErrorCode::LogicalError("ClickHouseHandler already running.")),
+            Some(registration) => {
+                let rejected_rt = Arc::new(Runtime::with_worker_threads(1)?);
+                let (stream, listener) = Self::listener_tcp(listening).await?;
+                let stream = Abortable::new(stream, registration);
+                self.join_handle = Some(tokio::spawn(self.listen_loop(stream, rejected_rt)));
+                Ok(listener)
+            }
+        }
     }
 }

@@ -17,12 +17,13 @@ pub static METRIC_TEST: &str = "metrics.test";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_metrics_server() -> Result<()> {
-    let service = MetricService::create();
-    let address = service.start(("127.0.0.1".to_string(), 0)).await?;
+    let mut service = MetricService::create();
+    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
+    let listening = service.start(listening).await?;
 
-    assert_eq!(do_get(address).await?.find("metrics_test 1"), None);
+    assert_eq!(do_get(listening).await?.find("metrics_test 1"), None);
     counter!(METRIC_TEST, 1);
-    assert!(do_get(address).await?.find("metrics_test 1").is_some());
+    assert!(do_get(listening).await?.find("metrics_test 1").is_some());
     Ok(())
 }
 

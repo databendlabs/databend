@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -18,45 +19,70 @@ use common_runtime::Runtime;
 use futures::future::AbortHandle;
 use futures::future::AbortRegistration;
 use futures::future::Abortable;
+use futures::StreamExt;
 use msql_srv::*;
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_stream::StreamExt as OtherStreamExt;
 
+use crate::servers::server::ListeningStream;
+use crate::servers::server::Server;
 use crate::servers::mysql::mysql_session::MySQLConnection;
 use crate::servers::mysql::reject_connection::RejectConnection;
-use crate::servers::AbortableServer;
-use crate::servers::AbortableService;
-use crate::servers::Elapsed;
+use crate::sessions::SessionManager;
 use crate::sessions::SessionManagerRef;
+use common_runtime::tokio::task::JoinHandle;
 
 pub struct MySQLHandler {
-    session_manager: SessionManagerRef,
-
-    aborted: Arc<AtomicBool>,
-    aborted_notify: Arc<tokio::sync::Notify>,
-    abort_parts: Mutex<(AbortHandle, Option<AbortRegistration>)>,
+    sessions: SessionManagerRef,
+    abort_handle: AbortHandle,
+    abort_registration: Option<AbortRegistration>,
+    join_handle: Option<JoinHandle<()>>,
 }
 
 impl MySQLHandler {
-    pub fn create(session_manager: SessionManagerRef) -> AbortableServer {
-        let (abort_handle, reg) = AbortHandle::new_pair();
+    pub fn create(session_manager: SessionManagerRef) -> Box<dyn Server> {
+        let (abort_handle, registration) = AbortHandle::new_pair();
 
-        Arc::new(MySQLHandler {
-            session_manager,
-            aborted: Arc::new(AtomicBool::new(false)),
-            abort_parts: Mutex::new((abort_handle, Some(reg))),
-            aborted_notify: Arc::new(tokio::sync::Notify::new()),
+        Box::new(MySQLHandler {
+            sessions: session_manager,
+            abort_handle: abort_handle,
+            abort_registration: Some(registration),
+            join_handle: None,
         })
     }
 
-    async fn listener_tcp(hostname: &str, port: u16) -> Result<(TcpListenerStream, SocketAddr)> {
-        let address = format!("{}:{}", hostname, port);
-        let listener = tokio::net::TcpListener::bind(address).await?;
+    async fn listener_tcp(listening: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
+        let listener = tokio::net::TcpListener::bind(listening).await?;
         let listener_addr = listener.local_addr()?;
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
 
-    fn reject_session(stream: TcpStream, executor: &Runtime, error: ErrorCode) {
+    fn listen_loop(&self, stream: ListeningStream, rt: Arc<Runtime>) -> impl Future<Output=()> {
+        let sessions = self.sessions.clone();
+        stream.for_each(move |accept_socket| {
+            let executor = rt.clone();
+            let sessions = sessions.clone();
+            async move {
+                match accept_socket {
+                    Err(error) => log::error!("Broken session connection: {}", error),
+                    Ok(socket) => MySQLHandler::accept_socket(sessions, executor, socket),
+                };
+            }
+        })
+    }
+
+    fn accept_socket(sessions: Arc<SessionManager>, executor: Arc<Runtime>, socket: TcpStream) {
+        match sessions.create_session("MySQL") {
+            Err(error) => Self::reject_session(socket, executor, error),
+            Ok(session) => {
+                if let Err(error) = MySQLConnection::run_on_stream(session, socket) {
+                    log::error!("Unexpected error occurred during query: {:?}", error);
+                };
+            }
+        }
+    }
+
+    fn reject_session(stream: TcpStream, executor: Arc<Runtime>, error: ErrorCode) {
         executor.spawn(async move {
             let (kind, message) = match error.code() {
                 41 => (ErrorKind::ER_TOO_MANY_USER_CONNECTIONS, error.message()),
@@ -64,7 +90,7 @@ impl MySQLHandler {
             };
 
             if let Err(error) =
-                RejectConnection::reject_mysql_connection(stream, kind, message).await
+            RejectConnection::reject_mysql_connection(stream, kind, message).await
             {
                 log::error!(
                     "Unexpected error occurred during reject connection: {:?}",
@@ -76,82 +102,27 @@ impl MySQLHandler {
 }
 
 #[async_trait::async_trait]
-impl AbortableService<(String, u16), SocketAddr> for MySQLHandler {
-    fn abort(&self, _force: bool) -> Result<()> {
-        self.abort_parts.lock().0.abort();
-        Ok(())
-    }
+impl Server for MySQLHandler {
+    async fn shutdown(&mut self) {
+        self.abort_handle.abort();
 
-    async fn start(&self, args: (String, u16)) -> Result<SocketAddr> {
-        let abort_registration = self.abort_parts.lock().1.take();
-        if let Some(abort_registration) = abort_registration {
-            let sessions = self.session_manager.clone();
-            let aborted = self.aborted.clone();
-            let aborted_notify = self.aborted_notify.clone();
-            let rejected_executor = Runtime::with_worker_threads(1)?;
-
-            let (stream, listener) = Self::listener_tcp(&args.0, args.1).await?;
-
-            tokio::spawn(async move {
-                let mut listener_stream = Abortable::new(stream, abort_registration);
-
-                loop {
-                    match listener_stream.next().await {
-                        None => break,
-                        Some(Err(error)) => {
-                            log::error!("Unexpected error during process accept: {}", error)
-                        }
-                        Some(Ok(tcp_stream)) => match sessions.create_session("MySQL") {
-                            Err(error) => {
-                                Self::reject_session(tcp_stream, &rejected_executor, error)
-                            }
-                            Ok(mysql_session) => {
-                                if let Err(error) =
-                                    MySQLConnection::run_on_stream(mysql_session, tcp_stream)
-                                {
-                                    log::error!(
-                                        "Unexpected error occurred during start session: {:?}",
-                                        error
-                                    );
-                                };
-                            }
-                        },
-                    }
-                }
-
-                aborted.store(true, Ordering::Relaxed);
-                aborted_notify.notify_waiters();
-            });
-
-            return Ok(listener);
+        if let Some(join_handle) = self.join_handle.take() {
+            if let Err(error) = join_handle.await {
+                log::error!("Unexpected error during shutdown ClickHouseHandler. cause {}", error);
+            }
         }
-
-        Err(ErrorCode::LogicalError("MySQLHandler already running."))
     }
 
-    async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed> {
-        let instant = Instant::now();
-
-        match duration {
-            None => {
-                if !self.aborted.load(Ordering::Relaxed) {
-                    self.aborted_notify.notified().await;
-                }
+    async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+        match self.abort_registration.take() {
+            None => Err(ErrorCode::LogicalError("MySQLHandler already running.")),
+            Some(registration) => {
+                let rejected_rt = Arc::new(Runtime::with_worker_threads(1)?);
+                let (stream, listener) = Self::listener_tcp(listening).await?;
+                let stream = Abortable::new(stream, registration);
+                self.join_handle = Some(tokio::spawn(self.listen_loop(stream, rejected_rt)));
+                Ok(listener)
             }
-            Some(duration) => {
-                if !self.aborted.load(Ordering::Relaxed) {
-                    tokio::time::timeout(duration, self.aborted_notify.notified())
-                        .await
-                        .map_err(|_| {
-                            ErrorCode::Timeout(format!(
-                                "Service did not shutdown in {:?}",
-                                duration
-                            ))
-                        })?;
-                }
-            }
-        };
-
-        Ok(instant.elapsed())
+        }
     }
 }

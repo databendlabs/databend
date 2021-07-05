@@ -24,7 +24,7 @@ use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
-use crate::sql::{DfCreateDatabase, DfShowProcessList};
+use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateTable;
 use crate::sql::DfDropDatabase;
 use crate::sql::DfDropTable;
@@ -32,6 +32,7 @@ use crate::sql::DfExplain;
 use crate::sql::DfHint;
 use crate::sql::DfShowCreateTable;
 use crate::sql::DfShowDatabases;
+use crate::sql::DfShowProcessList;
 use crate::sql::DfShowSettings;
 use crate::sql::DfShowTables;
 use crate::sql::DfStatement;
