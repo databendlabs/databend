@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use crate::MatchSeq;
+use crate::MatchSeqExt;
 use crate::SeqError;
+use crate::SeqValue;
 
 #[test]
 fn test_seq_error_display() -> anyhow::Result<()> {
@@ -39,28 +41,35 @@ fn test_seq_error_display() -> anyhow::Result<()> {
 
 #[test]
 fn test_match_seq_match_seq_value() -> anyhow::Result<()> {
-    assert_eq!(MatchSeq::Any.match_seq_value((0, 1)), Ok(1));
-    assert_eq!(MatchSeq::Any.match_seq_value((1, 1)), Ok(1));
+    assert_eq!(MatchSeq::Any.match_seq(&Some((0, 1))), Ok(()));
+    assert_eq!(MatchSeq::Any.match_seq(&Some((1, 1))), Ok(()));
 
     //
 
     assert_eq!(
-        MatchSeq::Exact(3).match_seq_value((0, 1)),
+        MatchSeq::Exact(3).match_seq(&None::<SeqValue>),
         Err(SeqError::NotMatch {
             want: MatchSeq::Exact(3),
             got: 0
         })
     );
     assert_eq!(
-        MatchSeq::Exact(3).match_seq_value((2, 1)),
+        MatchSeq::Exact(3).match_seq(&Some((0, 1))),
+        Err(SeqError::NotMatch {
+            want: MatchSeq::Exact(3),
+            got: 0
+        })
+    );
+    assert_eq!(
+        MatchSeq::Exact(3).match_seq(&Some((2, 1))),
         Err(SeqError::NotMatch {
             want: MatchSeq::Exact(3),
             got: 2
         })
     );
-    assert_eq!(MatchSeq::Exact(3).match_seq_value((3, 1)), Ok(1));
+    assert_eq!(MatchSeq::Exact(3).match_seq(&Some((3, 1))), Ok(()));
     assert_eq!(
-        MatchSeq::Exact(3).match_seq_value((4, 1)),
+        MatchSeq::Exact(3).match_seq(&Some((4, 1))),
         Err(SeqError::NotMatch {
             want: MatchSeq::Exact(3),
             got: 4
@@ -70,21 +79,28 @@ fn test_match_seq_match_seq_value() -> anyhow::Result<()> {
     //
 
     assert_eq!(
-        MatchSeq::GE(3).match_seq_value((0, 1)),
+        MatchSeq::GE(3).match_seq(&None::<SeqValue>),
         Err(SeqError::NotMatch {
             want: MatchSeq::GE(3),
             got: 0
         })
     );
     assert_eq!(
-        MatchSeq::GE(3).match_seq_value((2, 1)),
+        MatchSeq::GE(3).match_seq(&Some((0, 1))),
+        Err(SeqError::NotMatch {
+            want: MatchSeq::GE(3),
+            got: 0
+        })
+    );
+    assert_eq!(
+        MatchSeq::GE(3).match_seq(&Some((2, 1))),
         Err(SeqError::NotMatch {
             want: MatchSeq::GE(3),
             got: 2
         })
     );
-    assert_eq!(MatchSeq::GE(3).match_seq_value((3, 1)), Ok(1));
-    assert_eq!(MatchSeq::GE(3).match_seq_value((4, 1)), Ok(1));
+    assert_eq!(MatchSeq::GE(3).match_seq(&Some((3, 1))), Ok(()));
+    assert_eq!(MatchSeq::GE(3).match_seq(&Some((4, 1))), Ok(()));
 
     Ok(())
 }

@@ -15,6 +15,7 @@ use std::collections::HashSet;
 
 pub use errors::SeqError;
 pub use match_seq::MatchSeq;
+pub use match_seq::MatchSeqExt;
 use serde::Deserialize;
 use serde::Serialize;
 
