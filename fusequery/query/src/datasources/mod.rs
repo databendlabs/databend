@@ -7,6 +7,7 @@ mod common_test;
 #[cfg(test)]
 mod tests;
 
+mod catalog;
 mod common;
 mod database;
 mod datasource;
