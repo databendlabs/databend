@@ -789,8 +789,10 @@ dependencies = [
 name = "common-metatypes"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "pretty_assertions",
  "serde",
+ "thiserror",
 ]
 
 [[package]]
