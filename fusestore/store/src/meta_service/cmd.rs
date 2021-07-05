@@ -5,7 +5,9 @@
 use std::fmt;
 
 use async_raft::NodeId;
+use common_metatypes::Database;
 use common_metatypes::MatchSeq;
+use common_metatypes::Table;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -39,8 +41,29 @@ pub enum Cmd {
     },
 
     /// Add a database if absent
-    AddDatabase {
+    CreateDatabase {
         name: String,
+        if_not_exists: bool,
+        db: Database,
+    },
+
+    /// Drop a database if absent
+    DropDatabase {
+        name: String,
+    },
+
+    /// Create a table if absent
+    CreateTable {
+        db_name: String,
+        table_name: String,
+        if_not_exists: bool,
+        table: Table,
+    },
+
+    /// Drop a table if absent
+    DropTable {
+        db_name: String,
+        table_name: String,
     },
 
     /// Update or insert a general purpose kv store
@@ -74,8 +97,37 @@ impl fmt::Display for Cmd {
             Cmd::AddNode { node_id, node } => {
                 write!(f, "add_node:{}={}", node_id, node)
             }
-            Cmd::AddDatabase { name } => {
-                write!(f, "add_db:{}", name)
+            Cmd::CreateDatabase {
+                name,
+                if_not_exists,
+                db,
+            } => {
+                write!(
+                    f,
+                    "create_db:{}={}, if_not_exists:{}",
+                    name, db, if_not_exists
+                )
+            }
+            Cmd::DropDatabase { name } => {
+                write!(f, "drop_db:{}", name)
+            }
+            Cmd::CreateTable {
+                db_name,
+                table_name,
+                if_not_exists,
+                table,
+            } => {
+                write!(
+                    f,
+                    "create_table:{}-{}={}, if_not_exists:{}",
+                    db_name, table_name, table, if_not_exists
+                )
+            }
+            Cmd::DropTable {
+                db_name,
+                table_name,
+            } => {
+                write!(f, "delete_table:{}-{}", db_name, table_name)
             }
             Cmd::UpsertKV { key, seq, value } => {
                 write!(f, "upsert_kv: {}({:?}) = {:?}", key, seq, value)

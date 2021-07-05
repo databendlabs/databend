@@ -17,7 +17,6 @@ use common_flights::storage_api_impl::AppendResult;
 use common_flights::storage_api_impl::ReadAction;
 use common_flights::RequestFor;
 use common_flights::StoreDoAction;
-use common_infallible::Mutex;
 use common_planners::PlanNode;
 use common_runtime::tokio::sync::mpsc::Sender;
 use futures::Stream;
@@ -27,7 +26,6 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::data_part::appender::Appender;
-use crate::engine::MemEngine;
 use crate::fs::FileSystem;
 use crate::meta_service::MetaNode;
 
@@ -38,7 +36,6 @@ pub trait ReplySerializer {
 }
 
 pub struct ActionHandler {
-    pub(crate) meta: Arc<Mutex<MemEngine>>,
     /// The raft-based meta data entry.
     /// In our design meta serves for both the distributed file system and the catalog storage such as db,tabel etc.
     /// Thus in case the `fs` is a Dfs impl, `meta_node` is just a reference to the `Dfs.meta_node`.
@@ -60,11 +57,7 @@ where T: RequestFor
 
 impl ActionHandler {
     pub fn create(fs: Arc<dyn FileSystem>, meta_node: Arc<MetaNode>) -> Self {
-        ActionHandler {
-            meta: MemEngine::create(),
-            meta_node,
-            fs,
-        }
+        ActionHandler { meta_node, fs }
     }
 
     /// Handle pull-file request, which is used internally for replicating data copies.
@@ -142,8 +135,9 @@ impl ActionHandler {
         parts: Streaming<FlightData>,
     ) -> common_exception::Result<AppendResult> {
         {
-            let mut meta = self.meta.lock();
-            let _tbl_meta = meta.get_table(db_name.clone(), table_name.clone())?;
+            // TODO(ariesdevil): use meta_node instead
+            // let mut meta = self.meta.lock();
+            // let _tbl_meta = meta.get_table(db_name.clone(), table_name.clone())?;
 
             // TODO:  Validates the schema of input stream:
             // The schema of `parts` should be a subset of
@@ -159,8 +153,12 @@ impl ActionHandler {
             .append_data(format!("{}/{}", &db_name, &table_name), Box::pin(parts))
             .await?;
 
-        let mut meta = self.meta.lock();
-        meta.append_data_parts(&db_name, &table_name, &res);
+        // let mut meta = self.meta.lock(); //todo(ariesdevil): change to meta_node
+        // meta.append_data_parts(&db_name, &table_name, &res);
+        // Ok(res)
+        self.meta_node
+            .append_data_parts(&db_name, &table_name, &res)
+            .await;
         Ok(res)
     }
 

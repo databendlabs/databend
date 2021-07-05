@@ -23,17 +23,20 @@ use common_flights::meta_api_impl::GetDatabaseAction;
 use common_flights::meta_api_impl::GetDatabaseActionResult;
 use common_flights::meta_api_impl::GetTableAction;
 use common_flights::meta_api_impl::GetTableActionResult;
+use common_metatypes::Database;
+use common_metatypes::Table;
 use log::info;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
-use crate::protobuf::CmdCreateDatabase;
-use crate::protobuf::CmdCreateTable;
-use crate::protobuf::Db;
-use crate::protobuf::Table;
+use crate::meta_service::cmd::Cmd::CreateDatabase;
+use crate::meta_service::cmd::Cmd::CreateTable;
+use crate::meta_service::cmd::Cmd::DropDatabase;
+use crate::meta_service::cmd::Cmd::DropTable;
+use crate::meta_service::AppliedState;
+use crate::meta_service::LogEntry;
 
 // Db
-
 #[async_trait::async_trait]
 impl RequestHandler<CreateDatabaseAction> for ActionHandler {
     async fn handle(
@@ -41,22 +44,40 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
         act: CreateDatabaseAction,
     ) -> common_exception::Result<CreateDatabaseActionResult> {
         let plan = act.plan;
-        let mut meta = self.meta.lock();
+        let db_name = &plan.db;
 
-        let cmd = CmdCreateDatabase {
-            db_name: plan.db,
-            db: Some(Db {
-                // meta fills it
-                db_id: -1,
-                ver: -1,
-                table_name_to_id: HashMap::new(),
-                tables: HashMap::new(),
-            }),
+        let cr = LogEntry {
+            txid: None,
+            cmd: CreateDatabase {
+                name: db_name.clone(),
+                if_not_exists: plan.if_not_exists,
+                db: Database {
+                    database_id: 0,
+                    tables: HashMap::new(),
+                },
+            },
         };
 
-        let database_id = meta.create_database(cmd, plan.if_not_exists)?;
+        let rst = self.meta_node.write(cr).await.map_err(|e| {
+            ErrorCode::MetaNodeInternalError(format!("not a Database result: {}", e.to_string()))
+        })?;
 
-        Ok(CreateDatabaseActionResult { database_id })
+        match rst {
+            AppliedState::DataBase { result, .. } if result.is_some() => {
+                Ok(CreateDatabaseActionResult {
+                    database_id: result.unwrap().database_id,
+                })
+            }
+            AppliedState::DataBase { prev, .. } if prev.is_some() => {
+                Ok(CreateDatabaseActionResult {
+                    database_id: prev.unwrap().database_id,
+                })
+            }
+            AppliedState::DataBase { prev, result } if (prev.is_none() && result.is_none()) => Err(
+                ErrorCode::DatabaseAlreadyExists(format!("{} database exists", db_name)),
+            ),
+            _ => Err(ErrorCode::MetaNodeInternalError("not a Database result")),
+        }
     }
 }
 
@@ -66,21 +87,18 @@ impl RequestHandler<GetDatabaseAction> for ActionHandler {
         &self,
         act: GetDatabaseAction,
     ) -> common_exception::Result<GetDatabaseActionResult> {
-        // TODO(xp): create/drop/get database should base on MetaNode
-        let db_name = &act.db;
-        let meta = self.meta.lock();
-
-        let db = meta.dbs.get(db_name);
+        let db_name = act.db;
+        let db = self.meta_node.get_database(&db_name).await;
 
         match db {
             Some(db) => {
                 let rst = GetDatabaseActionResult {
-                    database_id: db.db_id,
-                    db: db_name.clone(),
+                    database_id: db.database_id,
+                    db: db_name,
                 };
                 Ok(rst)
             }
-            None => Err(ErrorCode::UnknownDatabase(db_name.to_string())),
+            None => Err(ErrorCode::UnknownDatabase(db_name)),
         }
     }
 }
@@ -91,13 +109,25 @@ impl RequestHandler<DropDatabaseAction> for ActionHandler {
         &self,
         act: DropDatabaseAction,
     ) -> common_exception::Result<DropDatabaseActionResult> {
-        let mut meta = self.meta.lock();
-        let _ = meta.drop_database(&act.plan.db, act.plan.if_exists)?;
-        Ok(DropDatabaseActionResult {})
+        let cr = LogEntry {
+            txid: None,
+            cmd: DropDatabase { name: act.plan.db },
+        };
+
+        let rst = self
+            .meta_node
+            .write(cr)
+            .await
+            .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
+
+        match rst {
+            AppliedState::DataBase { .. } => Ok(DropDatabaseActionResult {}),
+            _ => Err(ErrorCode::MetaNodeInternalError("not a Database result")),
+        }
     }
 }
-// table
 
+// table
 #[async_trait::async_trait]
 impl RequestHandler<CreateTableAction> for ActionHandler {
     async fn handle(
@@ -105,37 +135,52 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
         act: CreateTableAction,
     ) -> common_exception::Result<CreateTableActionResult> {
         let plan = act.plan;
-        let db_name = plan.db;
-        let table_name = plan.table;
+        let db_name = &plan.db;
+        let table_name = &plan.table;
 
-        info!("create table: {:}: {:?}", db_name, table_name);
+        info!("create table: {:}: {:?}", &db_name, &table_name);
 
-        let mut meta = self.meta.lock();
+        // if database not exists, return early.
+        self.meta_node.get_database(db_name).await.ok_or_else(|| {
+            ErrorCode::UnknownDatabase(format!("create table: database not found {:}", db_name))
+        })?;
 
         let options = common_arrow::arrow::ipc::writer::IpcWriteOptions::default();
         let flight_data: FlightData =
             arrow_flight::SchemaAsIpc::new(&plan.schema.to_arrow(), &options).into();
 
         let table = Table {
-            // the storage engine fills the id.
-            table_id: -1,
-            ver: -1,
+            table_id: 0,
             schema: flight_data.data_header,
-            options: plan.options,
-
-            // TODO
-            placement_policy: vec![],
+            parts: Default::default(), // TODO(ariesdevil): what's this?
         };
 
-        let cmd = CmdCreateTable {
-            db_name,
-            table_name,
-            table: Some(table),
+        let cr = LogEntry {
+            txid: None,
+            cmd: CreateTable {
+                db_name: db_name.clone(),
+                table_name: table_name.clone(),
+                if_not_exists: plan.if_not_exists,
+                table,
+            },
         };
 
-        let table_id = meta.create_table(cmd, plan.if_not_exists)?;
+        let rst = self.meta_node.write(cr).await.map_err(|e| {
+            ErrorCode::MetaNodeInternalError(format!("not a Table result: {}", e.to_string()))
+        })?;
 
-        Ok(CreateTableActionResult { table_id })
+        match rst {
+            AppliedState::Table { result, .. } if result.is_some() => Ok(CreateTableActionResult {
+                table_id: result.unwrap().table_id,
+            }),
+            AppliedState::Table { prev, .. } if prev.is_some() => Ok(CreateTableActionResult {
+                table_id: prev.unwrap().table_id,
+            }),
+            AppliedState::Table { prev, result } if (prev.is_none() && result.is_none()) => Err(
+                ErrorCode::TableAlreadyExists(format!("table exists: {}", table_name)),
+            ),
+            _ => Err(ErrorCode::MetaNodeInternalError("not a Table result")),
+        }
     }
 }
 
@@ -145,9 +190,24 @@ impl RequestHandler<DropTableAction> for ActionHandler {
         &self,
         act: DropTableAction,
     ) -> common_exception::Result<DropTableActionResult> {
-        let mut meta = self.meta.lock();
-        let _ = meta.drop_table(&act.plan.db, &act.plan.table, act.plan.if_exists)?;
-        Ok(DropTableActionResult {})
+        let cr = LogEntry {
+            txid: None,
+            cmd: DropTable {
+                db_name: act.plan.db,
+                table_name: act.plan.table,
+            },
+        };
+
+        let rst = self
+            .meta_node
+            .write(cr)
+            .await
+            .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
+
+        match rst {
+            AppliedState::Table { .. } => Ok(DropTableActionResult {}),
+            _ => Err(ErrorCode::MetaNodeInternalError("not a Table result")),
+        }
     }
 }
 
@@ -157,25 +217,35 @@ impl RequestHandler<GetTableAction> for ActionHandler {
         let db_name = act.db;
         let table_name = act.table;
 
-        info!("create table: {:}: {:?}", db_name, table_name);
+        let db = self.meta_node.get_database(&db_name).await.ok_or_else(|| {
+            ErrorCode::UnknownDatabase(format!("get table: database not found {:}", &db_name))
+        })?;
 
-        let mut meta = self.meta.lock();
+        let table_id = db
+            .tables
+            .get(&table_name)
+            .ok_or_else(|| ErrorCode::UnknownTable(format!("table not found: {:}", &table_name)))?;
 
-        let table = meta.get_table(db_name.clone(), table_name.clone())?;
+        let result = self.meta_node.get_table(table_id).await;
 
-        let arrow_schema = ArrowSchema::try_from(&FlightData {
-            data_header: table.schema,
-            ..Default::default()
-        })
-        .map_err(|e| ErrorCode::IllegalSchema(format!("invalid schema: {:}", e.to_string())))?;
-
-        let rst = GetTableActionResult {
-            table_id: table.table_id,
-            db: db_name,
-            name: table_name,
-            schema: Arc::new(arrow_schema.into()),
-        };
-
-        Ok(rst)
+        match result {
+            Some(table) => {
+                let arrow_schema = ArrowSchema::try_from(&FlightData {
+                    data_header: table.schema,
+                    ..Default::default()
+                })
+                .map_err(|e| {
+                    ErrorCode::IllegalSchema(format!("invalid schema: {:}", e.to_string()))
+                })?;
+                let rst = GetTableActionResult {
+                    table_id: table.table_id,
+                    db: db_name,
+                    name: table_name,
+                    schema: Arc::new(arrow_schema.into()),
+                };
+                Ok(rst)
+            }
+            None => Err(ErrorCode::UnknownTable(table_name)),
+        }
     }
 }

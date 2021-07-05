@@ -9,10 +9,14 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use common_exception::prelude::ErrorCode;
+use common_flights::storage_api_impl::AppendResult;
+use common_flights::storage_api_impl::DataPartInfo;
 use common_metatypes::Database;
 use common_metatypes::MatchSeqExt;
 use common_metatypes::SeqValue;
 use common_metatypes::Table;
+use common_planners::Part;
+use common_planners::Statistics;
 use common_tracing::tracing;
 use serde::Deserialize;
 use serde::Serialize;
@@ -29,7 +33,7 @@ const SEQ_GENERIC_KV: &str = "generic_kv";
 /// seq number key to generate database id
 const SEQ_DATABASE_ID: &str = "database_id";
 /// seq number key to generate table id
-// const SEQ_TABLE_ID: &str = "table_id";
+const SEQ_TABLE_ID: &str = "table_id";
 
 /// Replication defines the replication strategy.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -75,6 +79,9 @@ pub struct StateMachine {
     /// table id to table mapping
     pub tables: BTreeMap<u64, Table>,
 
+    ///
+    pub tbl_parts: HashMap<String, HashMap<String, Vec<DataPartInfo>>>,
+
     /// A kv store of all other general purpose information.
     /// The value is tuple of a monotonic sequence number and userdata value in string.
     /// The sequence number is guaranteed to increment(by some value greater than 0) everytime the record changes.
@@ -116,6 +123,7 @@ impl StateMachineBuilder {
             replication,
             databases: BTreeMap::new(),
             tables: BTreeMap::new(),
+            tbl_parts: HashMap::new(),
             kv: BTreeMap::new(),
         };
         for _i in 0..initial_slots {
@@ -173,7 +181,7 @@ impl StateMachine {
     }
 
     /// Apply an op into state machine.
-    /// Already applied log should be filtered out before passing into this functino.
+    /// Already applied log should be filtered out before passing into this function.
     /// This is the only entry to modify state machine.
     /// The `data` is always committed by raft before applying.
     #[tracing::instrument(level = "debug", skip(self))]
@@ -212,12 +220,20 @@ impl StateMachine {
                 }
             }
 
-            Cmd::AddDatabase { ref name } => {
+            Cmd::CreateDatabase {
+                ref name,
+                ref if_not_exists,
+                ..
+            } => {
                 // - If the db present, return it.
                 // - Otherwise, create a new one with next seq number as database id, and add it in to store.
                 if self.databases.contains_key(name) {
                     let prev = self.databases.get(name);
-                    Ok((prev.cloned(), None).into())
+                    if *if_not_exists {
+                        Ok((prev.cloned(), None).into())
+                    } else {
+                        Ok((None::<Database>, None::<Database>).into())
+                    }
                 } else {
                     let db = Database {
                         database_id: self.incr_seq(SEQ_DATABASE_ID),
@@ -225,10 +241,62 @@ impl StateMachine {
                     };
 
                     let prev = self.databases.insert(name.clone(), db.clone());
-                    tracing::debug!("applied AddDatabase: {}={:?}", name, db);
+                    tracing::debug!("applied CreateDatabase: {}={:?}", name, db);
 
                     Ok((prev, Some(db)).into())
                 }
+            }
+
+            Cmd::DropDatabase { ref name } => {
+                let prev = self.databases.get(name).cloned();
+                self.databases.remove(name);
+                tracing::debug!("applied DropDatabase: {}", name);
+                Ok((prev, None).into())
+            }
+
+            Cmd::CreateTable {
+                ref db_name,
+                ref table_name,
+                ref if_not_exists,
+                ref table,
+            } => {
+                let db = self.databases.get(db_name);
+                let mut db = db.unwrap().to_owned();
+
+                if db.tables.contains_key(table_name) {
+                    let table_id = db.tables.get(table_name).unwrap();
+                    let prev = self.tables.get(table_id);
+                    if *if_not_exists {
+                        Ok((prev.cloned(), None).into())
+                    } else {
+                        Ok((None::<Table>, None::<Table>).into())
+                    }
+                } else {
+                    let table = Table {
+                        table_id: self.incr_seq(SEQ_TABLE_ID),
+                        schema: table.schema.clone(),
+                        parts: table.parts.clone(),
+                    };
+                    db.tables.insert(table_name.clone(), table.table_id);
+                    self.databases.insert(db_name.clone(), db);
+                    let prev = self.tables.insert(table.table_id, table.clone());
+                    tracing::debug!("applied CreateTable: {}={:?}", table_name, table);
+
+                    Ok((prev, Some(table)).into())
+                }
+            }
+
+            Cmd::DropTable {
+                ref db_name,
+                ref table_name,
+            } => {
+                let db = self.databases.get(db_name);
+                let db = db.unwrap(); // unsafe?
+
+                let table_id = db.tables.get(table_name);
+                let table_id = table_id.unwrap();
+                let prev = self.tables.get(table_id).cloned();
+                Ok((prev, None).into())
             }
 
             Cmd::UpsertKV {
@@ -313,9 +381,66 @@ impl StateMachine {
         x.cloned()
     }
 
+    pub fn get_table(&self, tid: &u64) -> Option<Table> {
+        let x = self.tables.get(tid);
+        x.cloned()
+    }
+
     pub fn get_kv(&self, key: &str) -> Option<SeqValue> {
         let x = self.kv.get(key);
         x.cloned()
+    }
+
+    pub fn get_data_parts(&self, db_name: &str, table_name: &str) -> Option<Vec<DataPartInfo>> {
+        let parts = self.tbl_parts.get(db_name);
+        parts.and_then(|m| m.get(table_name)).map(Clone::clone)
+    }
+
+    pub fn append_data_parts(
+        &mut self,
+        db_name: &str,
+        table_name: &str,
+        append_res: &AppendResult,
+    ) {
+        let part_info = || {
+            append_res
+                .parts
+                .iter()
+                .map(|p| {
+                    let loc = &p.location;
+                    DataPartInfo {
+                        part: Part {
+                            name: loc.clone(),
+                            version: 0,
+                        },
+                        stats: Statistics::new_exact(p.disk_bytes, p.rows),
+                    }
+                })
+                .collect::<Vec<_>>()
+        };
+        self.tbl_parts
+            .entry(db_name.to_string())
+            .and_modify(move |e| {
+                e.entry(table_name.to_string())
+                    .and_modify(|v| v.append(&mut part_info()))
+                    .or_insert_with(part_info);
+            })
+            .or_insert_with(|| {
+                [(table_name.to_string(), part_info())]
+                    .iter()
+                    .cloned()
+                    .collect()
+            });
+    }
+
+    pub fn remove_table_data_parts(&mut self, db_name: &str, table_name: &str) {
+        self.tbl_parts
+            .remove(db_name)
+            .and_then(|mut t| t.remove(table_name));
+    }
+
+    pub fn remove_db_data_parts(&mut self, db_name: &str) {
+        self.tbl_parts.remove(db_name);
     }
 
     pub fn mget_kv(&self, keys: &[impl AsRef<str>]) -> Vec<Option<SeqValue>> {

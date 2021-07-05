@@ -79,7 +79,7 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
     }
 
     /// helper to build a T
-    fn case(dbname: &str, if_not_exists: bool, want: common_exception::Result<i64>) -> T {
+    fn case(dbname: &str, if_not_exists: bool, want: common_exception::Result<u64>) -> T {
         let plan = CreateDatabasePlan {
             db: dbname.to_string(),
             if_not_exists,
@@ -96,16 +96,15 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
         T { plan, want }
     }
 
-    // TODO: id should be started from 1
     let cases: Vec<T> = vec![
-        case("foo", false, Ok(0)),
-        case("foo", true, Ok(0)),
+        case("foo", false, Ok(1)),
+        case("foo", true, Ok(1)),
         case(
             "foo",
             false,
             Err(ErrorCode::DatabaseAlreadyExists("foo database exists")),
         ),
-        case("bar", true, Ok(1)),
+        case("bar", true, Ok(2)),
     ];
 
     {
@@ -149,7 +148,7 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
     }
 
     /// helper to build a T
-    fn case(db_name: &'static str, want: Result<i64, &str>) -> T {
+    fn case(db_name: &'static str, want: Result<u64, &str>) -> T {
         let want = match want {
             Ok(want_db_id) => Ok(GetDatabaseActionResult {
                 database_id: want_db_id,
@@ -161,8 +160,7 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
         T { db_name, want }
     }
 
-    // TODO: id should be started from 1
-    let cases: Vec<T> = vec![case("foo", Ok(0)), case("bar", Err("bar"))];
+    let cases: Vec<T> = vec![case("foo", Ok(1)), case("bar", Err("bar"))];
 
     {
         let dir = tempdir()?;

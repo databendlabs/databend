@@ -192,8 +192,10 @@ fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
 
         let resp = m.apply_non_dup(&LogEntry {
             txid: None,
-            cmd: Cmd::AddDatabase {
+            cmd: Cmd::CreateDatabase {
                 name: c.name.to_string(),
+                if_not_exists: true,
+                db: Default::default(),
             },
         })?;
         assert_eq!(
