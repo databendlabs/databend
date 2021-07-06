@@ -66,7 +66,7 @@ impl Table for OneTable {
                 name: "".to_string(),
                 version: 0,
             }],
-            statistics: Statistics::default(),
+            statistics: Statistics::new_exact(1, std::mem::size_of::<u8>()),
             description: "(Read from system.one table)".to_string(),
             scan_plan: Arc::new(scan.clone()),
             remote: false,

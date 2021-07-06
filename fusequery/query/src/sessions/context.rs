@@ -140,10 +140,7 @@ impl FuseQueryContext {
 
     pub fn try_get_statistics(&self) -> Result<Statistics> {
         let statistics = self.statistics.read();
-        Ok(Statistics {
-            read_rows: statistics.read_rows,
-            read_bytes: statistics.read_bytes,
-        })
+        Ok((*statistics).clone())
     }
 
     pub fn try_set_statistics(&self, val: &Statistics) -> Result<()> {

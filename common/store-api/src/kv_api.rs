@@ -4,6 +4,7 @@
 //
 
 use async_trait::async_trait;
+use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -31,7 +32,7 @@ pub trait KVApi {
     async fn upsert_kv(
         &mut self,
         key: &str,
-        seq: Option<u64>,
+        seq: MatchSeq,
         value: Vec<u8>,
     ) -> common_exception::Result<UpsertKVActionResult>;
 
@@ -39,13 +40,6 @@ pub trait KVApi {
         &mut self,
         key: &str,
         seq: Option<u64>,
-    ) -> common_exception::Result<Option<SeqValue>>;
-
-    async fn update_kv(
-        &mut self,
-        key: &str,
-        seq: Option<u64>,
-        value: Vec<u8>,
     ) -> common_exception::Result<Option<SeqValue>>;
 
     async fn get_kv(&mut self, key: &str) -> common_exception::Result<GetKVActionResult>;

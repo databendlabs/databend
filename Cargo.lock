@@ -788,8 +788,10 @@ dependencies = [
 name = "common-metatypes"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "pretty_assertions",
  "serde",
+ "thiserror",
 ]
 
 [[package]]
@@ -4270,7 +4272,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.9.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=b6e44b95#b6e44b956550eedd427290aa38473a289a76617f"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=0db7cfa#0db7cfac980df4995ef4e55840ed240162c342b1"
 dependencies = [
  "log 0.4.14",
 ]
@@ -4359,9 +4361,9 @@ checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
 
 [[package]]
 name = "structopt"
-version = "0.3.21"
+version = "0.3.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5277acd7ee46e63e5168a80734c9f6ee81b1367a7d8772a2d765df2a3705d28c"
+checksum = "69b041cdcb67226aca307e6e7be44c8806423d83e018bd662360a93dabce4d71"
 dependencies = [
  "clap",
  "lazy_static",
@@ -4370,9 +4372,9 @@ dependencies = [
 
 [[package]]
 name = "structopt-derive"
-version = "0.4.14"
+version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ba9cdfda491b814720b6b06e0cac513d922fc407582032e8706e9f137976f90"
+checksum = "7813934aecf5f51a54775e00068c237de98489463968231a51746bbbc03f9c10"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -4747,9 +4749,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.7.1"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fb2ed024293bb19f7a5dc54fe83bf86532a44c12a2bb8ba40d64a4509395ca2"
+checksum = "570c2eb13b3ab38208130eccd41be92520388791207fde783bda7c1e8ace28d4"
 dependencies = [
  "autocfg 1.0.1",
  "bytes 1.0.1",
