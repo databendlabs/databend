@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 //
 
+mod cluster;
 mod user;
 
 pub use user::user_api::UserInfo;

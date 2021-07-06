@@ -47,21 +47,28 @@ const LOG_LEVEL: &str = "FUSE_QUERY_LOG_LEVEL";
 const LOG_DIR: &str = "FUSE_QUERY_LOG_DIR";
 const NUM_CPUS: &str = "FUSE_QUERY_NUM_CPUS";
 
+// MySQL.
 const MYSQL_HANDLER_HOST: &str = "FUSE_QUERY_MYSQL_HANDLER_HOST";
 const MYSQL_HANDLER_PORT: &str = "FUSE_QUERY_MYSQL_HANDLER_PORT";
 const MYSQL_HANDLER_THREAD_NUM: &str = "FUSE_QUERY_MYSQL_HANDLER_THREAD_NUM";
 
+// ClickHouse.
 const CLICKHOUSE_HANDLER_HOST: &str = "FUSE_QUERY_CLICKHOUSE_HANDLER_HOST";
 const CLICKHOUSE_HANDLER_PORT: &str = "FUSE_QUERY_CLICKHOUSE_HANDLER_PORT";
 const CLICKHOUSE_HANDLER_THREAD_NUM: &str = "FUSE_QUERY_CLICKHOUSE_HANDLER_THREAD_NUM";
 
+// API
 const FLIGHT_API_ADDRESS: &str = "FUSE_QUERY_FLIGHT_API_ADDRESS";
 const HTTP_API_ADDRESS: &str = "FUSE_QUERY_HTTP_API_ADDRESS";
 const METRICS_API_ADDRESS: &str = "FUSE_QUERY_METRIC_API_ADDRESS";
 
+// Store.
 const STORE_API_ADDRESS: &str = "STORE_API_ADDRESS";
 const STORE_API_USERNAME: &str = "STORE_API_USERNAME";
 const STORE_API_PASSWORD: &str = "STORE_API_PASSWORD";
+
+// Cluster.
+const NAMESPACE: &str = "NAMESPACE";
 
 const CONFIG_FILE: &str = "CONFIG_FILE";
 
@@ -144,6 +151,9 @@ pub struct Config {
 
     #[structopt(long, env = STORE_API_PASSWORD, default_value = "root")]
     pub store_api_password: Password,
+
+    #[structopt(long, env = NAMESPACE, default_value = "")]
+    pub namespace: String,
 
     #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
     pub config_file: String,
@@ -238,6 +248,7 @@ impl Config {
             store_api_password: Password {
                 store_api_password: "root".to_string(),
             },
+            namespace: "".to_string(),
             config_file: "".to_string(),
         }
     }
@@ -274,6 +285,8 @@ impl Config {
         env_helper!(mut_config, log_level, String, LOG_LEVEL);
         env_helper!(mut_config, log_dir, String, LOG_DIR);
         env_helper!(mut_config, num_cpus, u64, NUM_CPUS);
+
+        // MySQL.
         env_helper!(mut_config, mysql_handler_host, String, MYSQL_HANDLER_HOST);
         env_helper!(mut_config, mysql_handler_port, u16, MYSQL_HANDLER_PORT);
         env_helper!(
@@ -282,6 +295,8 @@ impl Config {
             u64,
             MYSQL_HANDLER_THREAD_NUM
         );
+
+        // ClickHouse.
         env_helper!(
             mut_config,
             clickhouse_handler_host,
@@ -300,12 +315,19 @@ impl Config {
             u64,
             CLICKHOUSE_HANDLER_THREAD_NUM
         );
+
+        // API.
         env_helper!(mut_config, flight_api_address, String, FLIGHT_API_ADDRESS);
         env_helper!(mut_config, http_api_address, String, HTTP_API_ADDRESS);
         env_helper!(mut_config, metric_api_address, String, METRICS_API_ADDRESS);
+
+        // Store.
         env_helper!(mut_config, store_api_address, String, STORE_API_ADDRESS);
         env_helper!(mut_config, store_api_username, User, STORE_API_USERNAME);
         env_helper!(mut_config, store_api_password, Password, STORE_API_PASSWORD);
+
+        // Cluster.
+        env_helper!(mut_config, namespace, String, NAMESPACE);
 
         Ok(mut_config)
     }
