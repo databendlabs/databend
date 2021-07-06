@@ -7,24 +7,18 @@ use std::sync::Arc;
 
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::Session;
-use crate::sessions::SessionManagerRef;
 
 /// SessionRef is the ptr of session.
 /// Remove it in session_manager when the current session is not referenced
 pub struct SessionRef {
     typ: String,
     session: Arc<Session>,
-    sessions: SessionManagerRef,
 }
 
 impl SessionRef {
-    pub fn create(typ: String, session: Arc<Session>, sessions: SessionManagerRef) -> SessionRef {
+    pub fn create(typ: String, session: Arc<Session>) -> SessionRef {
         session.increment_ref_count();
-        SessionRef {
-            typ,
-            session,
-            sessions,
-        }
+        SessionRef { typ, session }
     }
 
     pub fn get_id(&self) -> String {
@@ -57,7 +51,7 @@ impl Drop for SessionRef {
 impl Session {
     pub fn destroy_session_ref(self: &Arc<Self>) {
         if self.decrement_ref_count() {
-            log::info!("Destroy session {}", self.id);
+            log::debug!("Destroy session {}", self.id);
             self.sessions.destroy_session(&self.id);
         }
     }

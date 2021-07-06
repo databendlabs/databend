@@ -12,7 +12,6 @@ use crate::configs::Config;
 use crate::datasources::DataSource;
 use crate::sessions::Session;
 use crate::sessions::Settings;
-use std::sync::atomic::AtomicUsize;
 
 /// Data that needs to be shared in a query context.
 /// This is very useful, for example, for queries:
@@ -44,8 +43,18 @@ impl FuseQueryContextShared {
             runtime: Arc::new(RwLock::new(None)),
             cluster_cache: Arc::new(RwLock::new(None)),
             sources_abort_handle: Arc::new(RwLock::new(Vec::new())),
-            ref_count: Arc::new(RwLock::new(0))
+            ref_count: Arc::new(RwLock::new(0)),
         })
+    }
+
+    pub fn kill(&self) {
+        let mut sources_abort_handle = self.sources_abort_handle.write();
+
+        while let Some(source_abort_handle) = sources_abort_handle.pop() {
+            source_abort_handle.abort();
+        }
+
+        // TODO: Wait for the query to be processed (write out the last error)
     }
 
     pub fn try_get_cluster(&self) -> Result<ClusterRef> {

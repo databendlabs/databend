@@ -5,13 +5,16 @@
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::hash_map::Entry::Vacant;
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_runtime::tokio;
+use common_runtime::tokio::sync::mpsc::Receiver;
+use futures::future::Either;
 use metrics::counter;
 
 use crate::clusters::Cluster;
@@ -20,10 +23,6 @@ use crate::configs::Config;
 use crate::datasources::DataSource;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
-use std::future::Future;
-use common_runtime::tokio;
-use common_runtime::tokio::sync::mpsc::Receiver;
-use futures::future::Either;
 
 pub struct SessionManager {
     conf: Config,
@@ -44,7 +43,9 @@ impl SessionManager {
             datasource: Arc::new(DataSource::try_create()?),
 
             max_sessions: max_mysql_sessions as usize,
-            active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_mysql_sessions as usize))),
+            active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(
+                max_mysql_sessions as usize,
+            ))),
         }))
     }
 
@@ -84,7 +85,7 @@ impl SessionManager {
                 )?;
 
                 sessions.insert(session.get_id(), session.clone());
-                Ok(SessionRef::create(typ.into(), session, self.clone()))
+                Ok(SessionRef::create(typ.into(), session))
             }
         }
     }
@@ -105,27 +106,29 @@ impl SessionManager {
             }
         };
 
-        Ok(SessionRef::create(String::from("RpcSession"), session, self.clone()))
+        Ok(SessionRef::create(String::from("RpcSession"), session))
     }
 
+    #[allow(clippy::ptr_arg)]
     pub fn destroy_session(self: &Arc<Self>, session_id: &String) {
         counter!(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
 
         self.active_sessions.write().remove(session_id);
     }
 
-    pub fn shutdown(self: &Arc<Self>, signal: Option<Receiver<()>>) -> impl Future<Output=()> {
+    pub fn shutdown(self: &Arc<Self>, signal: Option<Receiver<()>>) -> impl Future<Output = ()> {
         let active_sessions = self.active_sessions.clone();
         async move {
             log::info!("Waiting for current connections to close.");
             if let Some(mut signal) = signal {
+                let mut signal = Box::pin(signal.recv());
+
                 for _index in 0..5 {
-                    if active_sessions.read().len() == 0 {
+                    if SessionManager::destroy_idle_sessions(&active_sessions) {
                         return;
                     }
 
                     let interval = Duration::from_secs(1);
-                    let mut signal = Box::pin(signal.recv());
                     let sleep = Box::pin(tokio::time::sleep(interval));
                     match futures::future::select(sleep, signal).await {
                         Either::Right((_, _)) => break,
@@ -134,7 +137,27 @@ impl SessionManager {
                 }
             }
 
-            active_sessions.read().values().for_each(Session::kill);
+            log::info!("Will shutdown forcefully.");
+            active_sessions
+                .read()
+                .values()
+                .for_each(Session::force_kill);
+        }
+    }
+
+    fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Arc<Session>>>>) -> bool {
+        let active_session_guard = sessions.read();
+
+        // First try to kill the idle session
+        active_session_guard.values().for_each(Session::kill);
+        let active_sessions = sessions.read().len();
+
+        match active_sessions {
+            0 => true,
+            _ => {
+                log::info!("Waiting for {} connections to close.", active_sessions);
+                false
+            }
         }
     }
 }

@@ -3,16 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use common_exception::Result;
-use futures::stream::Abortable;
-use tokio_stream::wrappers::TcpListenerStream;
-use crate::sessions::SessionManagerRef;
-use futures::Future;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use common_runtime::tokio;
 use common_runtime::tokio::sync::mpsc::Receiver;
+use futures::stream::Abortable;
+use futures::Future;
+use tokio_stream::wrappers::TcpListenerStream;
+
+use crate::sessions::SessionManagerRef;
 
 pub type ListeningStream = Abortable<TcpListenerStream>;
 
@@ -38,7 +40,7 @@ impl ShutdownHandle {
         }
     }
 
-    pub fn shutdown(&mut self, signal: Option<Receiver<()>>) -> impl Future<Output=()> + '_ {
+    pub fn shutdown(&mut self, signal: Option<Receiver<()>>) -> impl Future<Output = ()> + '_ {
         let mut shutdown_jobs = vec![];
         for service in &mut self.services {
             shutdown_jobs.push(service.shutdown());
@@ -56,7 +58,7 @@ impl ShutdownHandle {
         }
     }
 
-    pub fn wait_for_termination_request(&mut self) -> impl Future<Output=()> + '_ {
+    pub fn wait_for_termination_request(&mut self) -> impl Future<Output = ()> + '_ {
         let mut receiver = Self::register_termination_handle();
         async move {
             receiver.recv().await;
@@ -69,13 +71,14 @@ impl ShutdownHandle {
     }
 
     pub fn register_termination_handle() -> Receiver<()> {
-        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
         ctrlc::set_handler(move || {
             if let Err(error) = tx.blocking_send(()) {
                 log::error!("Could not send signal on channel {}", error);
                 std::process::exit(1);
             }
-        }).expect("Error setting Ctrl-C handler");
+        })
+        .expect("Error setting Ctrl-C handler");
 
         rx
     }

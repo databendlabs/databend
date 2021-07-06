@@ -24,7 +24,7 @@ use crate::datasources::DataSource;
 use crate::datasources::Table;
 use crate::datasources::TableFunction;
 use crate::sessions::context_shared::FuseQueryContextShared;
-use crate::sessions::{Settings, Session};
+use crate::sessions::Settings;
 
 pub struct FuseQueryContext {
     statistics: Arc<RwLock<Statistics>>,
@@ -237,7 +237,7 @@ impl Drop for FuseQueryContext {
 impl FuseQueryContextShared {
     pub(in crate::sessions) fn destroy_context_ref(&self) {
         if self.decrement_ref_count() {
-            log::info!("Destroy FuseQueryContext");
+            log::debug!("Destroy FuseQueryContext");
             self.session.destroy_context_shared();
         }
     }

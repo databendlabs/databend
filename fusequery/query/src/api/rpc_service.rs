@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -9,15 +10,13 @@ use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
 use common_exception::Result;
 use common_runtime::tokio::net::TcpListener;
 use common_runtime::tokio::sync::Notify;
-use common_runtime::tokio::time::Duration;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Server;
 
 use crate::api::rpc::FuseQueryFlightDispatcher;
 use crate::api::rpc::FuseQueryFlightService;
-use crate::sessions::SessionManagerRef;
 use crate::servers::Server as FuseQueryServer;
-use std::future::Future;
+use crate::sessions::SessionManagerRef;
 
 pub struct RpcService {
     sessions: SessionManagerRef,
@@ -40,9 +39,11 @@ impl RpcService {
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
 
-    fn shutdown_notify(&self) -> impl Future<Output=()> + 'static {
+    fn shutdown_notify(&self) -> impl Future<Output = ()> + 'static {
         let notified = self.abort_notify.clone();
-        async move { notified.notified().await; }
+        async move {
+            notified.notified().await;
+        }
     }
 }
 
@@ -64,6 +65,7 @@ impl FuseQueryServer for RpcService {
             .add_service(FlightServiceServer::new(flight_api_service))
             .serve_with_incoming_shutdown(listener_stream, self.shutdown_notify());
 
+        common_runtime::tokio::spawn(server);
         Ok(listening)
     }
 }

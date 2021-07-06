@@ -4,17 +4,13 @@
 
 use std::future::Future;
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::time::Duration;
-use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_runtime::tokio;
 use common_runtime::tokio::net::TcpStream;
+use common_runtime::tokio::task::JoinHandle;
 use common_runtime::Runtime;
 use futures::future::AbortHandle;
 use futures::future::AbortRegistration;
@@ -22,15 +18,13 @@ use futures::future::Abortable;
 use futures::StreamExt;
 use msql_srv::*;
 use tokio_stream::wrappers::TcpListenerStream;
-use tokio_stream::StreamExt as OtherStreamExt;
 
-use crate::servers::server::ListeningStream;
-use crate::servers::server::Server;
 use crate::servers::mysql::mysql_session::MySQLConnection;
 use crate::servers::mysql::reject_connection::RejectConnection;
+use crate::servers::server::ListeningStream;
+use crate::servers::server::Server;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionManagerRef;
-use common_runtime::tokio::task::JoinHandle;
 
 pub struct MySQLHandler {
     sessions: SessionManagerRef,
@@ -40,12 +34,11 @@ pub struct MySQLHandler {
 }
 
 impl MySQLHandler {
-    pub fn create(session_manager: SessionManagerRef) -> Box<dyn Server> {
+    pub fn create(sessions: SessionManagerRef) -> Box<dyn Server> {
         let (abort_handle, registration) = AbortHandle::new_pair();
-
         Box::new(MySQLHandler {
-            sessions: session_manager,
-            abort_handle: abort_handle,
+            sessions,
+            abort_handle,
             abort_registration: Some(registration),
             join_handle: None,
         })
@@ -57,7 +50,7 @@ impl MySQLHandler {
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
 
-    fn listen_loop(&self, stream: ListeningStream, rt: Arc<Runtime>) -> impl Future<Output=()> {
+    fn listen_loop(&self, stream: ListeningStream, rt: Arc<Runtime>) -> impl Future<Output = ()> {
         let sessions = self.sessions.clone();
         stream.for_each(move |accept_socket| {
             let executor = rt.clone();
@@ -90,7 +83,7 @@ impl MySQLHandler {
             };
 
             if let Err(error) =
-            RejectConnection::reject_mysql_connection(stream, kind, message).await
+                RejectConnection::reject_mysql_connection(stream, kind, message).await
             {
                 log::error!(
                     "Unexpected error occurred during reject connection: {:?}",
@@ -108,7 +101,10 @@ impl Server for MySQLHandler {
 
         if let Some(join_handle) = self.join_handle.take() {
             if let Err(error) = join_handle.await {
-                log::error!("Unexpected error during shutdown ClickHouseHandler. cause {}", error);
+                log::error!(
+                    "Unexpected error during shutdown ClickHouseHandler. cause {}",
+                    error
+                );
             }
         }
     }

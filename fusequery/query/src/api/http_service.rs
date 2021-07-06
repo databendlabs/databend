@@ -3,27 +3,20 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::net::SocketAddr;
-use std::net::ToSocketAddrs;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::time::Duration;
-use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_infallible::Mutex;
 use common_runtime::tokio;
-use common_runtime::tokio::sync::oneshot::Sender;
 use common_runtime::tokio::sync::Notify;
-use futures::{FutureExt, Future};
+use common_runtime::tokio::task::JoinHandle;
+use futures::Future;
 
 use crate::api::http::router::Router;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::servers::Server;
-use common_runtime::tokio::task::JoinHandle;
 
 pub struct HttpService {
     cfg: Config,
@@ -42,12 +35,13 @@ impl HttpService {
         })
     }
 
-    fn shutdown_notify(&self) -> impl Future<Output=()> + 'static {
+    fn shutdown_notify(&self) -> impl Future<Output = ()> + 'static {
         let notified = self.abort_notify.clone();
-        async move { notified.notified().await; }
+        async move {
+            notified.notified().await;
+        }
     }
 }
-
 
 #[async_trait::async_trait]
 impl Server for HttpService {
@@ -56,7 +50,10 @@ impl Server for HttpService {
 
         if let Some(join_handle) = self.join_handle.take() {
             if let Err(error) = join_handle.await {
-                log::error!("Unexpected error during shutdown HttpServer. cause {}", error);
+                log::error!(
+                    "Unexpected error during shutdown HttpServer. cause {}",
+                    error
+                );
             }
         }
     }
@@ -66,7 +63,7 @@ impl Server for HttpService {
         let server = warp::serve(router.router()?);
 
         let (listening, server) = server
-            .try_bind_with_graceful_shutdown(listening.clone(), self.shutdown_notify())
+            .try_bind_with_graceful_shutdown(listening, self.shutdown_notify())
             .map_err_to_code(ErrorCode::CannotListenerPort, || {
                 format!("Cannot start HTTPService with {}", listening)
             })?;

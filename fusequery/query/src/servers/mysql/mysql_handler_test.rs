@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::Barrier;
 use std::thread::JoinHandle;
@@ -19,7 +20,6 @@ use mysql::Row;
 
 use crate::servers::MySQLHandler;
 use crate::sessions::SessionManager;
-use std::net::SocketAddr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_use_database_with_on_query() -> Result<()> {

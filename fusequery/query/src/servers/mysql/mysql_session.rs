@@ -19,7 +19,6 @@ pub struct MySQLConnection;
 impl MySQLConnection {
     pub fn run_on_stream(session: SessionRef, stream: TcpStream) -> Result<()> {
         let blocking_stream = Self::convert_stream(stream)?;
-
         MySQLConnection::attach_session(&session, &blocking_stream)?;
         std::thread::spawn(move || {
             MySQLConnection::session_executor(session, blocking_stream);

@@ -4,13 +4,12 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_runtime::tokio;
 use common_runtime::tokio::net::TcpStream;
+use common_runtime::tokio::task::JoinHandle;
 use common_runtime::Runtime;
 use futures::future::AbortHandle;
 use futures::future::AbortRegistration;
@@ -21,10 +20,10 @@ use tokio_stream::wrappers::TcpListenerStream;
 
 use crate::servers::clickhouse::clickhouse_session::ClickHouseConnection;
 use crate::servers::clickhouse::reject_connection::RejectCHConnection;
+use crate::servers::server::ListeningStream;
+use crate::servers::server::Server;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionManagerRef;
-use crate::servers::server::{Server, ListeningStream};
-use common_runtime::tokio::task::JoinHandle;
 
 pub struct ClickHouseHandler {
     sessions: SessionManagerRef,
@@ -39,7 +38,7 @@ impl ClickHouseHandler {
         let (abort_handle, registration) = AbortHandle::new_pair();
         Box::new(ClickHouseHandler {
             sessions,
-            abort_handle: abort_handle,
+            abort_handle,
             abort_registration: Some(registration),
             join_handle: None,
         })
@@ -51,7 +50,7 @@ impl ClickHouseHandler {
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
 
-    fn listen_loop(&self, stream: ListeningStream, r: Arc<Runtime>) -> impl Future<Output=()> {
+    fn listen_loop(&self, stream: ListeningStream, r: Arc<Runtime>) -> impl Future<Output = ()> {
         let sessions = self.sessions.clone();
         stream.for_each(move |accept_socket| {
             let executor = r.clone();
@@ -95,14 +94,19 @@ impl Server for ClickHouseHandler {
 
         if let Some(join_handle) = self.join_handle.take() {
             if let Err(error) = join_handle.await {
-                log::error!("Unexpected error during shutdown ClickHouseHandler. cause {}", error);
+                log::error!(
+                    "Unexpected error during shutdown ClickHouseHandler. cause {}",
+                    error
+                );
             }
         }
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         match self.abort_registration.take() {
-            None => Err(ErrorCode::LogicalError("ClickHouseHandler already running.")),
+            None => Err(ErrorCode::LogicalError(
+                "ClickHouseHandler already running.",
+            )),
             Some(registration) => {
                 let rejected_rt = Arc::new(Runtime::with_worker_threads(1)?);
                 let (stream, listener) = Self::listener_tcp(listening).await?;

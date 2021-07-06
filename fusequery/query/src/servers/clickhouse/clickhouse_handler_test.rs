@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::net::SocketAddr;
 use std::time::Duration;
 
 use clickhouse_rs::types::Complex;
@@ -14,7 +15,6 @@ use common_runtime::tokio;
 
 use crate::servers::ClickHouseHandler;
 use crate::sessions::SessionManager;
-use std::net::SocketAddr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_clickhouse_handler_query() -> Result<()> {

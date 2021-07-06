@@ -2,31 +2,24 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::future::Future;
 use std::net::SocketAddr;
-use std::net::ToSocketAddrs;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::time::Duration;
-use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_infallible::Mutex;
 use common_runtime::tokio;
-use common_runtime::tokio::sync::oneshot::Sender;
 use common_runtime::tokio::sync::Notify;
-use futures::future::FutureExt;
-use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
+use common_runtime::tokio::task::JoinHandle;
+use metrics_exporter_prometheus::PrometheusBuilder;
+use metrics_exporter_prometheus::PrometheusHandle;
 use warp::hyper::Body;
 use warp::reply::Response;
 use warp::Filter;
 use warp::Reply;
 
 use crate::servers::Server;
-use std::future::Future;
-use common_runtime::tokio::task::JoinHandle;
 
 pub struct MetricService {
     abort_notify: Arc<Notify>,
@@ -48,14 +41,17 @@ impl MetricService {
         match metrics::set_boxed_recorder(Box::new(prometheus_recorder)) {
             Ok(_) => Ok(prometheus_handle),
             Err(error) => Err(ErrorCode::InitPrometheusFailure(format!(
-                "Cannot init prometheus recorder. cause: {}", error
+                "Cannot init prometheus recorder. cause: {}",
+                error
             ))),
         }
     }
 
-    fn shutdown_notify(&self) -> impl Future<Output=()> + 'static {
+    fn shutdown_notify(&self) -> impl Future<Output = ()> + 'static {
         let notified = self.abort_notify.clone();
-        async move { notified.notified().await; }
+        async move {
+            notified.notified().await;
+        }
     }
 }
 
@@ -66,7 +62,10 @@ impl Server for MetricService {
 
         if let Some(join_handle) = self.join_handle.take() {
             if let Err(error) = join_handle.await {
-                log::error!("Unexpected error during shutdown MetricServer. cause {}", error);
+                log::error!(
+                    "Unexpected error during shutdown MetricServer. cause {}",
+                    error
+                );
             }
         }
     }
@@ -76,7 +75,7 @@ impl Server for MetricService {
 
         let server = warp::serve(warp::any().map(move || MetricsReply(handle.render())));
         let (listening, server) = server
-            .try_bind_with_graceful_shutdown(listening.clone(), self.shutdown_notify())
+            .try_bind_with_graceful_shutdown(listening, self.shutdown_notify())
             .map_err_to_code(ErrorCode::CannotListenerPort, || {
                 format!("Cannot start MetricServer with {}", listening)
             })?;

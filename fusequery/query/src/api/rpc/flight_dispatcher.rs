@@ -22,6 +22,7 @@ use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionRef;
 
 struct StreamInfo {
+    #[allow(unused)]
     schema: DataSchemaRef,
     tx: mpsc::Sender<Result<DataBlock>>,
     rx: mpsc::Receiver<Result<DataBlock>>,
@@ -64,7 +65,9 @@ impl FuseQueryFlightDispatcher {
 
         let stream_name = format!("{}/{}", stage_name, stream);
         match self.streams.write().remove(&stream_name) {
-            None => Err(ErrorCode::NotFoundStream(format!("Stream is not found"))),
+            None => Err(ErrorCode::NotFoundStream(String::from(
+                "Stream is not found",
+            ))),
             Some(stream_info) => Ok(stream_info.rx),
         }
     }
@@ -82,7 +85,7 @@ impl FuseQueryFlightDispatcher {
                 session,
                 &action,
                 FlightScatterByHash::try_create(
-                    schema.clone(),
+                    schema,
                     action.scatters_expression.clone(),
                     action.sinks.len(),
                 )?,

@@ -11,6 +11,6 @@ pub use server::ShutdownHandle;
 pub use self::mysql::MySQLConnection;
 pub use self::mysql::MySQLHandler;
 
-mod server;
 mod clickhouse;
 mod mysql;
+mod server;
