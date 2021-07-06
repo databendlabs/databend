@@ -60,7 +60,7 @@ impl<'plan> PlanRewriter<'plan> for StatisticsExactImpl<'_> {
                                         .read_plan(
                                             self.ctx.clone(),
                                             dummy_scan_plan,
-                                            self.ctx.get_max_threads()? as usize,
+                                            self.ctx.get_settings().get_max_threads()? as usize,
                                         )
                                         .map(PlanNode::ReadSource),
                                     _unreachable_plan => {
