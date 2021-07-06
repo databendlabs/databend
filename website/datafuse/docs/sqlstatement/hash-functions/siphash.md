@@ -8,7 +8,8 @@ Produces a 64-bit [SipHash](https://131002.net/siphash) hash value.
 ## Syntax
 
 ```sql
-SIPHASH(expression)
+siphash(expression)
+siphash64(expression)
 ```
 
 ## Arguments
