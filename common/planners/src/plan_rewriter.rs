@@ -37,6 +37,7 @@ use crate::ShowCreateTablePlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::UseDatabasePlan;
+use crate::plan_subqueries_set_create::CreateSubQueriesSetsPlan;
 
 /// `PlanRewriter` is a visitor that can help to rewrite `PlanNode`
 /// By default, a `PlanRewriter` will traverse the plan tree in pre-order and return rewritten plan tree.
@@ -84,6 +85,7 @@ pub trait PlanRewriter<'plan> {
             PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
             PlanNode::InsertInto(plan) => self.rewrite_insert_into(plan),
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
+            PlanNode::SubQueryExpression(plan) => self.rewrite_sub_queries_expression(plan),
         }
     }
 
@@ -138,6 +140,18 @@ pub trait PlanRewriter<'plan> {
             schema: plan.schema.clone(),
             desc: plan.desc.clone(),
             exprs: plan.exprs.clone(),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+        }))
+    }
+
+    fn rewrite_sub_queries_expression(
+        &mut self,
+        plan: &'plan CreateSubQueriesSetsPlan,
+    ) -> Result<PlanNode>
+    {
+        // TODO: need rewrite subquery expression
+        Ok(PlanNode::SubQueryExpression(CreateSubQueriesSetsPlan {
+            expressions: plan.expressions.clone(),
             input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
         }))
     }
@@ -395,7 +409,7 @@ impl RewriteHelper {
             }
             Expression::Wildcard
             | Expression::Literal(_)
-            | Expression::Exists(_)
+            | Expression::ScalarSubquery { .. }
             | Expression::Sort { .. } => Ok(expr.clone()),
         }
     }
@@ -447,7 +461,7 @@ impl RewriteHelper {
             Expression::Alias(_, expr) => vec![expr.as_ref().clone()],
             Expression::Column(_) => vec![],
             Expression::Literal(_) => vec![],
-            Expression::Exists(_) => vec![],
+            Expression::ScalarSubquery { .. } => vec![],
             Expression::UnaryExpression { expr, .. } => {
                 vec![expr.as_ref().clone()]
             }
@@ -468,7 +482,7 @@ impl RewriteHelper {
             Expression::Alias(_, expr) => Self::expression_plan_columns(expr)?,
             Expression::Column(_) => vec![expr.clone()],
             Expression::Literal(_) => vec![],
-            Expression::Exists(_) => vec![],
+            Expression::ScalarSubquery { .. } => vec![],
             Expression::UnaryExpression { expr, .. } => Self::expression_plan_columns(expr)?,
             Expression::BinaryExpression { left, right, .. } => {
                 let mut l = Self::expression_plan_columns(left)?;
@@ -609,5 +623,28 @@ impl RewriteHelper {
             names.insert(name.clone());
         }
         Ok(())
+    }
+
+    pub fn collect_exprs_sub_queries(expressions: &[Expression]) -> Result<Vec<Expression>> {
+        let mut res = Vec::new();
+        for expression in expressions {
+            RewriteHelper::collect_expr_sub_queries(expression, &mut res)?;
+        }
+
+        Ok(res)
+    }
+
+    pub fn collect_expr_sub_queries(expr: &Expression, res: &mut Vec<Expression>) -> Result<bool> {
+        match expr {
+            Expression::ScalarSubquery { .. } => res.push(expr.clone()),
+            _ => {
+                let expressions = Self::expression_plan_children(expr)?;
+                for expression in &expressions {
+                    RewriteHelper::collect_expr_sub_queries(expression, res)?;
+                }
+            }
+        };
+
+        Ok(true)
     }
 }

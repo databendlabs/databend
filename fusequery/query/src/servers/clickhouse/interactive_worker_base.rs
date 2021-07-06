@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;

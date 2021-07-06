@@ -11,6 +11,7 @@ use crate::scalars::SleepFunction;
 use crate::scalars::ToTypeNameFunction;
 use crate::scalars::UdfExampleFunction;
 use crate::scalars::VersionFunction;
+use crate::scalars::udfs::exists::ExistsFunction;
 
 #[derive(Clone)]
 pub struct UdfFunction;
@@ -24,6 +25,7 @@ impl UdfFunction {
         map.insert("version", VersionFunction::try_create);
         map.insert("sleep", SleepFunction::try_create);
         map.insert("crashme", CrashMeFunction::try_create);
+        map.insert("exists", ExistsFunction::try_create);
         Ok(())
     }
 }

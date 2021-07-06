@@ -27,6 +27,7 @@ use crate::ShowCreateTablePlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::UseDatabasePlan;
+use crate::plan_subqueries_set_create::CreateSubQueriesSetsPlan;
 
 /// `PlanVisitor` implements visitor pattern(reference [syn](https://docs.rs/syn/1.0.72/syn/visit/trait.Visit.html)) for `PlanNode`.
 ///
@@ -96,6 +97,7 @@ pub trait PlanVisitor<'plan> {
             PlanNode::Expression(plan) => self.visit_expression(plan),
             PlanNode::InsertInto(plan) => self.visit_insert_into(plan),
             PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
+            PlanNode::SubQueryExpression(plan) => self.visit_subquery_expression(plan),
         }
     }
 
@@ -152,6 +154,10 @@ pub trait PlanVisitor<'plan> {
     }
 
     fn visit_explain(&mut self, plan: &'plan ExplainPlan) {
+        self.visit_plan_node(plan.input.as_ref());
+    }
+
+    fn visit_subquery_expression(&mut self, plan: &'plan CreateSubQueriesSetsPlan) {
         self.visit_plan_node(plan.input.as_ref());
     }
 

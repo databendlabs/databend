@@ -30,7 +30,6 @@ async fn test_transform_filter() -> Result<()> {
     {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
-                HashMap::<String, bool>::new(),
                 plan.input.schema(),
                 plan.predicate.clone(),
                 false,
@@ -72,7 +71,6 @@ async fn test_transform_filter_error() -> Result<()> {
 
     if let PlanNode::Filter(plan) = plan {
         let result = FilterTransform::try_create(
-            HashMap::<String, bool>::new(),
             plan.schema(),
             plan.predicate.clone(),
             false,

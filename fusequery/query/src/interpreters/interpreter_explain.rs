@@ -47,9 +47,7 @@ impl Interpreter for ExplainInterpreter {
                 format!("{}", plan.display_graphviz())
             }
             ExplainType::Pipeline => {
-                let pipeline =
-                    PipelineBuilder::create(self.ctx.clone(), HashMap::<String, bool>::new(), plan)
-                        .build()?;
+                let pipeline = PipelineBuilder::create(self.ctx.clone(), plan).build()?;
                 format!("{:?}", pipeline)
             }
             _ => format!("{:?}", plan),

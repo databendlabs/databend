@@ -49,8 +49,6 @@ pub enum Expression {
     Column(String),
     /// Constant value.
     Literal(DataValue),
-    /// select * from t where xxx and exists (subquery)
-    Exists(Arc<PlanNode>),
     /// A unary expression such as "NOT foo"
     UnaryExpression { op: String, expr: Box<Expression> },
 
@@ -91,6 +89,10 @@ pub enum Expression {
         /// The `DataType` the expression will yield
         data_type: DataType,
     },
+    ScalarSubquery {
+        name: String,
+        query_plan: Arc<PlanNode>,
+    },
 }
 
 impl Expression {
@@ -120,12 +122,24 @@ impl Expression {
         Ok(false)
     }
 
+    pub fn to_subquery_type(&self, subquery_plan: &PlanNode) -> Result<DataType> {
+        let subquery_schema = subquery_plan.schema();
+
+        let subquery_per_row_type = DataField::new(
+            "subquery_per_row",
+            DataType::Struct(subquery_schema.fields().clone()),
+            false,
+        );
+
+        Ok(DataType::List(Box::new(subquery_per_row_type)))
+    }
+
     pub fn to_data_type(&self, input_schema: &DataSchemaRef) -> Result<DataType> {
         match self {
             Expression::Alias(_, expr) => expr.to_data_type(input_schema),
             Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
             Expression::Literal(v) => Ok(v.data_type()),
-            Expression::Exists(_p) => Ok(DataType::Boolean),
+            Expression::ScalarSubquery { name, query_plan } => self.to_subquery_type(query_plan),
             Expression::BinaryExpression { op, left, right } => {
                 let arg_types = vec![
                     left.to_data_type(input_schema)?,
@@ -207,9 +221,11 @@ impl fmt::Debug for Expression {
             Expression::Alias(alias, v) => write!(f, "{:?} as {:#}", v, alias),
             Expression::Column(ref v) => write!(f, "{:#}", v),
             Expression::Literal(ref v) => write!(f, "{:#}", v),
-            Expression::Exists(_) => write!(f, "Exists(subquery)"),
+            Expression::ScalarSubquery { name, query_plan } => {
+                write!(f, "scalar subquery( {} )", name)
+            },
             Expression::BinaryExpression { op, left, right } => {
-                write!(f, "({:?} {} {:?})", left, op, right,)
+                write!(f, "({:?} {} {:?})", left, op, right, )
             }
 
             Expression::UnaryExpression { op, expr } => {

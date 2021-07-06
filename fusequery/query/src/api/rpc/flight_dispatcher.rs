@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -96,9 +100,7 @@ impl FuseQueryFlightDispatcher {
     fn run_action(&self, session: SessionRef, action: &ShuffleAction) -> Result<()> {
         let query_context = session.create_context();
         let action_context = FuseQueryContext::new(query_context.clone());
-        let pipeline =
-            PipelineBuilder::create(action_context.clone(), HashMap::new(), action.plan.clone())
-                .build()?;
+        let pipeline = PipelineBuilder::create(action_context.clone(), action.plan.clone()).build()?;
 
         assert_eq!(action.sinks.len(), 1);
 
@@ -145,9 +147,7 @@ impl FuseQueryFlightDispatcher {
     ) -> Result<()> {
         let query_context = session.create_context();
         let action_context = FuseQueryContext::new(query_context.clone());
-        let pipeline =
-            PipelineBuilder::create(action_context.clone(), HashMap::new(), action.plan.clone())
-                .build()?;
+        let pipeline = PipelineBuilder::create(action_context.clone(), action.plan.clone()).build()?;
 
         let sinks_tx = {
             assert!(action.sinks.len() > 1);

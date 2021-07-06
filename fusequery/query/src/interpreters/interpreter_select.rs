@@ -10,7 +10,6 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::find_exists_exprs;
 use common_planners::Expression;
 use common_planners::FilterPlan;
 use common_planners::PlanNode;
@@ -82,14 +81,10 @@ async fn execute_one_select(
         }
     }
 
-    PipelineBuilder::create(
-        ctx.clone(),
-        subquery_res_map,
-        scheduled_actions.local_plan.clone(),
-    )
-    .build()?
-    .execute()
-    .await
+    PipelineBuilder::create(ctx.clone(), scheduled_actions.local_plan.clone())
+        .build()?
+        .execute()
+        .await
 }
 
 #[async_trait::async_trait]
@@ -101,57 +96,36 @@ impl Interpreter for SelectInterpreter {
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = Optimizers::create(self.ctx.clone()).optimize(&self.select.input)?;
-        // Subquery Plan Name : Exists Expression Name
-        let mut names = HashMap::<String, String>::new();
-        // The execution order is from the bottom to the top
-        let mut levels = Vec::<Vec<PlanNode>>::new();
-        // The queue for the current level
-        let mut current_level_queue = VecDeque::<PlanNode>::new();
-        // The queue for the next level
-        let mut next_level_queue = VecDeque::<PlanNode>::new();
 
-        current_level_queue.push_back(plan.clone());
+        let scheduled_actions = PlanScheduler::reschedule(self.ctx.clone(), &plan)?;
 
-        while !current_level_queue.is_empty() {
-            let mut one_level = Vec::<PlanNode>::new();
-            while !current_level_queue.is_empty() {
-                if let Some(begin) = current_level_queue.pop_front() {
-                    if let Ok(p) = get_filter_plan(begin) {
-                        let exists_vec = find_exists_exprs(&[p.predicate.clone()]);
-                        for exst in exists_vec {
-                            let expr_name = format!("{:?}", exst);
-                            if let Expression::Exists(p) = exst {
-                                next_level_queue.push_back((*p).clone());
-                                one_level.push((*p).clone());
-                                names.insert(format!("{:?}", p), expr_name);
-                            }
-                        }
-                    }
+        let remote_actions_ref = &scheduled_actions.remote_actions;
+        let prepare_error_handler = move |error: ErrorCode, end: usize| {
+            let mut killed_set = HashSet::new();
+            for (node, _) in remote_actions_ref.iter().take(end) {
+                if killed_set.get(&node.name).is_none() {
+                    // TODO: ISSUE-204 kill prepared query stage
+                    killed_set.insert(node.name.clone());
                 }
             }
-            if !one_level.is_empty() {
-                levels.push(one_level);
-            }
-            current_level_queue = next_level_queue;
-            next_level_queue = VecDeque::<PlanNode>::new();
-        }
-        let mut subquery_res_map = HashMap::<String, bool>::new();
-        let size = levels.len();
-        for i in (0..size).rev() {
-            let ex_plans = &levels[i];
-            for exp in ex_plans {
-                let stream =
-                    execute_one_select(self.ctx.clone(), exp.clone(), subquery_res_map.clone())
-                        .await?;
 
-                let result = stream.try_collect::<Vec<_>>().await?;
-                let num_all_rows: usize = result.iter().map(|b| b.num_rows()).sum();
-                let b = num_all_rows > 0;
-                let name = names.get(&format!("{:?}", exp));
-                subquery_res_map.insert(name.unwrap().to_string(), b);
+            Result::Err(error)
+        };
+
+        let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
+        for (index, (node, action)) in scheduled_actions.remote_actions.iter().enumerate() {
+            let mut flight_client = node.get_flight_client().await?;
+            let prepare_query_stage = flight_client.prepare_query_stage(action.clone(), timeout);
+            if let Err(error) = prepare_query_stage.await
+            {
+                return prepare_error_handler(error, index);
             }
         }
-        execute_one_select(self.ctx.clone(), plan, subquery_res_map).await
+
+        PipelineBuilder::create(self.ctx.clone(), scheduled_actions.local_plan.clone())
+            .build()?
+            .execute()
+            .await
     }
 
     fn schema(&self) -> DataSchemaRef {

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_planners::Part;
+use common_planners::{Part, PlanNode};
 use common_planners::Partitions;
 use common_planners::Statistics;
 use common_progress::ProgressCallback;
@@ -25,6 +25,7 @@ use crate::datasources::Table;
 use crate::datasources::TableFunction;
 use crate::sessions::context_shared::FuseQueryContextShared;
 use crate::sessions::Settings;
+use std::sync::atomic::Ordering;
 
 pub struct FuseQueryContext {
     statistics: Arc<RwLock<Statistics>>,
@@ -216,6 +217,11 @@ impl FuseQueryContext {
 
     pub fn get_config(&self) -> Config {
         self.shared.conf.clone()
+    }
+
+    pub fn get_subquery_name(&self, _query: &PlanNode) -> String {
+        let index = self.shared.subquery_index.fetch_add(1, Ordering::Relaxed);
+        format!("subquery_{}", index)
     }
 }
 

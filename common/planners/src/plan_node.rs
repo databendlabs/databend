@@ -32,6 +32,7 @@ use crate::ShowCreateTablePlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::UseDatabasePlan;
+use crate::plan_subqueries_set_create::CreateSubQueriesSetsPlan;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum PlanNode {
@@ -59,6 +60,7 @@ pub enum PlanNode {
     SetVariable(SettingPlan),
     InsertInto(InsertIntoPlan),
     ShowCreateTable(ShowCreateTablePlan),
+    SubQueryExpression(CreateSubQueriesSetsPlan),
 }
 
 impl PlanNode {
@@ -89,6 +91,7 @@ impl PlanNode {
             PlanNode::UseDatabase(v) => v.schema(),
             PlanNode::InsertInto(v) => v.schema(),
             PlanNode::ShowCreateTable(v) => v.schema(),
+            PlanNode::SubQueryExpression(v) => v.schema(),
         }
     }
 
@@ -118,6 +121,7 @@ impl PlanNode {
             PlanNode::UseDatabase(_) => "UseDatabasePlan",
             PlanNode::InsertInto(_) => "InsertIntoPlan",
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
+            PlanNode::SubQueryExpression(_) => "CreateSubQueriesSets",
         }
     }
 
@@ -134,6 +138,7 @@ impl PlanNode {
             PlanNode::Explain(v) => vec![v.input.clone()],
             PlanNode::Select(v) => vec![v.input.clone()],
             PlanNode::Sort(v) => vec![v.input.clone()],
+            PlanNode::SubQueryExpression(v) => vec![v.input.clone()],
 
             _ => vec![],
         }

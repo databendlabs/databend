@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use std::time::Instant;
 
 use clickhouse_srv::connection::Connection;

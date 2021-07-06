@@ -21,6 +21,7 @@ use common_planners::RemotePlan;
 use common_planners::SortPlan;
 use common_planners::StagePlan;
 use common_tracing::tracing;
+use common_planners::CreateSubQueriesSetsPlan;
 
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::transforms::AggregatorFinalTransform;
@@ -40,19 +41,13 @@ use crate::sessions::FuseQueryContextRef;
 
 pub struct PipelineBuilder {
     ctx: FuseQueryContextRef,
-    subquery_res_map: HashMap<String, bool>,
     plan: PlanNode,
 }
 
 impl PipelineBuilder {
-    pub fn create(
-        ctx: FuseQueryContextRef,
-        subquery_res_map: HashMap<String, bool>,
-        plan: PlanNode,
-    ) -> Self {
+    pub fn create(ctx: FuseQueryContextRef, plan: PlanNode) -> Self {
         PipelineBuilder {
             ctx,
-            subquery_res_map,
             plan,
         }
     }
@@ -100,6 +95,7 @@ impl PipelineBuilder {
                     PipelineBuilder::visit_limit_by_plan(&mut pipeline, plan)
                 }
                 PlanNode::ReadSource(plan) => self.visit_read_data_source_plan(&mut pipeline, plan),
+                PlanNode::SubQueryExpression(plan) => self.visit_create_sets_plan(&mut pipeline, plan),
                 other => Result::Err(ErrorCode::UnknownPlan(format!(
                     "Build pipeline from the plan node unsupported:{:?}",
                     other.name()
@@ -208,7 +204,6 @@ impl PipelineBuilder {
     fn visit_filter_plan(&self, pipeline: &mut Pipeline, plan: &FilterPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
-                self.subquery_res_map.clone(),
                 plan.input.schema(),
                 plan.predicate.clone(),
                 false,
@@ -220,7 +215,6 @@ impl PipelineBuilder {
     fn visit_having_plan(&self, pipeline: &mut Pipeline, plan: &HavingPlan) -> Result<bool> {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
-                HashMap::<String, bool>::new(),
                 plan.input.schema(),
                 plan.predicate.clone(),
                 true,
@@ -310,5 +304,16 @@ impl PipelineBuilder {
             pipeline.add_source(Arc::new(source))?;
         }
         Ok(true)
+    }
+
+    fn visit_create_sets_plan(
+        &self,
+        pipeline: &mut Pipeline,
+        plan: &CreateSubQueriesSetsPlan,
+    ) -> Result<bool> {
+        Err(ErrorCode::UnImplement(""))
+        // pipeline.add_simple_transform(|| {
+        //     Ok(Box::new(LimitTransform::try_create(plan.n, plan.offset)?))
+        // })?;
     }
 }

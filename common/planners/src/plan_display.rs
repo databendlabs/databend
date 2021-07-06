@@ -7,7 +7,7 @@ use std::fmt::Display;
 
 use common_datavalues::DataSchema;
 
-use crate::PlanNode;
+use crate::{PlanNode, Expression};
 
 impl PlanNode {
     pub fn display_indent(&self) -> impl fmt::Display + '_ {
@@ -120,6 +120,16 @@ impl PlanNode {
                                     write!(f, "Limit: all, {}", offset)?;
                                 }
                             }
+                            Ok(true)
+                        }
+                        PlanNode::SubQueryExpression(plan) => {
+                            let mut names = Vec::with_capacity(plan.expressions.len());
+                            for expression in &plan.expressions {
+                                if let Expression::ScalarSubquery { name, .. } = expression {
+                                    names.push(name.clone());
+                                }
+                            }
+                            write!(f, "Create sub queries sets: [{:?}]", names);
                             Ok(true)
                         }
                         PlanNode::ReadSource(plan) => {

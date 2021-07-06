@@ -8,7 +8,6 @@ use common_functions::scalars::FunctionFactory;
 
 use crate::ActionAlias;
 use crate::ActionConstant;
-use crate::ActionExists;
 use crate::ActionFunction;
 use crate::ActionInput;
 use crate::Expression;
@@ -65,11 +64,12 @@ impl ExpressionChain {
 
                 self.actions.push(ExpressionAction::Constant(value));
             }
-            Expression::Exists(_p) => {
-                let value = ActionExists {
-                    name: format!("{:?}", expr),
-                };
-                self.actions.push(ExpressionAction::Exists(value));
+            Expression::ScalarSubquery { name, query_plan } => {
+                // Subquery results are ready in the expression input
+                self.actions.push(ExpressionAction::Input(ActionInput {
+                    name: name.to_string(),
+                    return_type: expr.to_subquery_type(query_plan)?,
+                }));
             }
             Expression::UnaryExpression {
                 op,

@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -12,6 +16,7 @@ use crate::configs::Config;
 use crate::datasources::DataSource;
 use crate::sessions::Session;
 use crate::sessions::Settings;
+use std::sync::atomic::AtomicUsize;
 
 /// Data that needs to be shared in a query context.
 /// This is very useful, for example, for queries:
@@ -31,6 +36,7 @@ pub struct FuseQueryContextShared {
     pub(in crate::sessions) cluster_cache: Arc<RwLock<Option<ClusterRef>>>,
     pub(in crate::sessions) sources_abort_handle: Arc<RwLock<Vec<AbortHandle>>>,
     pub(in crate::sessions) ref_count: Arc<RwLock<usize>>,
+    pub(in crate::sessions) subquery_index: Arc<AtomicUsize>,
 }
 
 impl FuseQueryContextShared {
@@ -44,6 +50,7 @@ impl FuseQueryContextShared {
             cluster_cache: Arc::new(RwLock::new(None)),
             sources_abort_handle: Arc::new(RwLock::new(Vec::new())),
             ref_count: Arc::new(RwLock::new(0)),
+            subquery_index: Arc::new(AtomicUsize::new(1)),
         })
     }
 

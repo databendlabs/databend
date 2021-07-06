@@ -9,7 +9,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
-use common_exception::Result;
+use common_exception::{Result, ErrorCode};
 
 use crate::col;
 use crate::validate_expression;
@@ -31,6 +31,7 @@ use crate::RewriteHelper;
 use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SortPlan;
+use crate::plan_subqueries_set_create::CreateSubQueriesSetsPlan;
 
 pub enum AggregateMode {
     Partial,
@@ -87,12 +88,15 @@ impl PlanBuilder {
             }
         }
 
-        Ok(Self::from(&PlanNode::Expression(ExpressionPlan {
-            input: Arc::new(self.plan.clone()),
-            exprs: projection_exprs,
-            schema: DataSchemaRefExt::create(merged),
-            desc: desc.to_string(),
-        })))
+        Ok(Self::from(&Self::rewrite_sub_queries_exprs(
+            &projection_exprs,
+            PlanNode::Expression(ExpressionPlan {
+                input: Arc::new(self.plan.clone()),
+                exprs: projection_exprs.clone(),
+                schema: DataSchemaRefExt::create(merged),
+                desc: desc.to_string(),
+            }),
+        )?))
     }
 
     /// Apply a projection.
@@ -100,11 +104,14 @@ impl PlanBuilder {
         let input_schema = self.plan.schema();
         let fields = RewriteHelper::exprs_to_fields(exprs, &input_schema)?;
 
-        Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
-            input: Arc::new(self.plan.clone()),
-            expr: exprs.to_owned(),
-            schema: DataSchemaRefExt::create(fields),
-        })))
+        Ok(Self::from(&Self::rewrite_sub_queries_exprs(
+            exprs,
+            PlanNode::Projection(ProjectionPlan {
+                input: Arc::new(self.plan.clone()),
+                expr: exprs.to_owned(),
+                schema: DataSchemaRefExt::create(fields),
+            }),
+        )?))
     }
 
     fn aggregate(
@@ -220,26 +227,36 @@ impl PlanBuilder {
     /// Apply a filter
     pub fn filter(&self, expr: Expression) -> Result<Self> {
         validate_expression(&expr)?;
-        Ok(Self::from(&PlanNode::Filter(FilterPlan {
-            predicate: expr,
-            input: Arc::new(self.plan.clone()),
-        })))
+
+        Ok(Self::from(&Self::rewrite_sub_queries_exprs(
+            &[expr.clone()],
+            PlanNode::Filter(FilterPlan {
+                predicate: expr,
+                input: Arc::new(self.plan.clone()),
+            }),
+        )?))
     }
 
     /// Apply a having
     pub fn having(&self, expr: Expression) -> Result<Self> {
         validate_expression(&expr)?;
-        Ok(Self::from(&PlanNode::Having(HavingPlan {
-            predicate: expr,
-            input: Arc::new(self.plan.clone()),
-        })))
+        Ok(Self::from(&Self::rewrite_sub_queries_exprs(
+            &[expr.clone()],
+            PlanNode::Having(HavingPlan {
+                predicate: expr,
+                input: Arc::new(self.plan.clone()),
+            }),
+        )?))
     }
 
     pub fn sort(&self, exprs: &[Expression]) -> Result<Self> {
-        Ok(Self::from(&PlanNode::Sort(SortPlan {
-            order_by: exprs.to_vec(),
-            input: Arc::new(self.plan.clone()),
-        })))
+        Ok(Self::from(&Self::rewrite_sub_queries_exprs(
+            exprs,
+            PlanNode::Sort(SortPlan {
+                order_by: exprs.to_vec(),
+                input: Arc::new(self.plan.clone()),
+            }),
+        )?))
     }
 
     /// Apply a limit
@@ -284,5 +301,19 @@ impl PlanBuilder {
     /// Build the plan
     pub fn build(&self) -> Result<PlanNode> {
         Ok(self.plan.clone())
+    }
+
+    fn rewrite_sub_queries_exprs(exprs: &[Expression], mut node: PlanNode) -> Result<PlanNode> {
+        let sub_queries = RewriteHelper::collect_exprs_sub_queries(exprs)?;
+        if !sub_queries.is_empty() {
+            node.set_inputs(vec![&PlanNode::SubQueryExpression(
+                CreateSubQueriesSetsPlan {
+                    expressions: sub_queries,
+                    input: node.input(0),
+                }
+            )]);
+        }
+
+        Ok(node)
     }
 }
