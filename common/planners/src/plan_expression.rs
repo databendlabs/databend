@@ -21,6 +21,7 @@ use common_functions::FunctionFactory;
 use lazy_static::lazy_static;
 
 use crate::PlanNode;
+use crate::InListExpr;
 
 lazy_static! {
     static ref OP_SET: HashSet<&'static str> = ["database", "version",].iter().copied().collect();
@@ -55,7 +56,8 @@ pub enum Expression {
     /// select * from t where xxx and exists (subquery)
     Exists(Arc<PlanNode>),
     /// select number from t where number in (1, 3, 5)
-    InList{ expr: Box<Expression>, list: Vec<Expression>, negated: bool },
+    //InList{ expr: Box<Expression>, list: Vec<Expression>, negated: bool },
+    InList(InListExpr),
     /// A unary expression such as "NOT foo"
     UnaryExpression { op: String, expr: Box<Expression> },
 
@@ -102,7 +104,7 @@ impl Expression {
     pub fn column_name(&self) -> String {
         match self {
             Expression::Alias(name, _expr) => name.clone(),
-            Expression::InList { expr, list: _, negated: _ } => {
+            Expression::InList(_) => {
                 let mut hasher = DefaultHasher::new();
                 let name = format!("{:?}", self);
                 name.hash(&mut hasher);
@@ -137,7 +139,7 @@ impl Expression {
             Expression::Alias(_, expr) => expr.to_data_type(input_schema),
             Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
             Expression::Literal(v) => Ok(v.data_type()),
-            Expression::InList { expr, list: _ , negated: _} => expr.to_data_type(input_schema),
+            Expression::InList(inlist_expr) => inlist_expr.expr().to_data_type(input_schema),
             Expression::Exists(_p) => Ok(DataType::Boolean),
             Expression::BinaryExpression { op, left, right } => {
                 let arg_types = vec![
@@ -228,11 +230,11 @@ impl fmt::Debug for Expression {
             Expression::UnaryExpression { op, expr } => {
                 write!(f, "({} {:?})", op, expr)
             }
-            Expression::InList{ expr, list, negated } => {
-                if *negated {
+            Expression::InList(inlist_expr) => {
+                if inlist_expr.negated() {
                     write!(f, "Not ")?;
                 }
-                write!(f, "({:?} In ({:?}))", expr, list)
+                write!(f, "({:?} In ({:?}))", inlist_expr.expr(), inlist_expr.list())
             }
             Expression::ScalarFunction { op, args } => {
                 write!(f, "{}(", op)?;

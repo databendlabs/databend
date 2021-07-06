@@ -10,6 +10,8 @@ mod plan_builder_test;
 mod plan_display_test;
 #[cfg(test)]
 mod plan_explain_test;
+//#[cfg(test)]
+//mod plan_expression_inlist_test;
 #[cfg(test)]
 mod plan_expression_test;
 #[cfg(test)]
@@ -42,6 +44,7 @@ mod plan_display;
 mod plan_empty;
 mod plan_explain;
 mod plan_expression;
+mod plan_expression_inlist;
 mod plan_expression_action;
 mod plan_expression_chain;
 mod plan_expression_column;
@@ -111,6 +114,7 @@ pub use plan_expression_function::sum;
 pub use plan_expression_literal::lit;
 pub use plan_expression_rewriter::ExprRewriter;
 pub use plan_expression_sort::sort;
+pub use plan_expression_inlist::InListExpr;
 pub use plan_expression_validator::validate_expression;
 pub use plan_expression_visitor::ExpressionVisitor;
 pub use plan_expression_visitor::Recursion;

@@ -67,10 +67,10 @@ impl ExpressionChain {
                 self.actions.push(ExpressionAction::Constant(value));
             }
             // maybe use Function is better
-            Expression::InList { expr: res, list, negated } => {
-                self.add_expr(res)?;
+            Expression::InList(inlist_expr) => {
+                self.add_expr(inlist_expr.expr())?;
                 let mut val_list = Vec::new();
-                for e in list {
+                for e in inlist_expr.list() {
                     match e {
                         Expression::Literal(l) => {
                             val_list.push(l.clone());
@@ -79,10 +79,10 @@ impl ExpressionChain {
                     }
                 }
                 let v = ActionInList {
-                    name: expr.column_name(),
-                    expr_name: res.column_name(),
+                    name: inlist_expr.expr().column_name(),
+                    expr_name: inlist_expr.expr().column_name(),
                     list: val_list,
-                    negated: *negated,
+                    negated: inlist_expr.negated(),
                 };
                 self.actions.push(ExpressionAction::InList(v));
             }
