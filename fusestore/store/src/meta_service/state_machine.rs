@@ -10,7 +10,6 @@ use std::fmt::Formatter;
 
 use common_exception::prelude::ErrorCode;
 use common_metatypes::Database;
-use common_metatypes::MatchSeq;
 use common_metatypes::MatchSeqExt;
 use common_metatypes::SeqValue;
 use common_metatypes::Table;
@@ -245,22 +244,20 @@ impl StateMachine {
                 let new_seq = self.incr_seq(SEQ_GENERIC_KV);
                 let record_value = (new_seq, value.clone());
                 self.kv.insert(key.clone(), record_value.clone());
-                tracing::debug!("applied UpsertKV: {}={:?}", key, record_value);
+                tracing::debug!("applied UpsertKV: {} {:?}", key, record_value);
 
                 Ok((prev, Some(record_value)).into())
             }
 
-            Cmd::DeleteByKeyKV { ref key, ref seq } => {
+            Cmd::DeleteKVByKey { ref key, ref seq } => {
                 let prev = self.kv.get(key).cloned();
 
-                let ms: MatchSeq = seq.into();
-                if ms.match_seq(&prev).is_err() {
-                    // TODO: unmatched delete should return prev value as result; add test.
-                    return Ok((prev, None).into());
+                if seq.match_seq(&prev).is_err() {
+                    return Ok((prev.clone(), prev).into());
                 }
 
                 self.kv.remove(key);
-                tracing::debug!("applied DeleteByKeyKV: {}={:?}", key, seq);
+                tracing::debug!("applied DeleteByKeyKV: {} {}", key, seq);
                 Ok((prev, None).into())
             }
         }
