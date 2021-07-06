@@ -1,9 +1,7 @@
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
-//
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
@@ -34,6 +32,9 @@ impl KVApi for StoreClient {
         .await
     }
 
+    /// Delete a kv record that matches key and seq.
+    /// Returns the (seq, value) that is deleted.
+    /// I.e., if key not found or seq does not match, it returns None.
     async fn delete_kv(&mut self, key: &str, seq: Option<u64>) -> Result<Option<SeqValue>> {
         let res = self
             .do_action(DeleteKVReq {
@@ -42,16 +43,12 @@ impl KVApi for StoreClient {
             })
             .await?;
 
-        match (&res.prev, &res.result) {
-            (prev @ Some(_), None) if seq.is_none() => Ok(prev.clone()),
-            (Some((s, v)), None) if seq.is_some() && *s == seq.unwrap() => {
-                Ok(Some((*s, v.clone())))
-            }
-            (_, None) => Ok(None),
-            _ => Err(ErrorCode::LogicalError(format!(
-                "unexpected response from kv service(delete): {:?}",
-                &res
-            ))),
+        // result is the state after.
+        // If the deletion is applied, result is None, otherwise result is same as the previous value.
+        if res.result.is_none() {
+            return Ok(res.prev);
+        } else {
+            return Ok(None);
         }
     }
 
