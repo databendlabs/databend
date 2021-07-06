@@ -65,10 +65,8 @@ impl ExpressionExecutor {
 
         println!(
             "({:#}) execute, actions: {:?}",
-            self.description,
-            self.chain.actions
+            self.description, self.chain.actions
         );
-
 
         let mut column_map: HashMap<String, DataColumn> = HashMap::new();
 
@@ -142,9 +140,9 @@ impl ExpressionExecutor {
                     }
                 }
                 ExpressionAction::InList(inlist) => {
-                    println!("inlist={:?}", inlist); 
-                    println!("rows={:?}", rows); 
-                    println!("datablock={:?}", block); 
+                    println!("inlist={:?}", inlist);
+                    println!("rows={:?}", rows);
+                    println!("datablock={:?}", block);
                 }
                 _ => {}
             }

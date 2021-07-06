@@ -301,9 +301,10 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                 data_type: data_type.clone(),
             }),
 
-            Expression::Column(_) | Expression::Literal(_) | Expression::Exists(_) | Expression::InList {..} => {
-                Ok(expr.clone())
-            }
+            Expression::Column(_)
+            | Expression::Literal(_)
+            | Expression::Exists(_)
+            | Expression::InList { .. } => Ok(expr.clone()),
         },
     }
 }

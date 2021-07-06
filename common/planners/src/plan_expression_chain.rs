@@ -7,10 +7,10 @@ use common_exception::Result;
 use common_functions::FunctionFactory;
 
 use crate::ActionAlias;
-use crate::ActionInList;
 use crate::ActionConstant;
 use crate::ActionExists;
 use crate::ActionFunction;
+use crate::ActionInList;
 use crate::ActionInput;
 use crate::Expression;
 use crate::ExpressionAction;
@@ -75,7 +75,7 @@ impl ExpressionChain {
                         Expression::Literal(l) => {
                             val_list.push(l.clone());
                         }
-                        _ => ()
+                        _ => (),
                     }
                 }
                 let v = ActionInList {

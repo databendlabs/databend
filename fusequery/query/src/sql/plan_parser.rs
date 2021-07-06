@@ -783,8 +783,12 @@ impl PlanParser {
             sqlparser::ast::Expr::Exists(q) => {
                 Ok(Expression::Exists(Arc::new(self.query_to_plan(q)?)))
             }
-            sqlparser::ast::Expr::InList { expr, list, negated } => {
-                let mut list_expr = vec!();
+            sqlparser::ast::Expr::InList {
+                expr,
+                list,
+                negated,
+            } => {
+                let mut list_expr = vec![];
                 for item in list {
                     list_expr.push(self.sql_to_rex(item, schema, select)?);
                 }

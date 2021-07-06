@@ -2,12 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
 use std::fmt;
-use std::sync::Arc;
-use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::sync::Arc;
 
 use common_aggregate_functions::AggregateFunction;
 use common_aggregate_functions::AggregateFunctionFactory;
@@ -20,8 +20,8 @@ use common_exception::Result;
 use common_functions::FunctionFactory;
 use lazy_static::lazy_static;
 
-use crate::PlanNode;
 use crate::InListExpr;
+use crate::PlanNode;
 
 lazy_static! {
     static ref OP_SET: HashSet<&'static str> = ["database", "version",].iter().copied().collect();
@@ -234,7 +234,12 @@ impl fmt::Debug for Expression {
                 if inlist_expr.negated() {
                     write!(f, "Not ")?;
                 }
-                write!(f, "({:?} In ({:?}))", inlist_expr.expr(), inlist_expr.list())
+                write!(
+                    f,
+                    "({:?} In ({:?}))",
+                    inlist_expr.expr(),
+                    inlist_expr.list()
+                )
             }
             Expression::ScalarFunction { op, args } => {
                 write!(f, "{}(", op)?;
