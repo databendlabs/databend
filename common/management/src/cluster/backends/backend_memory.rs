@@ -47,6 +47,25 @@ impl ClusterBackend for MemoryBackend {
         Ok(())
     }
 
+    async fn remove(&self, namespace: String, executor: &ClusterExecutor) -> Result<()> {
+        let mut db = self.db.write().await;
+
+        let executors = db.get_mut(&namespace);
+        match executors {
+            None => return Ok(()),
+            Some(values) => {
+                let mut new_values = vec![];
+                for value in values {
+                    if value != executor {
+                        new_values.push(value.clone());
+                    }
+                }
+                db.insert(namespace, new_values);
+            }
+        };
+        Ok(())
+    }
+
     async fn get(&self, namespace: String) -> Result<Vec<ClusterExecutor>> {
         let db = self.db.read().await;
         let executors = db.get(&namespace);

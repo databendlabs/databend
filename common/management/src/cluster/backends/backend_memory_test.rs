@@ -28,14 +28,25 @@ async fn test_backend_memory() -> Result<()> {
         sequence: 0,
     };
     let namespace = "namespace-1".to_string();
-
     let backend = MemoryBackend::create();
-    backend.put(namespace.clone(), &executor1).await?;
-    backend.put(namespace.clone(), &executor2).await?;
-    backend.put(namespace.clone(), &executor1).await?;
-    let actual = backend.get(namespace).await?;
-    let expect = vec![executor2.clone(), executor1.clone()];
-    assert_eq!(actual, expect);
+
+    // Put.
+    {
+        backend.put(namespace.clone(), &executor1).await?;
+        backend.put(namespace.clone(), &executor2).await?;
+        backend.put(namespace.clone(), &executor1).await?;
+        let actual = backend.get(namespace.clone()).await?;
+        let expect = vec![executor2.clone(), executor1.clone()];
+        assert_eq!(actual, expect);
+    }
+
+    // Remove.
+    {
+        backend.remove(namespace.clone(), &executor2).await?;
+        let actual = backend.get(namespace).await?;
+        let expect = vec![executor1.clone()];
+        assert_eq!(actual, expect);
+    }
 
     Ok(())
 }

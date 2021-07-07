@@ -27,16 +27,33 @@ async fn test_cluster_mgr() -> Result<()> {
         sequence: 0,
     };
     let namespace = "namespace-1".to_string();
-
     let mut cluster_mgr = ClusterMgr::create_with_memory_backend();
-    cluster_mgr.register(namespace.clone(), &executor1).await?;
-    cluster_mgr.register(namespace.clone(), &executor2).await?;
-    cluster_mgr.register(namespace.clone(), &executor1).await?;
-    cluster_mgr.register(namespace.clone(), &executor2).await?;
 
-    let actual = cluster_mgr.get_executors(namespace).await?;
-    let expect = vec![executor1.clone(), executor2.clone()];
-    assert_eq!(actual, expect);
+    // Register.
+    {
+        cluster_mgr.register(namespace.clone(), &executor1).await?;
+        cluster_mgr.register(namespace.clone(), &executor2).await?;
+        cluster_mgr.register(namespace.clone(), &executor1).await?;
+        cluster_mgr.register(namespace.clone(), &executor2).await?;
+
+        let actual = cluster_mgr.get_executors(namespace.clone()).await?;
+        let expect = vec![executor1.clone(), executor2.clone()];
+        assert_eq!(actual, expect);
+    }
+
+    // Unregister.
+    {
+        cluster_mgr
+            .unregister(namespace.clone(), &executor1)
+            .await?;
+        cluster_mgr
+            .unregister(namespace.clone(), &executor1)
+            .await?;
+
+        let actual = cluster_mgr.get_executors(namespace).await?;
+        let expect = vec![executor2.clone()];
+        assert_eq!(actual, expect);
+    }
 
     Ok(())
 }

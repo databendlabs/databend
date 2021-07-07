@@ -29,12 +29,21 @@ impl ClusterMgr {
         }
     }
 
-    /// Register a executor the namespace.
+    /// Register an executor to the namespace.
     pub async fn register(&mut self, namespace: String, executor: &ClusterExecutor) -> Result<()> {
         self.backend.put(namespace, executor).await
     }
 
-    /// Get all the executors from namespace.
+    /// Unregister an executor from namespace.
+    pub async fn unregister(
+        &mut self,
+        namespace: String,
+        executor: &ClusterExecutor,
+    ) -> Result<()> {
+        self.backend.remove(namespace, executor).await
+    }
+
+    /// Get all the executors by namespace.
     pub async fn get_executors(&mut self, namespace: String) -> Result<Vec<ClusterExecutor>> {
         self.backend.get(namespace).await
     }

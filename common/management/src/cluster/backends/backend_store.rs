@@ -25,6 +25,10 @@ impl ClusterBackend for StoreBackend {
         todo!()
     }
 
+    async fn remove(&self, _namespace: String, _executor: &ClusterExecutor) -> Result<()> {
+        todo!()
+    }
+
     async fn get(&self, _namespace: String) -> Result<Vec<ClusterExecutor>> {
         todo!()
     }

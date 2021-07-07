@@ -13,6 +13,10 @@ pub trait ClusterBackend {
     /// if the executor is exists in the namespace, replace it, others append.
     async fn put(&self, namespace: String, executor: &ClusterExecutor) -> Result<()>;
 
+    /// Remove an executor from the namespace.
+    /// if the executor is not exists, nothing to do.
+    async fn remove(&self, namespace: String, executor: &ClusterExecutor) -> Result<()>;
+
     /// Get all the executors by namespace key.
     async fn get(&self, namespace: String) -> Result<Vec<ClusterExecutor>>;
 }
