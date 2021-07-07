@@ -29,8 +29,7 @@ impl ClusterMgr {
     }
 
     pub async fn upsert_meta(&mut self, namespace: String, meta: &ClusterMeta) -> Result<()> {
-        let value = serde_json::to_vec(meta)?;
-        self.backend_api.put(namespace, value).await
+        self.backend_api.put(namespace, meta).await
     }
 
     pub async fn get_metas(&mut self, _namespace: &str) -> Result<Vec<ClusterMeta>> {

@@ -777,12 +777,13 @@ dependencies = [
  "async-trait",
  "common-exception",
  "common-metatypes",
+ "common-runtime",
  "common-store-api",
  "mockall",
+ "pretty_assertions",
  "serde",
  "serde_json",
  "sha2 0.9.5",
- "tokio",
 ]
 
 [[package]]

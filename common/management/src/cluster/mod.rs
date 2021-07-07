@@ -3,6 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0.
 //
 
+#[cfg(test)]
+mod address_test;
+
 mod address;
 mod backend_api;
 mod backends;

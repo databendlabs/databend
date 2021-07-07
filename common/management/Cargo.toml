@@ -10,6 +10,7 @@ edition = "2018"
 
 [dependencies]
 common-exception= {path = "../exception"}
+common-runtime= {path = "../runtime"}
 common-metatypes= {path = "../metatypes"}
 common-store-api= {path = "../store-api"}
 
@@ -19,6 +20,6 @@ serde_json = "1.0"
 sha2 = "0.9.5"
 
 [dev-dependencies]
-tokio = { version = "1.8.0", features = ["macros", "rt","rt-multi-thread", "sync"] }
+pretty_assertions = "0.7"
 mockall = "0.10.1"
 common-metatypes = {path = "../metatypes"}

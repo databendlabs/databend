@@ -4,7 +4,7 @@
 
 use crate::cluster::address::Address;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct ClusterMeta {
     pub name: String,
     // Node priority is in [0,10]
