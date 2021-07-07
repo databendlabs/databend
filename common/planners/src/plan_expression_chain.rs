@@ -86,6 +86,7 @@ impl ExpressionChain {
                     // variable passed to InListFunction
                     list: val_list,
                     negated: inlist_expr.negated(),
+                    data_type: inlist_expr.expr().to_data_type(&self.schema)?,
                 };
                 self.actions.push(ExpressionAction::InList(v));
             }

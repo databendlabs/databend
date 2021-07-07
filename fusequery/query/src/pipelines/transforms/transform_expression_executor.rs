@@ -141,11 +141,18 @@ impl ExpressionExecutor {
                     }
                 }
                 ExpressionAction::InList(inlist) => {
-                    let f = InListFunction::try_create(inlist.list.clone(), inlist.negated)?;
+                    println!("inlist={:?}", inlist);
+                    println!("rows={:?}", rows);
+                    let f = InListFunction::try_create(
+                        inlist.list.clone(),
+                        inlist.negated,
+                        inlist.data_type.clone(),
+                    )?;
                     let col = column_map.get(&inlist.expr_name);
                     match col {
                         Some(c) => {
                             let res_col = f.eval(&[c.clone()], rows)?;
+                            println!("res_col={:?}", res_col);
                             column_map.insert(inlist.name.clone(), res_col);
                         }
                         _ => {
@@ -154,8 +161,6 @@ impl ExpressionExecutor {
                             ));
                         }
                     }
-                    println!("inlist={:?}", inlist);
-                    println!("rows={:?}", rows);
                     println!("datablock={:?}", block);
                 }
                 _ => {}

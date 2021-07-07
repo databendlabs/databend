@@ -50,6 +50,7 @@ pub struct ActionInList {
     pub expr_name: String,
     pub list: Vec<DataValue>,
     pub negated: bool,
+    pub data_type: DataType,
 }
 
 #[derive(Debug, Clone)]
