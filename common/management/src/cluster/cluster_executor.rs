@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::cluster::address::Address;
+use common_exception::Result;
+use common_flights::Address;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct ClusterExecutor {
@@ -13,6 +14,28 @@ pub struct ClusterExecutor {
     pub address: Address,
     pub local: bool,
     pub sequence: usize,
+}
+
+impl ClusterExecutor {
+    pub fn create(
+        name: String,
+        priority: u8,
+        address: Address,
+        local: bool,
+        sequence: usize,
+    ) -> Result<ClusterExecutor> {
+        Ok(ClusterExecutor {
+            name,
+            priority,
+            address,
+            local,
+            sequence,
+        })
+    }
+
+    pub fn is_local(&self) -> bool {
+        self.local
+    }
 }
 
 impl PartialEq for ClusterExecutor {

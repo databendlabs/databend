@@ -23,12 +23,11 @@ use metrics::histogram;
 use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::StreamExt;
 
-use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::clickhouse::ClickHouseStream;
 use crate::sessions::FuseQueryContextRef;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionMgrRef;
 use crate::sql::PlanParser;
 
 struct Session {
@@ -171,15 +170,13 @@ impl ClickHouseSession for Session {
 
 pub struct ClickHouseHandler {
     conf: Config,
-    cluster: ClusterRef,
-    session_manager: SessionManagerRef,
+    session_manager: SessionMgrRef,
 }
 
 impl ClickHouseHandler {
-    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionManagerRef) -> Self {
+    pub fn create(conf: Config, session_manager: SessionMgrRef) -> Self {
         Self {
             conf,
-            cluster,
             session_manager,
         }
     }
@@ -195,10 +192,7 @@ impl ClickHouseHandler {
             let session_mgr = self.session_manager.clone();
             // Asynchronously wait for an inbound TcpStream.
             let (stream, _) = listener.accept().await?;
-            let ctx = self
-                .session_manager
-                .try_create_context()?
-                .with_cluster(self.cluster.clone())?;
+            let ctx = self.session_manager.try_create_context()?;
             ctx.set_max_threads(self.conf.num_cpus)?;
 
             // Spawn our handler to be run asynchronously.

@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_exception::Result;
+use common_flights::Address;
 use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 
-use crate::cluster::address::Address;
 use crate::cluster::backends::MemoryBackend;
-use crate::cluster::cluster_backend::ClusterBackend;
-use crate::ClusterExecutor;
+use crate::cluster::ClusterBackend;
+use crate::cluster::ClusterExecutor;
 
 #[tokio::test]
 async fn test_backend_memory() -> Result<()> {

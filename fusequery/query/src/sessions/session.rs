@@ -11,17 +11,13 @@ use common_runtime::tokio::net::TcpStream;
 use crate::configs::Config;
 use crate::servers::AbortableService;
 use crate::sessions::FuseQueryContextRef;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionMgrRef;
 use crate::sessions::SessionStatus;
 
 pub trait SessionCreator {
     type Session: ISession;
 
-    fn create(
-        conf: Config,
-        id: String,
-        sessions: SessionManagerRef,
-    ) -> Result<Arc<Box<dyn ISession>>>;
+    fn create(conf: Config, id: String, sessions: SessionMgrRef) -> Result<Arc<Box<dyn ISession>>>;
 }
 
 pub trait ISession: AbortableService<TcpStream, ()> + Send + Sync {

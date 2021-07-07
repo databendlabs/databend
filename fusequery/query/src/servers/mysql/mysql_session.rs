@@ -23,13 +23,13 @@ use crate::servers::Elapsed;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::ISession;
 use crate::sessions::SessionCreator;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionMgrRef;
 use crate::sessions::SessionStatus;
 
 pub struct Session {
     conf: Config,
     session_id: String,
-    session_manager: SessionManagerRef,
+    session_manager: SessionMgrRef,
     session_status: Arc<Mutex<SessionStatus>>,
 
     aborted_notify: Arc<tokio::sync::Notify>,
@@ -41,11 +41,9 @@ impl ISession for Session {
     }
 
     fn try_create_context(&self) -> Result<FuseQueryContextRef> {
-        self.session_status.lock().try_create_context(
-            self.conf.clone(),
-            self.session_manager.get_cluster(),
-            self.session_manager.get_datasource(),
-        )
+        self.session_status
+            .lock()
+            .try_create_context(self.conf.clone(), self.session_manager.get_datasource())
     }
 
     fn get_status(&self) -> Arc<Mutex<SessionStatus>> {
@@ -135,7 +133,7 @@ impl SessionCreator for Session {
     fn create(
         conf: Config,
         session_id: String,
-        sessions: SessionManagerRef,
+        sessions: SessionMgrRef,
     ) -> Result<Arc<Box<dyn ISession>>> {
         Ok(Arc::new(Box::new(Session {
             conf,

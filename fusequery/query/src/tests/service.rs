@@ -10,8 +10,8 @@ use crate::api::RpcService;
 use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::sessions::FuseQueryContextRef;
-use crate::sessions::SessionManager;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionMgr;
+use crate::sessions::SessionMgrRef;
 
 /// Start services and return the random address.
 pub async fn try_start_service(nums: usize) -> Result<Vec<String>> {
@@ -27,7 +27,7 @@ pub async fn try_start_service(nums: usize) -> Result<Vec<String>> {
 }
 
 // Start service and return the session manager for create his own contexts.
-pub async fn try_start_service_with_session_mgr() -> Result<(String, SessionManagerRef)> {
+pub async fn try_start_service_with_session_mgr() -> Result<(String, SessionMgrRef)> {
     let (addr, mgr) = start_one_service().await?;
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
     Ok((addr, mgr))
@@ -64,7 +64,7 @@ pub async fn try_create_context_with_nodes_and_priority(
 }
 
 // Start one random service and get the session manager.
-async fn start_one_service() -> Result<(String, SessionManagerRef)> {
+async fn start_one_service() -> Result<(String, SessionMgrRef)> {
     let mut rng = rand::thread_rng();
     let port: u32 = rng.gen_range(10000..11000);
     let addr = format!("127.0.0.1:{}", port);
@@ -73,7 +73,7 @@ async fn start_one_service() -> Result<(String, SessionManagerRef)> {
     conf.flight_api_address = addr.clone();
 
     let cluster = Cluster::create_global(conf.clone())?;
-    let session_manager = SessionManager::try_create(100)?;
+    let session_manager = SessionMgr::try_create(100)?;
     let srv = RpcService::create(conf, cluster, session_manager.clone());
     tokio::spawn(async move {
         srv.make_server().await?;

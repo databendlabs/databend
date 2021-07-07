@@ -21,12 +21,11 @@ use log::error;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_scatter::FlightScatterByHash;
-use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionMgrRef;
 
 #[derive(Debug)]
 pub struct PrepareStageInfo {
@@ -65,8 +64,7 @@ pub struct DispatcherState {
 
 struct ServerState {
     conf: Config,
-    cluster: ClusterRef,
-    session_manager: SessionManagerRef,
+    session_manager: SessionMgrRef,
 }
 
 pub struct FlightDispatcher {
@@ -255,7 +253,6 @@ impl FlightDispatcher {
             .session_manager
             .clone()
             .try_create_context()
-            .and_then(|ctx| ctx.with_cluster(state.cluster.clone()))
             .and_then(|ctx| {
                 ctx.set_max_threads(state.conf.num_cpus)?;
                 PipelineBuilder::create(ctx.clone(), subquery_res_map, plan.clone())
@@ -329,15 +326,10 @@ impl FlightDispatcher {
         Ok(())
     }
 
-    pub fn new(
-        conf: Config,
-        cluster: ClusterRef,
-        session_manager: SessionManagerRef,
-    ) -> FlightDispatcher {
+    pub fn new(conf: Config, session_manager: SessionMgrRef) -> FlightDispatcher {
         FlightDispatcher {
             state: Arc::new(ServerState {
                 conf,
-                cluster,
                 session_manager,
             }),
         }

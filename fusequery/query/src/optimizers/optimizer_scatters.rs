@@ -156,13 +156,14 @@ impl ScattersOptimizer {
     }
 }
 
+#[async_trait::async_trait]
 impl Optimizer for ScattersOptimizer {
     fn name(&self) -> &str {
         "Scatters"
     }
 
-    fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
-        if self.ctx.try_get_cluster()?.is_empty()? {
+    async fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
+        if self.ctx.try_get_executors().await?.is_empty() {
             // Standalone mode.
             return Ok(plan.clone());
         }

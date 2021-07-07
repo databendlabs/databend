@@ -11,9 +11,10 @@ use crate::optimizers::ProjectionPushDownOptimizer;
 use crate::optimizers::StatisticsExactOptimizer;
 use crate::sessions::FuseQueryContextRef;
 
-pub trait Optimizer {
+#[async_trait::async_trait]
+pub trait Optimizer: Send + Sync {
     fn name(&self) -> &str;
-    fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode>;
+    async fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode>;
 }
 
 pub struct Optimizers {
@@ -30,11 +31,11 @@ impl Optimizers {
         Optimizers { inner: optimizers }
     }
 
-    pub fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
+    pub async fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         let mut plan = plan.clone();
         for optimizer in self.inner.iter_mut() {
             tracing::debug!("Before {} \n{:?}", optimizer.name(), plan);
-            plan = optimizer.optimize(&plan)?;
+            plan = optimizer.optimize(&plan).await?;
             tracing::debug!("After {} \n{:?}", optimizer.name(), plan);
         }
         Ok(plan)

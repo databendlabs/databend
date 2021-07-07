@@ -28,10 +28,10 @@ use crate::servers::mysql::reject_connection::RejectConnection;
 use crate::servers::AbortableServer;
 use crate::servers::AbortableService;
 use crate::servers::Elapsed;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionMgrRef;
 
 pub struct MySQLHandler {
-    session_manager: SessionManagerRef,
+    session_manager: SessionMgrRef,
 
     aborted: Arc<AtomicBool>,
     aborted_notify: Arc<tokio::sync::Notify>,
@@ -39,7 +39,7 @@ pub struct MySQLHandler {
 }
 
 impl MySQLHandler {
-    pub fn create(session_manager: SessionManagerRef) -> AbortableServer {
+    pub fn create(session_manager: SessionMgrRef) -> AbortableServer {
         let (abort_handle, reg) = AbortHandle::new_pair();
 
         Arc::new(MySQLHandler {

@@ -19,12 +19,12 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::TryStreamExt;
 
-use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
+use crate::shuffle::PlanScheduler;
 
 pub struct SelectInterpreter {
     ctx: FuseQueryContextRef,
@@ -57,7 +57,7 @@ async fn execute_one_select(
     subquery_res_map: HashMap<String, bool>,
 ) -> Result<SendableDataBlockStream> {
     let scheduled_actions =
-        PlanScheduler::reschedule(ctx.clone(), subquery_res_map.clone(), &plan)?;
+        PlanScheduler::reschedule(ctx.clone(), subquery_res_map.clone(), &plan).await?;
 
     let remote_actions_ref = &scheduled_actions.remote_actions;
     let prepare_error_handler = move |error: ErrorCode, end: usize| {
@@ -73,8 +73,8 @@ async fn execute_one_select(
     };
 
     let timeout = ctx.get_settings().get_flight_client_timeout()?;
-    for (index, (node, action)) in scheduled_actions.remote_actions.iter().enumerate() {
-        let mut flight_client = node.get_flight_client().await?;
+    for (index, (executor, action)) in scheduled_actions.remote_actions.iter().enumerate() {
+        let mut flight_client = ctx.get_flight_client(executor.address.clone()).await?;
         if let Err(error) = flight_client
             .prepare_query_stage(action.clone(), timeout)
             .await
@@ -101,7 +101,9 @@ impl Interpreter for SelectInterpreter {
 
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let plan = Optimizers::create(self.ctx.clone()).optimize(&self.select.input)?;
+        let plan = Optimizers::create(self.ctx.clone())
+            .optimize(&self.select.input)
+            .await?;
         // Subquery Plan Name : Exists Expression Name
         let mut names = HashMap::<String, String>::new();
         // The execution order is from the bottom to the top

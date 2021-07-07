@@ -4,7 +4,7 @@
 
 use common_exception::Result;
 
-use crate::clusters::address::Address;
+use crate::address::Address;
 
 #[test]
 fn test_serialize_address() -> Result<()> {

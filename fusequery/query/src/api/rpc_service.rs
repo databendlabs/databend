@@ -10,23 +10,17 @@ use tonic::transport::Server;
 
 use crate::api::rpc::FlightDispatcher;
 use crate::api::rpc::FuseQueryService;
-use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionMgrRef;
 
 pub struct RpcService {
     conf: Config,
-    cluster: ClusterRef,
-    session_manager: SessionManagerRef,
+    session_mgr: SessionMgrRef,
 }
 
 impl RpcService {
-    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionManagerRef) -> Self {
-        Self {
-            conf,
-            cluster,
-            session_manager,
-        }
+    pub fn create(conf: Config, session_mgr: SessionMgrRef) -> Self {
+        Self { conf, session_mgr }
     }
 
     pub async fn make_server(&self) -> Result<()> {
@@ -35,11 +29,7 @@ impl RpcService {
             .flight_api_address
             .parse::<std::net::SocketAddr>()?;
 
-        let flight_dispatcher = FlightDispatcher::new(
-            self.conf.clone(),
-            self.cluster.clone(),
-            self.session_manager.clone(),
-        );
+        let flight_dispatcher = FlightDispatcher::new(self.conf.clone(), self.session_mgr.clone());
 
         // Flight service:
         let dispatcher_request_sender = flight_dispatcher.run();

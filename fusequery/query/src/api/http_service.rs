@@ -20,7 +20,6 @@ use common_runtime::tokio::sync::Notify;
 use futures::FutureExt;
 
 use crate::api::http::router::Router;
-use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::servers::AbortableServer;
 use crate::servers::AbortableService;
@@ -28,17 +27,15 @@ use crate::servers::Elapsed;
 
 pub struct HttpService {
     cfg: Config,
-    cluster: ClusterRef,
     aborted: Arc<AtomicBool>,
     abort_handle: Mutex<Option<Sender<()>>>,
     aborted_notify: Arc<Notify>,
 }
 
 impl HttpService {
-    pub fn create(cfg: Config, cluster: ClusterRef) -> AbortableServer {
+    pub fn create(cfg: Config) -> AbortableServer {
         Arc::new(HttpService {
             cfg,
-            cluster,
             aborted: Arc::new(AtomicBool::new(false)),
             abort_handle: Mutex::new(None),
             aborted_notify: Arc::new(Notify::new()),
@@ -64,7 +61,7 @@ impl AbortableService<(String, u16), SocketAddr> for HttpService {
     }
 
     async fn start(&self, args: (String, u16)) -> Result<SocketAddr> {
-        let router = Router::create(self.cfg.clone(), self.cluster.clone());
+        let router = Router::create(self.cfg.clone());
         let server = warp::serve(router.router()?);
 
         let addr = args.to_socket_addrs()?.next().unwrap();

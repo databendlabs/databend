@@ -6,9 +6,15 @@ use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::Arc;
 
+use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_flights::Address;
+use common_flights::ConnectionFactory;
 use common_infallible::RwLock;
+use common_management::cluster::ClusterExecutor;
+use common_management::cluster::ClusterMgr;
+use common_management::cluster::ClusterMgrRef;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::Statistics;
@@ -19,8 +25,7 @@ use common_runtime::tokio::task::JoinHandle;
 use common_runtime::Runtime;
 use uuid::Uuid;
 
-use crate::clusters::Cluster;
-use crate::clusters::ClusterRef;
+use crate::api::FlightClient;
 use crate::configs::Config;
 use crate::datasources::DataSource;
 use crate::datasources::Table;
@@ -32,7 +37,7 @@ pub struct FuseQueryContext {
     conf: Config,
     uuid: Arc<RwLock<String>>,
     settings: Arc<Settings>,
-    cluster: Arc<RwLock<ClusterRef>>,
+    cluster: ClusterMgrRef,
     datasource: Arc<DataSource>,
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Part>>>,
@@ -46,12 +51,13 @@ pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
     pub fn try_create(conf: Config) -> Result<FuseQueryContextRef> {
+        let cluster_backend = conf.store_api_address.clone();
         let settings = Settings::try_create()?;
         let ctx = FuseQueryContext {
             conf,
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings: settings.clone(),
-            cluster: Arc::new(RwLock::new(Cluster::empty())),
+            cluster: ClusterMgr::create(cluster_backend),
             datasource: Arc::new(DataSource::try_create()?),
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
@@ -75,11 +81,13 @@ impl FuseQueryContext {
         default_database: String,
         datasource: Arc<DataSource>,
     ) -> Result<FuseQueryContextRef> {
+        let cluster_backend = conf.store_api_address.clone();
+
         Ok(Arc::new(FuseQueryContext {
             conf,
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings: settings.clone(),
-            cluster: Arc::new(RwLock::new(Cluster::empty())),
+            cluster: ClusterMgr::create(cluster_backend),
             datasource,
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
@@ -93,11 +101,6 @@ impl FuseQueryContext {
                 *crate::configs::config::FUSE_COMMIT_VERSION
             ),
         }))
-    }
-
-    pub fn with_cluster(&self, cluster: ClusterRef) -> Result<FuseQueryContextRef> {
-        *self.cluster.write() = cluster;
-        Ok(Arc::new(self.clone()))
     }
 
     pub fn with_id(&self, uuid: &str) -> Result<FuseQueryContextRef> {
@@ -179,9 +182,27 @@ impl FuseQueryContext {
         Ok(())
     }
 
-    pub fn try_get_cluster(&self) -> Result<ClusterRef> {
-        let cluster = self.cluster.read();
-        Ok(cluster.clone())
+    /// Get all the executors of the namespace.
+    pub async fn try_get_executors(&self) -> Result<Vec<Arc<ClusterExecutor>>> {
+        let executors = self
+            .cluster
+            .get_executors(self.conf.namespace.clone())
+            .await?;
+        Ok(executors.iter().map(|x| Arc::new(x.clone())).collect())
+    }
+
+    /// Get the executor from executor name.
+    pub async fn try_get_executor_by_name(&self, executor_name: String) -> Result<ClusterExecutor> {
+        self.cluster
+            .get_executor_by_name(self.conf.namespace.clone(), executor_name)
+            .await
+    }
+
+    /// Get the flight client from address.
+    pub async fn get_flight_client(&self, address: Address) -> Result<FlightClient> {
+        let channel =
+            ConnectionFactory::create_flight_channel(address.to_string().clone(), None).await;
+        channel.map(|channel| FlightClient::new(FlightServiceClient::new(channel)))
     }
 
     pub fn get_datasource(&self) -> Arc<DataSource> {

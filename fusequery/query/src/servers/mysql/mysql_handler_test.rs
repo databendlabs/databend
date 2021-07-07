@@ -18,11 +18,11 @@ use mysql::FromRowError;
 use mysql::Row;
 
 use crate::servers::MySQLHandler;
-use crate::sessions::SessionManager;
+use crate::sessions::SessionMgr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_use_database_with_on_query() -> Result<()> {
-    let handler = MySQLHandler::create(SessionManager::try_create(1)?);
+    let handler = MySQLHandler::create(SessionMgr::try_create(1)?);
 
     let runnable_server = handler.start(("0.0.0.0".to_string(), 0_u16)).await?;
     let mut connection = create_connection(runnable_server.port())?;
@@ -37,7 +37,7 @@ async fn test_use_database_with_on_query() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rejected_session_with_sequence() -> Result<()> {
-    let handler = MySQLHandler::create(SessionManager::try_create(1)?);
+    let handler = MySQLHandler::create(SessionMgr::try_create(1)?);
 
     let listener_addr = handler.start(("0.0.0.0".to_string(), 0_u16)).await?;
 
@@ -94,7 +94,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         })
     }
 
-    let handler = MySQLHandler::create(SessionManager::try_create(1)?);
+    let handler = MySQLHandler::create(SessionMgr::try_create(1)?);
 
     let listener_addr = handler.start(("0.0.0.0".to_string(), 0_u16)).await?;
 

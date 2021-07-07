@@ -776,6 +776,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-exception",
+ "common-flights",
  "common-metatypes",
  "common-runtime",
  "common-store-api",

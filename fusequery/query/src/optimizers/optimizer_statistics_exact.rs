@@ -87,12 +87,13 @@ impl<'plan> PlanRewriter<'plan> for StatisticsExactImpl<'_> {
     }
 }
 
+#[async_trait::async_trait]
 impl Optimizer for StatisticsExactOptimizer {
     fn name(&self) -> &str {
         "StatisticsExact"
     }
 
-    fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
+    async fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         let mut visitor = StatisticsExactImpl { ctx: &self.ctx };
         visitor.rewrite_plan_node(plan)
     }

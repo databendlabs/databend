@@ -5,8 +5,8 @@
 use async_trait::async_trait;
 use common_exception::Result;
 
-use crate::cluster::cluster_backend::ClusterBackend;
-use crate::ClusterExecutor;
+use crate::cluster::ClusterBackend;
+use crate::cluster::ClusterExecutor;
 
 #[allow(dead_code)]
 pub struct StoreBackend {

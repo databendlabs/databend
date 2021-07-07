@@ -41,7 +41,9 @@ impl Interpreter for ExplainInterpreter {
         let schema =
             DataSchemaRefExt::create(vec![DataField::new("explain", DataType::Utf8, false)]);
 
-        let plan = Optimizers::create(self.ctx.clone()).optimize(&self.explain.input)?;
+        let plan = Optimizers::create(self.ctx.clone())
+            .optimize(&self.explain.input)
+            .await?;
         let result = match self.explain.typ {
             ExplainType::Graph => {
                 format!("{}", plan.display_graphviz())

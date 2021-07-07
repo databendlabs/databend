@@ -5,10 +5,10 @@
 use async_trait::async_trait;
 use common_exception::Result;
 
-use crate::ClusterExecutor;
+use crate::cluster::ClusterExecutor;
 
 #[async_trait]
-pub trait ClusterBackend {
+pub trait ClusterBackend: Send + Sync {
     /// Put an executor to the namespace.
     /// if the executor is exists in the namespace, replace it, others append.
     async fn put(&self, namespace: String, executor: &ClusterExecutor) -> Result<()>;

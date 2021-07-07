@@ -8,7 +8,6 @@
 pub mod tests;
 
 pub mod api;
-pub mod clusters;
 pub mod configs;
 pub mod datasources;
 pub mod functions;
@@ -18,4 +17,5 @@ pub mod optimizers;
 pub mod pipelines;
 pub mod servers;
 pub mod sessions;
+pub mod shuffle;
 pub mod sql;

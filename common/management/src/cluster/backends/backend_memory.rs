@@ -8,8 +8,8 @@ use async_trait::async_trait;
 use common_exception::Result;
 use common_runtime::tokio::sync::RwLock;
 
-use crate::cluster::cluster_backend::ClusterBackend;
-use crate::ClusterExecutor;
+use crate::cluster::ClusterBackend;
+use crate::cluster::ClusterExecutor;
 
 pub struct MemoryBackend {
     db: RwLock<HashMap<String, Vec<ClusterExecutor>>>,

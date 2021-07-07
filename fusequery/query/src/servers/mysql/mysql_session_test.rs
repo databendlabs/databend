@@ -16,7 +16,7 @@ use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::servers::mysql::mysql_session::Session;
 use crate::sessions::ISession;
-use crate::sessions::SessionManager;
+use crate::sessions::SessionMgr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_idle_state_wait_terminal_with_not_abort() -> Result<()> {
@@ -240,7 +240,7 @@ async fn test_progress_wait_terminal_after_force_abort() -> Result<()> {
 }
 
 async fn prepare_session_and_connect() -> Result<(mysql::Conn, Arc<Box<dyn ISession>>)> {
-    let session_manager = SessionManager::from_conf(Config::default(), Cluster::empty())?;
+    let session_manager = SessionMgr::from_conf(Config::default(), Cluster::empty())?;
     let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await?;
     let local_addr = listener
         .local_addr()

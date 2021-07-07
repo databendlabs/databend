@@ -7,6 +7,8 @@ use std::str::FromStr;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_flights::Address;
+use common_management::cluster::ClusterExecutor;
 use lazy_static::lazy_static;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
@@ -67,8 +69,10 @@ const STORE_API_ADDRESS: &str = "STORE_API_ADDRESS";
 const STORE_API_USERNAME: &str = "STORE_API_USERNAME";
 const STORE_API_PASSWORD: &str = "STORE_API_PASSWORD";
 
-// Cluster.
+// Namespace.
 const NAMESPACE: &str = "NAMESPACE";
+const EXECUTOR_NAME: &str = "EXECUTOR_NAME";
+const EXECUTOR_PRIORITY: &str = "EXECUTOR_PRIORITY";
 
 const CONFIG_FILE: &str = "CONFIG_FILE";
 
@@ -152,8 +156,15 @@ pub struct Config {
     #[structopt(long, env = STORE_API_PASSWORD, default_value = "root")]
     pub store_api_password: Password,
 
+    // Namespace.
     #[structopt(long, env = NAMESPACE, default_value = "")]
     pub namespace: String,
+
+    #[structopt(long, env = EXECUTOR_NAME, default_value = "")]
+    pub executor_name: String,
+
+    #[structopt(long, env = EXECUTOR_PRIORITY, default_value = "0")]
+    pub executor_priority: u8,
 
     #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
     pub config_file: String,
@@ -249,6 +260,8 @@ impl Config {
                 store_api_password: "root".to_string(),
             },
             namespace: "".to_string(),
+            executor_name: "".to_string(),
+            executor_priority: 0,
             config_file: "".to_string(),
         }
     }
@@ -326,9 +339,21 @@ impl Config {
         env_helper!(mut_config, store_api_username, User, STORE_API_USERNAME);
         env_helper!(mut_config, store_api_password, Password, STORE_API_PASSWORD);
 
-        // Cluster.
+        // Namespace.
         env_helper!(mut_config, namespace, String, NAMESPACE);
+        env_helper!(mut_config, executor_name, String, EXECUTOR_NAME);
+        env_helper!(mut_config, executor_priority, u8, EXECUTOR_PRIORITY);
 
         Ok(mut_config)
+    }
+
+    pub fn executor_from_config(&self) -> Result<ClusterExecutor> {
+        ClusterExecutor::create(
+            self.executor_name.clone(),
+            self.executor_priority,
+            Address::create(self.flight_api_address.as_str())?,
+            false,
+            0,
+        )
     }
 }

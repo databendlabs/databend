@@ -21,7 +21,7 @@ use crate::api::rpc::flight_dispatcher::Request;
 use crate::api::rpc::FlightDispatcher;
 use crate::clusters::Cluster;
 use crate::configs::Config;
-use crate::sessions::SessionManager;
+use crate::sessions::SessionMgr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_stream_with_non_exists_stream() -> Result<()> {
@@ -256,7 +256,7 @@ async fn test_prepare_stage_with_scatter() -> Result<()> {
 fn create_dispatcher() -> Result<(FlightDispatcher, Sender<Request>)> {
     let conf = Config::default();
     let cluster = Cluster::create_global(conf.clone())?;
-    let sessions = SessionManager::from_conf(conf.clone(), cluster.clone())?;
+    let sessions = SessionMgr::from_conf(conf.clone(), cluster.clone())?;
     let dispatcher = FlightDispatcher::new(conf, cluster, sessions);
     let sender = dispatcher.run();
     Ok((dispatcher, sender))

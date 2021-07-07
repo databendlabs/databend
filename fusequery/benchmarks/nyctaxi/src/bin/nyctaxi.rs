@@ -79,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         for i in 0..opt.iterations {
             let start = Instant::now();
             let plan = PlanParser::create(ctx.clone()).build_from_sql(sql)?;
-            let plan = Optimizers::create(ctx.clone()).optimize(&plan)?;
+            let plan = Optimizers::create(ctx.clone()).optimize(&plan).await?;
             let executor = InterpreterFactory::get(ctx.clone(), plan)?;
             let stream = executor.execute().await?;
 

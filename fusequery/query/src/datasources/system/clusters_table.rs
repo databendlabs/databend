@@ -83,15 +83,15 @@ impl Table for ClustersTable {
         ctx: FuseQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let nodes = ctx.try_get_cluster()?.get_nodes()?;
-        let names: Vec<&str> = nodes.iter().map(|x| x.name.as_str()).collect();
-        let hosts = nodes
+        let executors = ctx.try_get_executors().await?;
+        let names: Vec<&str> = executors.iter().map(|x| x.name.as_str()).collect();
+        let hosts = executors
             .iter()
             .map(|x| x.address.hostname())
             .collect::<Vec<_>>();
         let hostnames = hosts.iter().map(|x| x.as_str()).collect::<Vec<&str>>();
-        let ports: Vec<u16> = nodes.iter().map(|x| x.address.port()).collect();
-        let priorities: Vec<u8> = nodes.iter().map(|x| x.priority).collect();
+        let ports: Vec<u16> = executors.iter().map(|x| x.address.port()).collect();
+        let priorities: Vec<u8> = executors.iter().map(|x| x.priority).collect();
         let block = DataBlock::create_by_array(self.schema.clone(), vec![
             Series::new(names),
             Series::new(hostnames),

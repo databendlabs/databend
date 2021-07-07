@@ -65,12 +65,12 @@ impl Processor for RemoteTransform {
             self.fetch_node_name
         );
 
-        let context = self.ctx.clone();
-        let cluster = context.try_get_cluster()?;
-        let fetch_node = cluster.get_node_by_name(self.fetch_node_name.clone())?;
-
-        let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
-        let mut flight_client = fetch_node.get_flight_client().await?;
+        let ctx = self.ctx.clone();
+        let remote_executor = ctx
+            .try_get_executor_by_name(self.fetch_node_name.clone())
+            .await?;
+        let timeout = ctx.get_settings().get_flight_client_timeout()?;
+        let mut flight_client = ctx.get_flight_client(remote_executor.address).await?;
         flight_client
             .fetch_stream(self.fetch_name.clone(), self.schema.clone(), timeout)
             .await

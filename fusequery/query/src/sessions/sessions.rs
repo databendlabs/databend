@@ -17,8 +17,6 @@ use common_planners::Partitions;
 use common_runtime::tokio;
 use metrics::counter;
 
-use crate::clusters::Cluster;
-use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::DataSource;
 use crate::servers::AbortableService;
@@ -28,9 +26,8 @@ use crate::sessions::session::SessionCreator;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 
-pub struct SessionManager {
+pub struct SessionMgr {
     conf: Config,
-    cluster: ClusterRef,
     datasource: Arc<DataSource>,
 
     max_mysql_sessions: usize,
@@ -38,46 +35,40 @@ pub struct SessionManager {
     // TODO: remove queries_context.
     queries_context: RwLock<HashMap<String, FuseQueryContextRef>>,
 
-    notifyed: Arc<AtomicBool>,
+    notified: Arc<AtomicBool>,
     aborted_notify: Arc<tokio::sync::Notify>,
 }
 
-pub type SessionManagerRef = Arc<SessionManager>;
+pub type SessionMgrRef = Arc<SessionMgr>;
 
-impl SessionManager {
-    pub fn try_create(max_mysql_sessions: u64) -> Result<SessionManagerRef> {
-        Ok(Arc::new(SessionManager {
+impl SessionMgr {
+    pub fn try_create(max_mysql_sessions: u64) -> Result<SessionMgrRef> {
+        Ok(Arc::new(SessionMgr {
             conf: Config::default(),
-            cluster: Cluster::empty(),
             datasource: Arc::new(DataSource::try_create()?),
 
             max_mysql_sessions: max_mysql_sessions as usize,
             sessions: RwLock::new(HashMap::with_capacity(max_mysql_sessions as usize)),
             queries_context: RwLock::new(HashMap::with_capacity(max_mysql_sessions as usize)),
 
-            notifyed: Arc::new(AtomicBool::new(false)),
+            notified: Arc::new(AtomicBool::new(false)),
             aborted_notify: Arc::new(tokio::sync::Notify::new()),
         }))
     }
 
-    pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
+    pub fn from_conf(conf: Config) -> Result<SessionMgrRef> {
         let max_mysql_sessions = conf.mysql_handler_thread_num as usize;
-        Ok(Arc::new(SessionManager {
+        Ok(Arc::new(SessionMgr {
             conf,
-            cluster,
             datasource: Arc::new(DataSource::try_create()?),
 
             max_mysql_sessions,
             sessions: RwLock::new(HashMap::with_capacity(max_mysql_sessions)),
             queries_context: RwLock::new(HashMap::with_capacity(max_mysql_sessions)),
 
-            notifyed: Arc::new(AtomicBool::new(false)),
+            notified: Arc::new(AtomicBool::new(false)),
             aborted_notify: Arc::new(tokio::sync::Notify::new()),
         }))
-    }
-
-    pub fn get_cluster(self: &Arc<Self>) -> ClusterRef {
-        self.cluster.clone()
     }
 
     pub fn get_datasource(self: &Arc<Self>) -> Arc<DataSource> {
@@ -146,7 +137,7 @@ impl SessionManager {
 }
 
 #[async_trait::async_trait]
-impl AbortableService<(), ()> for SessionManager {
+impl AbortableService<(), ()> for SessionMgr {
     fn abort(&self, force: bool) -> Result<()> {
         self.sessions
             .write()
@@ -154,9 +145,9 @@ impl AbortableService<(), ()> for SessionManager {
             .map(|(_, session)| session.abort(force))
             .collect::<Result<Vec<_>>>()?;
 
-        if !self.notifyed.load(Ordering::Relaxed) {
+        if !self.notified.load(Ordering::Relaxed) {
             self.aborted_notify.notify_waiters();
-            self.notifyed.store(true, Ordering::Relaxed);
+            self.notified.store(true, Ordering::Relaxed);
         }
 
         Ok(())
@@ -181,7 +172,7 @@ impl AbortableService<(), ()> for SessionManager {
 
         match duration {
             None => {
-                if !self.notifyed.load(Ordering::Relaxed) {
+                if !self.notified.load(Ordering::Relaxed) {
                     self.aborted_notify.notified().await;
                 }
 
@@ -192,7 +183,7 @@ impl AbortableService<(), ()> for SessionManager {
             Some(duration) => {
                 let mut duration = duration;
 
-                if !self.notifyed.load(Ordering::Relaxed) {
+                if !self.notified.load(Ordering::Relaxed) {
                     tokio::time::timeout(duration, self.aborted_notify.notified())
                         .await
                         .map_err(|_| {

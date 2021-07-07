@@ -12,7 +12,6 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use futures::future::AbortHandle;
 
-use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::DataSource;
 use crate::sessions::FuseQueryContext;
@@ -81,7 +80,6 @@ impl SessionStatus {
     pub fn try_create_context(
         &mut self,
         conf: Config,
-        cluster: ClusterRef,
         datasource: Arc<DataSource>,
     ) -> Result<FuseQueryContextRef> {
         FuseQueryContext::from_settings(
@@ -90,7 +88,6 @@ impl SessionStatus {
             self.current_database.clone(),
             datasource,
         )
-        .and_then(|context| context.with_cluster(cluster))
     }
 
     pub fn enter_query(&mut self, query: &str) {

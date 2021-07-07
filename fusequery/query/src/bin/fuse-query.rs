@@ -6,17 +6,17 @@ use std::ops::Sub;
 use std::time::Duration;
 
 use common_exception::ErrorCode;
+use common_management::cluster::ClusterMgr;
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
 use fuse_query::api::HttpService;
 use fuse_query::api::RpcService;
-use fuse_query::clusters::Cluster;
 use fuse_query::configs::Config;
 use fuse_query::metrics::MetricService;
 use fuse_query::servers::AbortableServer;
 use fuse_query::servers::ClickHouseHandler;
 use fuse_query::servers::MySQLHandler;
-use fuse_query::sessions::SessionManager;
+use fuse_query::sessions::SessionMgr;
 use log::info;
 
 #[tokio::main]
@@ -53,12 +53,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let mut services: Vec<AbortableServer> = vec![];
-    let cluster = Cluster::create_global(conf.clone())?;
-    let session_manager = SessionManager::from_conf(conf.clone(), cluster.clone())?;
+    let session_mgr = SessionMgr::from_conf(conf.clone())?;
+    let cluster_mgr = ClusterMgr::create(conf.store_api_address.clone());
 
     // MySQL handler.
     {
-        let handler = MySQLHandler::create(session_manager.clone());
+        let handler = MySQLHandler::create(session_mgr.clone());
         let listening = handler
             .start((conf.mysql_handler_host.clone(), conf.mysql_handler_port))
             .await?;
@@ -74,8 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ClickHouse handler.
     {
-        let handler =
-            ClickHouseHandler::create(conf.clone(), cluster.clone(), session_manager.clone());
+        let handler = ClickHouseHandler::create(conf.clone(), session_mgr.clone());
 
         tokio::spawn(async move {
             handler.start().await.expect("ClickHouse handler error");
@@ -102,7 +101,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // HTTP API service.
     {
         let addr = conf.http_api_address.parse::<std::net::SocketAddr>()?;
-        let srv = HttpService::create(conf.clone(), cluster.clone());
+        let srv = HttpService::create(conf.clone());
         let addr = srv.start((addr.ip().to_string(), addr.port())).await?;
         services.push(srv);
         info!("HTTP API server listening on {}", addr);
@@ -110,11 +109,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // RPC API service.
     {
-        let srv = RpcService::create(conf.clone(), cluster.clone(), session_manager.clone());
+        let srv = RpcService::create(conf.clone(), session_mgr.clone());
         tokio::spawn(async move {
             srv.make_server().await.expect("RPC service error");
         });
         info!("RPC API server listening on {}", conf.flight_api_address);
+    }
+
+    // Register the executor to the namespace.
+    {
+        cluster_mgr
+            .register(conf.namespace.clone(), &conf.executor_from_config()?)
+            .await?;
     }
 
     // Ctrl + C 100 times in five seconds

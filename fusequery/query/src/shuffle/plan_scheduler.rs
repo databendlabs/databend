@@ -10,6 +10,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_management::cluster::ClusterExecutor;
 use common_planners::EmptyPlan;
 use common_planners::Partitions;
 use common_planners::PlanNode;
@@ -20,27 +21,26 @@ use common_planners::StagePlan;
 use common_tracing::tracing;
 
 use crate::api::ExecutePlanWithShuffleAction;
-use crate::clusters::Node;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct PlanScheduler;
 
 pub struct ScheduledActions {
     pub local_plan: PlanNode,
-    pub remote_actions: Vec<(Arc<Node>, ExecutePlanWithShuffleAction)>,
+    pub remote_actions: Vec<(Arc<ClusterExecutor>, ExecutePlanWithShuffleAction)>,
 }
 
 impl PlanScheduler {
     /// Schedule the plan to Local or Remote mode.
     #[tracing::instrument(level = "info", skip(ctx, plan))]
-    pub fn reschedule(
+    pub async fn reschedule(
         ctx: FuseQueryContextRef,
         subquery_res_map: HashMap<String, bool>,
         plan: &PlanNode,
     ) -> Result<ScheduledActions> {
-        let cluster = ctx.try_get_cluster()?;
+        let executors = ctx.try_get_executors().await?;
 
-        if cluster.is_empty()? {
+        if executors.is_empty() {
             return Ok(ScheduledActions {
                 local_plan: plan.clone(),
                 remote_actions: vec![],
@@ -48,7 +48,6 @@ impl PlanScheduler {
         }
 
         let mut last_stage = None;
-        let cluster_nodes = cluster.get_nodes()?;
         let mut builders = vec![];
         let mut get_node_plan: Arc<Box<dyn GetNodePlan>> = Arc::new(Box::new(EmptyGetNodePlan));
 
@@ -68,7 +67,7 @@ impl PlanScheduler {
                 }
                 PlanNode::ReadSource(plan) => {
                     get_node_plan =
-                        ReadSourceGetNodePlan::create(&ctx, plan, &get_node_plan, &cluster_nodes)?;
+                        ReadSourceGetNodePlan::create(&ctx, plan, &get_node_plan, &executors)?;
                 }
                 _ => {
                     get_node_plan = Arc::new(Box::new(DefaultGetNodePlan(
@@ -89,22 +88,22 @@ impl PlanScheduler {
             }
         }
 
-        let local_node = (&cluster_nodes).iter().find(|node| node.local);
+        let local_executor = (&executors).iter().find(|executor| executor.local);
 
-        if local_node.is_none() {
+        if local_executor.is_none() {
             return Result::Err(ErrorCode::NotFoundLocalNode(
                 "The PlanScheduler must be in the query cluster",
             ));
         }
 
-        let local_plan = get_node_plan.get_plan(&local_node.unwrap().name, &cluster_nodes)?;
+        let local_plan = get_node_plan.get_plan(&local_executor.unwrap().name, &executors)?;
         let mut remote_actions = vec![];
-        for node in &cluster_nodes {
+        for executor in &executors {
             for builder in &builders {
                 if let Some(action) =
-                    builder.build(&node.name, &cluster_nodes, subquery_res_map.clone())?
+                    builder.build(&executor.name, &executors, subquery_res_map.clone())?
                 {
-                    remote_actions.push((node.clone(), action));
+                    remote_actions.push((executor.clone(), action));
                 }
             }
         }
@@ -117,7 +116,7 @@ impl PlanScheduler {
 }
 
 trait GetNodePlan {
-    fn get_plan(&self, node_name: &str, cluster_nodes: &[Arc<Node>]) -> Result<PlanNode>;
+    fn get_plan(&self, node_name: &str, executors: &[Arc<ClusterExecutor>]) -> Result<PlanNode>;
 }
 
 struct EmptyGetNodePlan;
@@ -137,15 +136,15 @@ struct RemoteReadSourceGetNodePlan(
 struct ReadSourceGetNodePlan(Arc<Box<dyn GetNodePlan>>);
 
 impl GetNodePlan for DefaultGetNodePlan {
-    fn get_plan(&self, node_name: &str, cluster_nodes: &[Arc<Node>]) -> Result<PlanNode> {
+    fn get_plan(&self, node_name: &str, executors: &[Arc<ClusterExecutor>]) -> Result<PlanNode> {
         let mut clone_node = self.0.clone();
-        clone_node.set_inputs(vec![&self.1.get_plan(node_name, cluster_nodes)?])?;
+        clone_node.set_inputs(vec![&self.1.get_plan(node_name, executors)?])?;
         Ok(clone_node)
     }
 }
 
 impl GetNodePlan for EmptyGetNodePlan {
-    fn get_plan(&self, _node_name: &str, _cluster_nodes: &[Arc<Node>]) -> Result<PlanNode> {
+    fn get_plan(&self, _node_name: &str, _executors: &[Arc<ClusterExecutor>]) -> Result<PlanNode> {
         Ok(PlanNode::Empty(EmptyPlan {
             schema: Arc::new(DataSchema::empty()),
         }))
@@ -167,15 +166,19 @@ impl RemoteGetNodePlan {
 }
 
 impl GetNodePlan for RemoteGetNodePlan {
-    fn get_plan(&self, node_name: &str, cluster_nodes: &[Arc<Node>]) -> Result<PlanNode> {
+    fn get_plan(
+        &self,
+        executor_name: &str,
+        executors: &[Arc<ClusterExecutor>],
+    ) -> Result<PlanNode> {
         match self.2.kind {
             StageKind::Expansive => {
-                for cluster_node in cluster_nodes {
-                    if cluster_node.local {
+                for executor in executors {
+                    if executor.local {
                         return Ok(PlanNode::Remote(RemotePlan {
                             schema: self.2.schema(),
-                            fetch_name: format!("{}/{}/{}", self.0, self.1, node_name),
-                            fetch_nodes: vec![cluster_node.name.clone()],
+                            fetch_name: format!("{}/{}/{}", self.0, self.1, executor_name),
+                            fetch_nodes: vec![executor.name.clone()],
                         }));
                     }
                 }
@@ -185,14 +188,14 @@ impl GetNodePlan for RemoteGetNodePlan {
                 ))
             }
             _ => {
-                let all_nodes_name = cluster_nodes
+                let executors_name = executors
                     .iter()
                     .map(|node| node.name.clone())
                     .collect::<Vec<_>>();
                 Ok(PlanNode::Remote(RemotePlan {
                     schema: self.2.schema(),
-                    fetch_name: format!("{}/{}/{}", self.0, self.1, node_name),
-                    fetch_nodes: all_nodes_name,
+                    fetch_name: format!("{}/{}/{}", self.0, self.1, executor_name),
+                    fetch_nodes: executors_name,
                 }))
             }
         }
@@ -200,10 +203,14 @@ impl GetNodePlan for RemoteGetNodePlan {
 }
 
 impl GetNodePlan for LocalReadSourceGetNodePlan {
-    fn get_plan(&self, node_name: &str, cluster_nodes: &[Arc<Node>]) -> Result<PlanNode> {
-        match cluster_nodes
+    fn get_plan(
+        &self,
+        executor_name: &str,
+        executors: &[Arc<ClusterExecutor>],
+    ) -> Result<PlanNode> {
+        match executors
             .iter()
-            .filter(|node| node.name == node_name && node.local)
+            .filter(|executor| executor.name == executor_name && executor.local)
             .count()
         {
             0 => Result::Err(ErrorCode::NotFoundLocalNode(
@@ -215,8 +222,12 @@ impl GetNodePlan for LocalReadSourceGetNodePlan {
 }
 
 impl GetNodePlan for RemoteReadSourceGetNodePlan {
-    fn get_plan(&self, node_name: &str, _: &[Arc<Node>]) -> Result<PlanNode> {
-        let partitions = self.1.get(node_name).map(Clone::clone).unwrap_or_default();
+    fn get_plan(&self, executor_name: &str, _: &[Arc<ClusterExecutor>]) -> Result<PlanNode> {
+        let partitions = self
+            .1
+            .get(executor_name)
+            .map(Clone::clone)
+            .unwrap_or_default();
         Ok(PlanNode::ReadSource(ReadDataSourcePlan {
             db: self.0.db.clone(),
             table: self.0.table.clone(),
@@ -235,42 +246,41 @@ impl ReadSourceGetNodePlan {
         ctx: &FuseQueryContextRef,
         plan: &ReadDataSourcePlan,
         nest_getter: &Arc<Box<dyn GetNodePlan>>,
-        cluster_nodes: &[Arc<Node>],
+        executors: &[Arc<ClusterExecutor>],
     ) -> Result<Arc<Box<dyn GetNodePlan>>> {
         let table = ctx.get_table(&plan.db, &plan.table)?;
 
         if !table.is_local() {
-            let new_partitions_size = ctx.get_max_threads()? as usize * cluster_nodes.len();
+            let new_partitions_size = ctx.get_max_threads()? as usize * executors.len();
             let new_source_plan =
                 table.read_plan(ctx.clone(), &*plan.scan_plan, new_partitions_size)?;
 
             // We always put adjacent partitions in the same node
             let new_partitions = &new_source_plan.parts;
-            let mut nodes_partitions = HashMap::new();
-            let partitions_pre_node = new_partitions.len() / cluster_nodes.len();
+            let mut executors_partitions = HashMap::new();
+            let partitions_pre_node = new_partitions.len() / executors.len();
 
-            for (node_index, node) in cluster_nodes.iter().enumerate() {
-                let mut node_partitions = vec![];
-                let node_partitions_offset = partitions_pre_node * node_index;
+            for (executor_index, executor) in executors.iter().enumerate() {
+                let mut partitions = vec![];
+                let partitions_offset = partitions_pre_node * executor_index;
 
                 for partition_index in 0..partitions_pre_node {
-                    node_partitions
-                        .push((new_partitions[node_partitions_offset + partition_index]).clone());
+                    partitions.push((new_partitions[partitions_offset + partition_index]).clone());
                 }
 
-                if !node_partitions.is_empty() {
-                    nodes_partitions.insert(node.name.clone(), node_partitions);
+                if !partitions.is_empty() {
+                    executors_partitions.insert(executor.name.clone(), partitions);
                 }
             }
 
             // For some irregular partitions, we assign them to the head nodes
-            let offset = partitions_pre_node * cluster_nodes.len();
-            for index in 0..(new_partitions.len() % cluster_nodes.len()) {
-                let node_name = &cluster_nodes[index].name;
-                match nodes_partitions.entry(node_name.clone()) {
+            let offset = partitions_pre_node * executors.len();
+            for index in 0..(new_partitions.len() % executors.len()) {
+                let executor_name = &executors[index].name;
+                match executors_partitions.entry(executor_name.clone()) {
                     Vacant(entry) => {
-                        let node_partitions = vec![new_partitions[offset + index].clone()];
-                        entry.insert(node_partitions);
+                        let partitions = vec![new_partitions[offset + index].clone()];
+                        entry.insert(partitions);
                     }
                     Occupied(mut entry) => {
                         entry.get_mut().push(new_partitions[offset + index].clone());
@@ -280,7 +290,7 @@ impl ReadSourceGetNodePlan {
 
             let nested_getter = RemoteReadSourceGetNodePlan(
                 new_source_plan,
-                Arc::new(nodes_partitions),
+                Arc::new(executors_partitions),
                 nest_getter.clone(),
             );
             return Ok(Arc::new(Box::new(ReadSourceGetNodePlan(Arc::new(
@@ -296,8 +306,12 @@ impl ReadSourceGetNodePlan {
 }
 
 impl GetNodePlan for ReadSourceGetNodePlan {
-    fn get_plan(&self, node_name: &str, cluster_nodes: &[Arc<Node>]) -> Result<PlanNode> {
-        self.0.get_plan(node_name, cluster_nodes)
+    fn get_plan(
+        &self,
+        executor_name: &str,
+        executors: &[Arc<ClusterExecutor>],
+    ) -> Result<PlanNode> {
+        self.0.get_plan(executor_name, executors)
     }
 }
 
@@ -320,22 +334,22 @@ impl ExecutionPlanBuilder {
 
     pub fn build(
         &self,
-        node_name: &str,
-        cluster_nodes: &[Arc<Node>],
+        executor_name: &str,
+        executors: &[Arc<ClusterExecutor>],
         subquery_res_map: HashMap<String, bool>,
     ) -> Result<Option<ExecutePlanWithShuffleAction>> {
         match self.2.kind {
             StageKind::Expansive => {
-                let all_nodes_name = cluster_nodes
+                let all_nodes_name = executors
                     .iter()
                     .map(|node| node.name.clone())
                     .collect::<Vec<_>>();
-                for cluster_node in cluster_nodes {
-                    if cluster_node.name == *node_name && cluster_node.local {
+                for cluster_node in executors {
+                    if cluster_node.name == *executor_name && cluster_node.local {
                         return Ok(Some(ExecutePlanWithShuffleAction {
                             query_id: self.0.clone(),
                             stage_id: self.1.clone(),
-                            plan: self.3.get_plan(node_name, cluster_nodes)?,
+                            plan: self.3.get_plan(executor_name, executors)?,
                             scatters: all_nodes_name,
                             scatters_action: self.2.scatters_expr.clone(),
                             subquery_res_map,
@@ -345,13 +359,13 @@ impl ExecutionPlanBuilder {
                 Ok(None)
             }
             StageKind::Convergent => {
-                for cluster_node in cluster_nodes {
-                    if cluster_node.local {
+                for executor in executors {
+                    if executor.local {
                         return Ok(Some(ExecutePlanWithShuffleAction {
                             query_id: self.0.clone(),
                             stage_id: self.1.clone(),
-                            plan: self.3.get_plan(node_name, cluster_nodes)?,
-                            scatters: vec![cluster_node.name.clone()],
+                            plan: self.3.get_plan(executor_name, executors)?,
+                            scatters: vec![executor.name.clone()],
                             scatters_action: self.2.scatters_expr.clone(),
                             subquery_res_map,
                         }));
@@ -363,15 +377,15 @@ impl ExecutionPlanBuilder {
                 ))
             }
             StageKind::Normal => {
-                let all_nodes_name = cluster_nodes
+                let executor_names = executors
                     .iter()
-                    .map(|node| node.name.clone())
+                    .map(|executor| executor.name.clone())
                     .collect::<Vec<_>>();
                 Ok(Some(ExecutePlanWithShuffleAction {
                     query_id: self.0.clone(),
                     stage_id: self.1.clone(),
-                    plan: self.3.get_plan(node_name, cluster_nodes)?,
-                    scatters: all_nodes_name,
+                    plan: self.3.get_plan(executor_name, executors)?,
+                    scatters: executor_names,
                     scatters_action: self.2.scatters_expr.clone(),
                     subquery_res_map,
                 }))
