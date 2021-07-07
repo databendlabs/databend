@@ -29,7 +29,7 @@ use futures::StreamExt;
 use tonic::Request;
 
 use crate::impls::storage_api_impl_utils;
-pub use crate::impls::storage_api_impl_utils::get_do_put_meta;
+pub use crate::impls::storage_api_impl_utils::get_meta;
 use crate::RequestFor;
 use crate::StoreClient;
 use crate::StoreDoAction;
@@ -127,7 +127,7 @@ impl StorageApi for StoreClient {
 
         let mut req = Request::new(flight_stream);
         let meta = req.metadata_mut();
-        storage_api_impl_utils::set_do_put_meta(meta, &db_name, &tbl_name);
+        storage_api_impl_utils::put_meta(meta, &db_name, &tbl_name);
 
         let res = self.client.do_put(req).await?;
 

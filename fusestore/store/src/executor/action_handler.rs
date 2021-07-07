@@ -132,7 +132,6 @@ impl ActionHandler {
             StoreDoAction::MGetKV(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::PrefixListKV(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::DeleteKV(a) => s.serialize(self.handle(a).await?),
-            StoreDoAction::UpdateKV(a) => s.serialize(self.handle(a).await?),
         }
     }
 

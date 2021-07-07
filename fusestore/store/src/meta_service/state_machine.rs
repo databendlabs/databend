@@ -10,6 +10,7 @@ use std::fmt::Formatter;
 
 use common_exception::prelude::ErrorCode;
 use common_metatypes::Database;
+use common_metatypes::MatchSeqExt;
 use common_metatypes::SeqValue;
 use common_metatypes::Table;
 use common_tracing::tracing;
@@ -236,72 +237,29 @@ impl StateMachine {
                 ref value,
             } => {
                 let prev = self.kv.get(key).cloned();
-                let seq_matched = StateMachine::match_seq(&prev, seq);
-                if !seq_matched {
+                if seq.match_seq(&prev).is_err() {
                     return Ok((prev, None).into());
                 }
 
                 let new_seq = self.incr_seq(SEQ_GENERIC_KV);
                 let record_value = (new_seq, value.clone());
                 self.kv.insert(key.clone(), record_value.clone());
-                tracing::debug!("applied UpsertKV: {}={:?}", key, record_value);
+                tracing::debug!("applied UpsertKV: {} {:?}", key, record_value);
 
                 Ok((prev, Some(record_value)).into())
             }
 
-            Cmd::DeleteByKeyKV { ref key, ref seq } => {
+            Cmd::DeleteKVByKey { ref key, ref seq } => {
                 let prev = self.kv.get(key).cloned();
-                let seq_matched = match prev {
-                    Some((s, _)) if seq.is_some() && seq.unwrap() == s => true,
-                    Some(_) if seq.is_none() => true,
-                    _ => false,
-                };
-                if !seq_matched {
-                    return Ok((prev, None).into());
+
+                if seq.match_seq(&prev).is_err() {
+                    return Ok((prev.clone(), prev).into());
                 }
 
                 self.kv.remove(key);
-                tracing::debug!("applied DeleteByKeyKV: {}={:?}", key, seq);
+                tracing::debug!("applied DeleteByKeyKV: {} {}", key, seq);
                 Ok((prev, None).into())
             }
-
-            Cmd::UpdateByKeyKV {
-                ref key,
-                ref seq,
-                ref value,
-            } => {
-                let prev = self.kv.get(key).cloned();
-                let seq_matched = match prev {
-                    Some((s, _)) if seq.is_some() && seq.unwrap() == s => true,
-                    Some(_) if seq.is_none() => true,
-                    _ => false,
-                };
-                if !seq_matched {
-                    return Ok((prev, None).into());
-                }
-
-                let new_seq = self.incr_seq(SEQ_GENERIC_KV);
-                let record_value = (new_seq, value.clone());
-                self.kv.insert(key.clone(), record_value.clone());
-                tracing::debug!("applied UpdateByKeyKV: {}={:?}", key, seq);
-                Ok((prev, Some(record_value)).into())
-            }
-        }
-    }
-
-    fn match_seq(prev: &Option<SeqValue>, seq: &Option<u64>) -> bool {
-        if let Some(seq) = seq {
-            if *seq == 0 {
-                prev.is_none()
-            } else {
-                match prev {
-                    Some(ref p) => *seq == (*p).0,
-                    None => false,
-                }
-            }
-        } else {
-            // If seq is None, always override it.
-            true
         }
     }
 

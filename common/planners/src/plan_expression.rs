@@ -9,15 +9,15 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
-use common_aggregate_functions::AggregateFunction;
-use common_aggregate_functions::AggregateFunctionFactory;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::FunctionFactory;
+use common_functions::aggregates::AggregateFunction;
+use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::scalars::FunctionFactory;
 use lazy_static::lazy_static;
 
 use crate::InListExpr;

@@ -13,7 +13,6 @@ use crate::impls::kv_api_impl::DeleteKVReq;
 use crate::impls::kv_api_impl::GetKVAction;
 use crate::impls::kv_api_impl::MGetKVAction;
 use crate::impls::kv_api_impl::PrefixListReq;
-use crate::impls::kv_api_impl::UpdateKVReq;
 use crate::impls::kv_api_impl::UpsertKVAction;
 use crate::impls::meta_api_impl::CreateDatabaseAction;
 use crate::impls::meta_api_impl::CreateTableAction;
@@ -62,7 +61,6 @@ pub enum StoreDoAction {
     MGetKV(MGetKVAction),
     PrefixListKV(PrefixListReq),
     DeleteKV(DeleteKVReq),
-    UpdateKV(UpdateKVReq),
 }
 
 /// Try convert tonic::Request<Action> to DoActionAction.

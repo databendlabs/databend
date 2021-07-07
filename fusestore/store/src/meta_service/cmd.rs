@@ -1,16 +1,15 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use std::fmt;
 
 use async_raft::NodeId;
+use common_metatypes::MatchSeq;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta_service::Node;
-
-// Copyright 2020-2021 The Datafuse Authors.
-//
-// SPDX-License-Identifier: Apache-2.0.
-/// Cmd is an action a client wants to take.
-/// A Cmd is committed by raft leader before being applied.
 
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.
@@ -47,20 +46,16 @@ pub enum Cmd {
     /// Update or insert a general purpose kv store
     UpsertKV {
         key: String,
-        /// Set to Some() to modify the value only when the seq matches.
-        /// Since a sequence number is positive, use Some(0) to perform an add-if-absent operation.
-        seq: Option<u64>,
+        /// Since a sequence number is always positive, using Exact(0) to perform an add-if-absent operation.
+        /// GE(1) to perform an update-any operation.
+        /// Exact(n) to perform an update on some specified version.
+        /// Any to perform an update or insert that always takes effect.
+        seq: MatchSeq,
         value: Vec<u8>,
     },
-    DeleteByKeyKV {
+    DeleteKVByKey {
         key: String,
-        seq: Option<u64>,
-    },
-
-    UpdateByKeyKV {
-        key: String,
-        seq: Option<u64>,
-        value: Vec<u8>,
+        seq: MatchSeq,
     },
 }
 
@@ -85,11 +80,8 @@ impl fmt::Display for Cmd {
             Cmd::UpsertKV { key, seq, value } => {
                 write!(f, "upsert_kv: {}({:?}) = {:?}", key, seq, value)
             }
-            Cmd::DeleteByKeyKV { key, seq } => {
+            Cmd::DeleteKVByKey { key, seq } => {
                 write!(f, "delete_by_key_kv: {}({:?})", key, seq)
-            }
-            Cmd::UpdateByKeyKV { key, seq, value } => {
-                write!(f, "update_kv: {}({:?}) = {:?}", key, seq, value)
             }
         }
     }

@@ -21,6 +21,7 @@ impl SQLCommon {
         match sql_type {
             SQLDataType::BigInt => Ok(DataType::Int64),
             SQLDataType::Int => Ok(DataType::Int32),
+            SQLDataType::TinyInt => Ok(DataType::Int8),
             SQLDataType::SmallInt => Ok(DataType::Int16),
             SQLDataType::Char(_) => Ok(DataType::Utf8),
             SQLDataType::Varchar(_) => Ok(DataType::Utf8),
@@ -33,6 +34,29 @@ impl SQLCommon {
             SQLDataType::Time => Ok(DataType::Timestamp(TimeUnit::Millisecond, None)),
             SQLDataType::Timestamp => Ok(DataType::Date64),
 
+            //custom types for datafuse
+            // Custom(ObjectName([Ident { value: "uint8", quote_style: None }])
+            SQLDataType::Custom(obj) if !obj.0.is_empty() => {
+                match obj.0[0].value.to_uppercase().as_str() {
+                    "UINT8" => Ok(DataType::UInt8),
+                    "UINT16" => Ok(DataType::UInt16),
+                    "UINT32" => Ok(DataType::UInt32),
+                    "UINT64" => Ok(DataType::UInt64),
+
+                    "INT8" => Ok(DataType::Int8),
+                    "INT16" => Ok(DataType::Int16),
+                    "INT32" => Ok(DataType::Int32),
+                    "INT64" => Ok(DataType::Int64),
+                    "FLOAT32" => Ok(DataType::Float32),
+                    "FLOAT64" => Ok(DataType::Float64),
+                    "STRING" => Ok(DataType::Utf8),
+
+                    _ => Result::Err(ErrorCode::IllegalDataType(format!(
+                        "The SQL data type {:?} is not implemented",
+                        sql_type
+                    ))),
+                }
+            }
             _ => Result::Err(ErrorCode::IllegalDataType(format!(
                 "The SQL data type {:?} is not implemented",
                 sql_type

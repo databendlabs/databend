@@ -16,6 +16,7 @@ use common_exception::Result;
 
 use crate::arrays::DataArray;
 use crate::numerical_arithmetic_coercion;
+use crate::numerical_coercion;
 use crate::numerical_signed_coercion;
 use crate::prelude::*;
 use crate::DFBinaryArray;
@@ -67,8 +68,22 @@ impl Rem for &Series {
     type Output = Result<Series>;
 
     fn rem(self, rhs: Self) -> Self::Output {
-        let (lhs, rhs) = coerce_lhs_rhs(&DataValueArithmeticOperator::Modulo, self, rhs)?;
-        lhs.remainder(&rhs)
+        // apply rem with the largest types
+        let dtype = numerical_arithmetic_coercion(
+            &DataValueArithmeticOperator::Modulo,
+            &self.data_type(),
+            &rhs.data_type(),
+        )?;
+
+        let (lhs, rhs) = coerce_lhs_rhs_no_op(self, rhs)?;
+        let result = lhs.remainder(&rhs)?;
+
+        // then cast back to the lowest types
+        if result.data_type() != dtype {
+            result.cast_with_type(&dtype)
+        } else {
+            Ok(result)
+        }
     }
 }
 
@@ -185,6 +200,22 @@ fn coerce_lhs_rhs(
     rhs: &Series,
 ) -> Result<(Series, Series)> {
     let dtype = numerical_arithmetic_coercion(op, &lhs.data_type(), &rhs.data_type())?;
+
+    let mut left = lhs.clone();
+    if lhs.data_type() != dtype {
+        left = lhs.cast_with_type(&dtype)?;
+    }
+
+    let mut right = rhs.clone();
+    if rhs.data_type() != dtype {
+        right = rhs.cast_with_type(&dtype)?;
+    }
+
+    Ok((left, right))
+}
+
+fn coerce_lhs_rhs_no_op(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
+    let dtype = numerical_coercion(&lhs.data_type(), &rhs.data_type())?;
 
     let mut left = lhs.clone();
     if lhs.data_type() != dtype {

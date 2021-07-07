@@ -8,7 +8,8 @@ Produces a 64-bit [SipHash](https://131002.net/siphash) hash value.
 ## Syntax
 
 ```sql
-SIPHASH(expression)
+siphash(expression)
+siphash64(expression)
 ```
 
 ## Arguments
@@ -26,11 +27,11 @@ A UInt64 data type hash value.
 
 ```
 mysql> SELECT SIPHASH('1234567890');
-+----------------------+
-| SIPHASH(1234567890)  |
-+----------------------+
-| 18110648197875983073 |
-+----------------------+
++---------------------+
+| SIPHASH(1234567890) |
++---------------------+
+| 9027491583908826579 |
++---------------------+
 
 mysql> SELECT SIPHASH(1);
 +---------------------+

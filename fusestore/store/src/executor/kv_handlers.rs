@@ -12,12 +12,9 @@ use common_flights::kv_api_impl::MGetKVAction;
 use common_flights::kv_api_impl::MGetKVActionResult;
 use common_flights::kv_api_impl::PrefixListReply;
 use common_flights::kv_api_impl::PrefixListReq;
-use common_flights::kv_api_impl::UpdateByKeyReply;
-use common_flights::kv_api_impl::UpdateKVReq;
 use common_flights::kv_api_impl::UpsertKVAction;
 use common_flights::kv_api_impl::UpsertKVActionResult;
-use Cmd::DeleteByKeyKV;
-use Cmd::UpdateByKeyKV;
+use Cmd::DeleteKVByKey;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
@@ -78,9 +75,9 @@ impl RequestHandler<DeleteKVReq> for ActionHandler {
     async fn handle(&self, act: DeleteKVReq) -> common_exception::Result<DeleteKVReply> {
         let cr = LogEntry {
             txid: None,
-            cmd: DeleteByKeyKV {
+            cmd: DeleteKVByKey {
                 key: act.key,
-                seq: act.seq,
+                seq: act.seq.into(),
             },
         };
 
@@ -92,31 +89,6 @@ impl RequestHandler<DeleteKVReq> for ActionHandler {
 
         match rst {
             AppliedState::KV { prev, result } => Ok(DeleteKVReply { prev, result }),
-            _ => Err(ErrorCode::MetaNodeInternalError("not a KV result")),
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl RequestHandler<UpdateKVReq> for ActionHandler {
-    async fn handle(&self, act: UpdateKVReq) -> common_exception::Result<UpdateByKeyReply> {
-        let cr = LogEntry {
-            txid: None,
-            cmd: UpdateByKeyKV {
-                key: act.key,
-                seq: act.seq,
-                value: act.value,
-            },
-        };
-
-        let rst = self
-            .meta_node
-            .write(cr)
-            .await
-            .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
-
-        match rst {
-            AppliedState::KV { prev, result } => Ok(UpdateByKeyReply { prev, result }),
             _ => Err(ErrorCode::MetaNodeInternalError("not a KV result")),
         }
     }

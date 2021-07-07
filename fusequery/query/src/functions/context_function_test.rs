@@ -4,12 +4,11 @@
 
 use common_exception::Result;
 
+use crate::functions::ContextFunction;
+
 #[test]
 fn test_context_function_build_arg_from_ctx() -> Result<()> {
     use pretty_assertions::assert_eq;
-
-    use crate::functions::*;
-
     let ctx = crate::tests::try_create_context()?;
 
     // Ok.

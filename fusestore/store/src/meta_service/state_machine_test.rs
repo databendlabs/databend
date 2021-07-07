@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_metatypes::Database;
+use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
 use common_runtime::tokio;
 use pretty_assertions::assert_eq;
@@ -223,13 +224,13 @@ fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_state_machine_apply_non_dup_generic_kv() -> anyhow::Result<()> {
+fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Result<()> {
     let mut m = StateMachine::builder().build()?;
 
     struct T {
         // input:
         key: String,
-        seq: Option<u64>,
+        seq: MatchSeq,
         value: Vec<u8>,
         // want:
         prev: Option<SeqValue>,
@@ -238,37 +239,28 @@ fn test_state_machine_apply_non_dup_generic_kv() -> anyhow::Result<()> {
 
     fn case(
         name: &'static str,
-        seq: Option<u64>,
+        seq: MatchSeq,
         value: &'static str,
         prev: Option<(u64, &'static str)>,
         result: Option<(u64, &'static str)>,
     ) -> T {
-        let name = name.to_string();
-        let value = value.to_string().into_bytes();
-        let prev = match prev {
-            None => None,
-            Some((s, v)) => Some((s, v.to_string().into_bytes())),
-        };
-        let result = match result {
-            None => None,
-            Some((s, v)) => Some((s, v.to_string().into_bytes())),
-        };
         T {
-            key: name,
+            key: name.to_string(),
             seq,
-            value,
-            prev,
-            result,
+            value: value.to_string().into_bytes(),
+            prev: prev.map(|(a, b)| (a, b.as_bytes().to_vec())),
+            result: result.map(|(a, b)| (a, b.as_bytes().to_vec())),
         }
     }
 
     let cases: Vec<T> = vec![
-        case("foo", Some(5), "b", None, None),
-        case("foo", None, "a", None, Some((1, "a"))),
-        case("foo", None, "b", Some((1, "a")), Some((2, "b"))),
-        case("foo", Some(5), "b", Some((2, "b")), None),
-        case("bar", Some(0), "x", None, Some((3, "x"))),
-        case("bar", Some(0), "y", Some((3, "x")), None),
+        case("foo", MatchSeq::Exact(5), "b", None, None),
+        case("foo", MatchSeq::Any, "a", None, Some((1, "a"))),
+        case("foo", MatchSeq::Any, "b", Some((1, "a")), Some((2, "b"))),
+        case("foo", MatchSeq::Exact(5), "b", Some((2, "b")), None),
+        case("bar", MatchSeq::Exact(0), "x", None, Some((3, "x"))),
+        case("bar", MatchSeq::Exact(0), "y", Some((3, "x")), None),
+        case("bar", MatchSeq::GE(1), "y", Some((3, "x")), Some((4, "y"))),
     ];
 
     for (i, c) in cases.iter().enumerate() {
@@ -280,7 +272,7 @@ fn test_state_machine_apply_non_dup_generic_kv() -> anyhow::Result<()> {
             txid: None,
             cmd: Cmd::UpsertKV {
                 key: c.key.clone(),
-                seq: c.seq,
+                seq: c.seq.clone(),
                 value: c.value.clone(),
             },
         })?;
@@ -304,6 +296,83 @@ fn test_state_machine_apply_non_dup_generic_kv() -> anyhow::Result<()> {
 
         let got = m.get_kv(&c.key);
         assert_eq!(want, got, "get: {}", mes,);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<()> {
+    struct T {
+        // input:
+        key: String,
+        seq: MatchSeq,
+        // want:
+        prev: Option<SeqValue>,
+        result: Option<SeqValue>,
+    }
+
+    fn case(
+        name: &'static str,
+        seq: MatchSeq,
+        prev: Option<(u64, &'static str)>,
+        result: Option<(u64, &'static str)>,
+    ) -> T {
+        T {
+            key: name.to_string(),
+            seq,
+            prev: prev.map(|(a, b)| (a, b.as_bytes().to_vec())),
+            result: result.map(|(a, b)| (a, b.as_bytes().to_vec())),
+        }
+    }
+
+    let prev = Some((1u64, "x"));
+
+    let cases: Vec<T> = vec![
+        case("foo", MatchSeq::Any, prev.clone(), None),
+        case("foo", MatchSeq::Exact(1), prev.clone(), None),
+        case("foo", MatchSeq::Exact(0), prev.clone(), prev.clone()),
+        case("foo", MatchSeq::GE(1), prev.clone(), None),
+        case("foo", MatchSeq::GE(2), prev.clone(), prev.clone()),
+    ];
+
+    for (i, c) in cases.iter().enumerate() {
+        let mes = format!("{}-th: {}({})", i, c.key, c.seq);
+
+        let mut m = StateMachine::builder().build()?;
+
+        // prepare an record
+        m.apply_non_dup(&LogEntry {
+            txid: None,
+            cmd: Cmd::UpsertKV {
+                key: "foo".to_string(),
+                seq: MatchSeq::Any,
+                value: "x".as_bytes().to_vec(),
+            },
+        })?;
+
+        // delete
+        let resp = m.apply_non_dup(&LogEntry {
+            txid: None,
+            cmd: Cmd::DeleteKVByKey {
+                key: c.key.clone(),
+                seq: c.seq.clone(),
+            },
+        })?;
+        assert_eq!(
+            AppliedState::KV {
+                prev: c.prev.clone(),
+                result: c.result.clone(),
+            },
+            resp,
+            "delete: {}",
+            mes,
+        );
+
+        // read it to ensure the modified state.
+        let want = &c.result;
+        let got = m.get_kv(&c.key);
+        assert_eq!(want, &got, "get: {}", mes,);
     }
 
     Ok(())

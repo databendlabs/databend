@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_aggregate_functions::AggregateFunctionFactory;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::FunctionFactory;
+use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::scalars::FunctionFactory;
 use common_planners::Expression;
 
 use crate::sessions::FuseQueryContextRef;

@@ -74,13 +74,13 @@ fn test_plan_parser() -> Result<()> {
         Test {
         name: "cast-passed",
         sql: "select cast('1' as int)",
-        expect: "Projection: cast(1 as Int32):Int32\n  Expression: cast(1 as Int32):Int32 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
+        expect: "Projection: cast(1 as Int32):Int32\n  Expression: cast(1 as Int32):Int32 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
         error: "",
         },
         Test {
         name: "database-passed",
         sql: "select database()",
-        expect: "Projection: database():Utf8\n  Expression: database(default):Utf8 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
+        expect: "Projection: database():Utf8\n  Expression: database(default):Utf8 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
         error: "",
         },
         Test {
@@ -98,7 +98,7 @@ fn test_plan_parser() -> Result<()> {
         Test {
             name: "interval-passed",
             sql: "SELECT INTERVAL '1 year', INTERVAL '1 month', INTERVAL '1 day', INTERVAL '1 hour', INTERVAL '1 minute', INTERVAL '1 second'",
-            expect: "Projection: 12:Interval(YearMonth), 1:Interval(YearMonth), 4294967296:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime)\n  Expression: 12:Interval(YearMonth), 1:Interval(YearMonth), 4294967296:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime) (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 0, read_bytes: 0]",
+            expect: "Projection: 12:Interval(YearMonth), 1:Interval(YearMonth), 4294967296:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime)\n  Expression: 12:Interval(YearMonth), 1:Interval(YearMonth), 4294967296:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime) (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
             error: ""
         },
         Test {
@@ -140,13 +140,13 @@ fn test_plan_parser() -> Result<()> {
             sql: "select sum(number+1)+2, number%3 as id from numbers(10) where number>1 group by id having id>1 order by id desc limit 3",
             expect: "\
             Limit: 3\
-            \n  Projection: (sum((number + 1)) + 2):UInt64, (number % 3) as id:UInt64\
-            \n    Sort: (number % 3):UInt64\
+            \n  Projection: (sum((number + 1)) + 2):UInt64, (number % 3) as id:UInt8\
+            \n    Sort: (number % 3):UInt8\
             \n      Having: ((number % 3) > 1)\
-            \n        Expression: (sum((number + 1)) + 2):UInt64, (number % 3):UInt64 (Before OrderBy)\
+            \n        Expression: (sum((number + 1)) + 2):UInt64, (number % 3):UInt8 (Before OrderBy)\
             \n          AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]\
             \n            AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]\
-            \n              Expression: (number % 3):UInt64, (number + 1):UInt64 (Before GroupBy)\
+            \n              Expression: (number % 3):UInt8, (number + 1):UInt64 (Before GroupBy)\
             \n                Filter: (number > 1)\
             \n                  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
             error: ""

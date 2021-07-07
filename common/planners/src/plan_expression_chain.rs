@@ -4,7 +4,7 @@
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_functions::FunctionFactory;
+use common_functions::scalars::FunctionFactory;
 
 use crate::ActionAlias;
 use crate::ActionConstant;

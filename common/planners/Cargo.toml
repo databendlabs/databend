@@ -10,7 +10,6 @@ edition = "2018"
 # Workspace dependencies
 common-datavalues = {path = "../datavalues"}
 common-functions = {path = "../functions"}
-common-aggregate-functions = {path = "../aggregate_functions" }
 common-exception = {path = "../exception"}
 common-datablocks = {path = "../datablocks"}
 common-infallible = {path = "../infallible"}

@@ -5,6 +5,7 @@
 
 use async_trait::async_trait;
 use common_exception::ErrorCode;
+use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
 use common_store_api::kv_api::MGetKVActionResult;
 use common_store_api::kv_api::PrefixListReply;
@@ -29,16 +30,10 @@ mock! {
         async fn upsert_kv(
             &mut self,
             key: &str,
-            seq: Option<u64>,
+            seq: MatchSeq,
             value: Vec<u8>,
         ) -> common_exception::Result<UpsertKVActionResult>;
     async fn delete_kv(&mut self, key: &str, seq: Option<u64>) -> common_exception::Result<Option<SeqValue>>;
-    async fn update_kv(
-        &mut self,
-        key: &str,
-        seq: Option<u64>,
-        value: Vec<u8>,
-    ) -> common_exception::Result<Option<SeqValue>>;
 
     async fn get_kv(&mut self, key: &str) -> common_exception::Result<GetKVActionResult>;
 
@@ -77,7 +72,7 @@ mod add {
         let value = serde_json::to_vec(&user_info)?;
 
         let test_key = USER_API_KEY_PREFIX.to_string() + test_user_name;
-        let test_seq = Some(0);
+        let test_seq = MatchSeq::Exact(0);
 
         // normal
         {
@@ -497,14 +492,19 @@ mod update {
         let new_user_info = UserInfo::from(new_user);
         let new_value_with_old_salt = serde_json::to_vec(&new_user_info)?;
 
-        kv.expect_update_kv()
+        kv.expect_upsert_kv()
             .with(
                 predicate::function(move |v| v == test_key.as_str()),
-                predicate::eq(test_seq),
+                predicate::eq(MatchSeq::GE(1)),
                 predicate::eq(new_value_with_old_salt),
             )
             .times(1)
-            .return_once(|_, _, _| Ok(Some((0, vec![]))));
+            .return_once(|_, _, _| {
+                Ok(UpsertKVActionResult {
+                    prev: None,
+                    result: Some((0, vec![])),
+                })
+            });
 
         let mut user_mgr = UserMgr::new(kv);
 
@@ -532,14 +532,19 @@ mod update {
         let new_value = serde_json::to_vec(&new_user_info)?;
 
         let mut kv = MockKV::new();
-        kv.expect_update_kv()
+        kv.expect_upsert_kv()
             .with(
                 predicate::function(move |v| v == test_key.as_str()),
-                predicate::eq(test_seq),
+                predicate::eq(MatchSeq::GE(1)),
                 predicate::eq(new_value),
             )
             .times(1)
-            .return_once(|_, _, _| Ok(Some((0, vec![]))));
+            .return_once(|_, _, _| {
+                Ok(UpsertKVActionResult {
+                    prev: None,
+                    result: Some((0, vec![])),
+                })
+            });
 
         let mut user_mgr = UserMgr::new(kv);
 
@@ -601,14 +606,19 @@ mod update {
         let test_key = test_key.clone();
 
         // upsert should be called
-        kv.expect_update_kv()
+        kv.expect_upsert_kv()
             .with(
                 predicate::function(move |v| v == test_key.as_str()),
-                predicate::eq(test_seq),
+                predicate::eq(MatchSeq::GE(1)),
                 predicate::always(), // a little bit relax here, as we've covered it before
             )
             .times(1)
-            .returning(|_u, _s, _salt| Ok(None));
+            .returning(|_u, _s, _salt| {
+                Ok(UpsertKVActionResult {
+                    prev: None,
+                    result: None,
+                })
+            });
 
         let mut user_mgr = UserMgr::new(kv);
 

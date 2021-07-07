@@ -16,6 +16,20 @@ jobs:
         run: |
           bash ./scripts/setup/dev_setup.sh
 
+      - name: Cache cargo registry
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-testcache-${{ secrets.CACHE_RESET_KEY }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-testcache-${{ secrets.CACHE_RESET_KEY }}-
+            ${{ runner.os }}-cargo-testcache-
+            ${{ runner.os }}-cargo-
+
       - name: Run test
         uses: actions-rs/cargo@v1
         with:

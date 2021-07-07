@@ -21,6 +21,9 @@ use log::info;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Use customize malloc.
+    let malloc = common_allocators::init();
+
     // First load configs from args.
     let mut conf = Config::load_from_args();
 
@@ -44,8 +47,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("{:?}", conf);
     info!(
-        "FuseQuery v-{}",
-        *fuse_query::configs::config::FUSE_COMMIT_VERSION
+        "FuseQuery v-{}, Allocator: {}",
+        *fuse_query::configs::config::FUSE_COMMIT_VERSION,
+        malloc
     );
 
     let mut services: Vec<AbortableServer> = vec![];

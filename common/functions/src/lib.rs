@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+// support-in
 #[cfg(test)]
 mod function_column_test;
 
@@ -27,3 +28,7 @@ pub use function_factory::FactoryFuncRef;
 pub use function_factory::FunctionFactory;
 pub use function_inlist::InListFunction;
 pub use function_literal::LiteralFunction;
+//
+pub mod aggregates;
+pub mod scalars;
+// master
