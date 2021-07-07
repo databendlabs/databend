@@ -15,18 +15,13 @@ pub struct ClusterMgr {
 }
 
 impl ClusterMgr {
-    /// For test only.
-    pub fn create_with_memory_backend() -> ClusterMgr {
-        ClusterMgr {
-            backend: Box::new(MemoryBackend::create()),
-        }
-    }
-
-    /// Store the executor meta to store.
-    pub fn create_with_store_backend(addr: String) -> ClusterMgr {
-        ClusterMgr {
-            backend: Box::new(StoreBackend::create(addr)),
-        }
+    pub fn create(addr: String) -> ClusterMgr {
+        let backend: Box<dyn ClusterBackend> = match addr.as_str() {
+            // For test only.
+            "" => Box::new(MemoryBackend::create()),
+            _ => Box::new(StoreBackend::create(addr)),
+        };
+        ClusterMgr { backend }
     }
 
     /// Register an executor to the namespace.

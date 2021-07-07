@@ -27,7 +27,7 @@ async fn test_cluster_mgr() -> Result<()> {
         sequence: 0,
     };
     let namespace = "namespace-1".to_string();
-    let mut cluster_mgr = ClusterMgr::create_with_memory_backend();
+    let mut cluster_mgr = ClusterMgr::create("".to_string());
 
     // Register.
     {
