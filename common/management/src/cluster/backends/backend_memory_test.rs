@@ -7,21 +7,20 @@ use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 
 use crate::cluster::address::Address;
-use crate::cluster::backend_api::BackendApi;
 use crate::cluster::backends::MemoryBackend;
-use crate::ClusterMeta;
+use crate::cluster::cluster_backend::ClusterBackend;
+use crate::ClusterExecutor;
 
 #[tokio::test]
 async fn test_backend_memory() -> Result<()> {
-    let backend_store = MemoryBackend::create();
-    let meta1 = ClusterMeta {
+    let executor1 = ClusterExecutor {
         name: "n1".to_string(),
         priority: 0,
         address: Address::create("192.168.0.1:9091")?,
         local: false,
         sequence: 0,
     };
-    let meta2 = ClusterMeta {
+    let executor2 = ClusterExecutor {
         name: "n2".to_string(),
         priority: 0,
         address: Address::create("192.168.0.2:9091")?,
@@ -30,11 +29,12 @@ async fn test_backend_memory() -> Result<()> {
     };
     let namespace = "namespace-1".to_string();
 
-    backend_store.put(namespace.clone(), &meta1).await?;
-    backend_store.put(namespace.clone(), &meta2).await?;
-    backend_store.put(namespace.clone(), &meta1).await?;
-    let actual = backend_store.get(namespace).await?;
-    let expect = vec![meta2.clone(), meta1.clone()];
+    let backend = MemoryBackend::create();
+    backend.put(namespace.clone(), &executor1).await?;
+    backend.put(namespace.clone(), &executor2).await?;
+    backend.put(namespace.clone(), &executor1).await?;
+    let actual = backend.get(namespace).await?;
+    let expect = vec![executor2.clone(), executor1.clone()];
     assert_eq!(actual, expect);
 
     Ok(())

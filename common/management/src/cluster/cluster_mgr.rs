@@ -5,13 +5,13 @@
 
 use common_exception::Result;
 
-use crate::cluster::backend_api::BackendApi;
 use crate::cluster::backends::MemoryBackend;
 use crate::cluster::backends::StoreBackend;
-use crate::ClusterMeta;
+use crate::cluster::cluster_backend::ClusterBackend;
+use crate::ClusterExecutor;
 
 pub struct ClusterMgr {
-    backend: Box<dyn BackendApi>,
+    backend: Box<dyn ClusterBackend>,
 }
 
 impl ClusterMgr {
@@ -22,17 +22,20 @@ impl ClusterMgr {
         }
     }
 
+    /// Store the executor meta to store.
     pub fn create_with_store_backend(addr: String) -> ClusterMgr {
         ClusterMgr {
             backend: Box::new(StoreBackend::create(addr)),
         }
     }
 
-    pub async fn register(&mut self, namespace: String, meta: &ClusterMeta) -> Result<()> {
-        self.backend.put(namespace, meta).await
+    /// Register a executor the namespace.
+    pub async fn register(&mut self, namespace: String, executor: &ClusterExecutor) -> Result<()> {
+        self.backend.put(namespace, executor).await
     }
 
-    pub async fn metas(&mut self, namespace: String) -> Result<Vec<ClusterMeta>> {
+    /// Get all the executors from namespace.
+    pub async fn get_executors(&mut self, namespace: String) -> Result<Vec<ClusterExecutor>> {
         self.backend.get(namespace).await
     }
 }

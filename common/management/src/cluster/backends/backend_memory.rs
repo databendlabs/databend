@@ -8,11 +8,11 @@ use async_trait::async_trait;
 use common_exception::Result;
 use common_runtime::tokio::sync::RwLock;
 
-use crate::cluster::backend_api::BackendApi;
-use crate::ClusterMeta;
+use crate::cluster::cluster_backend::ClusterBackend;
+use crate::ClusterExecutor;
 
 pub struct MemoryBackend {
-    db: RwLock<HashMap<String, Vec<ClusterMeta>>>,
+    db: RwLock<HashMap<String, Vec<ClusterExecutor>>>,
 }
 
 impl MemoryBackend {
@@ -24,33 +24,33 @@ impl MemoryBackend {
 }
 
 #[async_trait]
-impl BackendApi for MemoryBackend {
-    async fn put(&self, key: String, meta: &ClusterMeta) -> Result<()> {
+impl ClusterBackend for MemoryBackend {
+    async fn put(&self, namespace: String, executor: &ClusterExecutor) -> Result<()> {
         let mut db = self.db.write().await;
 
-        let metas = db.get_mut(&key);
-        match metas {
+        let executors = db.get_mut(&namespace);
+        match executors {
             None => {
-                db.insert(key, vec![meta.clone()]);
+                db.insert(namespace, vec![executor.clone()]);
             }
             Some(values) => {
                 let mut new_values = vec![];
                 for value in values {
-                    if value != meta {
+                    if value != executor {
                         new_values.push(value.clone());
                     }
                 }
-                new_values.push(meta.clone());
-                db.insert(key, new_values);
+                new_values.push(executor.clone());
+                db.insert(namespace, new_values);
             }
         };
         Ok(())
     }
 
-    async fn get(&self, key: String) -> Result<Vec<ClusterMeta>> {
+    async fn get(&self, namespace: String) -> Result<Vec<ClusterExecutor>> {
         let db = self.db.read().await;
-        let metas = db.get(&key);
-        let res = match metas {
+        let executors = db.get(&namespace);
+        let res = match executors {
             None => vec![],
             Some(v) => v.clone(),
         };

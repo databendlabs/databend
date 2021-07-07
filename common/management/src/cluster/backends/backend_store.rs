@@ -5,8 +5,8 @@
 use async_trait::async_trait;
 use common_exception::Result;
 
-use crate::cluster::backend_api::BackendApi;
-use crate::ClusterMeta;
+use crate::cluster::cluster_backend::ClusterBackend;
+use crate::ClusterExecutor;
 
 #[allow(dead_code)]
 pub struct StoreBackend {
@@ -20,12 +20,12 @@ impl StoreBackend {
 }
 
 #[async_trait]
-impl BackendApi for StoreBackend {
-    async fn put(&self, _key: String, _meta: &ClusterMeta) -> Result<()> {
+impl ClusterBackend for StoreBackend {
+    async fn put(&self, _namespace: String, _executor: &ClusterExecutor) -> Result<()> {
         todo!()
     }
 
-    async fn get(&self, _key: String) -> Result<Vec<ClusterMeta>> {
+    async fn get(&self, _namespace: String) -> Result<Vec<ClusterExecutor>> {
         todo!()
     }
 }

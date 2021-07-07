@@ -5,7 +5,7 @@
 use crate::cluster::address::Address;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct ClusterMeta {
+pub struct ClusterExecutor {
     pub name: String,
     // Node priority is in [0,10]
     // larger value means higher priority
@@ -15,7 +15,7 @@ pub struct ClusterMeta {
     pub sequence: usize,
 }
 
-impl PartialEq for ClusterMeta {
+impl PartialEq for ClusterExecutor {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.priority == other.priority

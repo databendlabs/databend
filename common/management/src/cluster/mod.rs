@@ -9,8 +9,8 @@ mod address_test;
 mod cluster_mgr_test;
 
 mod address;
-mod backend_api;
 mod backends;
+mod cluster_backend;
 
-pub mod cluster_meta;
+pub mod cluster_executor;
 pub mod cluster_mgr;
