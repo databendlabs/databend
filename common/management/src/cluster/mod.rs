@@ -5,6 +5,8 @@
 
 #[cfg(test)]
 mod address_test;
+#[cfg(test)]
+mod cluster_mgr_test;
 
 mod address;
 mod backend_api;

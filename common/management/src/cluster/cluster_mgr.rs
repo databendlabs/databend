@@ -10,29 +10,29 @@ use crate::cluster::backends::MemoryBackend;
 use crate::cluster::backends::StoreBackend;
 use crate::ClusterMeta;
 
-pub enum BackendType {
-    Memory,
-    Store(String),
-}
-
 pub struct ClusterMgr {
-    backend_api: Box<dyn BackendApi>,
+    backend: Box<dyn BackendApi>,
 }
 
 impl ClusterMgr {
-    pub fn new(backend: BackendType) -> ClusterMgr {
-        let backend_api: Box<dyn BackendApi> = match backend {
-            BackendType::Memory => Box::new(MemoryBackend::create()),
-            BackendType::Store(addr) => Box::new(StoreBackend::create(addr)),
-        };
-        ClusterMgr { backend_api }
+    /// For test only.
+    pub fn create_with_memory_backend() -> ClusterMgr {
+        ClusterMgr {
+            backend: Box::new(MemoryBackend::create()),
+        }
     }
 
-    pub async fn upsert_meta(&mut self, namespace: String, meta: &ClusterMeta) -> Result<()> {
-        self.backend_api.put(namespace, meta).await
+    pub fn create_with_store_backend(addr: String) -> ClusterMgr {
+        ClusterMgr {
+            backend: Box::new(StoreBackend::create(addr)),
+        }
     }
 
-    pub async fn get_metas(&mut self, _namespace: &str) -> Result<Vec<ClusterMeta>> {
-        todo!()
+    pub async fn register(&mut self, namespace: String, meta: &ClusterMeta) -> Result<()> {
+        self.backend.put(namespace, meta).await
+    }
+
+    pub async fn metas(&mut self, namespace: String) -> Result<Vec<ClusterMeta>> {
+        self.backend.get(namespace).await
     }
 }
