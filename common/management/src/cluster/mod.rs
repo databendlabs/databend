@@ -4,9 +4,8 @@
 //
 
 mod address;
-mod cluster_meta;
-mod cluster_mgr;
+mod backend_api;
+mod backends;
 
-pub use address::Address;
-pub use cluster_meta::ClusterMeta;
-pub use cluster_mgr::ClusterMgr;
+pub mod cluster_meta;
+pub mod cluster_mgr;

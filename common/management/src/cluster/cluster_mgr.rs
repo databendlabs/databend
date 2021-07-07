@@ -4,24 +4,33 @@
 //
 
 use common_exception::Result;
-use common_store_api::KVApi;
 
-use crate::cluster::ClusterMeta;
+use crate::cluster::backend_api::BackendApi;
+use crate::cluster::backends::MemoryBackend;
+use crate::cluster::backends::StoreBackend;
+use crate::ClusterMeta;
 
-pub struct ClusterMgr<KV> {
-    kv_api: KV,
+pub enum BackendType {
+    Memory,
+    Store(String),
 }
 
-impl<T> ClusterMgr<T>
-where T: KVApi
-{
-    #[allow(dead_code)]
-    pub fn new(kv_api: T) -> Self {
-        ClusterMgr { kv_api }
+pub struct ClusterMgr {
+    backend_api: Box<dyn BackendApi>,
+}
+
+impl ClusterMgr {
+    pub fn new(backend: BackendType) -> ClusterMgr {
+        let backend_api: Box<dyn BackendApi> = match backend {
+            BackendType::Memory => Box::new(MemoryBackend::create()),
+            BackendType::Store(addr) => Box::new(StoreBackend::create(addr)),
+        };
+        ClusterMgr { backend_api }
     }
 
-    pub async fn upsert_meta(&mut self, _namespace: &str, _meta: ClusterMeta) -> Result<()> {
-        todo!()
+    pub async fn upsert_meta(&mut self, namespace: String, meta: &ClusterMeta) -> Result<()> {
+        let value = serde_json::to_vec(meta)?;
+        self.backend_api.put(namespace, value).await
     }
 
     pub async fn get_metas(&mut self, _namespace: &str) -> Result<Vec<ClusterMeta>> {

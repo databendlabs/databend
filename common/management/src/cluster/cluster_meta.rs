@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::cluster::Address;
+use crate::cluster::address::Address;
 
-#[derive(Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct ClusterMeta {
     pub name: String,
     // Node priority is in [0,10]

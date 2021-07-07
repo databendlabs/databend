@@ -6,6 +6,8 @@
 mod cluster;
 mod user;
 
+pub use cluster::cluster_meta::ClusterMeta;
+pub use cluster::cluster_mgr::ClusterMgr;
 pub use user::user_api::UserInfo;
 pub use user::user_api::UserMgrApi;
 pub use user::user_mgr::UserMgr;
