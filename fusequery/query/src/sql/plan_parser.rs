@@ -816,12 +816,11 @@ impl PlanParser {
                 op: format!("{}", op),
                 expr: Box::new(self.sql_to_rex(expr, schema, select)?),
             }),
-            sqlparser::ast::Expr::Exists(q) => {
-                Ok(Expression::ScalarFunction {
-                    op: "EXISTS".to_lowercase(),
-                    args: vec![self.subquery_to_rex(q)?],
-                })
-            }
+            sqlparser::ast::Expr::Exists(q) => Ok(Expression::ScalarFunction {
+                op: "EXISTS".to_lowercase(),
+                args: vec![self.subquery_to_rex(q)?],
+            }),
+            sqlparser::ast::Expr::Subquery(q) => Ok(self.scalar_subquery_to_rex(q)?),
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema, select),
             sqlparser::ast::Expr::CompoundIdentifier(ids) => {
                 self.process_compound_ident(ids.as_slice(), select)
@@ -933,10 +932,22 @@ impl PlanParser {
         }
     }
 
-    pub fn subquery_to_rex(&self, subquery: &Box<sqlparser::ast::Query>) -> Result<Expression> {
+    pub fn subquery_to_rex(&self, subquery: &Box<Query>) -> Result<Expression> {
         let subquery = self.query_to_plan(subquery)?;
         let subquery_name = self.ctx.get_subquery_name(&subquery);
-        Ok(Expression::ScalarSubquery { name: subquery_name, query_plan: Arc::new(subquery) })
+        Ok(Expression::Subquery {
+            name: subquery_name,
+            query_plan: Arc::new(subquery),
+        })
+    }
+
+    pub fn scalar_subquery_to_rex(&self, subquery: &Box<Query>) -> Result<Expression> {
+        let subquery = self.query_to_plan(subquery)?;
+        let subquery_name = self.ctx.get_subquery_name(&subquery);
+        Ok(Expression::ScalarSubquery {
+            name: subquery_name,
+            query_plan: Arc::new(subquery),
+        })
     }
 
     pub fn set_variable_to_plan(

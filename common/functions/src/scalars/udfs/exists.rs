@@ -7,7 +7,8 @@ use std::fmt;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
-use common_exception::{Result, ErrorCode};
+use common_exception::ErrorCode;
+use common_exception::Result;
 
 use crate::scalars::Function;
 

@@ -116,8 +116,7 @@ impl Interpreter for SelectInterpreter {
         for (index, (node, action)) in scheduled_actions.remote_actions.iter().enumerate() {
             let mut flight_client = node.get_flight_client().await?;
             let prepare_query_stage = flight_client.prepare_query_stage(action.clone(), timeout);
-            if let Err(error) = prepare_query_stage.await
-            {
+            if let Err(error) = prepare_query_stage.await {
                 return prepare_error_handler(error, index);
             }
         }

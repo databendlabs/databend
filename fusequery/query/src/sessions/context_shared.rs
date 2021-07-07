@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -16,7 +17,6 @@ use crate::configs::Config;
 use crate::datasources::DataSource;
 use crate::sessions::Session;
 use crate::sessions::Settings;
-use std::sync::atomic::AtomicUsize;
 
 /// Data that needs to be shared in a query context.
 /// This is very useful, for example, for queries:

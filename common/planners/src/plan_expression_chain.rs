@@ -64,8 +64,15 @@ impl ExpressionChain {
 
                 self.actions.push(ExpressionAction::Constant(value));
             }
-            Expression::ScalarSubquery { name, query_plan } => {
+            Expression::Subquery { name, query_plan } => {
                 // Subquery results are ready in the expression input
+                self.actions.push(ExpressionAction::Input(ActionInput {
+                    name: name.clone(),
+                    return_type: expr.to_subquery_type(query_plan)?,
+                }));
+            }
+            Expression::ScalarSubquery { name, query_plan } => {
+                // Scalar subquery results are ready in the expression input
                 self.actions.push(ExpressionAction::Input(ActionInput {
                     name: name.to_string(),
                     return_type: expr.to_subquery_type(query_plan)?,

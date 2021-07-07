@@ -9,9 +9,11 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
-use common_exception::{Result, ErrorCode};
+use common_exception::ErrorCode;
+use common_exception::Result;
 
 use crate::col;
+use crate::plan_subqueries_set_create::CreateSubQueriesSetsPlan;
 use crate::validate_expression;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
@@ -31,7 +33,6 @@ use crate::RewriteHelper;
 use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SortPlan;
-use crate::plan_subqueries_set_create::CreateSubQueriesSetsPlan;
 
 pub enum AggregateMode {
     Partial,
@@ -310,7 +311,7 @@ impl PlanBuilder {
                 CreateSubQueriesSetsPlan {
                     expressions: sub_queries,
                     input: node.input(0),
-                }
+                },
             )]);
         }
 

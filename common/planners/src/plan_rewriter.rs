@@ -11,6 +11,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::plan_subqueries_set_create::CreateSubQueriesSetsPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
@@ -37,7 +38,6 @@ use crate::ShowCreateTablePlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::UseDatabasePlan;
-use crate::plan_subqueries_set_create::CreateSubQueriesSetsPlan;
 
 /// `PlanRewriter` is a visitor that can help to rewrite `PlanNode`
 /// By default, a `PlanRewriter` will traverse the plan tree in pre-order and return rewritten plan tree.
@@ -147,8 +147,7 @@ pub trait PlanRewriter<'plan> {
     fn rewrite_sub_queries_expression(
         &mut self,
         plan: &'plan CreateSubQueriesSetsPlan,
-    ) -> Result<PlanNode>
-    {
+    ) -> Result<PlanNode> {
         // TODO: need rewrite subquery expression
         Ok(PlanNode::SubQueryExpression(CreateSubQueriesSetsPlan {
             expressions: plan.expressions.clone(),
@@ -409,6 +408,7 @@ impl RewriteHelper {
             }
             Expression::Wildcard
             | Expression::Literal(_)
+            | Expression::Subquery { .. }
             | Expression::ScalarSubquery { .. }
             | Expression::Sort { .. } => Ok(expr.clone()),
         }
@@ -461,6 +461,7 @@ impl RewriteHelper {
             Expression::Alias(_, expr) => vec![expr.as_ref().clone()],
             Expression::Column(_) => vec![],
             Expression::Literal(_) => vec![],
+            Expression::Subquery { .. } => vec![],
             Expression::ScalarSubquery { .. } => vec![],
             Expression::UnaryExpression { expr, .. } => {
                 vec![expr.as_ref().clone()]
@@ -482,6 +483,7 @@ impl RewriteHelper {
             Expression::Alias(_, expr) => Self::expression_plan_columns(expr)?,
             Expression::Column(_) => vec![expr.clone()],
             Expression::Literal(_) => vec![],
+            Expression::Subquery { .. } => vec![],
             Expression::ScalarSubquery { .. } => vec![],
             Expression::UnaryExpression { expr, .. } => Self::expression_plan_columns(expr)?,
             Expression::BinaryExpression { left, right, .. } => {
@@ -636,6 +638,7 @@ impl RewriteHelper {
 
     pub fn collect_expr_sub_queries(expr: &Expression, res: &mut Vec<Expression>) -> Result<bool> {
         match expr {
+            Expression::Subquery { .. } => res.push(expr.clone()),
             Expression::ScalarSubquery { .. } => res.push(expr.clone()),
             _ => {
                 let expressions = Self::expression_plan_children(expr)?;

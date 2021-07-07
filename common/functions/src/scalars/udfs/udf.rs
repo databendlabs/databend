@@ -4,6 +4,7 @@
 
 use common_exception::Result;
 
+use crate::scalars::udfs::exists::ExistsFunction;
 use crate::scalars::CrashMeFunction;
 use crate::scalars::DatabaseFunction;
 use crate::scalars::FactoryFuncRef;
@@ -11,7 +12,6 @@ use crate::scalars::SleepFunction;
 use crate::scalars::ToTypeNameFunction;
 use crate::scalars::UdfExampleFunction;
 use crate::scalars::VersionFunction;
-use crate::scalars::udfs::exists::ExistsFunction;
 
 #[derive(Clone)]
 pub struct UdfFunction;

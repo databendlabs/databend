@@ -50,7 +50,7 @@ impl Interpreter for ExplainInterpreter {
                 let pipeline = PipelineBuilder::create(self.ctx.clone(), plan).build()?;
                 format!("{:?}", pipeline)
             }
-            _ => format!("{:?}", plan),
+            _ => format!("{}", plan.display_indent_format()),
         };
         let block =
             DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![result.as_str()])]);

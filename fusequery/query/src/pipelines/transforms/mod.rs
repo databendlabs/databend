@@ -42,6 +42,7 @@ mod transform_source_test;
 
 mod transform_aggregator_final;
 mod transform_aggregator_partial;
+mod transform_create_sets;
 mod transform_expression;
 mod transform_expression_executor;
 mod transform_filter;
@@ -54,4 +55,3 @@ mod transform_remote;
 mod transform_sort_merge;
 mod transform_sort_partial;
 mod transform_source;
-mod transform_create_sets;

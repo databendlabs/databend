@@ -294,9 +294,10 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                 data_type: data_type.clone(),
             }),
 
-            Expression::Column(_) | Expression::Literal(_) | Expression::ScalarSubquery { .. } => {
-                Ok(expr.clone())
-            }
+            Expression::Column(_)
+            | Expression::Literal(_)
+            | Expression::Subquery { .. }
+            | Expression::ScalarSubquery { .. } => Ok(expr.clone()),
         },
     }
 }

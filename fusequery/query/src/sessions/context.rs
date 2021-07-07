@@ -4,13 +4,15 @@
 
 use std::collections::VecDeque;
 use std::future::Future;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_planners::{Part, PlanNode};
+use common_planners::Part;
 use common_planners::Partitions;
+use common_planners::PlanNode;
 use common_planners::Statistics;
 use common_progress::ProgressCallback;
 use common_progress::ProgressValues;
@@ -25,7 +27,6 @@ use crate::datasources::Table;
 use crate::datasources::TableFunction;
 use crate::sessions::context_shared::FuseQueryContextShared;
 use crate::sessions::Settings;
-use std::sync::atomic::Ordering;
 
 pub struct FuseQueryContext {
     statistics: Arc<RwLock<Statistics>>,

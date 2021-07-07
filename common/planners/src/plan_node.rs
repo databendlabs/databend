@@ -8,6 +8,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::plan_subqueries_set_create::CreateSubQueriesSetsPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
@@ -32,7 +33,6 @@ use crate::ShowCreateTablePlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::UseDatabasePlan;
-use crate::plan_subqueries_set_create::CreateSubQueriesSetsPlan;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum PlanNode {
@@ -138,7 +138,7 @@ impl PlanNode {
             PlanNode::Explain(v) => vec![v.input.clone()],
             PlanNode::Select(v) => vec![v.input.clone()],
             PlanNode::Sort(v) => vec![v.input.clone()],
-            PlanNode::SubQueryExpression(v) => vec![v.input.clone()],
+            PlanNode::SubQueryExpression(v) => v.get_inputs(),
 
             _ => vec![],
         }
@@ -165,6 +165,7 @@ impl PlanNode {
             PlanNode::Explain(v) => v.set_input(inputs[0]),
             PlanNode::Select(v) => v.set_input(inputs[0]),
             PlanNode::Sort(v) => v.set_input(inputs[0]),
+            PlanNode::SubQueryExpression(v) => v.set_inputs(inputs),
             _ => {
                 return Err(ErrorCode::UnImplement(format!(
                     "UnImplement set_inputs for {:?}",

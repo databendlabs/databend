@@ -89,7 +89,12 @@ pub enum Expression {
         /// The `DataType` the expression will yield
         data_type: DataType,
     },
+    /// Scalar sub query. such as `SELECT (SELECT 1)`
     ScalarSubquery {
+        name: String,
+        query_plan: Arc<PlanNode>,
+    },
+    Subquery {
         name: String,
         query_plan: Arc<PlanNode>,
     },
@@ -134,12 +139,24 @@ impl Expression {
         Ok(DataType::List(Box::new(subquery_per_row_type)))
     }
 
+    pub fn to_scalar_subquery_type(&self, subquery_plan: &PlanNode) -> Result<DataType> {
+        let subquery_schema = subquery_plan.schema();
+
+        match subquery_schema.fields().len() {
+            1 => Ok(subquery_schema.field(0).data_type().clone()),
+            _ => Ok(DataType::Struct(subquery_schema.fields().clone())),
+        }
+    }
+
     pub fn to_data_type(&self, input_schema: &DataSchemaRef) -> Result<DataType> {
         match self {
             Expression::Alias(_, expr) => expr.to_data_type(input_schema),
             Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
             Expression::Literal(v) => Ok(v.data_type()),
-            Expression::ScalarSubquery { name, query_plan } => self.to_subquery_type(query_plan),
+            Expression::Subquery { query_plan, .. } => self.to_subquery_type(query_plan),
+            Expression::ScalarSubquery { query_plan, .. } => {
+                self.to_scalar_subquery_type(query_plan)
+            }
             Expression::BinaryExpression { op, left, right } => {
                 let arg_types = vec![
                     left.to_data_type(input_schema)?,
@@ -221,11 +238,10 @@ impl fmt::Debug for Expression {
             Expression::Alias(alias, v) => write!(f, "{:?} as {:#}", v, alias),
             Expression::Column(ref v) => write!(f, "{:#}", v),
             Expression::Literal(ref v) => write!(f, "{:#}", v),
-            Expression::ScalarSubquery { name, query_plan } => {
-                write!(f, "scalar subquery( {} )", name)
-            },
+            Expression::Subquery { name, .. } => write!(f, "subquery({})", name),
+            Expression::ScalarSubquery { name, .. } => write!(f, "scalar subquery({})", name),
             Expression::BinaryExpression { op, left, right } => {
-                write!(f, "({:?} {} {:?})", left, op, right, )
+                write!(f, "({:?} {} {:?})", left, op, right,)
             }
 
             Expression::UnaryExpression { op, expr } => {

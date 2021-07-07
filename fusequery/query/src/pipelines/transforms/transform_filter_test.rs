@@ -70,11 +70,7 @@ async fn test_transform_filter_error() -> Result<()> {
         .and_then(|x| x.build())?;
 
     if let PlanNode::Filter(plan) = plan {
-        let result = FilterTransform::try_create(
-            plan.schema(),
-            plan.predicate.clone(),
-            false,
-        );
+        let result = FilterTransform::try_create(plan.schema(), plan.predicate.clone(), false);
         let actual = format!("{}", result.err().unwrap());
         let expect = "Code: 6, displayText = Unable to get field named \"not_found_filed\". Valid fields: [\"number\"].";
         assert_eq!(expect, actual);

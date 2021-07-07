@@ -29,11 +29,7 @@ pub struct FilterTransform {
 }
 
 impl FilterTransform {
-    pub fn try_create(
-        schema: DataSchemaRef,
-        predicate: Expression,
-        having: bool,
-    ) -> Result<Self> {
+    pub fn try_create(schema: DataSchemaRef, predicate: Expression, having: bool) -> Result<Self> {
         let mut fields = schema.fields().clone();
         fields.push(predicate.to_data_field(&schema)?);
 
@@ -82,7 +78,10 @@ impl Processor for FilterTransform {
         let executor = self.executor.clone();
         let column_name = self.predicate.column_name();
 
-        let execute_fn = |executor: Arc<ExpressionExecutor>, column_name: &str, block: Result<DataBlock>| -> Result<DataBlock> {
+        let execute_fn = |executor: Arc<ExpressionExecutor>,
+                          column_name: &str,
+                          block: Result<DataBlock>|
+         -> Result<DataBlock> {
             tracing::debug!("execute...");
             let start = Instant::now();
 
@@ -100,7 +99,9 @@ impl Processor for FilterTransform {
             batch.try_into()
         };
         let stream = input_stream.filter_map(move |v| {
-            execute_fn(executor.clone(), &column_name, v).map(Some).transpose()
+            execute_fn(executor.clone(), &column_name, v)
+                .map(Some)
+                .transpose()
         });
         Ok(Box::pin(stream))
     }

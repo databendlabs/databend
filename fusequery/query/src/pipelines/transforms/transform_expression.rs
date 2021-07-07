@@ -79,11 +79,9 @@ impl Processor for ExpressionTransform {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let executor = self.executor.clone();
         let input_stream = self.input.execute().await?;
-        let executor_fn = |executor: Arc<ExpressionExecutor>, block: Result<DataBlock>|
-                           -> Result<DataBlock>
-            {
-                executor.execute(&block?)
-            };
+        let executor_fn = |executor: Arc<ExpressionExecutor>,
+                           block: Result<DataBlock>|
+         -> Result<DataBlock> { executor.execute(&block?) };
 
         let stream = input_stream
             .filter_map(move |v| executor_fn(executor.clone(), v).map(Some).transpose());

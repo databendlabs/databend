@@ -9,6 +9,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
+use common_planners::CreateSubQueriesSetsPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::HavingPlan;
@@ -21,7 +22,6 @@ use common_planners::RemotePlan;
 use common_planners::SortPlan;
 use common_planners::StagePlan;
 use common_tracing::tracing;
-use common_planners::CreateSubQueriesSetsPlan;
 
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::transforms::AggregatorFinalTransform;
@@ -46,10 +46,7 @@ pub struct PipelineBuilder {
 
 impl PipelineBuilder {
     pub fn create(ctx: FuseQueryContextRef, plan: PlanNode) -> Self {
-        PipelineBuilder {
-            ctx,
-            plan,
-        }
+        PipelineBuilder { ctx, plan }
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -95,7 +92,9 @@ impl PipelineBuilder {
                     PipelineBuilder::visit_limit_by_plan(&mut pipeline, plan)
                 }
                 PlanNode::ReadSource(plan) => self.visit_read_data_source_plan(&mut pipeline, plan),
-                PlanNode::SubQueryExpression(plan) => self.visit_create_sets_plan(&mut pipeline, plan),
+                PlanNode::SubQueryExpression(plan) => {
+                    self.visit_create_sets_plan(&mut pipeline, plan)
+                }
                 other => Result::Err(ErrorCode::UnknownPlan(format!(
                     "Build pipeline from the plan node unsupported:{:?}",
                     other.name()
