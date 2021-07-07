@@ -17,7 +17,6 @@ use common_arrow::arrow::array::UInt64Array;
 use common_arrow::arrow::array::UInt8Array;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_datavalues::columns::DataColumn;
-//use common_datavalues::series::Series;
 use common_datavalues::prelude::*;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
@@ -62,8 +61,6 @@ impl InListExpr {
 
 macro_rules! make_contains {
     ($ARRAY:expr, $LIST_VALUES:expr, $NEGATED:expr, $SCALAR_VALUE:ident, $ARRAY_TYPE:ident) => {{
-        //let array = $ARRAY.as_any().downcast_ref::<$ARRAY_TYPE>().unwrap();
-
         let mut contains_null = false;
         let values = $LIST_VALUES
             .iter()
@@ -132,7 +129,7 @@ impl InListExpr {
             if let Expression::Literal(l) = e {
                 list_values.push(l);
             } else {
-                unimplemented!("InList contains invalid datatype.")
+                unimplemented!("InList contains invalid expression.")
             }
         }
 

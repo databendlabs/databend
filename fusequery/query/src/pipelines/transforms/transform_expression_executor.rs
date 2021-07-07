@@ -11,6 +11,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::InListFunction;
 use common_planners::Expression;
 use common_planners::ExpressionAction;
 use common_planners::ExpressionChain;
@@ -140,6 +141,19 @@ impl ExpressionExecutor {
                     }
                 }
                 ExpressionAction::InList(inlist) => {
+                    let f = InListFunction::try_create(inlist.list.clone(), inlist.negated)?;
+                    let col = column_map.get(&inlist.expr_name);
+                    match col {
+                        Some(c) => {
+                            let res_col = f.eval(&[c.clone()], rows)?;
+                            column_map.insert(inlist.name.clone(), res_col);
+                        }
+                        _ => {
+                            return Err(ErrorCode::LogicalError(
+                                "Exist subquery must be prepared before the main query's execution",
+                            ));
+                        }
+                    }
                     println!("inlist={:?}", inlist);
                     println!("rows={:?}", rows);
                     println!("datablock={:?}", block);

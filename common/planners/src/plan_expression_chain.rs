@@ -79,8 +79,11 @@ impl ExpressionChain {
                     }
                 }
                 let v = ActionInList {
-                    name: inlist_expr.expr().column_name(),
+                    // name for the whole exprs
+                    name: expr.column_name(),
+                    // name for the input column
                     expr_name: inlist_expr.expr().column_name(),
+                    // variable passed to InListFunction
                     list: val_list,
                     negated: inlist_expr.negated(),
                 };
