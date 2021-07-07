@@ -24,7 +24,11 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ secrets.CACHE_RESET_KEY }}-${{ runner.os }}-cargo-testcache-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-testcache-${{ secrets.CACHE_RESET_KEY }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-testcache-${{ secrets.CACHE_RESET_KEY }}-
+            ${{ runner.os }}-cargo-testcache-
+            ${{ runner.os }}-cargo-
 
       - name: Run test
         uses: actions-rs/cargo@v1

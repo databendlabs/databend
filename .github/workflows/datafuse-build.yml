@@ -26,7 +26,11 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ secrets.CACHE_RESET_KEY }}-${{ runner.os }}-cargo-buildcache-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-buildcache-${{ secrets.CACHE_RESET_KEY }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-buildcache-${{ secrets.CACHE_RESET_KEY }}-
+            ${{ runner.os }}-cargo-buildcache-
+            ${{ runner.os }}-cargo-
 
       - name: Build
         run: cargo build --verbose
