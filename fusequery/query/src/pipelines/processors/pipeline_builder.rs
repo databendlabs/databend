@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::AggregatorFinalPlan;
+use common_planners::{AggregatorFinalPlan, Expression};
 use common_planners::AggregatorPartialPlan;
 use common_planners::CreateSubQueriesSetsPlan;
 use common_planners::ExpressionPlan;
@@ -24,7 +24,7 @@ use common_planners::StagePlan;
 use common_tracing::tracing;
 
 use crate::pipelines::processors::Pipeline;
-use crate::pipelines::transforms::AggregatorFinalTransform;
+use crate::pipelines::transforms::{AggregatorFinalTransform, CreateSetsTransform, SubQueriesPuller};
 use crate::pipelines::transforms::AggregatorPartialTransform;
 use crate::pipelines::transforms::ExpressionTransform;
 use crate::pipelines::transforms::FilterTransform;
@@ -37,7 +37,7 @@ use crate::pipelines::transforms::RemoteTransform;
 use crate::pipelines::transforms::SortMergeTransform;
 use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::{FuseQueryContextRef, FuseQueryContext};
 
 pub struct PipelineBuilder {
     ctx: FuseQueryContextRef,
@@ -310,9 +310,16 @@ impl PipelineBuilder {
         pipeline: &mut Pipeline,
         plan: &CreateSubQueriesSetsPlan,
     ) -> Result<bool> {
-        Err(ErrorCode::UnImplement(""))
-        // pipeline.add_simple_transform(|| {
-        //     Ok(Box::new(LimitTransform::try_create(plan.n, plan.offset)?))
-        // })?;
+        let ctx = self.ctx.clone();
+        let expressions = plan.expressions.clone();
+        let sub_queries_puller = SubQueriesPuller::create(ctx.clone(), expressions);
+        pipeline.add_simple_transform(move || {
+            Ok(Box::new(CreateSetsTransform::try_create(
+                ctx.clone(),
+                sub_queries_puller.clone(),
+            )?))
+        })?;
+
+        Ok(true)
     }
 }

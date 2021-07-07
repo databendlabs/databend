@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
+use common_datavalues::{DataSchemaRef, DataField, DataSchema};
 
 use crate::Expression;
 use crate::PlanNode;
@@ -17,8 +17,23 @@ pub struct CreateSubQueriesSetsPlan {
 
 impl CreateSubQueriesSetsPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        // TODO: merge header
-        self.input.schema()
+        let schema = self.input.schema();
+        let mut schema_fields = schema.fields().clone();
+        for expression in &self.expressions {
+            match expression {
+                Expression::Subquery { name, query_plan } => {
+                    let subquery_field_type = expression.to_subquery_type(query_plan);
+                    schema_fields.push(DataField::new(name, subquery_field_type, false));
+                }
+                Expression::ScalarSubquery { name, query_plan } => {
+                    let subquery_field_type = expression.to_scalar_subquery_type(query_plan);
+                    schema_fields.push(DataField::new(name, subquery_field_type, false));
+                }
+                _ => panic!("Logical error, expressions must be Subquery or ScalarSubquery")
+            };
+        }
+
+        Arc::new(DataSchema::new(schema_fields))
     }
 
     pub fn get_inputs(&self) -> Vec<Arc<PlanNode>> {

@@ -16,6 +16,8 @@ pub use transform_remote::RemoteTransform;
 pub use transform_sort_merge::SortMergeTransform;
 pub use transform_sort_partial::SortPartialTransform;
 pub use transform_source::SourceTransform;
+pub use transform_create_sets::SubQueriesPuller;
+pub use transform_create_sets::CreateSetsTransform;
 
 #[cfg(test)]
 mod transform_aggregator_final_test;

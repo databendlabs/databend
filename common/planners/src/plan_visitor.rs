@@ -158,6 +158,7 @@ pub trait PlanVisitor<'plan> {
     }
 
     fn visit_subquery_expression(&mut self, plan: &'plan CreateSubQueriesSetsPlan) {
+        // TODO: need visit subquery expression
         self.visit_plan_node(plan.input.as_ref());
     }
 

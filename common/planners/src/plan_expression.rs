@@ -127,7 +127,7 @@ impl Expression {
         Ok(false)
     }
 
-    pub fn to_subquery_type(&self, subquery_plan: &PlanNode) -> Result<DataType> {
+    pub fn to_subquery_type(&self, subquery_plan: &PlanNode) -> DataType {
         let subquery_schema = subquery_plan.schema();
 
         let subquery_per_row_type = DataField::new(
@@ -136,15 +136,15 @@ impl Expression {
             false,
         );
 
-        Ok(DataType::List(Box::new(subquery_per_row_type)))
+        DataType::List(Box::new(subquery_per_row_type))
     }
 
-    pub fn to_scalar_subquery_type(&self, subquery_plan: &PlanNode) -> Result<DataType> {
+    pub fn to_scalar_subquery_type(&self, subquery_plan: &PlanNode) -> DataType {
         let subquery_schema = subquery_plan.schema();
 
         match subquery_schema.fields().len() {
-            1 => Ok(subquery_schema.field(0).data_type().clone()),
-            _ => Ok(DataType::Struct(subquery_schema.fields().clone())),
+            1 => subquery_schema.field(0).data_type().clone(),
+            _ => DataType::Struct(subquery_schema.fields().clone()),
         }
     }
 
@@ -153,10 +153,8 @@ impl Expression {
             Expression::Alias(_, expr) => expr.to_data_type(input_schema),
             Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
             Expression::Literal(v) => Ok(v.data_type()),
-            Expression::Subquery { query_plan, .. } => self.to_subquery_type(query_plan),
-            Expression::ScalarSubquery { query_plan, .. } => {
-                self.to_scalar_subquery_type(query_plan)
-            }
+            Expression::Subquery { query_plan, .. } => Ok(self.to_subquery_type(query_plan)),
+            Expression::ScalarSubquery { query_plan, .. } => Ok(self.to_scalar_subquery_type(query_plan)),
             Expression::BinaryExpression { op, left, right } => {
                 let arg_types = vec![
                     left.to_data_type(input_schema)?,
