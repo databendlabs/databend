@@ -22,7 +22,7 @@ impl InListExpr {
     }
 
     /// Input expression
-    pub fn expr(&self) -> &Box<Expression> {
+    pub fn expr(&self) -> &Expression {
         &self.expr
     }
 

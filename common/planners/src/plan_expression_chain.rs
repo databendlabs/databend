@@ -2,7 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_datavalues::is_numeric;
+use common_datavalues::numerical_coercion;
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
 
@@ -70,14 +73,30 @@ impl ExpressionChain {
             Expression::InList(inlist_expr) => {
                 self.add_expr(inlist_expr.expr())?;
                 let mut val_list = Vec::new();
+                let mut final_dtype = inlist_expr.expr().to_data_type(&self.schema)?;
+
+                // Use two passes to transform the data type here
                 for e in inlist_expr.list() {
-                    match e {
-                        Expression::Literal(l) => {
-                            val_list.push(l.clone());
-                        }
-                        _ => (),
+                    let tmp_dtype = e.to_data_type(&self.schema)?;
+                    if is_numeric(&tmp_dtype) && is_numeric(&final_dtype) {
+                        final_dtype = numerical_coercion(&final_dtype, &tmp_dtype)?;
+                    } else if tmp_dtype != final_dtype {
+                        return Err(ErrorCode::BadDataValueType(format!(
+                            "InList has invalid datatype: {} for {:?}",
+                            tmp_dtype, e
+                        )));
                     }
                 }
+
+                for e in inlist_expr.list() {
+                    if let Expression::Literal(l) = e {
+                        let array = l.to_series_with_size(1)?;
+                        let array = array.cast_with_type(&final_dtype)?;
+                        let value = array.try_get(0)?;
+                        val_list.push(value.clone());
+                    }
+                }
+
                 let v = ActionInList {
                     // name for the whole exprs
                     name: expr.column_name(),
@@ -86,7 +105,7 @@ impl ExpressionChain {
                     // variable passed to InListFunction
                     list: val_list,
                     negated: inlist_expr.negated(),
-                    data_type: inlist_expr.expr().to_data_type(&self.schema)?,
+                    data_type: final_dtype,
                 };
                 self.actions.push(ExpressionAction::InList(v));
             }
