@@ -17,19 +17,13 @@ pub struct ClusterExecutor {
 }
 
 impl ClusterExecutor {
-    pub fn create(
-        name: String,
-        priority: u8,
-        address: Address,
-        local: bool,
-        sequence: usize,
-    ) -> Result<ClusterExecutor> {
+    pub fn create(name: String, priority: u8, address: Address) -> Result<ClusterExecutor> {
         Ok(ClusterExecutor {
             name,
             priority,
             address,
-            local,
-            sequence,
+            local: false,
+            sequence: 0,
         })
     }
 

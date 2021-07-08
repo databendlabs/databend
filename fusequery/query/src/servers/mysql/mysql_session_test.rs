@@ -12,7 +12,6 @@ use common_exception::ToErrorCode;
 use common_runtime::tokio;
 use mysql::prelude::Queryable;
 
-use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::servers::mysql::mysql_session::Session;
 use crate::sessions::ISession;
@@ -240,7 +239,7 @@ async fn test_progress_wait_terminal_after_force_abort() -> Result<()> {
 }
 
 async fn prepare_session_and_connect() -> Result<(mysql::Conn, Arc<Box<dyn ISession>>)> {
-    let session_manager = SessionMgr::from_conf(Config::default(), Cluster::empty())?;
+    let session_manager = SessionMgr::from_conf(Config::default())?;
     let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await?;
     let local_addr = listener
         .local_addr()

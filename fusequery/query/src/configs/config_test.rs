@@ -36,6 +36,8 @@ fn test_config() -> Result<()> {
                 store_api_password: "root".to_string(),
             },
             namespace: "".to_string(),
+            executor_name: "".to_string(),
+            executor_priority: 0,
             config_file: "".to_string(),
         };
         let actual = Config::default();

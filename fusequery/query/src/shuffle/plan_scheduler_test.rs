@@ -10,20 +10,18 @@ use common_exception::Result;
 use common_planners::*;
 use common_runtime::tokio;
 
-use crate::clusters::Cluster;
-use crate::clusters::ClusterRef;
-use crate::configs::Config;
-use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::sessions::FuseQueryContextRef;
+use crate::shuffle::PlanScheduler;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scheduler_plan_without_stage() -> Result<()> {
-    let (context, _cluster) = create_env().await?;
+    let ctx = create_env().await?;
     let scheduled_actions = PlanScheduler::reschedule(
-        context.clone(),
+        ctx.clone(),
         HashMap::<String, bool>::new(),
         &PlanNode::Empty(EmptyPlan::create()),
-    )?;
+    )
+    .await?;
 
     assert!(scheduled_actions.remote_actions.is_empty());
     assert_eq!(
@@ -36,16 +34,17 @@ async fn test_scheduler_plan_without_stage() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scheduler_plan_with_one_normal_stage() -> Result<()> {
-    let (context, _cluster) = create_env().await?;
+    let ctx = create_env().await?;
     let reschedule_res = PlanScheduler::reschedule(
-        context.clone(),
+        ctx.clone(),
         HashMap::<String, bool>::new(),
         &PlanNode::Stage(StagePlan {
             kind: StageKind::Normal,
             scatters_expr: Expression::Literal(DataValue::UInt64(Some(1))),
             input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
         }),
-    );
+    )
+    .await;
 
     match reschedule_res {
         Ok(_) => assert!(
@@ -66,16 +65,17 @@ async fn test_scheduler_plan_with_one_normal_stage() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scheduler_plan_with_one_expansive_stage() -> Result<()> {
-    let (context, _cluster) = create_env().await?;
+    let ctx = create_env().await?;
     let reschedule_res = PlanScheduler::reschedule(
-        context.clone(),
+        ctx.clone(),
         HashMap::<String, bool>::new(),
         &PlanNode::Stage(StagePlan {
             kind: StageKind::Expansive,
             scatters_expr: Expression::Literal(DataValue::UInt64(Some(1))),
             input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
         }),
-    );
+    )
+    .await;
 
     match reschedule_res {
         Ok(_) => assert!(
@@ -112,16 +112,17 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
      *  |                  |
      *  +------------------+
      */
-    let (context, _cluster) = create_env().await?;
+    let ctx = create_env().await?;
     let scheduled_actions = PlanScheduler::reschedule(
-        context.clone(),
+        ctx.clone(),
         HashMap::<String, bool>::new(),
         &PlanNode::Stage(StagePlan {
             kind: StageKind::Convergent,
             scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
             input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
         }),
-    )?;
+    )
+    .await?;
 
     assert_eq!(scheduled_actions.remote_actions.len(), 2);
     assert_eq!(
@@ -186,9 +187,9 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
      *        +-------->|RemotePlan +------>|SelectPlan +-----------+
      *                  +-----------+       +-----------+
      */
-    let (context, _cluster) = create_env().await?;
+    let ctx = create_env().await?;
     let scheduled_actions = PlanScheduler::reschedule(
-        context.clone(),
+        ctx.clone(),
         HashMap::<String, bool>::new(),
         &PlanNode::Select(SelectPlan {
             input: Arc::new(PlanNode::Stage(StagePlan {
@@ -206,7 +207,8 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
                 })),
             })),
         }),
-    )?;
+    )
+    .await?;
 
     assert_eq!(scheduled_actions.remote_actions.len(), 3);
     assert_eq!(
@@ -298,9 +300,9 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
      *   |EmptyStage +----->|RemotePlan +------>|SelectPlan +-----------+
      *   +-----------+      +-----------+       +-----------+
      */
-    let (context, _cluster) = create_env().await?;
+    let ctx = create_env().await?;
     let scheduled_actions = PlanScheduler::reschedule(
-        context.clone(),
+        ctx.clone(),
         HashMap::<String, bool>::new(),
         &PlanNode::Select(SelectPlan {
             input: Arc::new(PlanNode::Stage(StagePlan {
@@ -315,7 +317,8 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
                 })),
             })),
         }),
-    )?;
+    )
+    .await?;
 
     assert_eq!(scheduled_actions.remote_actions.len(), 4);
     assert_eq!(
@@ -405,22 +408,16 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     Ok(())
 }
 
-async fn create_env() -> Result<(FuseQueryContextRef, ClusterRef)> {
+async fn create_env() -> Result<FuseQueryContextRef> {
     let ctx = crate::tests::try_create_context()?;
-    let cluster = Cluster::create_global(Config::default())?;
-
-    cluster
-        .add_node(
-            &String::from("dummy_local"),
-            1,
-            &String::from("localhost:9090"),
-        )
-        .await?;
-    cluster
-        .add_node(&String::from("dummy"), 1, &String::from("github.com:9090"))
+    ctx.register_one_executor(
+        String::from("dummy_local"),
+        1,
+        String::from("localhost:9090"),
+    )
+    .await?;
+    ctx.register_one_executor(String::from("dummy"), 1, String::from("github.com:9090"))
         .await?;
 
-    ctx.with_cluster(cluster.clone())?;
-
-    Ok((ctx, cluster))
+    Ok(ctx)
 }

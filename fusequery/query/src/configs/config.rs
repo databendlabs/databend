@@ -352,8 +352,6 @@ impl Config {
             self.executor_name.clone(),
             self.executor_priority,
             Address::create(self.flight_api_address.as_str())?,
-            false,
-            0,
         )
     }
 }

@@ -5,8 +5,6 @@
 use common_exception::Result;
 use common_runtime::tokio;
 
-use crate::clusters::Cluster;
-use crate::configs::Config;
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::Optimizer;
 use crate::sql::PlanParser;
@@ -157,20 +155,12 @@ async fn test_scatter_optimizer() -> Result<()> {
 
     for test in tests {
         let ctx = crate::tests::try_create_context()?;
-        let cluster = Cluster::create_global(Config::default())?;
-        cluster
-            .add_node(
-                &String::from("Github"),
-                1,
-                &String::from("www.github.com:9090"),
-            )
+        ctx.register_one_executor("Github".to_string(), 1, "www.github.com:9090".to_string())
             .await?;
-
-        ctx.with_cluster(cluster.clone())?;
         let plan = PlanParser::create(ctx.clone()).build_from_sql(test.query)?;
 
         let mut optimizer = ScattersOptimizer::create(ctx);
-        let optimized = optimizer.optimize(&plan)?;
+        let optimized = optimizer.optimize(&plan).await?;
         let actual = format!("{:?}", optimized);
         assert_eq!(test.expect, actual, "{:#?}", test.name);
     }

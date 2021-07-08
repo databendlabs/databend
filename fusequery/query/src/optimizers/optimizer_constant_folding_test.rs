@@ -10,13 +10,14 @@ mod tests {
     use common_datavalues::prelude::*;
     use common_exception::Result;
     use common_planners::*;
+    use common_runtime::tokio;
     use pretty_assertions::assert_eq;
 
     use crate::optimizers::optimizer_test::*;
     use crate::optimizers::*;
 
-    #[test]
-    fn test_constant_folding_optimizer() -> Result<()> {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_constant_folding_optimizer() -> Result<()> {
         let ctx = crate::tests::try_create_context()?;
 
         let total = ctx.get_settings().get_max_block_size()? as u64;
@@ -54,7 +55,7 @@ mod tests {
         });
 
         let mut constant_folding = ConstantFoldingOptimizer::create(ctx);
-        let optimized = constant_folding.optimize(&plan)?;
+        let optimized = constant_folding.optimize(&plan).await?;
 
         let expect = "\
         Projection: a:Utf8\
