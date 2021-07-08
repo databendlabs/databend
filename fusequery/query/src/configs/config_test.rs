@@ -38,6 +38,7 @@ fn test_config() -> Result<()> {
             namespace: "".to_string(),
             executor_name: "".to_string(),
             executor_priority: 0,
+            executor_backend_url: "".to_string(),
             config_file: "".to_string(),
         };
         let actual = Config::default();

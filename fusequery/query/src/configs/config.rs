@@ -73,6 +73,7 @@ const STORE_API_PASSWORD: &str = "STORE_API_PASSWORD";
 const NAMESPACE: &str = "NAMESPACE";
 const EXECUTOR_NAME: &str = "EXECUTOR_NAME";
 const EXECUTOR_PRIORITY: &str = "EXECUTOR_PRIORITY";
+const EXECUTOR_BACKEND_URL: &str = "EXECUTOR_BACKEND_URL";
 
 const CONFIG_FILE: &str = "CONFIG_FILE";
 
@@ -165,6 +166,9 @@ pub struct Config {
 
     #[structopt(long, env = EXECUTOR_PRIORITY, default_value = "0")]
     pub executor_priority: u8,
+
+    #[structopt(long, env = EXECUTOR_BACKEND_URL, default_value = "")]
+    pub executor_backend_url: String,
 
     #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
     pub config_file: String,
@@ -262,6 +266,7 @@ impl Config {
             namespace: "".to_string(),
             executor_name: "".to_string(),
             executor_priority: 0,
+            executor_backend_url: "".to_string(),
             config_file: "".to_string(),
         }
     }
@@ -343,6 +348,12 @@ impl Config {
         env_helper!(mut_config, namespace, String, NAMESPACE);
         env_helper!(mut_config, executor_name, String, EXECUTOR_NAME);
         env_helper!(mut_config, executor_priority, u8, EXECUTOR_PRIORITY);
+        env_helper!(
+            mut_config,
+            executor_backend_url,
+            String,
+            EXECUTOR_BACKEND_URL
+        );
 
         Ok(mut_config)
     }
@@ -351,7 +362,7 @@ impl Config {
         ClusterExecutor::create(
             self.executor_name.clone(),
             self.executor_priority,
-            Address::create(self.flight_api_address.as_str())?,
+            Address::create(self.executor_backend_url.as_str())?,
         )
     }
 }
