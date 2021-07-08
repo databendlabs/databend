@@ -161,7 +161,7 @@ dependencies = [
 [[package]]
 name = "async-raft"
 version = "0.6.1"
-source = "git+https://github.com/datafuse-extras/async-raft?tag=v0.6.2-alpha.1#24d9e9280725b2da39b27dde3d7b393477b496e2"
+source = "git+https://github.com/datafuse-extras/async-raft?tag=v0.6.2-alpha.3#cf4badd0d762757519e2db5ed2f2fc65c2f49d02"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -169,7 +169,7 @@ dependencies = [
  "derive_more",
  "futures",
  "log 0.4.14",
- "rand 0.7.3",
+ "rand 0.8.4",
  "serde",
  "thiserror",
  "tokio",
