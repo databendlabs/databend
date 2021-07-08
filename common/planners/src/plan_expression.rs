@@ -161,10 +161,7 @@ impl Expression {
         }
     }
 
-    pub fn to_aggregate_function(
-        &self,
-        schema: &DataSchemaRef,
-    ) -> Result<Box<dyn AggregateFunction>> {
+    pub fn to_aggregate_function(&self, schema: &DataSchemaRef) -> Result<AggregateFunctionRef> {
         match self {
             Expression::AggregateFunction { op, distinct, args } => {
                 let mut func_name = op.clone();

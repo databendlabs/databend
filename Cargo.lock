@@ -450,6 +450,16 @@ checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "bytes"
+version = "0.4.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "206fdffcfa2df7cbe15601ef46c813fce0965eb3286db6b56c583b814b51c81c"
+dependencies = [
+ "byteorder",
+ "iovec",
+]
+
+[[package]]
+name = "bytes"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e4cec68f03f32e44924783795810fa50a7035d8c8ebe78580ad7e6c703fba38"
@@ -752,6 +762,8 @@ name = "common-functions"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bumpalo",
+ "bytes 0.4.12",
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
@@ -761,6 +773,8 @@ dependencies = [
  "indexmap",
  "lazy_static",
  "pretty_assertions",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2149,6 +2163,15 @@ dependencies = [
  "derive_utils",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "iovec"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2b3ea6ff95e175473f8ffe6a7eb7c00d054240321b84c57051175fe3c1e075e"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

@@ -28,7 +28,7 @@ type GroupFuncTable = RwLock<
     HashMap<
         Vec<u8>,
         (
-            Vec<(Box<dyn AggregateFunction>, String, Vec<String>)>,
+            Vec<(AggregateFunctionRef, String, Vec<String>)>,
             Vec<DataValue>,
         ),
         ahash::RandomState,

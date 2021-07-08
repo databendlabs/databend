@@ -22,7 +22,7 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 
 // Table for <group_key, indices>
-type GroupFuncTable = RwLock<HashMap<Vec<u8>, Vec<Box<dyn AggregateFunction>>, ahash::RandomState>>;
+type GroupFuncTable = RwLock<HashMap<Vec<u8>, Vec<AggregateFunctionRef>, ahash::RandomState>>;
 
 // Group Key ==> Group by values
 type GroupKeyTable = RwLock<HashMap<Vec<u8>, Vec<DataValue>>>;
@@ -109,12 +109,13 @@ impl Processor for GroupByFinalTransform {
                             }
                             groups.insert(group_key.clone(), funcs);
 
+                            // group key values
                             if let DataValue::Utf8(Some(col)) =
                                 block.column(aggr_funcs_len).try_get(row)?
                             {
                                 let val: DataValue = serde_json::from_str(&col)?;
-                                if let DataValue::Struct(states) = val {
-                                    keys.insert(group_key.clone(), states);
+                                if let DataValue::Struct(values) = val {
+                                    keys.insert(group_key.clone(), values);
                                 }
                             }
                         }

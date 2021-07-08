@@ -21,7 +21,7 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 
 pub struct AggregatorFinalTransform {
-    funcs: Vec<Box<dyn AggregateFunction>>,
+    funcs: Vec<AggregateFunctionRef>,
     schema: DataSchemaRef,
     input: Arc<dyn Processor>,
 }

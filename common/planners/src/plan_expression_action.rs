@@ -89,7 +89,7 @@ impl ActionFunction {
         }
     }
 
-    pub fn to_aggregate_function(&self) -> Result<Box<dyn AggregateFunction>> {
+    pub fn to_aggregate_function(&self) -> Result<AggregateFunctionRef> {
         if !self.is_aggregated {
             return Err(ErrorCode::LogicalError(
                 "Action must be aggregated function",

@@ -20,7 +20,7 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 
 pub struct AggregatorPartialTransform {
-    funcs: Vec<Box<dyn AggregateFunction>>,
+    funcs: Vec<AggregateFunctionRef>,
     arg_names: Vec<Vec<String>>,
 
     schema: DataSchemaRef,

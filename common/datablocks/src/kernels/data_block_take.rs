@@ -8,17 +8,34 @@ use common_exception::Result;
 use crate::DataBlock;
 
 impl DataBlock {
-    pub fn block_take_by_indices(raw: &DataBlock, indices: &[u32]) -> Result<DataBlock> {
-        let columns = raw
-            .columns()
+    pub fn block_take_by_indices(
+        raw: &DataBlock,
+        constant_columns: &[String],
+        indices: &[u32],
+    ) -> Result<DataBlock> {
+        if indices.is_empty() {
+            return Ok(DataBlock::empty_with_schema(raw.schema().clone()));
+        }
+        let fields = raw.schema().fields();
+        let columns = fields
             .iter()
-            .map(|column| match column {
-                DataColumn::Array(array) => {
-                    let mut indices = indices.iter().map(|f| *f as usize);
-                    let series = unsafe { array.take_iter_unchecked(&mut indices) }?;
-                    Ok(DataColumn::Array(series))
+            .map(|f| {
+                let column = raw.try_column_by_name(f.name())?;
+                if constant_columns.contains(f.name()) {
+                    let v = column.try_get(indices[0] as usize)?;
+                    return Ok(DataColumn::Constant(v, indices.len()));
+                } else {
+                    match column {
+                        DataColumn::Array(array) => {
+                            let mut indices = indices.iter().map(|f| *f as usize);
+                            let series = unsafe { array.take_iter_unchecked(&mut indices) }?;
+                            return Ok(DataColumn::Array(series));
+                        }
+                        DataColumn::Constant(v, _) => {
+                            return Ok(DataColumn::Constant(v.clone(), indices.len()));
+                        }
+                    }
                 }
-                DataColumn::Constant(v, _) => Ok(DataColumn::Constant(v.clone(), indices.len())),
             })
             .collect::<Result<Vec<_>>>()?;
 

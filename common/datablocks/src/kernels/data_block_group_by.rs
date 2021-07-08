@@ -104,7 +104,7 @@ impl DataBlock {
         let group_indices = Self::group_by_get_indices(block, column_names)?;
         let mut group_blocks = GroupBlocksTable::default();
         for (group_key, (group_indices, group_keys)) in group_indices {
-            let take_block = DataBlock::block_take_by_indices(block, &group_indices)?;
+            let take_block = DataBlock::block_take_by_indices(block, column_names, &group_indices)?;
             group_blocks.push((group_key, group_keys, take_block));
         }
 
