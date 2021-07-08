@@ -2,26 +2,24 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::hash_map::Entry::Occupied;
-use std::collections::hash_map::Entry::Vacant;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_management::cluster::ClusterExecutor;
-use common_planners::EmptyPlan;
-use common_planners::Partitions;
 use common_planners::PlanNode;
-use common_planners::ReadDataSourcePlan;
-use common_planners::RemotePlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
 use common_tracing::tracing;
 
 use crate::api::ExecutePlanWithShuffleAction;
 use crate::sessions::FuseQueryContextRef;
+use crate::shuffle::DefaultExecutorPlan;
+use crate::shuffle::EmptyExecutorPlan;
+use crate::shuffle::ExecutorPlan;
+use crate::shuffle::ReadSourceExecutorPlan;
+use crate::shuffle::RemoteExecutorPlan;
 
 pub struct PlanScheduler;
 
@@ -49,7 +47,7 @@ impl PlanScheduler {
 
         let mut last_stage = None;
         let mut builders = vec![];
-        let mut get_node_plan: Arc<Box<dyn GetNodePlan>> = Arc::new(Box::new(EmptyGetNodePlan));
+        let mut get_node_plan: Arc<Box<dyn ExecutorPlan>> = Arc::new(Box::new(EmptyExecutorPlan));
 
         plan.walk_postorder(|node: &PlanNode| -> Result<bool> {
             match node {
@@ -63,14 +61,14 @@ impl PlanScheduler {
                         plan,
                         &get_node_plan,
                     ));
-                    get_node_plan = RemoteGetNodePlan::create(ctx.get_id(), stage_id, plan);
+                    get_node_plan = RemoteExecutorPlan::create(ctx.get_id(), stage_id, plan);
                 }
                 PlanNode::ReadSource(plan) => {
                     get_node_plan =
-                        ReadSourceGetNodePlan::create(&ctx, plan, &get_node_plan, &executors)?;
+                        ReadSourceExecutorPlan::create(&ctx, plan, &get_node_plan, &executors)?;
                 }
                 _ => {
-                    get_node_plan = Arc::new(Box::new(DefaultGetNodePlan(
+                    get_node_plan = Arc::new(Box::new(DefaultExecutorPlan(
                         node.clone(),
                         get_node_plan.clone(),
                     )))
@@ -115,214 +113,14 @@ impl PlanScheduler {
     }
 }
 
-trait GetNodePlan {
-    fn get_plan(&self, node_name: &str, executors: &[Arc<ClusterExecutor>]) -> Result<PlanNode>;
-}
-
-struct EmptyGetNodePlan;
-
-struct RemoteGetNodePlan(String, String, StagePlan);
-
-struct DefaultGetNodePlan(PlanNode, Arc<Box<dyn GetNodePlan>>);
-
-struct LocalReadSourceGetNodePlan(ReadDataSourcePlan, Arc<Box<dyn GetNodePlan>>);
-
-struct RemoteReadSourceGetNodePlan(
-    ReadDataSourcePlan,
-    Arc<HashMap<String, Partitions>>,
-    Arc<Box<dyn GetNodePlan>>,
-);
-
-struct ReadSourceGetNodePlan(Arc<Box<dyn GetNodePlan>>);
-
-impl GetNodePlan for DefaultGetNodePlan {
-    fn get_plan(&self, node_name: &str, executors: &[Arc<ClusterExecutor>]) -> Result<PlanNode> {
-        let mut clone_node = self.0.clone();
-        clone_node.set_inputs(vec![&self.1.get_plan(node_name, executors)?])?;
-        Ok(clone_node)
-    }
-}
-
-impl GetNodePlan for EmptyGetNodePlan {
-    fn get_plan(&self, _node_name: &str, _executors: &[Arc<ClusterExecutor>]) -> Result<PlanNode> {
-        Ok(PlanNode::Empty(EmptyPlan {
-            schema: Arc::new(DataSchema::empty()),
-        }))
-    }
-}
-
-impl RemoteGetNodePlan {
-    pub fn create(
-        query_id: String,
-        stage_id: String,
-        plan: &StagePlan,
-    ) -> Arc<Box<dyn GetNodePlan>> {
-        Arc::new(Box::new(RemoteGetNodePlan(
-            query_id,
-            stage_id,
-            plan.clone(),
-        )))
-    }
-}
-
-impl GetNodePlan for RemoteGetNodePlan {
-    fn get_plan(
-        &self,
-        executor_name: &str,
-        executors: &[Arc<ClusterExecutor>],
-    ) -> Result<PlanNode> {
-        match self.2.kind {
-            StageKind::Expansive => {
-                for executor in executors {
-                    if executor.local {
-                        return Ok(PlanNode::Remote(RemotePlan {
-                            schema: self.2.schema(),
-                            fetch_name: format!("{}/{}/{}", self.0, self.1, executor_name),
-                            fetch_nodes: vec![executor.name.clone()],
-                        }));
-                    }
-                }
-
-                Err(ErrorCode::NotFoundLocalNode(
-                    "The PlanScheduler must be in the query cluster",
-                ))
-            }
-            _ => {
-                let executors_name = executors
-                    .iter()
-                    .map(|node| node.name.clone())
-                    .collect::<Vec<_>>();
-                Ok(PlanNode::Remote(RemotePlan {
-                    schema: self.2.schema(),
-                    fetch_name: format!("{}/{}/{}", self.0, self.1, executor_name),
-                    fetch_nodes: executors_name,
-                }))
-            }
-        }
-    }
-}
-
-impl GetNodePlan for LocalReadSourceGetNodePlan {
-    fn get_plan(
-        &self,
-        executor_name: &str,
-        executors: &[Arc<ClusterExecutor>],
-    ) -> Result<PlanNode> {
-        match executors
-            .iter()
-            .filter(|executor| executor.name == executor_name && executor.local)
-            .count()
-        {
-            0 => Result::Err(ErrorCode::NotFoundLocalNode(
-                "The PlanScheduler must be in the query cluster",
-            )),
-            _ => Ok(PlanNode::ReadSource(self.0.clone())),
-        }
-    }
-}
-
-impl GetNodePlan for RemoteReadSourceGetNodePlan {
-    fn get_plan(&self, executor_name: &str, _: &[Arc<ClusterExecutor>]) -> Result<PlanNode> {
-        let partitions = self
-            .1
-            .get(executor_name)
-            .map(Clone::clone)
-            .unwrap_or_default();
-        Ok(PlanNode::ReadSource(ReadDataSourcePlan {
-            db: self.0.db.clone(),
-            table: self.0.table.clone(),
-            schema: self.0.schema.clone(),
-            parts: partitions,
-            statistics: self.0.statistics.clone(),
-            description: self.0.description.clone(),
-            scan_plan: self.0.scan_plan.clone(),
-            remote: self.0.remote,
-        }))
-    }
-}
-
-impl ReadSourceGetNodePlan {
-    pub fn create(
-        ctx: &FuseQueryContextRef,
-        plan: &ReadDataSourcePlan,
-        nest_getter: &Arc<Box<dyn GetNodePlan>>,
-        executors: &[Arc<ClusterExecutor>],
-    ) -> Result<Arc<Box<dyn GetNodePlan>>> {
-        let table = ctx.get_table(&plan.db, &plan.table)?;
-
-        if !table.is_local() {
-            let new_partitions_size = ctx.get_max_threads()? as usize * executors.len();
-            let new_source_plan =
-                table.read_plan(ctx.clone(), &*plan.scan_plan, new_partitions_size)?;
-
-            // We always put adjacent partitions in the same node
-            let new_partitions = &new_source_plan.parts;
-            let mut executors_partitions = HashMap::new();
-            let partitions_pre_node = new_partitions.len() / executors.len();
-
-            for (executor_index, executor) in executors.iter().enumerate() {
-                let mut partitions = vec![];
-                let partitions_offset = partitions_pre_node * executor_index;
-
-                for partition_index in 0..partitions_pre_node {
-                    partitions.push((new_partitions[partitions_offset + partition_index]).clone());
-                }
-
-                if !partitions.is_empty() {
-                    executors_partitions.insert(executor.name.clone(), partitions);
-                }
-            }
-
-            // For some irregular partitions, we assign them to the head nodes
-            let offset = partitions_pre_node * executors.len();
-            for index in 0..(new_partitions.len() % executors.len()) {
-                let executor_name = &executors[index].name;
-                match executors_partitions.entry(executor_name.clone()) {
-                    Vacant(entry) => {
-                        let partitions = vec![new_partitions[offset + index].clone()];
-                        entry.insert(partitions);
-                    }
-                    Occupied(mut entry) => {
-                        entry.get_mut().push(new_partitions[offset + index].clone());
-                    }
-                }
-            }
-
-            let nested_getter = RemoteReadSourceGetNodePlan(
-                new_source_plan,
-                Arc::new(executors_partitions),
-                nest_getter.clone(),
-            );
-            return Ok(Arc::new(Box::new(ReadSourceGetNodePlan(Arc::new(
-                Box::new(nested_getter),
-            )))));
-        }
-
-        let nested_getter = LocalReadSourceGetNodePlan(plan.clone(), nest_getter.clone());
-        Ok(Arc::new(Box::new(ReadSourceGetNodePlan(Arc::new(
-            Box::new(nested_getter),
-        )))))
-    }
-}
-
-impl GetNodePlan for ReadSourceGetNodePlan {
-    fn get_plan(
-        &self,
-        executor_name: &str,
-        executors: &[Arc<ClusterExecutor>],
-    ) -> Result<PlanNode> {
-        self.0.get_plan(executor_name, executors)
-    }
-}
-
-struct ExecutionPlanBuilder(String, String, StagePlan, Arc<Box<dyn GetNodePlan>>);
+struct ExecutionPlanBuilder(String, String, StagePlan, Arc<Box<dyn ExecutorPlan>>);
 
 impl ExecutionPlanBuilder {
     pub fn create(
         query_id: String,
         stage_id: String,
         plan: &StagePlan,
-        node_plan_getter: &Arc<Box<dyn GetNodePlan>>,
+        node_plan_getter: &Arc<Box<dyn ExecutorPlan>>,
     ) -> Arc<Box<ExecutionPlanBuilder>> {
         Arc::new(Box::new(ExecutionPlanBuilder(
             query_id,

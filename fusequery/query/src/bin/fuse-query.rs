@@ -133,6 +133,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     })
     .expect("Error setting Ctrl-C handler");
 
+    // TODO: unregister the executor from the namespace?
+
     let cloned_services = services.clone();
     tokio::spawn(async move {
         let cloned_services = cloned_services;
