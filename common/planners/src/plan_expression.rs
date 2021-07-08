@@ -56,7 +56,6 @@ pub enum Expression {
     /// select * from t where xxx and exists (subquery)
     Exists(Arc<PlanNode>),
     /// select number from t where number in (1, 3, 5)
-    //InList{ expr: Box<Expression>, list: Vec<Expression>, negated: bool },
     InList(InListExpr),
     /// A unary expression such as "NOT foo"
     UnaryExpression { op: String, expr: Box<Expression> },

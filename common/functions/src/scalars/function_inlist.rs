@@ -31,11 +31,6 @@ macro_rules! make_contains {
                     None
                 }
                 datatype => {
-                    println!(
-                        "trigger error! {:?}, scala data_type: {:?}",
-                        datatype,
-                        scalar.data_type()
-                    );
                     unimplemented!("Unexpected type {} for InList", datatype)
                 }
             })
@@ -153,7 +148,6 @@ impl Function for InListFunction {
             DataType::Boolean => {
                 make_contains!(array_cast, self.list, self.negated, Boolean, BooleanArray)
             }
-            //DataType::Utf8 => self.compare_utf8::<i32>(array, self.list, self.negated),
             datatype => {
                 unimplemented!("InList does not support datatype {:?}.", datatype)
             }

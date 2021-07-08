@@ -10,8 +10,6 @@ mod plan_builder_test;
 mod plan_display_test;
 #[cfg(test)]
 mod plan_explain_test;
-//#[cfg(test)]
-//mod plan_expression_inlist_test;
 #[cfg(test)]
 mod plan_expression_test;
 #[cfg(test)]
