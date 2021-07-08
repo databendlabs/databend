@@ -152,6 +152,7 @@ build_exceptions! {
     CannotListenerPort(45),
     BadBytes(46),
     InitPrometheusFailure(47),
+    ScalarSubqueryHashMoreRows(48),
 
 
     // uncategorized
@@ -461,5 +462,11 @@ impl From<ErrorCode> for Status {
             }
             Err(error) => Status::unknown(error.to_string()),
         }
+    }
+}
+
+impl Clone for ErrorCode {
+    fn clone(&self) -> Self {
+        ErrorCode::create(self.code(), self.message(), self.backtrace())
     }
 }

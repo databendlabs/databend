@@ -129,14 +129,24 @@ impl Expression {
 
     pub fn to_subquery_type(&self, subquery_plan: &PlanNode) -> DataType {
         let subquery_schema = subquery_plan.schema();
+        let mut columns_field = Vec::with_capacity(subquery_schema.fields().len());
 
-        let subquery_per_row_type = DataField::new(
-            "subquery_per_row",
-            DataType::Struct(subquery_schema.fields().clone()),
-            false,
-        );
+        for column_field in subquery_schema.fields() {
+            columns_field.push(DataField::new(
+                column_field.name(),
+                DataType::List(Box::new(DataField::new(
+                    column_field.name(),
+                    column_field.data_type().clone(),
+                    false,
+                ))),
+                false,
+            ));
+        }
 
-        DataType::List(Box::new(subquery_per_row_type))
+        match columns_field.len() {
+            1 => columns_field[0].data_type().clone(),
+            _ => DataType::Struct(columns_field)
+        }
     }
 
     pub fn to_scalar_subquery_type(&self, subquery_plan: &PlanNode) -> DataType {

@@ -5,7 +5,7 @@
 use std::fmt;
 
 use common_datavalues::columns::DataColumn;
-use common_datavalues::DataSchema;
+use common_datavalues::{DataSchema, DataValue};
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -34,11 +34,17 @@ impl Function for ExistsFunction {
         Ok(false)
     }
 
-    fn eval(&self, _columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
-        // let series = columns[0].to_minimal_array()?;
-        // let column: DataColumn = series.cast_with_type(&self.cast_type)?.into();
-        // Ok(column.resize_constant(input_rows))
-        Err(ErrorCode::UnImplement(""))
+    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
+        match columns[0] {
+            DataColumn::Array(_) => {
+                Err(ErrorCode::LogicalError(
+                    "Logical error: subquery result set must be const."
+                ))
+            },
+            DataColumn::Constant(_, size) => {
+                Ok(DataColumn::Constant(DataValue::Boolean(Some(size != 0)), size))
+            }
+        }
     }
 
     fn num_arguments(&self) -> usize {
