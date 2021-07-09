@@ -67,7 +67,7 @@ pub enum DataValue {
     Struct(Vec<DataValue>),
 }
 
-pub type DataValueRef = Box<DataValue>;
+pub type DataValueRef = Arc<DataValue>;
 
 impl DataValue {
     pub fn is_null(&self) -> bool {
@@ -294,6 +294,10 @@ impl DataValue {
     pub fn to_series_with_size(&self, size: usize) -> Result<Series> {
         let array = self.to_arrow_array_with_size(size)?;
         Ok(array.into_series())
+    }
+
+    pub fn to_values(&self, size: usize) -> Result<Vec<DataValue>> {
+        Ok((0..size).map(|_| self.clone()).collect())
     }
 
     pub fn as_u64(&self) -> Result<u64> {

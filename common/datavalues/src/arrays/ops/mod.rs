@@ -14,9 +14,12 @@ mod take;
 mod take_random;
 mod take_single;
 mod vec_hash;
+mod to_values;
 
 #[cfg(test)]
 mod cast_test;
+
+
 
 pub use agg::*;
 pub use apply::*;
@@ -30,3 +33,4 @@ pub use take::*;
 pub use take_random::*;
 pub use take_single::*;
 pub use vec_hash::*;
+pub use to_values::*;

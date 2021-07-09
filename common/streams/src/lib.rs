@@ -17,6 +17,7 @@ mod stream_progress;
 mod stream_skip;
 mod stream_sort;
 mod stream_take;
+mod stream_sub_queries;
 
 pub use stream::SendableDataBlockStream;
 pub use stream_abort::AbortStream;
@@ -27,3 +28,4 @@ pub use stream_progress::ProgressStream;
 pub use stream_skip::SkipStream;
 pub use stream_sort::SortStream;
 pub use stream_take::TakeStream;
+pub use stream_sub_queries::SubQueriesStream;

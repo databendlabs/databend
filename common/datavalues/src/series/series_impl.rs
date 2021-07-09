@@ -48,6 +48,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
 
     fn get_array_memory_size(&self) -> usize;
     fn get_array_ref(&self) -> ArrayRef;
+    fn to_values(&self) -> Result<Vec<DataValue>>;
     fn slice(&self, offset: usize, length: usize) -> Series;
 
     /// # Safety

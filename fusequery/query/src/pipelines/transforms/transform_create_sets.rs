@@ -2,21 +2,24 @@ use std::sync::Arc;
 use crate::pipelines::processors::{Processor, Pipeline, EmptyProcessor, PipelineBuilder};
 use std::collections::HashMap;
 use common_exception::{Result, ErrorCode};
-use common_streams::SendableDataBlockStream;
+use common_streams::{SendableDataBlockStream, SubQueriesStream};
 use crate::sessions::{FuseQueryContextRef, FuseQueryContext};
 use std::any::Any;
 use common_infallible::Mutex;
 use futures::{FutureExt, Future, StreamExt};
-use futures::future::{Shared, BoxFuture};
+use futures::future::{Shared, BoxFuture, JoinAll};
 use futures::channel::oneshot::Receiver;
 use common_datavalues::columns::DataColumn;
 use common_runtime::tokio::macros::support::{Pin, Poll};
 use common_datavalues::{DataValue, DataSchemaRef};
 use common_planners::Expression;
 use common_datablocks::DataBlock;
+use common_runtime::tokio::task::JoinHandle;
+use futures::future::join_all;
 
 pub struct CreateSetsTransform {
     ctx: FuseQueryContextRef,
+    schema: DataSchemaRef,
     input: Arc<dyn Processor>,
     sub_queries_puller: Arc<Mutex<SubQueriesPuller<'static>>>,
 }
@@ -24,14 +27,53 @@ pub struct CreateSetsTransform {
 impl CreateSetsTransform {
     pub fn try_create(
         ctx: FuseQueryContextRef,
+        schema: DataSchemaRef,
         sub_queries_puller: Arc<Mutex<SubQueriesPuller<'static>>>,
     ) -> Result<CreateSetsTransform>
     {
         Ok(CreateSetsTransform {
             ctx,
+            schema,
             sub_queries_puller,
             input: Arc::new(EmptyProcessor::create()),
         })
+    }
+
+    fn execute_sub_queries(&self) -> Result<impl Future<Output=Result<Vec<DataValue>>>> {
+        let join_all = self.execute_sub_queries_impl()?;
+
+        Ok(async move {
+            let sub_queries_res = join_all.await;
+            let mut execute_res = Vec::with_capacity(sub_queries_res.len());
+
+            // TODO: maybe it's a map(Result::flatten)?
+            for subquery_res in sub_queries_res {
+                match subquery_res {
+                    Ok(Ok(data)) => execute_res.push(data),
+                    Ok(Err(error)) => return Err(error),
+                    Err(error) => {
+                        return Err(ErrorCode::TokioError(format!(
+                            "Cannot join all sub queries. cause: {}", error
+                        )));
+                    }
+                };
+            }
+
+            Ok(execute_res)
+        })
+    }
+
+    fn execute_sub_queries_impl(&self) -> Result<JoinAll<JoinHandle<SubqueryData>>> {
+        let context = self.ctx.clone();
+        let mut data_puller = self.sub_queries_puller.lock();
+
+        let mut join_tasks = vec![];
+        for index in 0..data_puller.sub_queries_num() {
+            let future = data_puller.take_subquery_data(index)?;
+            join_tasks.push(context.execute_task(future)?);
+        }
+
+        Ok(join_all(join_tasks))
     }
 }
 
@@ -42,8 +84,7 @@ impl Processor for CreateSetsTransform {
     }
 
     fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
-        self.input = input;
-        Ok(())
+        Ok(self.input = input)
     }
 
     fn inputs(&self) -> Vec<Arc<dyn Processor>> {
@@ -55,20 +96,23 @@ impl Processor for CreateSetsTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let mut sub_queries_puller = self.sub_queries_puller.lock();
+        let data = self.execute_sub_queries()?.await;
 
-        self.ctx.execute_task(async {});
-        Err(ErrorCode::UnImplement(""))
+        Ok(Box::pin(SubQueriesStream::create(
+            self.schema.clone(),
+            self.input.execute().await?,
+            data?,
+        )))
     }
 }
 
-type SubqueryData = Result<Arc<DataColumn>>;
+type SubqueryData = Result<DataValue>;
 type SharedFuture<'a> = Shared<BoxFuture<'a, SubqueryData>>;
 
 pub struct SubQueriesPuller<'a> {
     ctx: FuseQueryContextRef,
     expressions: Vec<Expression>,
-    sub_queries: HashMap<String, SharedFuture<'a>>,
+    sub_queries: Vec<SharedFuture<'a>>,
 }
 
 impl<'a> SubQueriesPuller<'a> {
@@ -76,11 +120,24 @@ impl<'a> SubQueriesPuller<'a> {
         ctx: FuseQueryContextRef,
         expressions: Vec<Expression>,
     ) -> Arc<Mutex<SubQueriesPuller<'a>>> {
+        let expression_len = expressions.len();
         Arc::new(Mutex::new(SubQueriesPuller {
             ctx,
-            expressions: expressions,
-            sub_queries: HashMap::new(),
+            expressions,
+            sub_queries: Vec::with_capacity(expression_len),
         }))
+    }
+
+    pub fn sub_queries_num(&mut self) -> usize {
+        self.sub_queries.len()
+    }
+
+    pub fn take_subquery_data(&mut self, pos: usize) -> Result<impl Future<Output=SubqueryData> + 'a> {
+        if self.sub_queries.is_empty() {
+            self.init()?;
+        }
+
+        Ok(self.sub_queries[pos].clone())
     }
 
     fn init(&mut self) -> Result<()> {
@@ -91,14 +148,14 @@ impl<'a> SubQueriesPuller<'a> {
                 Expression::Subquery { name, query_plan } => {
                     let subquery_plan = (**query_plan).clone();
                     let builder = PipelineBuilder::create(subquery_ctx, subquery_plan);
-                    let shared_future = Self::receive_subquery_res(query_plan.schema(), builder.build()?);
-                    self.sub_queries.insert(name.clone(), shared_future);
+                    let shared_future = Self::receive_subquery_res(builder.build()?);
+                    self.sub_queries.push(shared_future);
                 }
                 Expression::ScalarSubquery { name, query_plan } => {
                     let subquery_plan = (**query_plan).clone();
                     let builder = PipelineBuilder::create(subquery_ctx, subquery_plan);
                     let shared_future = Self::receive_scalar_subquery_res(builder.build()?);
-                    self.sub_queries.insert(name.clone(), shared_future);
+                    self.sub_queries.push(shared_future);
                 }
                 _ => return Result::Err(ErrorCode::LogicalError("Expression must be Subquery or ScalarSubquery"))
             };
@@ -107,32 +164,37 @@ impl<'a> SubQueriesPuller<'a> {
         Ok(())
     }
 
-    pub fn get_subquery_data(&mut self, name: String) -> Result<impl Future<Output=SubqueryData>> {
-        if self.sub_queries.is_empty() {
-            self.init()?;
-        }
-
-        match self.sub_queries.get(&name) {
-            None => Err(ErrorCode::LogicalError("Cannot find subquery.")),
-            Some(future) => Ok(future.clone())
-        }
-    }
-
-    fn receive_subquery_res(schema: DataSchemaRef, mut pipeline: Pipeline) -> SharedFuture<'a> {
+    fn receive_subquery_res(mut pipeline: Pipeline) -> SharedFuture<'a> {
         let subquery_future = async move {
             let mut stream = pipeline.execute().await?;
 
-            // TODO: concat to list field
-            let list = Vec::new();
+            let mut columns = Vec::new();
             while let Some(data_block) = stream.next().await {
                 let data_block = data_block?;
+
+                if columns.is_empty() {
+                    for index in 0..data_block.num_columns() {
+                        columns.push((data_block.column(index).data_type(), Vec::new()));
+                    }
+                }
+
                 for column_index in 0..data_block.num_columns() {
                     let series = data_block.column(column_index).to_array()?;
-
-                    if let DataValue::List(Some(values), _) = series.compact() {}
+                    let mut values = series.to_values()?;
+                    columns[column_index].1.append(&mut values)
                 }
             }
-            Ok(Arc::new(DataColumn::Constant(DataValue::UInt64(Some(1)), 1)))
+
+            let mut struct_fields = Vec::with_capacity(columns.len());
+
+            for (data_type, values) in columns {
+                struct_fields.push(DataValue::List(Some(values), data_type))
+            }
+
+            match struct_fields.len() {
+                1 => Ok(struct_fields.remove(0)),
+                _ => Ok(DataValue::Struct(struct_fields))
+            }
         };
 
         subquery_future.boxed().shared()
@@ -146,7 +208,7 @@ impl<'a> SubQueriesPuller<'a> {
                 let data_block = data_block?;
 
                 if data_block.num_rows() > 1 {
-                    return Err(ErrorCode::ScalarSubqueryHashMoreRows(
+                    return Err(ErrorCode::ScalarSubqueryHasMoreRows(
                         "Scalar subquery result set must be one row."
                     ));
                 }
@@ -159,10 +221,9 @@ impl<'a> SubQueriesPuller<'a> {
             // match stream.next().await {
             //     None =>
             // }
-            Ok(Arc::new(DataColumn::Constant(DataValue::UInt64(Some(1)), 1)))
+            Ok(DataValue::UInt64(Some(1)))
         };
 
         subquery_future.boxed().shared()
     }
 }
-

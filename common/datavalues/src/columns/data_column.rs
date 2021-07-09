@@ -36,6 +36,14 @@ impl DataColumn {
     }
 
     #[inline]
+    pub fn to_values(&self) -> Result<Vec<DataValue>> {
+        match self {
+            DataColumn::Array(array) => array.to_values(),
+            DataColumn::Constant(scalar, size) => scalar.to_values(*size),
+        }
+    }
+
+    #[inline]
     pub fn get_array_ref(&self) -> Result<ArrayRef> {
         match self {
             DataColumn::Array(array) => Ok(array.get_array_ref()),

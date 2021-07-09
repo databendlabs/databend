@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::{AggregatorFinalPlan, Expression};
+use common_planners::{AggregatorFinalPlan, Expression, PlanVisitor};
 use common_planners::AggregatorPartialPlan;
 use common_planners::CreateSubQueriesSetsPlan;
 use common_planners::ExpressionPlan;
@@ -42,6 +42,10 @@ use crate::sessions::{FuseQueryContextRef, FuseQueryContext};
 pub struct PipelineBuilder {
     ctx: FuseQueryContextRef,
     plan: PlanNode,
+}
+
+impl<'plan> PlanVisitor<'plan> for PipelineBuilder {
+
 }
 
 impl PipelineBuilder {
@@ -310,12 +314,14 @@ impl PipelineBuilder {
         pipeline: &mut Pipeline,
         plan: &CreateSubQueriesSetsPlan,
     ) -> Result<bool> {
-        let ctx = self.ctx.clone();
+        let schema = plan.schema();
+        let context = self.ctx.clone();
         let expressions = plan.expressions.clone();
-        let sub_queries_puller = SubQueriesPuller::create(ctx.clone(), expressions);
+        let sub_queries_puller = SubQueriesPuller::create(context.clone(), expressions);
         pipeline.add_simple_transform(move || {
             Ok(Box::new(CreateSetsTransform::try_create(
-                ctx.clone(),
+                context.clone(),
+                schema.clone(),
                 sub_queries_puller.clone(),
             )?))
         })?;
