@@ -156,23 +156,29 @@ pub trait PlanRewriter<'plan> {
     }
 
     fn rewrite_filter(&mut self, plan: &'plan FilterPlan) -> Result<PlanNode> {
+        let new_input = Arc::new(self.rewrite_plan_node(plan.input.as_ref())?);
         Ok(PlanNode::Filter(FilterPlan {
             predicate: plan.predicate.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: new_input.clone(),
+            schema: new_input.schema(),
         }))
     }
 
     fn rewrite_having(&mut self, plan: &'plan HavingPlan) -> Result<PlanNode> {
+        let new_input = Arc::new(self.rewrite_plan_node(plan.input.as_ref())?);
         Ok(PlanNode::Having(HavingPlan {
             predicate: plan.predicate.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: new_input.clone(),
+            schema: new_input.schema(),
         }))
     }
 
     fn rewrite_sort(&mut self, plan: &'plan SortPlan) -> Result<PlanNode> {
+        let new_input = Arc::new(self.rewrite_plan_node(plan.input.as_ref())?);
         Ok(PlanNode::Sort(SortPlan {
             order_by: plan.order_by.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: new_input.clone(),
+            schema: new_input.schema(),
         }))
     }
 

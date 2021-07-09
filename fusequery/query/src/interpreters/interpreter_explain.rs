@@ -17,7 +17,7 @@ use log::debug;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
-use crate::pipelines::processors::PipelineBuilder;
+use crate::pipelines::processors::{PipelineBuilder};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ExplainInterpreter {
@@ -47,7 +47,8 @@ impl Interpreter for ExplainInterpreter {
                 format!("{}", plan.display_graphviz())
             }
             ExplainType::Pipeline => {
-                let pipeline = PipelineBuilder::create(self.ctx.clone(), plan).build()?;
+                let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
+                let pipeline = pipeline_builder.build(&plan)?;
                 format!("{:?}", pipeline)
             }
             _ => format!("{}", plan.display_indent_format()),

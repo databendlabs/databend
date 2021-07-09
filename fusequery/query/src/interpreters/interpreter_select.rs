@@ -22,7 +22,7 @@ use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
-use crate::pipelines::processors::PipelineBuilder;
+use crate::pipelines::processors::{PipelineBuilder};
 use crate::sessions::FuseQueryContextRef;
 
 pub struct SelectInterpreter {
@@ -81,10 +81,9 @@ async fn execute_one_select(
         }
     }
 
-    PipelineBuilder::create(ctx.clone(), scheduled_actions.local_plan.clone())
-        .build()?
-        .execute()
-        .await
+    let pipeline_builder = PipelineBuilder::create(ctx.clone());
+    let mut in_local_pipeline = pipeline_builder.build(&scheduled_actions.local_plan)?;
+    in_local_pipeline.execute().await
 }
 
 #[async_trait::async_trait]
@@ -121,10 +120,9 @@ impl Interpreter for SelectInterpreter {
             }
         }
 
-        PipelineBuilder::create(self.ctx.clone(), scheduled_actions.local_plan.clone())
-            .build()?
-            .execute()
-            .await
+        let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
+        let mut in_local_pipeline = pipeline_builder.build(&scheduled_actions.local_plan)?;
+        in_local_pipeline.execute().await
     }
 
     fn schema(&self) -> DataSchemaRef {

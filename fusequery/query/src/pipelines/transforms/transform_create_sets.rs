@@ -11,7 +11,7 @@ use futures::future::{Shared, BoxFuture, JoinAll};
 use futures::channel::oneshot::Receiver;
 use common_datavalues::columns::DataColumn;
 use common_runtime::tokio::macros::support::{Pin, Poll};
-use common_datavalues::{DataValue, DataSchemaRef};
+use common_datavalues::{DataValue, DataSchemaRef, DataType};
 use common_planners::Expression;
 use common_datablocks::DataBlock;
 use common_runtime::tokio::task::JoinHandle;
@@ -129,7 +129,7 @@ impl<'a> SubQueriesPuller<'a> {
     }
 
     pub fn sub_queries_num(&mut self) -> usize {
-        self.sub_queries.len()
+        self.expressions.len()
     }
 
     pub fn take_subquery_data(&mut self, pos: usize) -> Result<impl Future<Output=SubqueryData> + 'a> {
@@ -145,16 +145,18 @@ impl<'a> SubQueriesPuller<'a> {
             let subquery_ctx = FuseQueryContext::new(self.ctx.clone());
 
             match query_expression {
-                Expression::Subquery { name, query_plan } => {
+                Expression::Subquery { query_plan, .. } => {
                     let subquery_plan = (**query_plan).clone();
-                    let builder = PipelineBuilder::create(subquery_ctx, subquery_plan);
-                    let shared_future = Self::receive_subquery_res(builder.build()?);
+                    let builder = PipelineBuilder::create(subquery_ctx);
+                    let subquery_pipeline = builder.build(&subquery_plan)?;
+                    let shared_future = Self::receive_subquery_res(subquery_pipeline);
                     self.sub_queries.push(shared_future);
                 }
-                Expression::ScalarSubquery { name, query_plan } => {
+                Expression::ScalarSubquery { query_plan, .. } => {
                     let subquery_plan = (**query_plan).clone();
-                    let builder = PipelineBuilder::create(subquery_ctx, subquery_plan);
-                    let shared_future = Self::receive_scalar_subquery_res(builder.build()?);
+                    let builder = PipelineBuilder::create(subquery_ctx);
+                    let subquery_pipeline = builder.build(&subquery_plan)?;
+                    let shared_future = Self::receive_scalar_subquery_res(subquery_pipeline);
                     self.sub_queries.push(shared_future);
                 }
                 _ => return Result::Err(ErrorCode::LogicalError("Expression must be Subquery or ScalarSubquery"))

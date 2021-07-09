@@ -19,8 +19,7 @@ use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_actions::ShuffleAction;
 use crate::api::rpc::flight_scatter::FlightScatterByHash;
-use crate::pipelines::processors::Pipeline;
-use crate::pipelines::processors::PipelineBuilder;
+use crate::pipelines::processors::{Pipeline, PipelineBuilder};
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionRef;
@@ -100,8 +99,8 @@ impl FuseQueryFlightDispatcher {
     fn run_action(&self, session: SessionRef, action: &ShuffleAction) -> Result<()> {
         let query_context = session.create_context();
         let action_context = FuseQueryContext::new(query_context.clone());
-        let pipeline =
-            PipelineBuilder::create(action_context.clone(), action.plan.clone()).build()?;
+        let pipeline_builder = PipelineBuilder::create(action_context.clone());
+        let pipeline = pipeline_builder.build(&action.plan)?;
 
         assert_eq!(action.sinks.len(), 1);
 
@@ -148,8 +147,8 @@ impl FuseQueryFlightDispatcher {
     ) -> Result<()> {
         let query_context = session.create_context();
         let action_context = FuseQueryContext::new(query_context.clone());
-        let pipeline =
-            PipelineBuilder::create(action_context.clone(), action.plan.clone()).build()?;
+        let pipeline_builder = PipelineBuilder::create(action_context.clone());
+        let pipeline = pipeline_builder.build(&action.plan)?;
 
         let sinks_tx = {
             assert!(action.sinks.len() > 1);

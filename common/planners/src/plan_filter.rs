@@ -15,11 +15,13 @@ pub struct FilterPlan {
     pub predicate: Expression,
     /// The incoming logical plan
     pub input: Arc<PlanNode>,
+    /// output schema
+    pub schema: DataSchemaRef,
 }
 
 impl FilterPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        self.input.schema()
+        self.schema.clone()
     }
 
     pub fn set_input(&mut self, node: &PlanNode) {

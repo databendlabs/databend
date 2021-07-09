@@ -222,7 +222,7 @@ impl FuseQueryContext {
 
     pub fn get_subquery_name(&self, _query: &PlanNode) -> String {
         let index = self.shared.subquery_index.fetch_add(1, Ordering::Relaxed);
-        format!("subquery_{}", index)
+        format!("_subquery_{}", index)
     }
 }
 

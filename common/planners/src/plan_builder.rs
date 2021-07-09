@@ -234,6 +234,7 @@ impl PlanBuilder {
             PlanNode::Filter(FilterPlan {
                 predicate: expr,
                 input: Arc::new(self.plan.clone()),
+                schema: self.plan.schema(),
             }),
         )?))
     }
@@ -246,6 +247,7 @@ impl PlanBuilder {
             PlanNode::Having(HavingPlan {
                 predicate: expr,
                 input: Arc::new(self.plan.clone()),
+                schema: self.plan.schema().clone(),
             }),
         )?))
     }
@@ -256,6 +258,7 @@ impl PlanBuilder {
             PlanNode::Sort(SortPlan {
                 order_by: exprs.to_vec(),
                 input: Arc::new(self.plan.clone()),
+                schema: self.plan.schema().clone(),
             }),
         )?))
     }

@@ -42,8 +42,6 @@ impl Stream for SubQueriesStream {
                     new_columns.push(DataColumn::Constant(values, block.num_rows()));
                 }
 
-                println!("Receive data {:?}", block);
-                println!("Old schema: {:?}, New schema : {:?}", block.schema(), self.schema);
                 Some(Ok(DataBlock::create(self.schema.clone(), new_columns)))
             }
             other => other,

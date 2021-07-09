@@ -110,6 +110,8 @@ impl Expression {
                     None => format!("{:?}", self),
                 }
             }
+            Expression::Subquery { name, .. } => name.clone(),
+            Expression::Subquery { name, .. } => name.clone(),
             _ => format!("{:?}", self),
         }
     }
@@ -135,9 +137,9 @@ impl Expression {
             columns_field.push(DataField::new(
                 column_field.name(),
                 DataType::List(Box::new(DataField::new(
-                    column_field.name(),
+                    "item",
                     column_field.data_type().clone(),
-                    false,
+                    true,
                 ))),
                 false,
             ));
