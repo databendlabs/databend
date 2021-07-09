@@ -128,7 +128,11 @@ impl PlanBuilder {
                     // keys:  Vec<Key>, DataTypeStruct
                     // key:  group id, DataTypeBinary
                     partial_fields.push(DataField::new("_group_keys", DataType::Utf8, false));
-                    partial_fields.push(DataField::new("_group_by_key", DataType::Binary, false));
+
+                    // partial_fields.push(DataField::new("_group_by_key", DataType::Binary, false));
+                    for expr in group_expr.iter() {
+                        partial_fields.push(expr.to_data_field(&schema_before_groupby)?);
+                    }
                 }
 
                 Self::from(&PlanNode::AggregatorPartial(AggregatorPartialPlan {

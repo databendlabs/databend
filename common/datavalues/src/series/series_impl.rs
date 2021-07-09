@@ -185,6 +185,14 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
         )))
     }
 
+    /// Unpack to DFArray of data_type binary
+    fn binary(&self) -> Result<&DFBinaryArray> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != binary",
+            self.data_type()
+        )))
+    }
+
     /// Take by index from an iterator. This operation clones the data.
     ///
     /// # Safety

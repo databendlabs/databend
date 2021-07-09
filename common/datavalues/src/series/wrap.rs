@@ -313,6 +313,19 @@ macro_rules! impl_dyn_array {
                 }
             }
 
+            /// Unpack to DFArray of data_type binary
+            fn binary(&self) -> Result<&DFBinaryArray> {
+                if matches!(self.0.data_type(), DataType::Binary) {
+                    unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFBinaryArray)) }
+                } else {
+                    Err(ErrorCode::IllegalDataType(format!(
+                        "cannot unpack Series: {:?} of type {:?} into binary",
+                        self.name(),
+                        self.data_type(),
+                    )))
+                }
+            }
+
             fn take_iter(&self, iter: &mut dyn Iterator<Item = usize>) -> Result<Series> {
                 Ok(ArrayTake::take(&self.0, iter.into())?.into_series())
             }

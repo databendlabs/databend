@@ -5,7 +5,7 @@
 use common_datavalues::DataValue;
 use common_exception::Result;
 
-pub type StateAddr = *mut u8;
+pub type StateAddr = usize;
 pub trait GetState<'a, T> {
     fn get(place: StateAddr) -> &'a mut T {
         unsafe { &mut *(place as *mut T) }

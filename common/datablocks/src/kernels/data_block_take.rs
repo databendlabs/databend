@@ -23,16 +23,16 @@ impl DataBlock {
                 let column = raw.try_column_by_name(f.name())?;
                 if constant_columns.contains(f.name()) {
                     let v = column.try_get(indices[0] as usize)?;
-                    return Ok(DataColumn::Constant(v, indices.len()));
+                    Ok(DataColumn::Constant(v, indices.len()))
                 } else {
                     match column {
                         DataColumn::Array(array) => {
                             let mut indices = indices.iter().map(|f| *f as usize);
                             let series = unsafe { array.take_iter_unchecked(&mut indices) }?;
-                            return Ok(DataColumn::Array(series));
+                            Ok(DataColumn::Array(series))
                         }
                         DataColumn::Constant(v, _) => {
-                            return Ok(DataColumn::Constant(v.clone(), indices.len()));
+                            Ok(DataColumn::Constant(v.clone(), indices.len()))
                         }
                     }
                 }

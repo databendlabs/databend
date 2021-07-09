@@ -31,11 +31,7 @@ impl AggregateDistinctState {
     pub fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         let mut vs = Vec::with_capacity(self.set.len());
         for entry in self.set.iter() {
-            let array = entry
-                .0
-                .iter()
-                .map(|v| DataValue::from(v))
-                .collect::<Vec<_>>();
+            let array = entry.0.iter().map(DataValue::from).collect::<Vec<_>>();
             vs.push(array);
         }
 
@@ -51,7 +47,7 @@ impl AggregateDistinctState {
         for array in vs.iter() {
             let v = array
                 .iter()
-                .map(|value| DataGroupValue::try_from(value))
+                .map(DataGroupValue::try_from)
                 .collect::<Result<Vec<_>>>()?;
 
             self.set.insert(DataGroupValues(v));
@@ -181,7 +177,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
             Ok(DataValue::UInt64(Some(state.set.len() as u64)))
         } else {
             let offsize = std::mem::size_of::<AggregateDistinctState>();
-            let nested_place = (place as usize + offsize) as *mut u8;
+            let nested_place = place + offsize;
             if state.set.is_empty() {
                 return self.nested.merge_result(nested_place);
             }
@@ -207,7 +203,11 @@ impl AggregateFunction for AggregateDistinctCombinator {
 
             let columns = results
                 .iter()
-                .map(|v| DataValue::try_into_data_array(v).map(|s| DataColumn::Array(s)))
+                .enumerate()
+                .map(|(i, v)| {
+                    DataValue::try_into_data_array(v, self.arguments[i].data_type())
+                        .map(DataColumn::Array)
+                })
                 .collect::<Result<Vec<_>>>()?;
 
             self.nested
