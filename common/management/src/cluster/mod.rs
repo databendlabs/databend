@@ -6,7 +6,6 @@
 #[cfg(test)]
 mod cluster_mgr_test;
 
-mod backends;
 mod cluster_backend;
 mod cluster_executor;
 mod cluster_mgr;

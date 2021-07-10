@@ -779,13 +779,13 @@ dependencies = [
  "common-flights",
  "common-metatypes",
  "common-runtime",
+ "common-states",
  "common-store-api",
  "mockall",
  "pretty_assertions",
  "serde",
  "serde_json",
  "sha2 0.9.5",
- "url",
 ]
 
 [[package]]
@@ -838,6 +838,21 @@ dependencies = [
  "anyhow",
  "common-exception",
  "tokio",
+]
+
+[[package]]
+name = "common-states"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-exception",
+ "common-flights",
+ "common-runtime",
+ "common-store-api",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "url",
 ]
 
 [[package]]
