@@ -7,7 +7,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_planners::AggregatorPartialPlan;
+use common_planners::{AggregatorPartialPlan, PlanRewriter};
 use common_planners::EmptyPlan;
 use common_planners::Expression;
 use common_planners::PlanNode;
@@ -155,6 +155,13 @@ impl ScattersOptimizer {
         }
     }
 }
+
+// struct ScattersOptimizerImpl;
+//
+// impl PlanRewriter for ScattersOptimizerImpl {
+//
+// }
+
 
 impl Optimizer for ScattersOptimizer {
     fn name(&self) -> &str {

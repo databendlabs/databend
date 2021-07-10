@@ -5,8 +5,8 @@
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_exception::Result;
-use common_planners::Expression;
+use common_exception::{Result, ErrorCode};
+use common_planners::{Expression, AggregatorPartialPlan, AggregatorFinalPlan, PlanBuilder};
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::PlanNode;
@@ -24,7 +24,9 @@ fn is_boolean_type(schema: &DataSchemaRef, expr: &Expression) -> Result<bool> {
     Ok(false)
 }
 
-struct ConstantFoldingImpl {}
+struct ConstantFoldingImpl {
+    before_group_by_schema: Option<DataSchemaRef>,
+}
 
 fn constant_folding(schema: &DataSchemaRef, expr: Expression) -> Result<Expression> {
     let new_expr = match expr {
@@ -105,13 +107,35 @@ fn constant_folding(schema: &DataSchemaRef, expr: Expression) -> Result<Expressi
     Ok(new_expr)
 }
 
-impl<'plan> PlanRewriter<'plan> for ConstantFoldingImpl {
-    fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
-        let schema = plan.schema();
-        let mut new_plan = plan.clone();
-        new_plan.predicate = constant_folding(&schema, plan.predicate.clone())?;
-        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
-        Ok(PlanNode::Filter(new_plan))
+impl PlanRewriter for ConstantFoldingImpl {
+    fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
+        let new_input = self.rewrite_plan_node(&plan.input)?;
+
+        match self.before_group_by_schema {
+            Some(_) => Err(ErrorCode::LogicalError("Logical error: before group by schema must be None")),
+            None => {
+                self.before_group_by_schema = Some(new_input.schema());
+                PlanBuilder::from(&new_input)
+                    .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
+                    .build()
+            }
+        }
+    }
+
+    fn rewrite_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<PlanNode> {
+        let new_input = self.rewrite_plan_node(&plan.input)?;
+
+        match self.before_group_by_schema.take() {
+            None => Err(ErrorCode::LogicalError("Logical error: before group by schema must be Some")),
+            Some(schema_before_group_by) => {
+                PlanBuilder::from(&new_input)
+                    .aggregate_final(
+                        schema_before_group_by,
+                        &plan.aggr_expr,
+                        &plan.group_expr,
+                    )?.build()
+            }
+        }
     }
 
     fn rewrite_expression(&mut self, plan: &ExpressionPlan) -> Result<PlanNode> {
@@ -126,11 +150,21 @@ impl<'plan> PlanRewriter<'plan> for ConstantFoldingImpl {
         new_plan.exprs = new_exprs;
         Ok(PlanNode::Expression(new_plan))
     }
+
+    fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
+        let schema = plan.schema();
+        let mut new_plan = plan.clone();
+        new_plan.predicate = constant_folding(&schema, plan.predicate.clone())?;
+        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
+        Ok(PlanNode::Filter(new_plan))
+    }
 }
 
 impl ConstantFoldingImpl {
     pub fn new() -> ConstantFoldingImpl {
-        ConstantFoldingImpl {}
+        ConstantFoldingImpl {
+            before_group_by_schema: None,
+        }
     }
 }
 

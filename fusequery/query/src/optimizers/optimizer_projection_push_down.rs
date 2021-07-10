@@ -33,22 +33,7 @@ struct ProjectionPushDownImpl {
     pub before_group_by_schema: Option<DataSchemaRef>,
 }
 
-impl<'plan> PlanRewriter<'plan> for ProjectionPushDownImpl {
-    fn rewrite_projection(&mut self, plan: &ProjectionPlan) -> Result<PlanNode> {
-        self.collect_column_names_from_expr_vec(plan.expr.as_slice())?;
-        self.has_projection = true;
-        PlanBuilder::from(&self.rewrite_plan_node(&plan.input)?)
-            .project(&plan.expr)?
-            .build()
-    }
-
-    fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
-        self.collect_column_names_from_expr(&plan.predicate)?;
-        PlanBuilder::from(&self.rewrite_plan_node(&plan.input)?)
-            .filter(plan.predicate.clone())?
-            .build()
-    }
-
+impl PlanRewriter for ProjectionPushDownImpl {
     fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
         self.collect_column_names_from_expr_vec(&plan.group_expr)?;
         self.collect_column_names_from_expr_vec(&plan.aggr_expr)?;
@@ -83,6 +68,25 @@ impl<'plan> PlanRewriter<'plan> for ProjectionPushDownImpl {
         }
     }
 
+    fn rewrite_empty(&mut self, plan: &EmptyPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Empty(plan.clone()))
+    }
+
+    fn rewrite_projection(&mut self, plan: &ProjectionPlan) -> Result<PlanNode> {
+        self.collect_column_names_from_expr_vec(plan.expr.as_slice())?;
+        self.has_projection = true;
+        PlanBuilder::from(&self.rewrite_plan_node(&plan.input)?)
+            .project(&plan.expr)?
+            .build()
+    }
+
+    fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
+        self.collect_column_names_from_expr(&plan.predicate)?;
+        PlanBuilder::from(&self.rewrite_plan_node(&plan.input)?)
+            .filter(plan.predicate.clone())?
+            .build()
+    }
+
     fn rewrite_sort(&mut self, plan: &SortPlan) -> Result<PlanNode> {
         self.collect_column_names_from_expr_vec(plan.order_by.as_slice())?;
         PlanBuilder::from(&self.rewrite_plan_node(&plan.input)?)
@@ -105,10 +109,6 @@ impl<'plan> PlanRewriter<'plan> for ProjectionPushDownImpl {
                     remote: plan.remote,
                 })
             })
-    }
-
-    fn rewrite_empty(&mut self, plan: &EmptyPlan) -> Result<PlanNode> {
-        Ok(PlanNode::Empty(plan.clone()))
     }
 }
 

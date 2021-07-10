@@ -4,7 +4,7 @@
 
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_planners::AggregatorPartialPlan;
+use common_planners::{AggregatorPartialPlan, AggregatorFinalPlan};
 use common_planners::Expression;
 use common_planners::ExpressionPlan;
 use common_planners::PlanBuilder;
@@ -13,6 +13,7 @@ use common_planners::PlanRewriter;
 
 use crate::optimizers::Optimizer;
 use crate::sessions::FuseQueryContextRef;
+use std::sync::Arc;
 
 struct StatisticsExactImpl<'a> {
     ctx: &'a FuseQueryContextRef,
@@ -22,10 +23,10 @@ pub struct StatisticsExactOptimizer {
     ctx: FuseQueryContextRef,
 }
 
-impl<'plan> PlanRewriter<'plan> for StatisticsExactImpl<'_> {
+impl PlanRewriter for StatisticsExactImpl<'_> {
     fn rewrite_aggregate_partial(
         &mut self,
-        plan: &'plan AggregatorPartialPlan,
+        plan: &AggregatorPartialPlan,
     ) -> Result<PlanNode> {
         let new_plan = match (
             &plan.group_expr[..],
@@ -85,6 +86,15 @@ impl<'plan> PlanRewriter<'plan> for StatisticsExactImpl<'_> {
         };
         Ok(new_plan)
     }
+
+    fn rewrite_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<PlanNode> {
+        Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan {
+            schema: plan.schema.clone(),
+            aggr_expr: plan.aggr_expr.clone(),
+            group_expr: plan.group_expr.clone(),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+        }))
+    }
 }
 
 impl Optimizer for StatisticsExactOptimizer {
@@ -93,6 +103,14 @@ impl Optimizer for StatisticsExactOptimizer {
     }
 
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
+        /*
+            TODO:
+                SELECT COUNT(1), COUNT(1) FROM (
+                    SELECT COUNT(1) FROM (
+                        SELECT * FROM system.settings LIMIT 1
+                    )
+                )
+        */
         let mut visitor = StatisticsExactImpl { ctx: &self.ctx };
         visitor.rewrite_plan_node(plan)
     }
