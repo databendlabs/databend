@@ -141,7 +141,7 @@ async fn test_local_pipeline_builds() -> Result<()> {
 
         // Pipeline build check.
         let pipeline_builder = PipelineBuilder::create(ctx.clone());
-        let mut pipeline = pipeline_builder.build(&scheduled_actions.local_plan)?;
+        let mut pipeline = pipeline_builder.build(&plan)?;
         let actual_pipeline = format!("{:?}", pipeline);
         assert_eq!(test.pipeline, actual_pipeline, "{:#?}", test.name);
 

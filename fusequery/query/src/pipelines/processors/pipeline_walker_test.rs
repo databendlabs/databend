@@ -19,7 +19,7 @@ async fn test_pipeline_walker() -> Result<()> {
         "select sum(number+1)+2 as sumx from numbers_mt(80000) where (number+1)=4 limit 1",
     )?;
     let pipeline_builder = PipelineBuilder::create(ctx.clone());
-    let pipeline = pipeline_builder.build(&scheduled_actions.local_plan)?;
+    let pipeline = pipeline_builder.build(&plan)?;
 
     // PreOrder.
     {

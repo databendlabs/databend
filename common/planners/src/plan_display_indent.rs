@@ -56,16 +56,19 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
             PlanNode::CreateTable(plan) => Self::format_create_table(f, plan),
             PlanNode::DropTable(plan) => Self::format_drop_table(f, plan),
             _ => {
-                let inputs = self.node.inputs();
-                let mut iterator = inputs.iter();
+                let mut printed = true;
 
-                if let Some(first) = iterator.next() {
-                    PlanNodeIndentFormatDisplay::create(self.indent, first, true).fmt(f)?;
-                }
+                for input in self.node.inputs() {
+                    if matches!(input.as_ref(), PlanNode::Empty(_)) {
+                        continue;
+                    }
 
-                while let Some(tail) = iterator.next() {
-                    writeln!(f)?;
-                    PlanNodeIndentFormatDisplay::create(self.indent, tail, false).fmt(f)?;
+                    if !printed {
+                        writeln!(f)?;
+                    }
+
+                    PlanNodeIndentFormatDisplay::create(self.indent, input.as_ref(), printed).fmt(f)?;
+                    printed = true;
                 }
 
                 return fmt::Result::Ok(());
@@ -74,6 +77,10 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
 
         let new_indent = self.indent + 1;
         for input in self.node.inputs() {
+            if matches!(input.as_ref(), PlanNode::Empty(_)) {
+                continue;
+            }
+
             writeln!(f)?;
             PlanNodeIndentFormatDisplay::create(new_indent, &input, false).fmt(f)?;
         }
