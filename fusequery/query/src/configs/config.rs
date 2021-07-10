@@ -69,11 +69,13 @@ const STORE_API_ADDRESS: &str = "STORE_API_ADDRESS";
 const STORE_API_USERNAME: &str = "STORE_API_USERNAME";
 const STORE_API_PASSWORD: &str = "STORE_API_PASSWORD";
 
-// Namespace.
-const NAMESPACE: &str = "NAMESPACE";
+// Cluster.
+const CLUSTER_NAMESPACE: &str = "CLUSTER_NAMESPACE";
+const CLUSTER_BACKEND_URI: &str = "CLUSTER_BACKEND_URI";
+
+// Executor.
 const EXECUTOR_NAME: &str = "EXECUTOR_NAME";
 const EXECUTOR_PRIORITY: &str = "EXECUTOR_PRIORITY";
-const EXECUTOR_BACKEND_URL: &str = "EXECUTOR_BACKEND_URL";
 
 const CONFIG_FILE: &str = "CONFIG_FILE";
 
@@ -158,17 +160,17 @@ pub struct Config {
     pub store_api_password: Password,
 
     // Namespace.
-    #[structopt(long, env = NAMESPACE, default_value = "")]
-    pub namespace: String,
+    #[structopt(long, env = CLUSTER_NAMESPACE, default_value = "")]
+    pub cluster_namespace: String,
+
+    #[structopt(long, env = CLUSTER_BACKEND_URI, default_value = "http://127.0.0.1:8080")]
+    pub cluster_backend_uri: String,
 
     #[structopt(long, env = EXECUTOR_NAME, default_value = "")]
     pub executor_name: String,
 
     #[structopt(long, env = EXECUTOR_PRIORITY, default_value = "0")]
     pub executor_priority: u8,
-
-    #[structopt(long, env = EXECUTOR_BACKEND_URL, default_value = "")]
-    pub executor_backend_url: String,
 
     #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
     pub config_file: String,
@@ -263,10 +265,10 @@ impl Config {
             store_api_password: Password {
                 store_api_password: "root".to_string(),
             },
-            namespace: "".to_string(),
+            cluster_namespace: "".to_string(),
+            cluster_backend_uri: "http://127.0.0.1:8080".to_string(),
             executor_name: "".to_string(),
             executor_priority: 0,
-            executor_backend_url: "".to_string(),
             config_file: "".to_string(),
         }
     }
@@ -344,16 +346,13 @@ impl Config {
         env_helper!(mut_config, store_api_username, User, STORE_API_USERNAME);
         env_helper!(mut_config, store_api_password, Password, STORE_API_PASSWORD);
 
-        // Namespace.
-        env_helper!(mut_config, namespace, String, NAMESPACE);
+        // Cluster.
+        env_helper!(mut_config, cluster_namespace, String, CLUSTER_NAMESPACE);
+        env_helper!(mut_config, cluster_backend_uri, String, CLUSTER_BACKEND_URI);
+
+        // Executor.
         env_helper!(mut_config, executor_name, String, EXECUTOR_NAME);
         env_helper!(mut_config, executor_priority, u8, EXECUTOR_PRIORITY);
-        env_helper!(
-            mut_config,
-            executor_backend_url,
-            String,
-            EXECUTOR_BACKEND_URL
-        );
 
         Ok(mut_config)
     }
@@ -362,7 +361,7 @@ impl Config {
         ClusterExecutor::create(
             self.executor_name.clone(),
             self.executor_priority,
-            Address::create(self.executor_backend_url.as_str())?,
+            Address::create(self.cluster_backend_uri.as_str())?,
         )
     }
 }

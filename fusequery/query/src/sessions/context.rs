@@ -51,13 +51,13 @@ pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
     pub fn try_create(conf: Config) -> Result<FuseQueryContextRef> {
-        let cluster_backend = conf.store_api_address.clone();
+        let executor_backend_uri = conf.cluster_backend_uri.clone();
         let settings = Settings::try_create()?;
         let ctx = FuseQueryContext {
             conf,
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings: settings.clone(),
-            cluster: ClusterMgr::create(cluster_backend),
+            cluster: ClusterMgr::create(executor_backend_uri),
             datasource: Arc::new(DataSource::try_create()?),
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
@@ -81,13 +81,13 @@ impl FuseQueryContext {
         default_database: String,
         datasource: Arc<DataSource>,
     ) -> Result<FuseQueryContextRef> {
-        let executor_backend_url = conf.executor_backend_url.clone();
+        let executor_backend_uri = conf.cluster_backend_uri.clone();
 
         Ok(Arc::new(FuseQueryContext {
             conf,
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings: settings.clone(),
-            cluster: ClusterMgr::create(executor_backend_url),
+            cluster: ClusterMgr::create(executor_backend_uri),
             datasource,
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
@@ -186,7 +186,7 @@ impl FuseQueryContext {
     pub async fn try_get_executors(&self) -> Result<Vec<Arc<ClusterExecutor>>> {
         let executors = self
             .cluster
-            .get_executors(self.conf.namespace.clone())
+            .get_executors(self.conf.cluster_namespace.clone())
             .await?;
         Ok(executors.iter().map(|x| Arc::new(x.clone())).collect())
     }
@@ -194,7 +194,7 @@ impl FuseQueryContext {
     /// Get the executor from executor name.
     pub async fn try_get_executor_by_name(&self, executor_name: String) -> Result<ClusterExecutor> {
         self.cluster
-            .get_executor_by_name(self.conf.namespace.clone(), executor_name)
+            .get_executor_by_name(self.conf.cluster_namespace.clone(), executor_name)
             .await
     }
 
@@ -208,7 +208,7 @@ impl FuseQueryContext {
         let executor =
             ClusterExecutor::create(executor_name, priority, Address::create(address.as_str())?)?;
         self.cluster
-            .register(self.conf.namespace.clone(), &executor)
+            .register(self.conf.cluster_namespace.clone(), &executor)
             .await?;
         Ok(())
     }

@@ -7,8 +7,9 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use url::Url;
 
-use crate::cluster::backends::MemoryBackend;
+use crate::cluster::backends::LocalBackend;
 use crate::cluster::backends::StoreBackend;
 use crate::cluster::ClusterBackend;
 use crate::cluster::ClusterExecutor;
@@ -20,21 +21,29 @@ pub struct ClusterMgr {
 }
 
 impl ClusterMgr {
-    pub fn create(addr: String) -> ClusterMgrRef {
-        let backend: Box<dyn ClusterBackend> = match addr.as_str() {
-            // For test only.
-            "" => Box::new(MemoryBackend::create()),
-            _ => Box::new(StoreBackend::create(addr)),
-        };
-        Arc::new(ClusterMgr {
-            backend_client: backend,
-        })
-    }
+    pub fn create(uri: String) -> ClusterMgrRef {
+        let uri = Url::parse(uri.as_str()).unwrap();
 
-    pub fn empty() -> ClusterMgrRef {
-        Arc::new(ClusterMgr {
-            backend_client: Box::new(MemoryBackend::create()),
-        })
+        let mut host = "";
+        let mut port = 0u16;
+        if uri.host_str().is_some() {
+            host = uri.host_str().unwrap();
+        }
+        if uri.port().is_some() {
+            port = uri.port().unwrap();
+        }
+        let new_address = format!("{}:{}", host, port);
+
+        let backend_client: Box<dyn ClusterBackend> = match uri.scheme().to_lowercase().as_str() {
+            // For test.
+            "local" => Box::new(LocalBackend::create(new_address)),
+            // Use api http kv as backend.
+            "memory" => Box::new(LocalBackend::create(new_address)),
+            // Use store as backend.
+            _ => Box::new(StoreBackend::create(new_address)),
+        };
+
+        Arc::new(ClusterMgr { backend_client })
     }
 
     /// Register an executor to the namespace.

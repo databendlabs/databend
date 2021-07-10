@@ -35,10 +35,10 @@ fn test_config() -> Result<()> {
             store_api_password: Password {
                 store_api_password: "root".to_string(),
             },
-            namespace: "".to_string(),
+            cluster_namespace: "".to_string(),
             executor_name: "".to_string(),
             executor_priority: 0,
-            executor_backend_url: "".to_string(),
+            cluster_backend_uri: "".to_string(),
             config_file: "".to_string(),
         };
         let actual = Config::default();

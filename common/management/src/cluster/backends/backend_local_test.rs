@@ -7,7 +7,7 @@ use common_flights::Address;
 use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 
-use crate::cluster::backends::MemoryBackend;
+use crate::cluster::backends::LocalBackend;
 use crate::cluster::ClusterBackend;
 use crate::cluster::ClusterExecutor;
 
@@ -28,7 +28,7 @@ async fn test_backend_memory() -> Result<()> {
         sequence: 0,
     };
     let namespace = "namespace-1".to_string();
-    let backend = MemoryBackend::create();
+    let backend = LocalBackend::create();
 
     // Put.
     {

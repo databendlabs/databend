@@ -4,10 +4,10 @@
 //
 
 #[cfg(test)]
-mod backend_memory_test;
+mod backend_local_test;
 
-mod backend_memory;
+mod backend_local;
 mod backend_store;
 
-pub use backend_memory::MemoryBackend;
+pub use backend_local::LocalBackend;
 pub use backend_store::StoreBackend;

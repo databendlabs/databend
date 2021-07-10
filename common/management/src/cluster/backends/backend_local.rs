@@ -11,12 +11,12 @@ use common_runtime::tokio::sync::RwLock;
 use crate::cluster::ClusterBackend;
 use crate::cluster::ClusterExecutor;
 
-pub struct MemoryBackend {
+pub struct LocalBackend {
     db: RwLock<HashMap<String, Vec<ClusterExecutor>>>,
 }
 
-impl MemoryBackend {
-    pub fn create() -> Self {
+impl LocalBackend {
+    pub fn create(_addr: String) -> Self {
         Self {
             db: RwLock::new(HashMap::default()),
         }
@@ -24,7 +24,7 @@ impl MemoryBackend {
 }
 
 #[async_trait]
-impl ClusterBackend for MemoryBackend {
+impl ClusterBackend for LocalBackend {
     async fn put(&self, namespace: String, executor: &ClusterExecutor) -> Result<()> {
         let mut db = self.db.write().await;
 

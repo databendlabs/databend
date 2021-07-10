@@ -785,6 +785,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.9.5",
+ "url",
 ]
 
 [[package]]

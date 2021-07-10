@@ -26,8 +26,9 @@ async fn test_cluster_mgr() -> Result<()> {
         local: false,
         sequence: 0,
     };
+    let backend_uri = "local://127.0.0.1".to_string();
     let namespace = "namespace-1".to_string();
-    let cluster_mgr = ClusterMgr::create("".to_string());
+    let cluster_mgr = ClusterMgr::create(backend_uri);
 
     // Register.
     {

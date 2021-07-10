@@ -12,8 +12,6 @@ use crate::sessions::FuseQueryContextRef;
 
 pub fn try_create_context() -> Result<FuseQueryContextRef> {
     let mut config = Config::default();
-    // Setup store api address to empty, the cluster backend will use local memory backend.
-    config.store_api_address = "".to_string();
 
     // Setup log dir to the tests directory.
     config.log_dir = env::current_dir()?

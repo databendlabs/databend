@@ -23,7 +23,6 @@ pub struct KvRequest {
     pub value: String,
 }
 
-
 /// A key/value store handle.
 pub fn kv_handler(
     store: KvStoreRef,

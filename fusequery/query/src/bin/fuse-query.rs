@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut services: Vec<AbortableServer> = vec![];
     let session_mgr = SessionMgr::from_conf(conf.clone())?;
-    let cluster_mgr = ClusterMgr::create(conf.store_api_address.clone());
+    let cluster_mgr = ClusterMgr::create(conf.cluster_backend_uri.clone());
 
     // MySQL handler.
     {
@@ -119,7 +119,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Register the executor to the namespace.
     {
         cluster_mgr
-            .register(conf.namespace.clone(), &conf.executor_from_config()?)
+            .register(
+                conf.cluster_namespace.clone(),
+                &conf.executor_from_config()?,
+            )
             .await?;
     }
 
