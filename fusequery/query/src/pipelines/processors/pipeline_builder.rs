@@ -189,7 +189,7 @@ impl PipelineBuilder {
         let mut pipeline = self.visit(&*node.input)?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
-                node.input.schema(),
+                node.schema(),
                 node.predicate.clone(),
                 false,
             )?))
@@ -201,7 +201,7 @@ impl PipelineBuilder {
         let mut pipeline = self.visit(&*node.input)?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
-                node.input.schema(),
+                node.schema(),
                 node.predicate.clone(),
                 true,
             )?))

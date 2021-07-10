@@ -146,17 +146,17 @@ impl<'a> SubQueriesPuller<'a> {
 
             match query_expression {
                 Expression::Subquery { query_plan, .. } => {
-                    let subquery_plan = (**query_plan).clone();
+                    let plan = query_plan.as_ref().clone();
                     let builder = PipelineBuilder::create(subquery_ctx);
-                    let subquery_pipeline = builder.build(&subquery_plan)?;
-                    let shared_future = Self::receive_subquery_res(subquery_pipeline);
+                    let pipeline = builder.build(&plan)?;
+                    let shared_future = Self::receive_subquery_res(plan.schema(), pipeline);
                     self.sub_queries.push(shared_future);
                 }
                 Expression::ScalarSubquery { query_plan, .. } => {
-                    let subquery_plan = (**query_plan).clone();
+                    let plan = query_plan.as_ref().clone();
                     let builder = PipelineBuilder::create(subquery_ctx);
-                    let subquery_pipeline = builder.build(&subquery_plan)?;
-                    let shared_future = Self::receive_scalar_subquery_res(subquery_pipeline);
+                    let pipeline = builder.build(&plan)?;
+                    let shared_future = Self::receive_scalar_subquery_res(pipeline);
                     self.sub_queries.push(shared_future);
                 }
                 _ => return Result::Err(ErrorCode::LogicalError("Expression must be Subquery or ScalarSubquery"))
@@ -166,19 +166,18 @@ impl<'a> SubQueriesPuller<'a> {
         Ok(())
     }
 
-    fn receive_subquery_res(mut pipeline: Pipeline) -> SharedFuture<'a> {
+    fn receive_subquery_res(schema: DataSchemaRef, mut pipeline: Pipeline) -> SharedFuture<'a> {
         let subquery_future = async move {
             let mut stream = pipeline.execute().await?;
+            let mut columns = Vec::with_capacity(schema.fields().len());
 
-            let mut columns = Vec::new();
+            for field in schema.fields() {
+                let data_type = field.data_type().clone();
+                columns.push((data_type, Vec::new()))
+            }
+
             while let Some(data_block) = stream.next().await {
                 let data_block = data_block?;
-
-                if columns.is_empty() {
-                    for index in 0..data_block.num_columns() {
-                        columns.push((data_block.column(index).data_type(), Vec::new()));
-                    }
-                }
 
                 for column_index in 0..data_block.num_columns() {
                     let series = data_block.column(column_index).to_array()?;

@@ -62,57 +62,52 @@ impl PlanBuilder {
 
     /// Apply a expression and merge the fields with exprs.
     pub fn expression(&self, exprs: &[Expression], desc: &str) -> Result<Self> {
-        let input_schema = self.plan.schema();
+        self.sub_queries_expression(exprs, |exprs, schema, input| {
+            // Get the projection expressions(Including rewrite).
+            let mut projection_exprs = vec![];
+            exprs.iter().for_each(|v| match v {
+                Expression::Wildcard => {
+                    for i in 0..schema.fields().len() {
+                        projection_exprs.push(col(schema.fields()[i].name()))
+                    }
+                }
+                _ => projection_exprs.push(v.clone()),
+            });
 
-        // Get the projection expressions(Including rewrite).
-        let mut projection_exprs = vec![];
-        exprs.iter().for_each(|v| match v {
-            Expression::Wildcard => {
-                for i in 0..input_schema.fields().len() {
-                    projection_exprs.push(col(input_schema.fields()[i].name()))
+            // Let's validate the expressions firstly
+            for expr in projection_exprs.iter() {
+                validate_expression(expr)?;
+            }
+
+            // Merge fields.
+            let fields = RewriteHelper::exprs_to_fields(&projection_exprs, &schema)?;
+            let mut merged = schema.fields().clone();
+            for field in fields {
+                if !merged.iter().any(|x| x.name() == field.name()) && field.name() != "*" {
+                    merged.push(field);
                 }
             }
-            _ => projection_exprs.push(v.clone()),
-        });
 
-        // Let's validate the expressions firstly
-        for expr in projection_exprs.iter() {
-            validate_expression(expr)?;
-        }
-
-        // Merge fields.
-        let fields = RewriteHelper::exprs_to_fields(&projection_exprs, &input_schema)?;
-        let mut merged = input_schema.fields().clone();
-        for field in fields {
-            if !merged.iter().any(|x| x.name() == field.name()) && field.name() != "*" {
-                merged.push(field);
-            }
-        }
-
-        Ok(Self::from(&Self::rewrite_sub_queries_exprs(
-            &projection_exprs,
-            PlanNode::Expression(ExpressionPlan {
-                input: Arc::new(self.plan.clone()),
+            Ok(PlanNode::Expression(ExpressionPlan {
+                input: Arc::new(input),
                 exprs: projection_exprs.clone(),
                 schema: DataSchemaRefExt::create(merged),
                 desc: desc.to_string(),
-            }),
-        )?))
+            }))
+        })
     }
 
     /// Apply a projection.
     pub fn project(&self, exprs: &[Expression]) -> Result<Self> {
-        let input_schema = self.plan.schema();
-        let fields = RewriteHelper::exprs_to_fields(exprs, &input_schema)?;
+        self.sub_queries_expression(exprs, |exprs, schema, input| {
+            let fields = RewriteHelper::exprs_to_fields(exprs, &schema)?;
 
-        Ok(Self::from(&Self::rewrite_sub_queries_exprs(
-            exprs,
-            PlanNode::Projection(ProjectionPlan {
-                input: Arc::new(self.plan.clone()),
+            Ok(PlanNode::Projection(ProjectionPlan {
+                input: Arc::new(input),
                 expr: exprs.to_owned(),
                 schema: DataSchemaRefExt::create(fields),
-            }),
-        )?))
+            }))
+        })
     }
 
     fn aggregate(
@@ -228,39 +223,35 @@ impl PlanBuilder {
     /// Apply a filter
     pub fn filter(&self, expr: Expression) -> Result<Self> {
         validate_expression(&expr)?;
-
-        Ok(Self::from(&Self::rewrite_sub_queries_exprs(
-            &[expr.clone()],
-            PlanNode::Filter(FilterPlan {
-                predicate: expr,
-                input: Arc::new(self.plan.clone()),
-                schema: self.plan.schema(),
-            }),
-        )?))
+        self.sub_queries_expression(&[expr], |exprs, schema, input| {
+            Ok(PlanNode::Filter(FilterPlan {
+                predicate: exprs[0].clone(),
+                input: Arc::new(input),
+                schema: schema,
+            }))
+        })
     }
 
     /// Apply a having
     pub fn having(&self, expr: Expression) -> Result<Self> {
         validate_expression(&expr)?;
-        Ok(Self::from(&Self::rewrite_sub_queries_exprs(
-            &[expr.clone()],
-            PlanNode::Having(HavingPlan {
-                predicate: expr,
-                input: Arc::new(self.plan.clone()),
-                schema: self.plan.schema().clone(),
-            }),
-        )?))
+        self.sub_queries_expression(&[expr], |exprs, schema, input| {
+            Ok(PlanNode::Having(HavingPlan {
+                predicate: exprs[0].clone(),
+                input: Arc::new(input),
+                schema: schema,
+            }))
+        })
     }
 
     pub fn sort(&self, exprs: &[Expression]) -> Result<Self> {
-        Ok(Self::from(&Self::rewrite_sub_queries_exprs(
-            exprs,
-            PlanNode::Sort(SortPlan {
+        self.sub_queries_expression(exprs, |exprs, schema, input| {
+            Ok(PlanNode::Sort(SortPlan {
                 order_by: exprs.to_vec(),
-                input: Arc::new(self.plan.clone()),
-                schema: self.plan.schema().clone(),
-            }),
-        )?))
+                input: Arc::new(input),
+                schema: schema,
+            }))
+        })
     }
 
     /// Apply a limit
@@ -307,23 +298,49 @@ impl PlanBuilder {
         Ok(self.plan.clone())
     }
 
-    fn rewrite_sub_queries_exprs(exprs: &[Expression], mut node: PlanNode) -> Result<PlanNode> {
+    fn sub_queries_expression<F>(&self, exprs: &[Expression], f: F) -> Result<Self>
+        where F: FnOnce(&[Expression], DataSchemaRef, PlanNode) -> Result<PlanNode>
+    {
         let sub_queries = RewriteHelper::collect_exprs_sub_queries(exprs)?;
         if !sub_queries.is_empty() {
-            let mut input = node.input(0);
+            let mut input = &self.plan;
 
-            if let PlanNode::SubQueryExpression(subquery) = input.as_ref() {
-                input = subquery.input.clone();
+            if let PlanNode::SubQueryExpression(subquery) = input {
+                input = &subquery.input;
             }
 
-            node.set_inputs(vec![&PlanNode::SubQueryExpression(
-                CreateSubQueriesSetsPlan {
-                    expressions: sub_queries,
-                    input: input,
-                },
-            )]);
+            return Ok(Self::from(&f(
+                exprs,
+                input.schema(),
+                PlanNode::SubQueryExpression(
+                    CreateSubQueriesSetsPlan {
+                        expressions: sub_queries,
+                        input: Arc::new(input.clone()),
+                    },
+                ))?
+            ));
         }
 
-        Ok(node)
+        Ok(Self::from(&f(exprs, self.plan.schema(), self.plan.clone())?))
     }
+
+    // fn rewrite_sub_queries_exprs(exprs: &[Expression], mut node: PlanNode) -> Result<PlanNode> {
+    //     let sub_queries = RewriteHelper::collect_exprs_sub_queries(exprs)?;
+    //     if !sub_queries.is_empty() {
+    //         let mut input = node.input(0);
+    //
+    //         if let PlanNode::SubQueryExpression(subquery) = input.as_ref() {
+    //             input = subquery.input.clone();
+    //         }
+    //
+    //         node.set_inputs(vec![&PlanNode::SubQueryExpression(
+    //             CreateSubQueriesSetsPlan {
+    //                 expressions: sub_queries,
+    //                 input: input,
+    //             },
+    //         )]);
+    //     }
+    //
+    //     Ok(node)
+    // }
 }

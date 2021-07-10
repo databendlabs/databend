@@ -20,11 +20,7 @@ impl CorrectWithSchemaStream {
     }
 
     fn new_block_if_need(&self, data_block: DataBlock) -> Result<DataBlock> {
-        let schema_fields = self.schema.fields();
-        let block_fields = data_block.schema().fields();
-
-        // TODO: maybe type also missing match.
-        match block_fields.len() == schema_fields.len() {
+        match self.schema.eq(data_block.schema()) {
             true => Ok(data_block),
             false => self.new_data_block(data_block)
         }
@@ -38,8 +34,8 @@ impl CorrectWithSchemaStream {
                 Some(column) if &column.data_type() == schema_field.data_type() => {
                     new_columns.push(column.clone())
                 }
-                _ => return Err(ErrorCode::IllegalSchema(format!(
-                    "Illegal schema. expect: {:?} found: {:?}", self.schema, data_block.schema()
+                other => return Err(ErrorCode::IllegalSchema(format!(
+                    "Illegal schema. expect: {:?} found: {:?}", schema_field, other
                 ))),
             };
         }

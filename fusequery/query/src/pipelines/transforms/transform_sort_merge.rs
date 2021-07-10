@@ -10,7 +10,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::Expression;
-use common_streams::DataBlockStream;
+use common_streams::{DataBlockStream, CorrectWithSchemaStream};
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::StreamExt;
@@ -80,10 +80,13 @@ impl Processor for SortMergeTransform {
             )?],
         };
 
-        Ok(Box::pin(DataBlockStream::create(
+        Ok(Box::pin(CorrectWithSchemaStream::new(
+            Box::pin(DataBlockStream::create(
+                self.schema.clone(),
+                None,
+                results,
+            )),
             self.schema.clone(),
-            None,
-            results,
         )))
     }
 }

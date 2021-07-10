@@ -44,7 +44,6 @@ impl Function for ExistsFunction {
             DataColumn::Constant(values, size) => {
                 match values {
                     DataValue::List(Some(values), _) => {
-                        println!("exitis rows:{}", size);
                         Ok(DataColumn::Constant(DataValue::Boolean(Some(values.len() != 0)), *size))
                     }
                     DataValue::Struct(fields) if !fields.is_empty() => {
