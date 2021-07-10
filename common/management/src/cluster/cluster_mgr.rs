@@ -7,9 +7,10 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_states::BackendClient;
+use common_kvs::BackendClient;
 
 use crate::cluster::ClusterExecutor;
+use crate::cluster::ClusterExecutorList;
 
 pub type ClusterMgrRef = Arc<ClusterMgr>;
 
@@ -25,16 +26,28 @@ impl ClusterMgr {
 
     /// Register an executor to the namespace.
     pub async fn register(&self, namespace: String, executor: &ClusterExecutor) -> Result<()> {
-        self.backend_client.put(namespace, executor).await
+        let value: Option<ClusterExecutorList> = self.backend_client.get(namespace.clone()).await?;
+        let executors = match value {
+            None => {
+                let mut executors = ClusterExecutorList::create();
+                executors.list.push(executor.clone());
+                executors
+            }
+            Some(mut v) => {
+                v.list.push(executor.clone());
+                v
+            }
+        };
+        self.backend_client.put(namespace, executors).await
     }
 
     /// Unregister an executor from namespace.
     pub async fn unregister(&self, namespace: String, executor: &ClusterExecutor) -> Result<()> {
-        self.backend_client.remove(namespace, executor).await
+        self.backend_client.remove(namespace).await
     }
 
     /// Get all the executors by namespace.
-    pub async fn get_executors(&self, namespace: String) -> Result<Vec<ClusterExecutor>> {
+    pub async fn get_executors(&self, namespace: String) -> Result<Option<ClusterExecutorList>> {
         self.backend_client.get(namespace).await
     }
 

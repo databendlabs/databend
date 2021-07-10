@@ -12,5 +12,6 @@ mod cluster_mgr;
 
 pub use cluster_backend::ClusterBackend;
 pub use cluster_executor::ClusterExecutor;
+pub use cluster_executor::ClusterExecutorList;
 pub use cluster_mgr::ClusterMgr;
 pub use cluster_mgr::ClusterMgrRef;

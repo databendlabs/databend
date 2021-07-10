@@ -9,7 +9,6 @@ use common_exception::Result;
 use common_runtime::tokio::sync::RwLock;
 
 use crate::backends::StateBackend;
-use crate::Backend;
 
 pub struct LocalBackend {
     db: RwLock<HashMap<String, String>>,
@@ -38,11 +37,8 @@ impl StateBackend for LocalBackend {
     }
 
     async fn get(&self, key: String) -> Result<Option<String>> {
-        let mut db = self.db.write().await;
+        let db = self.db.read().await;
         let res = db.get(key.as_str());
-        Ok(match res {
-            None => None,
-            Some(v) => Some(v.clone()),
-        })
+        Ok(res.cloned())
     }
 }

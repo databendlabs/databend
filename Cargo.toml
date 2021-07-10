@@ -18,7 +18,7 @@ members = [
     "common/exception",
     "common/tracing",
     "common/profiling",
-    "common/states",
+    "common/kvs",
     "common/store-api",
     "common/management",
 

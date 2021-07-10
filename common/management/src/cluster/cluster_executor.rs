@@ -19,6 +19,17 @@ pub struct ClusterExecutor {
     pub sequence: usize,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct ClusterExecutorList {
+    pub list: Vec<ClusterExecutor>,
+}
+
+impl ClusterExecutorList {
+    pub fn create() -> Self {
+        ClusterExecutorList { list: vec![] }
+    }
+}
+
 impl ClusterExecutor {
     pub fn create(name: String, priority: u8, address: Address) -> Result<ClusterExecutor> {
         Ok(ClusterExecutor {

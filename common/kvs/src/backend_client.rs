@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use async_trait::async_trait;
 use common_exception::Result;
 use url::Url;
 
@@ -41,15 +40,22 @@ impl BackendClient {
         BackendClient { backend }
     }
 
-    pub async fn put(&self, key: String, value: String) -> Result<()> {
-        self.backend.put(key, value)
+    pub async fn put<T>(&self, key: String, value: T) -> Result<()>
+    where T: serde::Serialize {
+        let json = serde_json::to_string(&value).unwrap();
+        self.backend.put(key, json).await
     }
 
     pub async fn remove(&self, key: String) -> Result<()> {
-        self.backend.remove(key)
+        self.backend.remove(key).await
     }
 
-    pub async fn get(&self, key: String) -> Result<Option<String>> {
-        self.backend.get(key)
+    pub async fn get<T>(&self, key: String) -> Result<Option<T>>
+    where T: serde::de::DeserializeOwned {
+        let val = self.backend.get(key).await?;
+        Ok(match val {
+            None => None,
+            Some(v) => Some(serde_json::from_str::<T>(v.as_str())?),
+        })
     }
 }
