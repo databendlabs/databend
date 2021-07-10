@@ -206,24 +206,37 @@ impl<'a> SubQueriesPuller<'a> {
         let subquery_future = async move {
             let mut stream = pipeline.execute().await?;
 
-            if let Some(data_block) = stream.next().await {
+            let mut columns = None;
+            while let Some(data_block) = stream.next().await {
                 let data_block = data_block?;
 
-                if data_block.num_rows() > 1 {
-                    return Err(ErrorCode::ScalarSubqueryHasMoreRows(
+                if data_block.num_rows() != 1 || columns.is_some() {
+                    return Err(ErrorCode::ScalarSubqueryBadRows(
                         "Scalar subquery result set must be one row."
                     ));
                 }
 
-                if data_block.num_columns() == 1 {
-                    // match data_block
+                let mut columns_data = Vec::with_capacity(data_block.num_columns());
+                for column in data_block.columns() {
+                    let series = column.to_array()?;
+                    match series.to_values()? {
+                        values if values.len() == 1 => columns_data.push(values[0].clone()),
+                        _ => return Err(ErrorCode::ScalarSubqueryBadRows(
+                            "Scalar subquery result set must be one row."
+                        ))
+                    }
                 }
+
+                columns = Some(columns_data)
             }
 
-            // match stream.next().await {
-            //     None =>
-            // }
-            Ok(DataValue::UInt64(Some(1)))
+            match columns {
+                Some(mut data) if data.len() == 1 => Ok(data.remove(0)),
+                Some(data) => Ok(DataValue::Struct(data)),
+                None => Err(ErrorCode::ScalarSubqueryBadRows(
+                    "Scalar subquery result set must be one row."
+                )),
+            }
         };
 
         subquery_future.boxed().shared()

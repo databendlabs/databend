@@ -149,10 +149,11 @@ pub trait PlanRewriter<'plan> {
         plan: &'plan CreateSubQueriesSetsPlan,
     ) -> Result<PlanNode> {
         // TODO: need rewrite subquery expression
-        Ok(PlanNode::SubQueryExpression(CreateSubQueriesSetsPlan {
-            expressions: plan.expressions.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
-        }))
+        Ok(PlanNode::SubQueryExpression(plan.clone()))
+        // Ok(PlanNode::SubQueryExpression(CreateSubQueriesSetsPlan {
+        //     expressions: plan.expressions.clone(),
+        //     input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+        // }))
     }
 
     fn rewrite_filter(&mut self, plan: &'plan FilterPlan) -> Result<PlanNode> {

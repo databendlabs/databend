@@ -127,6 +127,7 @@ impl PipelineBuilder {
 
     fn visit_projection(&mut self, node: &ProjectionPlan) -> Result<Pipeline> {
         let mut pipeline = self.visit(&*node.input)?;
+        println!("Projection output schema: {:?}", node.schema);
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ProjectionTransform::try_create(
                 node.input.schema(),

@@ -111,7 +111,7 @@ impl Expression {
                 }
             }
             Expression::Subquery { name, .. } => name.clone(),
-            Expression::Subquery { name, .. } => name.clone(),
+            Expression::ScalarSubquery { name, .. } => name.clone(),
             _ => format!("{:?}", self),
         }
     }

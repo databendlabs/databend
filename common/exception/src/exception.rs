@@ -152,7 +152,7 @@ build_exceptions! {
     CannotListenerPort(45),
     BadBytes(46),
     InitPrometheusFailure(47),
-    ScalarSubqueryHasMoreRows(48),
+    ScalarSubqueryBadRows(48),
 
 
     // uncategorized

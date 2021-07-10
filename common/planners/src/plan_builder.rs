@@ -105,6 +105,7 @@ impl PlanBuilder {
         let input_schema = self.plan.schema();
         let fields = RewriteHelper::exprs_to_fields(exprs, &input_schema)?;
 
+        println!("Projection {:?}", fields);
         Ok(Self::from(&Self::rewrite_sub_queries_exprs(
             exprs,
             PlanNode::Projection(ProjectionPlan {

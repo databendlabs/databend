@@ -129,6 +129,7 @@ impl ExpressionExecutor {
             }
         }
 
+        println!("output schema: {:?}", self.output_schema);
         let mut project_columns = Vec::with_capacity(self.output_schema.fields().len());
         for f in self.output_schema.fields() {
             let column = column_map.get(f.name()).ok_or_else(|| {
