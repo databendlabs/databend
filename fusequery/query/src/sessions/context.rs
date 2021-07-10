@@ -81,13 +81,13 @@ impl FuseQueryContext {
         default_database: String,
         datasource: Arc<DataSource>,
     ) -> Result<FuseQueryContextRef> {
-        let cluster_backend = conf.store_api_address.clone();
+        let executor_backend_url = conf.executor_backend_url.clone();
 
         Ok(Arc::new(FuseQueryContext {
             conf,
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings: settings.clone(),
-            cluster: ClusterMgr::create(cluster_backend),
+            cluster: ClusterMgr::create(executor_backend_url),
             datasource,
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),

@@ -5,12 +5,15 @@
 use common_exception::Result;
 use common_flights::Address;
 
+/// Executor metadata.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct ClusterExecutor {
+    // Executor name.
     pub name: String,
     // Node priority is in [0,10]
     // larger value means higher priority
     pub priority: u8,
+    // Executor address.
     pub address: Address,
     pub local: bool,
     pub sequence: usize,

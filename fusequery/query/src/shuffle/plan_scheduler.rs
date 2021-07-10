@@ -142,8 +142,8 @@ impl ExecutionPlanBuilder {
                     .iter()
                     .map(|node| node.name.clone())
                     .collect::<Vec<_>>();
-                for cluster_node in executors {
-                    if cluster_node.name == *executor_name && cluster_node.local {
+                for executor in executors {
+                    if executor.name == *executor_name && executor.local {
                         return Ok(Some(ExecutePlanWithShuffleAction {
                             query_id: self.0.clone(),
                             stage_id: self.1.clone(),
