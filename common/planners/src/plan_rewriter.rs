@@ -12,7 +12,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::plan_subqueries_set_create::CreateSubQueriesSetsPlan;
-use crate::AggregatorFinalPlan;
+use crate::{AggregatorFinalPlan, PlanBuilder};
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
@@ -136,12 +136,10 @@ pub trait PlanRewriter<'plan> {
     }
 
     fn rewrite_expression(&mut self, plan: &'plan ExpressionPlan) -> Result<PlanNode> {
-        Ok(PlanNode::Expression(ExpressionPlan {
-            schema: plan.schema.clone(),
-            desc: plan.desc.clone(),
-            exprs: plan.exprs.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
-        }))
+        let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
+        PlanBuilder::from(&new_input)
+            .expression(&plan.exprs, &plan.desc)?
+            .build()
     }
 
     fn rewrite_sub_queries_expression(
@@ -149,11 +147,10 @@ pub trait PlanRewriter<'plan> {
         plan: &'plan CreateSubQueriesSetsPlan,
     ) -> Result<PlanNode> {
         // TODO: need rewrite subquery expression
-        Ok(PlanNode::SubQueryExpression(plan.clone()))
-        // Ok(PlanNode::SubQueryExpression(CreateSubQueriesSetsPlan {
-        //     expressions: plan.expressions.clone(),
-        //     input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
-        // }))
+        Ok(PlanNode::SubQueryExpression(CreateSubQueriesSetsPlan {
+            expressions: plan.expressions.clone(),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+        }))
     }
 
     fn rewrite_filter(&mut self, plan: &'plan FilterPlan) -> Result<PlanNode> {

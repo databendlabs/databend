@@ -105,7 +105,6 @@ impl PlanBuilder {
         let input_schema = self.plan.schema();
         let fields = RewriteHelper::exprs_to_fields(exprs, &input_schema)?;
 
-        println!("Projection {:?}", fields);
         Ok(Self::from(&Self::rewrite_sub_queries_exprs(
             exprs,
             PlanNode::Projection(ProjectionPlan {
@@ -311,10 +310,16 @@ impl PlanBuilder {
     fn rewrite_sub_queries_exprs(exprs: &[Expression], mut node: PlanNode) -> Result<PlanNode> {
         let sub_queries = RewriteHelper::collect_exprs_sub_queries(exprs)?;
         if !sub_queries.is_empty() {
+            let mut input = node.input(0);
+
+            if let PlanNode::SubQueryExpression(subquery) = input.as_ref() {
+                input = subquery.input.clone();
+            }
+
             node.set_inputs(vec![&PlanNode::SubQueryExpression(
                 CreateSubQueriesSetsPlan {
                     expressions: sub_queries,
-                    input: node.input(0),
+                    input: input,
                 },
             )]);
         }
