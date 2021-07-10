@@ -16,7 +16,7 @@ use crate::cluster::ClusterExecutor;
 pub type ClusterMgrRef = Arc<ClusterMgr>;
 
 pub struct ClusterMgr {
-    backend: Box<dyn ClusterBackend>,
+    backend_client: Box<dyn ClusterBackend>,
 }
 
 impl ClusterMgr {
@@ -26,28 +26,30 @@ impl ClusterMgr {
             "" => Box::new(MemoryBackend::create()),
             _ => Box::new(StoreBackend::create(addr)),
         };
-        Arc::new(ClusterMgr { backend })
+        Arc::new(ClusterMgr {
+            backend_client: backend,
+        })
     }
 
     pub fn empty() -> ClusterMgrRef {
         Arc::new(ClusterMgr {
-            backend: Box::new(MemoryBackend::create()),
+            backend_client: Box::new(MemoryBackend::create()),
         })
     }
 
     /// Register an executor to the namespace.
     pub async fn register(&self, namespace: String, executor: &ClusterExecutor) -> Result<()> {
-        self.backend.put(namespace, executor).await
+        self.backend_client.put(namespace, executor).await
     }
 
     /// Unregister an executor from namespace.
     pub async fn unregister(&self, namespace: String, executor: &ClusterExecutor) -> Result<()> {
-        self.backend.remove(namespace, executor).await
+        self.backend_client.remove(namespace, executor).await
     }
 
     /// Get all the executors by namespace.
     pub async fn get_executors(&self, namespace: String) -> Result<Vec<ClusterExecutor>> {
-        self.backend.get(namespace).await
+        self.backend_client.get(namespace).await
     }
 
     pub async fn get_executor_by_name(
@@ -55,7 +57,7 @@ impl ClusterMgr {
         namespace: String,
         executor_name: String,
     ) -> Result<ClusterExecutor> {
-        let executors = self.backend.get(namespace.clone()).await?;
+        let executors = self.backend_client.get(namespace.clone()).await?;
         executors
             .into_iter()
             .find(|x| x.name == executor_name)
