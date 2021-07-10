@@ -10,6 +10,7 @@ use common_exception::Result;
 use url::Url;
 
 use crate::cluster::backends::LocalBackend;
+use crate::cluster::backends::MemoryBackend;
 use crate::cluster::backends::StoreBackend;
 use crate::cluster::ClusterBackend;
 use crate::cluster::ClusterExecutor;
@@ -38,7 +39,7 @@ impl ClusterMgr {
             // For test.
             "local" => Box::new(LocalBackend::create(new_address)),
             // Use api http kv as backend.
-            "memory" => Box::new(LocalBackend::create(new_address)),
+            "memory" => Box::new(MemoryBackend::create(new_address)),
             // Use store as backend.
             _ => Box::new(StoreBackend::create(new_address)),
         };
