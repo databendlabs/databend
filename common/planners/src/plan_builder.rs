@@ -119,7 +119,7 @@ impl PlanBuilder {
                 let fields = RewriteHelper::exprs_to_fields(aggr_expr, &schema_before_groupby)?;
                 let mut partial_fields = fields
                     .iter()
-                    .map(|f| DataField::new(f.name(), DataType::Utf8, false))
+                    .map(|f| DataField::new(f.name(), DataType::Binary, false))
                     .collect::<Vec<_>>();
 
                 if !group_expr.is_empty() {
@@ -131,8 +131,8 @@ impl PlanBuilder {
                         partial_fields.push(expr.to_data_field(&schema_before_groupby)?);
                     }
 
-                    partial_fields.push(DataField::new("_group_keys", DataType::Utf8, false));
-                    // partial_fields.push(DataField::new("_group_by_key", DataType::Binary, false));
+                    // partial_fields.push(DataField::new("_group_keys", DataType::Utf8, false));
+                    partial_fields.push(DataField::new("_group_by_key", DataType::Binary, false));
                 }
 
                 Self::from(&PlanNode::AggregatorPartial(AggregatorPartialPlan {
