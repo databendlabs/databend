@@ -55,7 +55,6 @@ impl AggregateFunction for AggregateSumFunction {
     ) -> Result<()> {
         let state = AggregateSingeValueState::get(place);
         let value = Self::sum_batch(&columns[0])?;
-
         state.value = (&state.value + &value)?;
         Ok(())
     }

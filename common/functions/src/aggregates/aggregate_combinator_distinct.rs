@@ -25,6 +25,7 @@ struct DataGroupValues(Vec<DataGroupValue>);
 
 pub struct AggregateDistinctState {
     set: HashSet<DataGroupValues, RandomState>,
+    nested_addr: StateAddr,
 }
 
 impl AggregateDistinctState {
@@ -120,9 +121,10 @@ impl AggregateFunction for AggregateDistinctCombinator {
     }
 
     fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
-        self.nested.allocate_state(arena);
+        let addr = self.nested.allocate_state(arena);
         let state = arena.alloc(AggregateDistinctState {
             set: HashSet::new(),
+            nested_addr: addr,
         });
 
         (state as *mut AggregateDistinctState) as StateAddr
@@ -176,10 +178,8 @@ impl AggregateFunction for AggregateDistinctCombinator {
         {
             Ok(DataValue::UInt64(Some(state.set.len() as u64)))
         } else {
-            let offsize = std::mem::size_of::<AggregateDistinctState>();
-            let nested_place = place + offsize;
             if state.set.is_empty() {
-                return self.nested.merge_result(nested_place);
+                return self.nested.merge_result(state.nested_addr);
             }
             let mut results = Vec::with_capacity(state.set.len());
 
@@ -211,9 +211,9 @@ impl AggregateFunction for AggregateDistinctCombinator {
                 .collect::<Result<Vec<_>>>()?;
 
             self.nested
-                .accumulate(nested_place, &columns, state.set.len())?;
+                .accumulate(state.nested_addr, &columns, state.set.len())?;
             // merge_result
-            self.nested.merge_result(nested_place)
+            self.nested.merge_result(state.nested_addr)
         }
     }
 }

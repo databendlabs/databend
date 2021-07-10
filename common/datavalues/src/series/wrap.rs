@@ -128,7 +128,25 @@ macro_rules! impl_dyn_array {
             }
 
             fn sum(&self) -> Result<DataValue> {
-                self.0.sum()
+                if matches!(
+                    self.0.data_type(),
+                    DataType::Float64 | DataType::UInt64 | DataType::Int64
+                ) {
+                    return self.0.sum();
+                }
+
+                if is_floating(&self.0.data_type()) {
+                    let s = self.cast_with_type(&DataType::Float64)?;
+                    return s.0.sum();
+                }
+
+                if is_signed_numeric(&self.0.data_type()) {
+                    let s = self.cast_with_type(&DataType::Int64)?;
+                    return s.0.sum();
+                }
+
+                let s = self.cast_with_type(&DataType::UInt64)?;
+                s.0.sum()
             }
 
             fn max(&self) -> Result<DataValue> {
