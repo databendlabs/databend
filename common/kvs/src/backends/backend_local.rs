@@ -36,10 +36,10 @@ impl StateBackend for LocalBackend {
             .map(|v| std::str::from_utf8(&v).unwrap().to_owned()))
     }
 
-    async fn get_from_prefix(&self, key: String) -> Result<Vec<(String, String)>> {
+    async fn get_from_prefix(&self, prefix: String) -> Result<Vec<(String, String)>> {
         Ok(self
             .db
-            .scan_prefix(key)
+            .scan_prefix(prefix)
             .map(|v| {
                 v.map(|(key, value)| {
                     (
@@ -48,7 +48,8 @@ impl StateBackend for LocalBackend {
                     )
                 })
             })
-            .collect::<Vec<(_, _)>>())
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|e| ErrorCode::UnknownException(e.to_string()))?)
     }
 
     async fn put(&self, key: String, value: String) -> Result<()> {

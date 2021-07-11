@@ -5,6 +5,7 @@
 use async_trait::async_trait;
 use common_exception::Result;
 
+use crate::backends::Lock;
 use crate::backends::StateBackend;
 
 #[allow(dead_code)]
@@ -20,6 +21,14 @@ impl StoreBackend {
 
 #[async_trait]
 impl StateBackend for StoreBackend {
+    async fn get(&self, _key: String) -> Result<Option<String>> {
+        todo!()
+    }
+
+    async fn get_from_prefix(&self, _prefix: String) -> Result<Vec<(String, String)>> {
+        todo!()
+    }
+
     async fn put(&self, _key: String, _value: String) -> Result<()> {
         todo!()
     }
@@ -28,7 +37,7 @@ impl StateBackend for StoreBackend {
         todo!()
     }
 
-    async fn get(&self, _key: String) -> Result<Option<String>> {
+    async fn lock(&self, _key: String) -> Result<Box<dyn Lock>> {
         todo!()
     }
 }

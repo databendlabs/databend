@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use async_trait::async_trait;
 use common_exception::Result;
 use url::Url;
 
@@ -10,11 +9,6 @@ use crate::backends::LocalBackend;
 use crate::backends::MemoryBackend;
 use crate::backends::StateBackend;
 use crate::backends::StoreBackend;
-
-#[async_trait]
-pub trait Lock: Send + Sync {
-    async fn unlock(&mut self);
-}
 
 pub struct BackendClient {
     backend: Box<dyn StateBackend>,
