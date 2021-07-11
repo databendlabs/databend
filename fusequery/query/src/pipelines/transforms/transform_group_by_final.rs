@@ -9,13 +9,13 @@ use std::time::Instant;
 
 use bumpalo::Bump;
 use common_datablocks::DataBlock;
-use common_datablocks::HashMethod;
-use common_datablocks::HashMethodKeysU32;
 use common_datablocks::HashMethodKind;
-use common_datablocks::HashMethodSerializer;
 use common_datavalues::prelude::*;
 use common_datavalues::DFBinaryArray;
+use common_datavalues::DFUInt16Array;
 use common_datavalues::DFUInt32Array;
+use common_datavalues::DFUInt64Array;
+use common_datavalues::DFUInt8Array;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::Expression;
@@ -216,8 +216,17 @@ impl Processor for GroupByFinalTransform {
                     HashMethodKind::Serializer(hash_method) => {
                         apply! { hash_method,  &DFBinaryArray, binary,   RwLock<HashMap<Vec<u8>, (Vec<usize>, Vec<DataValue>), ahash::RandomState>>}
                     }
+                    HashMethodKind::KeysU8(hash_method) => {
+                        apply! { hash_method , &DFUInt8Array, u8,  RwLock<HashMap<u8, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
+                    }
+                    HashMethodKind::KeysU16(hash_method) => {
+                        apply! { hash_method , &DFUInt16Array, u16,  RwLock<HashMap<u16, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
+                    }
                     HashMethodKind::KeysU32(hash_method) => {
                         apply! { hash_method , &DFUInt32Array, u32,  RwLock<HashMap<u32, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
+                    }
+                    HashMethodKind::KeysU64(hash_method) => {
+                        apply! { hash_method , &DFUInt64Array, u64,  RwLock<HashMap<u64, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
                     }
                 }
             }};

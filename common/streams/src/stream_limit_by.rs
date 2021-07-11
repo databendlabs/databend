@@ -42,7 +42,7 @@ impl LimitByStream {
     pub fn limit_by(&mut self, block: &DataBlock) -> Result<Option<DataBlock>> {
         // TODO: use BitVec here.
         let mut filter_vec = vec![false; block.num_rows()];
-        let method = HashMethodSerializer::new();
+        let method = HashMethodSerializer::default();
         let group_indices = method.group_by_get_indices(block, &self.limit_by_columns_name)?;
 
         for (limit_by_key, (rows, _)) in group_indices {

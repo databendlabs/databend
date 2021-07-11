@@ -11,9 +11,7 @@ use bumpalo::Bump;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodKind;
-use common_datablocks::HashMethodSerializer;
 use common_datavalues::arrays::BinaryArrayBuilder;
-use common_datavalues::arrays::DFUInt32ArrayBuilder;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -251,8 +249,17 @@ impl Processor for GroupByPartialTransform {
                     HashMethodKind::Serializer(hash_method) => {
                         apply! { hash_method, BinaryArrayBuilder , RwLock<HashMap<Vec<u8>, (Vec<usize>, Vec<DataValue>), ahash::RandomState>>}
                     }
+                    HashMethodKind::KeysU8(hash_method) => {
+                        apply! { hash_method , DFUInt8ArrayBuilder, RwLock<HashMap<u8, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
+                    }
+                    HashMethodKind::KeysU16(hash_method) => {
+                        apply! { hash_method , DFUInt16ArrayBuilder, RwLock<HashMap<u16, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
+                    }
                     HashMethodKind::KeysU32(hash_method) => {
                         apply! { hash_method , DFUInt32ArrayBuilder, RwLock<HashMap<u32, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
+                    }
+                    HashMethodKind::KeysU64(hash_method) => {
+                        apply! { hash_method , DFUInt64ArrayBuilder, RwLock<HashMap<u64, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
                     }
                 }
             }};
