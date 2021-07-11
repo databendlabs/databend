@@ -47,6 +47,11 @@ pub struct DfCreateTable {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct DfDescribeTable {
+    pub name: ObjectName,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DfDropTable {
     pub if_exists: bool,
     pub name: ObjectName,
@@ -88,6 +93,7 @@ pub enum DfStatement {
     ShowTables(DfShowTables),
     ShowCreateTable(DfShowCreateTable),
     CreateTable(DfCreateTable),
+    DescribeTable(DfDescribeTable),
     DropTable(DfDropTable),
 
     // Settings.
