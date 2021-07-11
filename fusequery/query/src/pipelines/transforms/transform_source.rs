@@ -8,7 +8,8 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
-use common_streams::{SendableDataBlockStream, CorrectWithSchemaStream};
+use common_streams::CorrectWithSchemaStream;
+use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use crate::pipelines::processors::EmptyProcessor;

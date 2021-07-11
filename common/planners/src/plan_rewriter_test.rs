@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::test::Test;
 use crate::*;
-use std::sync::Arc;
 
 #[test]
 fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
@@ -169,7 +169,10 @@ fn test_rewrite_expressions_plan() -> anyhow::Result<()> {
 struct DefaultRewriter;
 
 impl PlanRewriter for DefaultRewriter {
-    fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> common_exception::Result<PlanNode> {
+    fn rewrite_aggregate_partial(
+        &mut self,
+        plan: &AggregatorPartialPlan,
+    ) -> common_exception::Result<PlanNode> {
         Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan {
             schema: plan.schema.clone(),
             aggr_expr: plan.aggr_expr.clone(),
@@ -178,7 +181,10 @@ impl PlanRewriter for DefaultRewriter {
         }))
     }
 
-    fn rewrite_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> common_exception::Result<PlanNode> {
+    fn rewrite_aggregate_final(
+        &mut self,
+        plan: &AggregatorFinalPlan,
+    ) -> common_exception::Result<PlanNode> {
         Ok(PlanNode::AggregatorFinal(AggregatorFinalPlan {
             schema: plan.schema.clone(),
             schema_before_group_by: plan.schema_before_group_by.clone(),

@@ -5,10 +5,14 @@
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_exception::{Result, ErrorCode};
-use common_planners::{Expression, AggregatorPartialPlan, AggregatorFinalPlan, PlanBuilder};
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::AggregatorFinalPlan;
+use common_planners::AggregatorPartialPlan;
+use common_planners::Expression;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
+use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 
@@ -112,7 +116,9 @@ impl PlanRewriter for ConstantFoldingImpl {
         let new_input = self.rewrite_plan_node(&plan.input)?;
 
         match self.before_group_by_schema {
-            Some(_) => Err(ErrorCode::LogicalError("Logical error: before group by schema must be None")),
+            Some(_) => Err(ErrorCode::LogicalError(
+                "Logical error: before group by schema must be None",
+            )),
             None => {
                 self.before_group_by_schema = Some(new_input.schema());
                 PlanBuilder::from(&new_input)
@@ -126,15 +132,12 @@ impl PlanRewriter for ConstantFoldingImpl {
         let new_input = self.rewrite_plan_node(&plan.input)?;
 
         match self.before_group_by_schema.take() {
-            None => Err(ErrorCode::LogicalError("Logical error: before group by schema must be Some")),
-            Some(schema_before_group_by) => {
-                PlanBuilder::from(&new_input)
-                    .aggregate_final(
-                        schema_before_group_by,
-                        &plan.aggr_expr,
-                        &plan.group_expr,
-                    )?.build()
-            }
+            None => Err(ErrorCode::LogicalError(
+                "Logical error: before group by schema must be Some",
+            )),
+            Some(schema_before_group_by) => PlanBuilder::from(&new_input)
+                .aggregate_final(schema_before_group_by, &plan.aggr_expr, &plan.group_expr)?
+                .build(),
         }
     }
 

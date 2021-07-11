@@ -1,14 +1,18 @@
-use crate::SendableDataBlockStream;
 use std::collections::HashMap;
-use std::sync::Arc;
-use common_datavalues::columns::DataColumn;
-use futures::{Stream, StreamExt};
-use std::task::Context;
-use common_datablocks::DataBlock;
-use common_exception::Result;
-use common_datavalues::{DataSchemaRef, DataValue};
 use std::pin::Pin;
+use std::sync::Arc;
+use std::task::Context;
+
+use common_datablocks::DataBlock;
+use common_datavalues::columns::DataColumn;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataValue;
+use common_exception::Result;
 use futures::task::Poll;
+use futures::Stream;
+use futures::StreamExt;
+
+use crate::SendableDataBlockStream;
 
 pub struct SubQueriesStream {
     input: SendableDataBlockStream,

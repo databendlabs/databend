@@ -5,8 +5,11 @@
 use common_arrow::arrow::compute;
 use common_exception::Result;
 
+use crate::arrays::ArrayApply;
+use crate::arrays::ArrayFullNull;
+use crate::arrays::DataArray;
+use crate::arrays::TakeRandom;
 use crate::DFBooleanArray;
-use crate::arrays::{TakeRandom, ArrayApply, DataArray, ArrayFullNull};
 
 impl DFBooleanArray {
     pub fn and(&self, rhs: &DFBooleanArray) -> Result<Self> {
@@ -26,7 +29,7 @@ impl DFBooleanArray {
                     Some(rhs) => Ok(self.apply_with_idx_on_opt(|(_, lhs)| match lhs {
                         None if rhs => None,
                         None => Some(false),
-                        Some(lhs) => Some(lhs && rhs)
+                        Some(lhs) => Some(lhs && rhs),
                     })),
                 }
             }
@@ -40,7 +43,7 @@ impl DFBooleanArray {
                     Some(lhs) => Ok(rhs.apply_with_idx_on_opt(|(_, rhs)| match rhs {
                         None if lhs => None,
                         None => Some(false),
-                        Some(rhs) => Some(lhs && rhs)
+                        Some(rhs) => Some(lhs && rhs),
                     })),
                 }
             }
@@ -65,7 +68,7 @@ impl DFBooleanArray {
                     Some(rhs) => Ok(self.apply_with_idx_on_opt(|(_, lhs)| match lhs {
                         None if rhs => Some(true),
                         None => None,
-                        Some(lhs) => Some(lhs || rhs)
+                        Some(lhs) => Some(lhs || rhs),
                     })),
                 }
             }
@@ -79,7 +82,7 @@ impl DFBooleanArray {
                     Some(lhs) => Ok(rhs.apply_with_idx_on_opt(|(_, rhs)| match rhs {
                         None if lhs => Some(true),
                         None => None,
-                        Some(rhs) => Some(lhs || rhs)
+                        Some(rhs) => Some(lhs || rhs),
                     })),
                 }
             }

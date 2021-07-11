@@ -147,7 +147,7 @@ impl Expression {
 
         match columns_field.len() {
             1 => columns_field[0].data_type().clone(),
-            _ => DataType::Struct(columns_field)
+            _ => DataType::Struct(columns_field),
         }
     }
 
@@ -166,7 +166,9 @@ impl Expression {
             Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
             Expression::Literal(v) => Ok(v.data_type()),
             Expression::Subquery { query_plan, .. } => Ok(self.to_subquery_type(query_plan)),
-            Expression::ScalarSubquery { query_plan, .. } => Ok(self.to_scalar_subquery_type(query_plan)),
+            Expression::ScalarSubquery { query_plan, .. } => {
+                Ok(self.to_scalar_subquery_type(query_plan))
+            }
             Expression::BinaryExpression { op, left, right } => {
                 let arg_types = vec![
                     left.to_data_type(input_schema)?,

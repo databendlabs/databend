@@ -17,7 +17,7 @@ use log::debug;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
-use crate::pipelines::processors::{PipelineBuilder};
+use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ExplainInterpreter {

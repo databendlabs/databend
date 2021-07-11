@@ -9,17 +9,20 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
-use common_exception::{Result, ErrorCode};
-use common_planners::{AggregatorFinalPlan, PlanBuilder, ScanPlan};
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::EmptyPlan;
 use common_planners::Expression;
 use common_planners::FilterPlan;
+use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::RewriteHelper;
+use common_planners::ScanPlan;
 use common_planners::SortPlan;
 
 use crate::optimizers::Optimizer;
@@ -40,7 +43,9 @@ impl PlanRewriter for ProjectionPushDownImpl {
         let new_input = self.rewrite_plan_node(&plan.input)?;
 
         match self.before_group_by_schema {
-            Some(_) => Err(ErrorCode::LogicalError("Logical error: before group by schema must be None")),
+            Some(_) => Err(ErrorCode::LogicalError(
+                "Logical error: before group by schema must be None",
+            )),
             None => {
                 self.before_group_by_schema = Some(new_input.schema());
                 PlanBuilder::from(&new_input)
@@ -56,15 +61,12 @@ impl PlanRewriter for ProjectionPushDownImpl {
         let new_input = self.rewrite_plan_node(&plan.input)?;
 
         match self.before_group_by_schema.take() {
-            None => Err(ErrorCode::LogicalError("Logical error: before group by schema must be Some")),
-            Some(schema_before_group_by) => {
-                PlanBuilder::from(&new_input)
-                    .aggregate_final(
-                        schema_before_group_by,
-                        &plan.aggr_expr,
-                        &plan.group_expr,
-                    )?.build()
-            }
+            None => Err(ErrorCode::LogicalError(
+                "Logical error: before group by schema must be Some",
+            )),
+            Some(schema_before_group_by) => PlanBuilder::from(&new_input)
+                .aggregate_final(schema_before_group_by, &plan.aggr_expr, &plan.group_expr)?
+                .build(),
         }
     }
 
@@ -117,7 +119,7 @@ impl ProjectionPushDownImpl {
         ProjectionPushDownImpl {
             required_columns: HashSet::new(),
             has_projection: false,
-            before_group_by_schema: None
+            before_group_by_schema: None,
         }
     }
 

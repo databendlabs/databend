@@ -1,21 +1,36 @@
-use std::sync::Arc;
-use crate::pipelines::processors::{Processor, Pipeline, EmptyProcessor, PipelineBuilder};
-use std::collections::HashMap;
-use common_exception::{Result, ErrorCode};
-use common_streams::{SendableDataBlockStream, SubQueriesStream};
-use crate::sessions::{FuseQueryContextRef, FuseQueryContext};
 use std::any::Any;
-use common_infallible::Mutex;
-use futures::{FutureExt, Future, StreamExt};
-use futures::future::{Shared, BoxFuture, JoinAll};
-use futures::channel::oneshot::Receiver;
-use common_datavalues::columns::DataColumn;
-use common_runtime::tokio::macros::support::{Pin, Poll};
-use common_datavalues::{DataValue, DataSchemaRef, DataType};
-use common_planners::Expression;
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use common_datablocks::DataBlock;
+use common_datavalues::columns::DataColumn;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
+use common_datavalues::DataValue;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_infallible::Mutex;
+use common_planners::Expression;
+use common_runtime::tokio::macros::support::Pin;
+use common_runtime::tokio::macros::support::Poll;
 use common_runtime::tokio::task::JoinHandle;
+use common_streams::SendableDataBlockStream;
+use common_streams::SubQueriesStream;
+use futures::channel::oneshot::Receiver;
 use futures::future::join_all;
+use futures::future::BoxFuture;
+use futures::future::JoinAll;
+use futures::future::Shared;
+use futures::Future;
+use futures::FutureExt;
+use futures::StreamExt;
+
+use crate::pipelines::processors::EmptyProcessor;
+use crate::pipelines::processors::Pipeline;
+use crate::pipelines::processors::PipelineBuilder;
+use crate::pipelines::processors::Processor;
+use crate::sessions::FuseQueryContext;
+use crate::sessions::FuseQueryContextRef;
 
 pub struct CreateSetsTransform {
     ctx: FuseQueryContextRef,
@@ -29,8 +44,7 @@ impl CreateSetsTransform {
         ctx: FuseQueryContextRef,
         schema: DataSchemaRef,
         sub_queries_puller: Arc<Mutex<SubQueriesPuller<'static>>>,
-    ) -> Result<CreateSetsTransform>
-    {
+    ) -> Result<CreateSetsTransform> {
         Ok(CreateSetsTransform {
             ctx,
             schema,
@@ -39,7 +53,7 @@ impl CreateSetsTransform {
         })
     }
 
-    fn execute_sub_queries(&self) -> Result<impl Future<Output=Result<Vec<DataValue>>>> {
+    fn execute_sub_queries(&self) -> Result<impl Future<Output = Result<Vec<DataValue>>>> {
         let join_all = self.execute_sub_queries_impl()?;
 
         Ok(async move {
@@ -53,7 +67,8 @@ impl CreateSetsTransform {
                     Ok(Err(error)) => return Err(error),
                     Err(error) => {
                         return Err(ErrorCode::TokioError(format!(
-                            "Cannot join all sub queries. cause: {}", error
+                            "Cannot join all sub queries. cause: {}",
+                            error
                         )));
                     }
                 };
@@ -132,7 +147,10 @@ impl<'a> SubQueriesPuller<'a> {
         self.expressions.len()
     }
 
-    pub fn take_subquery_data(&mut self, pos: usize) -> Result<impl Future<Output=SubqueryData> + 'a> {
+    pub fn take_subquery_data(
+        &mut self,
+        pos: usize,
+    ) -> Result<impl Future<Output = SubqueryData> + 'a> {
         if self.sub_queries.is_empty() {
             self.init()?;
         }
@@ -159,9 +177,13 @@ impl<'a> SubQueriesPuller<'a> {
                     let shared_future = Self::receive_scalar_subquery_res(pipeline);
                     self.sub_queries.push(shared_future);
                 }
-                _ => return Result::Err(ErrorCode::LogicalError("Expression must be Subquery or ScalarSubquery"))
+                _ => {
+                    return Result::Err(ErrorCode::LogicalError(
+                        "Expression must be Subquery or ScalarSubquery",
+                    ))
+                }
             };
-        };
+        }
 
         Ok(())
     }
@@ -194,7 +216,7 @@ impl<'a> SubQueriesPuller<'a> {
 
             match struct_fields.len() {
                 1 => Ok(struct_fields.remove(0)),
-                _ => Ok(DataValue::Struct(struct_fields))
+                _ => Ok(DataValue::Struct(struct_fields)),
             }
         };
 
@@ -211,7 +233,7 @@ impl<'a> SubQueriesPuller<'a> {
 
                 if data_block.num_rows() != 1 || columns.is_some() {
                     return Err(ErrorCode::ScalarSubqueryBadRows(
-                        "Scalar subquery result set must be one row."
+                        "Scalar subquery result set must be one row.",
                     ));
                 }
 
@@ -220,9 +242,11 @@ impl<'a> SubQueriesPuller<'a> {
                     let series = column.to_array()?;
                     match series.to_values()? {
                         values if values.len() == 1 => columns_data.push(values[0].clone()),
-                        _ => return Err(ErrorCode::ScalarSubqueryBadRows(
-                            "Scalar subquery result set must be one row."
-                        ))
+                        _ => {
+                            return Err(ErrorCode::ScalarSubqueryBadRows(
+                                "Scalar subquery result set must be one row.",
+                            ))
+                        }
                     }
                 }
 
@@ -233,7 +257,7 @@ impl<'a> SubQueriesPuller<'a> {
                 Some(mut data) if data.len() == 1 => Ok(data.remove(0)),
                 Some(data) => Ok(DataValue::Struct(data)),
                 None => Err(ErrorCode::ScalarSubqueryBadRows(
-                    "Scalar subquery result set must be one row."
+                    "Scalar subquery result set must be one row.",
                 )),
             }
         };

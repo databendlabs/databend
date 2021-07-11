@@ -67,7 +67,8 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
                         writeln!(f)?;
                     }
 
-                    PlanNodeIndentFormatDisplay::create(self.indent, input.as_ref(), printed).fmt(f)?;
+                    PlanNodeIndentFormatDisplay::create(self.indent, input.as_ref(), printed)
+                        .fmt(f)?;
                     printed = true;
                 }
 

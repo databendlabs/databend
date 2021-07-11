@@ -1,10 +1,16 @@
-use crate::SendableDataBlockStream;
-use common_datavalues::{DataSchemaRef, DataField};
-use futures::{Stream, StreamExt};
-use common_datablocks::DataBlock;
 use std::pin::Pin;
-use futures::task::{Context, Poll};
-use common_exception::{Result, ErrorCode};
+
+use common_datablocks::DataBlock;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use futures::task::Context;
+use futures::task::Poll;
+use futures::Stream;
+use futures::StreamExt;
+
+use crate::SendableDataBlockStream;
 
 pub struct CorrectWithSchemaStream {
     input: SendableDataBlockStream,
@@ -13,16 +19,13 @@ pub struct CorrectWithSchemaStream {
 
 impl CorrectWithSchemaStream {
     pub fn new(input: SendableDataBlockStream, schema: DataSchemaRef) -> Self {
-        CorrectWithSchemaStream {
-            input,
-            schema,
-        }
+        CorrectWithSchemaStream { input, schema }
     }
 
     fn new_block_if_need(&self, data_block: DataBlock) -> Result<DataBlock> {
         match self.schema.eq(data_block.schema()) {
             true => Ok(data_block),
-            false => self.new_data_block(data_block)
+            false => self.new_data_block(data_block),
         }
     }
 
@@ -34,9 +37,12 @@ impl CorrectWithSchemaStream {
                 Some(column) if &column.data_type() == schema_field.data_type() => {
                     new_columns.push(column.clone())
                 }
-                other => return Err(ErrorCode::IllegalSchema(format!(
-                    "Illegal schema. expect: {:?} found: {:?}", schema_field, other
-                ))),
+                other => {
+                    return Err(ErrorCode::IllegalSchema(format!(
+                        "Illegal schema. expect: {:?} found: {:?}",
+                        schema_field, other
+                    )))
+                }
             };
         }
 

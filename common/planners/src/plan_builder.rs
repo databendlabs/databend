@@ -299,8 +299,7 @@ impl PlanBuilder {
     }
 
     fn sub_queries_expression<F>(&self, exprs: &[Expression], f: F) -> Result<Self>
-        where F: FnOnce(&[Expression], DataSchemaRef, PlanNode) -> Result<PlanNode>
-    {
+    where F: FnOnce(&[Expression], DataSchemaRef, PlanNode) -> Result<PlanNode> {
         let sub_queries = RewriteHelper::collect_exprs_sub_queries(exprs)?;
         if !sub_queries.is_empty() {
             let mut input = &self.plan;
@@ -312,16 +311,18 @@ impl PlanBuilder {
             return Ok(Self::from(&f(
                 exprs,
                 input.schema(),
-                PlanNode::SubQueryExpression(
-                    CreateSubQueriesSetsPlan {
-                        expressions: sub_queries,
-                        input: Arc::new(input.clone()),
-                    },
-                ))?
-            ));
+                PlanNode::SubQueryExpression(CreateSubQueriesSetsPlan {
+                    expressions: sub_queries,
+                    input: Arc::new(input.clone()),
+                }),
+            )?));
         }
 
-        Ok(Self::from(&f(exprs, self.plan.schema(), self.plan.clone())?))
+        Ok(Self::from(&f(
+            exprs,
+            self.plan.schema(),
+            self.plan.clone(),
+        )?))
     }
 
     // fn rewrite_sub_queries_exprs(exprs: &[Expression], mut node: PlanNode) -> Result<PlanNode> {

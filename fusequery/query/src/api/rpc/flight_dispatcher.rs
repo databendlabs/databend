@@ -19,7 +19,8 @@ use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_actions::ShuffleAction;
 use crate::api::rpc::flight_scatter::FlightScatterByHash;
-use crate::pipelines::processors::{Pipeline, PipelineBuilder};
+use crate::pipelines::processors::Pipeline;
+use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionRef;

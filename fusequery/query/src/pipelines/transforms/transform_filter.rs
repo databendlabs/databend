@@ -13,7 +13,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::Expression;
-use common_streams::{SendableDataBlockStream, CorrectWithSchemaStream};
+use common_streams::CorrectWithSchemaStream;
+use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use tokio_stream::StreamExt;
 
@@ -100,13 +101,14 @@ impl Processor for FilterTransform {
             tracing::debug!("Filter cost: {:?}", delta);
             batch.try_into()
         };
-        let stream = input_stream.filter_map(move |v| {
-            match execute_fn(executor.clone(), &column_name, v) {
-                Err(error) => Some(Err(error)),
-                Ok(data_block) if data_block.is_empty() => None,
-                Ok(data_block) => Some(Ok(data_block))
-            }
-        });
+        let stream =
+            input_stream.filter_map(
+                move |v| match execute_fn(executor.clone(), &column_name, v) {
+                    Err(error) => Some(Err(error)),
+                    Ok(data_block) if data_block.is_empty() => None,
+                    Ok(data_block) => Some(Ok(data_block)),
+                },
+            );
 
         Ok(Box::pin(CorrectWithSchemaStream::new(
             Box::pin(stream),

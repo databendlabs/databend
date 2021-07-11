@@ -4,14 +4,22 @@
 
 use std::sync::Arc;
 
-use common_datavalues::{DataSchema, DataSchemaRef};
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
-use common_exception::{Result, ErrorCode};
-use common_planners::{AggregatorPartialPlan, PlanRewriter, AggregatorFinalPlan, PlanBuilder, SortPlan, LimitPlan, LimitByPlan};
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::AggregatorFinalPlan;
+use common_planners::AggregatorPartialPlan;
 use common_planners::EmptyPlan;
 use common_planners::Expression;
+use common_planners::LimitByPlan;
+use common_planners::LimitPlan;
+use common_planners::PlanBuilder;
 use common_planners::PlanNode;
+use common_planners::PlanRewriter;
 use common_planners::ReadDataSourcePlan;
+use common_planners::SortPlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
 
@@ -60,10 +68,12 @@ impl ScattersOptimizerImpl {
             Some(input) => Ok(PlanNode::Stage(StagePlan {
                 kind: StageKind::Convergent,
                 scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
-                input: Arc::new(PlanBuilder::from(input.as_ref())
-                    .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
-                    .build()?),
-            }))
+                input: Arc::new(
+                    PlanBuilder::from(input.as_ref())
+                        .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
+                        .build()?,
+                ),
+            })),
         }
     }
 
@@ -76,10 +86,12 @@ impl ScattersOptimizerImpl {
             Some(input) => Ok(PlanNode::Stage(StagePlan {
                 kind: StageKind::Normal,
                 scatters_expr: Self::create_scatters_expr(),
-                input: Arc::new(PlanBuilder::from(input.as_ref())
-                    .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
-                    .build()?),
-            }))
+                input: Arc::new(
+                    PlanBuilder::from(input.as_ref())
+                        .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
+                        .build()?,
+                ),
+            })),
         }
     }
 
@@ -95,7 +107,7 @@ impl ScattersOptimizerImpl {
             None => Ok(PlanNode::AggregatorPartial(plan.clone())),
             Some(input) => PlanBuilder::from(input.as_ref())
                 .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
-                .build()
+                .build(),
         }
     }
 
@@ -105,13 +117,15 @@ impl ScattersOptimizerImpl {
 
         match self.input.take() {
             None => Ok(PlanNode::Sort(plan.clone())),
-            Some(input) => Ok(PlanNode::Stage(StagePlan {
-                kind: StageKind::Convergent,
-                scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
-                input: Arc::new(PlanBuilder::from(input.as_ref())
-                    .sort(&plan.order_by)?
-                    .build()?),
-            }))
+            Some(input) => {
+                let input = PlanNode::Stage(StagePlan {
+                    kind: StageKind::Convergent,
+                    scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
+                    input: input,
+                });
+
+                PlanBuilder::from(&input).sort(&plan.order_by)?.build()
+            }
         }
     }
 
@@ -120,7 +134,7 @@ impl ScattersOptimizerImpl {
             None => Ok(PlanNode::Sort(plan.clone())),
             Some(input) => PlanBuilder::from(input.as_ref())
                 .sort(&plan.order_by)?
-                .build()
+                .build(),
         }
     }
 
@@ -130,14 +144,17 @@ impl ScattersOptimizerImpl {
 
         match self.input.take() {
             None => Ok(PlanNode::Limit(plan.clone())),
-            Some(input) => Ok(PlanNode::Stage(StagePlan {
-                kind: StageKind::Convergent,
-                scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
-                input: Arc::new(PlanBuilder::from(input.as_ref())
+            Some(input) => {
+                let input = PlanNode::Stage(StagePlan {
+                    kind: StageKind::Convergent,
+                    scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
+                    input: input,
+                });
+
+                PlanBuilder::from(&input)
                     .limit_offset(plan.n, plan.offset)?
-                    .build()?
-                ),
-            }))
+                    .build()
+            }
         }
     }
 
@@ -146,7 +163,7 @@ impl ScattersOptimizerImpl {
             None => Ok(PlanNode::Limit(plan.clone())),
             Some(input) => PlanBuilder::from(input.as_ref())
                 .limit_offset(plan.n, plan.offset)?
-                .build()
+                .build(),
         }
     }
 
@@ -156,14 +173,17 @@ impl ScattersOptimizerImpl {
 
         match self.input.take() {
             None => Ok(PlanNode::LimitBy(plan.clone())),
-            Some(input) => Ok(PlanNode::Stage(StagePlan {
-                kind: StageKind::Convergent,
-                scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
-                input: Arc::new(PlanBuilder::from(input.as_ref())
+            Some(input) => {
+                let input = PlanNode::Stage(StagePlan {
+                    kind: StageKind::Convergent,
+                    scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
+                    input: input,
+                });
+
+                PlanBuilder::from(&input)
                     .limit_by(plan.limit, &plan.limit_by)?
-                    .build()?
-                ),
-            })),
+                    .build()
+            }
         }
     }
 
@@ -189,7 +209,10 @@ impl PlanRewriter for ScattersOptimizerImpl {
         let new_input = Arc::new(self.rewrite_plan_node(&plan.input)?);
 
         self.input = Some(new_input.clone());
-        assert!(self.before_group_by_schema.is_none(), "Before group by schema must be None");
+        assert!(
+            self.before_group_by_schema.is_none(),
+            "Before group by schema must be None"
+        );
         self.before_group_by_schema = Some(new_input.schema());
 
         match self.running_mode {
@@ -201,13 +224,16 @@ impl PlanRewriter for ScattersOptimizerImpl {
     fn rewrite_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(&plan.input)?;
 
-        assert!(self.before_group_by_schema.is_some(), "Before group by schema must be Some");
+        assert!(
+            self.before_group_by_schema.is_some(),
+            "Before group by schema must be Some"
+        );
 
         match self.before_group_by_schema.take() {
             None => Ok(PlanNode::AggregatorFinal(plan.clone())),
             Some(schema_before_group_by) => PlanBuilder::from(&new_input)
                 .aggregate_final(schema_before_group_by, &plan.aggr_expr, &plan.group_expr)?
-                .build()
+                .build(),
         }
     }
 
@@ -253,9 +279,7 @@ impl PlanRewriter for ScattersOptimizerImpl {
 
 impl ScattersOptimizer {
     pub fn create(ctx: FuseQueryContextRef) -> ScattersOptimizer {
-        ScattersOptimizer {
-            ctx
-        }
+        ScattersOptimizer { ctx }
     }
 }
 
@@ -276,13 +300,11 @@ impl Optimizer for ScattersOptimizer {
         // We need to converge at the end
         match optimizer_impl.running_mode {
             RunningMode::Standalone => Ok(rewrite_plan),
-            RunningMode::Cluster => {
-                Ok(PlanNode::Stage(StagePlan {
-                    kind: StageKind::Convergent,
-                    scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
-                    input: Arc::new(rewrite_plan),
-                }))
-            }
+            RunningMode::Cluster => Ok(PlanNode::Stage(StagePlan {
+                kind: StageKind::Convergent,
+                scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
+                input: Arc::new(rewrite_plan),
+            })),
         }
     }
 }

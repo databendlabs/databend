@@ -2,9 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_planners::{AggregatorPartialPlan, AggregatorFinalPlan};
+use common_planners::AggregatorFinalPlan;
+use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
 use common_planners::ExpressionPlan;
 use common_planners::PlanBuilder;
@@ -13,7 +16,6 @@ use common_planners::PlanRewriter;
 
 use crate::optimizers::Optimizer;
 use crate::sessions::FuseQueryContextRef;
-use std::sync::Arc;
 
 struct StatisticsExactImpl<'a> {
     ctx: &'a FuseQueryContextRef,
@@ -24,10 +26,7 @@ pub struct StatisticsExactOptimizer {
 }
 
 impl PlanRewriter for StatisticsExactImpl<'_> {
-    fn rewrite_aggregate_partial(
-        &mut self,
-        plan: &AggregatorPartialPlan,
-    ) -> Result<PlanNode> {
+    fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
         let new_plan = match (
             &plan.group_expr[..],
             &plan.aggr_expr[..],

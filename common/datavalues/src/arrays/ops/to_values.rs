@@ -1,6 +1,14 @@
 use std::fmt::Debug;
-use crate::{DataValue, UInt8Type, UInt16Type, UInt32Type, Int8Type, Int16Type, Int32Type, Int64Type, Float32Type, Float64Type, IntervalDayTimeType, IntervalYearMonthType, TimestampSecondType, TimestampNanosecondType, TimestampMicrosecondType, TimestampMillisecondType, Date32Type, Date64Type};
-use common_exception::{Result, ErrorCode};
+use std::marker::PhantomData;
+
+use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::ArrayRef;
+use common_arrow::arrow::array::PrimitiveArray;
+use common_arrow::arrow::array::Time32MillisecondArray;
+use common_arrow::arrow::datatypes::IntervalUnit;
+use common_arrow::arrow::datatypes::TimeUnit;
+use common_exception::ErrorCode;
+use common_exception::Result;
 
 use super::ArrayApply;
 use crate::arrays::DataArray;
@@ -16,10 +24,25 @@ use crate::DFNullArray;
 use crate::DFStructArray;
 use crate::DFUInt64Array;
 use crate::DFUtf8Array;
+use crate::DataValue;
+use crate::Date32Type;
+use crate::Date64Type;
+use crate::Float32Type;
+use crate::Float64Type;
+use crate::Int16Type;
+use crate::Int32Type;
+use crate::Int64Type;
+use crate::Int8Type;
+use crate::IntervalDayTimeType;
+use crate::IntervalYearMonthType;
+use crate::TimestampMicrosecondType;
+use crate::TimestampMillisecondType;
+use crate::TimestampNanosecondType;
+use crate::TimestampSecondType;
+use crate::UInt16Type;
+use crate::UInt32Type;
 use crate::UInt64Type;
-use common_arrow::arrow::array::{Array, ArrayRef, PrimitiveArray, Time32MillisecondArray};
-use common_arrow::arrow::datatypes::{TimeUnit, IntervalUnit};
-use std::marker::PhantomData;
+use crate::UInt8Type;
 
 /// This trait is used to compact a column into a Vec<DataValue>.
 /// It is mainly used for subquery execution.
@@ -29,7 +52,9 @@ pub trait ToValues: Debug {
 }
 
 fn primitive_type_to_values_impl<T, F>(array: &PrimitiveArray<T>, f: F) -> Result<Vec<DataValue>>
-    where T: DFPrimitiveType, F: Fn(Option<T::Native>) -> DataValue
+where
+    T: DFPrimitiveType,
+    F: Fn(Option<T::Native>) -> DataValue,
 {
     let mut values = Vec::with_capacity(array.len());
 
@@ -41,7 +66,7 @@ fn primitive_type_to_values_impl<T, F>(array: &PrimitiveArray<T>, f: F) -> Resul
         for index in 0..array.len() {
             match array.is_null(index) {
                 true => values.push(f(None)),
-                false => values.push(f(Some(array.value(index))))
+                false => values.push(f(Some(array.value(index)))),
             }
         }
     }
@@ -170,7 +195,7 @@ impl ToValues for DFUtf8Array {
             for index in 0..self.len() {
                 match array.is_null(index) {
                     true => values.push(DataValue::Utf8(None)),
-                    false => values.push(DataValue::Utf8(Some(array.value(index).to_string())))
+                    false => values.push(DataValue::Utf8(Some(array.value(index).to_string()))),
                 }
             }
         }
@@ -192,7 +217,7 @@ impl ToValues for DFBooleanArray {
             for index in 0..self.len() {
                 match array.is_null(index) {
                     true => values.push(DataValue::Boolean(None)),
-                    false => values.push(DataValue::Boolean(Some(array.value(index))))
+                    false => values.push(DataValue::Boolean(Some(array.value(index)))),
                 }
             }
         }
@@ -214,7 +239,7 @@ impl ToValues for DFBinaryArray {
             for index in 0..self.len() {
                 match array.is_null(index) {
                     true => values.push(DataValue::Binary(None)),
-                    false => values.push(DataValue::Binary(Some(array.value(index).to_vec())))
+                    false => values.push(DataValue::Binary(Some(array.value(index).to_vec()))),
                 }
             }
         }

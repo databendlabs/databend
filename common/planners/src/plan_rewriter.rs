@@ -12,7 +12,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::plan_subqueries_set_create::CreateSubQueriesSetsPlan;
-use crate::{AggregatorFinalPlan, PlanBuilder};
+use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
@@ -27,6 +27,7 @@ use crate::HavingPlan;
 use crate::InsertIntoPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
+use crate::PlanBuilder;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
@@ -113,9 +114,7 @@ pub trait PlanRewriter {
 
     fn rewrite_projection(&mut self, plan: &ProjectionPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        PlanBuilder::from(&new_input)
-            .project(&plan.expr)?
-            .build()
+        PlanBuilder::from(&new_input).project(&plan.expr)?.build()
     }
 
     fn rewrite_expression(&mut self, plan: &ExpressionPlan) -> Result<PlanNode> {
@@ -152,9 +151,7 @@ pub trait PlanRewriter {
 
     fn rewrite_sort(&mut self, plan: &SortPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        PlanBuilder::from(&new_input)
-            .sort(&plan.order_by)?
-            .build()
+        PlanBuilder::from(&new_input).sort(&plan.order_by)?.build()
     }
 
     fn rewrite_limit(&mut self, plan: &LimitPlan) -> Result<PlanNode> {
@@ -184,7 +181,9 @@ pub trait PlanRewriter {
                 rewrite_plan.scan_plan = Arc::new(new_scan);
                 Ok(PlanNode::ReadSource(rewrite_plan))
             }
-            _ => Err(ErrorCode::BadPlanInputs("Rewrite ReadDataSource need scan plan."))
+            _ => Err(ErrorCode::BadPlanInputs(
+                "Rewrite ReadDataSource need scan plan.",
+            )),
         }
     }
 

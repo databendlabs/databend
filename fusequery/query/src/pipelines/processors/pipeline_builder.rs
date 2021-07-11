@@ -7,25 +7,29 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::{AggregatorFinalPlan, Expression, PlanVisitor, SelectPlan};
+use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::CreateSubQueriesSetsPlan;
+use common_planners::Expression;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::HavingPlan;
 use common_planners::LimitByPlan;
 use common_planners::LimitPlan;
 use common_planners::PlanNode;
+use common_planners::PlanVisitor;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::RemotePlan;
+use common_planners::SelectPlan;
 use common_planners::SortPlan;
 use common_planners::StagePlan;
 use common_tracing::tracing;
 
 use crate::pipelines::processors::Pipeline;
-use crate::pipelines::transforms::{AggregatorFinalTransform, CreateSetsTransform, SubQueriesPuller};
+use crate::pipelines::transforms::AggregatorFinalTransform;
 use crate::pipelines::transforms::AggregatorPartialTransform;
+use crate::pipelines::transforms::CreateSetsTransform;
 use crate::pipelines::transforms::ExpressionTransform;
 use crate::pipelines::transforms::FilterTransform;
 use crate::pipelines::transforms::GroupByFinalTransform;
@@ -37,7 +41,9 @@ use crate::pipelines::transforms::RemoteTransform;
 use crate::pipelines::transforms::SortMergeTransform;
 use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
-use crate::sessions::{FuseQueryContextRef, FuseQueryContext};
+use crate::pipelines::transforms::SubQueriesPuller;
+use crate::sessions::FuseQueryContext;
+use crate::sessions::FuseQueryContextRef;
 
 pub struct PipelineBuilder {
     ctx: FuseQueryContextRef,
@@ -47,10 +53,7 @@ pub struct PipelineBuilder {
 
 impl PipelineBuilder {
     pub fn create(ctx: FuseQueryContextRef) -> PipelineBuilder {
-        PipelineBuilder {
-            ctx,
-            limit: None,
-        }
+        PipelineBuilder { ctx, limit: None }
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -77,12 +80,10 @@ impl PipelineBuilder {
             PlanNode::LimitBy(node) => self.visit_limit_by(node),
             PlanNode::ReadSource(node) => self.visit_read_data_source(node),
             PlanNode::SubQueryExpression(node) => self.visit_create_sets(node),
-            other => {
-                Result::Err(ErrorCode::UnknownPlan(format!(
-                    "Build pipeline from the plan node unsupported:{:?}",
-                    other.name()
-                )))
-            },
+            other => Result::Err(ErrorCode::UnknownPlan(format!(
+                "Build pipeline from the plan node unsupported:{:?}",
+                other.name()
+            ))),
         }
     }
 
