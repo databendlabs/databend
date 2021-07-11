@@ -136,7 +136,7 @@ impl PlanBuilder {
                         partial_fields.push(field);
                     }
 
-                    let sample_block = DataBlock::empty_with_schema(schema_before_groupby.clone());
+                    let sample_block = DataBlock::empty_with_schema(schema_before_groupby);
                     let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
                     // partial_fields.push(DataField::new("_group_keys", DataType::Utf8, false));
                     partial_fields.push(DataField::new("_group_by_key", method.data_type(), false));
