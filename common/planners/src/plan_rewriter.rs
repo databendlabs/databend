@@ -81,7 +81,7 @@ pub trait PlanRewriter<'plan> {
             PlanNode::Remote(plan) => self.rewrite_remote(plan),
             PlanNode::Having(plan) => self.rewrite_having(plan),
             PlanNode::Expression(plan) => self.rewrite_expression(plan),
-            PlanNode::DescribeTable(plan) => self.rewrite_desc_table(plan),
+            PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
             PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
             PlanNode::InsertInto(plan) => self.rewrite_insert_into(plan),
@@ -218,7 +218,7 @@ pub trait PlanRewriter<'plan> {
         Ok(PlanNode::SetVariable(plan.clone()))
     }
 
-    fn rewrite_desc_table(&mut self, plan: &'plan DescribeTablePlan) -> Result<PlanNode> {
+    fn rewrite_describe_table(&mut self, plan: &'plan DescribeTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::DescribeTable(plan.clone()))
     }
 

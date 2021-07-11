@@ -109,7 +109,7 @@ impl PlanParser {
             DfStatement::CreateDatabase(v) => self.sql_create_database_to_plan(v),
             DfStatement::DropDatabase(v) => self.sql_drop_database_to_plan(v),
             DfStatement::CreateTable(v) => self.sql_create_table_to_plan(v),
-            DfStatement::DescribeTable(v) => self.sql_desc_table_to_plan(v),
+            DfStatement::DescribeTable(v) => self.sql_describe_table_to_plan(v),
             DfStatement::DropTable(v) => self.sql_drop_table_to_plan(v),
             DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(v),
             DfStatement::ShowCreateTable(v) => self.sql_show_create_table_to_plan(v),
@@ -273,32 +273,26 @@ impl PlanParser {
         }))
     }
 
-    /// DfDescribeTable to plan.\
-    #[tracing::instrument(level = "info", skip(self, desc), fields(ctx.id = self.ctx.get_id().as_str()))]
-    pub fn sql_desc_table_to_plan(
-        &self, 
-        desc: &DfDescribeTable,
-    ) -> Result<PlanNode>{
+    /// DfDescribeTable to plan.
+    #[tracing::instrument(level = "info", skip(self, describe), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_describe_table_to_plan(&self, describe: &DfDescribeTable) -> Result<PlanNode> {
         let mut db = self.ctx.get_current_database();
-        if desc.name.0.is_empty() {
-            return Result::Err(ErrorCode::SyntaxException(
-                "Desc table name is empty",
-            ));
+        if describe.name.0.is_empty() {
+            return Result::Err(ErrorCode::SyntaxException("Describe table name is empty"));
         }
-        let mut table = desc.name.0[0].value.clone();
-        if desc.name.0.len() > 1 {
+        let mut table = describe.name.0[0].value.clone();
+        if describe.name.0.len() > 1 {
             db = table;
-            table = desc.name.0[1].value.clone();
+            table = describe.name.0[1].value.clone();
         }
 
-        let fields = vec![
+        let schema = DataSchemaRefExt::create(vec![
             DataField::new("Field", DataType::Utf8, false),
             DataField::new("Type", DataType::Utf8, false),
             DataField::new("Null", DataType::Utf8, false),
-        ];
-        let schema = DataSchemaRefExt::create(fields);
+        ]);
 
-        Ok(PlanNode::DescribeTable(DescribeTablePlan{
+        Ok(PlanNode::DescribeTable(DescribeTablePlan {
             db,
             table,
             schema,

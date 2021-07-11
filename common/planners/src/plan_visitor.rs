@@ -89,7 +89,7 @@ pub trait PlanVisitor<'plan> {
             PlanNode::DropDatabase(plan) => self.visit_drop_database(plan),
             PlanNode::CreateTable(plan) => self.visit_create_table(plan),
             PlanNode::DropTable(plan) => self.visit_drop_table(plan),
-            PlanNode::DescribeTable(plan) => self.visit_desc_table(plan),
+            PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
             PlanNode::UseDatabase(plan) => self.visit_use_database(plan),
             PlanNode::SetVariable(plan) => self.visit_set_variable(plan),
             PlanNode::Stage(plan) => self.visit_stage(plan),
@@ -163,7 +163,7 @@ pub trait PlanVisitor<'plan> {
 
     fn visit_create_table(&mut self, _: &'plan CreateTablePlan) {}
 
-    fn visit_desc_table(&mut self, _: &'plan DescribeTablePlan) {}
+    fn visit_describe_table(&mut self, _: &'plan DescribeTablePlan) {}
 
     fn visit_drop_table(&mut self, _: &'plan DropTablePlan) {}
 
