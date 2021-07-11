@@ -11,6 +11,8 @@ edition = "2018"
 common-arrow = {path = "../arrow"}
 common-datavalues = {path = "../datavalues"}
 common-exception = {path = "../exception"}
+common-infallible = {path = "../infallible"}
+
 
 # Github dependencies
 

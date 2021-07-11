@@ -692,6 +692,7 @@ dependencies = [
  "common-arrow",
  "common-datavalues",
  "common-exception",
+ "common-infallible",
  "prettytable-rs",
 ]
 

@@ -9,7 +9,11 @@ use std::time::Instant;
 
 use bumpalo::Bump;
 use common_datablocks::DataBlock;
+use common_datablocks::HashMethod;
+use common_datablocks::HashMethodKind;
+use common_datablocks::HashMethodSerializer;
 use common_datavalues::arrays::BinaryArrayBuilder;
+use common_datavalues::arrays::DFUInt32ArrayBuilder;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -22,9 +26,6 @@ use futures::stream::StreamExt;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 
-// Table for <group_key, (place, keys) >
-type GroupFuncTable = RwLock<HashMap<Vec<u8>, (Vec<usize>, Vec<DataValue>), ahash::RandomState>>;
-
 pub struct GroupByPartialTransform {
     aggr_exprs: Vec<Expression>,
     group_exprs: Vec<Expression>,
@@ -32,7 +33,6 @@ pub struct GroupByPartialTransform {
     schema: DataSchemaRef,
     schema_before_group_by: DataSchemaRef,
     input: Arc<dyn Processor>,
-    groups: GroupFuncTable,
 }
 
 impl GroupByPartialTransform {
@@ -48,7 +48,6 @@ impl GroupByPartialTransform {
             schema,
             schema_before_group_by,
             input: Arc::new(EmptyProcessor::create()),
-            groups: RwLock::new(HashMap::default()),
         }
     }
 }
@@ -124,111 +123,141 @@ impl Processor for GroupByPartialTransform {
 
         let mut stream = self.input.execute().await?;
         let arena = Bump::new();
-        while let Some(block) = stream.next().await {
-            let block = block?;
-            // 1.1 and 1.2.
-            let group_blocks = DataBlock::group_by(&block, &group_cols)?;
-            // 1.3 Apply take blocks to aggregate function by group_key.
-            {
-                for (group_key, group_keys, take_block) in group_blocks {
-                    let rows = take_block.num_rows();
+        let sample_block = DataBlock::empty_with_schema(self.schema.clone());
+        let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
 
-                    let mut groups = self.groups.write();
-                    match groups.get_mut(&group_key) {
-                        // New group.
-                        None => {
-                            let mut places = Vec::with_capacity(aggr_cols.len());
-                            for (idx, _aggr_col) in aggr_cols.iter().enumerate() {
-                                let func = funcs[idx].clone();
-                                let place = funcs[idx].allocate_state(&arena);
+        macro_rules! apply {
+            ($hash_method: ident, $key_array_builder: ty, $group_func_table: ty) => {{
+                // Table for <group_key, (place, keys) >
+                type GroupFuncTable = $group_func_table;
+                let groups_locker = GroupFuncTable::default();
+                while let Some(block) = stream.next().await {
+                    let block = block?;
+                    // 1.1 and 1.2.
+                    let group_blocks = $hash_method.group_by(&block, &group_cols)?;
+                    // 1.3 Apply take blocks to aggregate function by group_key.
+                    {
+                        for (group_key, group_keys, take_block) in group_blocks {
+                            let rows = take_block.num_rows();
 
-                                let arg_columns = arg_names[idx]
-                                    .iter()
-                                    .map(|arg| {
-                                        take_block.try_column_by_name(arg).map(|c| c.clone())
-                                    })
-                                    .collect::<Result<Vec<DataColumn>>>()?;
-                                func.accumulate(place, &arg_columns, rows)?;
+                            let mut groups = groups_locker.write();
+                            match groups.get_mut(&group_key) {
+                                // New group.
+                                None => {
+                                    let mut places = Vec::with_capacity(aggr_cols.len());
+                                    for (idx, _aggr_col) in aggr_cols.iter().enumerate() {
+                                        let func = funcs[idx].clone();
+                                        let place = funcs[idx].allocate_state(&arena);
 
-                                places.push(place);
-                            }
+                                        let arg_columns = arg_names[idx]
+                                            .iter()
+                                            .map(|arg| {
+                                                take_block
+                                                    .try_column_by_name(arg)
+                                                    .map(|c| c.clone())
+                                            })
+                                            .collect::<Result<Vec<DataColumn>>>()?;
+                                        func.accumulate(place, &arg_columns, rows)?;
 
-                            groups.insert(group_key.clone(), (places, group_keys));
-                        }
-                        // Accumulate result against the take block by indices.
-                        Some((places, _)) => {
-                            for (idx, _aggr_col) in aggr_cols.iter().enumerate() {
-                                let arg_columns = arg_names[idx]
-                                    .iter()
-                                    .map(|arg| {
-                                        take_block.try_column_by_name(arg).map(|c| c.clone())
-                                    })
-                                    .collect::<Result<Vec<DataColumn>>>()?;
+                                        places.push(place);
+                                    }
 
-                                funcs[idx].accumulate(places[idx], &arg_columns, rows)?
+                                    groups.insert(group_key.clone(), (places, group_keys));
+                                }
+                                // Accumulate result against the take block by indices.
+                                Some((places, _)) => {
+                                    for (idx, _aggr_col) in aggr_cols.iter().enumerate() {
+                                        let arg_columns = arg_names[idx]
+                                            .iter()
+                                            .map(|arg| {
+                                                take_block
+                                                    .try_column_by_name(arg)
+                                                    .map(|c| c.clone())
+                                            })
+                                            .collect::<Result<Vec<DataColumn>>>()?;
+
+                                        funcs[idx].accumulate(places[idx], &arg_columns, rows)?
+                                    }
+                                }
                             }
                         }
                     }
                 }
-            }
+
+                let delta = start.elapsed();
+                tracing::debug!("Group by partial cost: {:?}", delta);
+
+                let groups = groups_locker.read();
+                if groups.is_empty() {
+                    return Ok(Box::pin(DataBlockStream::create(
+                        DataSchemaRefExt::create(vec![]),
+                        None,
+                        vec![],
+                    )));
+                }
+
+                let mut group_arrays = Vec::with_capacity(group_cols.len());
+                for _i in 0..group_cols.len() {
+                    group_arrays.push(Vec::with_capacity(groups.len()));
+                }
+
+                // Builders.
+                let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
+                    .map(|_| BinaryArrayBuilder::new(groups.len() * 4))
+                    .collect();
+
+                type KeyBuilder = $key_array_builder;
+                let mut group_key_builder = KeyBuilder::new(groups.len());
+                for (key, (places, values)) in groups.iter() {
+                    for (idx, func) in funcs.iter().enumerate() {
+                        let mut writer = vec![];
+                        func.serialize(places[idx], &mut writer)?;
+
+                        state_builders[idx].append_value(&writer);
+                    }
+
+                    for (i, value) in values.iter().enumerate() {
+                        group_arrays[i].push(value.clone());
+                    }
+                    // Keys
+                    group_key_builder.append_value((*key).clone());
+                }
+
+                let mut columns: Vec<Series> = Vec::with_capacity(self.schema.fields().len());
+                for mut builder in state_builders {
+                    columns.push(builder.finish().into_series());
+                }
+                for (i, values) in group_arrays.iter().enumerate() {
+                    columns.push(DataValue::try_into_data_array(
+                        values,
+                        &self.group_exprs[i].to_data_type(&self.schema_before_group_by)?,
+                    )?)
+                }
+                let array = group_key_builder.finish();
+                columns.push(array.into_series());
+
+                let block = DataBlock::create_by_array(self.schema.clone(), columns);
+                Ok(Box::pin(DataBlockStream::create(
+                    self.schema.clone(),
+                    None,
+                    vec![block],
+                )))
+            }};
         }
 
-        let delta = start.elapsed();
-        tracing::debug!("Group by partial cost: {:?}", delta);
-
-        let groups = self.groups.read();
-        if groups.is_empty() {
-            return Ok(Box::pin(DataBlockStream::create(
-                DataSchemaRefExt::create(vec![]),
-                None,
-                vec![],
-            )));
+        macro_rules! match_hash_method_and_apply {
+            ($method: ident, $apply: ident) => {{
+                match $method {
+                    HashMethodKind::Serializer(hash_method) => {
+                        apply! { hash_method, BinaryArrayBuilder , RwLock<HashMap<Vec<u8>, (Vec<usize>, Vec<DataValue>), ahash::RandomState>>}
+                    }
+                    HashMethodKind::KeysU32(hash_method) => {
+                        apply! { hash_method , DFUInt32ArrayBuilder, RwLock<HashMap<u32, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
+                    }
+                }
+            }};
         }
 
-        let mut group_arrays = Vec::with_capacity(group_cols.len());
-        for _i in 0..group_cols.len() {
-            group_arrays.push(Vec::with_capacity(groups.len()));
-        }
-
-        // Builders.
-        let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
-            .map(|_| BinaryArrayBuilder::new(groups.len() * 4))
-            .collect();
-
-        let mut group_key_builder = BinaryArrayBuilder::new(groups.len());
-        for (key, (places, values)) in groups.iter() {
-            for (idx, func) in funcs.iter().enumerate() {
-                let mut writer = vec![];
-                func.serialize(places[idx], &mut writer)?;
-
-                state_builders[idx].append_value(&writer);
-            }
-
-            for (i, value) in values.iter().enumerate() {
-                group_arrays[i].push(value.clone());
-            }
-            // Keys
-            group_key_builder.append_value(key);
-        }
-
-        let mut columns: Vec<Series> = Vec::with_capacity(self.schema.fields().len());
-        for mut builder in state_builders {
-            columns.push(builder.finish().into_series());
-        }
-        for (i, values) in group_arrays.iter().enumerate() {
-            columns.push(DataValue::try_into_data_array(
-                values,
-                &self.group_exprs[i].to_data_type(&self.schema_before_group_by)?,
-            )?)
-        }
-        let array = group_key_builder.finish();
-        columns.push(array.into_series());
-
-        let block = DataBlock::create_by_array(self.schema.clone(), columns);
-        Ok(Box::pin(DataBlockStream::create(
-            self.schema.clone(),
-            None,
-            vec![block],
-        )))
+        match_hash_method_and_apply! {method, apply}
     }
 }

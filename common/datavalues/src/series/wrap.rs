@@ -103,8 +103,8 @@ macro_rules! impl_dyn_array {
                 self.0.vec_hash(hasher)
             }
 
-            fn group_hash(&self) -> Result<DFUInt64Array> {
-                self.0.group_hash()
+            fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+                self.0.group_hash(ptr, step)
             }
 
             fn subtract(&self, rhs: &Series) -> Result<Series> {

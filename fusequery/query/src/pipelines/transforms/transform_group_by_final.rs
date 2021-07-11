@@ -9,8 +9,13 @@ use std::time::Instant;
 
 use bumpalo::Bump;
 use common_datablocks::DataBlock;
+use common_datablocks::HashMethod;
+use common_datablocks::HashMethodKeysU32;
+use common_datablocks::HashMethodKind;
+use common_datablocks::HashMethodSerializer;
 use common_datavalues::prelude::*;
 use common_datavalues::DFBinaryArray;
+use common_datavalues::DFUInt32Array;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::Expression;
@@ -22,15 +27,12 @@ use futures::stream::StreamExt;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 
-type GroupFuncTable = RwLock<HashMap<Vec<u8>, (Vec<usize>, Vec<DataValue>), ahash::RandomState>>;
-
 pub struct GroupByFinalTransform {
     aggr_exprs: Vec<Expression>,
     group_exprs: Vec<Expression>,
     schema: DataSchemaRef,
     schema_before_group_by: DataSchemaRef,
     input: Arc<dyn Processor>,
-    groups: GroupFuncTable,
 }
 
 impl GroupByFinalTransform {
@@ -46,7 +48,6 @@ impl GroupByFinalTransform {
             schema,
             schema_before_group_by,
             input: Arc::new(EmptyProcessor::create()),
-            groups: RwLock::new(HashMap::default()),
         }
     }
 }
@@ -81,116 +82,147 @@ impl Processor for GroupByFinalTransform {
         let aggr_funcs_len = aggr_funcs.len();
         let group_expr_len = self.group_exprs.len();
 
+        let group_cols = self
+            .group_exprs
+            .iter()
+            .map(|x| x.column_name())
+            .collect::<Vec<_>>();
+
         let start = Instant::now();
         let arena = Bump::new();
+
         let mut stream = self.input.execute().await?;
-        while let Some(block) = stream.next().await {
-            let mut groups = self.groups.write();
-            let block = block?;
+        let sample_block = DataBlock::empty_with_schema(self.schema.clone());
+        let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
 
-            let key_array = block.column(aggr_funcs_len + group_expr_len).to_array()?;
-            let key_array: &DFBinaryArray = key_array.binary()?;
-            let array = key_array.downcast_ref();
+        macro_rules! apply {
+            ($hash_method: ident, $key_array_type: ty, $downcast_fn: ident, $group_func_table: ty) => {{
+                type GroupFuncTable = $group_func_table;
+                let groups_locker = GroupFuncTable::default();
 
-            let states_series = (0..aggr_funcs_len)
-                .map(|i| block.column(i).to_array())
-                .collect::<Result<Vec<_>>>()?;
-            let mut states_binary_arrays = Vec::with_capacity(states_series.len());
+                while let Some(block) = stream.next().await {
+                    let mut groups = groups_locker.write();
+                    let block = block?;
 
-            for agg in states_series.iter().take(aggr_funcs_len) {
-                let aggr_array: &DFBinaryArray = agg.binary()?;
-                let aggr_array = aggr_array.downcast_ref();
-                states_binary_arrays.push(aggr_array);
-            }
+                    let key_array = block.column(aggr_funcs_len + group_expr_len).to_array()?;
+                    let key_array: $key_array_type = key_array.$downcast_fn()?;
 
-            for row in 0..block.num_rows() {
-                let group_key = array.value(row);
-                match groups.get_mut(group_key) {
-                    None => {
-                        let mut places = Vec::with_capacity(aggr_funcs_len);
-                        for (i, func) in aggr_funcs.iter().enumerate() {
-                            let data = states_binary_arrays[i].value(row);
-                            let place = func.allocate_state(&arena);
-                            func.deserialize(place, data)?;
-                            places.push(place);
-                        }
-                        let mut values = Vec::with_capacity(group_expr_len);
-                        for i in 0..group_expr_len {
-                            values.push(block.column(i + aggr_funcs_len).try_get(row)?);
-                        }
+                    let states_series = (0..aggr_funcs_len)
+                        .map(|i| block.column(i).to_array())
+                        .collect::<Result<Vec<_>>>()?;
+                    let mut states_binary_arrays = Vec::with_capacity(states_series.len());
 
-                        groups.insert(group_key.to_owned(), (places, values));
+                    for agg in states_series.iter().take(aggr_funcs_len) {
+                        let aggr_array: &DFBinaryArray = agg.binary()?;
+                        let aggr_array = aggr_array.downcast_ref();
+                        states_binary_arrays.push(aggr_array);
                     }
-                    Some((places, _)) => {
-                        for (i, func) in aggr_funcs.iter().enumerate() {
-                            let data = states_binary_arrays[i].value(row);
-                            let place = func.allocate_state(&arena);
-                            func.deserialize(place, data)?;
-                            func.merge(places[i], place)?;
-                        }
+
+                    for row in 0..block.num_rows() {
+                        let group_key = $hash_method.get_key(&key_array, row);
+                        match groups.get_mut(&group_key) {
+                            None => {
+                                let mut places = Vec::with_capacity(aggr_funcs_len);
+                                for (i, func) in aggr_funcs.iter().enumerate() {
+                                    let data = states_binary_arrays[i].value(row);
+                                    let place = func.allocate_state(&arena);
+                                    func.deserialize(place, data)?;
+                                    places.push(place);
+                                }
+                                let mut values = Vec::with_capacity(group_expr_len);
+                                for i in 0..group_expr_len {
+                                    values.push(block.column(i + aggr_funcs_len).try_get(row)?);
+                                }
+
+                                groups.insert(group_key, (places, values));
+                            }
+                            Some((places, _)) => {
+                                for (i, func) in aggr_funcs.iter().enumerate() {
+                                    let data = states_binary_arrays[i].value(row);
+                                    let place = func.allocate_state(&arena);
+                                    func.deserialize(place, data)?;
+                                    func.merge(places[i], place)?;
+                                }
+                            }
+                        };
                     }
+                }
+                let delta = start.elapsed();
+                tracing::debug!("Group by final cost: {:?}", delta);
+
+                // Collect the merge states.
+                let groups = groups_locker.read();
+
+                let mut group_values: Vec<Vec<DataValue>> = {
+                    let mut values = vec![];
+                    for _i in 0..group_expr_len {
+                        values.push(vec![])
+                    }
+                    values
                 };
-            }
-        }
-        let delta = start.elapsed();
-        tracing::debug!("Group by final cost: {:?}", delta);
 
-        // Collect the merge states.
-        let groups = self.groups.read();
+                let mut aggr_values: Vec<Vec<DataValue>> = {
+                    let mut values = vec![];
+                    for _i in 0..aggr_funcs_len {
+                        values.push(vec![])
+                    }
+                    values
+                };
+                for (_key, (places, values)) in groups.iter() {
+                    for (i, value) in values.iter().enumerate() {
+                        group_values[i].push(value.clone());
+                    }
 
-        let mut group_values: Vec<Vec<DataValue>> = {
-            let mut values = vec![];
-            for _i in 0..group_expr_len {
-                values.push(vec![])
-            }
-            values
-        };
+                    for (i, func) in aggr_funcs.iter().enumerate() {
+                        let merge = func.merge_result(places[i])?;
+                        aggr_values[i].push(merge);
+                    }
+                }
 
-        let mut aggr_values: Vec<Vec<DataValue>> = {
-            let mut values = vec![];
-            for _i in 0..aggr_funcs_len {
-                values.push(vec![])
-            }
-            values
-        };
-        for (_key, (places, values)) in groups.iter() {
-            for (i, value) in values.iter().enumerate() {
-                group_values[i].push(value.clone());
-            }
+                // Build final state block.
+                let mut columns: Vec<Series> = Vec::with_capacity(aggr_funcs_len + group_expr_len);
 
-            for (i, func) in aggr_funcs.iter().enumerate() {
-                let merge = func.merge_result(places[i])?;
-                aggr_values[i].push(merge);
-            }
-        }
+                for (i, value) in aggr_values.iter().enumerate() {
+                    columns.push(DataValue::try_into_data_array(
+                        value.as_slice(),
+                        &self.aggr_exprs[i].to_data_type(&self.schema_before_group_by)?,
+                    )?);
+                }
 
-        // Build final state block.
-        let mut columns: Vec<Series> = Vec::with_capacity(aggr_funcs_len + group_expr_len);
+                for (i, value) in group_values.iter().enumerate() {
+                    columns.push(DataValue::try_into_data_array(
+                        value.as_slice(),
+                        &self.group_exprs[i].to_data_type(&self.schema_before_group_by)?,
+                    )?);
+                }
 
-        for (i, value) in aggr_values.iter().enumerate() {
-            columns.push(DataValue::try_into_data_array(
-                value.as_slice(),
-                &self.aggr_exprs[i].to_data_type(&self.schema_before_group_by)?,
-            )?);
-        }
+                let mut blocks = vec![];
+                if !columns.is_empty() {
+                    let block = DataBlock::create_by_array(self.schema.clone(), columns);
+                    blocks.push(block);
+                }
 
-        for (i, value) in group_values.iter().enumerate() {
-            columns.push(DataValue::try_into_data_array(
-                value.as_slice(),
-                &self.group_exprs[i].to_data_type(&self.schema_before_group_by)?,
-            )?);
-        }
-
-        let mut blocks = vec![];
-        if !columns.is_empty() {
-            let block = DataBlock::create_by_array(self.schema.clone(), columns);
-            blocks.push(block);
+                Ok(Box::pin(DataBlockStream::create(
+                    self.schema.clone(),
+                    None,
+                    blocks,
+                )))
+            }};
         }
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.schema.clone(),
-            None,
-            blocks,
-        )))
+        macro_rules! match_hash_method_and_apply {
+            ($method: ident, $apply: ident) => {{
+                match $method {
+                    HashMethodKind::Serializer(hash_method) => {
+                        apply! { hash_method,  &DFBinaryArray, binary,   RwLock<HashMap<Vec<u8>, (Vec<usize>, Vec<DataValue>), ahash::RandomState>>}
+                    }
+                    HashMethodKind::KeysU32(hash_method) => {
+                        apply! { hash_method , &DFUInt32Array, u32,  RwLock<HashMap<u32, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
+                    }
+                }
+            }};
+        }
+
+        match_hash_method_and_apply! {method, apply}
     }
 }
