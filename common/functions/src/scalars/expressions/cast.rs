@@ -18,8 +18,9 @@ pub struct CastFunction {
 }
 
 impl CastFunction {
-    pub fn create(cast_type: DataType) -> Box<dyn Function> {
-        Box::new(Self { cast_type })
+
+    pub fn create(cast_type: DataType) -> Result<Box<dyn Function>> {
+        Ok(Box::new(Self { cast_type }))
     }
 }
 

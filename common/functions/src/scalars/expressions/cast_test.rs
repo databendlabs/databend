@@ -19,7 +19,7 @@ fn test_cast_function() -> Result<()> {
         cast_type: DataType,
         expect: Series,
         error: &'static str,
-        func: Box<dyn Function>,
+        func: Result<Box<dyn Function>>,
     }
 
     let tests = vec![
@@ -47,11 +47,10 @@ fn test_cast_function() -> Result<()> {
 
     for t in tests {
         let rows = t.columns[0].len();
-        let func = t.func;
+        let func = t.func.unwrap();
         if let Err(e) = func.eval(&t.columns, rows) {
             assert_eq!(t.error, e.to_string());
         }
-
         // Display check.
         let expect_display = t.display.to_string();
         let actual_display = format!("{}", func);
