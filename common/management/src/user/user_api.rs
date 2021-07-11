@@ -5,6 +5,7 @@
 
 use async_trait::async_trait;
 use common_exception::Result;
+use common_metatypes::SeqValue;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct UserInfo {
@@ -30,13 +31,13 @@ pub trait UserMgrApi {
         &mut self,
         username: V,
         seq: Option<u64>,
-    ) -> common_exception::Result<(u64, UserInfo)>
+    ) -> common_exception::Result<SeqValue<UserInfo>>
     where
         V: AsRef<str> + Send;
 
-    async fn get_all_users(&mut self) -> Result<Vec<(u64, UserInfo)>>;
+    async fn get_all_users(&mut self) -> Result<Vec<SeqValue<UserInfo>>>;
 
-    async fn get_users<V>(&mut self, usernames: &[V]) -> Result<Vec<Option<(u64, UserInfo)>>>
+    async fn get_users<V>(&mut self, usernames: &[V]) -> Result<Vec<Option<SeqValue<UserInfo>>>>
     where V: AsRef<str> + Sync;
 
     async fn update_user<V>(
