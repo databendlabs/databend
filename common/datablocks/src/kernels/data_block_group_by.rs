@@ -118,6 +118,18 @@ pub enum HashMethodKind {
     KeysU64(HashMethodKeysU64),
 }
 
+impl HashMethodKind {
+    pub fn data_type(&self) -> DataType {
+        match self {
+            HashMethodKind::Serializer(_) => DataType::Binary,
+            HashMethodKind::KeysU8(_) => DataType::UInt8,
+            HashMethodKind::KeysU16(_) => DataType::UInt16,
+            HashMethodKind::KeysU32(_) => DataType::UInt32,
+            HashMethodKind::KeysU64(_) => DataType::UInt64,
+        }
+    }
+}
+
 impl DataBlock {
     pub fn choose_hash_method(
         block: &DataBlock,

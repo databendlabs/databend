@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -123,16 +124,22 @@ impl PlanBuilder {
                     .collect::<Vec<_>>();
 
                 if !group_expr.is_empty() {
-                    // Fields. [aggrs,  [keys],  key ]
+                    // Fields. [aggrs,  group_keys...,  key]
                     // aggrs: aggr_len aggregate states
-                    // keys:  Vec<Key>, DataTypeStruct
-                    // key:  group id, DataTypeBinary
+                    // group_keys:  group_len, group by key columns
+                    // key: Varint by hash method
+
+                    let mut group_cols = vec![];
                     for expr in group_expr.iter() {
-                        partial_fields.push(expr.to_data_field(&schema_before_groupby)?);
+                        group_cols.push(expr.column_name());
+                        let field = expr.to_data_field(&schema_before_groupby)?;
+                        partial_fields.push(field);
                     }
 
+                    let sample_block = DataBlock::empty_with_schema(schema_before_groupby.clone());
+                    let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
                     // partial_fields.push(DataField::new("_group_keys", DataType::Utf8, false));
-                    partial_fields.push(DataField::new("_group_by_key", DataType::Binary, false));
+                    partial_fields.push(DataField::new("_group_by_key", method.data_type(), false));
                 }
 
                 Self::from(&PlanNode::AggregatorPartial(AggregatorPartialPlan {
