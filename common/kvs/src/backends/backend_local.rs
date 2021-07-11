@@ -2,43 +2,70 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::HashMap;
+use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_exception::ErrorCode;
 use common_exception::Result;
-use common_runtime::tokio::sync::RwLock;
+use common_runtime::tokio::sync::Mutex;
 
+use crate::backends::Lock;
 use crate::backends::StateBackend;
 
 pub struct LocalBackend {
-    db: RwLock<HashMap<String, String>>,
+    db: sled::Db,
+    lock: Arc<Mutex<()>>,
 }
 
 impl LocalBackend {
     pub fn create(_addr: String) -> Self {
         Self {
-            db: RwLock::new(HashMap::default()),
+            db: sled::Config::new().temporary(true).open().unwrap(),
+            lock: Arc::new(Mutex::new(())),
         }
     }
 }
 
 #[async_trait]
 impl StateBackend for LocalBackend {
+    async fn get(&self, key: String) -> Result<Option<String>> {
+        Ok(self
+            .db
+            .get(key)
+            .map_err(|e| ErrorCode::UnknownException(e.to_string()))?
+            .map(|v| std::str::from_utf8(&v).unwrap().to_owned()))
+    }
+
+    async fn get_from_prefix(&self, key: String) -> Result<Vec<(String, String)>> {
+        Ok(self
+            .db
+            .scan_prefix(key)
+            .map(|v| {
+                v.map(|(key, value)| {
+                    (
+                        std::str::from_utf8(&key).unwrap().to_owned(),
+                        std::str::from_utf8(&value).unwrap().to_owned(),
+                    )
+                })
+            })
+            .collect::<Vec<(_, _)>>())
+    }
+
     async fn put(&self, key: String, value: String) -> Result<()> {
-        let mut db = self.db.write().await;
-        db.insert(key, value);
-        Ok(())
+        self.db
+            .insert(key.as_bytes(), value.as_bytes())
+            .map_err(|e| ErrorCode::UnknownException(e.to_string()))
+            .map(|_| ())
     }
 
     async fn remove(&self, key: String) -> Result<()> {
-        let mut db = self.db.write().await;
-        db.remove(key.as_str());
-        Ok(())
+        self.db
+            .remove(key)
+            .map_err(|e| ErrorCode::UnknownException(e.to_string()))
+            .map(|_| ())
     }
 
-    async fn get(&self, key: String) -> Result<Option<String>> {
-        let db = self.db.read().await;
-        let res = db.get(key.as_str());
-        Ok(res.cloned())
+    async fn lock(&self, _key: String) -> Result<Box<dyn Lock>> {
+        Ok(Box::new(self.lock.clone().lock_owned().await))
     }
 }

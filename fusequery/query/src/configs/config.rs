@@ -71,7 +71,7 @@ const STORE_API_PASSWORD: &str = "STORE_API_PASSWORD";
 
 // Cluster.
 const CLUSTER_NAMESPACE: &str = "CLUSTER_NAMESPACE";
-const CLUSTER_BACKEND_URI: &str = "CLUSTER_BACKEND_URI";
+const CLUSTER_META_SERVER_URI: &str = "CLUSTER_META_SERVER_URI";
 
 // Executor.
 const EXECUTOR_NAME: &str = "EXECUTOR_NAME";
@@ -163,8 +163,8 @@ pub struct Config {
     #[structopt(long, env = CLUSTER_NAMESPACE, default_value = "")]
     pub cluster_namespace: String,
 
-    #[structopt(long, env = CLUSTER_BACKEND_URI, default_value = "http://127.0.0.1:8080")]
-    pub cluster_backend_uri: String,
+    #[structopt(long, env = CLUSTER_META_SERVER_URI, default_value = "memory://127.0.0.1:8080")]
+    pub cluster_meta_server_uri: String,
 
     #[structopt(long, env = EXECUTOR_NAME, default_value = "")]
     pub executor_name: String,
@@ -266,7 +266,7 @@ impl Config {
                 store_api_password: "root".to_string(),
             },
             cluster_namespace: "".to_string(),
-            cluster_backend_uri: "http://127.0.0.1:8080".to_string(),
+            cluster_meta_server_uri: "http://127.0.0.1:8080".to_string(),
             executor_name: "".to_string(),
             executor_priority: 0,
             config_file: "".to_string(),
@@ -348,7 +348,12 @@ impl Config {
 
         // Cluster.
         env_helper!(mut_config, cluster_namespace, String, CLUSTER_NAMESPACE);
-        env_helper!(mut_config, cluster_backend_uri, String, CLUSTER_BACKEND_URI);
+        env_helper!(
+            mut_config,
+            cluster_meta_server_uri,
+            String,
+            CLUSTER_META_SERVER_URI
+        );
 
         // Executor.
         env_helper!(mut_config, executor_name, String, EXECUTOR_NAME);
@@ -361,7 +366,7 @@ impl Config {
         ClusterExecutor::create(
             self.executor_name.clone(),
             self.executor_priority,
-            Address::create(self.cluster_backend_uri.as_str())?,
+            Address::create(self.cluster_meta_server_uri.as_str())?,
         )
     }
 }

@@ -8,6 +8,7 @@ mod backend_local;
 mod backend_memory;
 mod backend_store;
 
+pub use backend::Lock;
 pub use backend::StateBackend;
 pub use backend_local::LocalBackend;
 pub use backend_memory::MemoryBackend;

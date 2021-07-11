@@ -51,7 +51,7 @@ pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
     pub fn try_create(conf: Config) -> Result<FuseQueryContextRef> {
-        let executor_backend_uri = conf.cluster_backend_uri.clone();
+        let executor_backend_uri = conf.cluster_meta_server_uri.clone();
         let settings = Settings::try_create()?;
         let ctx = FuseQueryContext {
             conf,
@@ -81,7 +81,7 @@ impl FuseQueryContext {
         default_database: String,
         datasource: Arc<DataSource>,
     ) -> Result<FuseQueryContextRef> {
-        let executor_backend_uri = conf.cluster_backend_uri.clone();
+        let executor_backend_uri = conf.cluster_meta_server_uri.clone();
 
         Ok(Arc::new(FuseQueryContext {
             conf,

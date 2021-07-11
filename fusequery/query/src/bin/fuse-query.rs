@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut services: Vec<AbortableServer> = vec![];
     let session_mgr = SessionMgr::from_conf(conf.clone())?;
-    let cluster_mgr = ClusterMgr::create(conf.cluster_backend_uri.clone());
+    let cluster_mgr = ClusterMgr::create(conf.cluster_meta_server_uri.clone());
 
     // MySQL handler.
     {
