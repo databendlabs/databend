@@ -363,10 +363,11 @@ impl Config {
     }
 
     pub fn executor_from_config(&self) -> Result<ClusterExecutor> {
+        // Executor using Flight API.
         ClusterExecutor::create(
             self.executor_name.clone(),
             self.executor_priority,
-            Address::create(self.cluster_meta_server_uri.as_str())?,
+            Address::create(self.flight_api_address.as_str())?,
         )
     }
 }
