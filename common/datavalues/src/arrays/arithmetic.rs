@@ -183,6 +183,13 @@ where
     type Output = Result<DataArray<T>>;
 
     fn div(self, rhs: Self) -> Self::Output {
+        if rhs.len() == 1 {
+            let result = Arc::new(compute::divide_scalar(
+                self.as_ref(),
+                rhs.as_ref().value(0),
+            )?) as ArrayRef;
+            return Ok(result.into());
+        }
         arithmetic_helper(self, rhs, compute::divide, |lhs, rhs| lhs / rhs)
     }
 }
@@ -200,7 +207,16 @@ where
 {
     type Output = Result<DataArray<T>>;
 
+    // Test sql: pc :) select sum(number % 5)  FROM numbers_mt(10000000000);
     fn rem(self, rhs: Self) -> Self::Output {
+        // modulus_scalar is not faster
+        // if rhs.len() == 1 {
+        //     let result = Arc::new(compute::modulus_scalar(
+        //         self.as_ref(),
+        //         rhs.as_ref().value(0),
+        //     )?) as ArrayRef;
+        //     return Ok(result.into());
+        // }
         arithmetic_helper(self, rhs, compute::modulus, |lhs, rhs| lhs % rhs)
     }
 }
@@ -412,8 +428,13 @@ where
     T: DFNumericType,
     T::Native: NumCast,
     N: Num + ToPrimitive,
-    T::Native:
-        Div<Output = T::Native> + One + Zero + Rem<Output = T::Native> + Sub<Output = T::Native>,
+    T::Native: Add<Output = T::Native>
+        + Sub<Output = T::Native>
+        + Mul<Output = T::Native>
+        + Div<Output = T::Native>
+        + Rem<Output = T::Native>
+        + Zero
+        + One,
 {
     type Output = Result<DataArray<T>>;
 
@@ -488,8 +509,13 @@ where
     T: DFNumericType,
     T::Native: NumCast,
     N: Num + ToPrimitive,
-    T::Native:
-        Div<Output = T::Native> + One + Zero + Rem<Output = T::Native> + Sub<Output = T::Native>,
+    T::Native: Add<Output = T::Native>
+        + Sub<Output = T::Native>
+        + Mul<Output = T::Native>
+        + Div<Output = T::Native>
+        + Rem<Output = T::Native>
+        + Zero
+        + One,
 {
     type Output = Result<DataArray<T>>;
 

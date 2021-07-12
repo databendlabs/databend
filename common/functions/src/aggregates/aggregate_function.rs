@@ -4,45 +4,53 @@
 
 use std::any::Any;
 use std::fmt;
+use std::sync::Arc;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use dyn_clone::DynClone;
 
-pub trait AggregateFunction: fmt::Display + Sync + Send + DynClone {
+use super::StateAddr;
+
+pub type AggregateFunctionRef = Arc<dyn AggregateFunction>;
+pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn name(&self) -> &str;
     fn return_type(&self) -> Result<DataType>;
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool>;
 
     fn as_any(&self) -> &dyn Any;
 
-    // accumulate is to accumulate the columns in batch mod
-    // if some aggregate functions wants to iterate over the columns row by row, it doesn't need to implement this function
-    fn accumulate(&mut self, columns: &[DataColumn], input_rows: usize) -> Result<()> {
-        if columns.is_empty() {
-            return Ok(());
-        };
+    fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr;
 
-        (0..input_rows).try_for_each(|index| {
-            let v = columns
-                .iter()
-                .map(|column| column.try_get(index))
-                .collect::<Result<Vec<_>>>()?;
-            self.accumulate_scalar(&v)
-        })
+    // accumulate is to accumulate the columns in batch mode
+    // common used when there is no group by for aggregate function
+    fn accumulate(
+        &self,
+        place: StateAddr,
+        columns: &[DataColumn],
+        input_rows: usize,
+    ) -> Result<()> {
+        (0..input_rows).try_for_each(|row| self.accumulate_row(place, row, columns))
     }
 
-    // must be implemented even we implement `accumulate`, because the combinator need this function
-    fn accumulate_scalar(&mut self, _values: &[DataValue]) -> Result<()> {
+    // used when we need to caclulate row by row
+    fn accumulate_row(
+        &self,
+        _place: StateAddr,
+        _row: usize,
+        _columns: &[DataColumn],
+    ) -> Result<()> {
         Ok(())
     }
 
-    fn accumulate_result(&self) -> Result<Vec<DataValue>>;
-    fn merge(&mut self, _states: &[DataValue]) -> Result<()>;
-    fn merge_result(&self) -> Result<DataValue>;
-}
+    // serialize  the state into binary array
+    fn serialize(&self, _place: StateAddr, _writer: &mut Vec<u8>) -> Result<()>;
+    fn deserialize(&self, _place: StateAddr, _value: &[u8]) -> Result<()>;
 
-dyn_clone::clone_trait_object!(AggregateFunction);
+    fn merge(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
+
+    // TODO append the value into the column builder
+    fn merge_result(&self, _place: StateAddr) -> Result<DataValue>;
+}
