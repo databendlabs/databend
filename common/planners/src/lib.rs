@@ -7,6 +7,8 @@ mod plan_aggregator_test;
 #[cfg(test)]
 mod plan_builder_test;
 #[cfg(test)]
+mod plan_describe_table_test;
+#[cfg(test)]
 mod plan_display_test;
 #[cfg(test)]
 mod plan_explain_test;
@@ -39,6 +41,7 @@ mod plan_broadcast;
 mod plan_builder;
 mod plan_database_create;
 mod plan_database_drop;
+mod plan_describe_table;
 mod plan_display;
 mod plan_display_indent;
 mod plan_empty;
@@ -88,6 +91,7 @@ pub use plan_database_create::CreateDatabasePlan;
 pub use plan_database_create::DatabaseEngineType;
 pub use plan_database_create::DatabaseOptions;
 pub use plan_database_drop::DropDatabasePlan;
+pub use plan_describe_table::DescribeTablePlan;
 pub use plan_empty::EmptyPlan;
 pub use plan_explain::ExplainPlan;
 pub use plan_explain::ExplainType;

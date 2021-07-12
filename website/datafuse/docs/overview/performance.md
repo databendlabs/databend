@@ -7,7 +7,7 @@ title: Performance
     * **Memory SIMD-Vector processing performance only**
     * Dataset: 100,000,000,000 (100 Billion)
     * Hardware: AMD Ryzen 7 PRO 4750U, 8 CPU Cores, 16 Threads
-    * Rust: rustc 1.53.0-nightly (673d0db5e 2021-03-23)
+    * Rust: rustc 1.55.0-nightly (868c702d0 2021-06-30)
     * Build with Link-time Optimization and Using CPU Specific Instructions
     * ClickHouse server version 21.4.6 revision 54447
 

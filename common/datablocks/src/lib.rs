@@ -13,4 +13,4 @@ mod kernels;
 
 pub use data_block::DataBlock;
 pub use data_block_debug::*;
-pub use kernels::SortColumnDescription;
+pub use kernels::*;

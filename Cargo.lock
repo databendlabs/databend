@@ -450,6 +450,16 @@ checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "bytes"
+version = "0.4.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "206fdffcfa2df7cbe15601ef46c813fce0965eb3286db6b56c583b814b51c81c"
+dependencies = [
+ "byteorder",
+ "iovec",
+]
+
+[[package]]
+name = "bytes"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e4cec68f03f32e44924783795810fa50a7035d8c8ebe78580ad7e6c703fba38"
@@ -681,6 +691,7 @@ dependencies = [
  "common-arrow",
  "common-datavalues",
  "common-exception",
+ "common-infallible",
  "prettytable-rs",
 ]
 
@@ -693,7 +704,7 @@ dependencies = [
  "common-arrow",
  "common-exception",
  "num",
- "ordered-float 2.5.1",
+ "ordered-float 2.6.0",
  "paste",
  "pretty_assertions",
  "prettytable-rs",
@@ -751,6 +762,8 @@ name = "common-functions"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bumpalo",
+ "bytes 0.4.12",
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
@@ -760,6 +773,8 @@ dependencies = [
  "indexmap",
  "lazy_static",
  "pretty_assertions",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1559,6 +1574,7 @@ dependencies = [
  "ahash 0.7.4",
  "anyhow",
  "async-trait",
+ "bumpalo",
  "clickhouse-rs",
  "clickhouse-srv",
  "common-allocators",
@@ -2053,9 +2069,9 @@ checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
-version = "0.14.9"
+version = "0.14.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07d6baa1b441335f3ce5098ac421fb6547c46dda735ca1bc6d0153c838f9dd83"
+checksum = "7728a72c4c7d72665fde02204bcbd93b247721025b222ef78606f14513e0fd03"
 dependencies = [
  "bytes 1.0.1",
  "futures-channel",
@@ -2148,6 +2164,15 @@ dependencies = [
  "derive_utils",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "iovec"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2b3ea6ff95e175473f8ffe6a7eb7c00d054240321b84c57051175fe3c1e075e"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -2562,7 +2587,7 @@ dependencies = [
  "indexmap",
  "metrics",
  "num_cpus",
- "ordered-float 2.5.1",
+ "ordered-float 2.6.0",
  "parking_lot",
  "quanta",
  "radix_trie",
@@ -3091,9 +3116,9 @@ dependencies = [
 
 [[package]]
 name = "ordered-float"
-version = "2.5.1"
+version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f100fcfb41e5385e0991f74981732049f9b896821542a219420491046baafdc2"
+checksum = "6dea6388d3d5498ec651701f14edbaf463c924b5d8829fb2848ccf0bcc7b3c69"
 dependencies = [
  "num-traits",
 ]
@@ -4749,9 +4774,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.8.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "570c2eb13b3ab38208130eccd41be92520388791207fde783bda7c1e8ace28d4"
+checksum = "98c8b05dc14c75ea83d63dd391100353789f5f24b8b3866542a5e85c8be8e985"
 dependencies = [
  "autocfg 1.0.1",
  "bytes 1.0.1",
@@ -4777,9 +4802,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-stream"
-version = "0.1.6"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8864d706fdb3cc0843a49647ac892720dac98a6eeb818b77190592cf4994066"
+checksum = "7b2f3f698253f03119ac0102beaa64f67a67e08074d03a22d18784104543727f"
 dependencies = [
  "futures-core",
  "pin-project-lite",

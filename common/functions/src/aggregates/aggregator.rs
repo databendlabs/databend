@@ -23,9 +23,9 @@ impl Aggregators {
         let mut map = map.write();
         // FuseQuery always uses lowercase function names to get functions.
         map.insert("count", AggregateCountFunction::try_create);
+        map.insert("sum", AggregateSumFunction::try_create);
         map.insert("min", AggregateMinFunction::try_create);
         map.insert("max", AggregateMaxFunction::try_create);
-        map.insert("sum", AggregateSumFunction::try_create);
         map.insert("avg", AggregateAvgFunction::try_create);
         map.insert("argmin", AggregateArgMinFunction::try_create);
         map.insert("argmax", AggregateArgMaxFunction::try_create);

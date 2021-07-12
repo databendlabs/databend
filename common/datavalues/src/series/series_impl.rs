@@ -60,7 +60,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn try_get(&self, index: usize) -> Result<DataValue>;
 
     fn vec_hash(&self, hasher: DFHasher) -> Result<DFUInt64Array>;
-    fn group_hash(&self) -> Result<DFUInt64Array>;
+    fn group_hash(&self, ptr: usize, step: usize) -> Result<()>;
 
     fn subtract(&self, rhs: &Series) -> Result<Series>;
     fn add_to(&self, rhs: &Series) -> Result<Series>;
@@ -182,6 +182,14 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn date64(&self) -> Result<&DFDate64Array> {
         Err(ErrorCode::IllegalDataType(format!(
             "{:?} != date64",
+            self.data_type()
+        )))
+    }
+
+    /// Unpack to DFArray of data_type binary
+    fn binary(&self) -> Result<&DFBinaryArray> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != binary",
             self.data_type()
         )))
     }

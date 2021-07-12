@@ -107,8 +107,8 @@ macro_rules! impl_dyn_array {
                 self.0.vec_hash(hasher)
             }
 
-            fn group_hash(&self) -> Result<DFUInt64Array> {
-                self.0.group_hash()
+            fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+                self.0.group_hash(ptr, step)
             }
 
             fn subtract(&self, rhs: &Series) -> Result<Series> {
@@ -132,7 +132,29 @@ macro_rules! impl_dyn_array {
             }
 
             fn sum(&self) -> Result<DataValue> {
-                self.0.sum()
+                if !is_numeric(&self.0.data_type()) {
+                    return self.0.sum();
+                }
+
+                if matches!(
+                    self.0.data_type(),
+                    DataType::Float64 | DataType::UInt64 | DataType::Int64
+                ) {
+                    return self.0.sum();
+                }
+
+                if is_floating(&self.0.data_type()) {
+                    let s = self.cast_with_type(&DataType::Float64)?;
+                    return s.sum();
+                }
+
+                if is_signed_numeric(&self.0.data_type()) {
+                    let s = self.cast_with_type(&DataType::Int64)?;
+                    return s.sum();
+                }
+
+                let s = self.cast_with_type(&DataType::UInt64)?;
+                s.sum()
             }
 
             fn max(&self) -> Result<DataValue> {
@@ -311,6 +333,19 @@ macro_rules! impl_dyn_array {
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
                         "cannot unpack Series: {:?} of type {:?} into date64",
+                        self.name(),
+                        self.data_type(),
+                    )))
+                }
+            }
+
+            /// Unpack to DFArray of data_type binary
+            fn binary(&self) -> Result<&DFBinaryArray> {
+                if matches!(self.0.data_type(), DataType::Binary) {
+                    unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFBinaryArray)) }
+                } else {
+                    Err(ErrorCode::IllegalDataType(format!(
+                        "cannot unpack Series: {:?} of type {:?} into binary",
                         self.name(),
                         self.data_type(),
                     )))

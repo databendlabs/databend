@@ -7,8 +7,8 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::aggregates::AggregateFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::Function;
 use common_functions::scalars::FunctionFactory;
@@ -82,7 +82,7 @@ impl ActionFunction {
         }
     }
 
-    pub fn to_aggregate_function(&self) -> Result<Box<dyn AggregateFunction>> {
+    pub fn to_aggregate_function(&self) -> Result<AggregateFunctionRef> {
         if !self.is_aggregated {
             return Err(ErrorCode::LogicalError(
                 "Action must be aggregated function",

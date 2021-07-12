@@ -14,6 +14,7 @@ use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
+use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
 use crate::EmptyPlan;
@@ -57,6 +58,7 @@ pub enum PlanNode {
     CreateDatabase(CreateDatabasePlan),
     DropDatabase(DropDatabasePlan),
     CreateTable(CreateTablePlan),
+    DescribeTable(DescribeTablePlan),
     DropTable(DropTablePlan),
     UseDatabase(UseDatabasePlan),
     SetVariable(SettingPlan),
@@ -89,6 +91,7 @@ impl PlanNode {
             PlanNode::DropDatabase(v) => v.schema(),
             PlanNode::CreateTable(v) => v.schema(),
             PlanNode::DropTable(v) => v.schema(),
+            PlanNode::DescribeTable(v) => v.schema(),
             PlanNode::SetVariable(v) => v.schema(),
             PlanNode::Sort(v) => v.schema(),
             PlanNode::UseDatabase(v) => v.schema(),
@@ -119,6 +122,7 @@ impl PlanNode {
             PlanNode::CreateDatabase(_) => "CreateDatabasePlan",
             PlanNode::DropDatabase(_) => "DropDatabasePlan",
             PlanNode::CreateTable(_) => "CreateTablePlan",
+            PlanNode::DescribeTable(_) => "DescribeTablePlan",
             PlanNode::DropTable(_) => "DropTablePlan",
             PlanNode::SetVariable(_) => "SetVariablePlan",
             PlanNode::Sort(_) => "SortPlan",

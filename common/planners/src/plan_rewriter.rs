@@ -18,6 +18,7 @@ use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
+use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
 use crate::EmptyPlan;
@@ -86,6 +87,7 @@ pub trait PlanRewriter {
             PlanNode::Remote(plan) => self.rewrite_remote(plan),
             PlanNode::Having(plan) => self.rewrite_having(plan),
             PlanNode::Expression(plan) => self.rewrite_expression(plan),
+            PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
             PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
             PlanNode::InsertInto(plan) => self.rewrite_insert_into(plan),
@@ -291,6 +293,10 @@ pub trait PlanRewriter {
 
     fn rewrite_set_variable(&mut self, plan: &SettingPlan) -> Result<PlanNode> {
         Ok(PlanNode::SetVariable(plan.clone()))
+    }
+
+    fn rewrite_describe_table(&mut self, plan: &DescribeTablePlan) -> Result<PlanNode> {
+        Ok(PlanNode::DescribeTable(plan.clone()))
     }
 
     fn rewrite_drop_table(&mut self, plan: &DropTablePlan) -> Result<PlanNode> {

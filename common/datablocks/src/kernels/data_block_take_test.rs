@@ -18,7 +18,7 @@ fn test_data_block_take() -> anyhow::Result<()> {
         Series::new(vec!["b1", "b2", "b3"]),
     ]);
 
-    let take = DataBlock::block_take_by_indices(&raw, &[0, 2])?;
+    let take = DataBlock::block_take_by_indices(&raw, &[], &[0, 2])?;
     assert_eq!(raw.schema(), take.schema());
 
     let expected = vec![

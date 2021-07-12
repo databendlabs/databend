@@ -151,8 +151,8 @@ macro_rules! impl_dyn_arrays {
                 cast_and_apply!(self, vec_hash, hasher)
             }
 
-            fn group_hash(&self) -> Result<DFUInt64Array> {
-                cast_and_apply!(self, group_hash,)
+            fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+                cast_and_apply!(self, group_hash, ptr, step)
             }
 
             fn subtract(&self, rhs: &Series) -> Result<Series> {
