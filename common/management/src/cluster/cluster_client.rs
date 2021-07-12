@@ -11,16 +11,16 @@ use common_kvs::BackendClient;
 
 use crate::cluster::ClusterExecutor;
 
-pub type ClusterMgrRef = Arc<ClusterMgr>;
+pub type ClusterClientRef = Arc<ClusterClient>;
 
-pub struct ClusterMgr {
+pub struct ClusterClient {
     backend_client: BackendClient,
 }
 
-impl ClusterMgr {
-    pub fn create(uri: String) -> ClusterMgrRef {
+impl ClusterClient {
+    pub fn create(uri: String) -> ClusterClientRef {
         let backend_client = BackendClient::create(uri);
-        Arc::new(ClusterMgr { backend_client })
+        Arc::new(ClusterClient { backend_client })
     }
 
     /// Register an executor to the namespace.

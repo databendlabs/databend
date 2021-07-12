@@ -6,7 +6,7 @@ use std::ops::Sub;
 use std::time::Duration;
 
 use common_exception::ErrorCode;
-use common_management::cluster::ClusterMgr;
+use common_management::cluster::ClusterClient;
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
 use fuse_query::api::HttpService;
@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut services: Vec<AbortableServer> = vec![];
     let session_mgr = SessionMgr::from_conf(conf.clone())?;
-    let cluster_mgr = ClusterMgr::create(conf.cluster_meta_server_uri.clone());
+    let cluster_mgr = ClusterClient::create(conf.cluster_meta_server_uri.clone());
 
     // MySQL handler.
     {

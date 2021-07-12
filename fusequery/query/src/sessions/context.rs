@@ -12,9 +12,9 @@ use common_exception::Result;
 use common_flights::Address;
 use common_flights::ConnectionFactory;
 use common_infallible::RwLock;
+use common_management::cluster::ClusterClient;
+use common_management::cluster::ClusterClientRef;
 use common_management::cluster::ClusterExecutor;
-use common_management::cluster::ClusterMgr;
-use common_management::cluster::ClusterMgrRef;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::Statistics;
@@ -37,7 +37,7 @@ pub struct FuseQueryContext {
     conf: Config,
     uuid: Arc<RwLock<String>>,
     settings: Arc<Settings>,
-    cluster: ClusterMgrRef,
+    cluster: ClusterClientRef,
     datasource: Arc<DataSource>,
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Part>>>,
@@ -57,7 +57,7 @@ impl FuseQueryContext {
             conf,
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings: settings.clone(),
-            cluster: ClusterMgr::create(executor_backend_uri),
+            cluster: ClusterClient::create(executor_backend_uri),
             datasource: Arc::new(DataSource::try_create()?),
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
@@ -87,7 +87,7 @@ impl FuseQueryContext {
             conf,
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings: settings.clone(),
-            cluster: ClusterMgr::create(executor_backend_uri),
+            cluster: ClusterClient::create(executor_backend_uri),
             datasource,
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),

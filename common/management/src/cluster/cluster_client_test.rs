@@ -7,11 +7,11 @@ use common_flights::Address;
 use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 
+use crate::cluster::ClusterClient;
 use crate::cluster::ClusterExecutor;
-use crate::cluster::ClusterMgr;
 
 #[tokio::test]
-async fn test_cluster_mgr() -> Result<()> {
+async fn test_cluster_client() -> Result<()> {
     let executor1 = ClusterExecutor {
         name: "n1".to_string(),
         priority: 0,
@@ -28,7 +28,7 @@ async fn test_cluster_mgr() -> Result<()> {
     };
     let backend_uri = "local://127.0.0.1".to_string();
     let namespace = "namespace-1".to_string();
-    let cluster_mgr = ClusterMgr::create(backend_uri);
+    let cluster_mgr = ClusterClient::create(backend_uri);
 
     // Register.
     {
