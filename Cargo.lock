@@ -1600,6 +1600,7 @@ dependencies = [
  "common-flights",
  "common-functions",
  "common-infallible",
+ "common-kvs",
  "common-management",
  "common-planners",
  "common-profling",

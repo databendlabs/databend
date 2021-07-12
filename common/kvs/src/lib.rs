@@ -7,6 +7,6 @@
 mod backend_client_test;
 
 mod backend_client;
-mod backends;
 
+pub mod backends;
 pub use backend_client::BackendClient;

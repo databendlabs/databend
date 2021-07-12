@@ -30,6 +30,7 @@ common-exception = {path = "../../common/exception"}
 common-flights = {path = "../../common/flights"}
 common-functions = {path = "../../common/functions"}
 common-infallible = {path = "../../common/infallible"}
+common-kvs= {path = "../../common/kvs"}
 common-planners = {path = "../../common/planners"}
 common-progress = {path = "../../common/progress"}
 common-runtime = {path = "../../common/runtime"}

@@ -5,15 +5,20 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use common_kvs::backends::LocalBackend;
 use warp::Filter;
 
 pub type KvStoreRef = Arc<KvStore>;
-pub struct KvStore {}
+pub struct KvStore {
+    db: LocalBackend,
+}
 
 /// A in memory key/value store.
 impl KvStore {
     pub fn create() -> KvStoreRef {
-        Arc::new(KvStore {})
+        Arc::new(KvStore {
+            db: LocalBackend::create("".to_string()),
+        })
     }
 }
 
@@ -38,7 +43,8 @@ fn kv_list(
     store: KvStoreRef,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::path!("v1" / "kv" / "list")
-        .and(warp::get())
+        .and(warp::post())
+        .and(json_body())
         .and(with_store(store))
         .and_then(handlers::list)
 }
@@ -48,6 +54,7 @@ fn kv_get(
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::path!("v1" / "kv" / "get")
         .and(warp::post())
+        .and(json_body())
         .and(with_store(store))
         .and_then(handlers::get)
 }
@@ -85,36 +92,47 @@ fn json_body() -> impl Filter<Extract = (KvRequest,), Error = warp::Rejection> +
 }
 
 mod handlers {
+    use common_kvs::backends::Backend;
     use log::info;
 
     use crate::api::http::v1::kv::KvRequest;
     use crate::api::http::v1::kv::KvStoreRef;
 
     // Get value by key.
-    pub async fn get(_store: KvStoreRef) -> Result<impl warp::Reply, std::convert::Infallible> {
-        Ok(warp::http::StatusCode::OK)
+    pub async fn get(
+        req: KvRequest,
+        store: KvStoreRef,
+    ) -> Result<impl warp::Reply, std::convert::Infallible> {
+        let v = store.db.get(req.key).await.unwrap();
+        Ok(warp::reply::json(&v))
     }
 
     // List all the key/value paris.
-    pub async fn list(_store: KvStoreRef) -> Result<impl warp::Reply, std::convert::Infallible> {
-        Ok(warp::http::StatusCode::OK)
+    pub async fn list(
+        req: KvRequest,
+        store: KvStoreRef,
+    ) -> Result<impl warp::Reply, std::convert::Infallible> {
+        let values = store.db.get_from_prefix(req.key).await.unwrap();
+        Ok(warp::reply::json(&values))
     }
 
     // Put a kv.
     pub async fn put(
         req: KvRequest,
-        _store: KvStoreRef,
+        store: KvStoreRef,
     ) -> Result<impl warp::Reply, warp::Rejection> {
         info!("kv put: {:?}", req);
+        store.db.put(req.key, req.value).await.unwrap();
         Ok(warp::http::StatusCode::OK)
     }
 
     // Delete by key.
     pub async fn del(
         req: KvRequest,
-        _store: KvStoreRef,
+        store: KvStoreRef,
     ) -> Result<impl warp::Reply, std::convert::Infallible> {
         info!("kv del: {:?}", req);
+        store.db.remove(req.key).await.unwrap();
         Ok(warp::http::StatusCode::OK)
     }
 }
