@@ -4,12 +4,10 @@
 
 use std::fmt;
 use std::fmt::Display;
-use std::fmt::Formatter;
 
 use common_datavalues::DataSchema;
 
 use crate::plan_display_indent::PlanNodeIndentFormatDisplay;
-use crate::Expression;
 use crate::PlanNode;
 
 impl PlanNode {

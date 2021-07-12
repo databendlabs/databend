@@ -1,7 +1,6 @@
 use std::pin::Pin;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -54,7 +53,7 @@ impl Stream for CorrectWithSchemaStream {
     type Item = Result<DataBlock>;
 
     fn poll_next(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.input.poll_next_unpin(ctx).map(|mut x| match x {
+        self.input.poll_next_unpin(ctx).map(|x| match x {
             Some(Ok(block)) => Some(self.new_block_if_need(block)),
             other => other,
         })

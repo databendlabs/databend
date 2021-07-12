@@ -294,3 +294,5 @@ impl fmt::Debug for Expression {
         }
     }
 }
+
+pub type Expressions = Vec<Expression>;

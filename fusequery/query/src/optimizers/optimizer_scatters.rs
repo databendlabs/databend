@@ -4,14 +4,13 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
-use common_planners::EmptyPlan;
+use common_planners::BroadcastPlan;
 use common_planners::Expression;
 use common_planners::LimitByPlan;
 use common_planners::LimitPlan;
@@ -22,15 +21,17 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::SortPlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
+use common_planners::SubQueriesSetsPlan;
 
 use crate::optimizers::Optimizer;
+use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct ScattersOptimizer {
     ctx: FuseQueryContextRef,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum RunningMode {
     Standalone,
     Cluster,
@@ -55,25 +56,17 @@ impl ScattersOptimizerImpl {
         }
     }
 
-    pub fn get_running_mode(&self) -> RunningMode {
-        self.running_mode.clone()
-    }
-
     fn cluster_aggregate_without_key(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
         // If no group by we convergent it in local node
         self.running_mode = RunningMode::Standalone;
 
         match self.input.take() {
-            None => Ok(PlanNode::AggregatorPartial(plan.clone())),
-            Some(input) => Ok(PlanNode::Stage(StagePlan {
-                kind: StageKind::Convergent,
-                scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
-                input: Arc::new(
-                    PlanBuilder::from(input.as_ref())
-                        .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
-                        .build()?,
-                ),
-            })),
+            None => Err(ErrorCode::LogicalError("Cluster aggr input is None")),
+            Some(input) => Self::convergent_shuffle_stage(
+                PlanBuilder::from(input.as_ref())
+                    .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
+                    .build()?,
+            ),
         }
     }
 
@@ -82,16 +75,13 @@ impl ScattersOptimizerImpl {
         self.running_mode = RunningMode::Cluster;
 
         match self.input.take() {
-            None => Ok(PlanNode::AggregatorPartial(plan.clone())),
-            Some(input) => Ok(PlanNode::Stage(StagePlan {
-                kind: StageKind::Normal,
-                scatters_expr: Self::create_scatters_expr(),
-                input: Arc::new(
-                    PlanBuilder::from(input.as_ref())
-                        .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
-                        .build()?,
-                ),
-            })),
+            None => Err(ErrorCode::LogicalError("Cluster aggr input is None")),
+            Some(input) => Self::normal_shuffle_stage(
+                "_group_by_key",
+                PlanBuilder::from(input.as_ref())
+                    .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
+                    .build()?,
+            ),
         }
     }
 
@@ -104,7 +94,7 @@ impl ScattersOptimizerImpl {
 
     fn standalone_aggregate(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
         match self.input.take() {
-            None => Ok(PlanNode::AggregatorPartial(plan.clone())),
+            None => Err(ErrorCode::LogicalError("Standalone aggr input is None")),
             Some(input) => PlanBuilder::from(input.as_ref())
                 .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
                 .build(),
@@ -116,22 +106,16 @@ impl ScattersOptimizerImpl {
         self.running_mode = RunningMode::Standalone;
 
         match self.input.take() {
-            None => Ok(PlanNode::Sort(plan.clone())),
-            Some(input) => {
-                let input = PlanNode::Stage(StagePlan {
-                    kind: StageKind::Convergent,
-                    scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
-                    input: input,
-                });
-
-                PlanBuilder::from(&input).sort(&plan.order_by)?.build()
-            }
+            None => Err(ErrorCode::LogicalError("Cluster sort input is None")),
+            Some(input) => Self::convergent_shuffle_stage_builder(input)
+                .sort(&plan.order_by)?
+                .build(),
         }
     }
 
     fn standalone_sort(&mut self, plan: &SortPlan) -> Result<PlanNode> {
         match self.input.take() {
-            None => Ok(PlanNode::Sort(plan.clone())),
+            None => Err(ErrorCode::LogicalError("Standalone sort input is None")),
             Some(input) => PlanBuilder::from(input.as_ref())
                 .sort(&plan.order_by)?
                 .build(),
@@ -143,24 +127,16 @@ impl ScattersOptimizerImpl {
         self.running_mode = RunningMode::Standalone;
 
         match self.input.take() {
-            None => Ok(PlanNode::Limit(plan.clone())),
-            Some(input) => {
-                let input = PlanNode::Stage(StagePlan {
-                    kind: StageKind::Convergent,
-                    scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
-                    input: input,
-                });
-
-                PlanBuilder::from(&input)
-                    .limit_offset(plan.n, plan.offset)?
-                    .build()
-            }
+            None => Err(ErrorCode::LogicalError("Cluster limit input is None")),
+            Some(input) => Self::convergent_shuffle_stage_builder(input)
+                .limit_offset(plan.n, plan.offset)?
+                .build(),
         }
     }
 
     fn standalone_limit(&mut self, plan: &LimitPlan) -> Result<PlanNode> {
         match self.input.take() {
-            None => Ok(PlanNode::Limit(plan.clone())),
+            None => Err(ErrorCode::LogicalError("Standalone limit input is None")),
             Some(input) => PlanBuilder::from(input.as_ref())
                 .limit_offset(plan.n, plan.offset)?
                 .build(),
@@ -172,47 +148,75 @@ impl ScattersOptimizerImpl {
         self.running_mode = RunningMode::Standalone;
 
         match self.input.take() {
-            None => Ok(PlanNode::LimitBy(plan.clone())),
-            Some(input) => {
-                let input = PlanNode::Stage(StagePlan {
-                    kind: StageKind::Convergent,
-                    scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
-                    input: input,
-                });
-
-                PlanBuilder::from(&input)
-                    .limit_by(plan.limit, &plan.limit_by)?
-                    .build()
-            }
+            None => Err(ErrorCode::LogicalError("Cluster limit by input is None.")),
+            Some(input) => Self::convergent_shuffle_stage_builder(input)
+                .limit_by(plan.limit, &plan.limit_by)?
+                .build(),
         }
     }
 
     fn standalone_limit_by(&mut self, plan: &LimitByPlan) -> Result<PlanNode> {
         match self.input.take() {
-            None => Ok(PlanNode::LimitBy(plan.clone())),
+            None => Err(ErrorCode::LogicalError(
+                "Standalone limit by input is None.",
+            )),
             Some(input) => PlanBuilder::from(input.as_ref())
                 .limit_by(plan.limit, &plan.limit_by)?
                 .build(),
         }
     }
 
-    fn create_scatters_expr() -> Expression {
-        Expression::ScalarFunction {
+    fn convergent_shuffle_stage_builder(input: Arc<PlanNode>) -> PlanBuilder {
+        PlanBuilder::from(&PlanNode::Stage(StagePlan {
+            kind: StageKind::Convergent,
+            scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
+            input,
+        }))
+    }
+
+    fn convergent_shuffle_stage(input: PlanNode) -> Result<PlanNode> {
+        Ok(PlanNode::Stage(StagePlan {
+            kind: StageKind::Convergent,
+            scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
+            input: Arc::new(input),
+        }))
+    }
+
+    fn normal_shuffle_stage(key: impl Into<String>, input: PlanNode) -> Result<PlanNode> {
+        let scatters_expr = Expression::ScalarFunction {
             op: String::from("sipHash"),
-            args: vec![Expression::Column(String::from("_group_by_key"))],
-        }
+            args: vec![Expression::Column(String::from(key.into()))],
+        };
+
+        Ok(PlanNode::Stage(StagePlan {
+            kind: StageKind::Normal,
+            scatters_expr: scatters_expr,
+            input: Arc::new(input),
+        }))
     }
 }
 
 impl PlanRewriter for ScattersOptimizerImpl {
+    fn rewrite_subquery_plan(&mut self, subquery_plan: &PlanNode) -> Result<PlanNode> {
+        let subquery_ctx = FuseQueryContext::new(self.ctx.clone());
+        let mut subquery_optimizer = ScattersOptimizerImpl::create(subquery_ctx);
+        let rewritten_subquery = subquery_optimizer.rewrite_plan_node(subquery_plan)?;
+
+        match (&self.running_mode, &subquery_optimizer.running_mode) {
+            (RunningMode::Standalone, RunningMode::Standalone) => Ok(rewritten_subquery),
+            (RunningMode::Standalone, RunningMode::Cluster) => {
+                Ok(Self::convergent_shuffle_stage(rewritten_subquery)?)
+            }
+            (RunningMode::Cluster, _) => Ok(PlanNode::Broadcast(BroadcastPlan {
+                input: Arc::new(rewritten_subquery),
+            })),
+        }
+    }
+
     fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
         let new_input = Arc::new(self.rewrite_plan_node(&plan.input)?);
 
         self.input = Some(new_input.clone());
-        assert!(
-            self.before_group_by_schema.is_none(),
-            "Before group by schema must be None"
-        );
         self.before_group_by_schema = Some(new_input.schema());
 
         match self.running_mode {
@@ -223,11 +227,6 @@ impl PlanRewriter for ScattersOptimizerImpl {
 
     fn rewrite_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(&plan.input)?;
-
-        assert!(
-            self.before_group_by_schema.is_some(),
-            "Before group by schema must be Some"
-        );
 
         match self.before_group_by_schema.take() {
             None => Ok(PlanNode::AggregatorFinal(plan.clone())),

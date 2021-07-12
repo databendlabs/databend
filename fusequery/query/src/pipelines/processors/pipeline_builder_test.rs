@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::HashMap;
-
 use common_exception::Result;
 use common_runtime::tokio;
 use futures::TryStreamExt;

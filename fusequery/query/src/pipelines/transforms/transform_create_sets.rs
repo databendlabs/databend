@@ -1,22 +1,15 @@
 use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
 use common_planners::Expression;
-use common_runtime::tokio::macros::support::Pin;
-use common_runtime::tokio::macros::support::Poll;
 use common_runtime::tokio::task::JoinHandle;
 use common_streams::SendableDataBlockStream;
 use common_streams::SubQueriesStream;
-use futures::channel::oneshot::Receiver;
 use futures::future::join_all;
 use futures::future::BoxFuture;
 use futures::future::JoinAll;

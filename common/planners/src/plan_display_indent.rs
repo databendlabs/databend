@@ -1,10 +1,10 @@
 use std::fmt;
 use std::fmt::Formatter;
 
+use crate::plan_broadcast::BroadcastPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
-use crate::CreateSubQueriesSetsPlan;
 use crate::CreateTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
@@ -16,6 +16,7 @@ use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::SortPlan;
 use crate::StagePlan;
+use crate::SubQueriesSetsPlan;
 
 pub struct PlanNodeIndentFormatDisplay<'a> {
     indent: usize,
@@ -41,6 +42,7 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
 
         match self.node {
             PlanNode::Stage(plan) => Self::format_stage(f, plan),
+            PlanNode::Broadcast(plan) => Self::format_broadcast(f, plan),
             PlanNode::Projection(plan) => Self::format_projection(f, plan),
             PlanNode::Expression(plan) => Self::format_expression(f, plan),
             PlanNode::AggregatorPartial(plan) => Self::format_aggregator_partial(f, plan),
@@ -92,7 +94,11 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
 
 impl<'a> PlanNodeIndentFormatDisplay<'a> {
     fn format_stage(f: &mut Formatter, plan: &StagePlan) -> fmt::Result {
-        write!(f, "RedistributeStage[expr: {:?}]", plan.scatters_expr,)
+        write!(f, "RedistributeStage[expr: {:?}]", plan.scatters_expr)
+    }
+
+    fn format_broadcast(f: &mut Formatter, _plan: &BroadcastPlan) -> fmt::Result {
+        write!(f, "Broadcast in cluster")
     }
 
     fn format_projection(f: &mut Formatter, plan: &ProjectionPlan) -> fmt::Result {
@@ -171,7 +177,7 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
         }
     }
 
-    fn format_subquery_expr(f: &mut Formatter, plan: &CreateSubQueriesSetsPlan) -> fmt::Result {
+    fn format_subquery_expr(f: &mut Formatter, plan: &SubQueriesSetsPlan) -> fmt::Result {
         let mut names = Vec::with_capacity(plan.expressions.len());
         for expression in &plan.expressions {
             match expression {

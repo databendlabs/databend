@@ -6,8 +6,6 @@ use common_arrow::arrow::compute;
 use common_exception::Result;
 
 use crate::arrays::ArrayApply;
-use crate::arrays::ArrayFullNull;
-use crate::arrays::DataArray;
 use crate::arrays::TakeRandom;
 use crate::DFBooleanArray;
 

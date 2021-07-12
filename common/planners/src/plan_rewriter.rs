@@ -7,11 +7,13 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_datavalues::DataField;
+use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::plan_subqueries_set_create::CreateSubQueriesSetsPlan;
+use crate::plan_broadcast::BroadcastPlan;
+use crate::plan_subqueries_set_create::SubQueriesSetsPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
@@ -22,6 +24,7 @@ use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::Expression;
 use crate::ExpressionPlan;
+use crate::Expressions;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::InsertIntoPlan;
@@ -79,6 +82,7 @@ pub trait PlanRewriter {
             PlanNode::UseDatabase(plan) => self.rewrite_use_database(plan),
             PlanNode::SetVariable(plan) => self.rewrite_set_variable(plan),
             PlanNode::Stage(plan) => self.rewrite_stage(plan),
+            PlanNode::Broadcast(plan) => self.rewrite_broadcast(plan),
             PlanNode::Remote(plan) => self.rewrite_remote(plan),
             PlanNode::Having(plan) => self.rewrite_having(plan),
             PlanNode::Expression(plan) => self.rewrite_expression(plan),
@@ -86,8 +90,80 @@ pub trait PlanRewriter {
             PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
             PlanNode::InsertInto(plan) => self.rewrite_insert_into(plan),
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
-            PlanNode::SubQueryExpression(plan) => self.rewrite_sub_queries_expression(plan),
+            PlanNode::SubQueryExpression(plan) => self.rewrite_sub_queries_sets(plan),
         }
+    }
+
+    fn rewrite_subquery_plan(&mut self, subquery_plan: &PlanNode) -> Result<PlanNode> {
+        self.rewrite_plan_node(subquery_plan)
+    }
+
+    // TODO: Move it to ExpressionsRewrite trait
+    fn rewrite_expr(&mut self, schema: &DataSchemaRef, expr: &Expression) -> Result<Expression> {
+        match expr {
+            Expression::Alias(alias, input) => Ok(Expression::Alias(
+                alias.clone(),
+                Box::new(self.rewrite_expr(schema, input.as_ref())?),
+            )),
+            Expression::UnaryExpression { op, expr } => Ok(Expression::UnaryExpression {
+                op: op.clone(),
+                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
+            }),
+            Expression::BinaryExpression { op, left, right } => Ok(Expression::BinaryExpression {
+                op: op.clone(),
+                left: Box::new(self.rewrite_expr(schema, left.as_ref())?),
+                right: Box::new(self.rewrite_expr(schema, right.as_ref())?),
+            }),
+            Expression::ScalarFunction { op, args } => Ok(Expression::ScalarFunction {
+                op: op.clone(),
+                args: self.rewrite_exprs(schema, args)?,
+            }),
+            Expression::AggregateFunction { op, distinct, args } => {
+                Ok(Expression::AggregateFunction {
+                    op: op.clone(),
+                    distinct: *distinct,
+                    args: self.rewrite_exprs(schema, args)?,
+                })
+            }
+            Expression::Sort {
+                expr,
+                asc,
+                nulls_first,
+            } => Ok(Expression::Sort {
+                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
+                asc: *asc,
+                nulls_first: *nulls_first,
+            }),
+            Expression::Cast { expr, data_type } => Ok(Expression::Cast {
+                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
+                data_type: data_type.clone(),
+            }),
+            Expression::Wildcard => Ok(Expression::Wildcard),
+            Expression::Column(column_name) => Ok(Expression::Column(column_name.clone())),
+            Expression::Literal(value) => Ok(Expression::Literal(value.clone())),
+            Expression::Subquery { name, query_plan } => {
+                let new_subquery = self.rewrite_subquery_plan(query_plan)?;
+                Ok(Expression::Subquery {
+                    name: name.clone(),
+                    query_plan: Arc::new(new_subquery),
+                })
+            }
+            Expression::ScalarSubquery { name, query_plan } => {
+                let new_subquery = self.rewrite_subquery_plan(query_plan)?;
+                Ok(Expression::ScalarSubquery {
+                    name: name.clone(),
+                    query_plan: Arc::new(new_subquery),
+                })
+            }
+        }
+    }
+
+    // TODO: Move it to ExpressionsRewrite trait
+    fn rewrite_exprs(&mut self, schema: &DataSchemaRef, exprs: &[Expression]) -> Result<Expressions> {
+        exprs
+            .iter()
+            .map(|expr| Self::rewrite_expr(self, schema, expr))
+            .collect::<Result<Vec<_>>>()
     }
 
     /// The implementer of PlanRewriter must implement it because it may change the schema
@@ -108,50 +184,51 @@ pub trait PlanRewriter {
         }))
     }
 
+    fn rewrite_broadcast(&mut self, plan: &BroadcastPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Broadcast(BroadcastPlan {
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+        }))
+    }
+
     fn rewrite_remote(&mut self, plan: &RemotePlan) -> Result<PlanNode> {
         Ok(PlanNode::Remote(plan.clone()))
     }
 
     fn rewrite_projection(&mut self, plan: &ProjectionPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        PlanBuilder::from(&new_input).project(&plan.expr)?.build()
+        let new_exprs = self.rewrite_exprs(&new_input.schema(), &plan.expr)?;
+        PlanBuilder::from(&new_input).project(&new_exprs)?.build()
     }
 
     fn rewrite_expression(&mut self, plan: &ExpressionPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
+        let new_exprs = self.rewrite_exprs(&new_input.schema(), &plan.exprs)?;
         PlanBuilder::from(&new_input)
-            .expression(&plan.exprs, &plan.desc)?
+            .expression(&new_exprs, &plan.desc)?
             .build()
     }
 
-    fn rewrite_sub_queries_expression(
-        &mut self,
-        plan: &CreateSubQueriesSetsPlan,
-    ) -> Result<PlanNode> {
-        // TODO: need rewrite subquery expression
-        Ok(PlanNode::SubQueryExpression(CreateSubQueriesSetsPlan {
-            expressions: plan.expressions.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
-        }))
+    fn rewrite_sub_queries_sets(&mut self, plan: &SubQueriesSetsPlan) -> Result<PlanNode> {
+        // We don't touch expressions, it should be rebuilt by a new expressions
+        self.rewrite_plan_node(plan.input.as_ref())
     }
 
     fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        PlanBuilder::from(&new_input)
-            .filter(plan.predicate.clone())?
-            .build()
+        let new_predicate = self.rewrite_expr(&new_input.schema(), &plan.predicate)?;
+        PlanBuilder::from(&new_input).filter(new_predicate)?.build()
     }
 
     fn rewrite_having(&mut self, plan: &HavingPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        PlanBuilder::from(&new_input)
-            .having(plan.predicate.clone())?
-            .build()
+        let new_predicate = self.rewrite_expr(&new_input.schema(), &plan.predicate)?;
+        PlanBuilder::from(&new_input).having(new_predicate)?.build()
     }
 
     fn rewrite_sort(&mut self, plan: &SortPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        PlanBuilder::from(&new_input).sort(&plan.order_by)?.build()
+        let new_order_by = self.rewrite_exprs(&new_input.schema(), &plan.order_by)?;
+        PlanBuilder::from(&new_input).sort(&new_order_by)?.build()
     }
 
     fn rewrite_limit(&mut self, plan: &LimitPlan) -> Result<PlanNode> {

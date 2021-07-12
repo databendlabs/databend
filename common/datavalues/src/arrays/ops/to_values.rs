@@ -1,28 +1,16 @@
 use std::fmt::Debug;
-use std::marker::PhantomData;
 
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::array::Time32MillisecondArray;
-use common_arrow::arrow::datatypes::IntervalUnit;
-use common_arrow::arrow::datatypes::TimeUnit;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::ArrayApply;
 use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::DFBinaryArray;
 use crate::DFBooleanArray;
-use crate::DFFloat32Array;
-use crate::DFFloat64Array;
-use crate::DFHasher;
-use crate::DFIntegerType;
 use crate::DFListArray;
 use crate::DFNullArray;
 use crate::DFStructArray;
-use crate::DFUInt64Array;
 use crate::DFUtf8Array;
 use crate::DataValue;
 use crate::Date32Type;

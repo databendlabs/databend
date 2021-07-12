@@ -29,6 +29,7 @@ fn is_boolean_type(schema: &DataSchemaRef, expr: &Expression) -> Result<bool> {
 }
 
 struct ConstantFoldingImpl {
+    expression_schema: Option<DataSchemaRef>,
     before_group_by_schema: Option<DataSchemaRef>,
 }
 
@@ -112,6 +113,15 @@ fn constant_folding(schema: &DataSchemaRef, expr: Expression) -> Result<Expressi
 }
 
 impl PlanRewriter for ConstantFoldingImpl {
+    fn rewrite_expr(&mut self, schema: &DataSchemaRef, expr: &Expression) -> Result<Expression> {
+        /* TODO: Recursively optimize constant expressions.
+         *  such as:
+         *      subquery,
+         *      a + (1 + (2 + 3)) => a + 6
+         */
+        constant_folding(schema, expr.clone())
+    }
+
     fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(&plan.input)?;
 
@@ -140,32 +150,12 @@ impl PlanRewriter for ConstantFoldingImpl {
                 .build(),
         }
     }
-
-    fn rewrite_expression(&mut self, plan: &ExpressionPlan) -> Result<PlanNode> {
-        let mut new_exprs = Vec::new();
-        let schema = plan.schema();
-
-        for e in plan.exprs.as_slice() {
-            let new_expr = constant_folding(&schema, e.clone())?;
-            new_exprs.push(new_expr);
-        }
-        let mut new_plan = plan.clone();
-        new_plan.exprs = new_exprs;
-        Ok(PlanNode::Expression(new_plan))
-    }
-
-    fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
-        let schema = plan.schema();
-        let mut new_plan = plan.clone();
-        new_plan.predicate = constant_folding(&schema, plan.predicate.clone())?;
-        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
-        Ok(PlanNode::Filter(new_plan))
-    }
 }
 
 impl ConstantFoldingImpl {
     pub fn new() -> ConstantFoldingImpl {
         ConstantFoldingImpl {
+            expression_schema: None,
             before_group_by_schema: None,
         }
     }

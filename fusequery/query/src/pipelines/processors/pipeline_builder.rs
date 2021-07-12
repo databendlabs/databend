@@ -1,29 +1,26 @@
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
-
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
-use common_planners::CreateSubQueriesSetsPlan;
-use common_planners::Expression;
+use common_planners::BroadcastPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::HavingPlan;
 use common_planners::LimitByPlan;
 use common_planners::LimitPlan;
 use common_planners::PlanNode;
-use common_planners::PlanVisitor;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::RemotePlan;
 use common_planners::SelectPlan;
 use common_planners::SortPlan;
 use common_planners::StagePlan;
+use common_planners::SubQueriesSetsPlan;
 use common_tracing::tracing;
 
 use crate::pipelines::processors::Pipeline;
@@ -42,7 +39,6 @@ use crate::pipelines::transforms::SortMergeTransform;
 use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
 use crate::pipelines::transforms::SubQueriesPuller;
-use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct PipelineBuilder {
@@ -68,6 +64,7 @@ impl PipelineBuilder {
         match node {
             PlanNode::Select(node) => self.visit_select(node),
             PlanNode::Stage(node) => self.visit_stage(node),
+            PlanNode::Broadcast(node) => self.visit_broadcast(node),
             PlanNode::Remote(node) => self.visit_remote(node),
             PlanNode::Expression(node) => self.visit_expression(node),
             PlanNode::Projection(node) => self.visit_projection(node),
@@ -94,6 +91,12 @@ impl PipelineBuilder {
     fn visit_stage(&self, _: &StagePlan) -> Result<Pipeline> {
         Result::Err(ErrorCode::LogicalError(
             "Logical Error: visit_stage_plan in pipeline_builder",
+        ))
+    }
+
+    fn visit_broadcast(&self, _: &BroadcastPlan) -> Result<Pipeline> {
+        Result::Err(ErrorCode::LogicalError(
+            "Logical Error: visit_broadcast in pipeline_builder",
         ))
     }
 
@@ -292,7 +295,7 @@ impl PipelineBuilder {
         Ok(pipeline)
     }
 
-    fn visit_create_sets(&mut self, plan: &CreateSubQueriesSetsPlan) -> Result<Pipeline> {
+    fn visit_create_sets(&mut self, plan: &SubQueriesSetsPlan) -> Result<Pipeline> {
         let mut pipeline = self.visit(&*plan.input)?;
         let schema = plan.schema();
         let context = self.ctx.clone();

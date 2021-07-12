@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::plan_subqueries_set_create::CreateSubQueriesSetsPlan;
+use crate::plan_broadcast::BroadcastPlan;
+use crate::plan_subqueries_set_create::SubQueriesSetsPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
@@ -92,6 +93,7 @@ pub trait PlanVisitor<'plan> {
             PlanNode::UseDatabase(plan) => self.visit_use_database(plan),
             PlanNode::SetVariable(plan) => self.visit_set_variable(plan),
             PlanNode::Stage(plan) => self.visit_stage(plan),
+            PlanNode::Broadcast(plan) => self.visit_broadcast(plan),
             PlanNode::Remote(plan) => self.visit_remote(plan),
             PlanNode::Having(plan) => self.visit_having(plan),
             PlanNode::Expression(plan) => self.visit_expression(plan),
@@ -113,6 +115,11 @@ pub trait PlanVisitor<'plan> {
 
     fn visit_stage(&mut self, plan: &'plan StagePlan) {
         self.visit_plan_node(plan.input.as_ref());
+    }
+
+    fn visit_broadcast(&mut self, _plan: &'plan BroadcastPlan) {
+        // TODO: visit subquery
+        // self.visit_plan_node(plan.input.as_ref());
     }
 
     fn visit_remote(&mut self, _: &'plan RemotePlan) {}
@@ -157,7 +164,7 @@ pub trait PlanVisitor<'plan> {
         self.visit_plan_node(plan.input.as_ref());
     }
 
-    fn visit_subquery_expression(&mut self, plan: &'plan CreateSubQueriesSetsPlan) {
+    fn visit_subquery_expression(&mut self, plan: &'plan SubQueriesSetsPlan) {
         // TODO: need visit subquery expression
         self.visit_plan_node(plan.input.as_ref());
     }

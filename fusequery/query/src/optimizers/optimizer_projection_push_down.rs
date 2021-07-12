@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
@@ -22,7 +21,6 @@ use common_planners::PlanRewriter;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::RewriteHelper;
-use common_planners::ScanPlan;
 use common_planners::SortPlan;
 
 use crate::optimizers::Optimizer;
@@ -77,22 +75,25 @@ impl PlanRewriter for ProjectionPushDownImpl {
     fn rewrite_projection(&mut self, plan: &ProjectionPlan) -> Result<PlanNode> {
         self.collect_column_names_from_expr_vec(plan.expr.as_slice())?;
         self.has_projection = true;
-        PlanBuilder::from(&self.rewrite_plan_node(&plan.input)?)
-            .project(&plan.expr)?
+        let new_input = self.rewrite_plan_node(&plan.input)?;
+        PlanBuilder::from(&new_input)
+            .project(&self.rewrite_exprs(&new_input.schema(), &plan.expr)?)?
             .build()
     }
 
     fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
         self.collect_column_names_from_expr(&plan.predicate)?;
-        PlanBuilder::from(&self.rewrite_plan_node(&plan.input)?)
-            .filter(plan.predicate.clone())?
+        let new_input = self.rewrite_plan_node(&plan.input)?;
+        PlanBuilder::from(&new_input)
+            .filter(self.rewrite_expr(&new_input.schema(), &plan.predicate)?)?
             .build()
     }
 
     fn rewrite_sort(&mut self, plan: &SortPlan) -> Result<PlanNode> {
         self.collect_column_names_from_expr_vec(plan.order_by.as_slice())?;
-        PlanBuilder::from(&self.rewrite_plan_node(&plan.input)?)
-            .sort(&plan.order_by)?
+        let new_input = self.rewrite_plan_node(&plan.input)?;
+        PlanBuilder::from(&new_input)
+            .sort(&self.rewrite_exprs(&new_input.schema(), &plan.order_by)?)?
             .build()
     }
 

@@ -4,19 +4,16 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Expression;
 use common_planners::FilterPlan;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
-use futures::TryStreamExt;
 
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::interpreters::Interpreter;

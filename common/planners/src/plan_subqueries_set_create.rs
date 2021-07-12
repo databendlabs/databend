@@ -12,12 +12,12 @@ use crate::Expression;
 use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
-pub struct CreateSubQueriesSetsPlan {
+pub struct SubQueriesSetsPlan {
     pub expressions: Vec<Expression>,
     pub input: Arc<PlanNode>,
 }
 
-impl CreateSubQueriesSetsPlan {
+impl SubQueriesSetsPlan {
     pub fn schema(&self) -> DataSchemaRef {
         let schema = self.input.schema();
         let mut schema_fields = schema.fields().clone();

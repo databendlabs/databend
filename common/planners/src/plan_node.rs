@@ -8,7 +8,8 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::plan_subqueries_set_create::CreateSubQueriesSetsPlan;
+use crate::plan_broadcast::BroadcastPlan;
+use crate::plan_subqueries_set_create::SubQueriesSetsPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
@@ -38,6 +39,7 @@ use crate::UseDatabasePlan;
 pub enum PlanNode {
     Empty(EmptyPlan),
     Stage(StagePlan),
+    Broadcast(BroadcastPlan),
     Remote(RemotePlan),
     Projection(ProjectionPlan),
     Expression(ExpressionPlan),
@@ -60,7 +62,7 @@ pub enum PlanNode {
     SetVariable(SettingPlan),
     InsertInto(InsertIntoPlan),
     ShowCreateTable(ShowCreateTablePlan),
-    SubQueryExpression(CreateSubQueriesSetsPlan),
+    SubQueryExpression(SubQueriesSetsPlan),
 }
 
 impl PlanNode {
@@ -69,6 +71,7 @@ impl PlanNode {
         match self {
             PlanNode::Empty(v) => v.schema(),
             PlanNode::Stage(v) => v.schema(),
+            PlanNode::Broadcast(v) => v.schema(),
             PlanNode::Remote(v) => v.schema(),
             PlanNode::Scan(v) => v.schema(),
             PlanNode::Projection(v) => v.schema(),
@@ -99,6 +102,7 @@ impl PlanNode {
         match self {
             PlanNode::Empty(_) => "EmptyPlan",
             PlanNode::Stage(_) => "StagePlan",
+            PlanNode::Broadcast(_) => "BroadcastPlan",
             PlanNode::Scan(_) => "ScanPlan",
             PlanNode::Remote(_) => "RemotePlan",
             PlanNode::Projection(_) => "ProjectionPlan",
@@ -128,6 +132,7 @@ impl PlanNode {
     pub fn inputs(&self) -> Vec<Arc<PlanNode>> {
         match self {
             PlanNode::Stage(v) => vec![v.input.clone()],
+            PlanNode::Broadcast(v) => vec![v.input.clone()],
             PlanNode::Projection(v) => vec![v.input.clone()],
             PlanNode::Expression(v) => vec![v.input.clone()],
             PlanNode::AggregatorPartial(v) => vec![v.input.clone()],
@@ -155,6 +160,7 @@ impl PlanNode {
 
         match self {
             PlanNode::Stage(v) => v.set_input(inputs[0]),
+            PlanNode::Broadcast(v) => v.set_input(inputs[0]),
             PlanNode::Projection(v) => v.set_input(inputs[0]),
             PlanNode::Expression(v) => v.set_input(inputs[0]),
             PlanNode::AggregatorPartial(v) => v.set_input(inputs[0]),
