@@ -7,6 +7,8 @@ mod interpreter_database_create_test;
 #[cfg(test)]
 mod interpreter_database_drop_test;
 #[cfg(test)]
+mod interpreter_describe_table_test;
+#[cfg(test)]
 mod interpreter_explain_test;
 #[cfg(test)]
 mod interpreter_select_test;

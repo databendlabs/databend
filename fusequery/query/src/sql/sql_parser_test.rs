@@ -191,6 +191,26 @@ mod tests {
     }
 
     #[test]
+    fn describe_table() -> Result<()> {
+        {
+            let sql = "DESCRIBE t1";
+            let expected = DfStatement::DescribeTable(DfDescribeTable {
+                name: ObjectName(vec![Ident::new("t1")]),
+            });
+            expect_parse_ok(sql, expected)?;
+        }
+        {
+            let sql = "DESC t1";
+            let expected = DfStatement::DescribeTable(DfDescribeTable {
+                name: ObjectName(vec![Ident::new("t1")]),
+            });
+            expect_parse_ok(sql, expected)?;
+        }
+
+        Ok(())
+    }
+
+    #[test]
     fn show_queries() -> Result<()> {
         // positive case
         expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables))?;
