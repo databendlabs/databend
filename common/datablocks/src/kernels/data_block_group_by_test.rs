@@ -19,9 +19,8 @@ fn test_data_block_group_by() -> anyhow::Result<()> {
     ]);
 
     let columns = &["a".to_string(), "b".to_string()];
-    let method = HashMethodSerializer::default();
-    let table = method.group_by(&block, columns)?;
-    for (_, _, block) in table {
+    let table = DataBlock::group_by_blocks(&block, columns)?;
+    for block in table {
         match block.num_rows() {
             1 => {
                 let expected = vec![
