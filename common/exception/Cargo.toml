@@ -11,6 +11,7 @@ common-arrow = {path = "../arrow"}
 
 anyhow = "1.0.41"
 backtrace = "0.3.60"
+reqwest = "0.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0.25"
