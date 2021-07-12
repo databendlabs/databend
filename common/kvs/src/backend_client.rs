@@ -29,15 +29,33 @@ impl BackendClient {
         let new_address = format!("{}:{}", host, port);
 
         let backend: Box<dyn Backend> = match uri.scheme().to_lowercase().as_str() {
-            // For test.
+            // Use local sled as backend.
             "local" => Box::new(LocalBackend::create(new_address)),
-            // Use api http kv as backend.
+            // Use http api as backend.
             "memory" => Box::new(MemoryBackend::create(new_address)),
             // Use store as backend.
             _ => Box::new(StoreBackend::create(new_address)),
         };
 
         BackendClient { backend }
+    }
+
+    pub async fn get<T>(&self, key: String) -> Result<Option<T>>
+    where T: serde::de::DeserializeOwned {
+        let val = self.backend.get(key).await?;
+        Ok(match val {
+            None => None,
+            Some(v) => Some(serde_json::from_str::<T>(v.as_str())?),
+        })
+    }
+
+    pub async fn get_from_prefix<T>(&self, prefix: String) -> Result<Vec<(String, T)>>
+    where T: serde::de::DeserializeOwned {
+        let values = self.backend.get_from_prefix(prefix).await?;
+        values
+            .into_iter()
+            .map(|(k, v)| Ok((k, serde_json::from_str::<T>(v.as_str())?)))
+            .collect()
     }
 
     pub async fn put<T>(&self, key: String, value: T) -> Result<()>
@@ -48,14 +66,5 @@ impl BackendClient {
 
     pub async fn remove(&self, key: String) -> Result<()> {
         self.backend.remove(key).await
-    }
-
-    pub async fn get<T>(&self, key: String) -> Result<Option<T>>
-    where T: serde::de::DeserializeOwned {
-        let val = self.backend.get(key).await?;
-        Ok(match val {
-            None => None,
-            Some(v) => Some(serde_json::from_str::<T>(v.as_str())?),
-        })
     }
 }
