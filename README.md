@@ -66,7 +66,7 @@ in Rust, inspired by [ClickHouse](https://github.com/ClickHouse/ClickHouse) and 
 * ClickHouse server version 21.4.6 revision 54447
 
 
-| Query                                                        | FuseQuery (v0.4.40-nightly)                                  | ClickHouse (v21.4.6)                                         |
+| Query                                                        | FuseQuery (v0.4.48-nightly)                                  | ClickHouse (v21.4.6)                                         |
 | ------------------------------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------ |
 | SELECT avg(number) FROM numbers_mt(100000000000)             | 4.35 s.<br /> (22.97 billion rows/s., 183.91 GB/s.) | **×1.4 slow, (6.04 s.)** <br /> (16.57 billion rows/s., 132.52 GB/s.) |
 | SELECT sum(number) FROM numbers_mt(100000000000)             | 4.20 s.<br />(23.79 billion rows/s., 190.50 GB/s.)  | **×1.4 slow, (5.90 s.)** <br />(16.95 billion rows/s., 135.62 GB/s.) |
@@ -77,7 +77,7 @@ in Rust, inspired by [ClickHouse](https://github.com/ClickHouse/ClickHouse) and 
 | SELECT sum(number) / count(number) FROM numbers_mt(100000000000) | 3.90 s.<br />(25.62 billion rows/s., 205.13 GB/s.)  | **×2.5 slow, (9.70 s.)** <br /> (10.31 billion rows/s., 82.52 GB/s.) |
 | SELECT sum(number) / count(number), max(number), min(number) FROM numbers_mt(100000000000) | 8.28 s.<br />(12.07 billion rows/s., 96.66 GB/s.)   | **×4.0 slow, (32.87 s.)** <br /> (3.04 billion rows/s., 24.34 GB/s.) |
 | SELECT number FROM numbers_mt(10000000000) ORDER BY number DESC LIMIT 100 | 4.80 s.<br />(2.08 billion rows/s., 16.67 GB/s.)    | **×2.9 slow, (13.95 s.)** <br /> (716.62 million rows/s., 5.73 GB/s.) |
-| SELECT max(number), sum(number) FROM numbers_mt(1000000000) GROUP BY sipHash64(number % 3), sipHash64(number % 4) | 14.84 s.<br />(67.38 million rows/s., 539.51 MB/s.) | **×1.5 fast, (10.24 s.)** <br /> (97.65 million rows/s., 781.23 MB/s.) |
+| SELECT max(number), sum(number) FROM numbers_mt(1000000000) GROUP BY number % 3, number % 4, number % 5 | 6.31 s.<br />(158.49 million rows/s., 1.27 GB/s.) | **×1.02 fast, (6.18 s.)** <br /> (161.84 million rows/s., 1.29 GB/s.) |
 
 Note:
 
