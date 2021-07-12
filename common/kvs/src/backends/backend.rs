@@ -17,7 +17,7 @@ impl<T: Send + Sync> Lock for OwnedMutexGuard<T> {
 }
 
 #[async_trait]
-pub trait StateBackend: Send + Sync {
+pub trait Backend: Send + Sync {
     /// Get value string by key.
     async fn get(&self, key: String) -> Result<Option<String>>;
     /// Get all value strings which prefix with the key.

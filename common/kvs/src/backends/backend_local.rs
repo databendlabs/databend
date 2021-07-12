@@ -9,8 +9,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_runtime::tokio::sync::Mutex;
 
+use crate::backends::Backend;
 use crate::backends::Lock;
-use crate::backends::StateBackend;
 
 pub struct LocalBackend {
     db: sled::Db,
@@ -27,7 +27,7 @@ impl LocalBackend {
 }
 
 #[async_trait]
-impl StateBackend for LocalBackend {
+impl Backend for LocalBackend {
     async fn get(&self, key: String) -> Result<Option<String>> {
         Ok(self
             .db

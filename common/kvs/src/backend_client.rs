@@ -5,13 +5,13 @@
 use common_exception::Result;
 use url::Url;
 
+use crate::backends::Backend;
 use crate::backends::LocalBackend;
 use crate::backends::MemoryBackend;
-use crate::backends::StateBackend;
 use crate::backends::StoreBackend;
 
 pub struct BackendClient {
-    backend: Box<dyn StateBackend>,
+    backend: Box<dyn Backend>,
 }
 
 impl BackendClient {
@@ -28,7 +28,7 @@ impl BackendClient {
         }
         let new_address = format!("{}:{}", host, port);
 
-        let backend: Box<dyn StateBackend> = match uri.scheme().to_lowercase().as_str() {
+        let backend: Box<dyn Backend> = match uri.scheme().to_lowercase().as_str() {
             // For test.
             "local" => Box::new(LocalBackend::create(new_address)),
             // Use api http kv as backend.

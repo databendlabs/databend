@@ -5,8 +5,8 @@
 use async_trait::async_trait;
 use common_exception::Result;
 
+use crate::backends::Backend;
 use crate::backends::Lock;
-use crate::backends::StateBackend;
 
 #[allow(dead_code)]
 pub struct MemoryBackend {
@@ -20,7 +20,7 @@ impl MemoryBackend {
 }
 
 #[async_trait]
-impl StateBackend for MemoryBackend {
+impl Backend for MemoryBackend {
     async fn get(&self, _key: String) -> Result<Option<String>> {
         todo!()
     }
