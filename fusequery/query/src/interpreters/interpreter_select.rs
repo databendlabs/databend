@@ -33,56 +33,6 @@ impl SelectInterpreter {
     }
 }
 
-fn get_filter_plan(plan: PlanNode) -> Result<FilterPlan> {
-    let mut res = Err(ErrorCode::Ok("Not filter plan found"));
-    plan.walk_preorder(|node| -> Result<bool> {
-        match node {
-            PlanNode::Filter(ref filter_plan) => {
-                res = Ok(filter_plan.clone());
-                Ok(false)
-            }
-            _ => Ok(true),
-        }
-    })?;
-    res
-}
-
-async fn execute_one_select(
-    ctx: FuseQueryContextRef,
-    plan: PlanNode,
-    subquery_res_map: HashMap<String, bool>,
-) -> Result<SendableDataBlockStream> {
-    let scheduled_actions = PlanScheduler::reschedule(ctx.clone(), &plan)?;
-
-    let remote_actions_ref = &scheduled_actions.remote_actions;
-    let prepare_error_handler = move |error: ErrorCode, end: usize| {
-        let mut killed_set = HashSet::new();
-        for (node, _) in remote_actions_ref.iter().take(end) {
-            if killed_set.get(&node.name).is_none() {
-                // TODO: ISSUE-204 kill prepared query stage
-                killed_set.insert(node.name.clone());
-            }
-        }
-
-        Result::Err(error)
-    };
-
-    let timeout = ctx.get_settings().get_flight_client_timeout()?;
-    for (index, (node, action)) in scheduled_actions.remote_actions.iter().enumerate() {
-        let mut flight_client = node.get_flight_client().await?;
-        if let Err(error) = flight_client
-            .prepare_query_stage(action.clone(), timeout)
-            .await
-        {
-            return prepare_error_handler(error, index);
-        }
-    }
-
-    let pipeline_builder = PipelineBuilder::create(ctx.clone());
-    let mut in_local_pipeline = pipeline_builder.build(&scheduled_actions.local_plan)?;
-    in_local_pipeline.execute().await
-}
-
 #[async_trait::async_trait]
 impl Interpreter for SelectInterpreter {
     fn name(&self) -> &str {

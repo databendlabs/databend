@@ -127,19 +127,19 @@ pub trait PlanRewriter {
                     args: self.rewrite_exprs(schema, args)?,
                 })
             }
-            Expression::Sort {
-                expr,
-                asc,
-                nulls_first,
-            } => Ok(Expression::Sort {
-                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
-                asc: *asc,
-                nulls_first: *nulls_first,
-            }),
-            Expression::Cast { expr, data_type } => Ok(Expression::Cast {
-                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
-                data_type: data_type.clone(),
-            }),
+            Expression::Sort { expr, asc, nulls_first } => {
+                Ok(Expression::Sort {
+                    expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
+                    asc: *asc,
+                    nulls_first: *nulls_first,
+                })
+            },
+            Expression::Cast { expr, data_type } => {
+                Ok(Expression::Cast {
+                    expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
+                    data_type: data_type.clone(),
+                })
+            },
             Expression::Wildcard => Ok(Expression::Wildcard),
             Expression::Column(column_name) => Ok(Expression::Column(column_name.clone())),
             Expression::Literal(value) => Ok(Expression::Literal(value.clone())),

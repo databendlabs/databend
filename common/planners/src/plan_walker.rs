@@ -18,7 +18,7 @@ struct PreOrderWalker<'a, E> {
     state: Result<(), E>,
 }
 
-impl<'plan, 'a, E> PlanVisitor<'plan> for PreOrderWalker<'a, E> {
+impl<'a, E> PlanVisitor for PreOrderWalker<'a, E> {
     fn visit_plan_node(&mut self, node: &PlanNode) {
         if let PlanNode::Empty(_) = node {
             return;
@@ -55,7 +55,7 @@ struct PostOrderWalker<'a, E> {
     state: Result<bool, E>,
 }
 
-impl<'plan, 'a, E> PlanVisitor<'plan> for PostOrderWalker<'a, E> {
+impl<'a, E> PlanVisitor for PostOrderWalker<'a, E> {
     fn visit_plan_node(&mut self, node: &PlanNode) {
         if let PlanNode::Empty(_) = node {
             return;
