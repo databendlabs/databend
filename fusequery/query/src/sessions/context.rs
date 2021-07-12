@@ -186,7 +186,7 @@ impl FuseQueryContext {
     pub async fn try_get_executors(&self) -> Result<Vec<Arc<ClusterExecutor>>> {
         let executors = self
             .cluster
-            .get_executors(self.conf.cluster_namespace.clone())
+            .get_executors_by_namespace(self.conf.cluster_namespace.clone())
             .await?;
         Ok(executors.iter().map(|x| Arc::new(x.clone())).collect())
     }

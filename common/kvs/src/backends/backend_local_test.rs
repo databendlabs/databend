@@ -17,6 +17,8 @@ async fn test_local_backend() -> Result<()> {
 
     // Put test.
     backend.put(k1.clone(), v.clone()).await?;
+    // Insert k1 twice.
+    backend.put(k1.clone(), v.clone()).await?;
     backend.put(k2.clone(), v.clone()).await?;
 
     // Get test.

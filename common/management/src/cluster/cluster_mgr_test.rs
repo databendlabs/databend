@@ -37,7 +37,9 @@ async fn test_cluster_mgr() -> Result<()> {
         cluster_mgr.register(namespace.clone(), &executor1).await?;
         cluster_mgr.register(namespace.clone(), &executor2).await?;
 
-        let actual = cluster_mgr.get_executors(namespace.clone()).await?;
+        let actual = cluster_mgr
+            .get_executors_by_namespace(namespace.clone())
+            .await?;
         let expect = vec![executor1.clone(), executor2.clone()];
         assert_eq!(actual, expect);
     }
@@ -51,7 +53,7 @@ async fn test_cluster_mgr() -> Result<()> {
             .unregister(namespace.clone(), &executor1)
             .await?;
 
-        let actual = cluster_mgr.get_executors(namespace).await?;
+        let actual = cluster_mgr.get_executors_by_namespace(namespace).await?;
         let expect = vec![executor2.clone()];
         assert_eq!(actual, expect);
     }
