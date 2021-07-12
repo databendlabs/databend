@@ -119,8 +119,9 @@ macro_rules! impl_dyn_array {
             fn divide(&self, rhs: &Series) -> Result<Series> {
                 NumOpsDispatch::divide(&self.0, rhs)
             }
-            fn remainder(&self, rhs: &Series) -> Result<Series> {
-                NumOpsDispatch::remainder(&self.0, rhs)
+
+            fn remainder(&self, rhs: &Series, dtype: &DataType) -> Result<Series> {
+                NumOpsDispatch::remainder(&self.0, rhs, dtype)
             }
 
             fn negative(&self) -> Result<Series> {

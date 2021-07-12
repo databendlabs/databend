@@ -27,6 +27,7 @@ use num::Zero;
 
 use crate::arrays::ops::*;
 use crate::arrays::DataArray;
+use crate::prelude::*;
 use crate::*;
 
 macro_rules! apply_operand_on_array_by_iter {
@@ -194,30 +195,49 @@ where
     }
 }
 
-impl<T> Rem for &DataArray<T>
+// we don't impl Rem because we have specific dtype for the result type
+// this is very efficient for some cases
+// such as: UInt64 % Const UInt8, the result is always UInt8
+// 1. turn it into UInt64 % Const UInt64
+// 2. create UInt8Array to accept the result, this could save lots of allocation than UInt64Array
+
+impl<T> DataArray<T>
 where
     T: DFNumericType,
+    DataArray<T>: IntoSeries,
     T::Native: Add<Output = T::Native>
         + Sub<Output = T::Native>
         + Mul<Output = T::Native>
         + Div<Output = T::Native>
         + Rem<Output = T::Native>
+        + ToPrimitive
         + num::Zero
         + num::One,
 {
-    type Output = Result<DataArray<T>>;
+    pub fn rem(&self, rhs: &Self, dtype: &DataType) -> Result<Series> {
+        match (rhs.len(), dtype) {
+            // TODO: add more specific cases
+            (1, DataType::UInt8) => {
+                let opt_rhs = rhs.get(0);
+                match opt_rhs {
+                    None => Ok(DFUInt8Array::full_null(self.len()).into_series()),
+                    Some(rhs) => unsafe {
+                        let array: DFUInt8Array = self.apply_cast_numeric(|a| {
+                            let v = a % rhs;
+                            let j = &v as *const T::Native as *const u8;
 
-    // Test sql: pc :) select sum(number % 5)  FROM numbers_mt(10000000000);
-    fn rem(self, rhs: Self) -> Self::Output {
-        // modulus_scalar is not faster
-        // if rhs.len() == 1 {
-        //     let result = Arc::new(compute::modulus_scalar(
-        //         self.as_ref(),
-        //         rhs.as_ref().value(0),
-        //     )?) as ArrayRef;
-        //     return Ok(result.into());
-        // }
-        arithmetic_helper(self, rhs, compute::modulus, |lhs, rhs| lhs % rhs)
+                            *j
+                        });
+                        Ok(array.into_series())
+                    },
+                }
+            }
+
+            _ => {
+                let array = arithmetic_helper(self, rhs, compute::modulus, |lhs, rhs| lhs % rhs)?;
+                Ok(array.into_series())
+            }
+        }
     }
 }
 
@@ -267,93 +287,6 @@ where
         };
         let result = result?;
         Ok(result.into())
-    }
-}
-
-impl<T> Add for DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
-        + num::Zero,
-{
-    type Output = Result<Self>;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        (&self).add(&rhs)
-    }
-}
-
-impl<T> Div for DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
-        + num::Zero
-        + num::One,
-{
-    type Output = Result<Self>;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        (&self).div(&rhs)
-    }
-}
-
-impl<T> Mul for DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
-        + num::Zero,
-{
-    type Output = Result<Self>;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        (&self).mul(&rhs)
-    }
-}
-
-impl<T> Sub for DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
-        + num::Zero,
-{
-    type Output = Result<Self>;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        (&self).sub(&rhs)
-    }
-}
-
-impl<T> Rem for DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
-        + num::Zero
-        + num::One,
-{
-    type Output = Result<DataArray<T>>;
-
-    fn rem(self, rhs: Self) -> Self::Output {
-        (&self).rem(&rhs)
     }
 }
 
@@ -441,86 +374,6 @@ where
     fn rem(self, rhs: N) -> Self::Output {
         let rhs: T::Native = NumCast::from(rhs).expect("could not cast");
         Ok(self.apply_kernel(|arr| Arc::new(compute::modulus_scalar(arr, rhs).unwrap())))
-    }
-}
-
-impl<T, N> Add<N> for DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: NumCast,
-    N: Num + ToPrimitive,
-    T::Native: Add<Output = T::Native>,
-{
-    type Output = Result<DataArray<T>>;
-
-    fn add(self, rhs: N) -> Self::Output {
-        (&self).add(rhs)
-    }
-}
-
-impl<T, N> Sub<N> for DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: NumCast,
-    N: Num + ToPrimitive,
-    T::Native: Sub<Output = T::Native>,
-{
-    type Output = Result<DataArray<T>>;
-
-    fn sub(self, rhs: N) -> Self::Output {
-        (&self).sub(rhs)
-    }
-}
-
-impl<T, N> Div<N> for DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: NumCast
-        + Div<Output = T::Native>
-        + One
-        + Zero
-        + Sub<Output = T::Native>
-        + Rem<Output = T::Native>,
-    N: Num + ToPrimitive,
-{
-    type Output = Result<DataArray<T>>;
-
-    fn div(self, rhs: N) -> Self::Output {
-        (&self).div(rhs)
-    }
-}
-
-impl<T, N> Mul<N> for DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: NumCast,
-    N: Num + ToPrimitive,
-    T::Native: Mul<Output = T::Native>,
-{
-    type Output = Result<DataArray<T>>;
-
-    fn mul(self, rhs: N) -> Self::Output {
-        (&self).mul(rhs)
-    }
-}
-
-impl<T, N> Rem<N> for DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: NumCast,
-    N: Num + ToPrimitive,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
-        + Zero
-        + One,
-{
-    type Output = Result<DataArray<T>>;
-
-    fn rem(self, rhs: N) -> Self::Output {
-        (&self).rem(rhs)
     }
 }
 
