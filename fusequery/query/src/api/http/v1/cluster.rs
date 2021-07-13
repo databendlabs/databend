@@ -27,8 +27,8 @@ pub fn cluster_handler(
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     let extra = ClusterExtra { cfg, client };
     cluster_list_node(extra.clone())
-        .or(cluster_add_node(extra.clone()))
-        .or(cluster_remove_node(extra))
+        .or(cluster_register_node(extra.clone()))
+        .or(cluster_unregister_node(extra))
 }
 
 /// GET /v1/cluster/list
@@ -41,24 +41,22 @@ fn cluster_list_node(
         .and_then(handlers::list_node)
 }
 
-fn cluster_add_node(
+fn cluster_register_node(
     extra: ClusterExtra,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    warp::path!("v1" / "cluster" / "add")
+    warp::path!("v1" / "cluster" / "register")
         .and(warp::post())
-        .and(json_body())
         .and(with_cluster_extra(extra))
-        .and_then(handlers::add_node)
+        .and_then(handlers::register_node)
 }
 
-fn cluster_remove_node(
+fn cluster_unregister_node(
     extra: ClusterExtra,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    warp::path!("v1" / "cluster" / "remove")
+    warp::path!("v1" / "cluster" / "unregister")
         .and(warp::post())
-        .and(json_body())
         .and(with_cluster_extra(extra))
-        .and_then(handlers::remove_node)
+        .and_then(handlers::unregister_node)
 }
 
 fn with_cluster_extra(
@@ -67,16 +65,8 @@ fn with_cluster_extra(
     warp::any().map(move || extra.clone())
 }
 
-fn json_body() -> impl Filter<Extract = (ClusterNodeRequest,), Error = warp::Rejection> + Clone {
-    // When accepting a body, we want a JSON body
-    // (and to reject huge payloads)...
-    warp::body::content_length_limit(1024 * 16).and(warp::body::json())
-}
-
 mod handlers {
-
     use crate::api::http::v1::cluster::ClusterExtra;
-    use crate::api::http::v1::cluster::ClusterNodeRequest;
 
     pub async fn list_node(
         extra: ClusterExtra,
@@ -89,18 +79,28 @@ mod handlers {
         Ok(warp::reply::json(&results))
     }
 
-    pub async fn add_node(
-        _req: ClusterNodeRequest,
-        _extra: ClusterExtra,
-    ) -> Result<impl warp::Reply, warp::Rejection> {
-        Ok(warp::reply::json(&vec![""]))
+    pub async fn register_node(extra: ClusterExtra) -> Result<impl warp::Reply, warp::Rejection> {
+        let conf = extra.cfg.clone();
+        let executor = conf.executor_from_config().unwrap();
+        extra
+            .client
+            .register(conf.cluster_namespace, &executor)
+            .await
+            .unwrap();
+        Ok(warp::http::StatusCode::OK)
     }
 
-    pub async fn remove_node(
-        _req: ClusterNodeRequest,
-        _extra: ClusterExtra,
+    pub async fn unregister_node(
+        extra: ClusterExtra,
     ) -> Result<impl warp::Reply, std::convert::Infallible> {
-        Ok(warp::reply::json(&vec![""]))
+        let conf = extra.cfg.clone();
+        let executor = conf.executor_from_config().unwrap();
+        extra
+            .client
+            .unregister(conf.cluster_namespace, &executor)
+            .await
+            .unwrap();
+        Ok(warp::http::StatusCode::OK)
     }
 }
 

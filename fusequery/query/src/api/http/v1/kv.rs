@@ -13,7 +13,7 @@ pub struct KvStore {
     db: LocalBackend,
 }
 
-/// A in memory key/value store.
+/// Http kv store with sled store.
 impl KvStore {
     pub fn create() -> KvStoreRef {
         Arc::new(KvStore {

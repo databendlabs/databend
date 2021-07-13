@@ -20,7 +20,7 @@ pub struct HttpBackend {
 
 impl HttpBackend {
     pub fn create(addr: String) -> Self {
-        let addr = format!("http://{}/{}", addr, "v1/kv");
+        let addr = format!("http://{}/v1/kv", addr);
         Self { addr }
     }
 }
@@ -34,7 +34,7 @@ impl Backend for HttpBackend {
         };
         let res: String = reqwest::Client::new()
             .post(format!("{}/get", self.addr))
-            .json(&&req)
+            .json(&req)
             .send()
             .await?
             .json()
@@ -49,7 +49,7 @@ impl Backend for HttpBackend {
         };
         let res: Vec<(String, String)> = reqwest::Client::new()
             .post(format!("{}/list", self.addr))
-            .json(&&req)
+            .json(&req)
             .send()
             .await?
             .json()

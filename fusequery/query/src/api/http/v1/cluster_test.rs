@@ -9,17 +9,21 @@ use crate::api::http::v1::cluster::*;
 use crate::configs::Config;
 
 #[tokio::test]
-async fn test_cluser() -> common_exception::Result<()> {
-    let conf = Config::default();
+async fn test_cluster() -> common_exception::Result<()> {
+    let mut conf = Config::default();
+    conf.cluster_namespace = "n1".to_string();
+    conf.executor_name = "e1".to_string();
+    // make the backend url to local sled store.
+    conf.cluster_meta_server_uri = "local://xx".to_string();
+
     let cluster_client = ClusterClient::create(conf.clone().cluster_meta_server_uri);
     let filter = cluster_handler(conf, cluster_client);
 
-    // Add node.
+    // Register.
     {
         let res = warp::test::request()
             .method("POST")
-            .path("/v1/cluster/add")
-            .json(&ClusterNodeRequest {})
+            .path("/v1/cluster/register")
             .reply(&filter);
         assert_eq!(200, res.await.status());
     }
@@ -29,9 +33,26 @@ async fn test_cluser() -> common_exception::Result<()> {
         let res = warp::test::request()
             .method("GET")
             .path("/v1/cluster/list")
-            .json(&ClusterNodeRequest {})
             .reply(&filter);
-        assert_eq!("\"v1\"", res.await.body());
+        assert_eq!("[{\"name\":\"e1\",\"priority\":0,\"address\":\"127.0.0.1:9090\",\"local\":false,\"sequence\":0}]", res.await.body());
+    }
+
+    // unregister.
+    {
+        let res = warp::test::request()
+            .method("POST")
+            .path("/v1/cluster/unregister")
+            .reply(&filter);
+        assert_eq!(200, res.await.status());
+    }
+
+    // List.
+    {
+        let res = warp::test::request()
+            .method("GET")
+            .path("/v1/cluster/list")
+            .reply(&filter);
+        assert_eq!("[]", res.await.body());
     }
 
     Ok(())
