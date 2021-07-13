@@ -37,8 +37,8 @@ fn test_config() -> Result<()> {
             },
             cluster_namespace: "".to_string(),
             cluster_meta_server_uri: "http://127.0.0.1:8080".to_string(),
-            executor_name: "".to_string(),
-            executor_priority: 0,
+            cluster_executor_name: "".to_string(),
+            cluster_executor_priority: 0,
             config_file: "".to_string(),
         };
         let actual = Config::default();

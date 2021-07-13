@@ -12,7 +12,7 @@ use crate::configs::Config;
 async fn test_cluster() -> common_exception::Result<()> {
     let mut conf = Config::default();
     conf.cluster_namespace = "n1".to_string();
-    conf.executor_name = "e1".to_string();
+    conf.cluster_executor_name = "e1".to_string();
     // make the backend url to local sled store.
     conf.cluster_meta_server_uri = "local://xx".to_string();
 

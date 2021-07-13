@@ -72,10 +72,8 @@ const STORE_API_PASSWORD: &str = "STORE_API_PASSWORD";
 // Cluster.
 const CLUSTER_NAMESPACE: &str = "CLUSTER_NAMESPACE";
 const CLUSTER_META_SERVER_URI: &str = "CLUSTER_META_SERVER_URI";
-
-// Executor.
-const EXECUTOR_NAME: &str = "EXECUTOR_NAME";
-const EXECUTOR_PRIORITY: &str = "EXECUTOR_PRIORITY";
+const CLUSTER_EXECUTOR_NAME: &str = "CLUSTER_EXECUTOR_NAME";
+const CLUSTER_EXECUTOR_PRIORITY: &str = "CLUSTER_EXECUTOR_PRIORITY";
 
 const CONFIG_FILE: &str = "CONFIG_FILE";
 
@@ -160,17 +158,17 @@ pub struct Config {
     pub store_api_password: Password,
 
     // Namespace.
-    #[structopt(long, env = CLUSTER_NAMESPACE, default_value = "")]
+    #[structopt(long, env = CLUSTER_NAMESPACE, default_value = "", help = "Namespace of this executor\n")]
     pub cluster_namespace: String,
 
-    #[structopt(long, env = CLUSTER_META_SERVER_URI, default_value = "http://127.0.0.1:8080")]
+    #[structopt(long, env = CLUSTER_META_SERVER_URI, default_value = "http://127.0.0.1:8080", help = "Cluster registry center URI, 'http://':fuse-query, 'local://': local sled, 'store://': fuse-store\n")]
     pub cluster_meta_server_uri: String,
 
-    #[structopt(long, env = EXECUTOR_NAME, default_value = "")]
-    pub executor_name: String,
+    #[structopt(long, env = CLUSTER_EXECUTOR_NAME, default_value = "", help = "Executor unique name in the namespace\n")]
+    pub cluster_executor_name: String,
 
-    #[structopt(long, env = EXECUTOR_PRIORITY, default_value = "0")]
-    pub executor_priority: u8,
+    #[structopt(long, env = CLUSTER_EXECUTOR_PRIORITY, default_value = "0")]
+    pub cluster_executor_priority: u8,
 
     #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
     pub config_file: String,
@@ -267,8 +265,8 @@ impl Config {
             },
             cluster_namespace: "n1".to_string(),
             cluster_meta_server_uri: "http://127.0.0.1:8080".to_string(),
-            executor_name: "".to_string(),
-            executor_priority: 0,
+            cluster_executor_name: "".to_string(),
+            cluster_executor_priority: 0,
             config_file: "".to_string(),
         }
     }
@@ -356,8 +354,18 @@ impl Config {
         );
 
         // Executor.
-        env_helper!(mut_config, executor_name, String, EXECUTOR_NAME);
-        env_helper!(mut_config, executor_priority, u8, EXECUTOR_PRIORITY);
+        env_helper!(
+            mut_config,
+            cluster_executor_name,
+            String,
+            CLUSTER_EXECUTOR_NAME
+        );
+        env_helper!(
+            mut_config,
+            cluster_executor_priority,
+            u8,
+            CLUSTER_EXECUTOR_PRIORITY
+        );
 
         Ok(mut_config)
     }
@@ -365,8 +373,8 @@ impl Config {
     pub fn executor_from_config(&self) -> Result<ClusterExecutor> {
         // Executor using Flight API.
         ClusterExecutor::create(
-            self.executor_name.clone(),
-            self.executor_priority,
+            self.cluster_executor_name.clone(),
+            self.cluster_executor_priority,
             Address::create(self.flight_api_address.as_str())?,
         )
     }
