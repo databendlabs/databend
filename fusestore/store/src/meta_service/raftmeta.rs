@@ -23,11 +23,13 @@ use async_raft::storage::CurrentSnapshotData;
 use async_raft::storage::HardState;
 use async_raft::storage::InitialState;
 use async_raft::ClientWriteError;
+use async_raft::LogId;
 use async_raft::NodeId;
 use async_raft::Raft;
 use async_raft::RaftMetrics;
 use async_raft::RaftNetwork;
 use async_raft::RaftStorage;
+use async_raft::SnapshotId;
 use common_exception::prelude::ErrorCode;
 use common_exception::prelude::ToErrorCode;
 use common_metatypes::Database;
@@ -100,12 +102,14 @@ impl From<RetryableError> for RaftMes {
 /// The application snapshot type which the `MetaStore` works with.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaStoreSnapshot {
-    /// The last index covered by this snapshot.
-    pub index: u64,
-    /// The term of the last index covered by this snapshot.
-    pub term: u64,
+    /// The last log covered by this snapshot.
+    pub last_log_id: LogId,
+
     /// The last memberhsip config included in this snapshot.
     pub membership: MembershipConfig,
+
+    pub snapshot_id: SnapshotId,
+
     /// The data of the state machine at the time of this snapshot.
     pub data: Vec<u8>,
 }
@@ -120,6 +124,9 @@ pub struct MetaStore {
     sm: RwLock<StateMachine>,
     /// The current hard state.
     hs: RwLock<Option<HardState>>,
+
+    snapshot_idx: Arc<Mutex<u64>>,
+
     /// The current snapshot.
     current_snapshot: RwLock<Option<MetaStoreSnapshot>>,
 }
@@ -137,6 +144,7 @@ impl MetaStore {
             log,
             sm,
             hs,
+            snapshot_idx: Arc::new(Mutex::new(0)),
             current_snapshot,
         }
     }
@@ -159,6 +167,8 @@ impl MetaStore {
             log,
             sm,
             hs,
+            // TODO(xp): need to reload state
+            snapshot_idx: Arc::new(Mutex::new(0)),
             current_snapshot,
         }
     }
@@ -206,14 +216,13 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         let sm = self.sm.read().await;
         match &mut *hs {
             Some(inner) => {
-                let (last_log_index, last_log_term) = match log.values().rev().next() {
-                    Some(log) => (log.index, log.term),
-                    None => (0, 0),
+                let last_log_id = match log.values().rev().next() {
+                    Some(log) => log.log_id,
+                    None => (0, 0).into(),
                 };
                 let last_applied_log = sm.last_applied_log;
                 let st = InitialState {
-                    last_log_index,
-                    last_log_term,
+                    last_log_id,
                     last_applied_log,
                     hard_state: inner.clone(),
                     membership,
@@ -270,7 +279,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
     #[tracing::instrument(level = "info", skip(self, entry), fields(myid=self.id))]
     async fn append_entry_to_log(&self, entry: &Entry<LogEntry>) -> anyhow::Result<()> {
         let mut log = self.log.write().await;
-        log.insert(entry.index, entry.clone());
+        log.insert(entry.log_id.index, entry.clone());
         Ok(())
     }
 
@@ -278,7 +287,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
     async fn replicate_to_log(&self, entries: &[Entry<LogEntry>]) -> anyhow::Result<()> {
         let mut log = self.log.write().await;
         for entry in entries {
-            log.insert(entry.index, entry.clone());
+            log.insert(entry.log_id.index, entry.clone());
         }
         Ok(())
     }
@@ -323,7 +332,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             membership_config = log
                 .values()
                 .rev()
-                .skip_while(|entry| entry.index > last_applied_log)
+                .skip_while(|entry| entry.log_id.index > last_applied_log)
                 .find_map(|entry| match &entry.payload {
                     EntryPayload::ConfigChange(cfg) => Some(cfg.membership.clone()),
                     _ => None,
@@ -333,12 +342,19 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
 
         let snapshot_bytes: Vec<u8>;
         let term;
+        let snapshot_idx = {
+            let mut l = self.snapshot_idx.lock().await;
+            *l += 1;
+            *l
+        };
+        let snapshot_id;
+
         {
             let mut log = self.log.write().await;
             let mut current_snapshot = self.current_snapshot.write().await;
             term = log
                 .get(&last_applied_log)
-                .map(|entry| entry.term)
+                .map(|entry| entry.log_id.term)
                 .ok_or_else(|| anyhow::anyhow!(ERR_INCONSISTENT_LOG))?;
             *log = log.split_off(&last_applied_log);
             log.insert(
@@ -351,9 +367,14 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
                 ),
             );
 
+            snapshot_id = format!("{}-{}-{}", term, last_applied_log, snapshot_idx);
+
             let snapshot = MetaStoreSnapshot {
-                index: last_applied_log,
-                term,
+                last_log_id: LogId {
+                    term,
+                    index: last_applied_log,
+                },
+                snapshot_id: snapshot_id.clone(),
                 membership: membership_config.clone(),
                 data,
             };
@@ -366,16 +387,19 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             "log compaction complete"
         );
         Ok(CurrentSnapshotData {
-            term,
-            index: last_applied_log,
+            last_log_id: LogId {
+                term,
+                index: last_applied_log,
+            },
             membership: membership_config.clone(),
+            snapshot_id,
             snapshot: Box::new(Cursor::new(snapshot_bytes)),
         })
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
-    async fn create_snapshot(&self) -> anyhow::Result<(String, Box<Self::Snapshot>)> {
-        Ok((String::from(""), Box::new(Cursor::new(Vec::new())))) // Snapshot IDs are insignificant to this storage engine.
+    async fn create_snapshot(&self) -> anyhow::Result<Box<Self::Snapshot>> {
+        Ok(Box::new(Cursor::new(Vec::new())))
     }
 
     #[tracing::instrument(level = "info", skip(self, snapshot), fields(myid=self.id))]
@@ -402,7 +426,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             let membership_config = log
                 .values()
                 .rev()
-                .skip_while(|entry| entry.index > index)
+                .skip_while(|entry| entry.log_id.index > index)
                 .find_map(|entry| match &entry.payload {
                     EntryPayload::ConfigChange(cfg) => Some(cfg.membership.clone()),
                     _ => None,
@@ -442,9 +466,9 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             Some(snapshot) => {
                 let reader = serde_json::to_vec(&snapshot)?;
                 Ok(Some(CurrentSnapshotData {
-                    index: snapshot.index,
-                    term: snapshot.term,
+                    last_log_id: snapshot.last_log_id,
                     membership: snapshot.membership.clone(),
+                    snapshot_id: snapshot.snapshot_id.clone(),
                     snapshot: Box::new(Cursor::new(reader)),
                 }))
             }
